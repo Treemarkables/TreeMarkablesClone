@@ -2453,6 +2453,14 @@ class DatabaseStorage implements IStorage {
     const jobsResult = await this.getAllJobs({ limit: 10000 });
     const allJobs = jobsResult.jobs;
     
+    // Get all proposals that have been sent (status = 'sent' or 'accepted', or has sent_date)
+    const proposals = await db.select().from(schema.proposals);
+    const sentProposalJobIds = new Set(
+      proposals
+        .filter(p => p.jobId && (p.status === 'sent' || p.status === 'accepted' || p.sentDate))
+        .map(p => p.jobId)
+    );
+    
     // Filter by date if provided (using job creation date)
     let filteredJobs = allJobs.filter(j => !j.archived);
     
@@ -2470,29 +2478,32 @@ class DatabaseStorage implements IStorage {
     // - Accepted = jobs with status: completed, scheduled, in_progress, invoiced, work_order (customer said yes)
     // - Rejected = jobs with status: unsuccessful (customer said no)
     // - Pending = jobs with status: quote (waiting for response)
-    // - Exclude: archived, lead (these are old or not yet quoted)
+    // - ONLY include jobs that have a proposal sent (not draft)
     
     const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
     const rejectedStatuses = ['unsuccessful'];
     const pendingStatuses = ['quote'];
     
-    // Only count jobs that have been quoted - exclude archived and lead
+    // Only count jobs that have been quoted AND have a proposal sent
     const activeJobs = filteredJobs.filter(j => 
       j.status !== 'archived' && 
       j.status !== 'lead'
     );
     
-    // Jobs that have been quoted = accepted + rejected + pending
-    const quotedJobs = activeJobs.filter(j => 
-      acceptedStatuses.includes(j.status || '') || 
-      rejectedStatuses.includes(j.status || '') ||
-      pendingStatuses.includes(j.status || '')
+    // Jobs with accepted status (customer said yes) - always include these
+    const acceptedJobs = activeJobs.filter(j => acceptedStatuses.includes(j.status || ''));
+    
+    // Jobs with rejected status (customer said no) - always include these
+    const rejectedJobs = activeJobs.filter(j => rejectedStatuses.includes(j.status || ''));
+    
+    // Jobs with pending status - ONLY include if proposal was actually sent
+    const pendingJobs = activeJobs.filter(j => 
+      pendingStatuses.includes(j.status || '') && 
+      sentProposalJobIds.has(j.id)
     );
     
-    const totalQuotes = quotedJobs.length;
-    const acceptedJobs = quotedJobs.filter(j => acceptedStatuses.includes(j.status || ''));
-    const rejectedJobs = quotedJobs.filter(j => rejectedStatuses.includes(j.status || ''));
-    const pendingJobs = quotedJobs.filter(j => pendingStatuses.includes(j.status || ''));
+    // Total quotes = accepted + rejected + pending (only jobs with proposals sent)
+    const totalQuotes = acceptedJobs.length + rejectedJobs.length + pendingJobs.length;
     
     return {
       totalQuotes,
