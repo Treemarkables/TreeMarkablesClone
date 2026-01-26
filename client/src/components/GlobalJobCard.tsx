@@ -2591,7 +2591,21 @@ export function GlobalJobCard({
               onClick={() => setSidebarTab('billing')}
               data-testid="sidebar-billing"
             >
-              Billing
+              <span className="flex flex-col items-center md:flex-row md:gap-1">
+                <span>Billing</span>
+                {(() => {
+                  const lineItems = form.getValues('lineItems') || [];
+                  const subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                  if (subtotal > 0) {
+                    return (
+                      <span className="text-[10px] md:text-xs opacity-80">
+                        ${subtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })} ex GST
+                      </span>
+                    );
+                  }
+                  return null;
+                })()}
+              </span>
             </button>
             <button
               className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
