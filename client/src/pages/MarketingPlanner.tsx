@@ -205,12 +205,12 @@ export default function MarketingPlanner() {
 
   const { data: jobs = [] } = useQuery<any[]>({
     queryKey: ['/api/jobs'],
-    select: (data: any) => data || [],
+    select: (data: any) => data?.data || [],
   });
 
   const { data: leads = [] } = useQuery<any[]>({
     queryKey: ['/api/leads'],
-    select: (data: any) => data || [],
+    select: (data: any) => data?.data || [],
   });
 
   const { data: marketingSettings } = useQuery<any>({
