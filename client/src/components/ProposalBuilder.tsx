@@ -1552,11 +1552,11 @@ export function ProposalBuilder({
                             </div>
 
                             {/* Add Line Item Form */}
-                            <Card className="mb-3 w-full max-w-full min-w-0">
-                              <CardHeader className="p-3 w-full max-w-full min-w-0">
+                            <Card className="mb-3 max-w-md">
+                              <CardHeader className="p-3">
                                 <CardTitle className="text-sm">Add Line Item</CardTitle>
                               </CardHeader>
-                              <CardContent className="space-y-2 p-3 pt-0 w-full max-w-full min-w-0">
+                              <CardContent className="space-y-2 p-3 pt-0">
                                 {/* Basic Details - Searchable Material Dropdown */}
                                 <div className="relative">
                                   <div className="relative">
