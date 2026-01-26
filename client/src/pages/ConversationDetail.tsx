@@ -169,9 +169,33 @@ export default function ConversationDetail() {
       description = conversation.title;
     }
 
-    // Extract lead source and other data from messages
+    // Extract contact details from messages (using parseContactForm patterns)
     messages.forEach(msg => {
       const content = msg.content || '';
+      
+      // Extract Name from "Name: ..." pattern in message content
+      if (!name) {
+        const nameMatch = content.match(/Name:\s*([^\n]+)/i);
+        if (nameMatch && nameMatch[1]) {
+          name = nameMatch[1].trim();
+        }
+      }
+      
+      // Extract Email from "Email: ..." pattern in message content
+      if (!email) {
+        const emailLabelMatch = content.match(/Email:\s*([^\n]+)/i);
+        if (emailLabelMatch && emailLabelMatch[1]) {
+          email = emailLabelMatch[1].trim();
+        }
+      }
+      
+      // Extract Phone from "Phone: ..." pattern in message content
+      if (!phone) {
+        const phoneLabelMatch = content.match(/Phone:\s*([^\n]+)/i);
+        if (phoneLabelMatch && phoneLabelMatch[1]) {
+          phone = phoneLabelMatch[1].trim();
+        }
+      }
       
       // Extract "How they heard about us" - lead source
       if (!leadSource) {
@@ -190,6 +214,7 @@ export default function ConversationDetail() {
             'ad': 'advertisement',
             'website': 'website',
             'repeat': 'repeat',
+            'previous customer': 'repeat',
             'other': 'other'
           };
           
@@ -198,7 +223,7 @@ export default function ConversationDetail() {
         }
       }
       
-      // Extract email (look for email patterns) - only if not already set
+      // Fallback: Extract email from any email pattern - only if not already set
       if (!email) {
         const emailMatch = content.match(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/);
         if (emailMatch) {
@@ -206,7 +231,7 @@ export default function ConversationDetail() {
         }
       }
 
-      // Extract phone (NZ format) - only if not already set
+      // Fallback: Extract phone (NZ format) - only if not already set
       if (!phone) {
         const phonePatterns = [
           /\+64\s?\d{1,3}\s?\d{3,4}\s?\d{4}/,  // +64 21 123 4567
@@ -240,7 +265,7 @@ export default function ConversationDetail() {
       }
     });
 
-    // If name is still empty but we have email, extract name from email
+    // Last resort: If name is still empty but we have email, extract name from email
     if (!name && email) {
       const emailParts = email.split('@')[0]; // Get part before @
       const nameParts = emailParts.split(/[._-]/); // Split on dots, underscores, hyphens
