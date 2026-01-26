@@ -445,10 +445,7 @@ export function EmailComposerModal({
     },
     onSuccess: () => {
       console.log('📧 Mutation: onSuccess callback triggered');
-      toast({
-        title: "Email Sent",
-        description: "Invoice email has been sent successfully",
-      });
+      // Success notification disabled per user preference
       
       // Invalidate job diary cache to show the new email entry
       if (job?.id) {

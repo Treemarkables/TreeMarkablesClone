@@ -786,10 +786,7 @@ export function ProposalBuilder({
     },
     onSuccess: (response: any) => {
       console.log('Email sent successfully:', response);
-      toast({
-        title: "Email Sent",
-        description: `Proposal email sent successfully to ${emailForm.to}`,
-      });
+      // Success notification disabled per user preference
       setShowEmailDialog(false);
       setEmailForm({ to: '', cc: '', subject: '', message: '' });
     },
@@ -909,10 +906,7 @@ export function ProposalBuilder({
     },
     onSuccess: (response: any) => {
       console.log('SMS sent successfully:', response);
-      toast({
-        title: "SMS Sent",
-        description: `Proposal SMS sent successfully to ${smsForm.to}`,
-      });
+      // Success notification disabled per user preference
       setShowSmsDialog(false);
       setSmsForm({ to: '', message: '' });
     },

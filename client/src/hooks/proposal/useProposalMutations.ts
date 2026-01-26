@@ -83,10 +83,7 @@ export function useProposalMutations(jobId?: string, onSuccess?: () => void) {
       });
     },
     onSuccess: (_, variables) => {
-      toast({
-        title: "Email Sent",
-        description: `Proposal email sent successfully to ${variables.to}`,
-      });
+      // Success notification disabled per user preference
     },
     onError: (error: any) => {
       toast({
