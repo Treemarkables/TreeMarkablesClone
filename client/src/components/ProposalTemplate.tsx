@@ -182,13 +182,22 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       });
     });
 
-    const totalAmount = subtotalExGst + gstAmount;
+    // Apply discount from proposal
+    const discountAmount = proposal?.discountAmount ? parseFloat(String(proposal.discountAmount)) : 0;
+    const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
     
-    console.log(`📊 FINAL TOTALS: subtotal=${subtotalExGst}, gst=${gstAmount}, total=${totalAmount}`);
+    // Recalculate GST on discounted amount
+    const gstRate = 0.15;
+    const gstOnDiscounted = subtotalAfterDiscount * gstRate;
+    const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
+    
+    console.log(`📊 FINAL TOTALS: subtotal=${subtotalExGst}, discount=${discountAmount}, subtotalAfterDiscount=${subtotalAfterDiscount}, gst=${gstOnDiscounted}, total=${totalAmount}`);
 
     return {
       subtotal: subtotalExGst,
-      gst: gstAmount,
+      discount: discountAmount,
+      subtotalAfterDiscount: subtotalAfterDiscount,
+      gst: gstOnDiscounted,
       total: totalAmount
     };
   };
@@ -570,6 +579,12 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                   <span>Subtotal (excl GST):</span>
                   <span data-testid="text-subtotal" className="font-medium">{formatCurrency(totals.subtotal)}</span>
                 </div>
+                {totals.discount > 0 && (
+                  <div className="flex justify-between text-xs sm:text-sm text-orange-600">
+                    <span>Discount:</span>
+                    <span data-testid="text-discount" className="font-medium">-{formatCurrency(totals.discount)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs sm:text-sm text-gray-700">
                   <span>GST (15%):</span>
                   <span data-testid="text-gst-amount" className="font-medium">{formatCurrency(totals.gst)}</span>
