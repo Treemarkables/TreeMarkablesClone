@@ -312,11 +312,75 @@ export interface TelnyxWebhookPayload {
   };
 }
 
+// Answer and forward an incoming call
+async function answerAndForwardCall(callControlId: string, forwardToNumber: string): Promise<void> {
+  const { apiKey } = getCredentials();
+  
+  try {
+    // First, answer the call
+    console.log(`📞 Answering call ${callControlId}...`);
+    const answerResponse = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/answer`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({}),
+    });
+    
+    if (!answerResponse.ok) {
+      console.error('📞 Failed to answer call:', await answerResponse.text());
+      return;
+    }
+    
+    console.log(`📞 Call answered, now transferring to ${forwardToNumber}...`);
+    
+    // Then transfer to the forwarding number
+    const transferResponse = await fetch(`https://api.telnyx.com/v2/calls/${callControlId}/actions/transfer`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        to: forwardToNumber,
+      }),
+    });
+    
+    if (!transferResponse.ok) {
+      console.error('📞 Failed to transfer call:', await transferResponse.text());
+    } else {
+      console.log(`📞 Call transferred successfully to ${forwardToNumber}`);
+    }
+  } catch (error) {
+    console.error('📞 Error handling incoming call:', error);
+  }
+}
+
 export async function processTelnyxWebhook(payload: TelnyxWebhookPayload): Promise<CallRecord | null> {
   const eventType = payload.data?.event_type;
   console.log(`📞 Processing Telnyx webhook event: ${eventType}`);
   
-  // Only process recording.saved events for now
+  // Handle incoming call - answer and forward
+  if (eventType === 'call.initiated') {
+    const direction = payload.data?.payload?.direction;
+    const callControlId = payload.data?.payload?.call_control_id;
+    
+    if (direction === 'incoming' && callControlId) {
+      // Forward to the configured number (use TELNYX_FORWARD_NUMBER or fallback)
+      const forwardNumber = process.env.TELNYX_FORWARD_NUMBER || process.env.HERO_PHONE_NUMBER;
+      
+      if (forwardNumber) {
+        console.log(`📞 Incoming call detected, forwarding to ${forwardNumber}`);
+        await answerAndForwardCall(callControlId, forwardNumber);
+      } else {
+        console.log('📞 No forward number configured, call will not be answered');
+      }
+    }
+    return null;
+  }
+  
+  // Only process recording.saved events for recordings
   if (eventType !== 'call.recording.saved') {
     console.log(`📞 Ignoring Telnyx event type: ${eventType}`);
     return null;
