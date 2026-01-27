@@ -3199,24 +3199,27 @@ export function GlobalJobCard({
                         {(() => {
                           // First try line items from form
                           const lineItems = form.watch('lineItems') || [];
-                          let subtotal = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                          let totalIncGst = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
                           
                           // Fall back to job's totalAmount if no line items
-                          if (subtotal === 0 && editingJob?.totalAmount) {
-                            subtotal = parseFloat(editingJob.totalAmount) || 0;
+                          if (totalIncGst === 0 && editingJob?.totalAmount) {
+                            totalIncGst = parseFloat(editingJob.totalAmount) || 0;
                           }
                           
                           // Fall back to proposal subtotal if available
-                          if (subtotal === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
-                            subtotal = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                          if (totalIncGst === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
+                            totalIncGst = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
                           }
                           
                           // Fall back to quote amount
-                          if (subtotal === 0 && jobQuoteResponse?.data?.[0]?.amount) {
-                            subtotal = parseFloat(jobQuoteResponse.data[0].amount) || 0;
+                          if (totalIncGst === 0 && jobQuoteResponse?.data?.[0]?.amount) {
+                            totalIncGst = parseFloat(jobQuoteResponse.data[0].amount) || 0;
                           }
                           
-                          if (subtotal > 0) {
+                          // Calculate ex-GST amount (prices include GST, divide by 1.15)
+                          const exGstAmount = totalIncGst / 1.15;
+                          
+                          if (totalIncGst > 0) {
                             return (
                               <div 
                                 className="flex items-center justify-between p-3 bg-gray-50 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
@@ -3228,7 +3231,7 @@ export function GlobalJobCard({
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-semibold text-gray-900">
-                                    ${subtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                                    ${exGstAmount.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                                   </span>
                                   <span className="text-xs text-gray-500">ex GST</span>
                                 </div>
