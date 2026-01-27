@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical, Check
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical, Check, Percent
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,8 @@ const proposalFormSchema = insertProposalSchema.extend({
   totalAmount: z.number().min(0, "Total amount must be positive").optional(),
   taxRate: z.preprocess((val) => parseFloat(val as string) || 15, z.number().min(0).max(100).default(15)),
   validUntil: z.string().optional(),
+  discountAmount: z.preprocess((val) => parseFloat(val as string) || 0, z.number().min(0).default(0)),
+  discountType: z.enum(["fixed", "percentage"]).default("fixed"),
 }).partial();
 
 interface ProposalBuilderProps {
@@ -104,6 +106,8 @@ export function ProposalBuilder({
       validUntil: "",
       totalAmount: 0,
       taxRate: 15,
+      discountAmount: 0,
+      discountType: "fixed" as const,
       notes: "",
       deliveryMethod: "email" as const,
     },
@@ -534,8 +538,17 @@ export function ProposalBuilder({
   
   const selectedLineItems = getAllSelectedLineItems();
   const subtotal = selectedLineItems.reduce((sum, item) => sum + item.totalPrice, 0);
-  const taxAmount = subtotal * (form.watch("taxRate") || 0) / 100;
-  const grandTotal = subtotal + taxAmount;
+  
+  // Calculate discount
+  const discountAmount = form.watch("discountAmount") || 0;
+  const discountType = form.watch("discountType") || "fixed";
+  const discountValue = discountType === "percentage" 
+    ? (subtotal * discountAmount / 100) 
+    : discountAmount;
+  
+  const discountedSubtotal = Math.max(0, subtotal - discountValue);
+  const taxAmount = discountedSubtotal * (form.watch("taxRate") || 0) / 100;
+  const grandTotal = discountedSubtotal + taxAmount;
 
   // Update form total when sections change
   useEffect(() => {
@@ -1110,7 +1123,13 @@ export function ProposalBuilder({
       templateUsed: null,
       branding: null,
       title: formData.title || 'Preview Proposal',
-      deliveryMethod: 'email'
+      deliveryMethod: 'email',
+      discountAmount: String(discountValue || 0),
+      discountType: formData.discountType || 'fixed',
+      subtotal: String(subtotal),
+      gstAmount: String(taxAmount),
+      totalAmount: String(grandTotal),
+      taxRate: String(formData.taxRate || 15)
     } as any;
 
     // Use real template data from API, fallback to mock data
@@ -1971,6 +1990,45 @@ export function ProposalBuilder({
                           ${subtotal.toFixed(2)}
                         </span>
                       </div>
+                      
+                      {/* Discount Input */}
+                      <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 space-y-2">
+                        <label className="text-sm font-medium text-orange-700 dark:text-orange-300 flex items-center gap-1">
+                          <Percent className="h-3.5 w-3.5" />
+                          Discount
+                        </label>
+                        <div className="flex gap-2">
+                          <Select
+                            value={form.watch("discountType") || "fixed"}
+                            onValueChange={(value) => form.setValue("discountType", value as "fixed" | "percentage")}
+                          >
+                            <SelectTrigger className="w-24" data-testid="select-discount-type">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="fixed">$</SelectItem>
+                              <SelectItem value="percentage">%</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            value={form.watch("discountAmount") || ""}
+                            onChange={(e) => form.setValue("discountAmount", parseFloat(e.target.value) || 0)}
+                            className="flex-1"
+                            data-testid="input-discount-amount"
+                          />
+                        </div>
+                        {discountValue > 0 && (
+                          <div className="flex justify-between text-sm text-orange-600 dark:text-orange-400">
+                            <span>Discount applied:</span>
+                            <span className="font-medium">-${discountValue.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                      
                       <div className="flex justify-between">
                         <span>Tax ({form.watch("taxRate") || 0}%):</span>
                         <span className="font-semibold" data-testid="text-tax">
