@@ -286,6 +286,9 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             <p className="text-xs text-gray-500 break-words">
               Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
             </p>
+            <p className="text-xs text-gray-500 mt-1">
+              GST Number: 131-047-592
+            </p>
           </div>
         </CardContent>
       </Card>
