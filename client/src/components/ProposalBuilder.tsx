@@ -990,8 +990,14 @@ export function ProposalBuilder({
   const initializeSmsForm = () => {
     const previewData = getPreviewData();
     const formData = form.getValues();
-    const customerPhone = previewData.customer?.phone || '';
-    const customerName = previewData.customer?.name || 'Valued Customer';
+    // Check customer phone first, then fall back to job contact phone
+    const customerPhone = previewData.customer?.phone || 
+                          previewData.job?.jobContactPhone || 
+                          previewData.job?.billingContactPhone ||
+                          '';
+    const customerName = previewData.customer?.name || 
+                         previewData.job?.clientName ||
+                         'Valued Customer';
     const firstName = customerName.split(' ')[0];
     const totalAmount = grandTotal.toFixed(2);
     
