@@ -170,6 +170,7 @@ export default function MetricsDashboard() {
   // Revenue breakdown modal state
   const [revenueBreakdownOpen, setRevenueBreakdownOpen] = useState(false);
   const [quoteBreakdownOpen, setQuoteBreakdownOpen] = useState(false);
+  const [avgJobValueBreakdownOpen, setAvgJobValueBreakdownOpen] = useState(false);
   
   const { toast } = useToast();
 
@@ -731,13 +732,18 @@ export default function MetricsDashboard() {
               testId="card-quotes-sent"
             />
 
-            <MetricCard
-              title="Avg Job Value"
-              value={formatCurrency(dashboardStats?.averageQuoteValue || 0)}
-              subtitle={`${((quoteAnalytics?.acceptedQuotes || 0) / Math.max(quoteAnalytics?.totalQuotes || 1, 1) * 100).toFixed(0)}% acceptance rate`}
-              icon={FileText}
-              testId="card-avg-quote"
-            />
+            <div 
+              onClick={() => setAvgJobValueBreakdownOpen(true)}
+              className="cursor-pointer"
+            >
+              <MetricCard
+                title="Avg Job Value"
+                value={formatCurrency(revenueStats?.averageJobValue || 0)}
+                subtitle="Click to see breakdown"
+                icon={FileText}
+                testId="card-avg-quote"
+              />
+            </div>
 
             <MetricCard
               title="Missed Calls"
@@ -1830,6 +1836,71 @@ export default function MetricsDashboard() {
 
             <div className="text-sm text-muted-foreground text-center">
               Total: {quoteAnalytics?.totalQuotes || 0} quoted jobs ({quoteAnalytics?.acceptedQuotes || 0} accepted + {quoteAnalytics?.rejectedQuotes || 0} rejected + {quoteAnalytics?.pendingQuotes || 0} pending)
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Avg Job Value Breakdown Modal */}
+      <Dialog open={avgJobValueBreakdownOpen} onOpenChange={setAvgJobValueBreakdownOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Average Job Value Breakdown
+            </DialogTitle>
+            <DialogDescription>
+              How your average job value is calculated
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Formula visualization */}
+            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+              <div className="text-center space-y-3">
+                <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">Formula</div>
+                <div className="flex items-center justify-center gap-2 text-lg">
+                  <span className="font-semibold">Total Revenue</span>
+                  <span className="text-blue-600">÷</span>
+                  <span className="font-semibold">Jobs with Invoices</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Values */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
+                <div className="text-xs text-green-600 dark:text-green-500 mb-1">Total Revenue</div>
+                <div className="text-xl font-bold text-green-700 dark:text-green-400">
+                  {formatCurrency(revenueStats?.totalRevenue || 0)}
+                </div>
+              </div>
+              <div className="bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-lg p-3 text-center">
+                <div className="text-xs text-purple-600 dark:text-purple-500 mb-1">Jobs with Invoices</div>
+                <div className="text-xl font-bold text-purple-700 dark:text-purple-400">
+                  {revenueStats?.jobsWithInvoices || 0}
+                </div>
+              </div>
+            </div>
+
+            {/* Result */}
+            <div className="bg-primary/10 border border-primary/20 rounded-lg p-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <div className="text-sm text-muted-foreground">Average Job Value</div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {formatCurrency(revenueStats?.totalRevenue || 0)} ÷ {revenueStats?.jobsWithInvoices || 0} jobs
+                  </div>
+                </div>
+                <span className="text-2xl font-bold text-primary">
+                  {formatCurrency(revenueStats?.averageJobValue || 0)}
+                </span>
+              </div>
+            </div>
+
+            {/* Note */}
+            <div className="text-sm text-muted-foreground text-center">
+              Only jobs with non-cancelled invoices are included in this calculation
             </div>
           </div>
         </DialogContent>
