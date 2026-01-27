@@ -18117,8 +18117,7 @@ Transcription: ${transcriptText}`;
           res.set('Content-Type', 'application/xml');
           res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">Hello! You have reached Treemarkables. This is a test message confirming your call was successfully received. Thank you for calling. Goodbye!</Say>
-  <Hangup />
+  <Say>Hello. You have reached Treemarkables. This is a test message confirming your call was successfully received. Thank you for calling. Goodbye.</Say>
 </Response>`);
           return;
         }
