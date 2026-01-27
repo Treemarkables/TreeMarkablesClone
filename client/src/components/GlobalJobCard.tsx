@@ -685,6 +685,11 @@ export function GlobalJobCard({
       }
       setHasUserSelectedCustomer(false); // Reset customer selection flag
     } else if (editingJob && editingJob.id && !customersLoading) {
+      // GUARD: Don't reset form if user has made changes (prevents data loss on background refetch)
+      if (form.formState.isDirty) {
+        return;
+      }
+      
       // Wait for customers to load before populating form to avoid missing customer data
       // Mark that we're loading data to prevent auto-save
       isLoadingDataRef.current = true;
