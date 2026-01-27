@@ -18081,6 +18081,12 @@ Transcription: ${transcriptText}`;
   // TELNYX - CALL RECORDING INTEGRATION
   // ========================================
 
+  // GET endpoint to verify webhook URL is reachable (for testing)
+  app.get("/api/telnyx/webhook", (req, res) => {
+    console.log('📞 Telnyx webhook GET test - URL is accessible');
+    res.status(200).send('Telnyx webhook endpoint is active. POST to this URL for webhooks.');
+  });
+
   // Telnyx webhook for call recording events (supports both TeXML and Call Control)
   app.post("/api/telnyx/webhook", async (req, res) => {
     try {
