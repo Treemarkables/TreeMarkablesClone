@@ -913,7 +913,11 @@ export default function MetricsDashboard() {
                       data-testid="input-calc-avg-job"
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">average per job</p>
+                  <p className="text-xs text-muted-foreground">
+                    {revenueStats?.totalRevenue && revenueStats?.jobsWithInvoices 
+                      ? `${formatCurrency(revenueStats.totalRevenue)} ÷ ${revenueStats.jobsWithInvoices} jobs`
+                      : "Total Revenue ÷ Jobs with Invoices"}
+                  </p>
                 </div>
 
                 {/* Jobs Needed */}
