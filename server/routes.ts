@@ -18124,11 +18124,16 @@ Transcription: ${transcriptText}`;
         }
         
         // Return TeXML to answer, record, and forward the call
+        // Use dynamic callback URL based on request host
+        const protocol = req.headers['x-forwarded-proto'] || 'https';
+        const host = req.headers['host'] || 'app.treemarkables.co.nz';
+        const callbackUrl = `${protocol}://${host}/api/telnyx/webhook`;
+        
         res.set('Content-Type', 'application/xml');
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Record recordingStatusCallback="https://treemarkablesclone.replit.app/api/telnyx/webhook" recordingStatusCallbackMethod="POST" />
-  <Dial record="record-from-answer-dual" recordingStatusCallback="https://treemarkablesclone.replit.app/api/telnyx/webhook" recordingStatusCallbackMethod="POST">
+  <Record recordingStatusCallback="${callbackUrl}" recordingStatusCallbackMethod="POST" />
+  <Dial record="record-from-answer-dual" recordingStatusCallback="${callbackUrl}" recordingStatusCallbackMethod="POST">
     <Number>${forwardNumber}</Number>
   </Dial>
 </Response>`);
