@@ -700,10 +700,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           ? (endDateTime.getTime() - startDateTime.getTime()) / (1000 * 60 * 60)
           : 2; // Default to 2 hours if parsing fails
 
-        // Safari-safe customer name lookup
+        // Safari-safe customer name lookup - check multiple sources
         const customerName = apiJob.customerId && customerMap.has(apiJob.customerId)
           ? customerMap.get(apiJob.customerId)
-          : apiJob.title || 'Unknown Customer';
+          : apiJob.clientName || apiJob.title || 'No Customer';
 
         jobAssignments.push({
           id: apiJob.id,
@@ -758,10 +758,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           endTime = new Date(Date.now() + (estimatedDuration * 60 * 60 * 1000)).toISOString();
         }
 
-        // Safari-safe customer name lookup
+        // Safari-safe customer name lookup - check multiple sources
         const customerName = apiJob.customerId && customerMap.has(apiJob.customerId)
           ? customerMap.get(apiJob.customerId)
-          : apiJob.title || 'Unknown Customer';
+          : apiJob.clientName || apiJob.title || 'No Customer';
 
         jobAssignments.push({
           id: apiJob.id,
