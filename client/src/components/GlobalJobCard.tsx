@@ -20,6 +20,7 @@ import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
+import { ProposalTemplate } from "./ProposalTemplate";
 import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
@@ -162,6 +163,10 @@ export function GlobalJobCard({
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | undefined>(undefined);
   
+  // Proposal viewer modal state
+  const [isProposalViewerOpen, setIsProposalViewerOpen] = useState(false);
+  const [viewingProposalId, setViewingProposalId] = useState<string | undefined>(undefined);
+  
   // Equipment addition state
   const [isAddingEquipment, setIsAddingEquipment] = useState(false);
   
@@ -283,6 +288,11 @@ export function GlobalJobCard({
     enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
+  const { data: proposalTemplateData } = useQuery({
+    queryKey: ['/api/templates/default/proposal'],
+    enabled: isOpen && isProposalViewerOpen,
+  });
+
   // Lazy load materials and services - only when billing tab is active (desktop uses sidebarTab, mobile uses activeTab)
   const { data: materialsData } = useQuery({
     queryKey: ['/api/materials'],
@@ -316,6 +326,7 @@ export function GlobalJobCard({
   
   const invoiceTemplate = (invoiceTemplateData as any)?.data || null;
   const quoteTemplate = (quoteTemplateData as any)?.data || null;
+  const proposalTemplate = (proposalTemplateData as any)?.data || null;
 
   // Line item management functions
   const addLineItem = () => {
@@ -4128,11 +4139,13 @@ export function GlobalJobCard({
                             setIsInvoiceModalOpen(true);
                           }}
                           onProposalClick={(proposalNumber) => {
-                            // Find the proposal by number
+                            // Find the proposal by number and open the viewer
                             const proposals = jobProposalResponse?.data || [];
                             const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
-                            setEditingProposalId(proposal?.id);
-                            setIsProposalBuilderOpen(true);
+                            if (proposal?.id) {
+                              setViewingProposalId(proposal.id);
+                              setIsProposalViewerOpen(true);
+                            }
                           }}
                         />
                       ) : (
@@ -5173,6 +5186,80 @@ export function GlobalJobCard({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Proposal Viewer Modal */}
+      <Dialog open={isProposalViewerOpen} onOpenChange={setIsProposalViewerOpen}>
+        <DialogContent className="max-w-full sm:max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+          <DialogHeader className="p-3 sm:p-4 border-b bg-gray-50 sticky top-0 z-10">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5 text-blue-600" />
+                View Document
+              </DialogTitle>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    // Open proposal in editor
+                    setIsProposalViewerOpen(false);
+                    setEditingProposalId(viewingProposalId);
+                    setIsProposalBuilderOpen(true);
+                  }}
+                  data-testid="button-edit-proposal"
+                >
+                  <Edit3 className="w-4 h-4 mr-1" />
+                  Edit
+                </Button>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setIsProposalViewerOpen(false)}
+                  className="bg-green-600 hover:bg-green-700"
+                  data-testid="button-close-proposal-viewer"
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="p-4">
+            {(() => {
+              const proposals = jobProposalResponse?.data || [];
+              const viewingProposal = proposals.find((p: any) => p.id === viewingProposalId);
+              
+              if (!viewingProposal) {
+                return (
+                  <div className="text-center py-8 text-gray-500">
+                    <FileText className="w-8 h-8 mx-auto mb-2" />
+                    <p>Proposal not found</p>
+                  </div>
+                );
+              }
+              
+              if (!proposalTemplate) {
+                return (
+                  <div className="text-center py-8 text-gray-500">
+                    <FileText className="w-8 h-8 mx-auto mb-2" />
+                    <p>Loading template...</p>
+                  </div>
+                );
+              }
+              
+              return (
+                <ProposalTemplate
+                  template={proposalTemplate}
+                  proposal={viewingProposal}
+                  customer={selectedCustomer}
+                  job={editingJob}
+                  sections={viewingProposal.sections || []}
+                  showActions={false}
+                />
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
