@@ -227,25 +227,25 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
         <div className="flex justify-end items-center mb-6 p-4 bg-gray-50 rounded-lg">
           <div className="flex gap-2">
             {onCopy && (
-              <Button variant="outline" size="sm" onClick={onCopy} data-testid="button-copy-proposal">
+              <Button variant="outline" size="sm" onClick={onCopy} data-testid="button-copy-proposal" className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200">
                 <Copy className="w-4 h-4 mr-2" />
                 Copy
               </Button>
             )}
             {onEmail && (
-              <Button variant="outline" size="sm" onClick={onEmail} data-testid="button-email-proposal">
+              <Button variant="outline" size="sm" onClick={onEmail} data-testid="button-email-proposal" className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200">
                 <Mail className="w-4 h-4 mr-2" />
                 Email
               </Button>
             )}
             {onSms && (
-              <Button variant="outline" size="sm" onClick={onSms} data-testid="button-sms-proposal-preview">
+              <Button variant="outline" size="sm" onClick={onSms} data-testid="button-sms-proposal-preview" className="bg-green-50 hover:bg-green-100 text-green-700 border-green-200">
                 <MessageSquare className="w-4 h-4 mr-2" />
                 SMS
               </Button>
             )}
             {onDownload && (
-              <Button variant="outline" size="sm" onClick={onDownload} data-testid="button-download-proposal">
+              <Button variant="outline" size="sm" onClick={onDownload} data-testid="button-download-proposal" className="bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200">
                 <Download className="w-4 h-4 mr-2" />
                 PDF
               </Button>
