@@ -18113,11 +18113,11 @@ Transcription: ${transcriptText}`;
         console.log('📞 Forward number:', forwardNumber);
         
         if (!forwardNumber) {
-          console.log('📞 No forward number configured, rejecting call');
+          console.log('📞 No forward number configured, playing test message');
           res.set('Content-Type', 'application/xml');
           res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Sorry, this number is not accepting calls at this time.</Say>
+  <Say voice="alice">Hello! You have reached Treemarkables. This is a test message confirming your call was successfully received. Thank you for calling. Goodbye!</Say>
   <Hangup />
 </Response>`);
           return;
