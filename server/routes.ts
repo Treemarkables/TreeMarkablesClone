@@ -18131,7 +18131,7 @@ Transcription: ${transcriptText}`;
         res.set('Content-Type', 'application/xml');
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial record="record-from-answer-dual" recordingStatusCallback="${callbackUrl}" recordingStatusCallbackMethod="POST">
+  <Dial>
     <Number>${forwardNumber}</Number>
   </Dial>
 </Response>`);
