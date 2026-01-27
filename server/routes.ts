@@ -18081,29 +18081,84 @@ Transcription: ${transcriptText}`;
   // TELNYX - CALL RECORDING INTEGRATION
   // ========================================
 
-  // Telnyx webhook for call recording events
+  // Telnyx webhook for call recording events (supports both TeXML and Call Control)
   app.post("/api/telnyx/webhook", async (req, res) => {
     try {
       console.log('📞 ============ TELNYX WEBHOOK RECEIVED ============');
       console.log('📞 Timestamp:', new Date().toISOString());
-      console.log('📞 Event type:', req.body?.data?.event_type);
+      console.log('📞 Headers:', JSON.stringify(req.headers, null, 2));
       console.log('📞 Body:', JSON.stringify(req.body, null, 2));
       console.log('📞 ================================================');
       
-      const { processTelnyxWebhook } = await import('./services/telnyxService.js');
+      // Check if this is a TeXML request (incoming call that needs XML response)
+      // TeXML requests have different structure - they come as form data or have specific headers
+      const contentType = req.headers['content-type'] || '';
+      const isTeXML = contentType.includes('application/x-www-form-urlencoded') || 
+                      req.body?.CallSid || req.body?.From || req.body?.To ||
+                      (typeof req.body === 'string');
       
+      if (isTeXML || req.body?.CallSid || req.body?.Direction === 'inbound') {
+        // This is a TeXML voice webhook - return XML to answer, record, and forward
+        const forwardNumber = process.env.TELNYX_FORWARD_NUMBER;
+        
+        console.log('📞 TeXML incoming call detected');
+        console.log('📞 From:', req.body?.From);
+        console.log('📞 To:', req.body?.To);
+        console.log('📞 Forward number:', forwardNumber);
+        
+        if (!forwardNumber) {
+          console.log('📞 No forward number configured, rejecting call');
+          res.set('Content-Type', 'application/xml');
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Sorry, this number is not accepting calls at this time.</Say>
+  <Hangup />
+</Response>`);
+          return;
+        }
+        
+        // Return TeXML to answer, record, and forward the call
+        res.set('Content-Type', 'application/xml');
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Record recordingStatusCallback="https://treemarkablesclone.replit.app/api/telnyx/webhook" recordingStatusCallbackMethod="POST" />
+  <Dial record="record-from-answer-dual" recordingStatusCallback="https://treemarkablesclone.replit.app/api/telnyx/webhook" recordingStatusCallbackMethod="POST">
+    <Number>${forwardNumber}</Number>
+  </Dial>
+</Response>`);
+        console.log('📞 TeXML response sent - forwarding to:', forwardNumber);
+        return;
+      }
+      
+      // Check for Call Control API events (JSON format with data.event_type)
+      const eventType = req.body?.data?.event_type;
+      console.log('📞 Event type:', eventType);
+      
+      if (eventType === 'call.initiated') {
+        // Call Control API - incoming call
+        const direction = req.body?.data?.payload?.direction;
+        const callControlId = req.body?.data?.payload?.call_control_id;
+        
+        if (direction === 'incoming' && callControlId) {
+          const { processTelnyxWebhook } = await import('./services/telnyxService.js');
+          await processTelnyxWebhook(req.body);
+        }
+        res.status(200).json({ success: true, message: 'Call initiated event processed' });
+        return;
+      }
+      
+      // Process recording events
+      const { processTelnyxWebhook } = await import('./services/telnyxService.js');
       const callRecord = await processTelnyxWebhook(req.body);
       
       if (callRecord) {
         console.log('📞 Telnyx call record created:', callRecord.id);
         res.status(200).json({ success: true, callRecordId: callRecord.id });
       } else {
-        // Event was received but didn't create a record (e.g., non-recording event)
         res.status(200).json({ success: true, message: 'Event acknowledged' });
       }
     } catch (error) {
       console.error('📞 ERROR processing Telnyx webhook:', error);
-      // Return 200 to prevent Telnyx from retrying
       res.status(200).json({ success: false, message: 'Logged but failed to process', error: String(error) });
     }
   });
