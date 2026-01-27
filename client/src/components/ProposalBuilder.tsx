@@ -2098,7 +2098,7 @@ export function ProposalBuilder({
                         variant="outline"
                         onClick={handlePreview}
                         data-testid="button-preview-proposal"
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 bg-purple-50 hover:bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-950 dark:hover:bg-purple-900 dark:text-purple-300 dark:border-purple-800"
                       >
                         <Eye className="h-4 w-4" />
                         <span className="hidden sm:inline">Preview</span>
@@ -2111,7 +2111,7 @@ export function ProposalBuilder({
                           setShowEmailDialog(true);
                         }}
                         data-testid="button-email-proposal"
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-950 dark:hover:bg-blue-900 dark:text-blue-300 dark:border-blue-800"
                       >
                         <Mail className="h-4 w-4" />
                         <span className="hidden sm:inline">Email</span>
@@ -2124,7 +2124,7 @@ export function ProposalBuilder({
                           setShowSmsDialog(true);
                         }}
                         data-testid="button-sms-proposal"
-                        className="flex items-center gap-2"
+                        className="flex items-center gap-2 bg-green-50 hover:bg-green-100 text-green-700 border-green-200 dark:bg-green-950 dark:hover:bg-green-900 dark:text-green-300 dark:border-green-800"
                       >
                         <MessageSquare className="h-4 w-4" />
                         <span className="hidden sm:inline">SMS</span>
@@ -2138,6 +2138,7 @@ export function ProposalBuilder({
                         variant="outline"
                         onClick={onClose}
                         data-testid="button-cancel-proposal"
+                        className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
                       >
                         Cancel
                       </Button>
@@ -2147,7 +2148,7 @@ export function ProposalBuilder({
                         onClick={handleManualSave}
                         disabled={saveDraftMutation.isPending}
                         data-testid="button-save-only-proposal"
-                        className="gap-2"
+                        className="gap-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-950 dark:hover:bg-orange-900 dark:text-orange-300 dark:border-orange-800"
                       >
                         {saveDraftMutation.isPending ? (
                           <>
@@ -2336,6 +2337,7 @@ export function ProposalBuilder({
                     onClick={() => setShowEmailDialog(false)}
                     disabled={sendEmailMutation.isPending}
                     data-testid="button-cancel-email"
+                    className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
                   >
                     Cancel
                   </Button>
@@ -2343,6 +2345,7 @@ export function ProposalBuilder({
                     onClick={handleSendEmail}
                     disabled={sendEmailMutation.isPending || !emailForm.to.trim() || !emailForm.subject.trim()}
                     data-testid="button-send-email"
+                    className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {sendEmailMutation.isPending ? (
                       <>
@@ -2414,6 +2417,7 @@ export function ProposalBuilder({
                     onClick={() => setShowSmsDialog(false)}
                     disabled={sendSmsMutation.isPending}
                     data-testid="button-cancel-sms"
+                    className="bg-gray-50 hover:bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-900 dark:hover:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
                   >
                     Cancel
                   </Button>
@@ -2421,6 +2425,7 @@ export function ProposalBuilder({
                     onClick={handleSendSms}
                     disabled={sendSmsMutation.isPending || !smsForm.to.trim() || !smsForm.message.trim()}
                     data-testid="button-send-sms"
+                    className="bg-green-600 hover:bg-green-700 text-white"
                   >
                     {sendSmsMutation.isPending ? (
                       <>
