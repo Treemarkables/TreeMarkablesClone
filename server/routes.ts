@@ -18077,6 +18077,48 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ========================================
+  // TELNYX - CALL RECORDING INTEGRATION
+  // ========================================
+
+  // Telnyx webhook for call recording events
+  app.post("/api/telnyx/webhook", async (req, res) => {
+    try {
+      console.log('📞 ============ TELNYX WEBHOOK RECEIVED ============');
+      console.log('📞 Timestamp:', new Date().toISOString());
+      console.log('📞 Event type:', req.body?.data?.event_type);
+      console.log('📞 Body:', JSON.stringify(req.body, null, 2));
+      console.log('📞 ================================================');
+      
+      const { processTelnyxWebhook } = await import('./services/telnyxService.js');
+      
+      const callRecord = await processTelnyxWebhook(req.body);
+      
+      if (callRecord) {
+        console.log('📞 Telnyx call record created:', callRecord.id);
+        res.status(200).json({ success: true, callRecordId: callRecord.id });
+      } else {
+        // Event was received but didn't create a record (e.g., non-recording event)
+        res.status(200).json({ success: true, message: 'Event acknowledged' });
+      }
+    } catch (error) {
+      console.error('📞 ERROR processing Telnyx webhook:', error);
+      // Return 200 to prevent Telnyx from retrying
+      res.status(200).json({ success: false, message: 'Logged but failed to process', error: String(error) });
+    }
+  });
+
+  // Test Telnyx connection
+  app.get("/api/telnyx/status", async (req, res) => {
+    try {
+      const { testTelnyxConnection } = await import('./services/telnyxService.js');
+      const result = await testTelnyxConnection();
+      res.json(result);
+    } catch (error) {
+      res.json({ success: false, message: 'Telnyx not configured' });
+    }
+  });
+
   // Get all call records
   app.get("/api/calls", async (req, res) => {
     try {
