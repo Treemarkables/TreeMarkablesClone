@@ -18112,28 +18112,35 @@ Transcription: ${transcriptText}`;
         console.log('📞 To:', req.body?.To);
         console.log('📞 Forward number:', forwardNumber);
         
-        if (!forwardNumber) {
-          console.log('📞 No forward number configured, playing message');
-          res.set('Content-Type', 'application/xml');
-          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Hello. You have reached Treemarkables. Please leave a message after the tone.</Say>
-</Response>`);
-          return;
-        }
-        
-        // Forward call to mobile with recording
+        // Use Telnyx Call Control to record and let the app ring
+        // The Telnyx app will receive the call directly when configured in the portal
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers['host'] || 'app.treemarkables.co.nz';
         const callbackUrl = `${protocol}://${host}/api/telnyx/webhook`;
         
-        res.set('Content-Type', 'application/xml');
-        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+        // If a forward number is set, forward with recording
+        // Otherwise, just record and let Telnyx app handle it
+        if (forwardNumber) {
+          res.set('Content-Type', 'application/xml');
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial record="record-from-answer-dual" recordingStatusCallback="${callbackUrl}" recordingStatusCallbackMethod="POST">
     <Number>${forwardNumber}</Number>
   </Dial>
 </Response>`);
+          console.log('📞 TeXML response sent - forwarding to:', forwardNumber);
+        } else {
+          // No forwarding - just answer with recording enabled
+          // Caller will hear ringing until answered via Telnyx app
+          res.set('Content-Type', 'application/xml');
+          res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Please hold while we connect your call.</Say>
+  <Pause length="30"/>
+  <Say>Sorry, no one is available to take your call. Please try again later.</Say>
+</Response>`);
+          console.log('📞 TeXML response sent - no forwarding configured');
+        }
         console.log('📞 TeXML response sent - forwarding to:', forwardNumber);
         return;
       }
