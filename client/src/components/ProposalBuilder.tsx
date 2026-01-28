@@ -1007,11 +1007,19 @@ export function ProposalBuilder({
   const initializeSmsForm = () => {
     const previewData = getPreviewData();
     const formData = form.getValues();
-    // Check customer phone first, then fall back to job contact phone
+    // Check customer phone first, then fall back to job contact phones (including mobile)
     const customerPhone = previewData.customer?.phone || 
+                          previewData.job?.billingContactMobile ||
                           previewData.job?.jobContactPhone || 
                           previewData.job?.billingContactPhone ||
                           '';
+    console.log('SMS phone lookup:', { 
+      customerPhone: previewData.customer?.phone,
+      billingMobile: previewData.job?.billingContactMobile,
+      jobContactPhone: previewData.job?.jobContactPhone,
+      billingPhone: previewData.job?.billingContactPhone,
+      resolved: customerPhone
+    });
     const customerName = previewData.customer?.name || 
                          previewData.job?.clientName ||
                          'Valued Customer';
