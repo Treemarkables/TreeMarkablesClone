@@ -18112,6 +18112,17 @@ Transcription: ${transcriptText}`;
         console.log('📞 To:', req.body?.To);
         console.log('📞 Forward number:', forwardNumber);
         
+        // TEMPORARY: Always play test message for testing
+        // TODO: Remove this block once testing is complete
+        console.log('📞 Playing test message (testing mode)');
+        res.set('Content-Type', 'application/xml');
+        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say>Hello. You have reached Treemarkables. This is a test message confirming your call was successfully received. Thank you for calling. Goodbye.</Say>
+</Response>`);
+        return;
+        
+        /* FORWARDING CODE - Enable after testing
         if (!forwardNumber) {
           console.log('📞 No forward number configured, playing test message');
           res.set('Content-Type', 'application/xml');
@@ -18135,6 +18146,7 @@ Transcription: ${transcriptText}`;
     <Number>${forwardNumber}</Number>
   </Dial>
 </Response>`);
+        */
         console.log('📞 TeXML response sent - forwarding to:', forwardNumber);
         return;
       }
