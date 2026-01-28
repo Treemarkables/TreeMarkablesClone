@@ -495,7 +495,7 @@ export function ProposalBuilder({
   const removeLineItem = (sectionId: string, itemId: string) => {
     setSections(prev => prev.map(section => 
       section.id === sectionId 
-        ? { ...section, lineItems: section.lineItems.filter(item => item.id !== itemId) }
+        ? { ...section, lineItems: (section.lineItems || []).filter(item => item.id !== itemId) }
         : section
     ));
   };
@@ -505,7 +505,7 @@ export function ProposalBuilder({
       section.id === sectionId 
         ? {
             ...section, 
-            lineItems: section.lineItems.map(item => 
+            lineItems: (section.lineItems || []).map(item => 
               item.id === itemId ? { ...item, selected: !item.selected } : item
             )
           }
@@ -518,7 +518,7 @@ export function ProposalBuilder({
       section.id === sectionId 
         ? {
             ...section, 
-            lineItems: section.lineItems.map(item => {
+            lineItems: (section.lineItems || []).map(item => {
               if (item.id === itemId) {
                 const updatedItem = { ...item, selectedChoiceId: choiceId };
                 updatedItem.totalPrice = calculateLineItemTotal(updatedItem);
@@ -533,7 +533,7 @@ export function ProposalBuilder({
 
   // Calculate totals across all sections
   const getAllSelectedLineItems = () => {
-    return sections.flatMap(section => section.lineItems.filter(item => item.selected));
+    return sections.flatMap(section => (section.lineItems || []).filter(item => item.selected));
   };
   
   const selectedLineItems = getAllSelectedLineItems();
@@ -1067,7 +1067,7 @@ export function ProposalBuilder({
     const formData = form.getValues();
     
     // Don't save if no meaningful data
-    if (!formData.title && sections.length === 1 && sections[0].lineItems.length === 0) {
+    if (!formData.title && sections.length === 1 && (sections[0].lineItems || []).length === 0) {
       return;
     }
 
@@ -1199,7 +1199,7 @@ export function ProposalBuilder({
     const previewSections = sections.map(section => ({
       ...section,
       photos: section.photos,
-      lineItems: section.lineItems.map(item => ({
+      lineItems: (section.lineItems || []).map(item => ({
         ...item,
         id: item.id || `item-${Date.now()}-${Math.random()}`, // Ensure ID is never undefined
         selected: item.selected !== false, // Default to true if not explicitly false
@@ -1436,7 +1436,7 @@ export function ProposalBuilder({
                           </div>
                           <div>
                             <h3 className="font-medium text-sm">{section.title}</h3>
-                            <span className="text-xs text-muted-foreground">{section.lineItems.length} line item{section.lineItems.length !== 1 ? 's' : ''}</span>
+                            <span className="text-xs text-muted-foreground">{(section.lineItems || []).length} line item{(section.lineItems || []).length !== 1 ? 's' : ''}</span>
                           </div>
                         </div>
                         <div className="flex items-center gap-1">
@@ -1898,9 +1898,9 @@ export function ProposalBuilder({
                             </Card>
 
                             {/* Line Items List */}
-                            {section.lineItems.length > 0 && (
+                            {(section.lineItems || []).length > 0 && (
                               <div className="space-y-1.5">
-                                {section.lineItems.map((item) => (
+                                {(section.lineItems || []).map((item) => (
                                   <Card key={item.id} className="bg-muted/30">
                                     <CardContent className="p-2 sm:p-3">
                                       <div className="flex flex-wrap items-start justify-between gap-2">
