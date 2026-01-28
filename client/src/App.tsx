@@ -71,6 +71,7 @@ import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, C
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ScrollToTop component to reset scroll position on navigation
 function ScrollToTop() {
@@ -833,16 +834,18 @@ function App() {
   }, []);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <ScrollToTop />
-          <Toaster />
-          <InstallPrompt />
-          <Router />
-        </AuthProvider>
-      </TooltipProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <AuthProvider>
+            <ScrollToTop />
+            <Toaster />
+            <InstallPrompt />
+            <Router />
+          </AuthProvider>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
