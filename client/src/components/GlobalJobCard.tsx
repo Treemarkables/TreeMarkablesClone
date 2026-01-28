@@ -229,6 +229,7 @@ export function GlobalJobCard({
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
   const isLoadingDataRef = useRef(false);
   const hasUserChangedRef = useRef(false);
+  const lastLoadedJobIdRef = useRef<string | null>(null); // Track which job was loaded to prevent isDirty blocking initial load
   
   // Description textarea auto-resize ref
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -511,6 +512,7 @@ export function GlobalJobCard({
     if (!isOpen) {
       setCreatedJobId(null);
       setInternalMode(mode);
+      lastLoadedJobIdRef.current = null; // Reset so next job gets properly loaded
     }
   }, [isOpen, mode]);
 
@@ -685,10 +687,17 @@ export function GlobalJobCard({
       }
       setHasUserSelectedCustomer(false); // Reset customer selection flag
     } else if (editingJob && editingJob.id && !customersLoading) {
+      // Check if this is a NEW job we haven't loaded yet (first time seeing this job)
+      const isNewJobLoad = lastLoadedJobIdRef.current !== editingJob.id;
+      
       // GUARD: Don't reset form if user has made changes (prevents data loss on background refetch)
-      if (form.formState.isDirty) {
+      // BUT: Always allow reset if this is a different job than what we last loaded
+      if (form.formState.isDirty && !isNewJobLoad) {
         return;
       }
+      
+      // Mark that we're loading this job
+      lastLoadedJobIdRef.current = editingJob.id;
       
       // Wait for customers to load before populating form to avoid missing customer data
       // Mark that we're loading data to prevent auto-save
