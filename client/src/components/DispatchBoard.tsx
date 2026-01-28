@@ -180,6 +180,26 @@ const staffColorPalette = [
   'bg-lime-500',     // Lime
 ];
 
+// Format currency in NZD
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-NZ', {
+    style: 'currency',
+    currency: 'NZD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
+
+// Calculate total price from line items
+const calculateJobTotal = (lineItems: any[] | null | undefined): number => {
+  if (!lineItems || !Array.isArray(lineItems)) return 0;
+  return lineItems.reduce((sum, item) => {
+    const total = typeof item.total === 'number' ? item.total : 
+                  (parseFloat(item.quantity || 0) * parseFloat(item.unitPrice || 0));
+    return sum + total;
+  }, 0);
+};
+
 // Function to transform Employee data to StaffMember format for dispatch board
 const transformEmployeeToStaffMember = (employee: Employee, index: number): StaffMember => {
   // Assign unique color to each staff member
@@ -1671,9 +1691,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
                           {job.address || 'No address specified'}
                         </div>
-                        <div className="text-xs text-gray-500 mb-2 line-clamp-3 break-words h-[42px]">
+                        <div className="text-xs text-gray-500 mb-1 line-clamp-2 break-words h-[32px]">
                           {job.description || '\u00A0'}
                         </div>
+                        {(() => {
+                          const total = calculateJobTotal(job.lineItems);
+                          return total > 0 ? (
+                            <div className="text-xs font-semibold text-green-600 mb-1">
+                              {formatCurrency(total)}
+                            </div>
+                          ) : null;
+                        })()}
                         <div className="text-xs text-gray-500 mb-2 truncate h-[16px]">
                           {job.assignedTo || '\u00A0'}
                         </div>
@@ -1885,7 +1913,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                           {job.description && (
                             <div 
-                              className="text-xs text-gray-500 mb-3 line-clamp-2 break-words cursor-pointer"
+                              className="text-xs text-gray-500 mb-2 line-clamp-2 break-words cursor-pointer"
                               onDoubleClick={(e) => {
                                 e.stopPropagation();
                                 handleEditJob(job);
@@ -1895,6 +1923,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               {job.description}
                             </div>
                           )}
+                          {(() => {
+                            const total = calculateJobTotal(job.lineItems);
+                            return total > 0 ? (
+                              <div className="text-xs font-semibold text-green-600 mb-2">
+                                {formatCurrency(total)}
+                              </div>
+                            ) : null;
+                          })()}
                         </div>
                         <div className="text-[13px] font-bold text-black leading-none flex-shrink-0">
                           #{job.jobNumber || '0000'}
