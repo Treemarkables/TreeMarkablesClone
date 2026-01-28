@@ -588,7 +588,7 @@ export function ProposalBuilder({
         // Add photos to the specific section
         setSections(prev => prev.map(section => 
           section.id === sectionId 
-            ? { ...section, photos: [...section.photos, ...photosArray] }
+            ? { ...section, photos: [...(section.photos || []), ...photosArray] }
             : section
         ));
       } else {
@@ -604,7 +604,7 @@ export function ProposalBuilder({
 
         setSections(prev => prev.map(section => 
           section.id === sectionId 
-            ? { ...section, photos: [...section.photos, ...newPhotos] }
+            ? { ...section, photos: [...(section.photos || []), ...newPhotos] }
             : section
         ));
       }
@@ -618,7 +618,7 @@ export function ProposalBuilder({
   const removePhoto = (sectionId: string, photoId: string) => {
     setSections(prev => prev.map(section => 
       section.id === sectionId 
-        ? { ...section, photos: section.photos.filter(p => p.id !== photoId) }
+        ? { ...section, photos: (section.photos || []).filter(p => p.id !== photoId) }
         : section
     ));
   };
@@ -653,7 +653,7 @@ export function ProposalBuilder({
 
     setSections(prev => prev.map(section => 
       section.id === currentPhotoSectionId
-        ? { ...section, photos: [...section.photos, ...newPhotos] }
+        ? { ...section, photos: [...(section.photos || []), ...newPhotos] }
         : section
     ));
 
@@ -1563,9 +1563,9 @@ export function ProposalBuilder({
                               </div>
                             </div>
 
-                            {section.photos.length > 0 && (
+                            {(section.photos || []).length > 0 && (
                               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                {section.photos.map((photo) => (
+                                {(section.photos || []).map((photo) => (
                                   <div key={photo.id} className="relative group">
                                     <img
                                       src={photo.url}
