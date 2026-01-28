@@ -353,17 +353,17 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               )}
 
               {/* Section Photos */}
-              {section.photos.length > 0 && (
+              {(section.photos || []).length > 0 && (
                 <div className="mb-4 sm:mb-6">
                   <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Documentation</h4>
                   <div className="grid grid-cols-4 md:grid-cols-4 gap-1 sm:gap-1.5">
-                    {section.photos.map((photo, photoIndex) => (
+                    {(section.photos || []).map((photo, photoIndex) => (
                       <div 
                         key={photo.id} 
                         className="bg-gray-50 rounded-lg overflow-hidden cursor-pointer hover:opacity-90 transition-opacity" 
                         data-testid={`img-photo-${photo.id}`}
                         onClick={() => {
-                          const photos = section.photos;
+                          const photos = section.photos || [];
                           let currentIndex = photoIndex;
                           
                           // Create modal container
