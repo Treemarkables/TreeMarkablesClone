@@ -23,6 +23,7 @@ interface EmailParams {
 interface EmailResult {
   success: boolean;
   messageId?: string;
+  error?: string; // Error message for debugging
 }
 
 class EmailService {
@@ -153,7 +154,7 @@ class EmailService {
       
       if (response.error) {
         console.error('📧 Resend API error in response:', response.error);
-        return { success: false };
+        return { success: false, error: response.error.message || JSON.stringify(response.error) };
       }
       
       console.log(`📧 Email sent successfully to ${params.to}${messageId ? ` (Message ID: ${messageId})` : ''}`);
@@ -161,6 +162,7 @@ class EmailService {
     } catch (error: any) {
       console.error('📧 Resend email error:', error);
       // Log detailed error information
+      const errorMessage = error.message || 'Unknown email error';
       if (error.message) {
         console.error('📧 Error message:', error.message);
       }
@@ -170,7 +172,7 @@ class EmailService {
       if (error.data) {
         console.error('📧 Error data:', JSON.stringify(error.data, null, 2));
       }
-      return { success: false };
+      return { success: false, error: errorMessage };
     }
   }
 

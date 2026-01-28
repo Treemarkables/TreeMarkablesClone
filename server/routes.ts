@@ -5269,7 +5269,7 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 
       if (emailResult.success) {
         // Log email activity (you could store this in database for audit trail)
-        console.log(`📧 Invoice email sent to ${to} for job ${job?.jobNumber || jobId}${
+        console.log(`📧 Email sent to ${to} for job ${job?.jobNumber || jobId}${
           embeddedPhotoCount > 0 ? ` with ${embeddedPhotoCount} embedded photo(s)` : ''
         }${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
 
@@ -5313,9 +5313,10 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
           }` 
         });
       } else {
+        console.error('📧 Email send failed:', emailResult.error || 'Unknown error');
         res.status(500).json({ 
           success: false, 
-          message: 'Failed to send email' 
+          message: emailResult.error || 'Failed to send email' 
         });
       }
 
@@ -10180,14 +10181,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           diaryEntry 
         });
       } else {
+        console.error('📧 Diary email send failed:', emailResult.error || 'Unknown error');
         res.status(500).json({ 
           success: false, 
-          message: 'Failed to send email' 
+          message: emailResult.error || 'Failed to send email' 
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error sending email:', error);
-      res.status(500).json({ success: false, message: 'Error sending email' });
+      res.status(500).json({ success: false, message: error.message || 'Error sending email' });
     }
   });
 
