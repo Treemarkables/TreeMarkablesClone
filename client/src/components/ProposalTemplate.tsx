@@ -147,7 +147,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
     let gstAmount = 0;
     
     sections.forEach(section => {
-      section.lineItems.forEach(item => {
+      (section.lineItems || []).forEach(item => {
         if (item.selected) {
           let itemPrice = 0;
           if (item.pricingType === 'choice' && item.selectedChoiceId) {
@@ -487,7 +487,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               )}
 
               {/* Section Line Items */}
-              {section.lineItems.length > 0 && (
+              {(section.lineItems || []).length > 0 && (
                 <div className="mb-4 sm:mb-6">
                   <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Services & Pricing</h4>
                   <div className="w-full overflow-x-auto">
@@ -503,7 +503,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           </tr>
                         </thead>
                         <tbody>
-                          {section.lineItems.map((item, index) => {
+                          {(section.lineItems || []).map((item, index) => {
                             let displayPrice = item.totalPrice;
                             if (item.pricingType === 'choice' && item.selectedChoiceId) {
                               const selectedChoice = item.choices?.find(c => c.id === item.selectedChoiceId);
