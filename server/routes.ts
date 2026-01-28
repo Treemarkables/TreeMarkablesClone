@@ -18112,29 +18112,17 @@ Transcription: ${transcriptText}`;
         console.log('📞 To:', req.body?.To);
         console.log('📞 Forward number:', forwardNumber);
         
-        // TEMPORARY: Always play test message for testing
-        // TODO: Remove this block once testing is complete
-        console.log('📞 Playing test message (testing mode)');
-        res.set('Content-Type', 'application/xml');
-        res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-  <Say>Hello. You have reached Treemarkables. This is a test message confirming your call was successfully received. Thank you for calling. Goodbye.</Say>
-</Response>`);
-        return;
-        
-        /* FORWARDING CODE - Enable after testing
         if (!forwardNumber) {
-          console.log('📞 No forward number configured, playing test message');
+          console.log('📞 No forward number configured, playing message');
           res.set('Content-Type', 'application/xml');
           res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say>Hello. You have reached Treemarkables. This is a test message confirming your call was successfully received. Thank you for calling. Goodbye.</Say>
+  <Say>Hello. You have reached Treemarkables. Please leave a message after the tone.</Say>
 </Response>`);
           return;
         }
         
-        // Return TeXML to answer, record, and forward the call
-        // Use dynamic callback URL based on request host
+        // Forward call to mobile with recording
         const protocol = req.headers['x-forwarded-proto'] || 'https';
         const host = req.headers['host'] || 'app.treemarkables.co.nz';
         const callbackUrl = `${protocol}://${host}/api/telnyx/webhook`;
@@ -18142,11 +18130,10 @@ Transcription: ${transcriptText}`;
         res.set('Content-Type', 'application/xml');
         res.status(200).send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial>
+  <Dial record="record-from-answer-dual" recordingStatusCallback="${callbackUrl}" recordingStatusCallbackMethod="POST">
     <Number>${forwardNumber}</Number>
   </Dial>
 </Response>`);
-        */
         console.log('📞 TeXML response sent - forwarding to:', forwardNumber);
         return;
       }
