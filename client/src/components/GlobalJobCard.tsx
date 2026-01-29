@@ -755,7 +755,9 @@ export function GlobalJobCard({
         isLoadingDataRef.current = false;
       }, 500);
     }
-  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, editingJobCustomer, customersLoading, form, replaceLineItems, initialData]);
+  // Use editingJobCustomer?.id instead of the full object to prevent form reset on customer data refetch
+  // The actual customer data is still accessible via the editingJobCustomer variable above
+  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, editingJobCustomer?.id, customersLoading, form, replaceLineItems, initialData]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
