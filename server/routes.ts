@@ -8589,9 +8589,23 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   app.get('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
       const assignments = await storage.getJobStaffAssignmentsByJob(req.params.jobId);
+      
+      // Enrich with employee names
+      const allEmployees = await storage.getAllEmployees();
+      const employeeMap = new Map(allEmployees.map(e => [e.id, e]));
+      
+      const enrichedAssignments = assignments.map(assignment => {
+        const employee = employeeMap.get(assignment.employeeId);
+        return {
+          ...assignment,
+          employeeName: employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown',
+          employee: employee ? { firstName: employee.firstName, lastName: employee.lastName } : null
+        };
+      });
+      
       res.json({
         success: true,
-        data: assignments
+        data: enrichedAssignments
       });
     } catch (error) {
       console.error('Error fetching staff assignments:', error);
@@ -8878,10 +8892,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Get schedule events with optional date range
   app.get('/api/schedule-events', async (req: Request, res: Response) => {
     try {
-      const { startDate, endDate, employeeId } = req.query;
+      const { startDate, endDate, employeeId, jobId } = req.query;
       
       let events;
-      if (employeeId) {
+      if (jobId) {
+        // Filter by job ID
+        events = await storage.getScheduleEventsByJob(jobId as string);
+      } else if (employeeId) {
         events = await storage.getScheduleEventsByEmployee(
           employeeId as string,
           startDate ? new Date(startDate as string) : undefined,

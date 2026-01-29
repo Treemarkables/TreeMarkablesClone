@@ -397,7 +397,7 @@ export function JobDiarySection({
       // Add cache-busting timestamp to force fresh data
       const timestamp = Date.now();
       
-      const [localResponse, servicem8Response] = await Promise.all([
+      const [localResponse, servicem8Response, scheduleResponse] = await Promise.all([
         // Fetch local diary data (original endpoints)
         Promise.all([
           apiRequest('GET', `/api/jobs/${jobId}/diary?_t=${timestamp}`).then(res => res.json()),
@@ -405,7 +405,9 @@ export function JobDiarySection({
           apiRequest('GET', `/api/proposals?jobId=${jobId}&_t=${timestamp}`).then(res => res.json())
         ]),
         // Fetch ServiceM8 diary data (with error handling)
-        apiRequest('GET', `/api/servicem8/jobs/${jobId}/diary?_t=${timestamp}`).then(res => res.json()).catch(() => ({ data: [] }))
+        apiRequest('GET', `/api/servicem8/jobs/${jobId}/diary?_t=${timestamp}`).then(res => res.json()).catch(() => ({ data: [] })),
+        // Fetch job staff assignments (upcoming bookings)
+        apiRequest('GET', `/api/jobs/${jobId}/staff-assignments?_t=${timestamp}`).then(res => res.json()).catch(() => ({ data: [] }))
       ]);
 
       const [diaryResponse, communicationsResponse, proposalsResponse] = localResponse;
@@ -506,6 +508,39 @@ export function JobDiarySection({
             metadata: {
               eventType: entry.entryType || undefined,
               status: entry.active ? 'active' : 'inactive'
+            }
+          });
+        });
+      }
+      
+      // Add job staff assignments (upcoming bookings) if available
+      if (scheduleResponse.data && scheduleResponse.data.length > 0) {
+        scheduleResponse.data.forEach((assignment: any) => {
+          const startTime = assignment.startTime ? new Date(assignment.startTime) : null;
+          const endTime = assignment.endTime ? new Date(assignment.endTime) : null;
+          const staffName = assignment.employeeName || 
+            (assignment.employee ? `${assignment.employee.firstName} ${assignment.employee.lastName}` : 'Staff');
+          
+          // Format time for display
+          const timeStr = startTime ? formatInTimeZone(startTime, 'Pacific/Auckland', 'h:mm a') : '';
+          const dateStr = startTime ? formatInTimeZone(startTime, 'Pacific/Auckland', 'dd/MM/yyyy') : '';
+          const endTimeStr = endTime ? formatInTimeZone(endTime, 'Pacific/Auckland', 'h:mm a') : '';
+          
+          entries.push({
+            id: `booking-${assignment.id}`,
+            type: 'job_event',
+            title: 'Staff Scheduled',
+            content: `${staffName} scheduled for ${dateStr} at ${timeStr}${endTimeStr ? ` - ${endTimeStr}` : ''}`,
+            author: 'System',
+            timestamp: assignment.createdAt || startTime?.toISOString() || new Date().toISOString(),
+            metadata: {
+              eventType: 'staff_booking',
+              assignmentId: assignment.id,
+              employeeId: assignment.employeeId,
+              employeeName: staffName,
+              startTime: assignment.startTime,
+              endTime: assignment.endTime,
+              status: assignment.status
             }
           });
         });

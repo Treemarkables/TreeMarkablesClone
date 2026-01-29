@@ -3266,13 +3266,61 @@ class DatabaseStorage implements IStorage {
     await db.delete(schema.employees).where(eq(schema.employees.id, id));
   }
 
-  async createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent> { throw new Error("Not implemented"); }
-  async getScheduleEvent(id: string): Promise<ScheduleEvent | undefined> { return undefined; }
-  async updateScheduleEvent(id: string, updates: UpdateScheduleEvent): Promise<ScheduleEvent> { throw new Error("Not implemented"); }
-  async getAllScheduleEvents(startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> { return []; }
-  async getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> { return []; }
-  async getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]> { return []; }
-  async deleteScheduleEvent(id: string): Promise<void> { }
+  async createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent> {
+    const [newEvent] = await db.insert(schema.scheduleEvents).values(event).returning();
+    return newEvent;
+  }
+  
+  async getScheduleEvent(id: string): Promise<ScheduleEvent | undefined> {
+    const [event] = await db.select().from(schema.scheduleEvents).where(eq(schema.scheduleEvents.id, id));
+    return event;
+  }
+  
+  async updateScheduleEvent(id: string, updates: UpdateScheduleEvent): Promise<ScheduleEvent> {
+    const [updated] = await db.update(schema.scheduleEvents)
+      .set(updates)
+      .where(eq(schema.scheduleEvents.id, id))
+      .returning();
+    return updated;
+  }
+  
+  async getAllScheduleEvents(startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> {
+    let query = db.select().from(schema.scheduleEvents);
+    if (startDate && endDate) {
+      return await db.select().from(schema.scheduleEvents)
+        .where(and(
+          gte(schema.scheduleEvents.startTime, startDate),
+          lte(schema.scheduleEvents.endTime, endDate)
+        ))
+        .orderBy(schema.scheduleEvents.startTime);
+    }
+    return await db.select().from(schema.scheduleEvents).orderBy(schema.scheduleEvents.startTime);
+  }
+  
+  async getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]> {
+    if (startDate && endDate) {
+      return await db.select().from(schema.scheduleEvents)
+        .where(and(
+          eq(schema.scheduleEvents.employeeId, employeeId),
+          gte(schema.scheduleEvents.startTime, startDate),
+          lte(schema.scheduleEvents.endTime, endDate)
+        ))
+        .orderBy(schema.scheduleEvents.startTime);
+    }
+    return await db.select().from(schema.scheduleEvents)
+      .where(eq(schema.scheduleEvents.employeeId, employeeId))
+      .orderBy(schema.scheduleEvents.startTime);
+  }
+  
+  async getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]> {
+    return await db.select().from(schema.scheduleEvents)
+      .where(eq(schema.scheduleEvents.jobId, jobId))
+      .orderBy(schema.scheduleEvents.startTime);
+  }
+  
+  async deleteScheduleEvent(id: string): Promise<void> {
+    await db.delete(schema.scheduleEvents).where(eq(schema.scheduleEvents.id, id));
+  }
 
   async createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment> {
     const [newAssignment] = await db.insert(schema.jobStaffAssignments).values(assignment).returning();
