@@ -1169,10 +1169,10 @@ export function JobDiarySection({
                         </div>
                       </div>
                       {/* Content */}
-                      <div className="px-3 py-2">
-                        <p className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${
+                      <div className="px-3 py-2 min-w-0 overflow-hidden">
+                        <p className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full ${
                           isSent ? 'text-gray-700 dark:text-gray-300' : 'text-purple-900 dark:text-purple-100'
-                        }`}>
+                        }`} style={{ wordBreak: 'break-word' }}>
                           {messageText}
                         </p>
                       </div>
@@ -1322,7 +1322,7 @@ export function JobDiarySection({
                     </div>
                     
                     {/* Content */}
-                    <div className="px-3 py-2">
+                    <div className="px-3 py-2 min-w-0 overflow-hidden">
                       
                       {editingEntryId === entry.id ? (
                         <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
@@ -1388,7 +1388,8 @@ export function JobDiarySection({
                             return match ? match[0] : null;
                           })() ? (
                             <div 
-                              className="text-sm font-bold text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 whitespace-pre-line break-words overflow-hidden transition-colors"
+                              className="text-sm font-bold text-blue-600 dark:text-blue-400 cursor-pointer hover:text-blue-800 dark:hover:text-blue-300 whitespace-pre-line break-words overflow-hidden transition-colors w-full"
+                              style={{ wordBreak: 'break-word' }}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const match = entry.title.match(/PROP-\d+|DRAFT-\d+/);
@@ -1401,7 +1402,7 @@ export function JobDiarySection({
                               {cleanDiaryContent(entry.content, entry.type)}
                             </div>
                           ) : (
-                            <div className={`${entry.type === 'email' ? 'text-sm font-bold' : 'text-xs'} text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden`}>
+                            <div className={`${entry.type === 'email' ? 'text-sm font-bold' : 'text-xs'} text-gray-700 dark:text-gray-300 whitespace-pre-line break-words overflow-hidden w-full`} style={{ wordBreak: 'break-word' }}>
                               {cleanDiaryContent(entry.content, entry.type)}
                             </div>
                           )}
