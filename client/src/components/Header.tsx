@@ -77,10 +77,10 @@ export default function Header() {
   return (
     <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="grid grid-cols-[auto_1fr_auto] items-center h-20">
+        <div className="flex items-center justify-between h-14">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center hover-elevate group col-start-1 h-full" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate group h-full" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
@@ -90,7 +90,7 @@ export default function Header() {
           </Link>
 
           {/* Navigation - Centered */}
-          <nav className="hidden md:flex justify-center items-center gap-8 lg:gap-12 col-start-2">
+          <nav className="hidden md:flex items-center gap-6 lg:gap-8">
             {mainNavLinks.map((link) => (
               <Link 
                 key={link.href}
@@ -131,7 +131,7 @@ export default function Header() {
           </nav>
 
           {/* Action Buttons - Rounded Green */}
-          <div className="flex items-center space-x-2 md:space-x-3 col-start-3">
+          <div className="flex items-center space-x-2 md:space-x-3">
             {/* Phone Button - Rounded Green */}
             <a 
               href="tel:0272166882" 
