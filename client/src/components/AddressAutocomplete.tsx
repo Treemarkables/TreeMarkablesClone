@@ -109,6 +109,10 @@ export function AddressAutocomplete({
     // This fixes "StreetWhataupoko" -> "Street Whataupoko"
     let formatted = address.replace(/([a-z])([A-Z])/g, '$1 $2');
     
+    // Also handle common street suffixes followed by suburb names (case-insensitive)
+    // This fixes "123 Main StreetWhataupoko" or "123 Main streetwhataupoko"
+    formatted = formatted.replace(/(Street|St|Road|Rd|Drive|Dr|Avenue|Ave|Lane|Ln|Place|Pl|Crescent|Cres|Way|Court|Ct|Terrace|Tce|Grove|Gr|Close|Cl|Parade|Pde|Highway|Hwy)([a-zA-Z])/gi, '$1 $2');
+    
     // Also ensure commas are followed by a space
     formatted = formatted.replace(/,([^\s])/g, ', $1');
     
