@@ -103,11 +103,11 @@ export function AddressAutocomplete({
   };
 
 
-  // Format address with proper spacing and commas
+  // Format address with proper spacing
   const formatAddress = (address: string): string => {
-    // Always add comma and space before capital letters that follow lowercase letters
-    // This fixes "StreetWhataupoko" -> "Street, Whataupoko"
-    let formatted = address.replace(/([a-z])([A-Z])/g, '$1, $2');
+    // Always add space before capital letters that follow lowercase letters
+    // This fixes "StreetWhataupoko" -> "Street Whataupoko"
+    let formatted = address.replace(/([a-z])([A-Z])/g, '$1 $2');
     
     // Also ensure commas are followed by a space
     formatted = formatted.replace(/,([^\s])/g, ', $1');
