@@ -77,7 +77,7 @@ export default function Header() {
   return (
     <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-14">
+        <div className="flex items-center justify-between h-14 text-[21px]">
           
           {/* Logo and Brand */}
           <Link href="/" className="flex items-center hover-elevate group h-full" data-testid="link-home">
