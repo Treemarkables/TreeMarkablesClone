@@ -979,7 +979,7 @@ export function JobDiarySection({
           </div>
           <Button 
             size="icon"
-            className="h-9 w-12 bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="h-9 w-20 bg-primary hover:bg-primary/90 text-primary-foreground"
             onClick={() => {
               const input = quickNoteInputRef.current;
               if (input && input.value.trim()) {
