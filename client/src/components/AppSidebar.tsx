@@ -111,13 +111,6 @@ const businessItems = [
     isTab: false
   },
   {
-    title: "Equipment",
-    url: "/equipment",
-    icon: Settings,
-    value: "equipment",
-    isTab: false
-  },
-  {
     title: "Time Tracking",
     url: "/time-tracking",
     icon: Clock,
