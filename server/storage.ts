@@ -2604,8 +2604,8 @@ class DatabaseStorage implements IStorage {
       // Create a map of job IDs to their highest proposal amounts (for quoted value)
       const jobProposalAmountMap = new Map<string, number>();
       for (const proposal of proposals) {
-        if (proposal.jobId && proposal.totalPrice) {
-          const proposalAmount = parseFloat(proposal.totalPrice?.toString() || '0');
+        if (proposal.jobId && proposal.totalAmount) {
+          const proposalAmount = parseFloat(proposal.totalAmount?.toString() || '0');
           const existingAmount = jobProposalAmountMap.get(proposal.jobId) || 0;
           // Use the highest proposal amount for each job
           if (proposalAmount > existingAmount) {
