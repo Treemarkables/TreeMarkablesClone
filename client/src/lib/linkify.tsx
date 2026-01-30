@@ -80,7 +80,7 @@ export function LinkifyMultiline({ text, className = '' }: LinkifyProps) {
   const lines = text.split('\n');
 
   return (
-    <div className={className}>
+    <div className={`${className} space-y-2`}>
       {lines.map((line, lineIndex) => (
         <div key={lineIndex} className="flex items-start gap-2">
           {line.trim() && <span className="text-muted-foreground flex-shrink-0">–</span>}
