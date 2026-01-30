@@ -3132,19 +3132,63 @@ export function GlobalJobCard({
                               <Package className="w-4 h-4 text-blue-600" />
                               <label className="text-xs font-medium text-gray-600">Gear List</label>
                             </div>
-                            <div className="flex flex-wrap gap-1">
-                              {allEquipment.map((equip: any) => {
-                                const isAdded = editingJob.equipmentChecklist?.some(
-                                  (item: any) => item.equipment === equip.name
-                                );
-                                return (
-                                  <Button
-                                    key={equip.id}
-                                    type="button"
-                                    variant={isAdded ? "default" : "outline"}
-                                    size="sm"
-                                    className={`h-7 text-xs ${isAdded ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
-                                    disabled={isAddingEquipment}
+                            
+                            {/* Dropdown to add equipment */}
+                            <Select
+                              onValueChange={async (value) => {
+                                if (!editingJob?.id || !value) return;
+                                setIsAddingEquipment(true);
+                                
+                                try {
+                                  const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
+                                  const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
+                                  const currentChecklist = latestJob?.data?.equipmentChecklist || [];
+                                  
+                                  const newItem = {
+                                    id: `equip-${Date.now()}-${value}`,
+                                    equipment: value,
+                                    checked: false,
+                                  };
+                                  const updatedChecklist = [...currentChecklist, newItem];
+                                  
+                                  await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                    equipmentChecklist: updatedChecklist,
+                                  });
+                                  
+                                  await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                  await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                } catch (error) {
+                                  console.error('Error adding equipment:', error);
+                                } finally {
+                                  setIsAddingEquipment(false);
+                                }
+                              }}
+                              disabled={isAddingEquipment}
+                            >
+                              <SelectTrigger className="h-8 text-xs">
+                                <SelectValue placeholder="Add equipment..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allEquipment
+                                  .filter((equip: any) => !editingJob.equipmentChecklist?.some(
+                                    (item: any) => item.equipment === equip.name
+                                  ))
+                                  .map((equip: any) => (
+                                    <SelectItem key={equip.id} value={equip.name}>
+                                      {equip.name}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            
+                            {/* Selected equipment as removable tags */}
+                            {editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {editingJob.equipmentChecklist.map((item: any) => (
+                                  <Badge
+                                    key={item.id}
+                                    variant="secondary"
+                                    className="h-6 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer flex items-center gap-1"
                                     onClick={async () => {
                                       if (!editingJob?.id) return;
                                       setIsAddingEquipment(true);
@@ -3154,17 +3198,7 @@ export function GlobalJobCard({
                                         const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
                                         const currentChecklist = latestJob?.data?.equipmentChecklist || [];
                                         
-                                        let updatedChecklist;
-                                        if (isAdded) {
-                                          updatedChecklist = currentChecklist.filter((item: any) => item.equipment !== equip.name);
-                                        } else {
-                                          const newItem = {
-                                            id: `equip-${Date.now()}-${equip.id}`,
-                                            equipment: equip.name,
-                                            checked: false,
-                                          };
-                                          updatedChecklist = [...currentChecklist, newItem];
-                                        }
+                                        const updatedChecklist = currentChecklist.filter((i: any) => i.equipment !== item.equipment);
                                         
                                         await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
                                           equipmentChecklist: updatedChecklist,
@@ -3173,22 +3207,16 @@ export function GlobalJobCard({
                                         await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
                                         await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
                                       } catch (error) {
-                                        console.error('Error updating equipment:', error);
+                                        console.error('Error removing equipment:', error);
                                       } finally {
                                         setIsAddingEquipment(false);
                                       }
                                     }}
-                                    data-testid={`gear-${equip.id}`}
                                   >
-                                    {equip.name}
-                                    {isAdded && <Check className="w-3 h-3 ml-1" />}
-                                  </Button>
-                                );
-                              })}
-                            </div>
-                            {editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0 && (
-                              <div className="text-xs text-gray-500">
-                                {editingJob.equipmentChecklist.length} item{editingJob.equipmentChecklist.length !== 1 ? 's' : ''} selected
+                                    {item.equipment}
+                                    <X className="w-3 h-3" />
+                                  </Badge>
+                                ))}
                               </div>
                             )}
                           </div>
