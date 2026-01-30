@@ -2575,15 +2575,7 @@ export function GlobalJobCard({
         {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
         <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden">
           {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
-          <div className={`border-b md:border-b-0 md:border-r flex md:flex-col md:w-16 flex-shrink-0 ${
-            currentStatus === 'completed' ? 'bg-green-100 border-green-200' :
-            currentStatus === 'work_order' ? 'bg-blue-100 border-blue-200' :
-            currentStatus === 'scheduled' ? 'bg-blue-100 border-blue-200' :
-            currentStatus === 'quote' ? 'bg-orange-100 border-orange-200' :
-            currentStatus === 'lead' ? 'bg-cyan-100 border-cyan-200' :
-            currentStatus === 'unsuccessful' ? 'bg-red-100 border-red-200' :
-            'bg-gray-100 border-gray-200'
-          }`}>
+          <div className="border-b md:border-b-0 md:border-r flex md:flex-col md:w-16 flex-shrink-0 bg-white border-gray-200">
             <button
               className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
                 currentStatus === 'completed' ? 'border-green-200' :
