@@ -867,10 +867,14 @@ export function GlobalJobCard({
       // If no customer ID is provided, create a customer from job contact info
       if (!customerId && (data.jobContactFirstName || data.jobContactLastName)) {
         const customerName = `${data.jobContactFirstName || ''} ${data.jobContactLastName || ''}`.trim();
+        const phoneNumber = data.jobContactPhone || "";
+        // Detect if it's a mobile number (NZ mobiles start with 02, 2, +642, or 642)
+        const isMobile = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, ''));
         const customerData = {
           name: customerName || 'New Customer',
           email: data.jobContactEmail || "",
-          phone: data.jobContactPhone || "",
+          phone: isMobile ? "" : phoneNumber,
+          mobile: isMobile ? phoneNumber : "",
           address: data.address || ""
         };
         
