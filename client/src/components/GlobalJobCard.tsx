@@ -3153,36 +3153,34 @@ export function GlobalJobCard({
                                           className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-accent ${isSelected ? 'bg-blue-50' : ''}`}
                                           onClick={async () => {
                                             if (!editingJob?.id) return;
-                                            setIsAddingEquipment(true);
                                             
-                                            try {
-                                              const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
-                                              const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
-                                              const currentChecklist = latestJob?.data?.equipmentChecklist || [];
-                                              
-                                              let updatedChecklist;
-                                              if (isSelected) {
-                                                updatedChecklist = currentChecklist.filter((i: any) => i.equipment !== equip.name);
-                                              } else {
-                                                const newItem = {
-                                                  id: `equip-${Date.now()}-${equip.name}`,
-                                                  equipment: equip.name,
-                                                  checked: false,
-                                                };
-                                                updatedChecklist = [...currentChecklist, newItem];
-                                              }
-                                              
-                                              await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                                equipmentChecklist: updatedChecklist,
-                                              });
-                                              
-                                              await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                              await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                            } catch (error) {
-                                              console.error('Error toggling equipment:', error);
-                                            } finally {
-                                              setIsAddingEquipment(false);
+                                            const currentChecklist = editingJob.equipmentChecklist || [];
+                                            
+                                            let updatedChecklist;
+                                            if (isSelected) {
+                                              updatedChecklist = currentChecklist.filter((i: any) => i.equipment !== equip.name);
+                                            } else {
+                                              const newItem = {
+                                                id: `equip-${Date.now()}-${equip.name}`,
+                                                equipment: equip.name,
+                                                checked: false,
+                                              };
+                                              updatedChecklist = [...currentChecklist, newItem];
                                             }
+                                            
+                                            // Optimistic update - update UI immediately
+                                            queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
+                                              if (!oldData) return oldData;
+                                              return {
+                                                ...oldData,
+                                                data: { ...oldData.data, equipmentChecklist: updatedChecklist }
+                                              };
+                                            });
+                                            
+                                            // Background save - don't await
+                                            apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                              equipmentChecklist: updatedChecklist,
+                                            }).catch(error => console.error('Error saving equipment:', error));
                                           }}
                                         >
                                           <div className={`h-4 w-4 border rounded flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
@@ -3205,28 +3203,26 @@ export function GlobalJobCard({
                                     key={item.id}
                                     variant="secondary"
                                     className="h-6 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer flex items-center gap-1"
-                                    onClick={async () => {
+                                    onClick={() => {
                                       if (!editingJob?.id) return;
-                                      setIsAddingEquipment(true);
                                       
-                                      try {
-                                        const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
-                                        const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
-                                        const currentChecklist = latestJob?.data?.equipmentChecklist || [];
-                                        
-                                        const updatedChecklist = currentChecklist.filter((i: any) => i.equipment !== item.equipment);
-                                        
-                                        await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                          equipmentChecklist: updatedChecklist,
-                                        });
-                                        
-                                        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                        await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                      } catch (error) {
-                                        console.error('Error removing equipment:', error);
-                                      } finally {
-                                        setIsAddingEquipment(false);
-                                      }
+                                      const updatedChecklist = (editingJob.equipmentChecklist || []).filter(
+                                        (i: any) => i.equipment !== item.equipment
+                                      );
+                                      
+                                      // Optimistic update - update UI immediately
+                                      queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
+                                        if (!oldData) return oldData;
+                                        return {
+                                          ...oldData,
+                                          data: { ...oldData.data, equipmentChecklist: updatedChecklist }
+                                        };
+                                      });
+                                      
+                                      // Background save - don't await
+                                      apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                        equipmentChecklist: updatedChecklist,
+                                      }).catch(error => console.error('Error removing equipment:', error));
                                     }}
                                   >
                                     {item.equipment}
