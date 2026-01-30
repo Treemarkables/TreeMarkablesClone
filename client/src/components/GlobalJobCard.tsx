@@ -3141,8 +3141,8 @@ export function GlobalJobCard({
                                     <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
                                   </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[220px] p-2" align="start">
-                                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                                <PopoverContent className="w-[220px] p-0 max-h-[350px] overflow-y-auto" align="start">
+                                  <div className="space-y-1 p-2">
                                     {allEquipment.map((equip: any) => {
                                       const isSelected = editingJob.equipmentChecklist?.some(
                                         (item: any) => item.equipment === equip.name
