@@ -84,7 +84,7 @@ export default function Header() {
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="max-h-12 md:max-h-16 lg:max-h-20 w-auto max-w-[50vw] md:max-w-[40vw] object-contain transition-all duration-200"
+              className="max-h-36 md:max-h-48 lg:max-h-60 w-auto max-w-[80vw] md:max-w-[70vw] object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
@@ -95,11 +95,11 @@ export default function Header() {
               <Link 
                 key={link.href}
                 href={link.href} 
-                className="text-green-500 hover:text-green-400 transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap tracking-wide uppercase" 
+                className="text-[#39FF14] hover:text-[#32CD32] transition-colors font-medium text-sm lg:text-base relative group whitespace-nowrap tracking-wide uppercase" 
                 data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}`}
               >
                 {link.label}
-                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-green-500 transition-all duration-200 group-hover:w-full"></span>
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-[#39FF14] transition-all duration-200 group-hover:w-full"></span>
               </Link>
             ))}
             
@@ -107,7 +107,7 @@ export default function Header() {
               <DropdownMenuTrigger asChild>
                 <Button 
                   variant="ghost"
-                  className="text-green-500 hover:text-green-400 hover:bg-transparent transition-colors font-medium text-sm lg:text-base whitespace-nowrap tracking-wide uppercase flex items-center space-x-1 px-0" 
+                  className="text-[#39FF14] hover:text-[#32CD32] hover:bg-transparent transition-colors font-medium text-sm lg:text-base whitespace-nowrap tracking-wide uppercase flex items-center space-x-1 px-0" 
                   data-testid="button-services-dropdown"
                 >
                   <span>Services</span>
@@ -136,20 +136,20 @@ export default function Header() {
             <a 
               href="tel:0272166882" 
               onClick={handlePhoneClick}
-              className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-[#39FF14] hover:bg-[#32CD32] rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-phone-header"
             >
-              <Phone className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
+              <Phone className="h-5 w-5 lg:h-6 lg:w-6 text-black" />
             </a>
 
             {/* Email Button - Rounded Green */}
             <a 
               href="mailto:quotes@treemarkables.nz" 
               onClick={handleEmailClick}
-              className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-green-500 hover:bg-green-600 rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
+              className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-[#39FF14] hover:bg-[#32CD32] rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
             >
-              <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-white" />
+              <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-black" />
             </a>
 
             
@@ -157,7 +157,7 @@ export default function Header() {
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden relative text-green-500 hover:text-green-400 hover:bg-transparent w-11 h-11"
+              className="md:hidden relative text-[#39FF14] hover:text-[#32CD32] hover:bg-transparent w-11 h-11"
               onClick={toggleMenu}
               data-testid="button-mobile-menu"
               aria-label={isMenuOpen ? "Close menu" : "Open menu"}
@@ -188,7 +188,7 @@ export default function Header() {
                 <Link 
                   key={`mobile-${link.href}`}
                   href={link.href} 
-                  className="text-green-500 hover:text-green-400 hover:bg-gray-900 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md" 
+                  className="text-[#39FF14] hover:text-[#32CD32] hover:bg-gray-900 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md" 
                   data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}-mobile`}
                   onClick={closeMenu}
                 >
@@ -201,7 +201,7 @@ export default function Header() {
                 <Link 
                   key={`mobile-${link.href}`}
                   href={link.href} 
-                  className="text-green-500 hover:text-green-400 hover:bg-gray-900 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md ml-4" 
+                  className="text-[#39FF14] hover:text-[#32CD32] hover:bg-gray-900 transition-all duration-200 font-medium text-base px-4 py-3 rounded-md ml-4" 
                   data-testid={`link-${link.label.toLowerCase().replace(' ', '-')}-mobile`}
                   onClick={closeMenu}
                 >
@@ -213,7 +213,7 @@ export default function Header() {
               <div className="flex flex-col space-y-3 pt-4 px-4 border-t border-gray-800 mt-4">
                 <a 
                   href="tel:0272166882" 
-                  className="flex items-center justify-center space-x-3 text-base text-white bg-green-500 px-4 py-4 rounded-full border-2 border-green-600 hover:bg-green-600 hover:border-green-700 transition-all duration-200 font-bold shadow-md tracking-tight"
+                  className="flex items-center justify-center space-x-3 text-base text-black bg-[#39FF14] px-4 py-4 rounded-full border-2 border-[#32CD32] hover:bg-[#32CD32] hover:border-[#2EB82E] transition-all duration-200 font-bold shadow-md tracking-tight"
                   data-testid="link-phone-mobile"
                   onClick={(e) => {
                     e.preventDefault();
@@ -231,7 +231,7 @@ export default function Header() {
                 
                 <a 
                   href="mailto:quotes@treemarkables.nz" 
-                  className="flex items-center justify-center space-x-3 text-base text-white bg-green-500 px-4 py-4 rounded-full border-2 border-green-600 hover:bg-green-600 hover:border-green-700 transition-all duration-200 font-bold shadow-md tracking-tight"
+                  className="flex items-center justify-center space-x-3 text-base text-black bg-[#39FF14] px-4 py-4 rounded-full border-2 border-[#32CD32] hover:bg-[#32CD32] hover:border-[#2EB82E] transition-all duration-200 font-bold shadow-md tracking-tight"
                   data-testid="link-email-mobile"
                   onClick={closeMenu}
                 >
