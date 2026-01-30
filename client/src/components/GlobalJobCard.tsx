@@ -3123,54 +3123,78 @@ export function GlobalJobCard({
                               <label className="text-xs font-medium text-gray-600">Gear List</label>
                             </div>
                             
-                            {/* Dropdown to add equipment */}
-                            <div className="w-[140px]">
-                            <Select
-                              onValueChange={async (value) => {
-                                if (!editingJob?.id || !value) return;
-                                setIsAddingEquipment(true);
-                                
-                                try {
-                                  const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
-                                  const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
-                                  const currentChecklist = latestJob?.data?.equipmentChecklist || [];
-                                  
-                                  const newItem = {
-                                    id: `equip-${Date.now()}-${value}`,
-                                    equipment: value,
-                                    checked: false,
-                                  };
-                                  const updatedChecklist = [...currentChecklist, newItem];
-                                  
-                                  await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                    equipmentChecklist: updatedChecklist,
-                                  });
-                                  
-                                  await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                  await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
-                                } catch (error) {
-                                  console.error('Error adding equipment:', error);
-                                } finally {
-                                  setIsAddingEquipment(false);
-                                }
-                              }}
-                              disabled={isAddingEquipment}
-                            >
-                              <SelectTrigger className="h-8 text-xs">
-                                <SelectValue placeholder="Add equipment..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {allEquipment
-                                  .filter((equip: any) => !editingJob.equipmentChecklist?.some(
-                                    (item: any) => item.equipment === equip.name
-                                  ))
-                                  .map((equip: any) => (
-                                    <SelectItem key={equip.id} value={equip.name}>
-                                      {equip.name}
-                                    </SelectItem>
-                                  ))}
-                              </SelectContent>
-                            </Select>
+                            {/* Multi-select dropdown for equipment */}
+                            <div className="w-[200px]">
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8 text-xs w-full justify-between"
+                                    disabled={isAddingEquipment}
+                                  >
+                                    <span className="truncate">
+                                      {editingJob.equipmentChecklist?.length 
+                                        ? `${editingJob.equipmentChecklist.length} selected` 
+                                        : "Select gear..."}
+                                    </span>
+                                    <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[220px] p-2" align="start">
+                                  <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                                    {allEquipment.map((equip: any) => {
+                                      const isSelected = editingJob.equipmentChecklist?.some(
+                                        (item: any) => item.equipment === equip.name
+                                      );
+                                      return (
+                                        <div
+                                          key={equip.id}
+                                          className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-accent ${isSelected ? 'bg-blue-50' : ''}`}
+                                          onClick={async () => {
+                                            if (!editingJob?.id) return;
+                                            setIsAddingEquipment(true);
+                                            
+                                            try {
+                                              const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
+                                              const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
+                                              const currentChecklist = latestJob?.data?.equipmentChecklist || [];
+                                              
+                                              let updatedChecklist;
+                                              if (isSelected) {
+                                                updatedChecklist = currentChecklist.filter((i: any) => i.equipment !== equip.name);
+                                              } else {
+                                                const newItem = {
+                                                  id: `equip-${Date.now()}-${equip.name}`,
+                                                  equipment: equip.name,
+                                                  checked: false,
+                                                };
+                                                updatedChecklist = [...currentChecklist, newItem];
+                                              }
+                                              
+                                              await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                                equipmentChecklist: updatedChecklist,
+                                              });
+                                              
+                                              await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                              await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                            } catch (error) {
+                                              console.error('Error toggling equipment:', error);
+                                            } finally {
+                                              setIsAddingEquipment(false);
+                                            }
+                                          }}
+                                        >
+                                          <div className={`h-4 w-4 border rounded flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                                          </div>
+                                          <span className="text-sm">{equip.name}</span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             </div>
                             
                             {/* Selected equipment as removable tags */}
