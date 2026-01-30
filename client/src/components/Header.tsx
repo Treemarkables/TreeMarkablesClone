@@ -114,9 +114,9 @@ export default function Header() {
                   <ChevronDown className="w-4 h-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 pt-4 pb-2 px-2">
+              <DropdownMenuContent className="w-56 pt-4 pb-2 px-2 bg-black border-gray-800">
                 {serviceLinks.map((link) => (
-                  <DropdownMenuItem key={link.href} asChild>
+                  <DropdownMenuItem key={link.href} asChild className="text-[#39FF14] hover:text-[#32CD32] hover:bg-gray-900 focus:bg-gray-900 focus:text-[#32CD32]">
                     <Link 
                       href={link.href} 
                       className="w-full" 
