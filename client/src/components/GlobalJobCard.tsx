@@ -3228,31 +3228,23 @@ export function GlobalJobCard({
                                       <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Select hours" />
                                       </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="0.25">15 min</SelectItem>
-                                        <SelectItem value="0.5">30 min</SelectItem>
-                                        <SelectItem value="0.75">45 min</SelectItem>
-                                        <SelectItem value="1">1 hr</SelectItem>
-                                        <SelectItem value="1.25">1 hr 15 min</SelectItem>
-                                        <SelectItem value="1.5">1 hr 30 min</SelectItem>
-                                        <SelectItem value="1.75">1 hr 45 min</SelectItem>
-                                        <SelectItem value="2">2 hrs</SelectItem>
-                                        <SelectItem value="2.5">2 hrs 30 min</SelectItem>
-                                        <SelectItem value="3">3 hrs</SelectItem>
-                                        <SelectItem value="3.5">3 hrs 30 min</SelectItem>
-                                        <SelectItem value="4">4 hrs</SelectItem>
-                                        <SelectItem value="4.5">4 hrs 30 min</SelectItem>
-                                        <SelectItem value="5">5 hrs</SelectItem>
-                                        <SelectItem value="5.5">5 hrs 30 min</SelectItem>
-                                        <SelectItem value="6">6 hrs</SelectItem>
-                                        <SelectItem value="7">7 hrs</SelectItem>
-                                        <SelectItem value="8">8 hrs (1 day)</SelectItem>
-                                        <SelectItem value="10">10 hrs</SelectItem>
-                                        <SelectItem value="12">12 hrs</SelectItem>
-                                        <SelectItem value="16">16 hrs (2 days)</SelectItem>
-                                        <SelectItem value="24">24 hrs (3 days)</SelectItem>
-                                        <SelectItem value="32">32 hrs (4 days)</SelectItem>
-                                        <SelectItem value="40">40 hrs (5 days)</SelectItem>
+                                      <SelectContent className="max-h-[300px]">
+                                        {Array.from({ length: 160 }, (_, i) => {
+                                          const hours = (i + 1) * 0.25;
+                                          const wholeHours = Math.floor(hours);
+                                          const minutes = Math.round((hours - wholeHours) * 60);
+                                          let label = '';
+                                          if (wholeHours === 0) {
+                                            label = `${minutes} min`;
+                                          } else if (minutes === 0) {
+                                            label = wholeHours === 1 ? '1 hr' : `${wholeHours} hrs`;
+                                          } else {
+                                            label = wholeHours === 1 ? `1 hr ${minutes} min` : `${wholeHours} hrs ${minutes} min`;
+                                          }
+                                          return (
+                                            <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>
+                                          );
+                                        })}
                                       </SelectContent>
                                     </Select>
                                   </FormControl>
