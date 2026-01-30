@@ -8,7 +8,7 @@ import {
 import { Phone, Mail, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-import logoImage from "@assets/treemarkables-logo-green.png";
+import logoImage from "@assets/treemarkables-logo-horizontal.png";
 
 // Declare gtag and gtag_report_conversion for TypeScript
 declare global {
@@ -85,7 +85,6 @@ export default function Header() {
               src={logoImage} 
               alt="Treemarkables" 
               className="max-h-12 md:max-h-16 lg:max-h-20 w-auto max-w-[50vw] md:max-w-[40vw] object-contain transition-all duration-200"
-              style={{ mixBlendMode: 'screen' }}
               data-testid="logo-image"
             />
           </Link>
