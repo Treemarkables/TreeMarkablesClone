@@ -3124,6 +3124,7 @@ export function GlobalJobCard({
                             </div>
                             
                             {/* Dropdown to add equipment */}
+                            <div className="w-[140px]">
                             <Select
                               onValueChange={async (value) => {
                                 if (!editingJob?.id || !value) return;
@@ -3170,6 +3171,7 @@ export function GlobalJobCard({
                                   ))}
                               </SelectContent>
                             </Select>
+                            </div>
                             
                             {/* Selected equipment as removable tags */}
                             {editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0 && (
