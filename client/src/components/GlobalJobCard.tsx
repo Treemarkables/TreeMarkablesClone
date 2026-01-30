@@ -3125,6 +3125,75 @@ export function GlobalJobCard({
                           />
                         </div>
 
+                        {/* Equipment Selection */}
+                        {mode === 'edit' && editingJob && allEquipment.length > 0 && (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <Package className="w-4 h-4 text-blue-600" />
+                              <label className="text-xs font-medium text-gray-600">Gear List</label>
+                            </div>
+                            <div className="flex flex-wrap gap-1">
+                              {allEquipment.map((equip: any) => {
+                                const isAdded = editingJob.equipmentChecklist?.some(
+                                  (item: any) => item.equipment === equip.name
+                                );
+                                return (
+                                  <Button
+                                    key={equip.id}
+                                    type="button"
+                                    variant={isAdded ? "default" : "outline"}
+                                    size="sm"
+                                    className={`h-7 text-xs ${isAdded ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+                                    disabled={isAddingEquipment}
+                                    onClick={async () => {
+                                      if (!editingJob?.id) return;
+                                      setIsAddingEquipment(true);
+                                      
+                                      try {
+                                        const latestJobResponse = await apiRequest('GET', `/api/jobs/${editingJob.id}`);
+                                        const latestJob = latestJobResponse.json ? await latestJobResponse.json() : latestJobResponse;
+                                        const currentChecklist = latestJob?.data?.equipmentChecklist || [];
+                                        
+                                        let updatedChecklist;
+                                        if (isAdded) {
+                                          updatedChecklist = currentChecklist.filter((item: any) => item.equipment !== equip.name);
+                                        } else {
+                                          const newItem = {
+                                            id: `equip-${Date.now()}-${equip.id}`,
+                                            equipment: equip.name,
+                                            checked: false,
+                                          };
+                                          updatedChecklist = [...currentChecklist, newItem];
+                                        }
+                                        
+                                        await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                          equipmentChecklist: updatedChecklist,
+                                        });
+                                        
+                                        await queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                        await queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                      } catch (error) {
+                                        console.error('Error updating equipment:', error);
+                                      } finally {
+                                        setIsAddingEquipment(false);
+                                      }
+                                    }}
+                                    data-testid={`gear-${equip.id}`}
+                                  >
+                                    {equip.name}
+                                    {isAdded && <Check className="w-3 h-3 ml-1" />}
+                                  </Button>
+                                );
+                              })}
+                            </div>
+                            {editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0 && (
+                              <div className="text-xs text-gray-500">
+                                {editingJob.equipmentChecklist.length} item{editingJob.equipmentChecklist.length !== 1 ? 's' : ''} selected
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {/* Job Description */}
                         <div>
                           <div className="flex items-center justify-between mb-1">
