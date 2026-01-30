@@ -82,9 +82,9 @@ export function LinkifyMultiline({ text, className = '' }: LinkifyProps) {
   return (
     <div className={className}>
       {lines.map((line, lineIndex) => (
-        <div key={lineIndex}>
+        <div key={lineIndex} className="flex items-start gap-2">
+          {line.trim() && <span className="text-muted-foreground flex-shrink-0">–</span>}
           <Linkify text={line} />
-          {lineIndex < lines.length - 1 && <br />}
         </div>
       ))}
     </div>
