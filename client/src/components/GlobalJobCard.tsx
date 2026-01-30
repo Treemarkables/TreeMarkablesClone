@@ -2878,7 +2878,7 @@ export function GlobalJobCard({
                                   onAddressSelect={(parsed) => {
                                     form.setValue('address', parsed.fullAddress);
                                   }}
-                                  className="h-9 text-sm" 
+                                  className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
                                   placeholder="Enter address..."
                                   data-testid="input-job-address"
                                 />
