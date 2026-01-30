@@ -2601,12 +2601,26 @@ class DatabaseStorage implements IStorage {
         }
       });
 
+      // Create a map of job IDs to their highest proposal amounts (for quoted value)
+      const jobProposalAmountMap = new Map<string, number>();
+      for (const proposal of proposals) {
+        if (proposal.jobId && proposal.totalPrice) {
+          const proposalAmount = parseFloat(proposal.totalPrice?.toString() || '0');
+          const existingAmount = jobProposalAmountMap.get(proposal.jobId) || 0;
+          // Use the highest proposal amount for each job
+          if (proposalAmount > existingAmount) {
+            jobProposalAmountMap.set(proposal.jobId, proposalAmount);
+          }
+        }
+      }
+
       // Group jobs by lead source
       const sourceMap = new Map<string, {
         count: number;
         quotedCount: number;
         wonCount: number;
         totalRevenue: number;
+        totalQuotedValue: number;
         totalCosts: number;
         totalProfit: number;
         jobIds: Set<string>;
@@ -2621,6 +2635,7 @@ class DatabaseStorage implements IStorage {
           quotedCount: 0,
           wonCount: 0,
           totalRevenue: 0,
+          totalQuotedValue: 0,
           totalCosts: 0,
           totalProfit: 0,
           jobIds: new Set(),
@@ -2658,6 +2673,9 @@ class DatabaseStorage implements IStorage {
         // Count jobs with proposals sent in the date range as "quoted"
         if (hasProposalInPeriod) {
           existing.quotedJobIds.add(job.id);
+          // Add the proposal amount to quoted value
+          const proposalAmount = jobProposalAmountMap.get(job.id) || 0;
+          existing.totalQuotedValue += proposalAmount;
         }
         
         // Count jobs with invoices in the date range as "won" with revenue
@@ -2720,6 +2738,7 @@ class DatabaseStorage implements IStorage {
         const quotedCount = data.quotedJobIds.size; // Count of unique jobs with proposals in period
         const wonCount = data.wonCount;
         const totalRevenue = data.totalRevenue;
+        const totalQuotedValue = data.totalQuotedValue;
         const totalProfit = data.totalProfit;
 
         // Conversion rates
@@ -2728,6 +2747,7 @@ class DatabaseStorage implements IStorage {
 
         // Average values
         const averageValue = wonCount > 0 ? totalRevenue / wonCount : 0;
+        const averageQuoteValue = quotedCount > 0 ? totalQuotedValue / quotedCount : 0;
         // Only calculate margin from jobs with actual cost data (excludes jobs with $0 costs)
         const revenueWithCostData = data.revenueWithCostData || 0;
         const profitWithCostData = data.profitWithCostData || 0;
@@ -2744,7 +2764,9 @@ class DatabaseStorage implements IStorage {
           wonCount,
           conversionRate: Math.round(conversionRate * 100) / 100,
           quoteConversionRate: Math.round(quoteConversionRate * 100) / 100,
+          totalQuotedValue: Math.round(totalQuotedValue * 100) / 100,
           totalRevenue: Math.round(totalRevenue * 100) / 100,
+          averageQuoteValue: Math.round(averageQuoteValue * 100) / 100,
           averageValue: Math.round(averageValue * 100) / 100,
           averageProfitMargin: Math.round(averageProfitMargin * 100) / 100,
           totalProfit: Math.round(totalProfit * 100) / 100,

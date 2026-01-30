@@ -1203,9 +1203,10 @@ export default function MetricsDashboard() {
                       <tr className="border-b">
                         <th className="text-left py-3 px-4 font-medium">Lead Source</th>
                         <th className="text-right py-3 px-4 font-medium">Quoted</th>
+                        <th className="text-right py-3 px-4 font-medium">Quoted Value</th>
                         <th className="text-right py-3 px-4 font-medium">Won</th>
                         <th className="text-right py-3 px-4 font-medium">Quote Conv.</th>
-                        <th className="text-right py-3 px-4 font-medium">Total Revenue</th>
+                        <th className="text-right py-3 px-4 font-medium">Invoiced Revenue</th>
                         <th className="text-right py-3 px-4 font-medium">Revenue %</th>
                         <th className="text-right py-3 px-4 font-medium">Gross Margin</th>
                       </tr>
@@ -1219,13 +1220,14 @@ export default function MetricsDashboard() {
                         >
                           <td className="py-3 px-4 font-medium">{formatLeadSource(source.source)}</td>
                           <td className="text-right py-3 px-4">{source.quotedCount}</td>
+                          <td className="text-right py-3 px-4 text-orange-600">{formatCurrency(source.totalQuotedValue || 0)}</td>
                           <td className="text-right py-3 px-4">{source.wonCount}</td>
                           <td className="text-right py-3 px-4">
                             <span className={source.quoteConversionRate > 70 ? 'text-green-600 font-semibold' : source.quoteConversionRate > 40 ? 'text-yellow-600' : 'text-gray-600'}>
                               {source.quoteConversionRate.toFixed(1)}%
                             </span>
                           </td>
-                          <td className="text-right py-3 px-4 font-semibold">{formatCurrency(source.totalRevenue)}</td>
+                          <td className="text-right py-3 px-4 font-semibold text-green-600">{formatCurrency(source.totalRevenue)}</td>
                           <td className="text-right py-3 px-4">
                             {(() => {
                               const totalRev = leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0);
@@ -1245,11 +1247,12 @@ export default function MetricsDashboard() {
                       <tr className="border-t-2 font-bold bg-muted/50">
                         <td className="py-3 px-4">TOTAL</td>
                         <td className="text-right py-3 px-4">{leadSourceData.reduce((sum, s) => sum + s.quotedCount, 0)}</td>
+                        <td className="text-right py-3 px-4 text-orange-600">{formatCurrency(leadSourceData.reduce((sum, s) => sum + (s.totalQuotedValue || 0), 0))}</td>
                         <td className="text-right py-3 px-4">{leadSourceData.reduce((sum, s) => sum + s.wonCount, 0)}</td>
                         <td className="text-right py-3 px-4">
                           {((leadSourceData.reduce((sum, s) => sum + s.wonCount, 0) / Math.max(leadSourceData.reduce((sum, s) => sum + s.quotedCount, 0), 1)) * 100).toFixed(1)}%
                         </td>
-                        <td className="text-right py-3 px-4">{formatCurrency(leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0))}</td>
+                        <td className="text-right py-3 px-4 text-green-600">{formatCurrency(leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0))}</td>
                         <td className="text-right py-3 px-4 text-blue-600">100.0%</td>
                         <td className="text-right py-3 px-4">
                           {(() => {
