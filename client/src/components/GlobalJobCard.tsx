@@ -262,6 +262,8 @@ export function GlobalJobCard({
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ['/api/customers'],
     enabled: isOpen,
+    staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
+    refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
   });
   
   // Fetch employees for scheduling assignment (needed upfront)
@@ -276,6 +278,8 @@ export function GlobalJobCard({
   const { data: specificJobData, isLoading: isLoadingSpecificJob, isPending: isPendingSpecificJob } = useQuery({
     queryKey: ['/api/jobs', jobId || createdJobId],
     enabled: isOpen && effectiveModeForQuery === 'edit' && !!(jobId || createdJobId) && !job,
+    staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
+    refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
   });
 
   // Lazy load templates - only when billing tab is active or invoice modal is open
