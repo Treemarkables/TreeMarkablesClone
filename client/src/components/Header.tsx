@@ -80,11 +80,11 @@ export default function Header() {
         <div className="flex items-center justify-between h-full">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center hover-elevate group h-full py-2" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate group h-full" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-full w-auto object-contain transition-all duration-200"
+              className="h-20 w-auto object-contain transition-all duration-200"
               data-testid="logo-image"
             />
           </Link>
