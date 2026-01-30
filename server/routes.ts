@@ -6731,7 +6731,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Revenue breakdown - list of jobs that make up the revenue
   app.get('/api/revenue-breakdown', async (req: Request, res: Response) => {
     try {
-      const { from, to } = req.query;
+      const { from, to, leadSource, type } = req.query;
       
       let fromDate: Date | undefined;
       let toDate: Date | undefined;
@@ -6755,6 +6755,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
       const allInvoices = await storage.getAllInvoices();
       const allCustomers = await storage.getAllCustomers();
+      const allProposals = await storage.getAllProposals();
       
       // Create customer map
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
@@ -6763,44 +6764,103 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const jobInvoiceMap = new Map<string, number>();
       for (const invoice of allInvoices) {
         if (invoice.status !== 'cancelled' && invoice.jobId) {
+          // Check if invoice is in date range
+          if (fromDate || toDate) {
+            const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : null;
+            if (issueDate) {
+              if (fromDate && issueDate < fromDate) continue;
+              if (toDate && issueDate > toDate) continue;
+            }
+          }
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
           const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
         }
       }
       
-      // Filter completed jobs by date range
-      let filteredJobs = allJobs.filter(job => job.status === 'completed');
-      if (fromDate || toDate) {
+      // Create proposal amount map (highest proposal per job)
+      const jobProposalMap = new Map<string, number>();
+      for (const proposal of allProposals) {
+        if (proposal.jobId && proposal.totalPrice) {
+          // Check if proposal is in date range
+          if (fromDate || toDate) {
+            const createdAt = proposal.createdAt ? new Date(proposal.createdAt) : null;
+            if (createdAt) {
+              if (fromDate && createdAt < fromDate) continue;
+              if (toDate && createdAt > toDate) continue;
+            }
+          }
+          const proposalAmount = parseFloat(proposal.totalPrice?.toString() || '0');
+          const existingAmount = jobProposalMap.get(proposal.jobId) || 0;
+          if (proposalAmount > existingAmount) {
+            jobProposalMap.set(proposal.jobId, proposalAmount);
+          }
+        }
+      }
+      
+      // Filter jobs by lead source if specified
+      let filteredJobs = allJobs.filter(job => job.status !== 'archived');
+      
+      if (leadSource && typeof leadSource === 'string') {
+        const normalizedLeadSource = leadSource.toLowerCase().replace(/\s+/g, '_');
         filteredJobs = filteredJobs.filter(job => {
-          if (!job.completedDate) return false;
-          const completedDate = new Date(job.completedDate);
-          if (fromDate && completedDate < fromDate) return false;
-          if (toDate && completedDate > toDate) return false;
-          return true;
+          const jobLeadSource = (job.leadSource || 'other').toLowerCase().replace(/\s+/g, '_');
+          return jobLeadSource === normalizedLeadSource || 
+                 (normalizedLeadSource === 'other' && !job.leadSource);
         });
       }
       
-      // Build breakdown with invoice amounts
-      const breakdown = filteredJobs
-        .map(job => {
-          const invoiceAmount = jobInvoiceMap.get(job.id) || 0;
-          const customer = customerMap.get(job.customerId || '');
-          return {
-            jobNumber: job.jobNumber,
-            jobId: job.id,
-            customerName: customer?.name || 'Unknown',
-            title: job.title || '',
-            completedDate: job.completedDate,
-            invoiceAmount
-          };
-        })
-        .filter(j => j.invoiceAmount > 0)
-        .sort((a, b) => new Date(b.completedDate || 0).getTime() - new Date(a.completedDate || 0).getTime());
+      // Determine what type of breakdown (invoiced or quoted)
+      const breakdownType = type === 'quoted' ? 'quoted' : 'invoiced';
       
-      const total = breakdown.reduce((sum, j) => sum + j.invoiceAmount, 0);
+      // Build breakdown based on type
+      let breakdown;
+      if (breakdownType === 'quoted') {
+        // Show jobs with proposals
+        breakdown = filteredJobs
+          .map(job => {
+            const quotedAmount = jobProposalMap.get(job.id) || 0;
+            const customer = customerMap.get(job.customerId || '');
+            return {
+              jobNumber: job.jobNumber,
+              jobId: job.id,
+              customerName: customer?.name || 'Unknown',
+              title: job.title || '',
+              leadSource: job.leadSource || 'other',
+              status: job.status,
+              completedDate: job.completedDate,
+              amount: quotedAmount,
+              amountType: 'quoted'
+            };
+          })
+          .filter(j => j.amount > 0)
+          .sort((a, b) => b.amount - a.amount);
+      } else {
+        // Show completed jobs with invoices
+        breakdown = filteredJobs
+          .filter(job => job.status === 'completed')
+          .map(job => {
+            const invoiceAmount = jobInvoiceMap.get(job.id) || 0;
+            const customer = customerMap.get(job.customerId || '');
+            return {
+              jobNumber: job.jobNumber,
+              jobId: job.id,
+              customerName: customer?.name || 'Unknown',
+              title: job.title || '',
+              leadSource: job.leadSource || 'other',
+              status: job.status,
+              completedDate: job.completedDate,
+              amount: invoiceAmount,
+              amountType: 'invoiced'
+            };
+          })
+          .filter(j => j.amount > 0)
+          .sort((a, b) => new Date(b.completedDate || 0).getTime() - new Date(a.completedDate || 0).getTime());
+      }
       
-      res.json({ success: true, data: { breakdown, total } });
+      const total = breakdown.reduce((sum, j) => sum + j.amount, 0);
+      
+      res.json({ success: true, data: { breakdown, total, type: breakdownType } });
     } catch (error) {
       console.error('Error fetching revenue breakdown:', error);
       res.status(500).json({ success: false, message: 'Error fetching revenue breakdown' });
