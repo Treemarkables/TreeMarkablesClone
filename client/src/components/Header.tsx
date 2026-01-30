@@ -85,6 +85,7 @@ export default function Header() {
               src={logoImage} 
               alt="Treemarkables" 
               className="max-h-12 md:max-h-16 lg:max-h-20 w-auto max-w-[50vw] md:max-w-[40vw] object-contain transition-all duration-200"
+              style={{ mixBlendMode: 'screen' }}
               data-testid="logo-image"
             />
           </Link>
