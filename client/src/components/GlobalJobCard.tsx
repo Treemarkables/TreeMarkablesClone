@@ -3384,7 +3384,7 @@ export function GlobalJobCard({
                           if (total > 0) {
                             return (
                               <div 
-                                className="flex items-center justify-between p-3 bg-gray-50 border rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                                className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-100 transition-colors"
                                 onClick={() => setSidebarTab('billing')}
                               >
                                 <div className="flex items-center gap-2">
