@@ -652,6 +652,7 @@ export function GlobalJobCard({
         taxMode: 'tax_exclusive',
         checklist: [],
         includeDescriptionInQuotesProposals: true,
+        estimatedManHours: '',
       } : {
         title: '',
         description: '',
@@ -672,6 +673,7 @@ export function GlobalJobCard({
         billingAddress: '',
         invoiceDescription: '',
         sameAsJobAddress: true,
+        estimatedManHours: '',
         taxMode: 'tax_exclusive',
         checklist: [],
         includeDescriptionInQuotesProposals: true,
@@ -740,6 +742,7 @@ export function GlobalJobCard({
         // Arrays - DO NOT set lineItems here, let replaceLineItems() handle it
         checklist: editingJob.checklist || [],
         includeDescriptionInQuotesProposals: editingJob.includeDescriptionInQuotesProposals ?? true,
+        estimatedManHours: editingJob.estimatedManHours || '',
       });
       
       // Fix: Explicitly sync useFieldArray with line items after form reset
@@ -3208,6 +3211,54 @@ export function GlobalJobCard({
                             )}
                           </div>
                         )}
+
+                        {/* Estimated Man Hours */}
+                        <div className="flex gap-2 items-center">
+                          <div className="w-[140px]">
+                            <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Est. Man Hours</label>
+                            <FormField
+                              control={form.control}
+                              name="estimatedManHours"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Select hours" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="0.25">15 min</SelectItem>
+                                        <SelectItem value="0.5">30 min</SelectItem>
+                                        <SelectItem value="0.75">45 min</SelectItem>
+                                        <SelectItem value="1">1 hr</SelectItem>
+                                        <SelectItem value="1.25">1 hr 15 min</SelectItem>
+                                        <SelectItem value="1.5">1 hr 30 min</SelectItem>
+                                        <SelectItem value="1.75">1 hr 45 min</SelectItem>
+                                        <SelectItem value="2">2 hrs</SelectItem>
+                                        <SelectItem value="2.5">2 hrs 30 min</SelectItem>
+                                        <SelectItem value="3">3 hrs</SelectItem>
+                                        <SelectItem value="3.5">3 hrs 30 min</SelectItem>
+                                        <SelectItem value="4">4 hrs</SelectItem>
+                                        <SelectItem value="4.5">4 hrs 30 min</SelectItem>
+                                        <SelectItem value="5">5 hrs</SelectItem>
+                                        <SelectItem value="5.5">5 hrs 30 min</SelectItem>
+                                        <SelectItem value="6">6 hrs</SelectItem>
+                                        <SelectItem value="7">7 hrs</SelectItem>
+                                        <SelectItem value="8">8 hrs (1 day)</SelectItem>
+                                        <SelectItem value="10">10 hrs</SelectItem>
+                                        <SelectItem value="12">12 hrs</SelectItem>
+                                        <SelectItem value="16">16 hrs (2 days)</SelectItem>
+                                        <SelectItem value="24">24 hrs (3 days)</SelectItem>
+                                        <SelectItem value="32">32 hrs (4 days)</SelectItem>
+                                        <SelectItem value="40">40 hrs (5 days)</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        </div>
 
                         {/* Job Description */}
                         <div>
