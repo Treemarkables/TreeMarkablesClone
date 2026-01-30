@@ -979,8 +979,7 @@ export function JobDiarySection({
           </div>
           <Button 
             size="icon"
-            variant="ghost"
-            className="h-9 w-9"
+            className="h-9 w-12 bg-primary hover:bg-primary/90 text-primary-foreground"
             onClick={() => {
               const input = quickNoteInputRef.current;
               if (input && input.value.trim()) {
@@ -994,7 +993,7 @@ export function JobDiarySection({
             }}
             data-testid="button-add-note"
           >
-            <Plus className="w-5 h-5" />
+            <Plus className="w-6 h-6" />
           </Button>
         </div>
       </div>
