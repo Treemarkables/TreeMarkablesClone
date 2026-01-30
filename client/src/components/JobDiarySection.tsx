@@ -954,13 +954,13 @@ export function JobDiarySection({
           </div>
         
         {/* Quick Note Input */}
-        <div className="flex gap-0.5">
+        <div className="flex gap-1">
           <div className="flex-1 relative">
-            <MdStickyNote2 className="absolute left-1.5 top-1/2 transform -translate-y-1/2 w-2.5 h-2.5 text-yellow-400" />
+            <MdStickyNote2 className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-yellow-400" />
             <Input 
               ref={quickNoteInputRef}
               placeholder="Add note..."
-              className="pl-6 pr-6 h-6 text-xs"
+              className="pl-9 pr-9 h-9 text-sm"
               onKeyPress={(e) => {
                 if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                   createNoteMutation.mutate({ content: e.currentTarget.value.trim() });
@@ -972,15 +972,15 @@ export function JobDiarySection({
             <Button 
               size="icon" 
               variant="ghost" 
-              className="absolute right-0.5 top-1/2 transform -translate-y-1/2 h-5 w-5"
+              className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
             >
-              <Paperclip className="w-2.5 h-2.5" />
+              <Paperclip className="w-4 h-4" />
             </Button>
           </div>
           <Button 
             size="icon"
             variant="ghost"
-            className="h-6 w-6"
+            className="h-9 w-9"
             onClick={() => {
               const input = quickNoteInputRef.current;
               if (input && input.value.trim()) {
@@ -994,7 +994,7 @@ export function JobDiarySection({
             }}
             data-testid="button-add-note"
           >
-            <Plus className="w-2.5 h-2.5" />
+            <Plus className="w-5 h-5" />
           </Button>
         </div>
       </div>
