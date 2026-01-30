@@ -2713,26 +2713,12 @@ export function GlobalJobCard({
                                       data-testid="button-search-customer"
                                     >
                                       {selectedCustomerName ? (
-                                        <div className="space-y-1">
+                                        <div>
                                           {/* Customer Name */}
                                           <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
                                             {selectedCustomerName}
                                             <ChevronsUpDown className="h-4 w-4 text-gray-400" />
                                           </h2>
-                                          {/* Address on multiple lines */}
-                                          {(() => {
-                                            const address = form.watch('address') || selectedCustomer?.address || '';
-                                            if (!address) return null;
-                                            // Parse address into lines: street, suburb/city, postcode
-                                            const lines = address.split(/[,\n]/).map((line: string) => line.trim()).filter(Boolean);
-                                            return (
-                                              <div className="text-sm text-gray-600 leading-relaxed">
-                                                {lines.map((line: string, idx: number) => (
-                                                  <div key={idx}>{line}</div>
-                                                ))}
-                                              </div>
-                                            );
-                                          })()}
                                         </div>
                                       ) : (
                                         <div className="flex items-center gap-2 text-muted-foreground">
@@ -2875,6 +2861,28 @@ export function GlobalJobCard({
                                 </PopoverContent>
                               </Popover>
                               <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        {/* Address directly under customer name */}
+                        <FormField
+                          control={form.control}
+                          name="address"
+                          render={({ field }) => (
+                            <FormItem className="-mt-2">
+                              <FormControl>
+                                <AddressAutocomplete 
+                                  value={field.value || ""}
+                                  onChange={field.onChange}
+                                  onAddressSelect={(parsed) => {
+                                    form.setValue('address', parsed.fullAddress);
+                                  }}
+                                  className="h-auto min-h-[60px] text-sm border-0 shadow-none p-0 focus-visible:ring-0 bg-transparent" 
+                                  placeholder="Enter address..."
+                                  data-testid="input-job-address"
+                                />
+                              </FormControl>
                             </FormItem>
                           )}
                         />
@@ -3083,34 +3091,6 @@ export function GlobalJobCard({
                               )}
                             />
                           </div>
-                        </div>
-
-                        {/* Job Address */}
-                        <div className="space-y-3">
-                          <div className="flex items-center gap-2">
-                            <MapPin className="w-4 h-4 text-blue-600" />
-                            <label className="text-xs font-medium text-gray-600">Job Address</label>
-                          </div>
-                          <FormField
-                            control={form.control}
-                            name="address"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <AddressAutocomplete 
-                                    value={field.value || ""}
-                                    onChange={field.onChange}
-                                    onAddressSelect={(parsed) => {
-                                      form.setValue('address', parsed.fullAddress);
-                                    }}
-                                    className="h-9 text-base md:text-sm" 
-                                    placeholder="Start typing address..."
-                                    data-testid="input-job-address"
-                                  />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
                         </div>
 
                         {/* Equipment Selection */}
