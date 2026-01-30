@@ -38,6 +38,7 @@ import MaterialsServices from "@/pages/MaterialsServices";
 import Settings from "@/pages/Settings";
 import StaffManagement from "@/pages/StaffManagement";
 import TemplateManagement from "@/pages/TemplateManagement";
+import Equipment from "@/pages/Equipment";
 import Developer from "@/pages/Developer";
 import Calendar from "@/pages/Calendar";
 import StaffSchedule from "@/pages/StaffSchedule";
@@ -621,6 +622,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <TemplateManagement />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/equipment">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Equipment />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

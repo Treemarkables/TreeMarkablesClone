@@ -24,7 +24,8 @@ import {
   History as HistoryIconLucide,
   Megaphone,
   Clock,
-  PhoneCall
+  PhoneCall,
+  Package
 } from "lucide-react";
 import {
   Sidebar,
@@ -108,6 +109,13 @@ const businessItems = [
     url: "/templates",
     icon: Layout,
     value: "templates",
+    isTab: false
+  },
+  {
+    title: "Equipment",
+    url: "/equipment",
+    icon: Package,
+    value: "equipment",
     isTab: false
   },
   {
