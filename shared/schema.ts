@@ -194,6 +194,7 @@ export const customers = pgTable("customers", {
   name: text("name").notNull(),
   email: text("email"),
   phone: text("phone"),
+  mobile: text("mobile"), // Mobile phone number
   normalizedPhone: text("normalized_phone"), // Phone with all non-digits stripped for efficient matching
   address: text("address"),
   city: text("city"),
