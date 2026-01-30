@@ -105,6 +105,15 @@ export function AddressAutocomplete({
 
   // Format address with proper spacing and commas
   const formatAddress = (address: string): string => {
+    // Always add space before capital letters that follow lowercase letters
+    // This fixes "StreetWhataupoko" -> "Street Whataupoko"
+    let formatted = address.replace(/([a-z])([A-Z])/g, '$1, $2');
+    
+    // If address already has proper formatting, return it
+    if (formatted !== address) {
+      return formatted;
+    }
+    
     // If address already has commas, return as-is
     if (address.includes(',')) {
       return address;
@@ -118,9 +127,6 @@ export function AddressAutocomplete({
     
     // Try to intelligently add spaces and commas for readability
     // Pattern: "23 Moana DrHawke's BayMahia 4198" -> "23 Moana Dr, Hawke's Bay, Mahia 4198"
-    
-    // First, add space before capital letters that follow lowercase letters
-    let formatted = address.replace(/([a-z])([A-Z])/g, '$1 $2');
     
     // Now split by postcode pattern (4 digits at end)
     const postcodeMatch = formatted.match(/^(.+)\s+(\d{4})$/);
