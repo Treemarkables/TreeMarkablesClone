@@ -2708,8 +2708,8 @@ export function GlobalJobCard({
                                       role="combobox"
                                       type="button"
                                       className={cn(
-                                        "w-full justify-between h-11 font-normal",
-                                        !selectedCustomerName && "text-muted-foreground"
+                                        "w-full justify-between h-11 text-base font-semibold",
+                                        !selectedCustomerName && "text-muted-foreground font-normal"
                                       )}
                                       data-testid="button-search-customer"
                                     >
@@ -2952,7 +2952,7 @@ export function GlobalJobCard({
                         {/* Job Status, Lead Source */}
                         <div className="grid grid-cols-2 gap-3">
                           <div>
-                            <label className="text-xs font-medium text-gray-600 mb-1 block">Job Status</label>
+                            <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Job Status</label>
                             <FormField
                               control={form.control}
                               name="status"
@@ -2960,7 +2960,7 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormControl>
                                     <Select value={field.value || ""} onValueChange={field.onChange}>
-                                      <SelectTrigger className="h-9 text-base md:text-sm" data-testid="select-job-status">
+                                      <SelectTrigger className="h-8 text-xs" data-testid="select-job-status">
                                         <SelectValue placeholder="Select status" />
                                       </SelectTrigger>
                                       <SelectContent>
@@ -3027,7 +3027,7 @@ export function GlobalJobCard({
                             )}
                           </div>
                           <div>
-                            <label className="text-xs font-medium text-gray-600 mb-1 block">Lead Source</label>
+                            <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Lead Source</label>
                             <FormField
                               control={form.control}
                               name="leadSource"
@@ -3035,7 +3035,7 @@ export function GlobalJobCard({
                                 <FormItem>
                                   <FormControl>
                                     <Select value={field.value || ""} onValueChange={field.onChange}>
-                                      <SelectTrigger className="h-9 text-base md:text-sm">
+                                      <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Select source" />
                                       </SelectTrigger>
                                       <SelectContent>
