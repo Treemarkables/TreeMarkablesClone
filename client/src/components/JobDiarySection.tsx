@@ -514,33 +514,55 @@ export function JobDiarySection({
       }
       
       // Add job staff assignments (upcoming bookings) if available
+      // Group by same time slot to show as single entry
       if (scheduleResponse.data && scheduleResponse.data.length > 0) {
+        // Group assignments by start/end time
+        const timeSlotGroups = new Map<string, any[]>();
+        
         scheduleResponse.data.forEach((assignment: any) => {
-          const startTime = assignment.startTime ? new Date(assignment.startTime) : null;
-          const endTime = assignment.endTime ? new Date(assignment.endTime) : null;
-          const staffName = assignment.employeeName || 
-            (assignment.employee ? `${assignment.employee.firstName} ${assignment.employee.lastName}` : 'Staff');
+          const key = `${assignment.startTime || ''}-${assignment.endTime || ''}`;
+          if (!timeSlotGroups.has(key)) {
+            timeSlotGroups.set(key, []);
+          }
+          timeSlotGroups.get(key)!.push(assignment);
+        });
+        
+        // Create a single entry per time slot with all staff names
+        timeSlotGroups.forEach((assignments, _key) => {
+          const firstAssignment = assignments[0];
+          const startTime = firstAssignment.startTime ? new Date(firstAssignment.startTime) : null;
+          const endTime = firstAssignment.endTime ? new Date(firstAssignment.endTime) : null;
+          
+          // Collect all staff names for this time slot
+          const staffNames = assignments.map((a: any) => 
+            a.employeeName || (a.employee ? `${a.employee.firstName} ${a.employee.lastName}` : 'Staff')
+          );
           
           // Format time for display
           const timeStr = startTime ? formatInTimeZone(startTime, 'Pacific/Auckland', 'h:mm a') : '';
           const dateStr = startTime ? formatInTimeZone(startTime, 'Pacific/Auckland', 'dd/MM/yyyy') : '';
           const endTimeStr = endTime ? formatInTimeZone(endTime, 'Pacific/Auckland', 'h:mm a') : '';
           
+          // Format staff list nicely
+          const staffList = staffNames.length === 1 
+            ? staffNames[0] 
+            : staffNames.slice(0, -1).join(', ') + ' & ' + staffNames[staffNames.length - 1];
+          
           entries.push({
-            id: `booking-${assignment.id}`,
+            id: `booking-${assignments.map((a: any) => a.id).join('-')}`,
             type: 'job_event',
             title: 'Staff Scheduled',
-            content: `${staffName} scheduled for ${dateStr} at ${timeStr}${endTimeStr ? ` - ${endTimeStr}` : ''}`,
+            content: `${staffList} scheduled for ${dateStr} at ${timeStr}${endTimeStr ? ` - ${endTimeStr}` : ''}`,
             author: 'System',
-            timestamp: assignment.createdAt || startTime?.toISOString() || new Date().toISOString(),
+            timestamp: firstAssignment.createdAt || startTime?.toISOString() || new Date().toISOString(),
             metadata: {
               eventType: 'staff_booking',
-              assignmentId: assignment.id,
-              employeeId: assignment.employeeId,
-              employeeName: staffName,
-              startTime: assignment.startTime,
-              endTime: assignment.endTime,
-              status: assignment.status
+              assignmentIds: assignments.map((a: any) => a.id),
+              employeeIds: assignments.map((a: any) => a.employeeId),
+              staffNames: staffNames,
+              startTime: firstAssignment.startTime,
+              endTime: firstAssignment.endTime,
+              status: firstAssignment.status
             }
           });
         });
