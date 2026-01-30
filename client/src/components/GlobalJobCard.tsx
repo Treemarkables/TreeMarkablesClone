@@ -2865,26 +2865,45 @@ export function GlobalJobCard({
                           )}
                         />
 
-                        {/* Address directly under customer name */}
+                        {/* Address directly under customer name - two lines */}
                         <FormField
                           control={form.control}
                           name="address"
-                          render={({ field }) => (
-                            <FormItem className="mt-1">
-                              <FormControl>
-                                <AddressAutocomplete 
-                                  value={field.value || ""}
-                                  onChange={field.onChange}
-                                  onAddressSelect={(parsed) => {
-                                    form.setValue('address', parsed.fullAddress);
-                                  }}
-                                  className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
-                                  placeholder="Enter address..."
-                                  data-testid="input-job-address"
-                                />
-                              </FormControl>
-                            </FormItem>
-                          )}
+                          render={({ field }) => {
+                            // Split address into street and suburb/city/postcode
+                            const addressParts = (field.value || "").split(", ");
+                            const streetLine = addressParts[0] || "";
+                            const locationLine = addressParts.slice(1).join(", ");
+                            
+                            return (
+                              <FormItem className="mt-1">
+                                <FormControl>
+                                  <div className="space-y-0">
+                                    <AddressAutocomplete 
+                                      value={streetLine}
+                                      onChange={(newStreet) => {
+                                        // When typing in street, update full address
+                                        if (locationLine) {
+                                          field.onChange(`${newStreet}, ${locationLine}`);
+                                        } else {
+                                          field.onChange(newStreet);
+                                        }
+                                      }}
+                                      onAddressSelect={(parsed) => {
+                                        form.setValue('address', parsed.fullAddress);
+                                      }}
+                                      className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
+                                      placeholder="Enter street address..."
+                                      data-testid="input-job-address"
+                                    />
+                                    {locationLine && (
+                                      <div className="text-sm text-gray-500 pl-0">{locationLine}</div>
+                                    )}
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            );
+                          }}
                         />
 
                         {/* Show New Customer Fields When Creating */}
