@@ -2696,9 +2696,9 @@ export function GlobalJobCard({
                   <div className={`flex-1 bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
-                      {/* ServiceM8-Style Customer Search or Create */}
-                      <div className="space-y-3">
-                        {/* Search or Create Client Combobox */}
+                      {/* ServiceM8-Style Customer Display with Name and Address */}
+                      <div className="space-y-1">
+                        {/* Customer Name - Large and Prominent */}
                         <FormField
                           control={form.control}
                           name="customerId"
@@ -2707,19 +2707,40 @@ export function GlobalJobCard({
                               <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                                 <PopoverTrigger asChild>
                                   <FormControl>
-                                    <Button
-                                      variant="outline"
-                                      role="combobox"
-                                      type="button"
-                                      className={cn(
-                                        "w-full justify-between h-11 text-base font-semibold",
-                                        !selectedCustomerName && "text-muted-foreground font-normal"
-                                      )}
+                                    <div 
+                                      role="button"
+                                      className="cursor-pointer hover:bg-gray-50 rounded-md p-2 -ml-2 transition-colors"
                                       data-testid="button-search-customer"
                                     >
-                                      {selectedCustomerName || "Search or Create Client"}
-                                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
+                                      {selectedCustomerName ? (
+                                        <div className="space-y-1">
+                                          {/* Customer Name */}
+                                          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
+                                            {selectedCustomerName}
+                                            <ChevronsUpDown className="h-4 w-4 text-gray-400" />
+                                          </h2>
+                                          {/* Address on multiple lines */}
+                                          {(() => {
+                                            const address = form.watch('address') || selectedCustomer?.address || '';
+                                            if (!address) return null;
+                                            // Parse address into lines: street, suburb/city, postcode
+                                            const lines = address.split(/[,\n]/).map((line: string) => line.trim()).filter(Boolean);
+                                            return (
+                                              <div className="text-sm text-gray-600 leading-relaxed">
+                                                {lines.map((line: string, idx: number) => (
+                                                  <div key={idx}>{line}</div>
+                                                ))}
+                                              </div>
+                                            );
+                                          })()}
+                                        </div>
+                                      ) : (
+                                        <div className="flex items-center gap-2 text-muted-foreground">
+                                          <span>Search or Create Client</span>
+                                          <ChevronsUpDown className="h-4 w-4" />
+                                        </div>
+                                      )}
+                                    </div>
                                   </FormControl>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[400px] p-0" align="start">
