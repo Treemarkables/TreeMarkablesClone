@@ -3003,7 +3003,7 @@ export function GlobalJobCard({
                       <div className="space-y-4">
                         {/* Job Status, Lead Source */}
                         <div className="flex gap-2">
-                          <div className="w-24">
+                          <div className="w-28">
                             <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Job Status</label>
                             <FormField
                               control={form.control}
@@ -3078,7 +3078,7 @@ export function GlobalJobCard({
                               </div>
                             )}
                           </div>
-                          <div className="w-24">
+                          <div className="w-28">
                             <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Lead Source</label>
                             <FormField
                               control={form.control}
