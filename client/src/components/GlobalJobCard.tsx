@@ -2865,27 +2865,30 @@ export function GlobalJobCard({
                           )}
                         />
 
-                        {/* Address directly under customer name */}
-                        <FormField
-                          control={form.control}
-                          name="address"
-                          render={({ field }) => (
-                            <FormItem className="mt-1">
-                              <FormControl>
-                                <AddressAutocomplete 
-                                  value={field.value || ""}
-                                  onChange={field.onChange}
-                                  onAddressSelect={(parsed) => {
-                                    form.setValue('address', parsed.fullAddress);
-                                  }}
-                                  className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
-                                  placeholder="Enter address..."
-                                  data-testid="input-job-address"
-                                />
-                              </FormControl>
-                            </FormItem>
-                          )}
-                        />
+                        {/* Address directly under customer name - Multi-line display */}
+                        {(() => {
+                          const address = form.watch('address') || '';
+                          const lines = address ? address.split(/[,\n]/).map((line: string) => line.trim()).filter(Boolean) : [];
+                          return (
+                            <div 
+                              className="text-sm text-gray-600 leading-relaxed cursor-pointer hover:bg-gray-50 rounded p-1 -ml-1"
+                              onClick={() => {
+                                const newAddress = prompt('Edit address:', address);
+                                if (newAddress !== null) {
+                                  form.setValue('address', newAddress);
+                                }
+                              }}
+                            >
+                              {lines.length > 0 ? (
+                                lines.map((line: string, idx: number) => (
+                                  <div key={idx}>{line}</div>
+                                ))
+                              ) : (
+                                <span className="text-gray-400 italic">Click to add address...</span>
+                              )}
+                            </div>
+                          );
+                        })()}
 
                         {/* Show New Customer Fields When Creating */}
                         {form.watch('isNewCustomer') && form.watch('newCustomerName') && (
