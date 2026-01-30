@@ -1678,7 +1678,7 @@ export default function MetricsDashboard() {
                           {job.completedDate ? new Date(job.completedDate).toLocaleDateString('en-NZ') : '-'}
                         </td>
                         <td className="py-3 px-4 text-sm text-right font-medium text-green-600">
-                          {formatCurrency(job.invoiceAmount)}
+                          {formatCurrency(job.amount || job.invoiceAmount || 0)}
                         </td>
                       </tr>
                     ))}
