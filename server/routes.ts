@@ -6266,6 +6266,27 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Update job with computed labor costs
       await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
       
+      // Update actualManHours and calculate estimation accuracy
+      const currentJob = await storage.getJob(id);
+      const estimatedHours = currentJob?.estimatedManHours ? parseFloat(String(currentJob.estimatedManHours)) : null;
+      
+      let estimationAccuracy = null;
+      let estimationVariance = null;
+      
+      if (estimatedHours && estimatedHours > 0 && totalHours > 0) {
+        // Variance: positive = over estimate, negative = under estimate
+        estimationVariance = totalHours - estimatedHours;
+        // Accuracy: 100% means perfect, lower means less accurate
+        estimationAccuracy = Math.max(0, (1 - Math.abs(estimationVariance) / estimatedHours) * 100);
+      }
+      
+      // Update job with actual man hours and accuracy metrics
+      await db.update(jobs).set({
+        actualManHours: String(totalHours),
+        estimationAccuracy: estimationAccuracy !== null ? String(estimationAccuracy) : null,
+        estimationVariance: estimationVariance !== null ? String(estimationVariance) : null,
+      }).where(eq(jobs.id, id));
+      
       // Recalculate gross margin
       const finalJob = await storage.calculateAndUpdateGrossMargin(id);
       res.json({ success: true, data: finalJob });
@@ -6294,6 +6315,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       // Update job with computed labor costs
       await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
+      
+      // Update actualManHours and recalculate estimation accuracy
+      const currentJob = await storage.getJob(id);
+      const estimatedHours = currentJob?.estimatedManHours ? parseFloat(String(currentJob.estimatedManHours)) : null;
+      
+      let estimationAccuracy = null;
+      let estimationVariance = null;
+      
+      if (estimatedHours && estimatedHours > 0 && totalHours > 0) {
+        estimationVariance = totalHours - estimatedHours;
+        estimationAccuracy = Math.max(0, (1 - Math.abs(estimationVariance) / estimatedHours) * 100);
+      }
+      
+      await db.update(jobs).set({
+        actualManHours: String(totalHours),
+        estimationAccuracy: estimationAccuracy !== null ? String(estimationAccuracy) : null,
+        estimationVariance: estimationVariance !== null ? String(estimationVariance) : null,
+      }).where(eq(jobs.id, id));
       
       // Recalculate gross margin
       const finalJob = await storage.calculateAndUpdateGrossMargin(id);
@@ -12499,6 +12538,106 @@ Transcription: ${transcriptText}`;
     } catch (error) {
       console.error('Error generating revenue analytics:', error);
       res.status(500).json({ success: false, message: 'Error generating revenue analytics' });
+    }
+  });
+
+  // Get estimation accuracy analytics
+  app.get('/api/analytics/estimation-accuracy', async (req: Request, res: Response) => {
+    try {
+      const allJobs = await storage.getAllJobs();
+      
+      // Filter jobs that have both estimated and actual man hours
+      const jobsWithBoth = allJobs.filter(job => 
+        job.estimatedManHours && 
+        job.actualManHours && 
+        parseFloat(String(job.estimatedManHours)) > 0 &&
+        parseFloat(String(job.actualManHours)) > 0
+      );
+      
+      if (jobsWithBoth.length === 0) {
+        return res.json({
+          success: true,
+          data: {
+            averageAccuracy: null,
+            totalJobsTracked: 0,
+            underEstimatedCount: 0,
+            overEstimatedCount: 0,
+            accurateCount: 0,
+            averageVarianceHours: 0,
+            totalEstimatedHours: 0,
+            totalActualHours: 0,
+            recentJobs: []
+          }
+        });
+      }
+      
+      let totalAccuracy = 0;
+      let underEstimatedCount = 0;
+      let overEstimatedCount = 0;
+      let accurateCount = 0; // Within 10% variance
+      let totalVariance = 0;
+      let totalEstimatedHours = 0;
+      let totalActualHours = 0;
+      
+      const recentJobs: any[] = [];
+      
+      jobsWithBoth.forEach(job => {
+        const estimated = parseFloat(String(job.estimatedManHours));
+        const actual = parseFloat(String(job.actualManHours));
+        const variance = actual - estimated;
+        const accuracy = job.estimationAccuracy ? parseFloat(String(job.estimationAccuracy)) : 
+          Math.max(0, (1 - Math.abs(variance) / estimated) * 100);
+        
+        totalAccuracy += accuracy;
+        totalVariance += variance;
+        totalEstimatedHours += estimated;
+        totalActualHours += actual;
+        
+        const variancePercent = (variance / estimated) * 100;
+        
+        if (variancePercent > 10) {
+          underEstimatedCount++; // Took longer than estimated
+        } else if (variancePercent < -10) {
+          overEstimatedCount++; // Took less time than estimated
+        } else {
+          accurateCount++; // Within 10%
+        }
+        
+        // Add to recent jobs for display
+        if (recentJobs.length < 10) {
+          recentJobs.push({
+            id: job.id,
+            jobNumber: job.jobNumber,
+            title: job.title,
+            estimatedHours: estimated,
+            actualHours: actual,
+            variance: variance,
+            accuracy: accuracy,
+            status: job.status
+          });
+        }
+      });
+      
+      const averageAccuracy = totalAccuracy / jobsWithBoth.length;
+      const averageVarianceHours = totalVariance / jobsWithBoth.length;
+      
+      res.json({
+        success: true,
+        data: {
+          averageAccuracy: Math.round(averageAccuracy * 10) / 10,
+          totalJobsTracked: jobsWithBoth.length,
+          underEstimatedCount,
+          overEstimatedCount,
+          accurateCount,
+          averageVarianceHours: Math.round(averageVarianceHours * 100) / 100,
+          totalEstimatedHours: Math.round(totalEstimatedHours * 10) / 10,
+          totalActualHours: Math.round(totalActualHours * 10) / 10,
+          recentJobs
+        }
+      });
+    } catch (error) {
+      console.error('Error generating estimation accuracy analytics:', error);
+      res.status(500).json({ success: false, message: 'Error generating estimation accuracy analytics' });
     }
   });
 
