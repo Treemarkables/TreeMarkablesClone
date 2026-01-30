@@ -277,6 +277,15 @@ export default function MetricsDashboard() {
     const fromDate = new Date();
     
     switch (dateRangePreset) {
+      case "mon-fri": {
+        const dayOfWeek = today.getDay();
+        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() + diffToMonday);
+        const friday = new Date(monday);
+        friday.setDate(monday.getDate() + 4);
+        return { from: monday.toISOString().split('T')[0], to: friday.toISOString().split('T')[0] };
+      }
       case "7":
         fromDate.setDate(today.getDate() - 7);
         return { from: fromDate.toISOString().split('T')[0], to: today.toISOString().split('T')[0] };
@@ -604,6 +613,14 @@ export default function MetricsDashboard() {
               data-testid="button-date-all"
             >
               All Time
+            </Button>
+            <Button
+              variant={dateRangePreset === "mon-fri" ? "default" : "outline"}
+              size="sm"
+              onClick={() => setDateRangePreset("mon-fri")}
+              data-testid="button-date-mon-fri"
+            >
+              Mon-Fri
             </Button>
             <Button
               variant={dateRangePreset === "7" ? "default" : "outline"}
