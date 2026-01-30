@@ -25,7 +25,6 @@ import Reputation from "@/pages/Reputation";
 import Reviews from "@/pages/Reviews";
 import Inbox from "@/pages/Inbox";
 import Integrations from "@/pages/Integrations";
-import Equipment from "@/pages/Equipment";
 import Invoices from "@/pages/Invoices";
 import MarketingPlanner from "@/pages/MarketingPlanner";
 import NotFound from "@/pages/not-found";
@@ -601,13 +600,6 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <ConversationDetail />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
-      <Route path="/equipment">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <Equipment />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
