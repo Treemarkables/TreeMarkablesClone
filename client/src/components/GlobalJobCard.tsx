@@ -3013,7 +3013,7 @@ export function GlobalJobCard({
                                           </Button>
                                         </CommandEmpty>
                                         <CommandGroup heading="Existing Customers">
-                                          {customers.slice(0, 50).map((customer) => (
+                                          {customers.map((customer) => (
                                             <CommandItem
                                               key={customer.id}
                                               value={customer.name}
