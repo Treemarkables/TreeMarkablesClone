@@ -861,170 +861,169 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                             Private
                           </Badge>
                         )}
-                        </div>
-                        <p className="text-gray-700 mb-4">
-                          <LinkifiedText text={entry.description} />
-                        </p>
-                        
-                        {/* Photo Thumbnails */}
-                        {entry.photos && entry.photos.length > 0 && (
-                          <div className="mb-3">
-                            <div className="flex items-center gap-2 mb-1.5">
-                              <Camera className="h-3.5 w-3.5 text-gray-500" />
-                              <span className="text-xs font-medium text-gray-700">
-                                {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
-                              </span>
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 60px))', gap: '2px' }}>
-                              {entry.photos.map((photo, index) => (
+                      </div>
+                      <p className="text-gray-700 mb-4">
+                        <LinkifiedText text={entry.description} />
+                      </p>
+                      
+                      {/* Photo Thumbnails */}
+                      {entry.photos && entry.photos.length > 0 && (
+                        <div className="mb-3">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Camera className="h-3.5 w-3.5 text-gray-500" />
+                            <span className="text-xs font-medium text-gray-700">
+                              {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
+                            </span>
+                          </div>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 60px))', gap: '2px' }}>
+                            {entry.photos.map((photo, index) => (
+                              <div
+                                key={index}
+                                className="relative rounded-sm overflow-hidden group cursor-pointer"
+                                style={{ aspectRatio: '1/1', width: '60px', height: '60px' }}
+                              >
                                 <div
-                                  key={index}
-                                  className="relative rounded-sm overflow-hidden group cursor-pointer"
-                                  style={{ aspectRatio: '1/1', width: '60px', height: '60px' }}
+                                  role="button"
+                                  tabIndex={0}
+                                  onClick={() => setSelectedPhoto({ url: photo, entryId: entry.id })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                      e.preventDefault();
+                                      setSelectedPhoto({ url: photo, entryId: entry.id });
+                                    }
+                                  }}
+                                  className="w-full h-full hover-elevate active-elevate-2 active:opacity-80 transition-opacity cursor-pointer"
+                                  data-testid={`button-view-photo-${index}`}
                                 >
-                                  <div
-                                    role="button"
-                                    tabIndex={0}
-                                    onClick={() => setSelectedPhoto({ url: photo, entryId: entry.id })}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault();
-                                        setSelectedPhoto({ url: photo, entryId: entry.id });
-                                      }
-                                    }}
-                                    className="w-full h-full hover-elevate active-elevate-2 active:opacity-80 transition-opacity cursor-pointer"
-                                    data-testid={`button-view-photo-${index}`}
-                                  >
-                                    <img
-                                      src={photo}
-                                      alt={`Diary photo ${index + 1}`}
-                                      className="w-full h-full object-cover"
-                                      loading="lazy"
-                                    />
-                                    <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
-                                      <Eye className="h-5 w-5 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
-                                    </div>
+                                  <img
+                                    src={photo}
+                                    alt={`Diary photo ${index + 1}`}
+                                    className="w-full h-full object-cover"
+                                    loading="lazy"
+                                  />
+                                  <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">
+                                    <Eye className="h-5 w-5 text-white drop-shadow-lg opacity-60 md:opacity-0 md:group-hover:opacity-100 transition-opacity" />
                                   </div>
-                                  {/* Delete Photo Button - Always visible on mobile, hover on desktop */}
-                                  <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      if (confirm('Delete this photo from the diary entry?')) {
-                                        deletePhotoMutation.mutate({
-                                          entryId: entry.id,
-                                          photoUrl: photo
-                                        });
-                                      }
-                                    }}
-                                    className="absolute top-0.5 right-0.5 h-5 w-5 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
-                                    data-testid={`button-delete-photo-${index}`}
-                                    title="Delete photo"
-                                    disabled={deletePhotoMutation.isPending}
-                                  >
-                                    <Trash2 className="h-2.5 w-2.5" />
-                                  </Button>
                                 </div>
-                              ))}
-                            </div>
+                                {/* Delete Photo Button - Always visible on mobile, hover on desktop */}
+                                <Button
+                                  variant="destructive"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm('Delete this photo from the diary entry?')) {
+                                      deletePhotoMutation.mutate({
+                                        entryId: entry.id,
+                                        photoUrl: photo
+                                      });
+                                    }
+                                  }}
+                                  className="absolute top-0.5 right-0.5 h-5 w-5 md:opacity-0 md:group-hover:opacity-100 transition-opacity z-10"
+                                  data-testid={`button-delete-photo-${index}`}
+                                  title="Delete photo"
+                                  disabled={deletePhotoMutation.isPending}
+                                >
+                                  <Trash2 className="h-2.5 w-2.5" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                        <div className="flex items-center gap-1">
+                          <User className="h-4 w-4 text-gray-400" />
+                          <span>{entry.authorName}</span>
+                          {entry.authorRole && (
+                            <span className="text-gray-500">({entry.authorRole})</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                          <span>{format(new Date(entry.createdAt), 'MMM dd, yyyy HH:mm')}</span>
+                        </div>
+                        {entry.location && (
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-4 w-4 text-gray-400" />
+                            <span>{entry.location}</span>
                           </div>
                         )}
-                        
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                          <div className="flex items-center gap-1">
-                            <User className="h-4 w-4 text-gray-400" />
-                            <span>{entry.authorName}</span>
-                            {entry.authorRole && (
-                              <span className="text-gray-500">({entry.authorRole})</span>
-                            )}
-                          </div>
+                        {entry.timeSpent && (
                           <div className="flex items-center gap-1">
                             <Clock className="h-4 w-4 text-gray-400" />
-                            <span>{format(new Date(entry.createdAt), 'MMM dd, yyyy HH:mm')}</span>
-                          </div>
-                          {entry.location && (
-                            <div className="flex items-center gap-1">
-                              <MapPin className="h-4 w-4 text-gray-400" />
-                              <span>{entry.location}</span>
-                            </div>
-                          )}
-                          {entry.timeSpent && (
-                            <div className="flex items-center gap-1">
-                              <Clock className="h-4 w-4 text-gray-400" />
-                              <span>{entry.timeSpent} minutes</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Email Activity Tracking */}
-                        {entry.entryType === 'email' && entry.metadata?.sendgridMessageId && (
-                          <div className="mt-3">
-                            <EmailActivity messageId={entry.metadata.sendgridMessageId} />
-                          </div>
-                        )}
-                        
-                        {/* Reply to Email Button */}
-                        {entry.entryType === 'email' && entry.metadata?.emailAddress && (
-                          <div className="mt-3">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                // Trigger email composer with reply context
-                                const event = new CustomEvent('openEmailComposer', {
-                                  detail: {
-                                    to: entry.metadata.emailAddress,
-                                    subject: `Re: ${entry.title}`,
-                                    context: 'reply'
-                                  }
-                                });
-                                window.dispatchEvent(event);
-                              }}
-                              className="gap-2"
-                              data-testid="button-reply-email"
-                            >
-                              <Mail className="h-4 w-4" />
-                              Reply
-                            </Button>
-                          </div>
-                        )}
-
-                        {(entry.progress !== undefined || entry.weatherConditions || entry.equipmentUsed?.length || entry.tags?.length) && (
-                          <div className="mt-4 pt-4 border-t border-gray-200">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                              {entry.progress !== undefined && (
-                                <div>
-                                  <span className="text-gray-500">Progress:</span>
-                                  <span className="ml-1 font-medium">{entry.progress}%</span>
-                                </div>
-                              )}
-                              {entry.weatherConditions && (
-                                <div className="flex items-center gap-1">
-                                  <Cloud className="h-4 w-4 text-gray-400" />
-                                  <span className="capitalize">{entry.weatherConditions}</span>
-                                </div>
-                              )}
-                              {entry.equipmentUsed?.length && (
-                                <div className="flex items-center gap-1">
-                                  <Wrench className="h-4 w-4 text-gray-400" />
-                                  <span>{entry.equipmentUsed.join(', ')}</span>
-                                </div>
-                              )}
-                              {entry.tags?.length && (
-                                <div className="flex flex-wrap gap-1">
-                                  {entry.tags.map((tag, index) => (
-                                    <Badge key={index} variant="outline" className="text-xs">
-                                      {tag}
-                                    </Badge>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                            <span>{entry.timeSpent} minutes</span>
                           </div>
                         )}
                       </div>
+
+                      {/* Email Activity Tracking */}
+                      {entry.entryType === 'email' && entry.metadata?.sendgridMessageId && (
+                        <div className="mt-3">
+                          <EmailActivity messageId={entry.metadata.sendgridMessageId} />
+                        </div>
+                      )}
+                      
+                      {/* Reply to Email Button */}
+                      {entry.entryType === 'email' && entry.metadata?.emailAddress && (
+                        <div className="mt-3">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              // Trigger email composer with reply context
+                              const event = new CustomEvent('openEmailComposer', {
+                                detail: {
+                                  to: entry.metadata.emailAddress,
+                                  subject: `Re: ${entry.title}`,
+                                  context: 'reply'
+                                }
+                              });
+                              window.dispatchEvent(event);
+                            }}
+                            className="gap-2"
+                            data-testid="button-reply-email"
+                          >
+                            <Mail className="h-4 w-4" />
+                            Reply
+                          </Button>
+                        </div>
+                      )}
+
+                      {(entry.progress !== undefined || entry.weatherConditions || entry.equipmentUsed?.length || entry.tags?.length) && (
+                        <div className="mt-4 pt-4 border-t border-gray-200">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            {entry.progress !== undefined && (
+                              <div>
+                                <span className="text-gray-500">Progress:</span>
+                                <span className="ml-1 font-medium">{entry.progress}%</span>
+                              </div>
+                            )}
+                            {entry.weatherConditions && (
+                              <div className="flex items-center gap-1">
+                                <Cloud className="h-4 w-4 text-gray-400" />
+                                <span className="capitalize">{entry.weatherConditions}</span>
+                              </div>
+                            )}
+                            {entry.equipmentUsed?.length && (
+                              <div className="flex items-center gap-1">
+                                <Wrench className="h-4 w-4 text-gray-400" />
+                                <span>{entry.equipmentUsed.join(', ')}</span>
+                              </div>
+                            )}
+                            {entry.tags?.length && (
+                              <div className="flex flex-wrap gap-1">
+                                {entry.tags.map((tag, index) => (
+                                  <Badge key={index} variant="outline" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
