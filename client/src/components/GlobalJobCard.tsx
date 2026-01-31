@@ -2732,10 +2732,10 @@ export function GlobalJobCard({
                               </Badge>
                             </div>
                             
-                            {/* Row 2: Location | Service Type */}
+                            {/* Row 2: Full Address | Service Type */}
                             <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
                               <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                              <span className="truncate">{form.getValues('address')?.split(',')[1]?.trim() || form.getValues('address')?.split(',')[0] || 'No location'}</span>
+                              <span>{form.getValues('address') || 'No address'}</span>
                               {editingJob?.serviceType && (
                                 <>
                                   <span className="text-gray-300">|</span>
