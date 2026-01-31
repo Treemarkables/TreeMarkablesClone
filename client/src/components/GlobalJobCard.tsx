@@ -152,21 +152,22 @@ export function GlobalJobCard({
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
   const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
 
-  useEffect(() => {
-    // Only run if form is initialized
-    if (typeof form !== 'undefined') {
-      const customerId = form.watch('customerId');
-      const customer = customers?.find(c => c.id === customerId);
-      if (customer) {
-        setSelectedCustomerName(customer.name);
-      }
-    }
-  }, [customers]); // Reduced dependencies to avoid premature access
   const { toast: _originalToast } = useToast();
   const toast = () => {}; // Disabled - user preference: no toast notifications
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { isAdmin } = useAuth();
+
+  // Watch customerId and update selectedCustomerName when it changes
+  const watchedCustomerId = form.watch('customerId');
+  useEffect(() => {
+    if (watchedCustomerId) {
+      const customer = customers?.find(c => c.id === watchedCustomerId);
+      if (customer) {
+        setSelectedCustomerName(customer.name);
+      }
+    }
+  }, [watchedCustomerId, customers]);
   
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
