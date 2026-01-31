@@ -388,7 +388,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-blue-200">
+      <SidebarFooter className="border-t border-sidebar-border">
         <SidebarMenu>
           {isAdmin && (
             <SidebarMenuItem>
