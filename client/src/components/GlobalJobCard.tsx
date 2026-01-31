@@ -3587,7 +3587,6 @@ export function GlobalJobCard({
                             })}
                           </div>
                         </div>
-                        )}
 
                         {/* Contacts */}
                         <div>
