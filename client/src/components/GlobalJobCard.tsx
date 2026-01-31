@@ -3626,7 +3626,7 @@ export function GlobalJobCard({
                                         <span className="text-lg font-semibold text-gray-900">
                                           ${total.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                                         </span>
-                                        <span className="text-xs text-gray-500">exc GST</span>
+                                        <span className="text-xs text-gray-500">inc GST</span>
                                       </>
                                     );
                                   })()}
