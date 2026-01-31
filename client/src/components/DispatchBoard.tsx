@@ -1561,7 +1561,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <ResizablePanel defaultSize={showGlobalJobCard ? 50 : 100} minSize={30}>
             <div className="flex gap-4 h-full pr-2">
               {/* Calendar Grid */}
-              <div className="w-[70%] h-full" data-testid="calendar-grid-container">
+              <div className="w-[60%] h-full" data-testid="calendar-grid-container">
                 <Card className="h-full overflow-hidden">
                   <CalendarGrid 
                     selectedDate={selectedDate}
@@ -1571,7 +1571,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
 
               {/* Job Cards Panel */}
-              <div className="flex w-[30%] h-full flex-col" data-testid="job-cards-container">
+              <div className="flex w-[40%] h-full flex-col" data-testid="job-cards-container">
                 <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
                   <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between">
