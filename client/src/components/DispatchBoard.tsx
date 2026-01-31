@@ -36,7 +36,11 @@ import {
   GripVertical,
   Move,
   SearchX,
-  Clipboard
+  Clipboard,
+  TreePine,
+  Scissors,
+  Axe,
+  Sprout
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -1798,163 +1802,226 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </ResizablePanelGroup>
       </div>
 
-      {/* Mobile Layout: Show job cards in traditional list view */}
-      <div className="lg:hidden px-1 pb-1 sm:px-2 sm:pb-2 flex flex-col flex-1 min-h-0 overflow-x-hidden overflow-y-auto">
-      <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0 w-full max-w-full pt-0">
-        {/* Mobile Header - Search and Create Job */}
-        <CardHeader className="space-y-0 flex-shrink-0 px-2 pb-1.5 pt-0 mt-0">
-          {/* Create Job Button - Mobile */}
+      {/* Mobile Layout: ServiceM8-style job cards */}
+      <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
+        {/* Header with Create Buttons */}
+        <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center justify-center gap-2">
           <Button
-            variant="default"
+            variant="ghost"
+            size="sm"
+            onClick={handleCreateJob}
+            data-testid="create-lead-button-mobile"
+            className="text-white hover:bg-white/20 text-sm font-medium"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            New Lead
+          </Button>
+          <span className="text-white/60">·</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleCreateJob}
+            data-testid="create-quote-button-mobile"
+            className="text-white hover:bg-white/20 text-sm font-medium"
+          >
+            Quote
+          </Button>
+          <span className="text-white/60">·</span>
+          <Button
+            variant="ghost"
             size="sm"
             onClick={handleCreateJob}
             data-testid="create-job-button-mobile"
-            className="w-full h-8 text-xs mb-1.5"
+            className="text-white hover:bg-white/20 text-sm font-medium"
           >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Create New Job
+            Job
           </Button>
-          
-          {/* Ultra Compact Job Search */}
+        </div>
+        
+        {/* Search Bar */}
+        <div className="px-4 py-3 bg-white border-b">
           <div className="relative">
-            <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
             <Input
-              placeholder={isDeepSearchActive ? "Deep search..." : "Search..."}
+              placeholder="Search..."
               value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                if (!isDeepSearchActive) {
-                  // Normal search - let the regular filtering handle it
-                }
-              }}
-              className="pl-7 pr-7 h-9 text-base bg-white"
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-10 h-11 text-base bg-gray-50 border-gray-200 rounded-xl"
               data-testid="mobile-job-search-input"
             />
-            {isDeepSearchActive && (
+            {searchQuery && (
               <Button
                 size="sm"
                 variant="ghost"
-                className="absolute right-0.5 top-1/2 transform -translate-y-1/2 h-5 w-5 p-0"
-                onClick={() => {
-                  setIsDeepSearchActive(false);
-                  setDeepSearchResults([]);
-                  setSearchQuery('');
-                }}
-                data-testid="btn-clear-deep-search-mobile"
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                onClick={() => setSearchQuery('')}
+                data-testid="btn-clear-search-mobile"
               >
-                <X className="h-2.5 w-2.5" />
+                <X className="h-4 w-4" />
               </Button>
             )}
           </div>
-          
-          {/* Deep Search Button - Ultra Compact */}
-          {searchQuery.trim() && !isDeepSearchActive && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="w-full h-6 text-[10px]"
-              onClick={() => performDeepSearch(searchQuery)}
-              disabled={isDeepSearchLoading}
-              data-testid="btn-deep-search-mobile"
-            >
-              <Search className="h-2.5 w-2.5 mr-1" />
-              {isDeepSearchLoading ? 'Searching...' : 'Deep Search'}
-            </Button>
-          )}
-          
-          {/* Deep Search Status - Ultra Compact */}
-          {isDeepSearchActive && (
-            <div className="flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-              <SearchX className="h-2.5 w-2.5" />
-              {deepSearchResults.length} results
-            </div>
-          )}
-        </CardHeader>
+        </div>
 
-        <CardContent className="flex-1 overflow-y-auto overflow-x-hidden p-0">
-          {/* Mobile Job Cards */}
-          <div className="space-y-0 w-full max-w-full">
+        {/* Jobs List - ServiceM8 Style */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="divide-y divide-gray-100">
             {getTodaysJobs().map((job: any) => {
               const customerName = job.customerName || 'Unknown Customer';
+              const total = calculateJobTotal(job.lineItems);
+              const suburb = job.address?.split(',')[0]?.trim() || '';
+              
+              // Get status badge styling
+              const getStatusBadge = () => {
+                switch (job.status) {
+                  case 'lead':
+                    return { label: 'Lead', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' };
+                  case 'quote':
+                    return { label: 'Quote Sent', bg: 'bg-blue-100', text: 'text-blue-700', icon: '≡' };
+                  case 'work_order':
+                    return { label: 'Scheduled', bg: 'bg-gray-100', text: 'text-gray-700', icon: '≡' };
+                  case 'scheduled':
+                    return { label: 'In Progress', bg: 'bg-green-100', text: 'text-green-700' };
+                  case 'completed':
+                    return { label: 'Completed', bg: 'bg-green-500', text: 'text-white' };
+                  case 'unsuccessful':
+                    return { label: 'Unsuccessful', bg: 'bg-red-100', text: 'text-red-700' };
+                  default:
+                    return { label: job.status || 'Job', bg: 'bg-gray-100', text: 'text-gray-700' };
+                }
+              };
+              
+              const statusBadge = getStatusBadge();
+              const hasPhone = job.customerPhone || job.phone;
+              
+              // Get job type icon based on service type
+              const getServiceTypeIcon = () => {
+                const serviceType = (job.serviceType || '').toLowerCase();
+                if (serviceType.includes('removal') || serviceType.includes('tree')) {
+                  return <TreePine className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                }
+                if (serviceType.includes('hedge') || serviceType.includes('prune') || serviceType.includes('trim')) {
+                  return <Scissors className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                }
+                if (serviceType.includes('stump') || serviceType.includes('grind')) {
+                  return <Axe className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />;
+                }
+                if (serviceType.includes('plant') || serviceType.includes('garden')) {
+                  return <Sprout className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                }
+                return null;
+              };
               
               return (
                 <div
                   key={job.id}
-                  className="relative bg-white border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full"
+                  className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
                   onClick={() => handleEditJob(job)}
                   data-testid={`job-card-${job.id}`}
-                  style={{pointerEvents: 'auto', position: 'relative', zIndex: 1}}
                 >
-                  <div className="flex items-start gap-3 sm:gap-5 p-3 sm:p-5 min-w-0">
-                    {/* Status Avatar with Activity Indicator */}
+                  <div className="flex items-start gap-3 p-4">
+                    {/* Customer Avatar - Large Circle */}
                     <div className="relative flex-shrink-0">
-                      <div 
-                        className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-[15px] relative z-10"
-                        style={{ backgroundColor: getJobStatusColorValue(job) }}
-                      >
-                        {getStatusInitials(job)}
-                      </div>
+                      <CustomerAvatar
+                        customerName={customerName}
+                        status={job.status}
+                        size="lg"
+                      />
                       {hasRecentActivity(job) && (
-                        <div className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-green-500 rounded-full border-2 border-white animate-pulse z-20" 
-                             title="Recent activity"
+                        <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" 
                              data-testid={`activity-indicator-${job.id}`} />
                       )}
                     </div>
                     
                     {/* Job Content */}
-                    <div className="flex-1 min-w-0 overflow-hidden">
-                      <div className="flex items-start justify-between mb-1.5 min-w-0 gap-3">
-                        <div className="min-w-0 flex-1">
-                          <h3 className="font-bold text-gray-900 text-sm sm:text-lg mb-1.5 truncate">
-                            {customerName}
-                          </h3>
-                          <div className="text-xs text-gray-600 mb-1.5 font-semibold truncate">
-                            {job.address || 'No address specified'}
-                          </div>
-                          {job.description && (
-                            <div 
-                              className="text-xs text-gray-500 mb-2 line-clamp-2 break-words cursor-pointer"
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                handleEditJob(job);
-                              }}
-                              data-testid={`job-description-${job.id}`}
-                            >
-                              {job.description}
-                            </div>
+                    <div className="flex-1 min-w-0">
+                      {/* Row 1: Customer Name + Job Number + Price */}
+                      <div className="flex items-start justify-between gap-2 mb-1">
+                        <h3 className="font-bold text-gray-900 text-base truncate flex-1">
+                          {customerName}
+                        </h3>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-sm text-gray-400 font-mono">#{job.jobNumber || '0000'}</span>
+                          {total > 0 && (
+                            <span className="text-base font-bold text-gray-900">{formatCurrency(total)}</span>
                           )}
-                          {(() => {
-                            const total = calculateJobTotal(job.lineItems);
-                            return total > 0 ? (
-                              <div className="text-xs font-semibold text-green-600 mb-2">
-                                {formatCurrency(total)}
-                              </div>
-                            ) : null;
-                          })()}
-                        </div>
-                        <div className="text-[13px] font-bold text-black leading-none flex-shrink-0">
-                          #{job.jobNumber || '0000'}
                         </div>
                       </div>
-
-                      {job.assignedTo && (
-                        <div className="flex items-center gap-2 mb-3 text-xs text-gray-500">
-                          <span className="truncate">{job.assignedTo}</span>
+                      
+                      {/* Row 2: Location + Service Type with Icon + Status Badge */}
+                      <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+                          <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                          <span className="truncate">{suburb || 'No location'}</span>
+                          {job.serviceType && (
+                            <>
+                              <span className="text-gray-300">|</span>
+                              {getServiceTypeIcon()}
+                              <span className="truncate">{job.serviceType}</span>
+                            </>
+                          )}
                         </div>
+                        <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0 flex-shrink-0`}>
+                          {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: 'currentColor' }} />}
+                          {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
+                          {statusBadge.label}
+                        </Badge>
+                      </div>
+                      
+                      {/* Row 3: Description snippet */}
+                      {job.description && (
+                        <p className="text-sm text-gray-500 line-clamp-1 mb-2">
+                          {job.description}
+                        </p>
                       )}
-
-                      <div className="flex items-center justify-between gap-2 min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {(() => {
-                            if (job.status === 'lead') {
-                              return (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs flex-shrink-0">
-                                  lead
-                                </Badge>
-                              );
-                            }
-                            return null;
-                          })()}
+                      
+                      {/* Row 4: Action indicators + Call/Message buttons */}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {job.priority === 'urgent' && (
+                            <Badge className="bg-orange-500 text-white text-xs border-0">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Urgent
+                            </Badge>
+                          )}
+                          {job.scheduledDate && (
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(job.scheduledDate), 'MMM d')}
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Call & Message Buttons - using proper icon button styling */}
+                        <div className="flex items-center gap-2">
+                          {hasPhone && (
+                            <Button
+                              size="icon"
+                              variant="default"
+                              className="bg-green-500 rounded-lg"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.location.href = `tel:${job.customerPhone || job.phone}`;
+                              }}
+                              data-testid={`call-button-${job.id}`}
+                            >
+                              <Phone className="h-4 w-4" />
+                            </Button>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="default"
+                            className="bg-blue-500 rounded-lg"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (hasPhone) {
+                                window.location.href = `sms:${job.customerPhone || job.phone}`;
+                              }
+                            }}
+                            data-testid={`message-button-${job.id}`}
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -1963,9 +2030,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               );
             })}
 
-            {/* Load More Button - Show whenever there are more jobs, even if current slice has zero today jobs */}
+            {/* Load More Button */}
             {hasMoreJobs && (
-              <div className="p-4 text-center border-t border-gray-200">
+              <div className="p-4 text-center bg-white">
                 <Button
                   onClick={loadMoreJobs}
                   disabled={loadingMore}
@@ -1978,25 +2045,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
             )}
 
-            {/* Empty State - Only show if no jobs AND no more to load */}
+            {/* Empty State */}
             {getTodaysJobs().length === 0 && !hasMoreJobs && (
-              <div className="p-8 text-center text-gray-500">
-                <Calendar className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm">No jobs scheduled for this date</p>
+              <div className="p-8 text-center text-gray-500 bg-white">
+                <Calendar className="h-10 w-10 mx-auto mb-3 text-gray-300" />
+                <p className="text-base mb-1">No jobs found</p>
+                <p className="text-sm text-gray-400 mb-4">Create your first job to get started</p>
                 <Button
-                  size="sm"
-                  variant="outline"
-                  className="mt-3"
+                  size="default"
                   onClick={handleCreateJob}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  Create First Job
+                  Create Job
                 </Button>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
       </div>
     </div>
 
