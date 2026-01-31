@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2 } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -25,6 +25,7 @@ import QuoteManagement from "./QuoteManagement";
 import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
+import { CustomerAvatar } from "./CustomerAvatar";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -2699,7 +2700,102 @@ export function GlobalJobCard({
                   <div className={`flex-1 bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-4">
-                      {/* ServiceM8-Style Customer Display with Name and Address */}
+                      {/* ServiceM8-Style Customer Card Header */}
+                      {mode === 'edit' && selectedCustomerName && (
+                        <div className="bg-gray-50 rounded-lg p-4 -mx-1">
+                          <div className="flex items-start gap-3">
+                            {/* Customer Avatar - Large Circle */}
+                            <div className="relative flex-shrink-0">
+                              <CustomerAvatar
+                                customerName={selectedCustomerName}
+                                status={currentStatus}
+                                size="lg"
+                              />
+                            </div>
+                            
+                            {/* Customer Info */}
+                            <div className="flex-1 min-w-0">
+                              {/* Row 1: Customer Name + Job Number */}
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <h2 className="font-bold text-gray-900 text-lg truncate flex-1">
+                                  {selectedCustomerName}
+                                </h2>
+                                <span className="text-sm text-gray-400 font-mono flex-shrink-0">
+                                  #{editingJob?.jobNumber || '0000'}
+                                </span>
+                              </div>
+                              
+                              {/* Row 2: Address + Service Type with Icon */}
+                              <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-1.5">
+                                <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                <span className="truncate">{form.getValues('address')?.split(',')[0] || 'No address'}</span>
+                                {editingJob?.serviceType && (
+                                  <>
+                                    <span className="text-gray-300">|</span>
+                                    {(() => {
+                                      const serviceType = (editingJob.serviceType || '').toLowerCase();
+                                      if (serviceType.includes('removal') || serviceType.includes('tree')) {
+                                        return <TreePine className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                                      }
+                                      if (serviceType.includes('hedge') || serviceType.includes('prune') || serviceType.includes('trim')) {
+                                        return <Scissors className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                                      }
+                                      if (serviceType.includes('stump') || serviceType.includes('grind')) {
+                                        return <Axe className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />;
+                                      }
+                                      if (serviceType.includes('plant') || serviceType.includes('garden')) {
+                                        return <Sprout className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                                      }
+                                      return null;
+                                    })()}
+                                    <span className="truncate">{editingJob.serviceType}</span>
+                                  </>
+                                )}
+                              </div>
+                              
+                              {/* Row 3: Call & Message Buttons */}
+                              <div className="flex items-center gap-2 mt-2">
+                                {(selectedCustomer?.phone || form.getValues('jobContactPhone')) && (
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="default"
+                                    className="bg-green-500 rounded-lg"
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      handleCallClick();
+                                    }}
+                                    data-testid="button-quick-call"
+                                  >
+                                    <Phone className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="default"
+                                  className="bg-blue-500 rounded-lg"
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    setIsSMSComposerOpen(true);
+                                  }}
+                                  data-testid="button-quick-sms"
+                                >
+                                  <MessageSquare className="h-4 w-4" />
+                                </Button>
+                                {editingJob?.priority === 'urgent' && (
+                                  <Badge className="bg-orange-500 text-white text-xs border-0 ml-auto">
+                                    <Zap className="h-3 w-3 mr-1" />
+                                    Urgent
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* Customer Selection (for create mode or changing customer) */}
                       <div className="space-y-1">
                         {/* Customer Name - Large and Prominent */}
                         <FormField
@@ -2718,8 +2814,8 @@ export function GlobalJobCard({
                                       {selectedCustomerName ? (
                                         <div>
                                           {/* Customer Name */}
-                                          <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-                                            {selectedCustomerName}
+                                          <h2 className={`text-xl font-semibold text-gray-900 flex items-center gap-2 ${mode === 'edit' ? 'text-sm' : ''}`}>
+                                            {mode === 'edit' ? 'Change Customer:' : selectedCustomerName}
                                             <ChevronsUpDown className="h-4 w-4 text-gray-400" />
                                           </h2>
                                         </div>
