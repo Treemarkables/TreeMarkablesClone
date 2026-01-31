@@ -2697,13 +2697,13 @@ export function GlobalJobCard({
                 data-form="job-form"
               >
                 <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
-                  <div className={`flex-1 bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
+                  <div className={`flex-1 bg-blue-50/50 md:bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
-                    <div className="space-y-4">
-                      {/* ServiceM8-Style Customer Card Header */}
+                    <div className="space-y-3 md:space-y-4">
+                      {/* ServiceM8-Style Customer Header Card */}
                       {mode === 'edit' && selectedCustomerName && (
-                        <div className="bg-gray-50 rounded-lg p-4 -mx-1">
-                          <div className="flex items-start gap-3">
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:hidden">
+                          <div className="flex items-start gap-4">
                             {/* Customer Avatar - Large Circle */}
                             <div className="relative flex-shrink-0">
                               <CustomerAvatar
@@ -2715,20 +2715,38 @@ export function GlobalJobCard({
                             
                             {/* Customer Info */}
                             <div className="flex-1 min-w-0">
-                              {/* Row 1: Customer Name + Job Number */}
+                              {/* Row 1: Customer Name + Status Badge */}
                               <div className="flex items-start justify-between gap-2 mb-1">
-                                <h2 className="font-bold text-gray-900 text-lg truncate flex-1">
+                                <h2 className="font-bold text-gray-900 text-xl truncate flex-1">
                                   {selectedCustomerName}
                                 </h2>
-                                <span className="text-sm text-gray-400 font-mono flex-shrink-0">
-                                  #{editingJob?.jobNumber || '0000'}
-                                </span>
+                                <Badge 
+                                  variant="outline" 
+                                  className={`text-xs whitespace-nowrap flex-shrink-0 ${
+                                    currentStatus === 'completed' ? 'border-green-500 text-green-600' :
+                                    currentStatus === 'work_order' ? 'border-blue-500 text-blue-600' :
+                                    currentStatus === 'quote' ? 'border-blue-500 text-blue-600' :
+                                    currentStatus === 'lead' ? 'border-cyan-500 text-cyan-600' :
+                                    currentStatus === 'scheduled' ? 'border-blue-500 text-blue-600' :
+                                    currentStatus === 'unsuccessful' ? 'border-red-500 text-red-600' :
+                                    'border-gray-400 text-gray-600'
+                                  }`}
+                                >
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  {currentStatus === 'quote' ? 'Quote Sent' : 
+                                   currentStatus === 'work_order' ? 'Work Order' :
+                                   currentStatus === 'completed' ? 'Completed' :
+                                   currentStatus === 'lead' ? 'Lead' :
+                                   currentStatus === 'scheduled' ? 'Scheduled' :
+                                   currentStatus === 'unsuccessful' ? 'Unsuccessful' :
+                                   currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
+                                </Badge>
                               </div>
                               
-                              {/* Row 2: Address + Service Type with Icon */}
-                              <div className="flex items-center gap-1.5 text-sm text-gray-500 mb-1.5">
+                              {/* Row 2: Location | Service Type */}
+                              <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1 flex-wrap">
                                 <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{form.getValues('address')?.split(',')[0] || 'No address'}</span>
+                                <span className="truncate">{form.getValues('address')?.split(',')[1]?.trim() || form.getValues('address')?.split(',')[0] || 'No location'}</span>
                                 {editingJob?.serviceType && (
                                   <>
                                     <span className="text-gray-300">|</span>
@@ -2748,49 +2766,97 @@ export function GlobalJobCard({
                                       }
                                       return null;
                                     })()}
-                                    <span className="truncate">{editingJob.serviceType}</span>
+                                    <span>{editingJob.serviceType}</span>
                                   </>
                                 )}
                               </div>
                               
-                              {/* Row 3: Call & Message Buttons */}
-                              <div className="flex items-center gap-2 mt-2">
-                                {(selectedCustomer?.phone || form.getValues('jobContactPhone')) && (
-                                  <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="default"
-                                    className="bg-green-500 rounded-lg"
-                                    onClick={(e) => {
-                                      e.preventDefault();
-                                      handleCallClick();
-                                    }}
-                                    data-testid="button-quick-call"
-                                  >
-                                    <Phone className="h-4 w-4" />
-                                  </Button>
+                              {/* Row 3: Est time | Rate | Crew */}
+                              <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
+                                {editingJob?.estimatedManHours && (
+                                  <>
+                                    <Clock className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                    <span>Est: {editingJob.estimatedManHours} hrs</span>
+                                    <span className="text-gray-300">|</span>
+                                  </>
                                 )}
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="default"
-                                  className="bg-blue-500 rounded-lg"
-                                  onClick={(e) => {
-                                    e.preventDefault();
-                                    setIsSMSComposerOpen(true);
-                                  }}
-                                  data-testid="button-quick-sms"
-                                >
-                                  <MessageSquare className="h-4 w-4" />
-                                </Button>
-                                {editingJob?.priority === 'urgent' && (
-                                  <Badge className="bg-orange-500 text-white text-xs border-0 ml-auto">
-                                    <Zap className="h-3 w-3 mr-1" />
-                                    Urgent
-                                  </Badge>
+                                {editingJob?.hourlyRate && (
+                                  <>
+                                    <DollarSign className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                    <span>${editingJob.hourlyRate}/hr</span>
+                                    <span className="text-gray-300">|</span>
+                                  </>
+                                )}
+                                {editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
+                                  <>
+                                    <User className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                    <span>{editingJob.assignedTo.length} crew</span>
+                                  </>
                                 )}
                               </div>
                             </div>
+                          </div>
+                          
+                          {/* Action Buttons Row */}
+                          <div className="flex items-center gap-2 mt-4">
+                            <Button
+                              type="button"
+                              size="sm"
+                              className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-full"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                handleCallClick();
+                              }}
+                              data-testid="button-servicem8-call"
+                            >
+                              <Phone className="h-4 w-4 mr-1.5" />
+                              Call
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 border-blue-500 text-blue-600 rounded-full"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setIsSMSComposerOpen(true);
+                              }}
+                              data-testid="button-servicem8-message"
+                            >
+                              <MessageSquare className="h-4 w-4 mr-1.5" />
+                              Message
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 border-blue-500 text-blue-600 rounded-full"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                const address = form.getValues('address');
+                                if (address) {
+                                  window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`, '_blank');
+                                }
+                              }}
+                              data-testid="button-servicem8-navigate"
+                            >
+                              <MapPin className="h-4 w-4 mr-1.5" />
+                              Navigate
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 border-blue-500 text-blue-600 rounded-full"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                setIsPhotoCaptureOpen(true);
+                              }}
+                              data-testid="button-servicem8-photos"
+                            >
+                              <Camera className="h-4 w-4 mr-1.5" />
+                              Photos
+                            </Button>
                           </div>
                         </div>
                       )}
@@ -3211,12 +3277,14 @@ export function GlobalJobCard({
                           </div>
                         </div>
 
-                        {/* Equipment Selection */}
+                        {/* ServiceM8-Style Gear List Card */}
                         {mode === 'edit' && editingJob && allEquipment.length > 0 && (
-                          <div className="space-y-2">
+                          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none space-y-3">
                             <div className="flex items-center gap-2">
-                              <Package className="w-4 h-4 text-blue-600" />
-                              <label className="text-xs font-medium text-gray-600">Gear List</label>
+                              <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
+                                <Package className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <h3 className="font-bold text-gray-900">Gear List</h3>
                             </div>
                             
                             {/* Multi-select dropdown for equipment */}
@@ -3370,89 +3438,206 @@ export function GlobalJobCard({
                           </div>
                         </div>
 
-                        {/* Job Description */}
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <label className="text-sm font-semibold text-gray-700">Job Description</label>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                              onClick={() => {
-                                setSpeechToQuoteContext('job-description');
-                                setIsSpeechToQuoteOpen(true);
-                              }}
-                              data-testid="button-speech-job-description"
-                            >
-                              <Mic className="h-4 w-4 mr-1" />
-                              <span className="text-xs">Voice</span>
-                            </Button>
+                        {/* ServiceM8-Style Job Scope Card */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
+                                <FileText className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <h3 className="font-bold text-gray-900">Job Scope</h3>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                onClick={() => {
+                                  setSpeechToQuoteContext('job-description');
+                                  setIsSpeechToQuoteOpen(true);
+                                }}
+                                data-testid="button-speech-job-description"
+                              >
+                                <Mic className="h-4 w-4 mr-1" />
+                                <span className="text-xs">Voice</span>
+                              </Button>
+                              {checklist.length > 0 && (
+                                <Badge variant="outline" className="text-xs">
+                                  {checklist.length}
+                                  <ChevronDown className="h-3 w-3 ml-1" />
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                          <FormField
-                            control={form.control}
-                            name="description"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <>
-                                    <input type="hidden" {...field} />
-                                    <div
-                                      ref={descriptionTextareaRef}
-                                      className="text-base font-medium cursor-pointer border rounded-md p-3 bg-white whitespace-pre-wrap break-words"
-                                      style={{ minHeight: '72px' }}
-                                      onTouchStart={() => {
-                                        const now = Date.now();
-                                        const timeSinceLastTap = now - lastDescriptionTap;
-                                        
-                                        // Double-tap detection: if tapped within 300ms, it's a double-tap
-                                        if (timeSinceLastTap < 300 && timeSinceLastTap > 0) {
-                                          setDescriptionPopupOpen(true);
-                                          setLastDescriptionTap(0); // Reset to prevent triple-tap
-                                        } else {
-                                          setLastDescriptionTap(now);
-                                        }
-                                      }}
-                                      onDoubleClick={() => {
-                                        setDescriptionPopupOpen(true);
-                                      }}
-                                      data-testid="div-description-display"
-                                    >
-                                      {field.value ? (
-                                        <LinkifyMultiline text={field.value} />
-                                      ) : (
-                                        <span className="text-gray-400">Describe the work that needs to be done</span>
-                                      )}
-                                    </div>
-                                  </>
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                          <div className="flex items-center gap-2 mt-2">
-                            <input 
-                              type="checkbox"
-                              id="includeInQuotesProposals"
-                              checked={form.watch('includeDescriptionInQuotesProposals') !== false}
-                              onChange={(e) => {
-                                const newValue = e.target.checked;
-                                form.setValue('includeDescriptionInQuotesProposals', newValue);
-                                
-                                // Auto-save when checkbox is toggled (only in edit mode)
-                                if (mode === 'edit' && editingJob?.id) {
-                                  updateJobMutation.mutate({
-                                    id: editingJob.id,
-                                    updates: {
-                                      includeDescriptionInQuotesProposals: newValue
+                          
+                          {/* Checklist Items */}
+                          <div className="space-y-2 mb-3">
+                            {checklist.map((item, index) => (
+                              <div 
+                                key={index} 
+                                className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                                onClick={() => {
+                                  const updated = [...checklist];
+                                  updated[index] = { ...item, completed: !item.completed };
+                                  setChecklist(updated);
+                                  if (mode === 'edit' && editingJob?.id) {
+                                    updateJobMutation.mutate({
+                                      id: editingJob.id,
+                                      updates: { checklist: updated }
+                                    });
+                                  }
+                                }}
+                              >
+                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${item.completed ? 'bg-green-500' : 'border-2 border-gray-300'}`}>
+                                  {item.completed && <Check className="h-3 w-3 text-white" />}
+                                </div>
+                                <span className={`text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                  {item.text}
+                                </span>
+                              </div>
+                            ))}
+                            
+                            {/* Add new checklist item */}
+                            <div className="flex items-center gap-2">
+                              <Input
+                                placeholder="Add checklist item..."
+                                value={newChecklistItem}
+                                onChange={(e) => setNewChecklistItem(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && newChecklistItem.trim()) {
+                                    e.preventDefault();
+                                    const newItem = { text: newChecklistItem.trim(), completed: false };
+                                    const updated = [...checklist, newItem];
+                                    setChecklist(updated);
+                                    setNewChecklistItem('');
+                                    if (mode === 'edit' && editingJob?.id) {
+                                      updateJobMutation.mutate({
+                                        id: editingJob.id,
+                                        updates: { checklist: updated }
+                                      });
                                     }
-                                  });
-                                }
-                              }}
-                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                  }
+                                }}
+                                className="h-9 text-sm"
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  if (newChecklistItem.trim()) {
+                                    const newItem = { text: newChecklistItem.trim(), completed: false };
+                                    const updated = [...checklist, newItem];
+                                    setChecklist(updated);
+                                    setNewChecklistItem('');
+                                    if (mode === 'edit' && editingJob?.id) {
+                                      updateJobMutation.mutate({
+                                        id: editingJob.id,
+                                        updates: { checklist: updated }
+                                      });
+                                    }
+                                  }
+                                }}
+                              >
+                                <Plus className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </div>
+                          
+                          {/* Crew Notes (Job Description) */}
+                          <div className="border-t pt-3">
+                            <FormField
+                              control={form.control}
+                              name="description"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <div 
+                                    className="flex items-center justify-between cursor-pointer"
+                                    onClick={() => setDescriptionPopupOpen(true)}
+                                  >
+                                    <span className="text-blue-600 font-medium flex items-center gap-2">
+                                      <MessageSquare className="h-4 w-4" />
+                                      Crew Notes
+                                    </span>
+                                    <ChevronDown className="h-4 w-4 text-gray-400" />
+                                  </div>
+                                  <FormControl>
+                                    <>
+                                      <input type="hidden" {...field} />
+                                      {field.value && (
+                                        <div
+                                          ref={descriptionTextareaRef}
+                                          className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-3"
+                                          onClick={() => setDescriptionPopupOpen(true)}
+                                          data-testid="div-description-display"
+                                        >
+                                          <LinkifyMultiline text={field.value} />
+                                        </div>
+                                      )}
+                                    </>
+                                  </FormControl>
+                                </FormItem>
+                              )}
                             />
-                            <label htmlFor="includeInQuotesProposals" className="text-xs text-gray-600">
-                              Include in quotes & proposals
-                            </label>
+                          </div>
+                        </div>
+                        
+                        {/* ServiceM8-Style Time & Cost Card */}
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
+                          <div className="flex items-center gap-2 mb-3">
+                            <div className="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
+                              <Clock className="h-4 w-4 text-green-600" />
+                            </div>
+                            <h3 className="font-bold text-gray-900">Time & Cost</h3>
+                          </div>
+                          
+                          <div className="space-y-3">
+                            {/* Estimated Hours */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-600">Estimated</span>
+                                <span className="text-gray-300">·</span>
+                                <FormField
+                                  control={form.control}
+                                  name="estimatedManHours"
+                                  render={({ field }) => (
+                                    <FormItem className="flex items-center gap-1">
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          type="number"
+                                          step="0.5"
+                                          className="h-7 w-16 text-sm font-bold"
+                                          placeholder="0"
+                                        />
+                                      </FormControl>
+                                      <span className="text-sm font-bold">hours</span>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="text-right">
+                                <FormField
+                                  control={form.control}
+                                  name="hourlyRate"
+                                  render={({ field }) => (
+                                    <FormItem className="flex items-center gap-1">
+                                      <span className="text-sm text-gray-500">$</span>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          type="number"
+                                          className="h-7 w-16 text-sm"
+                                          placeholder="0"
+                                        />
+                                      </FormControl>
+                                      <span className="text-sm text-gray-500">/hr</span>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
 
@@ -3499,19 +3684,7 @@ export function GlobalJobCard({
                           return null;
                         })()}
 
-                        {/* Checklist */}
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <label className="text-xs font-medium text-gray-600">Checklist</label>
-                            <button className="text-xs text-blue-600 hover:text-blue-800">⋯</button>
-                          </div>
-                          <div className="border rounded-lg p-2 bg-gray-50">
-                            <button className="text-sm text-gray-500 hover:text-gray-700 flex items-center gap-1">
-                              <Plus className="w-3 h-3" />
-                              New Item
-                            </button>
-                          </div>
-                        </div>
+                        {/* Checklist section removed - now in Job Scope card above */}
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
