@@ -2956,30 +2956,102 @@ export function GlobalJobCard({
                         </div>
                       )}
                       
-                      {/* Customer Name Input for Mobile New Jobs */}
+                      {/* Customer Search/Select for Mobile New Jobs */}
                       {mode === 'create' && (
                         <div className="md:hidden mb-2">
                           <FormField
                             control={form.control}
-                            name="newCustomerName"
+                            name="customerId"
                             render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-xs font-medium text-gray-500">Customer Name</FormLabel>
-                                <FormControl>
-                                  <Input
-                                    {...field}
-                                    placeholder="Enter customer name..."
-                                    className="h-10"
-                                    onChange={(e) => {
-                                      field.onChange(e);
-                                      form.setValue('isNewCustomer', true);
-                                      const names = e.target.value.split(' ');
-                                      form.setValue('jobContactFirstName', names[0] || '');
-                                      form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
-                                    }}
-                                    data-testid="input-mobile-customer-name"
-                                  />
-                                </FormControl>
+                                <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                                  <PopoverTrigger asChild>
+                                    <FormControl>
+                                      <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        className={cn(
+                                          "w-full justify-between h-10",
+                                          !field.value && !form.watch('newCustomerName') && "text-muted-foreground"
+                                        )}
+                                      >
+                                        {field.value
+                                          ? customers.find((c) => c.id === field.value)?.name
+                                          : form.watch('newCustomerName') 
+                                            ? form.watch('newCustomerName')
+                                            : "Select or enter customer..."}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                      </Button>
+                                    </FormControl>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[calc(100vw-2rem)] max-w-[350px] p-0" align="start">
+                                    <Command>
+                                      <CommandInput 
+                                        placeholder="Search or add customer..." 
+                                        value={customerSearchValue}
+                                        onValueChange={setCustomerSearchValue}
+                                      />
+                                      <CommandList className="max-h-[300px]">
+                                        <CommandEmpty>
+                                          <Button 
+                                            variant="ghost" 
+                                            className="w-full justify-start text-blue-600"
+                                            onClick={() => {
+                                              form.setValue('isNewCustomer', true);
+                                              form.setValue('newCustomerName', customerSearchValue);
+                                              form.setValue('customerId', '');
+                                              const names = customerSearchValue.split(' ');
+                                              form.setValue('jobContactFirstName', names[0] || '');
+                                              form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                              setSelectedCustomerName(customerSearchValue);
+                                              setCustomerSearchOpen(false);
+                                            }}
+                                          >
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Create "{customerSearchValue}"
+                                          </Button>
+                                        </CommandEmpty>
+                                        <CommandGroup heading="Existing Customers">
+                                          {customers.slice(0, 50).map((customer) => (
+                                            <CommandItem
+                                              key={customer.id}
+                                              value={customer.name}
+                                              onSelect={() => {
+                                                form.setValue("customerId", customer.id);
+                                                form.setValue('isNewCustomer', false);
+                                                form.setValue('newCustomerName', '');
+                                                setSelectedCustomerName(customer.name);
+                                                setHasUserSelectedCustomer(true);
+                                                // Pre-fill address from customer if available
+                                                if (customer.address && !form.getValues('address')) {
+                                                  form.setValue('address', customer.address);
+                                                }
+                                                setCustomerSearchOpen(false);
+                                              }}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  customer.id === field.value
+                                                    ? "opacity-100"
+                                                    : "opacity-0"
+                                                )}
+                                              />
+                                              <div className="flex flex-col">
+                                                <span>{customer.name}</span>
+                                                {customer.address && (
+                                                  <span className="text-xs text-gray-500 truncate max-w-[250px]">{customer.address}</span>
+                                                )}
+                                              </div>
+                                            </CommandItem>
+                                          ))}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  </PopoverContent>
+                                </Popover>
+                                <FormMessage />
                               </FormItem>
                             )}
                           />
