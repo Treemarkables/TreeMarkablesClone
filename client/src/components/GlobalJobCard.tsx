@@ -3449,7 +3449,7 @@ export function GlobalJobCard({
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[220px] p-0" align="start" side="bottom" sideOffset={4} onOpenAutoFocus={(e) => e.preventDefault()}>
-                                  <div className="space-y-1 p-2 max-h-[250px] overflow-y-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
+                                  <div className="space-y-1 p-2 max-h-[50vh] overflow-y-scroll overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
                                     {allEquipment.map((equip: any) => {
                                       const isSelected = editingJob.equipmentChecklist?.some(
                                         (item: any) => item.equipment === equip.name
