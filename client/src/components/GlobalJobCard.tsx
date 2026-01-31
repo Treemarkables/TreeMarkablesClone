@@ -3400,6 +3400,30 @@ export function GlobalJobCard({
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
+                          <div className="md:hidden mb-4">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
+                                  <Calendar className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">Upcoming Bookings</h3>
+                              </div>
+                              <div className="space-y-2">
+                                {editingJob.assignedTo.map((staffId: string) => {
+                                  const staff = users?.find(u => u.id === staffId);
+                                  return (
+                                    <div key={staffId} className="flex items-center justify-between">
+                                      <span className="text-sm text-gray-700">{staff?.name || 'Unknown Staff'}</span>
+                                      <span className="text-xs text-gray-500">
+                                        {format(new Date(editingJob.scheduledDate!), 'h:mm a')}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                         
                         {/* ServiceM8-Style Time & Cost Card */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
@@ -3506,6 +3530,30 @@ export function GlobalJobCard({
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
+                          <div className="md:hidden mb-4">
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
+                                  <Calendar className="h-4 w-4 text-blue-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">Upcoming Bookings</h3>
+                              </div>
+                              <div className="space-y-2">
+                                {editingJob.assignedTo.map((staffId: string) => {
+                                  const staff = users?.find(u => u.id === staffId);
+                                  return (
+                                    <div key={staffId} className="flex items-center justify-between">
+                                      <span className="text-sm text-gray-700">{staff?.name || 'Unknown Staff'}</span>
+                                      <span className="text-xs text-gray-500">
+                                        {format(new Date(editingJob.scheduledDate!), 'h:mm a')}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          </div>
+                        )}
                           <div>
                             <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
                             <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
