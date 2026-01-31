@@ -2940,34 +2940,6 @@ export function GlobalJobCard({
                       
                       {/* Address and other fields */}
                       <div className="space-y-4">
-                        {/* Desktop Only: Contact Person Row */}
-                        <div className="hidden md:grid grid-cols-2 gap-4 border-b border-gray-100 pb-4">
-                          <FormField
-                            control={form.control}
-                            name="jobContactFirstName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs text-gray-500 font-medium uppercase tracking-wider">Contact First Name</FormLabel>
-                                <FormControl>
-                                  <Input {...field} placeholder="First name" className="border-0 shadow-none px-0 h-8 text-sm focus-visible:ring-0" />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                          <FormField
-                            control={form.control}
-                            name="jobContactLastName"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormLabel className="text-xs text-gray-500 font-medium uppercase tracking-wider">Contact Last Name</FormLabel>
-                                <FormControl>
-                                  <Input {...field} placeholder="Last name" className="border-0 shadow-none px-0 h-8 text-sm focus-visible:ring-0" />
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        </div>
-
                         {/* Address - two lines */}
                         <FormField
                           control={form.control}
