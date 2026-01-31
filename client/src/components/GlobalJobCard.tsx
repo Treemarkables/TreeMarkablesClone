@@ -3438,6 +3438,44 @@ export function GlobalJobCard({
                               )}
                             />
                           </div>
+                          {/* Quote Presentation Method - only show for jobs with quotes/proposals */}
+                          {mode === 'edit' && editingJob && ['quote', 'scheduled', 'work_order', 'completed'].includes(editingJob.status) && (
+                            <div className="flex-1">
+                              <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Quote Method</label>
+                              <Select 
+                                value={(editingJob as any).quotePresentationMethod || ""} 
+                                onValueChange={(value) => {
+                                  if (editingJob?.id) {
+                                    // Optimistic update
+                                    queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
+                                      if (!oldData) return oldData;
+                                      return {
+                                        ...oldData,
+                                        data: { 
+                                          ...oldData.data, 
+                                          quotePresentationMethod: value,
+                                          quotePresentedDate: new Date().toISOString()
+                                        }
+                                      };
+                                    });
+                                    // Background save
+                                    apiRequest('PATCH', `/api/jobs/${editingJob.id}`, { 
+                                      quotePresentationMethod: value,
+                                      quotePresentedDate: new Date().toISOString()
+                                    }).catch(error => console.error('Error saving quote method:', error));
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="How was quote presented?" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="on_site">On-Site (presented in person)</SelectItem>
+                                  <SelectItem value="sent_later">Sent Later (email/post)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
                         </div>
 
                         {/* ServiceM8-Style Gear List Card */}

@@ -338,6 +338,13 @@ export interface IStorage {
     rejectionReasons: { reason: string; count: number }[];
     competitorAnalysis: { competitor: string; averagePrice: number; winRate: number }[];
   }>;
+  
+  getQuoteMethodAnalytics(fromDate?: Date, toDate?: Date): Promise<{
+    hasData: boolean;
+    onSite: { total: number; accepted: number; rejected: number; pending: number; acceptanceRate: number; avgAcceptedValue: number; totalAcceptedValue: number };
+    sentLater: { total: number; accepted: number; rejected: number; pending: number; acceptanceRate: number; avgAcceptedValue: number; totalAcceptedValue: number };
+    comparison: { rateAdvantage: number; valueAdvantage: number; winningMethod: string };
+  }>;
 
   // Enhanced Lead Analytics
   getLeadScoring(): Promise<(Lead & { score: number; priority: 'hot' | 'warm' | 'cold' })[]>;
@@ -2516,6 +2523,87 @@ class DatabaseStorage implements IStorage {
       averageResponseTime: 0,
       rejectionReasons: [],
       competitorAnalysis: []
+    };
+  }
+
+  async getQuoteMethodAnalytics(fromDate?: Date, toDate?: Date): Promise<any> {
+    // Get all jobs to analyze quote presentation methods
+    const jobsResult = await this.getAllJobs({ limit: 10000 });
+    const allJobs = jobsResult.jobs;
+    
+    // Filter by date if provided
+    let filteredJobs = allJobs.filter(j => !j.archived);
+    
+    if (fromDate || toDate) {
+      filteredJobs = filteredJobs.filter(j => {
+        if (!j.createdAt) return false;
+        const jobDate = new Date(j.createdAt);
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
+        return true;
+      });
+    }
+    
+    // Status definitions
+    const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+    const rejectedStatuses = ['unsuccessful'];
+    
+    // Filter jobs that have quote presentation method set
+    const jobsWithMethod = filteredJobs.filter(j => 
+      (j as any).quotePresentationMethod && 
+      (j.status !== 'lead' && j.status !== 'archived')
+    );
+    
+    // On-site quotes analytics
+    const onSiteJobs = jobsWithMethod.filter(j => (j as any).quotePresentationMethod === 'on_site');
+    const onSiteAccepted = onSiteJobs.filter(j => acceptedStatuses.includes(j.status || ''));
+    const onSiteRejected = onSiteJobs.filter(j => rejectedStatuses.includes(j.status || ''));
+    const onSitePending = onSiteJobs.filter(j => j.status === 'quote');
+    const onSiteTotal = onSiteAccepted.length + onSiteRejected.length;
+    const onSiteAcceptanceRate = onSiteTotal > 0 ? (onSiteAccepted.length / onSiteTotal) * 100 : 0;
+    
+    // Sent-later quotes analytics
+    const sentLaterJobs = jobsWithMethod.filter(j => (j as any).quotePresentationMethod === 'sent_later');
+    const sentLaterAccepted = sentLaterJobs.filter(j => acceptedStatuses.includes(j.status || ''));
+    const sentLaterRejected = sentLaterJobs.filter(j => rejectedStatuses.includes(j.status || ''));
+    const sentLaterPending = sentLaterJobs.filter(j => j.status === 'quote');
+    const sentLaterTotal = sentLaterAccepted.length + sentLaterRejected.length;
+    const sentLaterAcceptanceRate = sentLaterTotal > 0 ? (sentLaterAccepted.length / sentLaterTotal) * 100 : 0;
+    
+    // Calculate average values
+    const onSiteAvgValue = onSiteAccepted.length > 0 
+      ? onSiteAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0) / onSiteAccepted.length 
+      : 0;
+    const sentLaterAvgValue = sentLaterAccepted.length > 0 
+      ? sentLaterAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0) / sentLaterAccepted.length 
+      : 0;
+    
+    return {
+      hasData: jobsWithMethod.length > 0,
+      onSite: {
+        total: onSiteJobs.length,
+        accepted: onSiteAccepted.length,
+        rejected: onSiteRejected.length,
+        pending: onSitePending.length,
+        acceptanceRate: Math.round(onSiteAcceptanceRate * 10) / 10,
+        avgAcceptedValue: Math.round(onSiteAvgValue * 100) / 100,
+        totalAcceptedValue: onSiteAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0)
+      },
+      sentLater: {
+        total: sentLaterJobs.length,
+        accepted: sentLaterAccepted.length,
+        rejected: sentLaterRejected.length,
+        pending: sentLaterPending.length,
+        acceptanceRate: Math.round(sentLaterAcceptanceRate * 10) / 10,
+        avgAcceptedValue: Math.round(sentLaterAvgValue * 100) / 100,
+        totalAcceptedValue: sentLaterAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0)
+      },
+      comparison: {
+        rateAdvantage: Math.round((onSiteAcceptanceRate - sentLaterAcceptanceRate) * 10) / 10,
+        valueAdvantage: Math.round((onSiteAvgValue - sentLaterAvgValue) * 100) / 100,
+        winningMethod: onSiteAcceptanceRate > sentLaterAcceptanceRate ? 'on_site' : 
+                       sentLaterAcceptanceRate > onSiteAcceptanceRate ? 'sent_later' : 'equal'
+      }
     };
   }
 
