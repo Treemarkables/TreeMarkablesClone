@@ -3462,6 +3462,135 @@ export function GlobalJobCard({
                           </div>
                         )}
 
+                        {/* Desktop Job Scope - below Gear List */}
+                        <div className="hidden md:block">
+                          <div className="space-y-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                                  <FileText className="h-4 w-4 text-gray-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">Job Scope</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                  onClick={() => {
+                                    setSpeechToQuoteContext('job-description');
+                                    setIsSpeechToQuoteOpen(true);
+                                  }}
+                                  data-testid="button-speech-job-description-desktop"
+                                >
+                                  <Mic className="h-4 w-4 mr-1" />
+                                  <span className="text-xs">Voice</span>
+                                </Button>
+                                {checklist.length > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {checklist.length}
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Checklist Items */}
+                            <div className="space-y-2">
+                              {checklist.map((item, index) => (
+                                <div 
+                                  key={index} 
+                                  className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                                  onClick={() => {
+                                    const updated = [...checklist];
+                                    updated[index] = { ...item, completed: !item.completed };
+                                    setChecklist(updated);
+                                    if (mode === 'edit' && editingJob?.id) {
+                                      updateJobMutation.mutate({
+                                        id: editingJob.id,
+                                        updates: { checklist: updated }
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${item.completed ? 'bg-green-500' : 'border-2 border-gray-300'}`}>
+                                    {item.completed && <Check className="h-3 w-3 text-white" />}
+                                  </div>
+                                  <span className={`text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                    {item.text}
+                                  </span>
+                                </div>
+                              ))}
+                              
+                              {/* Add new checklist item */}
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Add checklist item..."
+                                  value={newChecklistItem}
+                                  onChange={(e) => setNewChecklistItem(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && newChecklistItem.trim()) {
+                                      e.preventDefault();
+                                      const newItem = { text: newChecklistItem.trim(), completed: false };
+                                      const updated = [...checklist, newItem];
+                                      setChecklist(updated);
+                                      setNewChecklistItem('');
+                                      if (mode === 'edit' && editingJob?.id) {
+                                        updateJobMutation.mutate({
+                                          id: editingJob.id,
+                                          updates: { checklist: updated }
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (newChecklistItem.trim()) {
+                                      const newItem = { text: newChecklistItem.trim(), completed: false };
+                                      const updated = [...checklist, newItem];
+                                      setChecklist(updated);
+                                      setNewChecklistItem('');
+                                      if (mode === 'edit' && editingJob?.id) {
+                                        updateJobMutation.mutate({
+                                          id: editingJob.id,
+                                          updates: { checklist: updated }
+                                        });
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Crew Notes (Job Description) */}
+                            <div className="border-t pt-3">
+                              <FormField
+                                control={form.control}
+                                name="description"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel className="text-xs text-gray-500 font-medium">Crew Notes</FormLabel>
+                                    <FormControl>
+                                      <Textarea
+                                        {...field}
+                                        placeholder="Enter job details, special instructions, or notes for the crew..."
+                                        className="min-h-[80px] text-sm resize-none"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Estimated Man Hours */}
                         <div className="flex gap-2 items-center">
                           <div className="w-[140px]">
