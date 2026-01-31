@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { XeroClient } from 'xero-node';
+import { XeroClient, PayrollNzApi, Configuration } from 'xero-node';
 import type { IStorage } from './storage';
+import { TimeTrackingService } from './timeTrackingService';
 
 const router = Router();
 
@@ -757,6 +758,334 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch Profit & Loss report from Xero'
+      });
+    }
+  });
+
+  // ========================================
+  // PAYROLL NZ - EMPLOYEE TIMESHEETS & HOURS
+  // ========================================
+
+  // Get employees from Xero Payroll NZ
+  app.get('/api/xero/payroll/employees', async (req: Request, res: Response) => {
+    try {
+      const client = await getValidXeroClient();
+      if (!client) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Not connected to Xero' 
+        });
+      }
+
+      const connection = await storage.getActiveXeroConnection();
+      if (!connection) {
+        return res.status(400).json({ success: false, message: 'No active Xero connection' });
+      }
+
+      // Get tenants to find the correct tenant ID
+      const tenants = await client.updateTenants();
+      if (!tenants || tenants.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No Xero organizations found' 
+        });
+      }
+
+      const tenantId = tenants[0].tenantId;
+
+      // Use Payroll NZ API to get employees
+      const employeesResponse = await client.payrollNZApi.getEmployees(tenantId);
+      const employees = employeesResponse.body.employees || [];
+
+      res.json({
+        success: true,
+        data: employees.map((emp: any) => ({
+          employeeId: emp.employeeID,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          email: emp.email,
+          status: emp.status,
+          payrollCalendarId: emp.payrollCalendarID,
+        }))
+      });
+    } catch (error: any) {
+      console.error('Error fetching Xero payroll employees:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch employees from Xero Payroll' 
+      });
+    }
+  });
+
+  // Get timesheets from Xero Payroll NZ for a date range
+  app.get('/api/xero/payroll/timesheets', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate, employeeId, status } = req.query;
+
+      const client = await getValidXeroClient();
+      if (!client) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Not connected to Xero' 
+        });
+      }
+
+      const connection = await storage.getActiveXeroConnection();
+      if (!connection) {
+        return res.status(400).json({ success: false, message: 'No active Xero connection' });
+      }
+
+      // Get tenants
+      const tenants = await client.updateTenants();
+      if (!tenants || tenants.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No Xero organizations found' 
+        });
+      }
+
+      const tenantId = tenants[0].tenantId;
+
+      // Fetch timesheets with optional filters
+      const filter = employeeId ? `employeeId==${employeeId}` : undefined;
+      const timesheetsResponse = await client.payrollNZApi.getTimesheets(
+        tenantId,
+        1, // page
+        filter,
+        status as string || undefined,
+        startDate as string || undefined,
+        endDate as string || undefined
+      );
+
+      const timesheets = timesheetsResponse.body.timesheets || [];
+
+      // Calculate total hours per employee
+      const employeeHours: Record<string, { 
+        employeeId: string;
+        totalHours: number;
+        timesheets: any[];
+      }> = {};
+
+      for (const ts of timesheets) {
+        const empId = ts.employeeID;
+        if (!employeeHours[empId]) {
+          employeeHours[empId] = {
+            employeeId: empId,
+            totalHours: 0,
+            timesheets: []
+          };
+        }
+
+        // Sum hours from timesheet lines
+        let timesheetHours = 0;
+        if (ts.timesheetLines) {
+          for (const line of ts.timesheetLines) {
+            timesheetHours += line.numberOfUnits || 0;
+          }
+        }
+
+        employeeHours[empId].totalHours += timesheetHours;
+        employeeHours[empId].timesheets.push({
+          timesheetId: ts.timesheetID,
+          startDate: ts.startDate,
+          endDate: ts.endDate,
+          status: ts.status,
+          hours: timesheetHours
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          timesheets: Object.values(employeeHours),
+          totalTimesheets: timesheets.length,
+          dateRange: {
+            from: startDate || 'all',
+            to: endDate || 'all'
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error('Error fetching Xero timesheets:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to fetch timesheets from Xero Payroll' 
+      });
+    }
+  });
+
+  // Get payroll paid hours summary - compares billable hours vs paid hours
+  app.get('/api/xero/payroll/efficiency', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'startDate and endDate are required'
+        });
+      }
+
+      const client = await getValidXeroClient();
+      if (!client) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Not connected to Xero' 
+        });
+      }
+
+      // Get tenants
+      const tenants = await client.updateTenants();
+      if (!tenants || tenants.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No Xero organizations found' 
+        });
+      }
+
+      const tenantId = tenants[0].tenantId;
+
+      // Fetch all employees
+      const employeesResponse = await client.payrollNZApi.getEmployees(tenantId);
+      const employees = employeesResponse.body.employees || [];
+
+      // Fetch all timesheets for the period with pagination
+      const allTimesheets: any[] = [];
+      let page = 1;
+      let hasMorePages = true;
+      
+      while (hasMorePages) {
+        const timesheetsResponse = await client.payrollNZApi.getTimesheets(
+          tenantId,
+          page,
+          undefined,
+          'Approved', // Only approved timesheets
+          startDate as string,
+          endDate as string
+        );
+
+        const pageTimesheets = timesheetsResponse.body.timesheets || [];
+        allTimesheets.push(...pageTimesheets);
+        
+        // Check if there are more pages (NZ Payroll API returns empty array when no more)
+        if (pageTimesheets.length === 0 || pageTimesheets.length < 100) {
+          hasMorePages = false;
+        } else {
+          page++;
+        }
+      }
+
+      console.log(`📊 Fetched ${allTimesheets.length} timesheets across ${page} page(s)`);
+
+      // Calculate paid hours per employee from Xero
+      const xeroPaidHours: Record<string, number> = {};
+      for (const ts of allTimesheets) {
+        const empId = ts.employeeID;
+        if (!xeroPaidHours[empId]) {
+          xeroPaidHours[empId] = 0;
+        }
+        if (ts.timesheetLines) {
+          for (const line of ts.timesheetLines) {
+            xeroPaidHours[empId] += line.numberOfUnits || 0;
+          }
+        }
+      }
+
+      // Get billable hours from our job time tracking system
+      // Query staff/employees from our system
+      const ourEmployees = await storage.getAllEmployees();
+      const timeTrackingService = new TimeTrackingService();
+      
+      // Build efficiency data for each employee
+      const efficiencyData = [];
+
+      for (const emp of employees) {
+        const xeroHours = xeroPaidHours[emp.employeeID] || 0;
+        
+        // Try to match Xero employee to our staff by name (multiple matching strategies)
+        const xeroFirstName = (emp.firstName || '').toLowerCase().trim();
+        const xeroLastName = (emp.lastName || '').toLowerCase().trim();
+        const xeroFullName = `${xeroFirstName} ${xeroLastName}`;
+        
+        const matchedStaff = ourEmployees.find(s => {
+          const staffName = s.name.toLowerCase().trim();
+          const staffParts = staffName.split(' ');
+          const staffFirstName = staffParts[0] || '';
+          const staffLastName = staffParts.slice(1).join(' ') || '';
+          
+          // Exact full name match
+          if (staffName === xeroFullName) return true;
+          
+          // First name + last name match (handles different ordering)
+          if (staffFirstName === xeroFirstName && staffLastName === xeroLastName) return true;
+          
+          // First name match when staff has single-word name
+          if (staffParts.length === 1 && staffFirstName === xeroFirstName) return true;
+          
+          // Partial match: staff name contains Xero first name and last name
+          if (staffName.includes(xeroFirstName) && xeroLastName && staffName.includes(xeroLastName)) return true;
+          
+          // Check if Xero email matches staff email (if available)
+          if (emp.email && s.email && emp.email.toLowerCase() === s.email.toLowerCase()) return true;
+          
+          return false;
+        });
+
+        let billableHours = 0;
+        if (matchedStaff) {
+          // Get billable hours from our time tracking for this staff member
+          const jobTimeEntries = await timeTrackingService.getJobTimeEntriesByEmployee(
+            matchedStaff.id.toString(),
+            startDate as string,
+            endDate as string
+          );
+          billableHours = jobTimeEntries.reduce((sum, entry) => sum + Number(entry.hours || 0), 0);
+        }
+
+        const efficiencyRate = xeroHours > 0 ? (billableHours / xeroHours) * 100 : 0;
+
+        efficiencyData.push({
+          employeeId: emp.employeeID,
+          employeeName: `${emp.firstName} ${emp.lastName}`,
+          staffId: matchedStaff?.id || null,
+          paidHours: xeroHours,
+          billableHours: billableHours,
+          nonBillableHours: Math.max(0, xeroHours - billableHours),
+          efficiencyRate: Math.round(efficiencyRate * 100) / 100,
+          status: emp.status
+        });
+      }
+
+      // Calculate totals
+      const totals = efficiencyData.reduce((acc, emp) => ({
+        totalPaidHours: acc.totalPaidHours + emp.paidHours,
+        totalBillableHours: acc.totalBillableHours + emp.billableHours,
+        totalNonBillableHours: acc.totalNonBillableHours + emp.nonBillableHours
+      }), { totalPaidHours: 0, totalBillableHours: 0, totalNonBillableHours: 0 });
+
+      const overallEfficiency = totals.totalPaidHours > 0 
+        ? (totals.totalBillableHours / totals.totalPaidHours) * 100 
+        : 0;
+
+      res.json({
+        success: true,
+        data: {
+          employees: efficiencyData.sort((a, b) => b.efficiencyRate - a.efficiencyRate),
+          totals: {
+            ...totals,
+            overallEfficiencyRate: Math.round(overallEfficiency * 100) / 100
+          },
+          period: {
+            from: startDate,
+            to: endDate
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error('Error calculating payroll efficiency:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to calculate payroll efficiency' 
       });
     }
   });
