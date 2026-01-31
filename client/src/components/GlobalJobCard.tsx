@@ -2713,7 +2713,87 @@ export function GlobalJobCard({
                       {mode === 'edit' && selectedCustomerName && (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:hidden">
                           <div className="flex flex-col gap-2">
-                            {/* Row 1: Customer Name + Status Badge */}
+                            {/* Row 0: Customer Name & Selector for Desktop/Large Screens */}
+                            <div className="hidden md:block mb-2">
+                              <FormField
+                                control={form.control}
+                                name="customerId"
+                                render={({ field }) => (
+                                  <FormItem className="flex flex-col">
+                                    <FormLabel className="text-xs text-gray-500 font-medium uppercase tracking-wider mb-1">Customer</FormLabel>
+                                    <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                                      <PopoverTrigger asChild>
+                                        <FormControl>
+                                          <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className={cn(
+                                              "w-full justify-between font-bold text-xl h-auto py-1 px-0 border-0 hover:bg-transparent shadow-none",
+                                              !field.value && "text-muted-foreground font-normal text-base"
+                                            )}
+                                          >
+                                            {field.value
+                                              ? customers.find((c) => c.id === field.value)?.name
+                                              : "Select customer..."}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                          </Button>
+                                        </FormControl>
+                                      </PopoverTrigger>
+                                      <PopoverContent className="w-[300px] p-0" align="start">
+                                        <Command>
+                                          <CommandInput 
+                                            placeholder="Search customers..." 
+                                            value={customerSearchValue}
+                                            onValueChange={setCustomerSearchValue}
+                                          />
+                                          <CommandList>
+                                            <CommandEmpty>
+                                              <Button 
+                                                variant="ghost" 
+                                                className="w-full justify-start text-blue-600"
+                                                onClick={() => {
+                                                  form.setValue('isNewCustomer', true);
+                                                  form.setValue('newCustomerName', customerSearchValue);
+                                                  setCustomerSearchOpen(false);
+                                                }}
+                                              >
+                                                <Plus className="mr-2 h-4 w-4" />
+                                                Create "{customerSearchValue}"
+                                              </Button>
+                                            </CommandEmpty>
+                                            <CommandGroup>
+                                              {customers.map((customer) => (
+                                                <CommandItem
+                                                  key={customer.id}
+                                                  value={customer.name}
+                                                  onSelect={() => {
+                                                    form.setValue("customerId", customer.id);
+                                                    setCustomerSearchOpen(false);
+                                                  }}
+                                                >
+                                                  <Check
+                                                    className={cn(
+                                                      "mr-2 h-4 w-4",
+                                                      customer.id === field.value
+                                                        ? "opacity-100"
+                                                        : "opacity-0"
+                                                    )}
+                                                  />
+                                                  {customer.name}
+                                                </CommandItem>
+                                              ))}
+                                            </CommandGroup>
+                                          </CommandList>
+                                        </Command>
+                                      </PopoverContent>
+                                    </Popover>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+
+                            {/* Row 1: Customer Name + Status Badge (Mobile) */}
                             <div className="flex items-start justify-between gap-2">
                               <h2 className="font-bold text-gray-900 text-xl">
                                 {selectedCustomerName}
@@ -2859,7 +2939,35 @@ export function GlobalJobCard({
                       )}
                       
                       {/* Address and other fields */}
-                      <div className="space-y-1">
+                      <div className="space-y-4">
+                        {/* Desktop Only: Contact Person Row */}
+                        <div className="hidden md:grid grid-cols-2 gap-4 border-b border-gray-100 pb-4">
+                          <FormField
+                            control={form.control}
+                            name="jobContactFirstName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs text-gray-500 font-medium uppercase tracking-wider">Contact First Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="First name" className="border-0 shadow-none px-0 h-8 text-sm focus-visible:ring-0" />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={form.control}
+                            name="jobContactLastName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs text-gray-500 font-medium uppercase tracking-wider">Contact Last Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="Last name" className="border-0 shadow-none px-0 h-8 text-sm focus-visible:ring-0" />
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
                         {/* Address - two lines */}
                         <FormField
                           control={form.control}
