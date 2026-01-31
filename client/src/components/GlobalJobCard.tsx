@@ -158,6 +158,16 @@ export function GlobalJobCard({
   const isMobile = useIsMobile();
   const { isAdmin } = useAuth();
 
+  // Fetch customers for the dropdown (needed upfront)
+  const { data: customersData, isLoading: customersLoading } = useQuery({
+    queryKey: ['/api/customers'],
+    enabled: isOpen,
+    staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
+    refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
+  });
+
+  const customers: Customer[] = (customersData as any)?.data || [];
+
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
@@ -200,7 +210,7 @@ export function GlobalJobCard({
   // Watch customerId and update selectedCustomerName when it changes
   const watchedCustomerId = form.watch('customerId');
   useEffect(() => {
-    if (watchedCustomerId && customers) {
+    if (watchedCustomerId && customers && customers.length > 0) {
       const customer = customers.find(c => c.id === watchedCustomerId);
       if (customer) {
         setSelectedCustomerName(customer.name);
@@ -310,14 +320,6 @@ export function GlobalJobCard({
     };
   }, [searchQuery]);
 
-  // Fetch customers for the dropdown (needed upfront)
-  const { data: customersData, isLoading: customersLoading } = useQuery({
-    queryKey: ['/api/customers'],
-    enabled: isOpen,
-    staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
-    refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
-  });
-  
   // Fetch employees for scheduling assignment (needed upfront)
   const { data: employeesData } = useQuery({
     queryKey: ['/api/employees'],
@@ -361,7 +363,6 @@ export function GlobalJobCard({
     enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
-  const customers: Customer[] = (customersData as any)?.data || [];
   const employees: any[] = (employeesData as any)?.data || [];
   const specificJob: Job | null = (specificJobData as any)?.data || null;
   
