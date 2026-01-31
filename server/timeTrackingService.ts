@@ -118,6 +118,32 @@ export class TimeTrackingService {
     return result.rowCount > 0;
   }
 
+  /**
+   * Get job time entries by employee within a date range
+   * Used for calculating billable hours vs Xero paid hours
+   */
+  async getJobTimeEntriesByEmployee(
+    employeeId: string,
+    fromDate?: string,
+    toDate?: string
+  ): Promise<JobTimeEntry[]> {
+    const conditions = [eq(jobTimeEntries.employeeId, employeeId)];
+
+    if (fromDate) {
+      conditions.push(gte(jobTimeEntries.entryDate, fromDate));
+    }
+    if (toDate) {
+      conditions.push(lte(jobTimeEntries.entryDate, toDate));
+    }
+
+    const entries = await db.select()
+      .from(jobTimeEntries)
+      .where(and(...conditions))
+      .orderBy(jobTimeEntries.entryDate);
+
+    return entries;
+  }
+
   // ========================================
   // STAFF RATE MANAGEMENT
   // ========================================

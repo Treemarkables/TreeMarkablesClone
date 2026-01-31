@@ -143,10 +143,36 @@ interface ManHoursMetrics {
   underestimatedJobs: number;
 }
 
+interface CrewEfficiencyEmployee {
+  employeeId: string;
+  employeeName: string;
+  staffId: string | null;
+  paidHours: number;
+  billableHours: number;
+  nonBillableHours: number;
+  efficiencyRate: number;
+  status: string;
+}
+
+interface CrewEfficiencyData {
+  employees: CrewEfficiencyEmployee[];
+  totals: {
+    totalPaidHours: number;
+    totalBillableHours: number;
+    totalNonBillableHours: number;
+    overallEfficiencyRate: number;
+  };
+  period: {
+    from: string;
+    to: string;
+  };
+}
+
 export default function MetricsDashboard() {
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [manHoursCollapsed, setManHoursCollapsed] = useState(false);
   const [servicePerformanceCollapsed, setServicePerformanceCollapsed] = useState(false);
+  const [crewEfficiencyCollapsed, setCrewEfficiencyCollapsed] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [customReportDialog, setCustomReportDialog] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<string>("");
@@ -427,6 +453,23 @@ export default function MetricsDashboard() {
       });
     },
     retry: false
+  });
+
+  // Crew Efficiency query - compares billable hours vs Xero paid hours
+  const { data: crewEfficiency, isLoading: crewEfficiencyLoading, error: crewEfficiencyError } = useQuery<CrewEfficiencyData>({
+    queryKey: ['/api/xero/payroll/efficiency', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('startDate', dateRange.from);
+      if (dateRange?.to) params.append('endDate', dateRange.to);
+      return fetch(`/api/xero/payroll/efficiency?${params}`).then(res => res.json()).then(res => {
+        if (!res.success) throw new Error(res.message);
+        return res.data;
+      });
+    },
+    enabled: Boolean(dateRange?.from && dateRange?.to),
+    retry: false,
+    staleTime: 30000
   });
 
   // Pre-populate calculator with real analytics data when available (only once)
@@ -1183,6 +1226,131 @@ export default function MetricsDashboard() {
                   </div>
                 </div>
               </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Crew Efficiency Section - Billable vs Paid Hours from Xero */}
+        {dateRange?.from && dateRange?.to && (
+          <div className="mt-8">
+            <Card>
+              <CardHeader 
+                className="cursor-pointer hover-elevate rounded-t-lg"
+                onClick={() => setCrewEfficiencyCollapsed(!crewEfficiencyCollapsed)}
+              >
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-blue-500" />
+                    Crew Efficiency
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    {crewEfficiency?.totals && (
+                      <span className={`text-lg font-bold ${
+                        crewEfficiency.totals.overallEfficiencyRate >= 80 ? 'text-green-600' :
+                        crewEfficiency.totals.overallEfficiencyRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                      }`}>
+                        {crewEfficiency.totals.overallEfficiencyRate.toFixed(1)}% Overall
+                      </span>
+                    )}
+                    {crewEfficiencyCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Compares billable job hours vs paid hours from Xero Payroll
+                </p>
+              </CardHeader>
+              
+              {!crewEfficiencyCollapsed && (
+                <CardContent>
+                  {crewEfficiencyLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : crewEfficiencyError ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>Unable to load crew efficiency data.</p>
+                      <p className="text-sm mt-1">Make sure Xero Payroll is connected.</p>
+                    </div>
+                  ) : crewEfficiency ? (
+                    <div className="space-y-6">
+                      {/* Summary Cards */}
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                          <div className="text-2xl font-bold text-blue-600">{crewEfficiency.totals.totalPaidHours.toFixed(1)}</div>
+                          <div className="text-sm text-muted-foreground mt-1">Paid Hours</div>
+                        </div>
+                        <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                          <div className="text-2xl font-bold text-green-600">{crewEfficiency.totals.totalBillableHours.toFixed(1)}</div>
+                          <div className="text-sm text-muted-foreground mt-1">Billable Hours</div>
+                        </div>
+                        <div className="text-center p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                          <div className="text-2xl font-bold text-orange-600">{crewEfficiency.totals.totalNonBillableHours.toFixed(1)}</div>
+                          <div className="text-sm text-muted-foreground mt-1">Non-Billable Hours</div>
+                        </div>
+                        <div className={`text-center p-4 rounded-lg ${
+                          crewEfficiency.totals.overallEfficiencyRate >= 80 ? 'bg-green-50 dark:bg-green-900/20' :
+                          crewEfficiency.totals.overallEfficiencyRate >= 60 ? 'bg-yellow-50 dark:bg-yellow-900/20' : 'bg-red-50 dark:bg-red-900/20'
+                        }`}>
+                          <div className={`text-2xl font-bold ${
+                            crewEfficiency.totals.overallEfficiencyRate >= 80 ? 'text-green-600' :
+                            crewEfficiency.totals.overallEfficiencyRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>{crewEfficiency.totals.overallEfficiencyRate.toFixed(1)}%</div>
+                          <div className="text-sm text-muted-foreground mt-1">Overall Efficiency</div>
+                        </div>
+                      </div>
+
+                      {/* Staff Breakdown Table */}
+                      {crewEfficiency.employees.length > 0 && (
+                        <div>
+                          <h4 className="font-semibold mb-3 flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            Staff Breakdown
+                          </h4>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b">
+                                  <th className="text-left py-2 px-2">Employee</th>
+                                  <th className="text-right py-2 px-2">Paid Hrs</th>
+                                  <th className="text-right py-2 px-2">Billable Hrs</th>
+                                  <th className="text-right py-2 px-2">Non-Billable</th>
+                                  <th className="text-right py-2 px-2">Efficiency</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {crewEfficiency.employees.map((emp) => (
+                                  <tr key={emp.employeeId} className="border-b last:border-0">
+                                    <td className="py-2 px-2 font-medium">{emp.employeeName}</td>
+                                    <td className="text-right py-2 px-2">{emp.paidHours.toFixed(1)}</td>
+                                    <td className="text-right py-2 px-2 text-green-600">{emp.billableHours.toFixed(1)}</td>
+                                    <td className="text-right py-2 px-2 text-orange-600">{emp.nonBillableHours.toFixed(1)}</td>
+                                    <td className={`text-right py-2 px-2 font-semibold ${
+                                      emp.efficiencyRate >= 80 ? 'text-green-600' :
+                                      emp.efficiencyRate >= 60 ? 'text-yellow-600' : 'text-red-600'
+                                    }`}>
+                                      {emp.efficiencyRate.toFixed(1)}%
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+
+                      {crewEfficiency.employees.length === 0 && (
+                        <div className="text-center text-muted-foreground py-4">
+                          No employee data found for the selected period
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Select a date range to view crew efficiency
+                    </div>
+                  )}
+                </CardContent>
+              )}
             </Card>
           </div>
         )}
