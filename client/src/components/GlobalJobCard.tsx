@@ -3448,8 +3448,8 @@ export function GlobalJobCard({
                                     <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
                                   </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[220px] p-0" align="start" side="bottom" sideOffset={4}>
-                                  <div className="space-y-1 p-2 max-h-[300px] overflow-y-auto overscroll-contain touch-pan-y">
+                                <PopoverContent className="w-[220px] p-0" align="start" side="bottom" sideOffset={4} onOpenAutoFocus={(e) => e.preventDefault()}>
+                                  <div className="space-y-1 p-2 max-h-[250px] overflow-y-scroll" style={{ WebkitOverflowScrolling: 'touch' }}>
                                     {allEquipment.map((equip: any) => {
                                       const isSelected = editingJob.equipmentChecklist?.some(
                                         (item: any) => item.equipment === equip.name
