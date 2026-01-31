@@ -2548,6 +2548,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
+      
+      // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
+      const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
+                            'otherCosts', 'grossMargin', 'profitMargin', 'laborHours', 'hourlyRate', 
+                            'estimatedDuration', 'actualDuration'];
+      for (const field of numericFields) {
+        if (processedBody[field] === '' || processedBody[field] === undefined) {
+          processedBody[field] = null;
+        }
+      }
 
       // Handle new customer creation
       if (processedBody.isNewCustomer && processedBody.newCustomerName) {
