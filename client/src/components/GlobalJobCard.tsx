@@ -2988,6 +2988,36 @@ export function GlobalJobCard({
                           }}
                         />
 
+                        {/* Customer Name Input for Mobile New Jobs */}
+                        {mode === 'create' && (
+                          <div className="md:hidden">
+                            <FormField
+                              control={form.control}
+                              name="newCustomerName"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel className="text-xs font-medium text-gray-500">Customer Name</FormLabel>
+                                  <FormControl>
+                                    <Input
+                                      {...field}
+                                      placeholder="Enter customer name..."
+                                      className="h-10"
+                                      onChange={(e) => {
+                                        field.onChange(e);
+                                        form.setValue('isNewCustomer', true);
+                                        const names = e.target.value.split(' ');
+                                        form.setValue('jobContactFirstName', names[0] || '');
+                                        form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                      }}
+                                      data-testid="input-mobile-customer-name"
+                                    />
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                        )}
+
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
