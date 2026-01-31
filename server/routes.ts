@@ -6947,6 +6947,37 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Quote Presentation Method Analytics - compare on-site vs sent-later conversion rates
+  app.get('/api/quote-method-analytics', async (req: Request, res: Response) => {
+    try {
+      const { fromDate, toDate } = req.query;
+      
+      let fromDateObj: Date | undefined;
+      let toDateObj: Date | undefined;
+      
+      if (fromDate && typeof fromDate === 'string') {
+        fromDateObj = new Date(fromDate);
+        if (isNaN(fromDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+      }
+      
+      if (toDate && typeof toDate === 'string') {
+        toDateObj = new Date(toDate);
+        if (isNaN(toDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+        toDateObj.setHours(23, 59, 59, 999);
+      }
+      
+      const analytics = await storage.getQuoteMethodAnalytics(fromDateObj, toDateObj);
+      res.json({ success: true, data: analytics });
+    } catch (error) {
+      console.error('Error fetching quote method analytics:', error);
+      res.status(500).json({ success: false, message: 'Error fetching quote method analytics' });
+    }
+  });
+
   // Get man-hours estimation accuracy metrics
   app.get('/api/man-hours-metrics', async (req: Request, res: Response) => {
     try {
