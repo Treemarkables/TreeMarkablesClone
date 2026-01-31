@@ -518,16 +518,20 @@ export default function MetricsDashboard() {
   });
 
   // Staff Work Days query - tracks hours and days worked from Xero timesheets
-  const { data: staffWorkDays, isLoading: staffWorkDaysLoading, error: staffWorkDaysError } = useQuery<StaffWorkDaysData>({
+  const { data: staffWorkDays, isLoading: staffWorkDaysLoading, error: staffWorkDaysError } = useQuery<StaffWorkDaysData | null>({
     queryKey: ['/api/xero/payroll/work-days', dateRange?.from, dateRange?.to],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (dateRange?.from) params.append('startDate', dateRange.from);
-      if (dateRange?.to) params.append('endDate', dateRange.to);
-      return fetch(`/api/xero/payroll/work-days?${params}`).then(res => res.json()).then(res => {
-        if (!res.success) throw new Error(res.message);
-        return res.data;
-      });
+    queryFn: async () => {
+      try {
+        const params = new URLSearchParams();
+        if (dateRange?.from) params.append('startDate', dateRange.from);
+        if (dateRange?.to) params.append('endDate', dateRange.to);
+        const res = await fetch(`/api/xero/payroll/work-days?${params}`);
+        const data = await res.json();
+        if (!data.success) return null; // Return null instead of throwing to prevent cascade errors
+        return data.data;
+      } catch {
+        return null; // Silently fail and return null
+      }
     },
     enabled: Boolean(dateRange?.from && dateRange?.to),
     retry: false,
@@ -1761,12 +1765,7 @@ export default function MetricsDashboard() {
                     <div className="flex items-center justify-center py-8">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                     </div>
-                  ) : staffWorkDaysError ? (
-                    <div className="text-center text-muted-foreground py-4">
-                      <p>Unable to load staff work days data.</p>
-                      <p className="text-xs mt-1">Make sure Xero is connected and has timesheet data.</p>
-                    </div>
-                  ) : staffWorkDays ? (
+                  ) : staffWorkDays && staffWorkDays.totals ? (
                     <div className="space-y-4">
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         <div className="text-center p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
@@ -1839,8 +1838,9 @@ export default function MetricsDashboard() {
                       )}
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      Select a date range to view staff work days
+                    <div className="text-center py-4 text-muted-foreground">
+                      <p>Unable to load staff work days data.</p>
+                      <p className="text-xs mt-1">Make sure Xero is connected and has timesheet data.</p>
                     </div>
                   )}
                 </CardContent>
