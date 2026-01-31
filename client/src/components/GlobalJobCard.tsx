@@ -3587,48 +3587,6 @@ export function GlobalJobCard({
                           </div>
                         </div>
 
-                        {/* Billing Amount - ServiceM8 Style */}
-                        {(() => {
-                          // First try line items from form
-                          const lineItems = form.watch('lineItems') || [];
-                          let total = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
-                          
-                          // Fall back to job's totalAmount if no line items
-                          if (total === 0 && editingJob?.totalAmount) {
-                            total = parseFloat(editingJob.totalAmount) || 0;
-                          }
-                          
-                          // Fall back to proposal subtotal if available
-                          if (total === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
-                            total = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
-                          }
-                          
-                          // Fall back to quote amount
-                          if (total === 0 && jobQuoteResponse?.data?.[0]?.amount) {
-                            total = parseFloat(jobQuoteResponse.data[0].amount) || 0;
-                          }
-                          
-                          if (total > 0) {
-                            return (
-                              <div 
-                                className="flex items-center justify-between p-3 cursor-pointer hover:bg-gray-100 transition-colors"
-                                onClick={() => setSidebarTab('billing')}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <DollarSign className="w-4 h-4 text-gray-500" />
-                                  <span className="text-sm font-medium text-gray-700">Billing</span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-sm font-semibold text-gray-900">
-                                    ${total.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
-                                  </span>
-                                  <span className="text-xs text-gray-500">exc GST</span>
-                                </div>
-                              </div>
-                            );
-                          }
-                          return null;
-                        })()}
 
                         {/* Checklist section removed - now in Job Scope card above */}
 
