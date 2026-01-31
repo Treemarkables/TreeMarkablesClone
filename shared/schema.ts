@@ -410,6 +410,10 @@ export const jobs = pgTable("jobs", {
   proposalSent: boolean("proposal_sent").default(false),
   proposalSentDate: timestamp("proposal_sent_date"),
   
+  // Quote Presentation Method Tracking - on_site vs sent_later analytics
+  quotePresentationMethod: text("quote_presentation_method"), // 'on_site' or 'sent_later'
+  quotePresentedDate: timestamp("quote_presented_date"), // When the quote was presented to customer
+  
   weatherDependent: boolean("weather_dependent").default(false),
   permitRequired: boolean("permit_required").default(false),
   insuranceClaim: boolean("insurance_claim").default(false),
