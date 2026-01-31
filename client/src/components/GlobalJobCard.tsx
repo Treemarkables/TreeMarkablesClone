@@ -2832,35 +2832,7 @@ export function GlobalJobCard({
                               </Badge>
                             </div>
                             
-                            {/* Row 2: Full Address | Service Type */}
-                            <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
-                              <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                              <span>{form.getValues('address') || 'No address'}</span>
-                              {editingJob?.serviceType && (
-                                <>
-                                  <span className="text-gray-300">|</span>
-                                  {(() => {
-                                    const serviceType = (editingJob.serviceType || '').toLowerCase();
-                                    if (serviceType.includes('removal') || serviceType.includes('tree')) {
-                                      return <TreePine className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
-                                    }
-                                    if (serviceType.includes('hedge') || serviceType.includes('prune') || serviceType.includes('trim')) {
-                                      return <Scissors className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
-                                    }
-                                    if (serviceType.includes('stump') || serviceType.includes('grind')) {
-                                      return <Axe className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />;
-                                    }
-                                    if (serviceType.includes('plant') || serviceType.includes('garden')) {
-                                      return <Sprout className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
-                                    }
-                                    return null;
-                                  })()}
-                                  <span>{editingJob.serviceType}</span>
-                                </>
-                              )}
-                            </div>
-                            
-                            {/* Row 3: Est time | Rate | Crew */}
+                            {/* Row 2: Est time | Rate | Crew */}
                             <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
                               {editingJob?.estimatedManHours && (
                                 <>
