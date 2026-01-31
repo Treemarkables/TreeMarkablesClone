@@ -1259,7 +1259,9 @@ export function JobDiarySection({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
-                                const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
+                                const originalSubject = (entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', ''))
+                                  .replace(/[\r\n]+/g, ' ')
+                                  .substring(0, 100);
                                 setReplyToEmail(replyEmail);
                                 setReplySubject(originalSubject);
                                 setActiveComposer('email');
@@ -1542,8 +1544,10 @@ export function JobDiarySection({
                                   e.stopPropagation();
                                   console.log('📧 Email reply metadata:', entry.metadata);
                                   const replyEmail = entry.metadata?.emailAddress || entry.metadata?.recipient || '';
-                                  // Extract subject from email title or content field
-                                  const originalSubject = entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', '');
+                                  // Extract subject from email title or content field - sanitize newlines
+                                  const originalSubject = (entry.content || entry.title.replace('Email from ', '').replace('Email sent: ', ''))
+                                    .replace(/[\r\n]+/g, ' ')
+                                    .substring(0, 100);
                                   setReplyToEmail(replyEmail);
                                   setReplySubject(originalSubject);
                                   setActiveComposer('email');
