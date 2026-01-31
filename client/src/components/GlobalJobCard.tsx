@@ -150,15 +150,18 @@ export function GlobalJobCard({
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
+  const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
 
   useEffect(() => {
-    const customerId = form.watch('customerId');
-    const customer = customers?.find(c => c.id === customerId);
-    if (customer) {
-      setSelectedCustomerName(customer.name);
+    // Only run if form is initialized
+    if (typeof form !== 'undefined') {
+      const customerId = form.watch('customerId');
+      const customer = customers?.find(c => c.id === customerId);
+      if (customer) {
+        setSelectedCustomerName(customer.name);
+      }
     }
-  }, [form.watch('customerId'), customers]);
-  const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
+  }, [customers]); // Reduced dependencies to avoid premature access
   const { toast: _originalToast } = useToast();
   const toast = () => {}; // Disabled - user preference: no toast notifications
   const queryClient = useQueryClient();
