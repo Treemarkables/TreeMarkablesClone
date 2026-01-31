@@ -2884,6 +2884,153 @@ export function GlobalJobCard({
                           }}
                         />
 
+                        {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
+                        <div className="md:hidden mt-2">
+                          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                                  <FileText className="h-4 w-4 text-gray-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">Job Scope</h3>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                  onClick={() => {
+                                    setSpeechToQuoteContext('job-description');
+                                    setIsSpeechToQuoteOpen(true);
+                                  }}
+                                  data-testid="button-speech-job-description"
+                                >
+                                  <Mic className="h-4 w-4 mr-1" />
+                                  <span className="text-xs">Voice</span>
+                                </Button>
+                                {checklist.length > 0 && (
+                                  <Badge variant="outline" className="text-xs">
+                                    {checklist.length}
+                                    <ChevronDown className="h-3 w-3 ml-1" />
+                                  </Badge>
+                                )}
+                              </div>
+                            </div>
+                            
+                            {/* Checklist Items */}
+                            <div className="space-y-2 mb-3">
+                              {checklist.map((item, index) => (
+                                <div 
+                                  key={index} 
+                                  className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
+                                  onClick={() => {
+                                    const updated = [...checklist];
+                                    updated[index] = { ...item, completed: !item.completed };
+                                    setChecklist(updated);
+                                    if (mode === 'edit' && editingJob?.id) {
+                                      updateJobMutation.mutate({
+                                        id: editingJob.id,
+                                        updates: { checklist: updated }
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${item.completed ? 'bg-green-500' : 'border-2 border-gray-300'}`}>
+                                    {item.completed && <Check className="h-3 w-3 text-white" />}
+                                  </div>
+                                  <span className={`text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
+                                    {item.text}
+                                  </span>
+                                </div>
+                              ))}
+                              
+                              {/* Add new checklist item */}
+                              <div className="flex items-center gap-2">
+                                <Input
+                                  placeholder="Add checklist item..."
+                                  value={newChecklistItem}
+                                  onChange={(e) => setNewChecklistItem(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && newChecklistItem.trim()) {
+                                      e.preventDefault();
+                                      const newItem = { text: newChecklistItem.trim(), completed: false };
+                                      const updated = [...checklist, newItem];
+                                      setChecklist(updated);
+                                      setNewChecklistItem('');
+                                      if (mode === 'edit' && editingJob?.id) {
+                                        updateJobMutation.mutate({
+                                          id: editingJob.id,
+                                          updates: { checklist: updated }
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  className="h-9 text-sm"
+                                />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    if (newChecklistItem.trim()) {
+                                      const newItem = { text: newChecklistItem.trim(), completed: false };
+                                      const updated = [...checklist, newItem];
+                                      setChecklist(updated);
+                                      setNewChecklistItem('');
+                                      if (mode === 'edit' && editingJob?.id) {
+                                        updateJobMutation.mutate({
+                                          id: editingJob.id,
+                                          updates: { checklist: updated }
+                                        });
+                                      }
+                                    }
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            
+                            {/* Crew Notes (Job Description) */}
+                            <div className="border-t pt-3">
+                              <FormField
+                                control={form.control}
+                                name="description"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <div 
+                                      className="flex items-center justify-between cursor-pointer"
+                                      onClick={() => setDescriptionPopupOpen(true)}
+                                    >
+                                      <span className="text-blue-600 font-medium flex items-center gap-2">
+                                        <MessageSquare className="h-4 w-4" />
+                                        Crew Notes
+                                      </span>
+                                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <FormControl>
+                                      <>
+                                        <input type="hidden" {...field} />
+                                        {field.value && (
+                                          <div
+                                            ref={descriptionTextareaRef}
+                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-3"
+                                            onClick={() => setDescriptionPopupOpen(true)}
+                                            data-testid="div-description-display"
+                                          >
+                                            <LinkifyMultiline text={field.value} />
+                                          </div>
+                                        )}
+                                      </>
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </div>
+                        </div>
+
                         {/* Show New Customer Fields When Creating */}
                         {form.watch('isNewCustomer') && form.watch('newCustomerName') && (
                           <div className="space-y-3">
@@ -3251,150 +3398,8 @@ export function GlobalJobCard({
                           </div>
                         </div>
 
-                        {/* ServiceM8-Style Job Scope Card */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
-                          <div className="flex items-center justify-between mb-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                                <FileText className="h-4 w-4 text-gray-600" />
-                              </div>
-                              <h3 className="font-bold text-gray-900">Job Scope</h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={() => {
-                                  setSpeechToQuoteContext('job-description');
-                                  setIsSpeechToQuoteOpen(true);
-                                }}
-                                data-testid="button-speech-job-description"
-                              >
-                                <Mic className="h-4 w-4 mr-1" />
-                                <span className="text-xs">Voice</span>
-                              </Button>
-                              {checklist.length > 0 && (
-                                <Badge variant="outline" className="text-xs">
-                                  {checklist.length}
-                                  <ChevronDown className="h-3 w-3 ml-1" />
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                          
-                          {/* Checklist Items */}
-                          <div className="space-y-2 mb-3">
-                            {checklist.map((item, index) => (
-                              <div 
-                                key={index} 
-                                className="flex items-start gap-3 p-2 hover:bg-gray-50 rounded-lg cursor-pointer"
-                                onClick={() => {
-                                  const updated = [...checklist];
-                                  updated[index] = { ...item, completed: !item.completed };
-                                  setChecklist(updated);
-                                  if (mode === 'edit' && editingJob?.id) {
-                                    updateJobMutation.mutate({
-                                      id: editingJob.id,
-                                      updates: { checklist: updated }
-                                    });
-                                  }
-                                }}
-                              >
-                                <div className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 ${item.completed ? 'bg-green-500' : 'border-2 border-gray-300'}`}>
-                                  {item.completed && <Check className="h-3 w-3 text-white" />}
-                                </div>
-                                <span className={`text-sm ${item.completed ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                                  {item.text}
-                                </span>
-                              </div>
-                            ))}
-                            
-                            {/* Add new checklist item */}
-                            <div className="flex items-center gap-2">
-                              <Input
-                                placeholder="Add checklist item..."
-                                value={newChecklistItem}
-                                onChange={(e) => setNewChecklistItem(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter' && newChecklistItem.trim()) {
-                                    e.preventDefault();
-                                    const newItem = { text: newChecklistItem.trim(), completed: false };
-                                    const updated = [...checklist, newItem];
-                                    setChecklist(updated);
-                                    setNewChecklistItem('');
-                                    if (mode === 'edit' && editingJob?.id) {
-                                      updateJobMutation.mutate({
-                                        id: editingJob.id,
-                                        updates: { checklist: updated }
-                                      });
-                                    }
-                                  }
-                                }}
-                                className="h-9 text-sm"
-                              />
-                              <Button
-                                type="button"
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => {
-                                  if (newChecklistItem.trim()) {
-                                    const newItem = { text: newChecklistItem.trim(), completed: false };
-                                    const updated = [...checklist, newItem];
-                                    setChecklist(updated);
-                                    setNewChecklistItem('');
-                                    if (mode === 'edit' && editingJob?.id) {
-                                      updateJobMutation.mutate({
-                                        id: editingJob.id,
-                                        updates: { checklist: updated }
-                                      });
-                                    }
-                                  }
-                                }}
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          
-                          {/* Crew Notes (Job Description) */}
-                          <div className="border-t pt-3">
-                            <FormField
-                              control={form.control}
-                              name="description"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <div 
-                                    className="flex items-center justify-between cursor-pointer"
-                                    onClick={() => setDescriptionPopupOpen(true)}
-                                  >
-                                    <span className="text-blue-600 font-medium flex items-center gap-2">
-                                      <MessageSquare className="h-4 w-4" />
-                                      Crew Notes
-                                    </span>
-                                    <ChevronDown className="h-4 w-4 text-gray-400" />
-                                  </div>
-                                  <FormControl>
-                                    <>
-                                      <input type="hidden" {...field} />
-                                      {field.value && (
-                                        <div
-                                          ref={descriptionTextareaRef}
-                                          className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-3"
-                                          onClick={() => setDescriptionPopupOpen(true)}
-                                          data-testid="div-description-display"
-                                        >
-                                          <LinkifyMultiline text={field.value} />
-                                        </div>
-                                      )}
-                                    </>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                        </div>
+                        {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
+                        {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
                         
                         {/* ServiceM8-Style Time & Cost Card */}
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
