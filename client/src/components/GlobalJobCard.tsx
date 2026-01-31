@@ -238,6 +238,7 @@ export function GlobalJobCard({
   
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
+  const [gearDialogOpen, setGearDialogOpen] = useState(false);
   
   // Double-tap detection for mobile description
   const [lastDescriptionTap, setLastDescriptionTap] = useState(0);
@@ -3430,26 +3431,30 @@ export function GlobalJobCard({
                               <h3 className="font-bold text-gray-900">Gear List</h3>
                             </div>
                             
-                            {/* Multi-select dropdown for equipment */}
+                            {/* Multi-select button for equipment */}
                             <div className="w-[200px]">
-                              <Popover>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-8 text-xs w-full justify-between"
-                                    disabled={isAddingEquipment}
-                                  >
-                                    <span className="truncate">
-                                      {editingJob.equipmentChecklist?.length 
-                                        ? `${editingJob.equipmentChecklist.length} selected` 
-                                        : "Select gear..."}
-                                    </span>
-                                    <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[220px] p-0" align="start" side="bottom" sideOffset={4} onOpenAutoFocus={(e) => e.preventDefault()}>
-                                  <div className="space-y-1 p-2 max-h-[50vh] overflow-y-scroll overscroll-contain" style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-y' }}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs w-full justify-between"
+                                disabled={isAddingEquipment}
+                                onClick={() => setGearDialogOpen(true)}
+                              >
+                                <span className="truncate">
+                                  {editingJob.equipmentChecklist?.length 
+                                    ? `${editingJob.equipmentChecklist.length} selected` 
+                                    : "Select gear..."}
+                                </span>
+                                <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
+                              </Button>
+                              
+                              <Dialog open={gearDialogOpen} onOpenChange={setGearDialogOpen}>
+                                <DialogContent className="max-w-sm max-h-[80vh] overflow-hidden flex flex-col">
+                                  <DialogHeader>
+                                    <DialogTitle>Select Gear</DialogTitle>
+                                    <DialogDescription>Choose equipment for this job</DialogDescription>
+                                  </DialogHeader>
+                                  <div className="flex-1 overflow-y-auto space-y-1 py-2">
                                     {allEquipment.map((equip: any) => {
                                       const isSelected = editingJob.equipmentChecklist?.some(
                                         (item: any) => item.equipment === equip.name
@@ -3457,7 +3462,7 @@ export function GlobalJobCard({
                                       return (
                                         <div
                                           key={equip.id}
-                                          className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-accent ${isSelected ? 'bg-gray-100' : ''}`}
+                                          className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer active:bg-gray-200 ${isSelected ? 'bg-green-50' : 'hover:bg-gray-50'}`}
                                           onClick={async () => {
                                             if (!editingJob?.id) return;
                                             
@@ -3490,16 +3495,16 @@ export function GlobalJobCard({
                                             }).catch(error => console.error('Error saving equipment:', error));
                                           }}
                                         >
-                                          <div className={`h-4 w-4 border rounded flex items-center justify-center ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
-                                            {isSelected && <Check className="h-3 w-3 text-white" />}
+                                          <div className={`h-5 w-5 border-2 rounded flex items-center justify-center ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
+                                            {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
                                           </div>
-                                          <span className="text-sm">{equip.name}</span>
+                                          <span className="text-base">{equip.name}</span>
                                         </div>
                                       );
                                     })}
                                   </div>
-                                </PopoverContent>
-                              </Popover>
+                                </DialogContent>
+                              </Dialog>
                             </div>
                             
                             {/* Selected equipment as removable tags */}
