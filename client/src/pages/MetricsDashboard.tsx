@@ -21,7 +21,8 @@ import {
   Calendar,
   Calculator,
   Loader2,
-  Briefcase
+  Briefcase,
+  AlertCircle
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -372,6 +373,24 @@ export default function MetricsDashboard() {
       if (dateRange?.from) params.append('fromDate', dateRange.from);
       if (dateRange?.to) params.append('toDate', dateRange.to);
       return fetch(`/api/quote-analytics?${params}`).then(res => res.json()).then(res => res.data);
+    }
+  });
+
+  // Quote Method Analytics - on-site vs sent-later acceptance rates
+  interface QuoteMethodAnalytics {
+    hasData: boolean;
+    onSite: { total: number; accepted: number; rejected: number; pending: number; acceptanceRate: number; avgAcceptedValue: number; totalAcceptedValue: number };
+    sentLater: { total: number; accepted: number; rejected: number; pending: number; acceptanceRate: number; avgAcceptedValue: number; totalAcceptedValue: number };
+    comparison: { rateAdvantage: number; valueAdvantage: number; winningMethod: string };
+  }
+  
+  const { data: quoteMethodAnalytics, isLoading: quoteMethodLoading } = useQuery<QuoteMethodAnalytics>({
+    queryKey: ['/api/quote-method-analytics', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/quote-method-analytics?${params}`).then(res => res.json()).then(res => res.data);
     }
   });
 
@@ -1053,6 +1072,71 @@ export default function MetricsDashboard() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Quote Method Comparison Card */}
+          {quoteMethodAnalytics?.hasData && (
+            <Card className="bg-gradient-to-r from-blue-50 to-green-50 border-blue-200">
+              <CardContent className="py-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Target className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-gray-900 mb-3">Quote Method Comparison</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className={`p-3 rounded-lg ${quoteMethodAnalytics.comparison.winningMethod === 'on_site' ? 'bg-green-100 border border-green-300' : 'bg-white border border-gray-200'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Users className="h-4 w-4 text-green-600" />
+                          <span className="text-sm font-medium text-gray-700">On-Site</span>
+                          {quoteMethodAnalytics.comparison.winningMethod === 'on_site' && (
+                            <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded">Best</span>
+                          )}
+                        </div>
+                        <div className="text-2xl font-bold text-green-600">{quoteMethodAnalytics.onSite.acceptanceRate}%</div>
+                        <div className="text-xs text-gray-500">
+                          {quoteMethodAnalytics.onSite.accepted}/{quoteMethodAnalytics.onSite.accepted + quoteMethodAnalytics.onSite.rejected} accepted
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Avg: {formatCurrency(quoteMethodAnalytics.onSite.avgAcceptedValue)}
+                        </div>
+                      </div>
+                      <div className={`p-3 rounded-lg ${quoteMethodAnalytics.comparison.winningMethod === 'sent_later' ? 'bg-green-100 border border-green-300' : 'bg-white border border-gray-200'}`}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Send className="h-4 w-4 text-blue-600" />
+                          <span className="text-sm font-medium text-gray-700">Sent Later</span>
+                          {quoteMethodAnalytics.comparison.winningMethod === 'sent_later' && (
+                            <span className="text-xs bg-green-500 text-white px-1.5 py-0.5 rounded">Best</span>
+                          )}
+                        </div>
+                        <div className="text-2xl font-bold text-blue-600">{quoteMethodAnalytics.sentLater.acceptanceRate}%</div>
+                        <div className="text-xs text-gray-500">
+                          {quoteMethodAnalytics.sentLater.accepted}/{quoteMethodAnalytics.sentLater.accepted + quoteMethodAnalytics.sentLater.rejected} accepted
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Avg: {formatCurrency(quoteMethodAnalytics.sentLater.avgAcceptedValue)}
+                        </div>
+                      </div>
+                    </div>
+                    {quoteMethodAnalytics.comparison.rateAdvantage !== 0 && (
+                      <p className="text-xs text-gray-600 mt-3 flex items-center gap-1">
+                        <TrendingUp className="h-3 w-3" />
+                        {quoteMethodAnalytics.comparison.winningMethod === 'on_site' 
+                          ? `On-site quotes convert ${Math.abs(quoteMethodAnalytics.comparison.rateAdvantage)}% better`
+                          : `Sent-later quotes convert ${Math.abs(quoteMethodAnalytics.comparison.rateAdvantage)}% better`
+                        }
+                      </p>
+                    )}
+                    {(quoteMethodAnalytics.onSite.total + quoteMethodAnalytics.sentLater.total) < 10 && (
+                      <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                        <AlertCircle className="h-3 w-3" />
+                        Track more quotes for accurate insights
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Advanced Metrics Toggle */}
           <div className="pt-4">
