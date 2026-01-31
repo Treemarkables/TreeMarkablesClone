@@ -2697,7 +2697,7 @@ export function GlobalJobCard({
                 data-form="job-form"
               >
                 <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
-                  <div className={`flex-1 bg-blue-50/50 md:bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
+                  <div className={`flex-1 bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-3 md:space-y-4">
                       {/* ServiceM8-Style Customer Header Card */}
@@ -3281,8 +3281,8 @@ export function GlobalJobCard({
                         {mode === 'edit' && editingJob && allEquipment.length > 0 && (
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none space-y-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
-                                <Package className="h-4 w-4 text-blue-600" />
+                              <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                                <Package className="h-4 w-4 text-gray-600" />
                               </div>
                               <h3 className="font-bold text-gray-900">Gear List</h3>
                             </div>
@@ -3314,7 +3314,7 @@ export function GlobalJobCard({
                                       return (
                                         <div
                                           key={equip.id}
-                                          className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-accent ${isSelected ? 'bg-blue-50' : ''}`}
+                                          className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer hover:bg-accent ${isSelected ? 'bg-gray-100' : ''}`}
                                           onClick={async () => {
                                             if (!editingJob?.id) return;
                                             
@@ -3347,7 +3347,7 @@ export function GlobalJobCard({
                                             }).catch(error => console.error('Error saving equipment:', error));
                                           }}
                                         >
-                                          <div className={`h-4 w-4 border rounded flex items-center justify-center ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                                          <div className={`h-4 w-4 border rounded flex items-center justify-center ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
                                             {isSelected && <Check className="h-3 w-3 text-white" />}
                                           </div>
                                           <span className="text-sm">{equip.name}</span>
@@ -3366,7 +3366,7 @@ export function GlobalJobCard({
                                   <Badge
                                     key={item.id}
                                     variant="secondary"
-                                    className="h-6 text-xs bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer flex items-center gap-1"
+                                    className="h-6 text-xs bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer flex items-center gap-1"
                                     onClick={() => {
                                       if (!editingJob?.id) return;
                                       
@@ -3442,8 +3442,8 @@ export function GlobalJobCard({
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
                           <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
-                                <FileText className="h-4 w-4 text-blue-600" />
+                              <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                                <FileText className="h-4 w-4 text-gray-600" />
                               </div>
                               <h3 className="font-bold text-gray-900">Job Scope</h3>
                             </div>
