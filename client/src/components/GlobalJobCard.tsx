@@ -2956,9 +2956,9 @@ export function GlobalJobCard({
                         </div>
                       )}
                       
-                      {/* Customer Search/Select for Mobile New Jobs */}
+                      {/* Customer Search/Select for New Jobs (Mobile + Desktop) */}
                       {mode === 'create' && (
-                        <div className="md:hidden mb-2">
+                        <div className="mb-2">
                           <FormField
                             control={form.control}
                             name="customerId"
@@ -2985,7 +2985,7 @@ export function GlobalJobCard({
                                       </Button>
                                     </FormControl>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[calc(100vw-2rem)] max-w-[350px] p-0" align="start">
+                                  <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start">
                                     <Command>
                                       <CommandInput 
                                         placeholder="Search or add customer..." 
