@@ -3558,7 +3558,7 @@ export function GlobalJobCard({
                         <div className="hidden md:block">
                           <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
                           <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
-                            {editingJob.assignedTo.map((employeeId: string) => {
+                            {editingJob?.assignedTo && editingJob.assignedTo.map((employeeId: string) => {
                               const employee = employees.find((e: any) => e.id === employeeId);
                               const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
                               const scheduledDate = editingJob.scheduledDate ? new Date(editingJob.scheduledDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
