@@ -3569,6 +3569,36 @@ export function GlobalJobCard({
                               </div>
                             </div>
                             
+                            {/* Job Price */}
+                            <div className="border-t border-dashed pt-3">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs text-gray-500 font-medium">Job Price</span>
+                                <div className="flex items-center gap-1">
+                                  {(() => {
+                                    const lineItems = form.watch('lineItems') || [];
+                                    let total = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                                    if (total === 0 && editingJob?.totalAmount) {
+                                      total = parseFloat(editingJob.totalAmount) || 0;
+                                    }
+                                    if (total === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
+                                      total = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                                    }
+                                    if (total === 0 && jobQuoteResponse?.data?.[0]?.amount) {
+                                      total = parseFloat(jobQuoteResponse.data[0].amount) || 0;
+                                    }
+                                    return (
+                                      <>
+                                        <span className="text-lg font-semibold text-gray-900">
+                                          ${total.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                                        </span>
+                                        <span className="text-xs text-gray-500">exc GST</span>
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                            </div>
+                            
                             {/* Crew Notes (Job Description) - Click to expand */}
                             <div className="border-t border-dashed pt-3">
                               <div 
@@ -3654,66 +3684,6 @@ export function GlobalJobCard({
                           </div>
                         )}
                         
-                        {/* ServiceM8-Style Time & Cost Card */}
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none">
-                          <div className="flex items-center gap-2 mb-3">
-                            <div className="w-6 h-6 bg-green-100 rounded flex items-center justify-center">
-                              <Clock className="h-4 w-4 text-green-600" />
-                            </div>
-                            <h3 className="font-bold text-gray-900">Time & Cost</h3>
-                          </div>
-                          
-                          <div className="space-y-3">
-                            {/* Estimated Hours */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <span className="text-gray-600">Estimated</span>
-                                <span className="text-gray-300">·</span>
-                                <FormField
-                                  control={form.control}
-                                  name="estimatedManHours"
-                                  render={({ field }) => (
-                                    <FormItem className="flex items-center gap-1">
-                                      <FormControl>
-                                        <Input
-                                          {...field}
-                                          type="number"
-                                          step="0.5"
-                                          className="h-7 w-16 text-sm font-bold"
-                                          placeholder="0"
-                                        />
-                                      </FormControl>
-                                      <span className="text-sm font-bold">hours</span>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                              <div className="text-right">
-                                <FormField
-                                  control={form.control}
-                                  name="hourlyRate"
-                                  render={({ field }) => (
-                                    <FormItem className="flex items-center gap-1">
-                                      <span className="text-sm text-gray-500">$</span>
-                                      <FormControl>
-                                        <Input
-                                          {...field}
-                                          type="number"
-                                          className="h-7 w-16 text-sm"
-                                          placeholder="0"
-                                        />
-                                      </FormControl>
-                                      <span className="text-sm text-gray-500">/hr</span>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-
-                        {/* Checklist section removed - now in Job Scope card above */}
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
