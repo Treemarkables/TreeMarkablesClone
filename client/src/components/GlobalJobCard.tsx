@@ -3570,7 +3570,7 @@ export function GlobalJobCard({
                             </div>
                             
                             {/* Crew Notes (Job Description) */}
-                            <div className="border-t pt-3">
+                            <div className="border-t border-dashed pt-3">
                               <FormField
                                 control={form.control}
                                 name="description"
@@ -3581,7 +3581,7 @@ export function GlobalJobCard({
                                       <Textarea
                                         {...field}
                                         placeholder="Enter job details, special instructions, or notes for the crew..."
-                                        className="min-h-[80px] text-sm resize-none"
+                                        className="min-h-[150px] text-sm resize-none"
                                       />
                                     </FormControl>
                                   </FormItem>
