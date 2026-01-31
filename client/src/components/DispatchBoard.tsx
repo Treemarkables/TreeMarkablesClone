@@ -1651,79 +1651,101 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </CardHeader>
 
             <CardContent className="flex-1 overflow-y-auto p-0">
-              {/* Job Cards */}
-              <div className="space-y-0 overflow-x-hidden w-full max-w-full">
-                {getTodaysJobs().map((job, index) => {
+              {/* Job Cards - Updated to match mobile design */}
+              <div className="divide-y divide-gray-100">
+                {getTodaysJobs().map((job) => {
                 const customerName = job.customerName || 'Unknown Customer';
+                const total = calculateJobTotal(job.lineItems);
+                const suburb = job.address?.split(',')[0]?.trim() || '';
+                
+                // Get status badge styling - same as mobile
+                const getDesktopStatusBadge = () => {
+                  switch (job.status) {
+                    case 'lead':
+                      return { label: 'Lead', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: true };
+                    case 'quote':
+                      return { label: 'Quote Sent', bg: 'bg-blue-100', text: 'text-blue-700', icon: '≡' };
+                    case 'work_order':
+                      return { label: 'Scheduled', bg: 'bg-gray-100', text: 'text-gray-700', icon: '≡' };
+                    case 'scheduled':
+                      return { label: 'In Progress', bg: 'bg-green-100', text: 'text-green-700' };
+                    case 'completed':
+                      return { label: 'Completed', bg: 'bg-green-500', text: 'text-white' };
+                    case 'unsuccessful':
+                      return { label: 'Unsuccessful', bg: 'bg-red-100', text: 'text-red-700' };
+                    default:
+                      return { label: job.status || 'Job', bg: 'bg-gray-100', text: 'text-gray-700' };
+                  }
+                };
+                
+                const statusBadge = getDesktopStatusBadge();
+                const hasPhone = job.customerPhone || job.phone;
                 
                 return (
                   <div
                     key={job.id}
-                    className="p-4 border-b hover:bg-gray-50 cursor-pointer transition-colors w-full max-w-full overflow-hidden h-[140px]"
+                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
                     onClick={() => handleEditJob(job)}
                     data-testid={`desktop-job-card-${job.id}`}
-                    style={{pointerEvents: 'auto', position: 'relative', zIndex: 1}}
                   >
-                    <div className="flex items-start gap-3 h-full">
-                      {/* Status Avatar Circle with Activity Indicator */}
+                    <div className="flex items-start gap-3 p-4">
+                      {/* Customer Avatar - Large Circle */}
                       <div className="relative flex-shrink-0">
-                        <div 
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-[10px]"
-                          style={{ backgroundColor: getJobStatusColorValue(job) }}
-                        >
-                          {getStatusInitials(job)}
-                        </div>
+                        <CustomerAvatar
+                          customerName={customerName}
+                          status={job.status}
+                          size="lg"
+                        />
                         {hasRecentActivity(job) && (
-                          <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white animate-pulse" 
-                               title="Recent activity"
+                          <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white" 
                                data-testid={`activity-indicator-${job.id}`} />
                         )}
                       </div>
                       
                       {/* Job Content */}
-                      <div className="flex-1 min-w-0 flex flex-col">
-                        <div className="flex items-start justify-between mb-1 gap-2">
-                          <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-gray-900 text-base truncate" data-testid={`desktop-job-customer-${job.id}`}>
-                              {customerName}
-                            </h3>
-                          </div>
-                          <div className="text-[9px] font-bold text-black leading-none flex-shrink-0">
-                            #{job.jobNumber || '0000'}
-                          </div>
+                      <div className="flex-1 min-w-0">
+                        {/* Row 1: Customer Name + Job Number */}
+                        <div className="flex items-start justify-between gap-2 mb-1">
+                          <h3 className="font-bold text-gray-900 text-base truncate flex-1" data-testid={`desktop-job-customer-${job.id}`}>
+                            {customerName}
+                          </h3>
+                          <span className="text-sm text-gray-400 font-mono flex-shrink-0">#{job.jobNumber || '0000'}</span>
                         </div>
-                        <div className="text-xs text-gray-600 mb-1 font-semibold truncate">
-                          {job.address || 'No address specified'}
-                        </div>
-                        <div className="text-xs text-gray-500 mb-1 line-clamp-2 break-words h-[32px]">
-                          {job.description || '\u00A0'}
-                        </div>
-                        {(() => {
-                          const total = calculateJobTotal(job.lineItems);
-                          return total > 0 ? (
-                            <div className="text-xs font-semibold text-green-600 mb-1">
-                              {formatCurrency(total)}
-                            </div>
-                          ) : null;
-                        })()}
-                        <div className="text-xs text-gray-500 mb-2 truncate h-[16px]">
-                          {job.assignedTo || '\u00A0'}
-                        </div>
-
                         
-                        {/* Status and Priority */}
-                        <div className="flex items-center gap-2 text-xs mt-auto">
-                          {(() => {
-                            if (job.status === 'lead') {
-                              return (
-                                <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-xs">
-                                  lead
-                                </Badge>
-                              );
-                            }
-                            return null;
-                          })()}
+                        {/* Row 2: Location + Status Badge */}
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+                            <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                            <span className="truncate">{suburb || 'No location'}</span>
+                          </div>
+                          <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0 flex-shrink-0`}>
+                            {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5 bg-current" />}
+                            {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
+                            {statusBadge.label}
+                          </Badge>
                         </div>
+                        
+                        {/* Row 3: Description snippet */}
+                        {job.description && (
+                          <p className="text-sm text-gray-500 line-clamp-1 mb-2">
+                            {job.description}
+                          </p>
+                        )}
+                      </div>
+                      
+                      {/* Message Icon */}
+                      <div className="flex-shrink-0 ml-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-10 w-10 rounded-lg border border-gray-200 hover:bg-gray-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditJob(job);
+                          }}
+                        >
+                          <MessageSquare className="h-5 w-5 text-blue-500" />
+                        </Button>
                       </div>
                     </div>
                   </div>
