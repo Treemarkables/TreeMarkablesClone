@@ -1753,6 +1753,8 @@ export function GlobalJobCard({
 
   // Save button handlers
   const handleSave = async () => {
+    console.log('🔴 SAVE BUTTON CLICKED');
+    
     // Prevent double-clicking
     if (isSaving) {
       console.log('Save already in progress, ignoring duplicate click');
@@ -1815,16 +1817,25 @@ export function GlobalJobCard({
     
     // Check if form has validation errors
     const isValid = await form.trigger();
+    console.log('🔴 Form validation result:', isValid);
     if (!isValid) {
       const errors = form.formState.errors;
-      console.error('Form validation failed:', errors);
+      console.error('🔴 Form validation failed:', errors);
       // Log specific field errors for debugging
       Object.keys(errors).forEach(key => {
-        console.error(`Field "${key}" error:`, (errors as any)[key]?.message);
+        console.error(`🔴 Field "${key}" error:`, (errors as any)[key]?.message);
       });
+      // Build a helpful error message
+      const errorMessages: string[] = [];
+      if ((errors as any).newCustomerName?.message) {
+        errorMessages.push('Customer name is required');
+      }
+      if ((errors as any).address?.message) {
+        errorMessages.push('Address is required');
+      }
       toast({
-        title: "Validation Error",
-        description: "Please fill in all required fields",
+        title: "Missing Required Fields",
+        description: errorMessages.length > 0 ? errorMessages.join(', ') : "Please fill in all required fields",
         variant: "destructive"
       });
       return;
