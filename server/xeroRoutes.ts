@@ -914,6 +914,193 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     }
   });
 
+  // Get staff work days and hours for the month - tracks days actually worked
+  app.get('/api/xero/payroll/work-days', async (req: Request, res: Response) => {
+    try {
+      const { startDate, endDate } = req.query;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'startDate and endDate are required'
+        });
+      }
+
+      const client = await getValidXeroClient();
+      if (!client) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Not connected to Xero' 
+        });
+      }
+
+      // Get tenants
+      const tenants = await client.updateTenants();
+      if (!tenants || tenants.length === 0) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'No Xero organizations found' 
+        });
+      }
+
+      const tenantId = tenants[0].tenantId;
+
+      // Fetch all employees
+      const employeesResponse = await client.payrollNZApi.getEmployees(tenantId);
+      const employees = employeesResponse.body.employees || [];
+
+      // Fetch all timesheets for the period with pagination
+      const allTimesheets: any[] = [];
+      let page = 1;
+      let hasMorePages = true;
+      
+      while (hasMorePages) {
+        const timesheetsResponse = await client.payrollNZApi.getTimesheets(
+          tenantId,
+          page,
+          undefined,
+          'Approved',
+          startDate as string,
+          endDate as string
+        );
+
+        const pageTimesheets = timesheetsResponse.body.timesheets || [];
+        allTimesheets.push(...pageTimesheets);
+        
+        if (pageTimesheets.length === 0 || pageTimesheets.length < 100) {
+          hasMorePages = false;
+        } else {
+          page++;
+        }
+      }
+
+      // Calculate hours and unique days worked per employee
+      const employeeWorkData: Record<string, { 
+        hours: number; 
+        daysWorked: Set<string>;
+        dailyHours: Record<string, number>;
+      }> = {};
+
+      for (const ts of allTimesheets) {
+        const empId = ts.employeeID;
+        if (!employeeWorkData[empId]) {
+          employeeWorkData[empId] = { 
+            hours: 0, 
+            daysWorked: new Set(),
+            dailyHours: {}
+          };
+        }
+        
+        if (ts.timesheetLines) {
+          for (const line of ts.timesheetLines) {
+            const units = line.numberOfUnits || 0;
+            employeeWorkData[empId].hours += units;
+            
+            // Track unique days from the timesheet line date
+            if (line.date) {
+              const dateStr = new Date(line.date).toISOString().split('T')[0];
+              employeeWorkData[empId].daysWorked.add(dateStr);
+              
+              // Track hours per day
+              if (!employeeWorkData[empId].dailyHours[dateStr]) {
+                employeeWorkData[empId].dailyHours[dateStr] = 0;
+              }
+              employeeWorkData[empId].dailyHours[dateStr] += units;
+            }
+          }
+        }
+        
+        // Also check timesheet start/end dates if no line dates
+        if (ts.startDate && ts.endDate) {
+          const start = new Date(ts.startDate);
+          const end = new Date(ts.endDate);
+          // Add each day in the range (for timesheets without line-level dates)
+          for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+            employeeWorkData[empId].daysWorked.add(d.toISOString().split('T')[0]);
+          }
+        }
+      }
+
+      // Calculate working days in the period (weekdays only)
+      const periodStart = new Date(startDate as string);
+      const periodEnd = new Date(endDate as string);
+      let totalWeekdays = 0;
+      for (let d = new Date(periodStart); d <= periodEnd; d.setDate(d.getDate() + 1)) {
+        const dayOfWeek = d.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not Sunday or Saturday
+          totalWeekdays++;
+        }
+      }
+
+      // Build work days data for each active employee
+      const workDaysData = [];
+
+      for (const emp of employees) {
+        // Only include active employees
+        if (emp.status !== 'Active') continue;
+        
+        const data = employeeWorkData[emp.employeeID] || { 
+          hours: 0, 
+          daysWorked: new Set(),
+          dailyHours: {}
+        };
+        
+        const daysWorked = data.daysWorked.size;
+        const totalHours = data.hours;
+        const avgHoursPerDay = daysWorked > 0 ? totalHours / daysWorked : 0;
+        const attendanceRate = totalWeekdays > 0 ? (daysWorked / totalWeekdays) * 100 : 0;
+
+        workDaysData.push({
+          employeeId: emp.employeeID,
+          employeeName: `${emp.firstName} ${emp.lastName}`,
+          totalHours: Math.round(totalHours * 100) / 100,
+          daysWorked: daysWorked,
+          avgHoursPerDay: Math.round(avgHoursPerDay * 100) / 100,
+          attendanceRate: Math.round(attendanceRate * 100) / 100
+        });
+      }
+
+      // Calculate totals
+      const totals = workDaysData.reduce((acc, emp) => ({
+        totalHours: acc.totalHours + emp.totalHours,
+        totalDaysWorked: acc.totalDaysWorked + emp.daysWorked
+      }), { totalHours: 0, totalDaysWorked: 0 });
+
+      const activeEmployeeCount = workDaysData.length;
+      const avgDaysPerEmployee = activeEmployeeCount > 0 
+        ? totals.totalDaysWorked / activeEmployeeCount 
+        : 0;
+      const avgAttendance = activeEmployeeCount > 0
+        ? workDaysData.reduce((sum, emp) => sum + emp.attendanceRate, 0) / activeEmployeeCount
+        : 0;
+
+      res.json({
+        success: true,
+        data: {
+          employees: workDaysData.sort((a, b) => b.daysWorked - a.daysWorked),
+          totals: {
+            totalHours: Math.round(totals.totalHours * 100) / 100,
+            totalDaysWorked: totals.totalDaysWorked,
+            avgDaysPerEmployee: Math.round(avgDaysPerEmployee * 100) / 100,
+            avgAttendance: Math.round(avgAttendance * 100) / 100,
+            workingDaysInPeriod: totalWeekdays,
+            activeEmployeeCount: activeEmployeeCount
+          },
+          period: {
+            from: startDate,
+            to: endDate
+          }
+        }
+      });
+    } catch (error: any) {
+      console.error('Error calculating work days:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to calculate work days from Xero' 
+      });
+    }
+  });
+
   // Get payroll paid hours summary - compares billable hours vs paid hours
   app.get('/api/xero/payroll/efficiency', async (req: Request, res: Response) => {
     try {
