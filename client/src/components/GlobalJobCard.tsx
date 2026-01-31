@@ -3569,24 +3569,20 @@ export function GlobalJobCard({
                               </div>
                             </div>
                             
-                            {/* Crew Notes (Job Description) */}
+                            {/* Crew Notes (Job Description) - Click to expand */}
                             <div className="border-t border-dashed pt-3">
-                              <FormField
-                                control={form.control}
-                                name="description"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-xs text-gray-500 font-medium">Crew Notes</FormLabel>
-                                    <FormControl>
-                                      <Textarea
-                                        {...field}
-                                        placeholder="Enter job details, special instructions, or notes for the crew..."
-                                        className="min-h-[150px] text-sm resize-none"
-                                      />
-                                    </FormControl>
-                                  </FormItem>
-                                )}
-                              />
+                              <div 
+                                className="cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+                                onClick={() => setDescriptionPopupOpen(true)}
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs text-gray-500 font-medium">Crew Notes</span>
+                                  <Edit3 className="h-3 w-3 text-gray-400" />
+                                </div>
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
+                                  {form.watch('description') || <span className="text-gray-400 italic">Click to add crew notes...</span>}
+                                </p>
+                              </div>
                             </div>
                           </div>
                         </div>
