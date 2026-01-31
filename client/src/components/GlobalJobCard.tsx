@@ -2036,32 +2036,24 @@ export function GlobalJobCard({
         </>
       )}
       
-      {/* ServiceM8-style Header */}
-        <div className={`border-b px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg ${
-          currentStatus === 'completed' ? 'bg-green-600 border-green-700' :
-          currentStatus === 'work_order' ? 'bg-blue-600 border-blue-700' :
-          currentStatus === 'quote' ? 'bg-orange-600 border-orange-700' :
-          currentStatus === 'lead' ? 'bg-cyan-600 border-cyan-700' :
-          currentStatus === 'scheduled' ? 'bg-blue-600 border-blue-700' :
-          currentStatus === 'unsuccessful' ? 'bg-red-600 border-red-700' :
-          'bg-gray-600 border-gray-700'
-        }`} style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
+      {/* ServiceM8-style Header - White with colored status badge */}
+        <div className="border-b border-gray-200 bg-white px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
             {/* Left: Job Title & Status */}
             <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
-              <h1 className="text-base sm:text-xl md:text-2xl font-bold text-white truncate tracking-tight" data-testid="text-job-title">
+              <h1 className="text-base sm:text-xl md:text-2xl font-bold text-gray-900 truncate tracking-tight" data-testid="text-job-title">
                 {mode === "create" ? "New Job" : `Job ${editingJob?.jobNumber || ""}`}
               </h1>
               {currentStatus && (
                 <Badge 
-                  className={`text-xs whitespace-nowrap ${
-                    currentStatus === 'completed' ? 'bg-green-700 hover:bg-green-800 text-white' :
-                    currentStatus === 'work_order' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
-                    currentStatus === 'quote' ? 'bg-orange-700 hover:bg-orange-800 text-white' :
-                    currentStatus === 'lead' ? 'bg-cyan-700 hover:bg-cyan-800 text-white' :
-                    currentStatus === 'scheduled' ? 'bg-blue-700 hover:bg-blue-800 text-white' :
-                    currentStatus === 'unsuccessful' ? 'bg-red-700 hover:bg-red-800 text-white' :
-                    'bg-gray-700 hover:bg-gray-800 text-white'
+                  className={`text-xs whitespace-nowrap rounded-full ${
+                    currentStatus === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                    currentStatus === 'work_order' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                    currentStatus === 'quote' ? 'bg-orange-500 hover:bg-orange-600 text-white' :
+                    currentStatus === 'lead' ? 'bg-cyan-600 hover:bg-cyan-700 text-white' :
+                    currentStatus === 'scheduled' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                    currentStatus === 'unsuccessful' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                    'bg-gray-600 hover:bg-gray-700 text-white'
                   }`}
                   data-testid="badge-job-status"
                 >
@@ -2074,15 +2066,15 @@ export function GlobalJobCard({
             <div className="flex items-center gap-3 sm:gap-4">
               {/* Auto-save status - Hide on mobile */}
               {mode === 'edit' && (
-                <div className="hidden sm:flex text-xs text-white/80 items-center gap-1.5">
+                <div className="hidden sm:flex text-xs text-gray-500 items-center gap-1.5">
                   {isAutoSaving ? (
                     <>
-                      <div className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
                       <span>Saving...</span>
                     </>
                   ) : lastAutoSaveTime ? (
                     <>
-                      <CheckCircle className="w-3.5 h-3.5" />
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
                       <span>Saved</span>
                     </>
                   ) : null}
@@ -2096,7 +2088,7 @@ export function GlobalJobCard({
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="md:hidden h-7 w-7 text-white hover:bg-white/20" 
+                    className="md:hidden h-7 w-7 text-gray-600 hover:bg-gray-100" 
                     data-testid="button-actions-menu-mobile"
                   >
                     <Menu className="h-4 w-4" />
@@ -2242,7 +2234,7 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="md:hidden h-7 w-7 text-white hover:bg-white/20" 
+                className="md:hidden h-7 w-7 text-gray-600 hover:bg-gray-100" 
                 onClick={onClose}
                 data-testid="button-close-mobile"
               >
@@ -2252,7 +2244,7 @@ export function GlobalJobCard({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-white text-orange-600 hover:bg-white/90 border-0 font-semibold transition-all" 
+                className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-orange-500 text-white hover:bg-orange-600 border-0 font-semibold transition-all" 
                 onClick={handleSave}
                 disabled={isSaving || createJobMutation.isPending || updateJobMutation.isPending || isAutoSaving}
                 data-testid="button-save"
