@@ -3554,38 +3554,39 @@ export function GlobalJobCard({
                             </div>
                           </div>
                         )}
-                          <div>
-                            <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
-                            <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
-                              {editingJob.assignedTo.map((employeeId: string) => {
-                                const employee = employees.find((e: any) => e.id === employeeId);
-                                const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
-                                const scheduledDate = editingJob.scheduledDate ? new Date(editingJob.scheduledDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
-                                const scheduledTime = editingJob.scheduledStartTime ? formatTime12Hour(editingJob.scheduledStartTime) : '';
-                                
-                                return (
-                                  <div key={employeeId} className="flex items-center justify-between gap-2">
-                                    <div className="flex items-center gap-2">
-                                      <Calendar className="w-4 h-4 text-blue-600" />
-                                      <span className="font-medium">{employeeName} on {scheduledDate} {scheduledTime}</span>
-                                    </div>
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-6 w-6"
-                                      onClick={() => {
-                                        setBookingToCancel(employeeId);
-                                        setCancelBookingDialogOpen(true);
-                                      }}
-                                      data-testid={`button-cancel-booking-${employeeId}`}
-                                    >
-                                      <X className="h-3.5 w-3.5 text-gray-500 hover:text-red-600" />
-                                    </Button>
+                        {/* Desktop Upcoming Bookings */}
+                        <div className="hidden md:block">
+                          <label className="text-xs font-medium text-gray-600 mb-2 block">Upcoming Bookings</label>
+                          <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
+                            {editingJob.assignedTo.map((employeeId: string) => {
+                              const employee = employees.find((e: any) => e.id === employeeId);
+                              const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+                              const scheduledDate = editingJob.scheduledDate ? new Date(editingJob.scheduledDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+                              const scheduledTime = editingJob.scheduledStartTime ? formatTime12Hour(editingJob.scheduledStartTime) : '';
+                              
+                              return (
+                                <div key={employeeId} className="flex items-center justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <Calendar className="w-4 h-4 text-blue-600" />
+                                    <span className="font-medium">{employeeName} on {scheduledDate} {scheduledTime}</span>
                                   </div>
-                                );
-                              })}
-                            </div>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-6 w-6"
+                                    onClick={() => {
+                                      setBookingToCancel(employeeId);
+                                      setCancelBookingDialogOpen(true);
+                                    }}
+                                    data-testid={`button-cancel-booking-${employeeId}`}
+                                  >
+                                    <X className="h-3.5 w-3.5 text-gray-500 hover:text-red-600" />
+                                  </Button>
+                                </div>
+                              );
+                            })}
                           </div>
+                        </div>
                         )}
 
                         {/* Contacts */}
