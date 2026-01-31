@@ -2938,6 +2938,13 @@ export function GlobalJobCard({
                         </div>
                       )}
                       
+                      {/* Desktop: Customer Name Display */}
+                      {mode === 'edit' && selectedCustomerName && (
+                        <div className="hidden md:block mb-2">
+                          <h2 className="font-bold text-gray-900 text-xl">{selectedCustomerName}</h2>
+                        </div>
+                      )}
+                      
                       {/* Address and other fields */}
                       <div className="space-y-4">
                         {/* Address - two lines */}
