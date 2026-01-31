@@ -2703,97 +2703,85 @@ export function GlobalJobCard({
                       {/* ServiceM8-Style Customer Header Card */}
                       {mode === 'edit' && selectedCustomerName && (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:hidden">
-                          <div className="flex items-start gap-4">
-                            {/* Customer Avatar - Large Circle */}
-                            <div className="relative flex-shrink-0">
-                              <CustomerAvatar
-                                customerName={selectedCustomerName}
-                                status={currentStatus}
-                                size="lg"
-                              />
+                          <div className="flex flex-col gap-2">
+                            {/* Row 1: Customer Name + Status Badge */}
+                            <div className="flex items-start justify-between gap-2">
+                              <h2 className="font-bold text-gray-900 text-xl">
+                                {selectedCustomerName}
+                              </h2>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-xs whitespace-nowrap flex-shrink-0 ${
+                                  currentStatus === 'completed' ? 'border-green-500 text-green-600' :
+                                  currentStatus === 'work_order' ? 'border-blue-500 text-blue-600' :
+                                  currentStatus === 'quote' ? 'border-blue-500 text-blue-600' :
+                                  currentStatus === 'lead' ? 'border-cyan-500 text-cyan-600' :
+                                  currentStatus === 'scheduled' ? 'border-blue-500 text-blue-600' :
+                                  currentStatus === 'unsuccessful' ? 'border-red-500 text-red-600' :
+                                  'border-gray-400 text-gray-600'
+                                }`}
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                {currentStatus === 'quote' ? 'Quote Sent' : 
+                                 currentStatus === 'work_order' ? 'Work Order' :
+                                 currentStatus === 'completed' ? 'Completed' :
+                                 currentStatus === 'lead' ? 'Lead' :
+                                 currentStatus === 'scheduled' ? 'Scheduled' :
+                                 currentStatus === 'unsuccessful' ? 'Unsuccessful' :
+                                 currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
+                              </Badge>
                             </div>
                             
-                            {/* Customer Info */}
-                            <div className="flex-1 min-w-0">
-                              {/* Row 1: Customer Name + Status Badge */}
-                              <div className="flex items-start justify-between gap-2 mb-1">
-                                <h2 className="font-bold text-gray-900 text-xl truncate flex-1">
-                                  {selectedCustomerName}
-                                </h2>
-                                <Badge 
-                                  variant="outline" 
-                                  className={`text-xs whitespace-nowrap flex-shrink-0 ${
-                                    currentStatus === 'completed' ? 'border-green-500 text-green-600' :
-                                    currentStatus === 'work_order' ? 'border-blue-500 text-blue-600' :
-                                    currentStatus === 'quote' ? 'border-blue-500 text-blue-600' :
-                                    currentStatus === 'lead' ? 'border-cyan-500 text-cyan-600' :
-                                    currentStatus === 'scheduled' ? 'border-blue-500 text-blue-600' :
-                                    currentStatus === 'unsuccessful' ? 'border-red-500 text-red-600' :
-                                    'border-gray-400 text-gray-600'
-                                  }`}
-                                >
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  {currentStatus === 'quote' ? 'Quote Sent' : 
-                                   currentStatus === 'work_order' ? 'Work Order' :
-                                   currentStatus === 'completed' ? 'Completed' :
-                                   currentStatus === 'lead' ? 'Lead' :
-                                   currentStatus === 'scheduled' ? 'Scheduled' :
-                                   currentStatus === 'unsuccessful' ? 'Unsuccessful' :
-                                   currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
-                                </Badge>
-                              </div>
-                              
-                              {/* Row 2: Location | Service Type */}
-                              <div className="flex items-center gap-1.5 text-sm text-gray-600 mb-1 flex-wrap">
-                                <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">{form.getValues('address')?.split(',')[1]?.trim() || form.getValues('address')?.split(',')[0] || 'No location'}</span>
-                                {editingJob?.serviceType && (
-                                  <>
-                                    <span className="text-gray-300">|</span>
-                                    {(() => {
-                                      const serviceType = (editingJob.serviceType || '').toLowerCase();
-                                      if (serviceType.includes('removal') || serviceType.includes('tree')) {
-                                        return <TreePine className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
-                                      }
-                                      if (serviceType.includes('hedge') || serviceType.includes('prune') || serviceType.includes('trim')) {
-                                        return <Scissors className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
-                                      }
-                                      if (serviceType.includes('stump') || serviceType.includes('grind')) {
-                                        return <Axe className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />;
-                                      }
-                                      if (serviceType.includes('plant') || serviceType.includes('garden')) {
-                                        return <Sprout className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
-                                      }
-                                      return null;
-                                    })()}
-                                    <span>{editingJob.serviceType}</span>
-                                  </>
-                                )}
-                              </div>
-                              
-                              {/* Row 3: Est time | Rate | Crew */}
-                              <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
-                                {editingJob?.estimatedManHours && (
-                                  <>
-                                    <Clock className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                    <span>Est: {editingJob.estimatedManHours} hrs</span>
-                                    <span className="text-gray-300">|</span>
-                                  </>
-                                )}
-                                {editingJob?.hourlyRate && (
-                                  <>
-                                    <DollarSign className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                    <span>${editingJob.hourlyRate}/hr</span>
-                                    <span className="text-gray-300">|</span>
-                                  </>
-                                )}
-                                {editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
-                                  <>
-                                    <User className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                    <span>{editingJob.assignedTo.length} crew</span>
-                                  </>
-                                )}
-                              </div>
+                            {/* Row 2: Location | Service Type */}
+                            <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
+                              <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                              <span className="truncate">{form.getValues('address')?.split(',')[1]?.trim() || form.getValues('address')?.split(',')[0] || 'No location'}</span>
+                              {editingJob?.serviceType && (
+                                <>
+                                  <span className="text-gray-300">|</span>
+                                  {(() => {
+                                    const serviceType = (editingJob.serviceType || '').toLowerCase();
+                                    if (serviceType.includes('removal') || serviceType.includes('tree')) {
+                                      return <TreePine className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                                    }
+                                    if (serviceType.includes('hedge') || serviceType.includes('prune') || serviceType.includes('trim')) {
+                                      return <Scissors className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                                    }
+                                    if (serviceType.includes('stump') || serviceType.includes('grind')) {
+                                      return <Axe className="h-3.5 w-3.5 text-amber-600 flex-shrink-0" />;
+                                    }
+                                    if (serviceType.includes('plant') || serviceType.includes('garden')) {
+                                      return <Sprout className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />;
+                                    }
+                                    return null;
+                                  })()}
+                                  <span>{editingJob.serviceType}</span>
+                                </>
+                              )}
+                            </div>
+                            
+                            {/* Row 3: Est time | Rate | Crew */}
+                            <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
+                              {editingJob?.estimatedManHours && (
+                                <>
+                                  <Clock className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                  <span>Est: {editingJob.estimatedManHours} hrs</span>
+                                  <span className="text-gray-300">|</span>
+                                </>
+                              )}
+                              {editingJob?.hourlyRate && (
+                                <>
+                                  <DollarSign className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                  <span>${editingJob.hourlyRate}/hr</span>
+                                  <span className="text-gray-300">|</span>
+                                </>
+                              )}
+                              {editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
+                                <>
+                                  <User className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                  <span>{editingJob.assignedTo.length} crew</span>
+                                </>
+                              )}
                             </div>
                           </div>
                           
