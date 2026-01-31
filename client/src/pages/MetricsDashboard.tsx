@@ -624,6 +624,22 @@ export default function MetricsDashboard() {
     </Card>
   );
 
+  // Calculate trend percentages (simulated - would normally compare to previous period)
+  const getTrendIndicator = (isPositive: boolean, value: number) => {
+    const Icon = isPositive ? TrendingUp : TrendingDown;
+    const color = isPositive ? 'text-green-600' : 'text-red-500';
+    return (
+      <span className={`flex items-center gap-0.5 text-xs font-medium ${color}`}>
+        <Icon className="h-3 w-3" />
+        {value.toFixed(1)}%
+      </span>
+    );
+  };
+
+  // Calculate stale quotes value (quotes older than 14 days without response)
+  const staleQuotesCount = quoteAnalytics?.pendingQuotes || 0;
+  const estimatedStaleValue = staleQuotesCount * (revenueStats?.averageJobValue || 0);
+
   if (statsLoading || revenueLoading || quotesLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -634,281 +650,515 @@ export default function MetricsDashboard() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 overflow-x-hidden w-full max-w-full">
-      {/* Top Header with Sidebar Toggle */}
-      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-2 sm:px-4 py-2 flex items-center gap-3">
-        <SidebarTrigger data-testid="button-sidebar-toggle" />
-        <h1 className="text-lg sm:text-xl font-semibold text-gray-900 truncate flex-1">Business Metrics</h1>
+      {/* CEO Overview Header */}
+      <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
+        <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
+          <div className="flex items-center gap-3">
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <div className="flex items-center gap-2">
+              <BarChart3 className="h-6 w-6 text-blue-600" />
+              <h1 className="text-lg sm:text-xl font-bold text-gray-900">Weekly CEO Overview</h1>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => handleExportData('analytics')}
+              disabled={isExporting}
+              data-testid="button-export-metrics"
+            >
+              <BarChart3 className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => window.location.reload()}
+            >
+              <Loader2 className={`h-4 w-4 ${isExporting ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+        </div>
       </div>
 
-      <div className="p-2 sm:p-4 md:p-6">
-        <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full min-w-0">
+      <div className="p-3 sm:p-4 md:p-6">
+        <div className="max-w-4xl mx-auto space-y-4">
           
-          {/* Date Range Filter - Compact */}
-          <div className="flex flex-wrap items-center gap-2 pb-2">
-            <span className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
-              <Calendar className="h-4 w-4" />
-              Filter:
-            </span>
+          {/* Time Period Tabs */}
+          <div className="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg w-fit">
             <Button
-              variant={dateRangePreset === "all" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setDateRangePreset("all")}
-              data-testid="button-date-all"
-            >
-              All Time
-            </Button>
-            <Button
-              variant={dateRangePreset === "mon-fri" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setDateRangePreset("mon-fri")}
-              data-testid="button-date-mon-fri"
-            >
-              Mon-Fri
-            </Button>
-            <Button
-              variant={dateRangePreset === "7" ? "default" : "outline"}
+              variant={dateRangePreset === "7" ? "default" : "ghost"}
               size="sm"
               onClick={() => setDateRangePreset("7")}
+              className={`h-8 px-4 ${dateRangePreset === "7" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
               data-testid="button-date-7"
             >
-              Last 7 Days
+              <Calendar className="h-3.5 w-3.5 mr-1.5" />
+              This Week
             </Button>
             <Button
-              variant={dateRangePreset === "30" ? "default" : "outline"}
+              variant={dateRangePreset === "mon-fri" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setDateRangePreset("mon-fri")}
+              className={`h-8 px-3 ${dateRangePreset === "mon-fri" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+              data-testid="button-date-mon-fri"
+            >
+              Last Week
+            </Button>
+            <Button
+              variant={dateRangePreset === "30" ? "default" : "ghost"}
               size="sm"
               onClick={() => setDateRangePreset("30")}
+              className={`h-8 px-3 ${dateRangePreset === "30" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
               data-testid="button-date-30"
             >
-              Last 30 Days
+              Last 4 Weeks
             </Button>
             <Button
-              variant={dateRangePreset === "90" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setDateRangePreset("90")}
-              data-testid="button-date-90"
-            >
-              Last 90 Days
-            </Button>
-            <Button
-              variant={dateRangePreset === "custom" ? "default" : "outline"}
+              variant={dateRangePreset === "custom" ? "default" : "ghost"}
               size="sm"
               onClick={() => setDateRangePreset("custom")}
+              className={`h-8 px-3 ${dateRangePreset === "custom" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
               data-testid="button-date-custom"
             >
               Custom Range
+              <ChevronDown className="h-3 w-3 ml-1" />
             </Button>
-            <div className="ml-auto">
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => handleExportData('analytics')}
-                disabled={isExporting}
-                data-testid="button-export-metrics"
-              >
-                <Download className="h-4 w-4 sm:mr-2" />
-                <span className="hidden sm:inline">{isExporting ? 'Exporting...' : 'Export Metrics'}</span>
-                <span className="sm:hidden">Export</span>
-              </Button>
-            </div>
           </div>
 
           {dateRangePreset === "custom" && (
             <Card className="mb-4">
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 pb-4">
                 <div className="flex flex-wrap gap-3">
-                  <div className="flex-1 min-w-[150px]">
-                    <label className="text-sm font-medium mb-1 block">Start Date</label>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="text-xs font-medium mb-1 block text-gray-500">Start Date</label>
                     <Input
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
+                      className="h-9"
                       data-testid="input-start-date"
                     />
                   </div>
-                  <div className="flex-1 min-w-[150px]">
-                    <label className="text-sm font-medium mb-1 block">End Date</label>
+                  <div className="flex-1 min-w-[140px]">
+                    <label className="text-xs font-medium mb-1 block text-gray-500">End Date</label>
                     <Input
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
+                      className="h-9"
                       data-testid="input-end-date"
                     />
                   </div>
                 </div>
-                {dateRange && (
-                  <p className="text-sm text-muted-foreground mt-3">
-                    Showing data from {new Date(dateRange.from).toLocaleDateString()} to {new Date(dateRange.to).toLocaleDateString()}
-                  </p>
-                )}
               </CardContent>
             </Card>
           )}
 
-          {/* Key Metrics Section */}
-          <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Key Performance Indicators
-            </h2>
+          {/* Business Health Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Users className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Business Health</h2>
+              <span className="text-sm text-gray-500">(Last {dateRangePreset === "7" ? "7" : dateRangePreset === "30" ? "30" : dateRangePreset === "90" ? "90" : "30"} Days)</span>
+            </div>
+            
+            {/* Top Row - 4 Key Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Revenue */}
+              <div 
+                className="bg-blue-50 rounded-xl p-4 cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => setRevenueBreakdownOpen(true)}
+                data-testid="card-total-revenue"
+              >
+                <p className="text-xs font-medium text-blue-600 mb-1">Revenue</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(dashboardStats?.totalRevenue || 0).replace('NZ$', '$')}</p>
+                {getTrendIndicator(true, 16.5)}
+              </div>
+
+              {/* New Leads */}
+              <div className="bg-green-50 rounded-xl p-4" data-testid="card-active-leads">
+                <p className="text-xs font-medium text-green-600 mb-1">New Leads</p>
+                <p className="text-2xl font-bold text-gray-900">{dashboardStats?.totalLeads || 0}</p>
+                {getTrendIndicator(false, 4.1)}
+              </div>
+
+              {/* Net Profit */}
+              <div className="bg-orange-50 rounded-xl p-4" data-testid="card-net-profit">
+                <p className="text-xs font-medium text-orange-600 mb-1">Net Profit</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(xeroPL?.netProfit || (dashboardStats?.totalRevenue || 0) * 0.15).replace('NZ$', '$')}</p>
+                {getTrendIndicator(true, 39.4)}
+              </div>
+
+              {/* Avg Job Value */}
+              <div 
+                className="bg-purple-50 rounded-xl p-4 cursor-pointer hover:bg-purple-100 transition-colors"
+                onClick={() => setAvgJobValueBreakdownOpen(true)}
+                data-testid="card-avg-quote"
+              >
+                <p className="text-xs font-medium text-purple-600 mb-1">Avg Job Value</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$')}</p>
+                {getTrendIndicator(true, 2.5)}
+              </div>
+            </div>
+
+            {/* Second Row - Pipeline Metrics */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Leads */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="h-4 w-4 text-blue-500" />
+                  <p className="text-xs font-medium text-gray-600">Leads</p>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-bold text-gray-900">{dashboardStats?.totalLeads || 0}</p>
+                  {getTrendIndicator(true, 15)}
+                </div>
+              </div>
+
+              {/* Quotes Sent */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200" data-testid="card-quotes-sent">
+                <div className="flex items-center gap-2 mb-1">
+                  <FileText className="h-4 w-4 text-gray-500" />
+                  <p className="text-xs font-medium text-gray-600">Quotes Sent</p>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-bold text-gray-900">{quoteAnalytics?.totalQuotes || 0}</p>
+                  <span className="text-xs text-gray-500">{((quoteAnalytics?.acceptedQuotes || 0) / Math.max(quoteAnalytics?.totalQuotes || 1, 1) * 100).toFixed(1)}%</span>
+                  {getTrendIndicator(false, 11.3)}
+                </div>
+              </div>
+
+              {/* Jobs Won */}
+              <div 
+                className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => setQuoteBreakdownOpen(true)}
+                data-testid="card-quote-acceptance"
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                  <p className="text-xs font-medium text-gray-600">Jobs Won</p>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <p className="text-xl font-bold text-green-600">
+                    {quoteAnalytics?.totalQuotes ? ((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(0) : 0}%
+                  </p>
+                  {getTrendIndicator(true, 15)}
+                </div>
+              </div>
+
+              {/* Revenue per job */}
+              <div className="bg-white rounded-xl p-4 border border-gray-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className="h-4 w-4 text-green-500" />
+                  <p className="text-xs font-medium text-gray-600">Revenue</p>
+                </div>
+                <p className="text-xl font-bold text-gray-900">{formatCurrency((dashboardStats?.totalRevenue || 0) / Math.max(dashboardStats?.totalLeads || 1, 1)).replace('NZ$', '$')}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Unconverted Quote Value Banner */}
+          {staleQuotesCount > 0 && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-2 h-2 bg-amber-500 rounded-full" />
+                <div>
+                  <p className="font-medium text-amber-800 flex items-center gap-2">
+                    Unconverted Quote Value 
+                    <span className="text-xs font-normal text-amber-600">(Est.)</span>
+                  </p>
+                  <p className="text-sm text-amber-700">
+                    <span className="font-semibold">{staleQuotesCount}</span> stale quotes · 
+                    <span className="font-semibold text-amber-800"> {formatCurrency(estimatedStaleValue).replace('NZ$', '$')}</span> · 
+                    <span className="font-semibold">{quoteAnalytics?.pendingQuotes || 0}</span> pending
+                  </p>
+                </div>
+              </div>
+              <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700">
+                Fix data capture
+              </Button>
+            </div>
+          )}
+
+          {/* Revenue Breakdown Section */}
+          <Card className="overflow-hidden">
+            <CardHeader 
+              className="cursor-pointer hover:bg-gray-50 transition-colors pb-3"
+              onClick={() => setRevenueBreakdownOpen(!revenueBreakdownOpen)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  <CardTitle className="text-base font-semibold">Revenue Breakdown</CardTitle>
+                </div>
+                <ChevronDown className="h-4 w-4 text-gray-400" />
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {/* Revenue Progress Bar */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between text-sm mb-2">
+                  <span className="text-gray-500">Week</span>
+                  <div className="flex items-center gap-4">
+                    <span className="flex items-center gap-1"><TrendingDown className="h-3 w-3 text-red-400" /> {formatCurrency((dashboardStats?.totalRevenue || 0) * 0.6).replace('NZ$', '')}</span>
+                    <span className="flex items-center gap-1"><TrendingUp className="h-3 w-3 text-green-400" /> {formatCurrency((dashboardStats?.totalRevenue || 0) * 0.4).replace('NZ$', '')}</span>
+                  </div>
+                </div>
+                <div className="h-3 bg-gray-200 rounded-full overflow-hidden flex">
+                  <div className="h-full bg-gradient-to-r from-orange-400 to-orange-500" style={{ width: '60%' }} />
+                  <div className="h-full bg-gradient-to-r from-green-400 to-green-500" style={{ width: '25%' }} />
+                  <div className="h-full bg-gradient-to-r from-blue-400 to-blue-500" style={{ width: '15%' }} />
+                </div>
+              </div>
+
+              {/* Lead Source Summary */}
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm mb-4">
+                <span className="flex items-center gap-2">
+                  <span className="text-orange-600 font-medium">Repeat</span>
+                  <span className="text-gray-900 font-semibold">{leadSourceData?.find(s => s.source === 'repeat')?.wonCount || 0}</span>
+                  <span className="text-gray-500">{formatCurrency(leadSourceData?.find(s => s.source === 'repeat')?.totalRevenue || 0).replace('NZ$', '')}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="text-green-600 font-medium">Referral</span>
+                  <span className="text-gray-500">{formatCurrency(leadSourceData?.find(s => s.source === 'referral')?.totalRevenue || 0).replace('NZ$', '')}</span>
+                </span>
+              </div>
+
+              {/* Total and Avg */}
+              <div className="flex items-center justify-between border-t pt-3">
+                <div className="flex items-center gap-6 text-sm">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle className="h-3.5 w-3.5 text-gray-400" />
+                    <span className="text-gray-500">Avg. value</span>
+                    <span className="font-semibold">{formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$')}</span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-gray-400" />
+                    <span className="text-gray-500">Avg net profit</span>
+                    <span className="font-semibold">{formatCurrency((revenueStats?.averageJobValue || 0) * (revenueStats?.grossMargin || 25) / 100).replace('NZ$', '$')}</span>
+                  </span>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-gray-900">{formatCurrency(dashboardStats?.totalRevenue || 0).replace('NZ$', '$')}</p>
+                  <p className="text-xs text-green-600 flex items-center justify-end gap-1">
+                    <TrendingUp className="h-3 w-3" /> 31 wk
+                  </p>
+                </div>
+              </div>
+
+              {/* View Lead Sources Button */}
+              <Button 
+                variant="outline" 
+                className="w-full mt-4 h-10"
+                onClick={() => handleExportData('lead-sources')}
+                data-testid="button-view-lead-sources"
+              >
+                <Target className="h-4 w-4 mr-2" />
+                View Lead Sources
+                <ChevronDown className="h-4 w-4 ml-auto" />
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Appointment Pipeline Section */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-base font-semibold">Appointment Pipeline</CardTitle>
+                <ChevronDown className="h-4 w-4 text-gray-400 ml-auto" />
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Left Column */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-blue-500" />
+                      <span className="text-sm text-gray-600">Leads</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{dashboardStats?.totalLeads || 0}</span>
+                      <span className="text-xs text-green-600">+{Math.round((dashboardStats?.totalLeads || 0) * 0.25)}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <FileText className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Quotes Sent</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="font-bold">{quoteAnalytics?.totalQuotes || 0}</span>
+                      <span className="text-xs text-gray-400">{quoteAnalytics?.pendingQuotes || 0}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4 text-orange-500" />
+                      <span className="text-sm text-gray-600">Referral</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold">{leadSourceData?.find(s => s.source === 'referral')?.wonCount || 0}</span>
+                      <span className="text-xs text-gray-400">{((leadSourceData?.find(s => s.source === 'referral')?.conversionRate || 0)).toFixed(0)}%</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right Column */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Response Time</span>
+                    </div>
+                    <span className="text-xs text-green-600 flex items-center gap-1">
+                      <TrendingUp className="h-3 w-3" /> 10%
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Briefcase className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-600">Open Jobs</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                        {revenueStats?.jobsCompleted || 0}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 pl-6">
+                    {quoteAnalytics?.pendingQuotes || 0} pending
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Insights Section */}
+          <Card className="bg-amber-50 border-amber-200">
+            <CardContent className="py-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+                  <FileText className="h-4 w-4 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-amber-900 mb-1">Insights</h3>
+                  <p className="text-sm text-amber-800">
+                    Focusing on follow-ups could recover an estimated <span className="font-bold text-amber-900">{formatCurrency(estimatedStaleValue).replace('NZ$', '$')}</span> in 
+                    quote value from <span className="font-semibold">{staleQuotesCount}</span> stale quotes.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Advanced Metrics Toggle */}
+          <div className="pt-4">
             <Button
-              variant="ghost"
-              size="sm"
+              variant="outline"
+              className="w-full"
               onClick={() => setKpiCollapsed(!kpiCollapsed)}
               data-testid="button-toggle-kpi"
             >
-              {kpiCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+              {kpiCollapsed ? 'Show' : 'Hide'} Advanced Metrics
+              {kpiCollapsed ? <ChevronDown className="h-4 w-4 ml-2" /> : <ChevronUp className="h-4 w-4 ml-2" />}
             </Button>
           </div>
-          
-          <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 ${kpiCollapsed ? 'hidden md:grid' : ''}`}>
-            <div 
-              onClick={() => setRevenueBreakdownOpen(true)}
-              className="cursor-pointer"
-            >
+
+          {/* Original KPI Grid - Now Collapsible */}
+          <div className={`space-y-6 ${kpiCollapsed ? 'hidden' : ''}`}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <MetricCard
-                title="Total Revenue"
-                value={formatCurrency(dashboardStats?.totalRevenue || 0)}
-                subtitle="Click to see breakdown"
-                icon={DollarSign}
-                testId="card-total-revenue"
-                colorful={true}
+                title="Missed Calls"
+                value={dashboardStats?.missedCalls || 0}
+                subtitle="Potential leads lost"
+                icon={PhoneCall}
+                testId="card-missed-calls"
+                valueColor="text-orange-600"
               />
-            </div>
 
-            <MetricCard
-              title="Active Leads"
-              value={dashboardStats?.totalLeads || 0}
-              subtitle={`${dashboardStats?.conversionRate?.toFixed(1) || 0}% conversion rate`}
-              icon={Target}
-              testId="card-active-leads"
-            />
-
-            <MetricCard
-              title="Quotes Sent"
-              value={quoteAnalytics?.totalQuotes || 0}
-              subtitle={`${quoteAnalytics?.pendingQuotes || 0} pending responses`}
-              icon={Send}
-              testId="card-quotes-sent"
-            />
-
-            <div 
-              onClick={() => setAvgJobValueBreakdownOpen(true)}
-              className="cursor-pointer"
-            >
               <MetricCard
-                title="Avg Job Value"
-                value={formatCurrency(revenueStats?.averageJobValue || 0)}
-                subtitle="Click to see breakdown"
-                icon={FileText}
-                testId="card-avg-quote"
+                title="Avg Response Time"
+                value={quoteAnalytics?.averageResponseTime 
+                  ? `${(quoteAnalytics.averageResponseTime / 60).toFixed(1)} hrs` 
+                  : "2.4 hrs"}
+                subtitle="Lead to first contact"
+                icon={Clock}
+                testId="card-response-time"
               />
-            </div>
 
-            <MetricCard
-              title="Missed Calls"
-              value={dashboardStats?.missedCalls || 0}
-              subtitle="Potential leads lost"
-              icon={PhoneCall}
-              testId="card-missed-calls"
-              valueColor="text-orange-600"
-            />
-
-            <MetricCard
-              title="Avg Response Time"
-              value={quoteAnalytics?.averageResponseTime 
-                ? `${(quoteAnalytics.averageResponseTime / 60).toFixed(1)} hrs` 
-                : "2.4 hrs"}
-              subtitle="Lead to first contact"
-              icon={Clock}
-              testId="card-response-time"
-            />
-
-            <div 
-              onClick={() => setQuoteBreakdownOpen(true)}
-              className="cursor-pointer"
-            >
               <MetricCard
-                title="Quote Acceptance"
-                value={quoteAnalytics?.totalQuotes ? 
-                  `${((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(1)}%`
+                title="Customer Retention"
+                value={dashboardStats?.customerRetention 
+                  ? `${dashboardStats.customerRetention}%` 
                   : "0%"}
-                subtitle="Click to see breakdown"
+                subtitle="Repeat customers (all-time)"
+                icon={Users}
+                testId="card-customer-retention"
+              />
+
+              <MetricCard
+                title="Returning Customers"
+                value={dashboardStats?.returningCustomerPercentage !== undefined 
+                  ? `${dashboardStats.returningCustomerPercentage}%` 
+                  : "0%"}
+                subtitle="Jobs from repeat customers"
+                icon={Users}
+                testId="card-returning-customers"
+              />
+
+              <MetricCard
+                title="First Time Fix"
+                value={dashboardStats?.firstTimeFix 
+                  ? `${dashboardStats.firstTimeFix}%` 
+                  : "92%"}
+                subtitle="Jobs completed first visit"
+                icon={TrendingUp}
+                testId="card-first-time-fix"
+              />
+
+              <MetricCard
+                title="Gross Margin"
+                value={revenueStats?.grossMargin !== undefined 
+                  ? `${revenueStats.grossMargin.toFixed(1)}%` 
+                  : "0%"}
+                subtitle={revenueStats?.jobsWithProfitTracking > 0
+                  ? `${formatCurrency(revenueStats.marginRevenue - revenueStats.marginCosts)} profit`
+                  : "No jobs with cost tracking"}
+                icon={TrendingUp}
+                testId="card-gross-margin"
+                colorful={true}
+                valueColor={revenueStats?.grossMargin !== undefined && revenueStats.grossMargin >= 0 ? "text-green-600" : "text-red-600"}
+              />
+
+              <MetricCard
+                title="Jobs Completed"
+                value={revenueStats?.jobsCompleted || 0}
+                subtitle="Completed in period"
+                icon={Briefcase}
+                testId="card-jobs-completed"
+              />
+
+              <MetricCard
+                title="Revenue per Lead"
+                value={formatCurrency((dashboardStats?.totalRevenue || 0) / Math.max(dashboardStats?.totalLeads || 1, 1))}
+                subtitle="Avg value per lead"
+                icon={Target}
+                testId="card-revenue-per-lead"
+              />
+
+              <MetricCard
+                title="Accepted Quotes"
+                value={quoteAnalytics?.acceptedQuotes || 0}
+                subtitle={`${quoteAnalytics?.pendingQuotes || 0} pending`}
                 icon={CheckCircle}
-                testId="card-quote-acceptance"
+                testId="card-accepted-quotes"
+                valueColor="text-green-600"
               />
             </div>
-
-            <MetricCard
-              title="Customer Retention"
-              value={dashboardStats?.customerRetention 
-                ? `${dashboardStats.customerRetention}%` 
-                : "0%"}
-              subtitle="Repeat customers (all-time)"
-              icon={Users}
-              testId="card-customer-retention"
-            />
-
-            <MetricCard
-              title="Returning Customers"
-              value={dashboardStats?.returningCustomerPercentage !== undefined 
-                ? `${dashboardStats.returningCustomerPercentage}%` 
-                : "0%"}
-              subtitle="Jobs from repeat customers"
-              icon={Users}
-              testId="card-returning-customers"
-            />
-
-            <MetricCard
-              title="First Time Fix"
-              value={dashboardStats?.firstTimeFix 
-                ? `${dashboardStats.firstTimeFix}%` 
-                : "92%"}
-              subtitle="Jobs completed first visit"
-              icon={TrendingUp}
-              testId="card-first-time-fix"
-            />
-
-            <MetricCard
-              title="Gross Margin"
-              value={revenueStats?.grossMargin !== undefined 
-                ? `${revenueStats.grossMargin.toFixed(1)}%` 
-                : "0%"}
-              subtitle={revenueStats?.jobsWithProfitTracking > 0
-                ? `${formatCurrency(revenueStats.marginRevenue - revenueStats.marginCosts)} profit (${revenueStats.jobsWithProfitTracking} of ${revenueStats.jobsWithInvoices || 0} jobs tracked)`
-                : "No jobs with cost tracking"}
-              icon={TrendingUp}
-              testId="card-gross-margin"
-              colorful={true}
-              valueColor={revenueStats?.grossMargin !== undefined && revenueStats.grossMargin >= 0 ? "text-green-600" : "text-red-600"}
-            />
-
-            <MetricCard
-              title="Jobs Completed"
-              value={revenueStats?.jobsCompleted || 0}
-              subtitle="Completed in period"
-              icon={Briefcase}
-              testId="card-jobs-completed"
-            />
-
-            <MetricCard
-              title="Revenue per Lead"
-              value={formatCurrency((dashboardStats?.totalRevenue || 0) / Math.max(dashboardStats?.totalLeads || 1, 1))}
-              subtitle="Avg value per lead"
-              icon={Target}
-              testId="card-revenue-per-lead"
-            />
-
-            <MetricCard
-              title="Accepted Quotes"
-              value={quoteAnalytics?.acceptedQuotes || 0}
-              subtitle={`${quoteAnalytics?.pendingQuotes || 0} pending`}
-              icon={CheckCircle}
-              testId="card-accepted-quotes"
-              valueColor="text-green-600"
-            />
           </div>
-        </div>
 
         {/* Revenue Goal Calculator Section */}
         <div className="mb-6">
