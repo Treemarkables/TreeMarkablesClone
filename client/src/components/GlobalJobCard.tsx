@@ -150,6 +150,13 @@ export function GlobalJobCard({
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
+  const selectedCustomer = customers?.find(c => c.id === form.watch('customerId'));
+
+  useEffect(() => {
+    if (selectedCustomer) {
+      setSelectedCustomerName(selectedCustomer.name);
+    }
+  }, [selectedCustomer]);
   const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
   const { toast: _originalToast } = useToast();
   const toast = () => {}; // Disabled - user preference: no toast notifications
