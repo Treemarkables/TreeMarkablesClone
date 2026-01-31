@@ -3611,22 +3611,24 @@ export function GlobalJobCard({
                                 <div className="flex items-center gap-1">
                                   {(() => {
                                     const lineItems = form.watch('lineItems') || [];
-                                    let total = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
-                                    if (total === 0 && editingJob?.totalAmount) {
-                                      total = parseFloat(editingJob.totalAmount) || 0;
+                                    let totalIncGst = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
+                                    if (totalIncGst === 0 && editingJob?.totalAmount) {
+                                      totalIncGst = parseFloat(editingJob.totalAmount) || 0;
                                     }
-                                    if (total === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
-                                      total = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                                    if (totalIncGst === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
+                                      totalIncGst = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
                                     }
-                                    if (total === 0 && jobQuoteResponse?.data?.[0]?.amount) {
-                                      total = parseFloat(jobQuoteResponse.data[0].amount) || 0;
+                                    if (totalIncGst === 0 && jobQuoteResponse?.data?.[0]?.amount) {
+                                      totalIncGst = parseFloat(jobQuoteResponse.data[0].amount) || 0;
                                     }
+                                    // Calculate exc GST (divide by 1.15 for NZ GST)
+                                    const totalExcGst = totalIncGst / 1.15;
                                     return (
                                       <>
                                         <span className="text-lg font-semibold text-gray-900">
-                                          ${total.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                                          ${totalExcGst.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                                         </span>
-                                        <span className="text-xs text-gray-500">inc GST</span>
+                                        <span className="text-xs text-gray-500">exc GST</span>
                                       </>
                                     );
                                   })()}
