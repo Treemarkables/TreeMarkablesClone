@@ -158,11 +158,50 @@ export function GlobalJobCard({
   const isMobile = useIsMobile();
   const { isAdmin } = useAuth();
 
+  // Form setup
+  const form = useForm<GlobalJobCardFormData>({
+    resolver: zodResolver(globalJobCardSchema),
+    shouldUnregister: true, // Clear form state on unmount to prevent stale data
+    defaultValues: {
+      title: "",
+      description: "",
+      status: "quote",
+      priority: "medium",
+      customerId: "",
+      isNewCustomer: false,
+      newCustomerName: "",
+      newCustomerEmail: "",
+      newCustomerPhone: "",
+      newCustomerAddress: "",
+      newCustomerCity: "",
+      newCustomerRegion: "",
+      jobContactFirstName: "",
+      jobContactLastName: "",
+      jobContactEmail: "",
+      jobContactPhone: "",
+      address: "",
+      leadSource: "",
+      totalAmount: "0",
+      paidAmount: "0",
+      lineItems: [],
+      notes: "",
+      checklist: [],
+      estimatedManHours: "",
+      billingAddress: "",
+      invoiceDescription: "",
+      billingContactPhone: "",
+      billingContactMobile: "",
+      sameAsJobAddress: true,
+      taxMode: "tax_exclusive",
+      includeDescriptionInQuotesProposals: true,
+    },
+  });
+
   // Watch customerId and update selectedCustomerName when it changes
   const watchedCustomerId = form.watch('customerId');
   useEffect(() => {
-    if (watchedCustomerId) {
-      const customer = customers?.find(c => c.id === watchedCustomerId);
+    if (watchedCustomerId && customers) {
+      const customer = customers.find(c => c.id === watchedCustomerId);
       if (customer) {
         setSelectedCustomerName(customer.name);
       }
@@ -567,41 +606,6 @@ export function GlobalJobCard({
       window.removeEventListener('openEmailComposer', handleOpenEmailComposer as EventListener);
     };
   }, []);
-
-  // Form setup
-  const form = useForm<GlobalJobCardFormData>({
-    resolver: zodResolver(globalJobCardSchema),
-    shouldUnregister: true, // Clear form state on unmount to prevent stale data
-    defaultValues: {
-      title: "",
-      description: "",
-      status: "quote",
-      priority: "medium",
-      customerId: "",
-      isNewCustomer: false,
-      newCustomerName: "",
-      newCustomerEmail: "",
-      newCustomerPhone: "",
-      newCustomerAddress: "",
-      newCustomerCity: "",
-      newCustomerRegion: "",
-      jobContactFirstName: "",
-      jobContactLastName: "",
-      jobContactEmail: "",
-      jobContactPhone: "",
-      billingContactPhone: "",
-      billingContactMobile: "",
-      billingAddress: "",
-      invoiceDescription: "",
-      sameAsJobAddress: true,
-      taxMode: "tax_exclusive",
-      totalAmount: "0",
-      paidAmount: "0",
-      lineItems: [],
-      checklist: [],
-      notes: "",
-    },
-  });
 
   // Properly manage line items as form field array
   const { fields: lineItemFields, append: appendLineItem, remove: removeLineItemField, update: updateLineItemField, replace: replaceLineItems } = useFieldArray({
