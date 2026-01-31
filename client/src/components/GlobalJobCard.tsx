@@ -3060,6 +3060,45 @@ export function GlobalJobCard({
 
                       {/* Address and other fields */}
                       <div className="space-y-4">
+                        {/* Address - two lines */}
+                        <FormField
+                          control={form.control}
+                          name="address"
+                          render={({ field }) => {
+                            const addressParts = (field.value || "").split(", ");
+                            const streetLine = addressParts[0] || "";
+                            const locationLine = addressParts.slice(1).join(", ");
+                            
+                            return (
+                              <FormItem className="mt-1">
+                                <FormControl>
+                                  <div className="space-y-0">
+                                    <AddressAutocomplete 
+                                      value={streetLine}
+                                      onChange={(newStreet) => {
+                                        if (locationLine) {
+                                          field.onChange(`${newStreet}, ${locationLine}`);
+                                        } else {
+                                          field.onChange(newStreet);
+                                        }
+                                      }}
+                                      onAddressSelect={(parsed) => {
+                                        form.setValue('address', parsed.fullAddress);
+                                      }}
+                                      className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
+                                      placeholder="Enter street address..."
+                                      data-testid="input-job-address"
+                                    />
+                                    {locationLine && (
+                                      <div className="text-sm text-gray-500 pl-0">{locationLine}</div>
+                                    )}
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            );
+                          }}
+                        />
+
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
