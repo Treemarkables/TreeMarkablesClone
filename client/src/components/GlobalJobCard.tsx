@@ -3395,7 +3395,26 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                    <Select 
+                                      value={field.value || ""} 
+                                      onValueChange={(value) => {
+                                        field.onChange(value);
+                                        // Immediate save for lead source
+                                        if (mode === 'edit' && editingJob?.id) {
+                                          // Optimistic update
+                                          queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
+                                            if (!oldData) return oldData;
+                                            return {
+                                              ...oldData,
+                                              data: { ...oldData.data, leadSource: value }
+                                            };
+                                          });
+                                          // Background save
+                                          apiRequest('PATCH', `/api/jobs/${editingJob.id}`, { leadSource: value })
+                                            .catch(error => console.error('Error saving lead source:', error));
+                                        }
+                                      }}
+                                    >
                                       <SelectTrigger className="h-8 text-xs">
                                         <SelectValue placeholder="Select source" />
                                       </SelectTrigger>
