@@ -3162,51 +3162,7 @@ export function GlobalJobCard({
                                 </div>
                               ))}
                               
-                              {/* Add new checklist item */}
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  placeholder="Add checklist item..."
-                                  value={newChecklistItem}
-                                  onChange={(e) => setNewChecklistItem(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && newChecklistItem.trim()) {
-                                      e.preventDefault();
-                                      const newItem = { text: newChecklistItem.trim(), completed: false };
-                                      const updated = [...checklist, newItem];
-                                      setChecklist(updated);
-                                      setNewChecklistItem('');
-                                      if (mode === 'edit' && editingJob?.id) {
-                                        updateJobMutation.mutate({
-                                          id: editingJob.id,
-                                          updates: { checklist: updated }
-                                        });
-                                      }
-                                    }
-                                  }}
-                                  className="h-9 text-sm"
-                                />
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    if (newChecklistItem.trim()) {
-                                      const newItem = { text: newChecklistItem.trim(), completed: false };
-                                      const updated = [...checklist, newItem];
-                                      setChecklist(updated);
-                                      setNewChecklistItem('');
-                                      if (mode === 'edit' && editingJob?.id) {
-                                        updateJobMutation.mutate({
-                                          id: editingJob.id,
-                                          updates: { checklist: updated }
-                                        });
-                                      }
-                                    }
-                                  }}
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </div>
+
                             </div>
                             
                             {/* Crew Notes (Job Description) */}
@@ -3671,51 +3627,7 @@ export function GlobalJobCard({
                                 </div>
                               ))}
                               
-                              {/* Add new checklist item */}
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  placeholder="Add checklist item..."
-                                  value={newChecklistItem}
-                                  onChange={(e) => setNewChecklistItem(e.target.value)}
-                                  onKeyDown={(e) => {
-                                    if (e.key === 'Enter' && newChecklistItem.trim()) {
-                                      e.preventDefault();
-                                      const newItem = { text: newChecklistItem.trim(), completed: false };
-                                      const updated = [...checklist, newItem];
-                                      setChecklist(updated);
-                                      setNewChecklistItem('');
-                                      if (mode === 'edit' && editingJob?.id) {
-                                        updateJobMutation.mutate({
-                                          id: editingJob.id,
-                                          updates: { checklist: updated }
-                                        });
-                                      }
-                                    }
-                                  }}
-                                  className="h-9 text-sm"
-                                />
-                                <Button
-                                  type="button"
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => {
-                                    if (newChecklistItem.trim()) {
-                                      const newItem = { text: newChecklistItem.trim(), completed: false };
-                                      const updated = [...checklist, newItem];
-                                      setChecklist(updated);
-                                      setNewChecklistItem('');
-                                      if (mode === 'edit' && editingJob?.id) {
-                                        updateJobMutation.mutate({
-                                          id: editingJob.id,
-                                          updates: { checklist: updated }
-                                        });
-                                      }
-                                    }
-                                  }}
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                              </div>
+
                             </div>
                             
                             {/* Job Price */}
