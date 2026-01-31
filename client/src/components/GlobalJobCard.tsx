@@ -3343,9 +3343,9 @@ export function GlobalJobCard({
 
                       {/* Job Information Section */}
                       <div className="space-y-4">
-                        {/* Job Status, Lead Source */}
+                        {/* Job Status, Lead Source, Est Hours - evenly distributed */}
                         <div className="flex gap-2">
-                          <div className="w-[100px]">
+                          <div className="flex-1">
                             <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Job Status</label>
                             <FormField
                               control={form.control}
@@ -3420,7 +3420,7 @@ export function GlobalJobCard({
                               </div>
                             )}
                           </div>
-                          <div className="w-28">
+                          <div className="flex-1">
                             <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Lead Source</label>
                             <FormField
                               control={form.control}
@@ -3445,6 +3445,42 @@ export function GlobalJobCard({
                                         <SelectItem value="advertisement">Advertisement</SelectItem>
                                         <SelectItem value="council">Council</SelectItem>
                                         <SelectItem value="other">Other</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                  </FormControl>
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Est. Man Hours</label>
+                            <FormField
+                              control={form.control}
+                              name="estimatedManHours"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormControl>
+                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                      <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Select hours" />
+                                      </SelectTrigger>
+                                      <SelectContent className="max-h-[300px]">
+                                        {Array.from({ length: 160 }, (_, i) => {
+                                          const hours = (i + 1) * 0.25;
+                                          const wholeHours = Math.floor(hours);
+                                          const minutes = Math.round((hours - wholeHours) * 60);
+                                          let label = '';
+                                          if (wholeHours === 0) {
+                                            label = `${minutes} min`;
+                                          } else if (minutes === 0) {
+                                            label = wholeHours === 1 ? '1 hr' : `${wholeHours} hrs`;
+                                          } else {
+                                            label = wholeHours === 1 ? `1 hr ${minutes} min` : `${wholeHours} hrs ${minutes} min`;
+                                          }
+                                          return (
+                                            <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>
+                                          );
+                                        })}
                                       </SelectContent>
                                     </Select>
                                   </FormControl>
@@ -3727,46 +3763,6 @@ export function GlobalJobCard({
                                 </p>
                               </div>
                             </div>
-                          </div>
-                        </div>
-
-                        {/* Estimated Man Hours */}
-                        <div className="flex gap-2 items-center">
-                          <div className="w-[140px]">
-                            <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Est. Man Hours</label>
-                            <FormField
-                              control={form.control}
-                              name="estimatedManHours"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Select value={field.value || ""} onValueChange={field.onChange}>
-                                      <SelectTrigger className="h-8 text-xs">
-                                        <SelectValue placeholder="Select hours" />
-                                      </SelectTrigger>
-                                      <SelectContent className="max-h-[300px]">
-                                        {Array.from({ length: 160 }, (_, i) => {
-                                          const hours = (i + 1) * 0.25;
-                                          const wholeHours = Math.floor(hours);
-                                          const minutes = Math.round((hours - wholeHours) * 60);
-                                          let label = '';
-                                          if (wholeHours === 0) {
-                                            label = `${minutes} min`;
-                                          } else if (minutes === 0) {
-                                            label = wholeHours === 1 ? '1 hr' : `${wholeHours} hrs`;
-                                          } else {
-                                            label = wholeHours === 1 ? `1 hr ${minutes} min` : `${wholeHours} hrs ${minutes} min`;
-                                          }
-                                          return (
-                                            <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>
-                                          );
-                                        })}
-                                      </SelectContent>
-                                    </Select>
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
                           </div>
                         </div>
 
