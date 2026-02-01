@@ -3264,5 +3264,35 @@ export type CallRecord = typeof callRecords.$inferSelect;
 export type InsertCallRecord = z.infer<typeof insertCallRecordSchema>;
 export type UpdateCallRecord = z.infer<typeof updateCallRecordSchema>;
 
+// Tree location markers for job site mapping
+export const treeMarkers = pgTable("tree_markers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).notNull(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).notNull(),
+  label: text("label"), // e.g., "Large oak - remove"
+  notes: text("notes"), // Additional notes about the tree
+  markerType: text("marker_type").default('tree'), // tree, stump, hazard, etc.
+  color: text("color").default('#22c55e'), // Marker color (green default)
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+}, (table) => ({
+  jobIdIdx: index("tree_markers_job_id_idx").on(table.jobId),
+}));
+
+// Tree markers schemas
+export const insertTreeMarkerSchema = createInsertSchema(treeMarkers).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateTreeMarkerSchema = insertTreeMarkerSchema.partial();
+
+// Tree marker types
+export type TreeMarker = typeof treeMarkers.$inferSelect;
+export type InsertTreeMarker = z.infer<typeof insertTreeMarkerSchema>;
+export type UpdateTreeMarker = z.infer<typeof updateTreeMarkerSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';
