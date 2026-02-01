@@ -313,10 +313,31 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     }
   };
 
+  // Calculate job total from line items
+  const calculateJobTotal = (lineItems: any[] | null | undefined): number => {
+    if (!lineItems || !Array.isArray(lineItems)) return 0;
+    return lineItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+      return sum + (quantity * unitPrice);
+    }, 0);
+  };
+
+  // Format currency in NZD
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NZ', {
+      style: 'currency',
+      currency: 'NZD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   // Render mini job card for right sidebar - ServiceM8 style
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
+    const jobTotal = calculateJobTotal(job.lineItems);
     
     // Check if job is scheduled for a different day
     const isScheduledForDifferentDay = job.scheduledDate && !isSameDay(new Date(job.scheduledDate), currentDate);
@@ -370,9 +391,12 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
           <p className="text-sm text-gray-800 break-words line-clamp-2">{job.title || '\u00A0'}</p>
         </div>
         
-        {/* Job number */}
-        <div className="flex-shrink-0">
-          <span className="text-sm text-gray-400 font-mono">#{job.id.slice(-4)}</span>
+        {/* Job number and price */}
+        <div className="flex-shrink-0 text-right">
+          <span className="text-sm text-gray-400 font-mono block">#{job.jobNumber || job.id.slice(-4)}</span>
+          {jobTotal > 0 && (
+            <span className="text-sm font-semibold text-gray-700 block">{formatCurrency(jobTotal)}</span>
+          )}
         </div>
       </div>
     );
@@ -384,6 +408,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     
     const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledStartTime}`);
     const slotHour = timeSlot.getHours();
+    const jobTotal = calculateJobTotal(job.lineItems);
     
     // Check if staffMember is assigned to this job (handle both single ID and array)
     const isAssigned = Array.isArray(job.assignedTo) 
@@ -400,6 +425,9 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
         >
           <div className="font-medium">{jobTime.getHours()}:{jobTime.getMinutes().toString().padStart(2, '0')}</div>
           <div className="truncate">{getCustomerName(job.customerId, job)}</div>
+          {jobTotal > 0 && (
+            <div className="font-bold text-[10px] opacity-90">{formatCurrency(jobTotal)}</div>
+          )}
         </div>
       );
     }

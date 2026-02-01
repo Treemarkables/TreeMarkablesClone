@@ -65,6 +65,26 @@ export default function StaffSchedule() {
     return 'No Customer';
   };
 
+  // Calculate job total from line items
+  const calculateJobTotal = (lineItems: any[] | null | undefined): number => {
+    if (!lineItems || !Array.isArray(lineItems)) return 0;
+    return lineItems.reduce((sum, item) => {
+      const quantity = Number(item.quantity) || 0;
+      const unitPrice = Number(item.unitPrice) || 0;
+      return sum + (quantity * unitPrice);
+    }, 0);
+  };
+
+  // Format currency in NZD
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-NZ', {
+      style: 'currency',
+      currency: 'NZD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+
   // Create a map of job IDs to jobs for quick lookup
   const jobMap = useMemo(() => {
     const map = new Map<string, Job>();
@@ -334,8 +354,11 @@ export default function StaffSchedule() {
                             <div className="font-semibold text-sm mb-1">
                               {getCustomerName(job)}
                             </div>
-                            <div className="text-xs opacity-90">
-                              Job #{job.jobNumber}
+                            <div className="flex items-center gap-2 text-xs opacity-90">
+                              <span>Job #{job.jobNumber}</span>
+                              {calculateJobTotal(job.lineItems) > 0 && (
+                                <span className="font-bold">{formatCurrency(calculateJobTotal(job.lineItems))}</span>
+                              )}
                             </div>
                             {job.address && (
                               <div className="text-xs opacity-75 mt-1">
