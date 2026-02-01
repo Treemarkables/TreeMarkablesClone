@@ -3768,38 +3768,11 @@ export function GlobalJobCard({
                               </div>
                               <div className="space-y-2">
                                 {editingJob.assignedTo.map((staffId: string) => {
-                                  const staff = users?.find(u => u.id === staffId);
+                                  const staff = employees?.find((e: any) => e.id === staffId);
+                                  const staffName = staff ? `${staff.firstName} ${staff.lastName}` : 'Unknown Staff';
                                   return (
                                     <div key={staffId} className="flex items-center justify-between">
-                                      <span className="text-sm text-gray-700">{staff?.name || 'Unknown Staff'}</span>
-                                      <span className="text-xs text-gray-500">
-                                        {format(new Date(editingJob.scheduledDate!), 'h:mm a')}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                        
-
-                        {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
-                        {editingJob?.scheduledDate && editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
-                          <div className="md:hidden mb-4">
-                            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                              <div className="flex items-center gap-2 mb-3">
-                                <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
-                                  <Calendar className="h-4 w-4 text-blue-600" />
-                                </div>
-                                <h3 className="font-bold text-gray-900">Upcoming Bookings</h3>
-                              </div>
-                              <div className="space-y-2">
-                                {editingJob.assignedTo.map((staffId: string) => {
-                                  const staff = users?.find(u => u.id === staffId);
-                                  return (
-                                    <div key={staffId} className="flex items-center justify-between">
-                                      <span className="text-sm text-gray-700">{staff?.name || 'Unknown Staff'}</span>
+                                      <span className="text-sm text-gray-700">{staffName}</span>
                                       <span className="text-xs text-gray-500">
                                         {format(new Date(editingJob.scheduledDate!), 'h:mm a')}
                                       </span>
