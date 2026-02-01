@@ -12885,6 +12885,101 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // AI-powered dispatch board analyzer - provides insights on workload and days of work
+  app.get('/api/analytics/dispatch-ai', async (req: Request, res: Response) => {
+    try {
+      // Get active jobs (work_order, scheduled, in_progress)
+      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
+      const activeJobs = allJobs.filter(job => 
+        ['work_order', 'scheduled', 'in_progress'].includes(job.status)
+      );
+      
+      // Get scheduled assignments for context
+      const assignments = await storage.getAllJobAssignments();
+      const employees = await storage.getAllEmployees();
+      
+      // Calculate summary stats
+      const workOrderJobs = activeJobs.filter(j => j.status === 'work_order');
+      const scheduledJobs = activeJobs.filter(j => j.status === 'scheduled');
+      const inProgressJobs = activeJobs.filter(j => j.status === 'in_progress');
+      
+      const totalValue = activeJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      const totalEstimatedHours = activeJobs.reduce((sum, job) => sum + parseFloat(job.estimatedManHours || '0'), 0);
+      
+      // Assume 8 hours per crew day
+      const hoursPerDay = 8;
+      const activeCrewCount = employees.filter(e => e.role === 'crew' || e.role === 'climber' || e.role === 'groundsman').length || 1;
+      const daysOfWork = totalEstimatedHours / (hoursPerDay * Math.max(activeCrewCount, 1));
+      
+      // Build job summaries for AI analysis
+      const jobSummaries = activeJobs.slice(0, 50).map(job => ({
+        jobNumber: job.jobNumber,
+        title: job.title,
+        status: job.status,
+        value: job.totalAmount || '0',
+        estimatedHours: job.estimatedManHours || '0',
+        address: job.address,
+        scheduledDate: job.scheduledDate
+      }));
+      
+      // Build AI prompt
+      const prompt = `You are an AI assistant for a tree removal business called Treemarkables. Analyze the dispatch board data and provide a concise business insight summary.
+
+DISPATCH BOARD DATA:
+- Work Orders (ready to schedule): ${workOrderJobs.length} jobs worth $${workOrderJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0).toFixed(2)} NZD
+- Scheduled Jobs: ${scheduledJobs.length} jobs worth $${scheduledJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0).toFixed(2)} NZD
+- In Progress: ${inProgressJobs.length} jobs worth $${inProgressJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0).toFixed(2)} NZD
+- Total Active Jobs: ${activeJobs.length}
+- Total Pipeline Value: $${totalValue.toFixed(2)} NZD
+- Total Estimated Hours: ${totalEstimatedHours.toFixed(1)} hours
+- Active Crew Members: ${activeCrewCount}
+- Estimated Days of Work: ${daysOfWork.toFixed(1)} days (at 8 hours/day with current crew)
+
+JOB DETAILS (first 50):
+${jobSummaries.map(j => `- Job #${j.jobNumber}: ${j.title} | ${j.status} | $${j.value} | ${j.estimatedHours}h${j.scheduledDate ? ` | Scheduled: ${j.scheduledDate}` : ''}`).join('\n')}
+
+Provide a brief, actionable summary (3-4 sentences) covering:
+1. How many days of work you have in the pipeline
+2. The total value and what it means for the business
+3. Any recommendations (e.g., "Consider hiring more crew" or "Good time to schedule more quotes")
+
+Keep the tone professional but conversational. Use NZD for currency.`;
+
+      // Call OpenAI
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{ role: "user", content: prompt }],
+        max_tokens: 500,
+        temperature: 0.7
+      });
+      
+      const aiInsight = completion.choices[0]?.message?.content || 'Unable to generate insights.';
+      
+      res.json({
+        success: true,
+        data: {
+          summary: {
+            workOrderCount: workOrderJobs.length,
+            workOrderValue: workOrderJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0),
+            scheduledCount: scheduledJobs.length,
+            scheduledValue: scheduledJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0),
+            inProgressCount: inProgressJobs.length,
+            inProgressValue: inProgressJobs.reduce((s, j) => s + parseFloat(j.totalAmount || '0'), 0),
+            totalJobs: activeJobs.length,
+            totalValue,
+            totalEstimatedHours,
+            activeCrewCount,
+            estimatedDaysOfWork: daysOfWork
+          },
+          aiInsight
+        }
+      });
+    } catch (error) {
+      console.error('Error generating dispatch AI insights:', error);
+      res.status(500).json({ success: false, message: 'Error generating dispatch insights' });
+    }
+  });
+
   // Get service-level performance analytics (revenue and margin by service/material)
   app.get('/api/analytics/service-performance', async (req: Request, res: Response) => {
     try {
