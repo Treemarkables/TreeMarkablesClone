@@ -104,6 +104,19 @@ interface LeadSourceData {
   roi: number;
 }
 
+interface QuotePresentationData {
+  method: string;
+  label: string;
+  totalQuotes: number;
+  acceptedQuotes: number;
+  rejectedQuotes: number;
+  pendingQuotes: number;
+  conversionRate: number;
+  totalValue: number;
+  acceptedValue: number;
+  averageValue: number;
+}
+
 interface ServicePerformance {
   id: string;
   name: string;
@@ -430,6 +443,16 @@ export default function MetricsDashboard() {
       if (dateRange?.from) params.append('fromDate', dateRange.from);
       if (dateRange?.to) params.append('toDate', dateRange.to);
       return fetch(`/api/lead-source-analysis?${params}`).then(res => res.json()).then(res => res.data);
+    }
+  });
+
+  const { data: quotePresentationData, isLoading: quotePresentationLoading } = useQuery<QuotePresentationData[]>({
+    queryKey: ['/api/quote-presentation-analysis', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/quote-presentation-analysis?${params}`).then(res => res.json()).then(res => res.data);
     }
   });
 
@@ -1951,6 +1974,138 @@ export default function MetricsDashboard() {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground">No lead source data available for the selected period</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Quote Presentation Method Conversion Section */}
+        <div className="mt-8">
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Send className="h-5 w-5 text-blue-500" />
+                  Quote Presentation Conversion
+                </CardTitle>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Compare conversion rates between on-site quotes vs quotes sent later
+              </p>
+            </CardHeader>
+            <CardContent>
+              {quotePresentationLoading ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">Loading quote presentation data...</p>
+                </div>
+              ) : quotePresentationData && quotePresentationData.length > 0 ? (
+                <div className="space-y-6">
+                  {/* Summary Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {quotePresentationData.map((method) => (
+                      <div 
+                        key={method.method} 
+                        className="bg-muted/30 rounded-lg p-4 border"
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-sm">{method.label}</h4>
+                          <span className={`text-lg font-bold ${
+                            method.conversionRate >= 50 ? 'text-green-600' : 
+                            method.conversionRate >= 30 ? 'text-yellow-600' : 'text-orange-600'
+                          }`}>
+                            {method.conversionRate.toFixed(1)}%
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Total Quotes</p>
+                            <p className="font-semibold">{method.totalQuotes}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Accepted</p>
+                            <p className="font-semibold text-green-600">{method.acceptedQuotes}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Pending</p>
+                            <p className="font-semibold text-blue-600">{method.pendingQuotes}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Rejected</p>
+                            <p className="font-semibold text-red-600">{method.rejectedQuotes}</p>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Avg Value</span>
+                            <span className="font-semibold">{formatCurrency(method.averageValue)}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Accepted Value</span>
+                            <span className="font-semibold text-green-600">{formatCurrency(method.acceptedValue)}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Comparison Table */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-3 px-4 font-medium">Presentation Method</th>
+                          <th className="text-right py-3 px-4 font-medium">Total</th>
+                          <th className="text-right py-3 px-4 font-medium">Accepted</th>
+                          <th className="text-right py-3 px-4 font-medium">Conversion</th>
+                          <th className="text-right py-3 px-4 font-medium">Total Value</th>
+                          <th className="text-right py-3 px-4 font-medium">Accepted Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quotePresentationData.map((method) => (
+                          <tr key={method.method} className="border-b hover-elevate">
+                            <td className="py-3 px-4 font-medium">{method.label}</td>
+                            <td className="text-right py-3 px-4">{method.totalQuotes}</td>
+                            <td className="text-right py-3 px-4 text-green-600">{method.acceptedQuotes}</td>
+                            <td className="text-right py-3 px-4">
+                              <span className={`font-semibold ${
+                                method.conversionRate >= 50 ? 'text-green-600' : 
+                                method.conversionRate >= 30 ? 'text-yellow-600' : 'text-orange-600'
+                              }`}>
+                                {method.conversionRate.toFixed(1)}%
+                              </span>
+                            </td>
+                            <td className="text-right py-3 px-4">{formatCurrency(method.totalValue)}</td>
+                            <td className="text-right py-3 px-4 text-green-600">{formatCurrency(method.acceptedValue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 font-bold bg-muted/50">
+                          <td className="py-3 px-4">TOTAL</td>
+                          <td className="text-right py-3 px-4">{quotePresentationData.reduce((sum, m) => sum + m.totalQuotes, 0)}</td>
+                          <td className="text-right py-3 px-4 text-green-600">{quotePresentationData.reduce((sum, m) => sum + m.acceptedQuotes, 0)}</td>
+                          <td className="text-right py-3 px-4">
+                            {(() => {
+                              const total = quotePresentationData.reduce((sum, m) => sum + m.totalQuotes, 0);
+                              const accepted = quotePresentationData.reduce((sum, m) => sum + m.acceptedQuotes, 0);
+                              return total > 0 ? ((accepted / total) * 100).toFixed(1) + '%' : '0%';
+                            })()}
+                          </td>
+                          <td className="text-right py-3 px-4">{formatCurrency(quotePresentationData.reduce((sum, m) => sum + m.totalValue, 0))}</td>
+                          <td className="text-right py-3 px-4 text-green-600">{formatCurrency(quotePresentationData.reduce((sum, m) => sum + m.acceptedValue, 0))}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No quote presentation data available</p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Set the presentation method when creating quotes to start tracking conversion rates
+                  </p>
                 </div>
               )}
             </CardContent>
