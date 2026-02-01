@@ -194,10 +194,22 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-// Calculate total price from line items
-const calculateJobTotal = (lineItems: any[] | null | undefined): number => {
+// Calculate total price from job data
+const calculateJobTotal = (job: any): number => {
+  // First check for stored total values
+  if (job.totalAmount && Number(job.totalAmount) > 0) {
+    return Number(job.totalAmount);
+  }
+  if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) {
+    return Number(job.totalIncludingGst);
+  }
+  if (job.subtotal && Number(job.subtotal) > 0) {
+    return Number(job.subtotal);
+  }
+  // Fallback to calculating from line items
+  const lineItems = job.lineItems;
   if (!lineItems || !Array.isArray(lineItems)) return 0;
-  return lineItems.reduce((sum, item) => {
+  return lineItems.reduce((sum: number, item: any) => {
     const total = typeof item.total === 'number' ? item.total : 
                   (parseFloat(item.quantity || 0) * parseFloat(item.unitPrice || 0));
     return sum + total;
@@ -1655,7 +1667,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               <div className="divide-y divide-gray-100">
                 {getTodaysJobs().map((job) => {
                 const customerName = job.customerName || 'Unknown Customer';
-                const total = calculateJobTotal(job.lineItems);
+                const total = calculateJobTotal(job);
                 const suburb = job.address?.split(',')[0]?.trim() || '';
                 
                 // Get status badge styling - same as mobile
@@ -1895,7 +1907,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="divide-y divide-gray-100">
             {getTodaysJobs().map((job: any) => {
               const customerName = job.customerName || 'Unknown Customer';
-              const total = calculateJobTotal(job.lineItems);
+              const total = calculateJobTotal(job);
               const suburb = job.address?.split(',')[0]?.trim() || '';
               
               // Get status badge styling
