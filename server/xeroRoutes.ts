@@ -126,6 +126,70 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     }
   });
 
+  // Force refresh token - useful after updating scopes in Xero Developer portal
+  app.post('/api/xero/refresh-token', async (req: Request, res: Response) => {
+    try {
+      const connection = await storage.getActiveXeroConnection();
+      
+      if (!connection) {
+        return res.status(400).json({ success: false, message: 'No active Xero connection' });
+      }
+      
+      console.log('🔄 Force refreshing Xero access token to get updated scopes...');
+      
+      // Get a fresh token from Xero (this will have any updated scopes from Developer portal)
+      const tokenSet = await xeroClient.getClientCredentialsToken();
+      
+      // Decode and log the new token's scopes for debugging
+      try {
+        const tokenPayload = JSON.parse(Buffer.from(tokenSet.access_token!.split('.')[1], 'base64').toString());
+        console.log('✅ New token scopes:', tokenPayload.scope);
+      } catch (e) {
+        console.log('Could not decode token for scope check');
+      }
+      
+      // Update in database
+      const newExpiresAt = new Date();
+      newExpiresAt.setSeconds(newExpiresAt.getSeconds() + (tokenSet.expires_in || 1800));
+      
+      await storage.updateXeroConnection(connection.tenantId, {
+        accessToken: tokenSet.access_token!,
+        expiresAt: newExpiresAt,
+        scope: tokenSet.scope,
+        lastSyncedAt: new Date(),
+      });
+      
+      await xeroClient.setTokenSet(tokenSet);
+      console.log('✅ Access token force refreshed successfully');
+      
+      // Return the scopes in the response so user can see what's available
+      let scopes: string[] = [];
+      try {
+        const tokenPayload = JSON.parse(Buffer.from(tokenSet.access_token!.split('.')[1], 'base64').toString());
+        scopes = tokenPayload.scope || [];
+      } catch (e) {
+        scopes = tokenSet.scope?.split(' ') || [];
+      }
+      
+      const hasPayrollScopes = scopes.some(s => s.includes('payroll'));
+      
+      res.json({ 
+        success: true, 
+        message: hasPayrollScopes 
+          ? 'Token refreshed with payroll scopes - payroll features now available!' 
+          : 'Token refreshed but no payroll scopes found. Please add payroll.employees and payroll.timesheets scopes in Xero Developer portal.',
+        scopes,
+        hasPayrollScopes
+      });
+    } catch (error: any) {
+      console.error('Error refreshing Xero token:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to refresh Xero token: ' + (error.message || 'Unknown error')
+      });
+    }
+  });
+
   // Helper function to get a valid Xero client with fresh token
   async function getValidXeroClient(): Promise<XeroClient | null> {
     const connection = await storage.getActiveXeroConnection();
@@ -1195,6 +1259,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         const xeroFullName = `${xeroFirstName} ${xeroLastName}`;
         
         const matchedStaff = ourEmployees.find(s => {
+          if (!s.name) return false;
           const staffName = s.name.toLowerCase().trim();
           const staffParts = staffName.split(' ');
           const staffFirstName = staffParts[0] || '';
