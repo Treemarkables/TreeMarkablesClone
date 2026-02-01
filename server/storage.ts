@@ -919,6 +919,13 @@ export interface IStorage {
   getCallRecordsByJob(jobId: string): Promise<schema.CallRecord[]>;
   getCallRecordsByCustomer(customerId: string): Promise<schema.CallRecord[]>;
   deleteCallRecord(id: string): Promise<boolean>;
+
+  // Tree Markers - Job Site Mapping
+  createTreeMarker(marker: schema.InsertTreeMarker): Promise<schema.TreeMarker>;
+  getTreeMarker(id: string): Promise<schema.TreeMarker | null>;
+  updateTreeMarker(id: string, updates: schema.UpdateTreeMarker): Promise<schema.TreeMarker>;
+  deleteTreeMarker(id: string): Promise<boolean>;
+  getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]>;
 }
 
 // Database Storage Implementation
@@ -5805,6 +5812,43 @@ class DatabaseStorage implements IStorage {
     const result = await db.delete(schema.callRecords)
       .where(eq(schema.callRecords.id, id));
     return true;
+  }
+
+  // ========================================
+  // TREE MARKERS - JOB SITE MAPPING
+  // ========================================
+
+  async createTreeMarker(marker: schema.InsertTreeMarker): Promise<schema.TreeMarker> {
+    const [result] = await db.insert(schema.treeMarkers).values(marker).returning();
+    return result;
+  }
+
+  async getTreeMarker(id: string): Promise<schema.TreeMarker | null> {
+    const [result] = await db.select()
+      .from(schema.treeMarkers)
+      .where(eq(schema.treeMarkers.id, id));
+    return result || null;
+  }
+
+  async updateTreeMarker(id: string, updates: schema.UpdateTreeMarker): Promise<schema.TreeMarker> {
+    const [result] = await db.update(schema.treeMarkers)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.treeMarkers.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteTreeMarker(id: string): Promise<boolean> {
+    await db.delete(schema.treeMarkers)
+      .where(eq(schema.treeMarkers.id, id));
+    return true;
+  }
+
+  async getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]> {
+    return await db.select()
+      .from(schema.treeMarkers)
+      .where(eq(schema.treeMarkers.jobId, jobId))
+      .orderBy(schema.treeMarkers.createdAt);
   }
 }
 
