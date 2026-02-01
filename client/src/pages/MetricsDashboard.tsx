@@ -351,7 +351,9 @@ export default function MetricsDashboard() {
         return { from: fromDate.toISOString().split('T')[0], to: today.toISOString().split('T')[0] };
       case "all":
       default:
-        return null;
+        // Return last 12 months for "all" to enable Xero payroll metrics
+        fromDate.setFullYear(today.getFullYear() - 1);
+        return { from: fromDate.toISOString().split('T')[0], to: today.toISOString().split('T')[0] };
     }
   };
 
@@ -1738,7 +1740,7 @@ export default function MetricsDashboard() {
         )}
 
         {/* Staff Work Days Section - Hours and Days Worked from Xero */}
-        {showAdvancedMetrics && (
+        {dateRange?.from && dateRange?.to && (
           <div className="mt-4">
             <Card>
               <CardHeader className="pb-2">
