@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -5376,14 +5376,46 @@ export function GlobalJobCard({
       <Dialog open={descriptionPopupOpen} onOpenChange={setDescriptionPopupOpen}>
         <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl">
           <DialogHeader>
-            <DialogTitle className="text-center">Job Description</DialogTitle>
+            <DialogTitle className="text-center">Crew Notes</DialogTitle>
           </DialogHeader>
           <div className="py-4">
+            <div className="flex gap-2 mb-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const currentValue = form.watch('description') || '';
+                  const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
+                  if (textarea) {
+                    const start = textarea.selectionStart;
+                    const end = textarea.selectionEnd;
+                    const beforeCursor = currentValue.substring(0, start);
+                    const afterCursor = currentValue.substring(end);
+                    const isStartOfLine = start === 0 || beforeCursor.endsWith('\n');
+                    const bullet = isStartOfLine ? '• ' : '\n• ';
+                    const newValue = beforeCursor + bullet + afterCursor;
+                    form.setValue('description', newValue);
+                    setTimeout(() => {
+                      textarea.focus();
+                      const newPos = start + bullet.length;
+                      textarea.setSelectionRange(newPos, newPos);
+                    }, 0);
+                  } else {
+                    form.setValue('description', currentValue + (currentValue ? '\n• ' : '• '));
+                  }
+                }}
+                className="flex items-center gap-1"
+              >
+                <List className="h-4 w-4" />
+                Add Bullet
+              </Button>
+            </div>
             <Textarea 
               value={form.watch('description') || ''}
               onChange={(e) => form.setValue('description', e.target.value)}
-              className="min-h-[300px] text-base font-medium" 
-              placeholder="Describe the work that needs to be done"
+              className="min-h-[450px] text-base font-medium" 
+              placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
               data-testid="textarea-description-popup"
             />
           </div>
