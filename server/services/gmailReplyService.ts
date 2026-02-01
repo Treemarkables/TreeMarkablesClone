@@ -405,9 +405,17 @@ class GmailReplyService {
         });
 
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
+        
+        // If reply was to a job-specific email address, ONLY log to job diary, NOT conversations
+        // This prevents duplicates when emails are sent from the job card modal
+        if (email.to && email.to.match(/job-\d+@/i)) {
+          console.log(`📧 Reply was to job-specific address (${email.to}) - skipping conversations page`);
+          return true; // Successfully processed - stop here, don't add to conversations
+        }
       }
       
       // Create or update conversation to trigger notification bell
+      // This only runs for emails NOT sent to job-specific addresses
       try {
         // Import notification helper
         const notificationHelper = await import('./notificationHelper.js');
