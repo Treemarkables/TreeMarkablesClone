@@ -394,17 +394,22 @@ export function NotificationBell() {
       markAsReadMutation.mutate(notification.id);
     }
 
+    // Close popover first to ensure clean navigation
+    setIsOpen(false);
+
     // Navigate to action URL if provided and it's an internal route
     if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
       console.log('🔀 Navigating via actionUrl:', notification.actionUrl);
-      setLocation(notification.actionUrl);
       
-      // Dispatch custom event to notify components of URL change
-      window.dispatchEvent(new CustomEvent('notification-navigation', { 
-        detail: { url: notification.actionUrl } 
-      }));
-      
-      setIsOpen(false);
+      // Use setTimeout to ensure popover closes before navigation
+      setTimeout(() => {
+        setLocation(notification.actionUrl!);
+        
+        // Dispatch custom event to notify components of URL change
+        window.dispatchEvent(new CustomEvent('notification-navigation', { 
+          detail: { url: notification.actionUrl } 
+        }));
+      }, 50);
       return;
     }
 
