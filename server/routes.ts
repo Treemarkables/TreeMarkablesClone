@@ -12894,8 +12894,7 @@ Transcription: ${transcriptText}`;
         ['work_order', 'scheduled', 'in_progress'].includes(job.status)
       );
       
-      // Get scheduled assignments for context
-      const assignments = await storage.getAllJobAssignments();
+      // Get employees for crew count calculation
       const employees = await storage.getAllEmployees();
       
       // Calculate summary stats
