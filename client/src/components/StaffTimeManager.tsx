@@ -75,7 +75,7 @@ export function StaffTimeManager({
     enabled: !!jobId,
   });
 
-  const employees = (employeesData as any)?.data || [];
+  const employees = ((employeesData as any)?.data || []).filter((emp: any) => emp.isActive !== false);
   const staffTimeEntries = (staffTimeData as any)?.data || [];
 
   // Form for adding/editing staff time entries

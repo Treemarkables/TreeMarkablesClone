@@ -32,6 +32,7 @@ interface Employee {
   lastName: string;
   hourlyRate?: number;
   position?: string;
+  isActive?: boolean;
 }
 
 interface StaffTimeTrackerProps {
@@ -63,7 +64,7 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
     }
   });
 
-  const employees: Employee[] = employeesData?.data || [];
+  const employees: Employee[] = (employeesData?.data || []).filter((emp: Employee) => emp.isActive !== false);
 
   // Fetch ALL existing staff time entries for this job from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
