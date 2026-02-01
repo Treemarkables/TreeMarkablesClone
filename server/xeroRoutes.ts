@@ -1096,12 +1096,35 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         }
       }
 
-      // Build work days data for each active employee
+      // Get only ACTIVE staff from our system
+      const ourActiveEmployees = await storage.getActiveEmployees();
+      
+      // Build work days data only for employees that match our active staff
       const workDaysData = [];
 
       for (const emp of employees) {
-        // Only include active employees
-        if (emp.status !== 'Active') continue;
+        // Try to match Xero employee to our active staff by name
+        const xeroFirstName = (emp.firstName || '').toLowerCase().trim();
+        const xeroLastName = (emp.lastName || '').toLowerCase().trim();
+        const xeroFullName = `${xeroFirstName} ${xeroLastName}`;
+        
+        const matchedStaff = ourActiveEmployees.find(s => {
+          const staffFirstName = (s.firstName || '').toLowerCase().trim();
+          const staffLastName = (s.lastName || '').toLowerCase().trim();
+          const staffFullName = `${staffFirstName} ${staffLastName}`;
+          
+          if (staffFullName === xeroFullName) return true;
+          if (staffFirstName === xeroFirstName && staffLastName === xeroLastName) return true;
+          if (staffFirstName === xeroFirstName) return true;
+          if (xeroFirstName.startsWith(staffFirstName) || staffFirstName.startsWith(xeroFirstName)) {
+            if (xeroLastName === staffLastName) return true;
+          }
+          if (emp.email && s.email && emp.email.toLowerCase() === s.email.toLowerCase()) return true;
+          return false;
+        });
+        
+        // Only include if matched to an active staff member in our system
+        if (!matchedStaff) continue;
         
         const data = employeeWorkData[emp.employeeID] || { 
           hours: 0, 
@@ -1243,45 +1266,49 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       }
 
       // Get billable hours from our job time tracking system
-      // Query staff/employees from our system
-      const ourEmployees = await storage.getAllEmployees();
+      // Query only ACTIVE staff/employees from our system
+      const ourActiveEmployees = await storage.getActiveEmployees();
       const timeTrackingService = new TimeTrackingService();
       
-      // Build efficiency data for each employee
+      // Build efficiency data only for employees that match our active staff
       const efficiencyData = [];
 
       for (const emp of employees) {
         const xeroHours = xeroPaidHours[emp.employeeID] || 0;
         
-        // Try to match Xero employee to our staff by name (multiple matching strategies)
+        // Try to match Xero employee to our active staff by name
         const xeroFirstName = (emp.firstName || '').toLowerCase().trim();
         const xeroLastName = (emp.lastName || '').toLowerCase().trim();
         const xeroFullName = `${xeroFirstName} ${xeroLastName}`;
         
-        const matchedStaff = ourEmployees.find(s => {
-          if (!s.name) return false;
-          const staffName = s.name.toLowerCase().trim();
-          const staffParts = staffName.split(' ');
-          const staffFirstName = staffParts[0] || '';
-          const staffLastName = staffParts.slice(1).join(' ') || '';
+        const matchedStaff = ourActiveEmployees.find(s => {
+          // Use firstName and lastName from our employee table
+          const staffFirstName = (s.firstName || '').toLowerCase().trim();
+          const staffLastName = (s.lastName || '').toLowerCase().trim();
+          const staffFullName = `${staffFirstName} ${staffLastName}`;
           
           // Exact full name match
-          if (staffName === xeroFullName) return true;
+          if (staffFullName === xeroFullName) return true;
           
           // First name + last name match (handles different ordering)
           if (staffFirstName === xeroFirstName && staffLastName === xeroLastName) return true;
           
-          // First name match when staff has single-word name
-          if (staffParts.length === 1 && staffFirstName === xeroFirstName) return true;
+          // First name only match (for common names like "Josh" vs "Joshua")
+          if (staffFirstName === xeroFirstName) return true;
           
-          // Partial match: staff name contains Xero first name and last name
-          if (staffName.includes(xeroFirstName) && xeroLastName && staffName.includes(xeroLastName)) return true;
+          // Partial first name match (Josh vs Joshua, Dan vs Daniel)
+          if (xeroFirstName.startsWith(staffFirstName) || staffFirstName.startsWith(xeroFirstName)) {
+            if (xeroLastName === staffLastName) return true;
+          }
           
           // Check if Xero email matches staff email (if available)
           if (emp.email && s.email && emp.email.toLowerCase() === s.email.toLowerCase()) return true;
           
           return false;
         });
+        
+        // Only include if matched to an active staff member in our system
+        if (!matchedStaff) continue;
 
         let billableHours = 0;
         if (matchedStaff) {

@@ -3356,7 +3356,7 @@ class DatabaseStorage implements IStorage {
 
   async getActiveEmployees(): Promise<Employee[]> {
     return await db.select().from(schema.employees)
-      .where(eq(schema.employees.status, 'active'))
+      .where(eq(schema.employees.isActive, true))
       .orderBy(schema.employees.firstName, schema.employees.lastName);
   }
 
