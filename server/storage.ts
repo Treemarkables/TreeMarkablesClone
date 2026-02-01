@@ -389,6 +389,19 @@ export interface IStorage {
     roi: number;
   }[]>;
 
+  getQuotePresentationAnalysis(fromDate?: Date, toDate?: Date): Promise<{
+    method: string;
+    label: string;
+    totalQuotes: number;
+    acceptedQuotes: number;
+    rejectedQuotes: number;
+    pendingQuotes: number;
+    conversionRate: number;
+    totalValue: number;
+    acceptedValue: number;
+    averageValue: number;
+  }[]>;
+
   // CSV Import Methods
   importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult>;
   importJobsFromCsv(csvData: any[]): Promise<CsvImportResult>;
@@ -2869,6 +2882,121 @@ class DatabaseStorage implements IStorage {
       return [];
     }
   }
+
+  async getQuotePresentationAnalysis(fromDate?: Date, toDate?: Date): Promise<{
+    method: string;
+    label: string;
+    totalQuotes: number;
+    acceptedQuotes: number;
+    rejectedQuotes: number;
+    pendingQuotes: number;
+    conversionRate: number;
+    totalValue: number;
+    acceptedValue: number;
+    averageValue: number;
+  }[]> {
+    try {
+      // Build date conditions
+      const conditions = [];
+      if (fromDate) {
+        conditions.push(sql`${schema.quotes.createdAt} >= ${fromDate}`);
+      }
+      if (toDate) {
+        conditions.push(sql`${schema.quotes.createdAt} <= ${toDate}`);
+      }
+
+      // Get all quotes with optional date filtering
+      const quotes = await db
+        .select()
+        .from(schema.quotes)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+
+      // Define presentation methods with labels
+      const methodLabels: Record<string, string> = {
+        'on-site': 'On-Site (presented in person)',
+        'sent-later': 'Sent Later (email/text)',
+        'phone': 'Over the Phone',
+        'unspecified': 'Not Specified'
+      };
+
+      // Group quotes by presentation method
+      const methodStats = new Map<string, {
+        totalQuotes: number;
+        acceptedQuotes: number;
+        rejectedQuotes: number;
+        pendingQuotes: number;
+        totalValue: number;
+        acceptedValue: number;
+      }>();
+
+      // Initialize all methods
+      for (const method of Object.keys(methodLabels)) {
+        methodStats.set(method, {
+          totalQuotes: 0,
+          acceptedQuotes: 0,
+          rejectedQuotes: 0,
+          pendingQuotes: 0,
+          totalValue: 0,
+          acceptedValue: 0
+        });
+      }
+
+      // Process each quote
+      for (const quote of quotes) {
+        const method = quote.presentationMethod || 'unspecified';
+        const stats = methodStats.get(method) || {
+          totalQuotes: 0,
+          acceptedQuotes: 0,
+          rejectedQuotes: 0,
+          pendingQuotes: 0,
+          totalValue: 0,
+          acceptedValue: 0
+        };
+
+        stats.totalQuotes++;
+        const amount = parseFloat(quote.amount?.toString() || '0');
+        stats.totalValue += amount;
+
+        if (quote.status === 'accepted') {
+          stats.acceptedQuotes++;
+          stats.acceptedValue += amount;
+        } else if (quote.status === 'rejected') {
+          stats.rejectedQuotes++;
+        } else if (['draft', 'sent', 'viewed'].includes(quote.status)) {
+          stats.pendingQuotes++;
+        }
+
+        methodStats.set(method, stats);
+      }
+
+      // Build result array
+      const result = Array.from(methodStats.entries())
+        .filter(([_, stats]) => stats.totalQuotes > 0) // Only include methods with quotes
+        .map(([method, stats]) => ({
+          method,
+          label: methodLabels[method] || method,
+          totalQuotes: stats.totalQuotes,
+          acceptedQuotes: stats.acceptedQuotes,
+          rejectedQuotes: stats.rejectedQuotes,
+          pendingQuotes: stats.pendingQuotes,
+          conversionRate: stats.totalQuotes > 0 
+            ? Math.round((stats.acceptedQuotes / stats.totalQuotes) * 100 * 100) / 100 
+            : 0,
+          totalValue: Math.round(stats.totalValue * 100) / 100,
+          acceptedValue: Math.round(stats.acceptedValue * 100) / 100,
+          averageValue: stats.totalQuotes > 0 
+            ? Math.round((stats.totalValue / stats.totalQuotes) * 100) / 100 
+            : 0
+        }));
+
+      // Sort by conversion rate descending
+      return result.sort((a, b) => b.conversionRate - a.conversionRate);
+    } catch (error) {
+      console.error('Error in getQuotePresentationAnalysis:', error);
+      return [];
+    }
+  }
+
   async importCustomersFromCsv(csvData: any[]): Promise<CsvImportResult> {
     console.log('🚀 Starting CSV customer import...', { totalRows: csvData.length });
     

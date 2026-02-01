@@ -7079,6 +7079,37 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Quote Presentation Method Conversion Analysis - compares on-site vs sent-later vs phone
+  app.get('/api/quote-presentation-analysis', async (req: Request, res: Response) => {
+    try {
+      const { fromDate, toDate } = req.query;
+      
+      let fromDateObj: Date | undefined;
+      let toDateObj: Date | undefined;
+      
+      if (fromDate && typeof fromDate === 'string') {
+        fromDateObj = new Date(fromDate);
+        if (isNaN(fromDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+      }
+      
+      if (toDate && typeof toDate === 'string') {
+        toDateObj = new Date(toDate);
+        if (isNaN(toDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+        toDateObj.setHours(23, 59, 59, 999);
+      }
+      
+      const presentationAnalysis = await storage.getQuotePresentationAnalysis(fromDateObj, toDateObj);
+      res.json({ success: true, data: presentationAnalysis });
+    } catch (error) {
+      console.error('Error fetching quote presentation analysis:', error);
+      res.status(500).json({ success: false, message: 'Error fetching quote presentation analysis' });
+    }
+  });
+
   // ========================================
   // WORKFLOW AUTOMATION ENDPOINTS
   // ========================================
