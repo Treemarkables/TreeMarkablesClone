@@ -1106,7 +1106,7 @@ export default function MetricsDashboard() {
                   <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
                   <span className="ml-2 text-sm text-gray-500">Analyzing dispatch board...</span>
                 </div>
-              ) : dispatchAI ? (
+              ) : dispatchAI?.summary ? (
                 <div className="space-y-4">
                   {/* Summary Stats */}
                   <div className="grid grid-cols-3 gap-3">
