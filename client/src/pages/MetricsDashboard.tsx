@@ -200,6 +200,7 @@ export default function MetricsDashboard() {
   const [servicePerformanceCollapsed, setServicePerformanceCollapsed] = useState(false);
   const [crewEfficiencyCollapsed, setCrewEfficiencyCollapsed] = useState(false);
   const [staffWorkDaysCollapsed, setStaffWorkDaysCollapsed] = useState(false);
+  const [showAdvancedMetrics, setShowAdvancedMetrics] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [customReportDialog, setCustomReportDialog] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState<string>("");
