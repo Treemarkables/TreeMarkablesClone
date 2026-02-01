@@ -12578,7 +12578,7 @@ Transcription: ${transcriptText}`;
   // Get executive dashboard statistics
   app.get('/api/analytics/dashboard', async (req: Request, res: Response) => {
     try {
-      const jobs = await storage.getAllJobs();
+      const { jobs } = await storage.getAllJobs({ limit: 999999 });
       const customers = await storage.getAllCustomers();
       const quotes = await storage.getAllQuotes();
       const equipment = await storage.getAllEquipment();
@@ -12598,7 +12598,7 @@ Transcription: ${transcriptText}`;
   // Get comprehensive revenue analytics
   app.get('/api/analytics/revenue', async (req: Request, res: Response) => {
     try {
-      const jobs = await storage.getAllJobs();
+      const { jobs } = await storage.getAllJobs({ limit: 999999 });
       const customers = await storage.getAllCustomers();
       const settings = await storage.getBusinessSettings();
       
