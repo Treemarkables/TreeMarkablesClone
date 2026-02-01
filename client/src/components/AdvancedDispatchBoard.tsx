@@ -313,10 +313,22 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     }
   };
 
-  // Calculate job total from line items
-  const calculateJobTotal = (lineItems: any[] | null | undefined): number => {
+  // Calculate job total from job data
+  const calculateJobTotal = (job: any): number => {
+    // First check for stored total values
+    if (job.totalAmount && Number(job.totalAmount) > 0) {
+      return Number(job.totalAmount);
+    }
+    if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) {
+      return Number(job.totalIncludingGst);
+    }
+    if (job.subtotal && Number(job.subtotal) > 0) {
+      return Number(job.subtotal);
+    }
+    // Fallback to calculating from line items
+    const lineItems = job.lineItems;
     if (!lineItems || !Array.isArray(lineItems)) return 0;
-    return lineItems.reduce((sum, item) => {
+    return lineItems.reduce((sum: number, item: any) => {
       const quantity = Number(item.quantity) || 0;
       const unitPrice = Number(item.unitPrice) || 0;
       return sum + (quantity * unitPrice);
@@ -337,7 +349,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
-    const jobTotal = calculateJobTotal(job.lineItems);
+    const jobTotal = calculateJobTotal(job);
     
     // Check if job is scheduled for a different day
     const isScheduledForDifferentDay = job.scheduledDate && !isSameDay(new Date(job.scheduledDate), currentDate);
@@ -408,7 +420,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
     
     const jobTime = new Date(`${format(currentDate, 'yyyy-MM-dd')} ${job.scheduledStartTime}`);
     const slotHour = timeSlot.getHours();
-    const jobTotal = calculateJobTotal(job.lineItems);
+    const jobTotal = calculateJobTotal(job);
     
     // Check if staffMember is assigned to this job (handle both single ID and array)
     const isAssigned = Array.isArray(job.assignedTo) 

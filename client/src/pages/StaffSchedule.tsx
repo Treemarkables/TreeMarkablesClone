@@ -65,10 +65,22 @@ export default function StaffSchedule() {
     return 'No Customer';
   };
 
-  // Calculate job total from line items
-  const calculateJobTotal = (lineItems: any[] | null | undefined): number => {
+  // Calculate job total from job data
+  const calculateJobTotal = (job: any): number => {
+    // First check for stored total values
+    if (job.totalAmount && Number(job.totalAmount) > 0) {
+      return Number(job.totalAmount);
+    }
+    if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) {
+      return Number(job.totalIncludingGst);
+    }
+    if (job.subtotal && Number(job.subtotal) > 0) {
+      return Number(job.subtotal);
+    }
+    // Fallback to calculating from line items
+    const lineItems = job.lineItems;
     if (!lineItems || !Array.isArray(lineItems)) return 0;
-    return lineItems.reduce((sum, item) => {
+    return lineItems.reduce((sum: number, item: any) => {
       const quantity = Number(item.quantity) || 0;
       const unitPrice = Number(item.unitPrice) || 0;
       return sum + (quantity * unitPrice);
@@ -356,8 +368,8 @@ export default function StaffSchedule() {
                             </div>
                             <div className="flex items-center gap-2 text-xs opacity-90">
                               <span>Job #{job.jobNumber}</span>
-                              {calculateJobTotal(job.lineItems) > 0 && (
-                                <span className="font-bold">{formatCurrency(calculateJobTotal(job.lineItems))}</span>
+                              {calculateJobTotal(job) > 0 && (
+                                <span className="font-bold">{formatCurrency(calculateJobTotal(job))}</span>
                               )}
                             </div>
                             {job.address && (
