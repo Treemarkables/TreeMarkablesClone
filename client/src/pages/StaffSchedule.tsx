@@ -183,7 +183,10 @@ export default function StaffSchedule() {
   const filteredEmployees = useMemo(() => {
     return employees.filter(employee => {
       const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-      return !fullName.includes('admin') && fullName !== 'julian halley' && fullName !== 'jullian halley';
+      // Filter out admin users and inactive employees
+      const isAdmin = fullName.includes('admin');
+      const isActive = employee.isActive !== false;
+      return !isAdmin && isActive;
     });
   }, [employees]);
 
