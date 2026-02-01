@@ -1704,12 +1704,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       
                       {/* Job Content */}
                       <div className="flex-1 min-w-0">
-                        {/* Row 1: Customer Name + Job Number */}
+                        {/* Row 1: Customer Name + Job Number + Price */}
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <h3 className="font-bold text-gray-900 text-base truncate flex-1" data-testid={`desktop-job-customer-${job.id}`}>
                             {customerName}
                           </h3>
-                          <span className="text-sm text-gray-400 font-mono flex-shrink-0">#{job.jobNumber || '0000'}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-sm text-gray-400 font-mono">#{job.jobNumber || '0000'}</span>
+                            {total > 0 && (
+                              <span className="text-sm font-bold text-gray-700">{formatCurrency(total)}</span>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Row 2: Location + Status Badge */}
