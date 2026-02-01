@@ -53,6 +53,7 @@ const quoteFormSchema = z.object({
   amount: z.string().min(1, 'Amount is required'),
   validUntil: z.date().optional(),
   status: z.enum(['draft', 'sent', 'viewed', 'accepted', 'rejected', 'expired']),
+  presentationMethod: z.enum(['on-site', 'sent-later', 'phone']).optional(),
   terms: z.string().optional(),
   lineItems: z.array(z.object({
     description: z.string(),
@@ -400,6 +401,29 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                             <SelectItem value="accepted">Accepted</SelectItem>
                             <SelectItem value="rejected">Rejected</SelectItem>
                             <SelectItem value="expired">Expired</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="presentationMethod"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Presentation Method</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-presentation-method">
+                              <SelectValue placeholder="How was this quote presented?" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="on-site">On-Site (presented in person)</SelectItem>
+                            <SelectItem value="sent-later">Sent Later (email/text)</SelectItem>
+                            <SelectItem value="phone">Over the Phone</SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
