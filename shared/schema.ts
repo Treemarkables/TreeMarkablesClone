@@ -321,6 +321,8 @@ export const quotes = pgTable("quotes", {
   lastFollowUpDate: timestamp("last_follow_up_date"),
   nextFollowUpDate: timestamp("next_follow_up_date"),
   followUpNotes: text("follow_up_notes"),
+  // Presentation method tracking for conversion rate analysis
+  presentationMethod: text("presentation_method"), // on-site, sent-later, phone
 });
 
 // Job Management
