@@ -18638,6 +18638,79 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ========================================
+  // TREE MARKERS - JOB SITE MAPPING API
+  // ========================================
+
+  // Get all tree markers for a job
+  app.get("/api/jobs/:id/tree-markers", async (req, res) => {
+    try {
+      const markers = await storage.getTreeMarkersByJob(req.params.id);
+      res.json({ success: true, data: markers });
+    } catch (error) {
+      console.error('Error fetching tree markers:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch tree markers' });
+    }
+  });
+
+  // Create a new tree marker
+  app.post("/api/jobs/:id/tree-markers", async (req, res) => {
+    try {
+      const { latitude, longitude, label, notes, markerType, color } = req.body;
+      
+      if (!latitude || !longitude) {
+        return res.status(400).json({ success: false, message: 'Latitude and longitude are required' });
+      }
+
+      const marker = await storage.createTreeMarker({
+        jobId: req.params.id,
+        latitude: String(latitude),
+        longitude: String(longitude),
+        label: label || null,
+        notes: notes || null,
+        markerType: markerType || 'tree',
+        color: color || '#22c55e'
+      });
+      
+      res.json({ success: true, data: marker });
+    } catch (error) {
+      console.error('Error creating tree marker:', error);
+      res.status(500).json({ success: false, message: 'Failed to create tree marker' });
+    }
+  });
+
+  // Update a tree marker
+  app.patch("/api/tree-markers/:id", async (req, res) => {
+    try {
+      const { latitude, longitude, label, notes, markerType, color } = req.body;
+      const updates: any = {};
+      
+      if (latitude !== undefined) updates.latitude = String(latitude);
+      if (longitude !== undefined) updates.longitude = String(longitude);
+      if (label !== undefined) updates.label = label;
+      if (notes !== undefined) updates.notes = notes;
+      if (markerType !== undefined) updates.markerType = markerType;
+      if (color !== undefined) updates.color = color;
+
+      const marker = await storage.updateTreeMarker(req.params.id, updates);
+      res.json({ success: true, data: marker });
+    } catch (error) {
+      console.error('Error updating tree marker:', error);
+      res.status(500).json({ success: false, message: 'Failed to update tree marker' });
+    }
+  });
+
+  // Delete a tree marker
+  app.delete("/api/tree-markers/:id", async (req, res) => {
+    try {
+      await storage.deleteTreeMarker(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting tree marker:', error);
+      res.status(500).json({ success: false, message: 'Failed to delete tree marker' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
