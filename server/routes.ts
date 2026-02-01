@@ -6217,12 +6217,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
       
       // Add diary entry for time tracking
-      const laborCost = entry.hours * entry.rate;
       await storage.createJobDiaryEntry({
         jobId: id,
         entryType: 'note',
         title: 'Staff Time Added',
-        description: `Time tracking added for ${employeeName}: ${entry.hours} hours @ $${entry.rate}/hr = $${laborCost.toFixed(2)}${entry.date ? ` (Date: ${entry.date})` : ''}`,
+        description: `${employeeName}: ${entry.hours} hours`,
         authorName: 'System',
         authorRole: 'system',
         isPrivate: false,
@@ -6294,7 +6293,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         validatedEntries.map(async (entry) => {
           const employee = await storage.getEmployee(entry.employeeId);
           const name = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
-          return `${name}: ${entry.hours}hrs @ $${entry.rate}/hr`;
+          return `${name}: ${entry.hours} hours`;
         })
       );
       
@@ -6303,7 +6302,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           jobId: id,
           entryType: 'note',
           title: 'Staff Time Updated',
-          description: `Time tracking updated for ${validatedEntries.length} staff member(s):\n${employeeDetails.join('\n')}\nTotal: ${totalHours} hours, $${totalLaborCost.toFixed(2)} labor cost`,
+          description: employeeDetails.join('\n'),
           authorName: 'System',
           authorRole: 'system',
           isPrivate: false,
