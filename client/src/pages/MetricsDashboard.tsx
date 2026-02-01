@@ -22,7 +22,9 @@ import {
   Calculator,
   Loader2,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  Bot,
+  RefreshCw
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -205,6 +207,25 @@ interface StaffWorkDaysData {
     from: string;
     to: string;
   };
+}
+
+interface DispatchAISummary {
+  workOrderCount: number;
+  workOrderValue: number;
+  scheduledCount: number;
+  scheduledValue: number;
+  inProgressCount: number;
+  inProgressValue: number;
+  totalJobs: number;
+  totalValue: number;
+  totalEstimatedHours: number;
+  activeCrewCount: number;
+  estimatedDaysOfWork: number;
+}
+
+interface DispatchAIData {
+  summary: DispatchAISummary;
+  aiInsight: string;
 }
 
 export default function MetricsDashboard() {
@@ -562,6 +583,13 @@ export default function MetricsDashboard() {
     enabled: Boolean(dateRange?.from && dateRange?.to),
     retry: false,
     staleTime: 30000
+  });
+
+  // AI Dispatch Board Analyzer - shows workload and days of work
+  const { data: dispatchAI, isLoading: dispatchAILoading, refetch: refetchDispatchAI } = useQuery<DispatchAIData>({
+    queryKey: ['/api/analytics/dispatch-ai'],
+    staleTime: 60000, // Cache for 1 minute
+    retry: false
   });
 
   // Pre-populate calculator with real analytics data when available (only once)
@@ -1050,6 +1078,94 @@ export default function MetricsDashboard() {
                 View Lead Sources
                 <ChevronDown className="h-4 w-4 ml-auto" />
               </Button>
+            </CardContent>
+          </Card>
+
+          {/* AI Dispatch Insights Section */}
+          <Card className="overflow-hidden border-2 border-purple-200 bg-gradient-to-br from-purple-50 to-white dark:from-purple-950/20 dark:to-background">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-purple-600" />
+                  <CardTitle className="text-base font-semibold">AI Dispatch Insights</CardTitle>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => refetchDispatchAI()}
+                  disabled={dispatchAILoading}
+                  className="h-8 w-8 p-0"
+                >
+                  <RefreshCw className={`h-4 w-4 ${dispatchAILoading ? 'animate-spin' : ''}`} />
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {dispatchAILoading ? (
+                <div className="flex items-center justify-center py-6">
+                  <Loader2 className="h-6 w-6 animate-spin text-purple-600" />
+                  <span className="ml-2 text-sm text-gray-500">Analyzing dispatch board...</span>
+                </div>
+              ) : dispatchAI ? (
+                <div className="space-y-4">
+                  {/* Summary Stats */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-2 bg-orange-50 dark:bg-orange-950/20 rounded-lg">
+                      <p className="text-lg font-bold text-orange-600">{dispatchAI.summary.workOrderCount}</p>
+                      <p className="text-xs text-gray-500">Work Orders</p>
+                      <p className="text-xs font-medium">{formatCurrency(dispatchAI.summary.workOrderValue)}</p>
+                    </div>
+                    <div className="text-center p-2 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
+                      <p className="text-lg font-bold text-blue-600">{dispatchAI.summary.scheduledCount}</p>
+                      <p className="text-xs text-gray-500">Scheduled</p>
+                      <p className="text-xs font-medium">{formatCurrency(dispatchAI.summary.scheduledValue)}</p>
+                    </div>
+                    <div className="text-center p-2 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                      <p className="text-lg font-bold text-green-600">{dispatchAI.summary.inProgressCount}</p>
+                      <p className="text-xs text-gray-500">In Progress</p>
+                      <p className="text-xs font-medium">{formatCurrency(dispatchAI.summary.inProgressValue)}</p>
+                    </div>
+                  </div>
+
+                  {/* Pipeline Summary */}
+                  <div className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-900 rounded-lg">
+                    <div>
+                      <p className="text-sm text-gray-500">Pipeline Value</p>
+                      <p className="text-xl font-bold">{formatCurrency(dispatchAI.summary.totalValue)}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">Days of Work</p>
+                      <p className="text-xl font-bold text-purple-600">{dispatchAI.summary.estimatedDaysOfWork.toFixed(1)} days</p>
+                    </div>
+                  </div>
+
+                  {/* AI Insight */}
+                  <div className="p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg border border-purple-100 dark:border-purple-900">
+                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                      {dispatchAI.aiInsight}
+                    </p>
+                  </div>
+
+                  {/* Hours & Crew Info */}
+                  <div className="flex items-center justify-between text-sm text-gray-500">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      {dispatchAI.summary.totalEstimatedHours.toFixed(1)}h estimated
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Users className="h-3.5 w-3.5" />
+                      {dispatchAI.summary.activeCrewCount} crew members
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-center py-6 text-gray-500">
+                  <p>Unable to load dispatch insights</p>
+                  <Button variant="outline" size="sm" className="mt-2" onClick={() => refetchDispatchAI()}>
+                    Try Again
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
 
