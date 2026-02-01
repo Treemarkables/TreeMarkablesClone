@@ -3159,7 +3159,7 @@ export function GlobalJobCard({
                                         {field.value && (
                                           <div
                                             ref={descriptionTextareaRef}
-                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-3"
+                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
                                             onClick={() => setDescriptionPopupOpen(true)}
                                             data-testid="div-description-display"
                                           >
