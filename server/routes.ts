@@ -6212,6 +6212,22 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       const updatedJob = await storage.addStaffTimeEntry(id, entry);
       
+      // Get employee name for diary entry
+      const employee = await storage.getEmployee(entry.employeeId);
+      const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+      
+      // Add diary entry for time tracking
+      const laborCost = entry.hours * entry.rate;
+      await storage.createJobDiaryEntry({
+        jobId: id,
+        entryType: 'note',
+        title: 'Staff Time Added',
+        description: `Time tracking added for ${employeeName}: ${entry.hours} hours @ $${entry.rate}/hr = $${laborCost.toFixed(2)}${entry.date ? ` (Date: ${entry.date})` : ''}`,
+        authorName: 'System',
+        authorRole: 'system',
+        isPrivate: false,
+      });
+      
       // Automatically update job labor costs from staff time totals
       const staffEntries = await storage.getJobStaffTimeEntries(id);
       const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
@@ -6272,6 +6288,27 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Automatically update job labor costs from staff time totals
       const totalLaborCost = validatedEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
       const totalHours = validatedEntries.reduce((sum, e) => sum + e.hours, 0);
+      
+      // Get employee names and create diary entry for time tracking update
+      const employeeDetails = await Promise.all(
+        validatedEntries.map(async (entry) => {
+          const employee = await storage.getEmployee(entry.employeeId);
+          const name = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+          return `${name}: ${entry.hours}hrs @ $${entry.rate}/hr`;
+        })
+      );
+      
+      if (validatedEntries.length > 0) {
+        await storage.createJobDiaryEntry({
+          jobId: id,
+          entryType: 'note',
+          title: 'Staff Time Updated',
+          description: `Time tracking updated for ${validatedEntries.length} staff member(s):\n${employeeDetails.join('\n')}\nTotal: ${totalHours} hours, $${totalLaborCost.toFixed(2)} labor cost`,
+          authorName: 'System',
+          authorRole: 'system',
+          isPrivate: false,
+        });
+      }
       
       // Update job with computed labor costs
       await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
