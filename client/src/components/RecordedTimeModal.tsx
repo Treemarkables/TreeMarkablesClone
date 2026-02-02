@@ -456,7 +456,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                                   </div>
                                   <div className="text-xs text-gray-500">
                                     {staff.position && `${staff.position} • `}
-                                    {staffRate > 0 ? `$${staffRate.toFixed(2)}/hr` : 'No rate set'}
+                                    {staffRate > 0 ? `$${staffRate.toFixed(2)}/hr pay rate` : 'No pay rate set'}
                                   </div>
                                 </div>
                               </label>
@@ -547,8 +547,14 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         <div className="font-medium text-[10px]">{entry.staffName}</div>
                       </div>
                       <div>
-                        <div className="text-[8px] text-gray-500">Rate</div>
-                        <div className="text-[10px]">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate || 'No rate'}</div>
+                        <div className="text-[8px] text-gray-500">Pay Rate</div>
+                        <div className="text-[10px]">
+                          {(() => {
+                            const staff = employees.find((e: any) => e.id === entry.staffId);
+                            const rate = staff?.hourlyRate ? parseFloat(staff.hourlyRate) : 0;
+                            return rate > 0 ? `$${rate.toFixed(2)}/hr` : 'Not set';
+                          })()}
+                        </div>
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Time</div>
@@ -588,8 +594,14 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         <div className="font-medium text-[10px]">{entry.employeeName}</div>
                       </div>
                       <div>
-                        <div className="text-[8px] text-gray-500">Rate</div>
-                        <div className="text-[10px]">{entry.lineItemName || 'No rate'}</div>
+                        <div className="text-[8px] text-gray-500">Pay Rate</div>
+                        <div className="text-[10px]">
+                          {(() => {
+                            const staff = employees.find((e: any) => e.id === entry.employeeId);
+                            const rate = staff?.hourlyRate ? parseFloat(staff.hourlyRate) : 0;
+                            return rate > 0 ? `$${rate.toFixed(2)}/hr` : 'Not set';
+                          })()}
+                        </div>
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Time</div>
