@@ -2678,15 +2678,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
             }
             
-            // Sync name (from jobContactFirstName + jobContactLastName)
-            if (job.jobContactFirstName || job.jobContactLastName) {
-              const firstName = job.jobContactFirstName?.trim() || '';
-              const lastName = job.jobContactLastName?.trim() || '';
-              const fullName = `${firstName} ${lastName}`.trim();
-              if (fullName) {
-                customerUpdates.name = fullName;
-              }
-            }
+            // NOTE: We do NOT sync job contact name to customer name
+            // This prevents organization names (e.g., "Gisborne District Council") 
+            // from being overwritten by contact person names (e.g., "Sam Frasier")
             
             // Apply updates if any exist
             if (Object.keys(customerUpdates).length > 0) {
@@ -3396,15 +3390,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
             }
             
-            // Sync name (from jobContactFirstName + jobContactLastName)
-            if (job.jobContactFirstName || job.jobContactLastName) {
-              const firstName = job.jobContactFirstName?.trim() || '';
-              const lastName = job.jobContactLastName?.trim() || '';
-              const fullName = `${firstName} ${lastName}`.trim();
-              if (fullName) {
-                customerUpdates.name = fullName;
-              }
-            }
+            // NOTE: We do NOT sync job contact name to customer name
+            // This prevents organization names (e.g., "Gisborne District Council") 
+            // from being overwritten by contact person names (e.g., "Sam Frasier")
             
             // Apply updates if any exist
             if (Object.keys(customerUpdates).length > 0) {
@@ -3547,15 +3535,9 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
               customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
             }
             
-            // Sync name (from jobContactFirstName + jobContactLastName)
-            if (job.jobContactFirstName || job.jobContactLastName) {
-              const firstName = job.jobContactFirstName?.trim() || '';
-              const lastName = job.jobContactLastName?.trim() || '';
-              const fullName = `${firstName} ${lastName}`.trim();
-              if (fullName) {
-                customerUpdates.name = fullName;
-              }
-            }
+            // NOTE: We do NOT sync job contact name to customer name
+            // This prevents organization names (e.g., "Gisborne District Council") 
+            // from being overwritten by contact person names (e.g., "Sam Frasier")
             
             // Apply updates if any exist
             if (Object.keys(customerUpdates).length > 0) {
