@@ -3095,39 +3095,24 @@ export function GlobalJobCard({
                         <FormField
                           control={form.control}
                           name="address"
-                          render={({ field }) => {
-                            const addressParts = (field.value || "").split(", ");
-                            const streetLine = addressParts[0] || "";
-                            const locationLine = addressParts.slice(1).join(", ");
-                            
-                            return (
-                              <FormItem className="mt-1">
-                                <FormControl>
-                                  <div className="space-y-0">
-                                    <AddressAutocomplete 
-                                      value={streetLine}
-                                      onChange={(newStreet) => {
-                                        if (locationLine) {
-                                          field.onChange(`${newStreet}, ${locationLine}`);
-                                        } else {
-                                          field.onChange(newStreet);
-                                        }
-                                      }}
-                                      onAddressSelect={(parsed) => {
-                                        form.setValue('address', parsed.fullAddress);
-                                      }}
-                                      className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
-                                      placeholder="Enter street address..."
-                                      data-testid="input-job-address"
-                                    />
-                                    {locationLine && (
-                                      <div className="text-sm text-gray-500 pl-0">{locationLine}</div>
-                                    )}
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            );
-                          }}
+                          render={({ field }) => (
+                            <FormItem className="mt-1">
+                              <FormControl>
+                                <AddressAutocomplete 
+                                  value={field.value || ""}
+                                  onChange={(newAddress) => {
+                                    field.onChange(newAddress);
+                                  }}
+                                  onAddressSelect={(parsed) => {
+                                    form.setValue('address', parsed.fullAddress);
+                                  }}
+                                  className="h-auto border-0 shadow-none p-0 text-sm text-gray-600 focus-visible:ring-0 bg-transparent" 
+                                  placeholder="Enter or paste full address..."
+                                  data-testid="input-job-address"
+                                />
+                              </FormControl>
+                            </FormItem>
+                          )}
                         />
 
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
@@ -4009,6 +3994,32 @@ export function GlobalJobCard({
                         </div>
                       </div>
 
+                      {/* Billing Name Override */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Users className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-800">Invoice To (Name Override)</h4>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name="billingNameOverride"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  className="h-9 text-base md:text-sm" 
+                                  placeholder="Leave blank to use customer name, or enter override (e.g., Gisborne District Council)"
+                                />
+                              </FormControl>
+                              <p className="text-xs text-gray-500">
+                                Use this when the billing name differs from the customer record (e.g., organization name vs contact name)
+                              </p>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
                       {/* Invoice Description */}
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -4789,7 +4800,8 @@ export function GlobalJobCard({
             email: editingJob.billingContactEmail || editingJob.jobContactEmail || selectedCustomer?.email,
             phone: editingJob.billingContactPhone || editingJob.billingContactMobile || editingJob.jobContactPhone || selectedCustomer?.phone,
             address: editingJob.billingAddress || editingJob.address || selectedCustomer?.address,
-            name: selectedCustomer?.name || `${editingJob.jobContactFirstName || ''} ${editingJob.jobContactLastName || ''}`.trim()
+            // Use billing name override if set, otherwise fall back to customer name
+            name: editingJob.billingNameOverride || selectedCustomer?.name || `${editingJob.jobContactFirstName || ''} ${editingJob.jobContactLastName || ''}`.trim()
           } : selectedCustomer}
           quoteData={emailContext === 'quote' && jobQuoteResponse?.success && jobQuoteResponse.data.length > 0 ? {
             id: jobQuoteResponse.data[0].id,
