@@ -17,6 +17,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
   const viewedRef = useRef(false);
+  const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({});
+
+  const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
+    setSelectedChoices(prev => ({ ...prev, [lineItemId]: choiceId }));
+  };
   
   const handleBackClick = () => {
     // Check if there's a page to go back to in the history
@@ -94,8 +99,10 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
       const actualId = actualProposalResponse?.data?.id || proposalId;
-      console.log('Accepting proposal:', actualId);
-      const response = await apiRequest('POST', `/api/proposals/${actualId}/accept`);
+      console.log('Accepting proposal:', actualId, 'with selected choices:', selectedChoices);
+      const response = await apiRequest('POST', `/api/proposals/${actualId}/accept`, {
+        selectedChoices: Object.keys(selectedChoices).length > 0 ? selectedChoices : undefined
+      });
       return response;
     },
     onSuccess: (response: any) => {
@@ -282,6 +289,9 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             sections={proposal.sections || []}
             showActions={false}
             className="bg-white"
+            allowChoiceSelection={!isAccepted && !isExpired}
+            selectedChoices={selectedChoices}
+            onChoiceSelect={handleChoiceSelect}
           />
         </div>
       </div>

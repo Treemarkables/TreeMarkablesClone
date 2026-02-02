@@ -10,6 +10,11 @@ import { ProposalTemplate } from "@/components/ProposalTemplate";
 export default function ProposalAccept() {
   const { proposalId } = useParams();
   const [acceptanceStatus, setAcceptanceStatus] = useState<'viewing' | 'success'>('viewing');
+  const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({});
+
+  const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
+    setSelectedChoices(prev => ({ ...prev, [lineItemId]: choiceId }));
+  };
   
   // Fetch proposal, customer, and template in one optimized request
   const { data: proposalDataResponse, isLoading: proposalLoading } = useQuery({
@@ -20,7 +25,9 @@ export default function ProposalAccept() {
   // Accept proposal mutation
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`);
+      const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`, {
+        selectedChoices: Object.keys(selectedChoices).length > 0 ? selectedChoices : undefined
+      });
       const data = await response.json();
       return data;
     },
@@ -158,6 +165,9 @@ export default function ProposalAccept() {
                 sections={proposal.sections || []}
                 showActions={false}
                 className="border-0"
+                allowChoiceSelection={proposal?.status !== 'accepted'}
+                selectedChoices={selectedChoices}
+                onChoiceSelect={handleChoiceSelect}
               />
             </CardContent>
           </Card>
@@ -214,6 +224,8 @@ export default function ProposalAccept() {
               sections={proposal.sections || []}
               showActions={false}
               className="border-0"
+              allowChoiceSelection={false}
+              selectedChoices={selectedChoices}
             />
           </CardContent>
         </Card>
