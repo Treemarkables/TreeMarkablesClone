@@ -277,6 +277,9 @@ export function GlobalJobCard({
 
   // Photo capture modal state
   const [isPhotoCaptureOpen, setIsPhotoCaptureOpen] = useState(false);
+  // Pending photos for new jobs (uploaded after job creation)
+  const [pendingPhotos, setPendingPhotos] = useState<File[]>([]);
+  const [pendingPhotoPreviewUrls, setPendingPhotoPreviewUrls] = useState<string[]>([]);
 
   // Speech to quote modal state
   const [isSpeechToQuoteOpen, setIsSpeechToQuoteOpen] = useState(false);
@@ -291,6 +294,81 @@ export function GlobalJobCard({
   useEffect(() => {
     setInternalMode(mode);
   }, [mode]);
+
+  // Clipboard paste handler for screenshots
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      const imageFiles: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            imageFiles.push(file);
+          }
+        }
+      }
+      
+      if (imageFiles.length === 0) return;
+      
+      // Prevent default paste behavior for images
+      e.preventDefault();
+      
+      console.log('📸 Pasted', imageFiles.length, 'image(s) from clipboard');
+      
+      // If we have a job ID, upload directly
+      if (editingJob?.id) {
+        for (const file of imageFiles) {
+          try {
+            const formData = new FormData();
+            formData.append('photo', file);
+            formData.append('authorName', 'User');
+            formData.append('description', 'Pasted from clipboard');
+            
+            const response = await fetch(`/api/jobs/${editingJob.id}/photos`, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (response.ok) {
+              toast({
+                title: "Photo Added",
+                description: "Screenshot uploaded successfully.",
+              });
+              queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary-timeline'] });
+            }
+          } catch (error) {
+            console.error('📸 Failed to upload pasted image:', error);
+          }
+        }
+      } else {
+        // In create mode, queue the photos for later upload
+        const newPreviews: string[] = [];
+        for (const file of imageFiles) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            newPreviews.push(reader.result as string);
+            if (newPreviews.length === imageFiles.length) {
+              setPendingPhotoPreviewUrls(prev => [...prev, ...newPreviews]);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+        setPendingPhotos(prev => [...prev, ...imageFiles]);
+        toast({
+          title: "Photos Queued",
+          description: `${imageFiles.length} screenshot(s) will be uploaded when job is saved.`,
+        });
+      }
+    };
+    
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isOpen, editingJob?.id, queryClient, toast]);
 
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -991,11 +1069,43 @@ export function GlobalJobCard({
       
       // Switch to edit mode after creating the job - stay in modal
       if (newJob?.data?.id) {
-        setCreatedJobId(newJob.data.id);
+        const jobId = newJob.data.id;
+        setCreatedJobId(jobId);
         setInternalMode('edit');
+        
+        // Upload any pending photos that were added before job was saved
+        if (pendingPhotos.length > 0) {
+          console.log('📸 Uploading', pendingPhotos.length, 'pending photos to new job:', jobId);
+          for (const file of pendingPhotos) {
+            try {
+              const formData = new FormData();
+              formData.append('photo', file);
+              formData.append('authorName', 'User');
+              formData.append('description', 'Photo added');
+              
+              const response = await fetch(`/api/jobs/${jobId}/photos`, {
+                method: 'POST',
+                body: formData,
+              });
+              
+              if (!response.ok) {
+                console.error('📸 Failed to upload pending photo:', await response.text());
+              } else {
+                console.log('📸 Uploaded pending photo successfully');
+              }
+            } catch (error) {
+              console.error('📸 Error uploading pending photo:', error);
+            }
+          }
+          // Clear pending photos after upload
+          setPendingPhotos([]);
+          setPendingPhotoPreviewUrls([]);
+        }
+        
         // Invalidate and refetch the specific job data immediately
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', newJob.data.id] });
-        queryClient.refetchQueries({ queryKey: ['/api/jobs', newJob.data.id] });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
+        queryClient.refetchQueries({ queryKey: ['/api/jobs', jobId] });
         // Call parent callback if provided
         onJobCreated?.(newJob);
         // Note: Not closing modal - staying open in edit mode for the newly created job
@@ -2689,7 +2799,7 @@ The Treemarkables Team`;
                     <DollarSign className="w-4 h-4 mr-2" />
                     Profit
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} disabled={!editingJob?.id || mode === 'create'} data-testid="menu-item-camera-mobile">
+                  <DropdownMenuItem onClick={() => setIsPhotoCaptureOpen(true)} data-testid="menu-item-camera-mobile">
                     <Camera className="w-4 h-4 mr-2" />
                     Camera
                   </DropdownMenuItem>
@@ -3073,7 +3183,7 @@ The Treemarkables Team`;
                               type="button"
                               size="sm"
                               variant="outline"
-                              className="flex-1 border-blue-500 text-blue-600 rounded-full"
+                              className="flex-1 border-blue-500 text-blue-600 rounded-full relative"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setIsPhotoCaptureOpen(true);
@@ -3082,6 +3192,11 @@ The Treemarkables Team`;
                             >
                               <Camera className="h-4 w-4 mr-1.5" />
                               Photos
+                              {pendingPhotos.length > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
+                                  {pendingPhotos.length}
+                                </span>
+                              )}
                             </Button>
                           </div>
                         </div>
@@ -5641,14 +5756,16 @@ The Treemarkables Team`;
         />
       )}
 
-      {/* Photo Capture Modal */}
-      {editingJob && (
-        <PhotoCaptureModal
-          isOpen={isPhotoCaptureOpen}
-          onClose={() => setIsPhotoCaptureOpen(false)}
-          jobId={editingJob.id}
-        />
-      )}
+      {/* Photo Capture Modal - supports both create mode (pending photos) and edit mode (direct upload) */}
+      <PhotoCaptureModal
+        isOpen={isPhotoCaptureOpen}
+        onClose={() => setIsPhotoCaptureOpen(false)}
+        jobId={editingJob?.id}
+        onPendingPhotos={(files, previews) => {
+          setPendingPhotos(prev => [...prev, ...files]);
+          setPendingPhotoPreviewUrls(prev => [...prev, ...previews]);
+        }}
+      />
 
       {/* Speech to Quote Modal */}
       <SpeechToQuote

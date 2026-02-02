@@ -11,10 +11,12 @@ import { compressImage } from "@/lib/imageCompression";
 interface PhotoCaptureModalProps {
   isOpen: boolean;
   onClose: () => void;
-  jobId: string;
+  jobId?: string;
+  onPendingPhotos?: (files: File[], previewUrls: string[]) => void;
 }
 
-export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalProps) {
+export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: PhotoCaptureModalProps) {
+  const isPendingMode = !jobId && !!onPendingPhotos;
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
   const { toast } = useToast();
@@ -133,6 +135,18 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
 
   const handleUpload = () => {
     if (selectedFiles.length === 0) return;
+    
+    // If in pending mode (no jobId), pass files back to parent instead of uploading
+    if (isPendingMode && onPendingPhotos) {
+      onPendingPhotos(selectedFiles, previewUrls);
+      toast({
+        title: "Photos Queued",
+        description: `${selectedFiles.length} photo(s) will be uploaded when job is saved.`,
+      });
+      handleClose();
+      return;
+    }
+    
     uploadPhotoMutation.mutate(selectedFiles);
   };
 
@@ -246,7 +260,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId }: PhotoCaptureModalP
                 disabled={uploadPhotoMutation.isPending}
                 data-testid="button-upload-photo"
               >
-                {uploadPhotoMutation.isPending ? "Uploading..." : "Upload Photo"}
+                {uploadPhotoMutation.isPending ? "Uploading..." : isPendingMode ? "Queue Photo" : "Upload Photo"}
               </Button>
             </div>
           )}
