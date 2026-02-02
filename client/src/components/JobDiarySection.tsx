@@ -2144,11 +2144,15 @@ export function JobDiarySection({
                   const startTime = new Date(`${calendarBookingDate}T${calendarBookingTime}:00`);
                   const endTime = new Date(startTime.getTime() + parseInt(calendarBookingDuration) * 60000);
                   
+                  const customerName = jobData?.customerName || 'Customer';
+                  const jobAddress = jobData?.jobAddress || jobData?.address || '';
+                  const customerPhone = jobData?.customerPhone || '';
+                  
                   const response = await apiRequest('POST', '/api/calendar/quick-book', {
                     jobId,
-                    title: calendarBookingTitle,
-                    description: `Job: ${jobId}\nCustomer: ${jobData?.customerName || 'N/A'}\n\nFrom diary entry: ${calendarBookingEntry?.content?.substring(0, 200) || ''}`,
-                    location: jobData?.jobAddress || jobData?.address || '',
+                    title: `${calendarBookingTitle} - ${customerName}`,
+                    description: `Customer: ${customerName}\nAddress: ${jobAddress}\nPhone: ${customerPhone}\n\nJob ID: ${jobId}`,
+                    location: jobAddress,
                     startTime: startTime.toISOString(),
                     endTime: endTime.toISOString(),
                     customerEmail: customerEmail || undefined
