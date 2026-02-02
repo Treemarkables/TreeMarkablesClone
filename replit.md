@@ -40,7 +40,7 @@ This application is a comprehensive business management platform for Treemarkabl
 
 ### Key Features
 - **Job Management**: Job Dashboard, ServiceM8-style Dispatch Board, dynamic checklists, duplicate job prevention, man-hours tracking, server-side deep search, multi-select staff time entry with auto-rate matching.
-- **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote, Twilio voice auto-quote generation, and presentation method tracking for conversion analysis).
+- **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote, Twilio voice auto-quote generation, and presentation method tracking for conversion analysis), Interactive Proposal Option Selection (customers can click to select pricing choices before accepting).
 - **Communication Tracking**: Gmail email reply capture, SMS reply capture, automatic job diary entries for all customer communications.
 - **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, NZ timezone utilities.
 - **Reporting & Analytics**: Business Analytics (lead source tracking, job estimation accuracy, quote presentation conversion rates), Invoice Management, Safety Reporting, Service-level margin tracking, Crew Efficiency (Xero Payroll integration).
