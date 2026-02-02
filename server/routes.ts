@@ -3177,6 +3177,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
       
+      // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
+      const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
+                            'otherCosts', 'grossMargin', 'profitMargin', 'laborHours', 'hourlyRate', 
+                            'estimatedDuration', 'actualDuration'];
+      for (const field of numericFields) {
+        if (processedBody[field] === '' || processedBody[field] === undefined) {
+          processedBody[field] = null;
+        }
+      }
+      
       // Handle new customer creation
       console.log('🔍 NEW CUSTOMER CHECK:', {
         isNewCustomer: processedBody.isNewCustomer,
@@ -3488,6 +3498,16 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
       const processedBody = { ...req.body };
       if (processedBody.customerId === '') {
         processedBody.customerId = null;
+      }
+      
+      // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
+      const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
+                            'otherCosts', 'grossMargin', 'profitMargin', 'laborHours', 'hourlyRate', 
+                            'estimatedDuration', 'actualDuration'];
+      for (const field of numericFields) {
+        if (processedBody[field] === '' || processedBody[field] === undefined) {
+          processedBody[field] = null;
+        }
       }
       
       const validation = insertJobSchema.partial().safeParse(processedBody);
