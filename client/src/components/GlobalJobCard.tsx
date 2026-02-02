@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -2922,10 +2922,64 @@ export function GlobalJobCard({
                         </div>
                       )}
                       
-                      {/* Desktop: Customer Name Display */}
-                      {mode === 'edit' && selectedCustomerName && (
+                      {/* Desktop: Customer Name Display - Clickable to change */}
+                      {mode === 'edit' && (
                         <div className="hidden md:block mb-2">
-                          <h2 className="font-bold text-gray-900 text-xl">{selectedCustomerName}</h2>
+                          <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                className="p-0 h-auto font-bold text-gray-900 text-xl hover:bg-transparent hover:underline"
+                              >
+                                {selectedCustomerName || 'Select Customer'}
+                                <Pencil className="ml-2 h-4 w-4 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start">
+                              <Command>
+                                <CommandInput 
+                                  placeholder="Search customers..." 
+                                  value={customerSearchValue}
+                                  onValueChange={setCustomerSearchValue}
+                                />
+                                <CommandList className="max-h-[300px]">
+                                  <CommandEmpty>No customers found</CommandEmpty>
+                                  <CommandGroup heading="Customers">
+                                    {customers
+                                      .filter(customer => 
+                                        customer.name?.toLowerCase().includes(customerSearchValue.toLowerCase())
+                                      )
+                                      .slice(0, 20)
+                                      .map((customer) => (
+                                        <CommandItem
+                                          key={customer.id}
+                                          value={customer.name}
+                                          onSelect={() => {
+                                            form.setValue('customerId', customer.id);
+                                            setSelectedCustomerName(customer.name);
+                                            setCustomerSearchOpen(false);
+                                            setCustomerSearchValue('');
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              form.watch('customerId') === customer.id ? "opacity-100" : "opacity-0"
+                                            )}
+                                          />
+                                          <div className="flex flex-col">
+                                            <span>{customer.name}</span>
+                                            {customer.address && (
+                                              <span className="text-xs text-gray-500">{customer.address}</span>
+                                            )}
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                  </CommandGroup>
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
                         </div>
                       )}
                       
