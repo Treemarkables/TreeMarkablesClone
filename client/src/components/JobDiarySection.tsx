@@ -1293,7 +1293,10 @@ export function JobDiarySection({
                                 console.log('📅 Book button clicked, opening calendar dialog');
                                 // Extract any mentioned time from the email content
                                 const content = entry.content || '';
-                                const custName = jobData?.customerName || 'Customer';
+                                // Get customer name from job contact fields or customer record
+                                const custName = (jobData?.jobContactFirstName && jobData?.jobContactLastName)
+                                  ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
+                                  : jobData?.jobContactFirstName || jobData?.customerName || 'Customer';
                                 const title = `Quote appointment - ${custName}`;
                                 // Set tomorrow's date as default
                                 const tomorrow = new Date();
@@ -2145,14 +2148,17 @@ export function JobDiarySection({
                   const startTime = new Date(`${calendarBookingDate}T${calendarBookingTime}:00`);
                   const endTime = new Date(startTime.getTime() + parseInt(calendarBookingDuration) * 60000);
                   
-                  const customerName = jobData?.customerName || 'Customer';
+                  // Get customer name from job contact fields or customer record
+                  const customerName = (jobData?.jobContactFirstName && jobData?.jobContactLastName)
+                    ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
+                    : jobData?.jobContactFirstName || jobData?.customerName || 'Customer';
                   const jobAddress = jobData?.jobAddress || jobData?.address || '';
-                  const customerPhone = jobData?.customerPhone || '';
+                  const custPhone = jobData?.billingContactMobile || jobData?.jobContactPhone || jobData?.customerPhone || '';
                   
                   const response = await apiRequest('POST', '/api/calendar/quick-book', {
                     jobId,
                     title: `${calendarBookingTitle} - ${customerName}`,
-                    description: `Customer: ${customerName}\nAddress: ${jobAddress}\nPhone: ${customerPhone}\n\nJob ID: ${jobId}`,
+                    description: `Customer: ${customerName}\nAddress: ${jobAddress}\nPhone: ${custPhone}\n\nJob ID: ${jobId}`,
                     location: jobAddress,
                     startTime: startTime.toISOString(),
                     endTime: endTime.toISOString(),
