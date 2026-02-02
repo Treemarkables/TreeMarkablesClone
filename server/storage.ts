@@ -1714,8 +1714,12 @@ class DatabaseStorage implements IStorage {
     // Get existing entries or initialize empty array
     const existingEntries = (job.staffTimeEntries as any[]) || [];
     
-    // Add the new entry
-    const updatedEntries = [...existingEntries, entry];
+    // Add the new entry with a unique ID
+    const entryWithId = {
+      ...entry,
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    };
+    const updatedEntries = [...existingEntries, entryWithId];
     
     // Update the job with new entries
     const [updatedJob] = await db.update(schema.jobs)

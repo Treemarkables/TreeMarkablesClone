@@ -6190,13 +6190,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const { jobId } = req.params;
       const staffTimeEntries = await storage.getJobStaffTimeEntries(jobId);
       
+      console.log('📊 Fetching time entries for job:', jobId, 'count:', staffTimeEntries.length);
+      
       // Enrich entries with employee names
       const enrichedEntries = await Promise.all(
-        staffTimeEntries.map(async (entry: any) => {
-          const employee = await storage.getEmployee(entry.employeeId);
+        staffTimeEntries.map(async (entry: any, index: number) => {
+          const employee = entry.employeeId ? await storage.getEmployee(entry.employeeId) : null;
+          // Use stored ID if available, otherwise generate a fallback
+          const entryId = entry.id || `legacy-${index}-${entry.employeeId || 'unknown'}-${entry.date || 'nodate'}`;
           return {
             ...entry,
-            id: entry.id || `${entry.employeeId}-${entry.date || 'nodate'}`,
+            id: entryId,
             employeeName: employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff',
             lineItemName: entry.rate ? `$${parseFloat(entry.rate).toFixed(2)}/hr` : ''
           };
@@ -6283,18 +6287,23 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const { entryId } = req.params;
       const { jobId } = req.query;
       
+      console.log('🗑️ Deleting time entry:', { entryId, jobId });
+      
       if (!jobId || typeof jobId !== 'string') {
         return res.status(400).json({ success: false, message: 'jobId is required' });
       }
       
       // Get current entries
       const staffTimeEntries = await storage.getJobStaffTimeEntries(jobId);
+      console.log('📋 Current entries before delete:', staffTimeEntries.length);
       
-      // Filter out the entry to delete
+      // Filter out the entry to delete - match by id field
       const updatedEntries = staffTimeEntries.filter((entry: any) => {
-        const currentId = entry.id || `${entry.employeeId}-${entry.date || 'nodate'}`;
-        return currentId !== entryId;
+        // Use the entry's stored id field
+        return entry.id !== entryId;
       });
+      
+      console.log('📋 Entries after filter:', updatedEntries.length);
       
       // Save back to job
       await storage.updateJobStaffTime(jobId, updatedEntries);
@@ -6303,7 +6312,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const totalLaborCost = updatedEntries.reduce((sum: number, e: any) => sum + (e.hours * e.rate), 0);
       await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
       
-      res.json({ success: true, message: 'Time entry deleted' });
+      res.json({ success: true, message: 'Time entry deleted', remainingCount: updatedEntries.length });
     } catch (error) {
       console.error('Error deleting time entry:', error);
       res.status(500).json({ success: false, message: 'Error deleting time entry' });
