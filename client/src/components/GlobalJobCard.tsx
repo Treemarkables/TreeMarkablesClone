@@ -3758,19 +3758,41 @@ export function GlobalJobCard({
                                 <span className="text-xs text-gray-500 font-medium">Job Price</span>
                                 <div className="flex items-center gap-1">
                                   {(() => {
+                                    // Priority: proposal subtotal > line items > job totalAmount > quote amount
+                                    // Proposal subtotal is already exc GST (before tax), so use directly
+                                    if (jobProposalResponse?.data?.[0]?.subtotal) {
+                                      const subtotal = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                                      return (
+                                        <>
+                                          <span className="text-lg font-semibold text-gray-900">
+                                            ${subtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                                          </span>
+                                          <span className="text-xs text-gray-500">exc GST</span>
+                                        </>
+                                      );
+                                    }
+                                    
+                                    // Calculate from line items (these are typically exc GST unit prices)
                                     const lineItems = form.watch('lineItems') || [];
-                                    let totalIncGst = lineItems.reduce((sum: number, item: any) => sum + (parseFloat(item.total) || 0), 0);
-                                    if (totalIncGst === 0 && editingJob?.totalAmount) {
-                                      totalIncGst = parseFloat(editingJob.totalAmount) || 0;
+                                    let totalExcGst = lineItems.reduce((sum: number, item: any) => {
+                                      const itemTotal = parseFloat(item.total) || 0;
+                                      // If price includes tax, back out the GST
+                                      if (item.priceIncludesTax) {
+                                        return sum + (itemTotal / 1.15);
+                                      }
+                                      return sum + itemTotal;
+                                    }, 0);
+                                    
+                                    // Fallback to job totalAmount (stored as inc GST typically)
+                                    if (totalExcGst === 0 && editingJob?.totalAmount) {
+                                      totalExcGst = (parseFloat(editingJob.totalAmount) || 0) / 1.15;
                                     }
-                                    if (totalIncGst === 0 && jobProposalResponse?.data?.[0]?.subtotal) {
-                                      totalIncGst = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                                    
+                                    // Fallback to quote amount
+                                    if (totalExcGst === 0 && jobQuoteResponse?.data?.[0]?.amount) {
+                                      totalExcGst = (parseFloat(jobQuoteResponse.data[0].amount) || 0) / 1.15;
                                     }
-                                    if (totalIncGst === 0 && jobQuoteResponse?.data?.[0]?.amount) {
-                                      totalIncGst = parseFloat(jobQuoteResponse.data[0].amount) || 0;
-                                    }
-                                    // Calculate exc GST (divide by 1.15 for NZ GST)
-                                    const totalExcGst = totalIncGst / 1.15;
+                                    
                                     return (
                                       <>
                                         <span className="text-lg font-semibold text-gray-900">
