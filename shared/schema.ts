@@ -2170,7 +2170,8 @@ export const invoices = pgTable("invoices", {
   jobId: varchar("job_id").references(() => jobs.id),
   invoiceNumber: text("invoice_number").notNull().unique(),
   jobTitle: text("job_title").notNull(),
-  address: text("address"), // Service address for the invoice
+  address: text("address"), // Billing address for the invoice
+  contactName: text("contact_name"), // Contact person name (e.g., "Sam Frasier" for Gisborne District Council)
   issueDate: timestamp("issue_date").notNull(),
   dueDate: timestamp("due_date").notNull(),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),

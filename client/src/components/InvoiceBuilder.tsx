@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown, Package } from 'lucide-react';
+import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown, Package, User } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { InvoiceTemplate } from '@/components/InvoiceTemplate';
@@ -63,6 +63,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   
   // Editable fields
   const [editableAddress, setEditableAddress] = useState('');
+  const [editableContactName, setEditableContactName] = useState('');
   const [editableEmail, setEditableEmail] = useState('');
   const [editableDescription, setEditableDescription] = useState('');
   const [editableNotes, setEditableNotes] = useState('');
@@ -180,8 +181,13 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       console.log('⚠️ No existing invoices found for this job');
     }
 
-    // Set address and email - use billing address if available, otherwise job address
+    // Set address, contact name, and email - use billing address if available
     setEditableAddress(job.billingAddress || job.address || customer.address || '');
+    // Build contact name from job contact or existing invoice
+    const contactName = job.jobContactFirstName && job.jobContactLastName 
+      ? `${job.jobContactFirstName} ${job.jobContactLastName}`
+      : job.jobContactFirstName || job.jobContactLastName || '';
+    setEditableContactName(existingInvoice?.contactName || contactName);
     setEditableEmail(customer.email || '');
 
     // Get proposals and quotes
@@ -286,6 +292,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setEditableNotes('');
       setEditableDescription('');
       setEditableAddress('');
+      setEditableContactName('');
       setEditableEmail('');
       setInitializedJobId(null);
     }
@@ -476,6 +483,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         invoiceType: 'full',
         customData: {
           address: editableAddress,
+          contactName: editableContactName || undefined,
           dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           notes: editableNotes,
           description: editableDescription,
@@ -587,6 +595,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
       const updateData = {
         address: editableAddress,
+        contactName: editableContactName || undefined,
         items: formattedLineItems,
         amount: subtotal.toString(),
         notes: editableNotes
@@ -885,6 +894,21 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     placeholder="Enter billing address"
                     className="bg-white"
                     data-testid="input-invoice-address"
+                  />
+                </div>
+
+                {/* Contact Name */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <User className="h-4 w-4 text-blue-600" />
+                    Contact Name (optional)
+                  </Label>
+                  <Input
+                    value={editableContactName}
+                    onChange={(e) => setEditableContactName(e.target.value)}
+                    placeholder="e.g., Sam Frasier"
+                    className="bg-white"
+                    data-testid="input-invoice-contact-name"
                   />
                 </div>
 

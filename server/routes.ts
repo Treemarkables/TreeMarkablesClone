@@ -4357,13 +4357,20 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         amount = amount * (parseFloat(customData.percentage) / 100);
       }
 
+      // Build contact name from job if not provided
+      const contactName = customData.contactName || 
+        (job.jobContactFirstName && job.jobContactLastName 
+          ? `${job.jobContactFirstName} ${job.jobContactLastName}`
+          : job.jobContactFirstName || job.jobContactLastName || null);
+
       // Create invoice data with custom or default values
       const invoiceData = {
         customerId: job.customerId!,
         jobId: job.id,
         invoiceNumber,
         jobTitle: job.title || 'Unnamed Job',
-        address: customData.address || job.address || '', // Store the service address
+        address: customData.address || job.billingAddress || job.address || '', // Use billing address first
+        contactName: contactName || null, // Store contact person name
         issueDate,
         dueDate,
         amount: amount.toString(),

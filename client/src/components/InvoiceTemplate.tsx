@@ -38,7 +38,7 @@ interface Invoice {
 
 interface InvoiceTemplateProps {
   template: DocumentTemplate;
-  invoice: Invoice;
+  invoice: Invoice & { contactName?: string };
   customer?: Customer;
   lineItems?: InvoiceLineItem[];
   description?: string;
@@ -46,6 +46,7 @@ interface InvoiceTemplateProps {
   className?: string;
   showActions?: boolean;
   jobAddress?: string;
+  contactName?: string;
   jobNumber?: number;
   onEmail?: () => void;
   onSms?: () => void;
@@ -64,6 +65,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   className = '',
   showActions = false,
   jobAddress,
+  contactName,
   jobNumber,
   onEmail,
   onSms,
@@ -71,6 +73,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   onCopy,
   onAddPayment
 }, ref) => {
+  // Use contact name from prop, invoice, or empty string
+  const displayContactName = contactName || invoice.contactName || '';
   const [isLoading, setIsLoading] = useState(false);
 
   // Calculate totals
@@ -189,6 +193,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               </p>
               {(jobAddress || customer?.address) && (
                 <p className="text-xs text-gray-600 mb-1">{jobAddress || customer.address}</p>
+              )}
+              {displayContactName && (
+                <p className="text-xs text-gray-600 mb-1">
+                  <span className="mr-1">c/o</span>{displayContactName}
+                </p>
               )}
               {customer?.email && (
                 <p className="text-xs text-gray-600">
