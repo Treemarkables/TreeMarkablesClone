@@ -236,6 +236,7 @@ export function GlobalJobCard({
   
   // Equipment addition state
   const [isAddingEquipment, setIsAddingEquipment] = useState(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<Array<{id: string; equipment: string; checked: boolean}>>([]);
   
   // Booking cancellation state
   const [cancelBookingDialogOpen, setCancelBookingDialogOpen] = useState(false);
@@ -1068,10 +1069,11 @@ export function GlobalJobCard({
         throw new Error('Customer is required to create a job');
       }
       
-      // Create the job with the customer ID
+      // Create the job with the customer ID and selected equipment
       const jobData = {
         ...data,
-        customerId: customerId
+        customerId: customerId,
+        equipmentChecklist: selectedEquipment.length > 0 ? selectedEquipment : undefined
       };
       
       const response = await apiRequest('POST', '/api/jobs', jobData);
@@ -1107,6 +1109,7 @@ export function GlobalJobCard({
         const jobId = newJob.data.id;
         setCreatedJobId(jobId);
         setInternalMode('edit');
+        setSelectedEquipment([]); // Reset equipment selection for next create
         
         // Upload any pending photos that were added before job was saved
         if (pendingPhotos.length > 0) {
@@ -3872,8 +3875,8 @@ The Treemarkables Team`;
                           )}
                         </div>
 
-                        {/* ServiceM8-Style Gear List Card */}
-                        {mode === 'edit' && editingJob && allEquipment.length > 0 && (
+                        {/* ServiceM8-Style Gear List Card - show in both create and edit modes */}
+                        {allEquipment.length > 0 && (
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none space-y-3">
                             <div className="flex items-center gap-2">
                               <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
@@ -3892,8 +3895,8 @@ The Treemarkables Team`;
                                 onClick={() => setGearDialogOpen(true)}
                               >
                                 <span className="truncate">
-                                  {editingJob.equipmentChecklist?.length 
-                                    ? `${editingJob.equipmentChecklist.length} selected` 
+                                  {(mode === 'edit' ? editingJob?.equipmentChecklist?.length : selectedEquipment.length)
+                                    ? `${mode === 'edit' ? editingJob?.equipmentChecklist?.length : selectedEquipment.length} selected` 
                                     : "Select gear..."}
                                 </span>
                                 <ChevronDown className="h-3 w-3 ml-1 opacity-50" />
@@ -3907,7 +3910,8 @@ The Treemarkables Team`;
                                   </DialogHeader>
                                   <div className="flex-1 overflow-y-auto space-y-1 py-2">
                                     {allEquipment.map((equip: any) => {
-                                      const isSelected = editingJob.equipmentChecklist?.some(
+                                      const currentChecklist = mode === 'edit' ? (editingJob?.equipmentChecklist || []) : selectedEquipment;
+                                      const isSelected = currentChecklist.some(
                                         (item: any) => item.equipment === equip.name
                                       );
                                       return (
@@ -3915,35 +3919,38 @@ The Treemarkables Team`;
                                           key={equip.id}
                                           className={`flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer active:bg-gray-200 ${isSelected ? 'bg-green-50' : 'hover:bg-gray-50'}`}
                                           onClick={async () => {
-                                            if (!editingJob?.id) return;
-                                            
-                                            const currentChecklist = editingJob.equipmentChecklist || [];
+                                            const currentList = mode === 'edit' ? (editingJob?.equipmentChecklist || []) : selectedEquipment;
                                             
                                             let updatedChecklist;
                                             if (isSelected) {
-                                              updatedChecklist = currentChecklist.filter((i: any) => i.equipment !== equip.name);
+                                              updatedChecklist = currentList.filter((i: any) => i.equipment !== equip.name);
                                             } else {
                                               const newItem = {
                                                 id: `equip-${Date.now()}-${equip.name}`,
                                                 equipment: equip.name,
                                                 checked: false,
                                               };
-                                              updatedChecklist = [...currentChecklist, newItem];
+                                              updatedChecklist = [...currentList, newItem];
                                             }
                                             
-                                            // Optimistic update - update UI immediately
-                                            queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
-                                              if (!oldData) return oldData;
-                                              return {
-                                                ...oldData,
-                                                data: { ...oldData.data, equipmentChecklist: updatedChecklist }
-                                              };
-                                            });
-                                            
-                                            // Background save - don't await
-                                            apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                              equipmentChecklist: updatedChecklist,
-                                            }).catch(error => console.error('Error saving equipment:', error));
+                                            if (mode === 'edit' && editingJob?.id) {
+                                              // Optimistic update - update UI immediately
+                                              queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
+                                                if (!oldData) return oldData;
+                                                return {
+                                                  ...oldData,
+                                                  data: { ...oldData.data, equipmentChecklist: updatedChecklist }
+                                                };
+                                              });
+                                              
+                                              // Background save - don't await
+                                              apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                                equipmentChecklist: updatedChecklist,
+                                              }).catch(error => console.error('Error saving equipment:', error));
+                                            } else {
+                                              // Create mode - just update local state
+                                              setSelectedEquipment(updatedChecklist);
+                                            }
                                           }}
                                         >
                                           <div className={`h-5 w-5 border-2 rounded flex items-center justify-center ${isSelected ? 'bg-green-600 border-green-600' : 'border-gray-300'}`}>
@@ -3959,33 +3966,38 @@ The Treemarkables Team`;
                             </div>
                             
                             {/* Selected equipment as removable tags */}
-                            {editingJob.equipmentChecklist && editingJob.equipmentChecklist.length > 0 && (
+                            {((mode === 'edit' && editingJob?.equipmentChecklist && editingJob.equipmentChecklist.length > 0) || 
+                              (mode === 'create' && selectedEquipment.length > 0)) && (
                               <div className="flex flex-wrap gap-1">
-                                {editingJob.equipmentChecklist.map((item: any) => (
+                                {(mode === 'edit' ? editingJob?.equipmentChecklist || [] : selectedEquipment).map((item: any) => (
                                   <Badge
                                     key={item.id}
                                     variant="secondary"
                                     className="h-6 text-xs bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer flex items-center gap-1"
                                     onClick={() => {
-                                      if (!editingJob?.id) return;
-                                      
-                                      const updatedChecklist = (editingJob.equipmentChecklist || []).filter(
+                                      const currentList = mode === 'edit' ? (editingJob?.equipmentChecklist || []) : selectedEquipment;
+                                      const updatedChecklist = currentList.filter(
                                         (i: any) => i.equipment !== item.equipment
                                       );
                                       
-                                      // Optimistic update - update UI immediately
-                                      queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
-                                        if (!oldData) return oldData;
-                                        return {
-                                          ...oldData,
-                                          data: { ...oldData.data, equipmentChecklist: updatedChecklist }
-                                        };
-                                      });
-                                      
-                                      // Background save - don't await
-                                      apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
-                                        equipmentChecklist: updatedChecklist,
-                                      }).catch(error => console.error('Error removing equipment:', error));
+                                      if (mode === 'edit' && editingJob?.id) {
+                                        // Optimistic update - update UI immediately
+                                        queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
+                                          if (!oldData) return oldData;
+                                          return {
+                                            ...oldData,
+                                            data: { ...oldData.data, equipmentChecklist: updatedChecklist }
+                                          };
+                                        });
+                                        
+                                        // Background save - don't await
+                                        apiRequest('PATCH', `/api/jobs/${editingJob.id}`, {
+                                          equipmentChecklist: updatedChecklist,
+                                        }).catch(error => console.error('Error removing equipment:', error));
+                                      } else {
+                                        // Create mode - just update local state
+                                        setSelectedEquipment(updatedChecklist);
+                                      }
                                     }}
                                   >
                                     {item.equipment}
