@@ -236,11 +236,16 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
   // Delete saved time entry mutation
   const deleteTimeEntryMutation = useMutation({
     mutationFn: async (entryId: string) => {
-      await apiRequest('DELETE', `/api/time-entries/job/${entryId}`);
+      await apiRequest('DELETE', `/api/time-entries/job/${entryId}?jobId=${jobId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       refetchTimeEntries();
+      toast({
+        title: "Success",
+        description: "Time entry deleted",
+      });
     },
     onError: () => {
       toast({

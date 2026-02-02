@@ -6189,7 +6189,21 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     try {
       const { jobId } = req.params;
       const staffTimeEntries = await storage.getJobStaffTimeEntries(jobId);
-      res.json({ success: true, data: staffTimeEntries });
+      
+      // Enrich entries with employee names
+      const enrichedEntries = await Promise.all(
+        staffTimeEntries.map(async (entry: any) => {
+          const employee = await storage.getEmployee(entry.employeeId);
+          return {
+            ...entry,
+            id: entry.id || `${entry.employeeId}-${entry.date || 'nodate'}`,
+            employeeName: employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff',
+            lineItemName: entry.rate ? `$${parseFloat(entry.rate).toFixed(2)}/hr` : ''
+          };
+        })
+      );
+      
+      res.json({ success: true, data: enrichedEntries });
     } catch (error) {
       console.error('Error getting time entries:', error);
       res.status(500).json({ success: false, message: 'Error getting time entries' });
@@ -6267,7 +6281,28 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   app.delete('/api/time-entries/job/:entryId', async (req: Request, res: Response) => {
     try {
       const { entryId } = req.params;
-      await storage.deleteStaffTimeEntry(entryId);
+      const { jobId } = req.query;
+      
+      if (!jobId || typeof jobId !== 'string') {
+        return res.status(400).json({ success: false, message: 'jobId is required' });
+      }
+      
+      // Get current entries
+      const staffTimeEntries = await storage.getJobStaffTimeEntries(jobId);
+      
+      // Filter out the entry to delete
+      const updatedEntries = staffTimeEntries.filter((entry: any) => {
+        const currentId = entry.id || `${entry.employeeId}-${entry.date || 'nodate'}`;
+        return currentId !== entryId;
+      });
+      
+      // Save back to job
+      await storage.updateJobStaffTime(jobId, updatedEntries);
+      
+      // Recalculate labor costs
+      const totalLaborCost = updatedEntries.reduce((sum: number, e: any) => sum + (e.hours * e.rate), 0);
+      await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
+      
       res.json({ success: true, message: 'Time entry deleted' });
     } catch (error) {
       console.error('Error deleting time entry:', error);
