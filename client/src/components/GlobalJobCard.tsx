@@ -3276,7 +3276,7 @@ export function GlobalJobCard({
                                   render={({ field }) => (
                                     <FormItem className="flex-shrink-0">
                                       <FormControl>
-                                        <Select value={field.value || ""} onValueChange={field.onChange}>
+                                        <Select value={field.value ? String(parseFloat(field.value)) : ""} onValueChange={field.onChange}>
                                           <SelectTrigger className="h-7 text-xs w-[120px]">
                                             <SelectValue placeholder="Select hours" />
                                           </SelectTrigger>
@@ -3871,7 +3871,7 @@ export function GlobalJobCard({
                                   render={({ field }) => (
                                     <FormItem className="flex-shrink-0">
                                       <FormControl>
-                                        <Select value={field.value || ""} onValueChange={field.onChange}>
+                                        <Select value={field.value ? String(parseFloat(field.value)) : ""} onValueChange={field.onChange}>
                                           <SelectTrigger className="h-7 text-xs w-[120px]">
                                             <SelectValue placeholder="Select hours" />
                                           </SelectTrigger>
