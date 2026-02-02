@@ -427,6 +427,7 @@ export const jobs = pgTable("jobs", {
   
   // ServiceM8-Style Billing & GST Fields
   billingAddress: text("billing_address"),
+  billingNameOverride: text("billing_name_override"), // Override customer name for invoicing (e.g., "Gisborne District Council" instead of contact name)
   city: text("city"),
   region: text("region"),
   invoiceDescription: text("invoice_description"),

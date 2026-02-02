@@ -74,6 +74,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   
   // ServiceM8 Billing Fields
   billingAddress: z.string().optional(),
+  billingNameOverride: z.string().optional(), // Override customer name for invoicing
   invoiceDescription: z.string().optional(),
   billingContactPhone: z.string().optional(),
   billingContactMobile: z.string().optional(),
@@ -666,6 +667,7 @@ export function GlobalJobCard({
         billingContactPhone: '',
         billingContactMobile: initialData.customerPhone || '', // Put mobile number here
         billingAddress: initialData.address || '',
+        billingNameOverride: '', // Can be set to override customer name for invoicing
         invoiceDescription: initialData.description || '',
         sameAsJobAddress: true,
         taxMode: 'tax_exclusive',
@@ -690,6 +692,7 @@ export function GlobalJobCard({
         billingContactPhone: '',
         billingContactMobile: '',
         billingAddress: '',
+        billingNameOverride: '',
         invoiceDescription: '',
         sameAsJobAddress: true,
         estimatedManHours: '',
@@ -755,6 +758,7 @@ export function GlobalJobCard({
         billingContactPhone: editingJob.billingContactPhone || '',
         billingContactMobile: editingJob.billingContactMobile || '',
         billingAddress: editingJob.billingAddress || '',
+        billingNameOverride: editingJob.billingNameOverride || '',
         invoiceDescription: editingJob.invoiceDescription || '',
         sameAsJobAddress: editingJob.sameAsJobAddress ?? true,
         taxMode: editingJob.taxMode || 'tax_exclusive',
