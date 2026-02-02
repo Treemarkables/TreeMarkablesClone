@@ -6233,20 +6233,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       for (const entry of entries) {
         const hours = typeof entry.hours === 'string' ? parseFloat(entry.hours) : entry.hours;
         const rate = typeof entry.rate === 'string' ? parseFloat(entry.rate) : entry.rate;
+        const employeeId = entry.employeeId || entry.staffId; // Support both field names
 
         if (isNaN(hours) || hours <= 0) continue;
 
         await storage.addStaffTimeEntry(jobId, {
-          employeeId: entry.staffId,
+          employeeId: employeeId,
           hours: hours,
           rate: rate || 0,
           date: entry.date || new Date().toISOString().split('T')[0]
         });
 
-        // Build diary entry line
-        const employee = await storage.getEmployee(entry.staffId);
-        const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
-        diaryLines.push(`${employeeName}: ${hours} hours`);
+        // Build diary entry line - use employeeName from frontend first, then lookup
+        let employeeName = entry.employeeName;
+        if (!employeeName && employeeId) {
+          const employee = await storage.getEmployee(employeeId);
+          employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+        }
+        diaryLines.push(`${employeeName || 'Unknown Staff'}: ${hours} hours`);
       }
 
       // Create diary entry for time tracking if we have entries
