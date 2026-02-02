@@ -851,6 +851,7 @@ export function GlobalJobCard({
     const subscription = form.watch((values, { name }) => {
       // Skip auto-save if we're currently loading data from the server
       if (isLoadingDataRef.current) {
+        console.log('🔄 Auto-save skipped - still loading data');
         return;
       }
       
@@ -858,6 +859,8 @@ export function GlobalJobCard({
       if (!name || !autoSaveFieldsRef.current.has(name)) {
         return;
       }
+      
+      console.log(`📝 Auto-save triggered for field: ${name}, value:`, (values as any)[name]);
       
       // Mark that the user has made a change
       hasUserChangedRef.current = true;
@@ -878,6 +881,12 @@ export function GlobalJobCard({
           setIsAutoSaving(true);
           const formData = form.getValues();
           
+          console.log('💾 Auto-saving job data...', {
+            jobId: editingJob.id,
+            estimatedManHours: formData.estimatedManHours,
+            description: formData.description?.substring(0, 50)
+          });
+          
           // EXCLUDE line items from auto-save to prevent data loss
           // Line items are saved separately via their own mechanisms
           const safeFormData = { ...formData };
@@ -893,13 +902,14 @@ export function GlobalJobCard({
           }
           
           await apiRequest('PUT', `/api/jobs/${editingJob.id}`, safeFormData);
+          console.log('✅ Auto-save completed successfully');
           setLastAutoSaveTime(new Date());
           hasUserChangedRef.current = false;
           
           // Invalidate queries to refresh data across all views (mobile & desktop sync)
           queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         } catch (error) {
-          console.error('Auto-save failed:', error);
+          console.error('❌ Auto-save failed:', error);
           hasUserChangedRef.current = false;
         } finally {
           setIsAutoSaving(false);
