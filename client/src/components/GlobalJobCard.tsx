@@ -3363,7 +3363,21 @@ export function GlobalJobCard({
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Select value={field.value || ""} onValueChange={field.onChange}>
+                                    <Select 
+                                      value={field.value || ""} 
+                                      onValueChange={(value) => {
+                                        field.onChange(value);
+                                        // Auto-save status change for existing jobs
+                                        if (mode === 'edit' && editingJob?.id) {
+                                          const formData = form.getValues();
+                                          updateJobMutation.mutate({
+                                            ...formData,
+                                            id: editingJob.id,
+                                            status: value
+                                          } as GlobalJobCardFormData);
+                                        }
+                                      }}
+                                    >
                                       <SelectTrigger className="h-8 text-xs" data-testid="select-job-status">
                                         <SelectValue placeholder="Select status" />
                                       </SelectTrigger>
