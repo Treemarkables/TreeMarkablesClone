@@ -180,8 +180,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       console.log('⚠️ No existing invoices found for this job');
     }
 
-    // Set address and email
-    setEditableAddress(job.address || customer.address || '');
+    // Set address and email - use billing address if available, otherwise job address
+    setEditableAddress(job.billingAddress || job.address || customer.address || '');
     setEditableEmail(customer.email || '');
 
     // Get proposals and quotes
@@ -873,16 +873,16 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   Invoice Details (Editable)
                 </h3>
 
-                {/* Address */}
+                {/* Billing Address */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <MapPin className="h-4 w-4 text-blue-600" />
-                    Service Address
+                    Billing Address
                   </Label>
                   <Input
                     value={editableAddress}
                     onChange={(e) => setEditableAddress(e.target.value)}
-                    placeholder="Enter service address"
+                    placeholder="Enter billing address"
                     className="bg-white"
                     data-testid="input-invoice-address"
                   />
