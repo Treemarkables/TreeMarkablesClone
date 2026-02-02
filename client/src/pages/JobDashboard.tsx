@@ -223,6 +223,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     queryKey: ['/api/proposals?includeSections=true'],
   });
 
+  // Fetch invoices data to get final pricing (takes priority over quotes/proposals)
+  const { data: invoicesResponse } = useQuery<ApiResponse<any>>({
+    queryKey: ['/api/invoices'],
+  });
+
   // Redirect crew users if they try to access restricted tabs
   useEffect(() => {
     const allowedCrewTabs = ['jobs', 'safety'];
@@ -237,6 +242,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   const customers = customersResponse?.data || [];
   const quotes = quotesResponse?.data || [];
   const proposals = proposalsResponse?.data || [];
+  const invoices = invoicesResponse?.data || [];
 
   // No mock data - use real data only
 
@@ -292,17 +298,24 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     return total;
   };
 
-  // Helper function to get job price from linked quote or proposal
+  // Helper function to get job price - priority: invoice → proposal → quote → job.totalAmount
   const getJobPrice = (job: Job): number => {
-    // First try to get price from linked quote
-    if (job.quoteId) {
-      const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
-      if (linkedQuote?.amount) {
-        return Number(linkedQuote.amount);
+    // FIRST: Check for invoice (final/billed amount takes priority)
+    const jobInvoices = invoices.filter((inv: any) => inv.jobId === job.id);
+    if (jobInvoices.length > 0) {
+      // Sort by creation date and get the most recent
+      const sortedInvoices = jobInvoices.sort((a: any, b: any) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      const latestInvoice = sortedInvoices[0];
+      // Check various amount fields (totalIncludingGst, totalAmount, amount, subtotal)
+      const invoiceAmount = latestInvoice.totalIncludingGst || latestInvoice.totalAmount || latestInvoice.amount || latestInvoice.subtotal;
+      if (invoiceAmount && Number(invoiceAmount) > 0) {
+        return Number(invoiceAmount);
       }
     }
     
-    // Then try to get price from the most recent proposal for this job
+    // SECOND: Check proposals for this job
     const jobProposals = proposals.filter((p: any) => p.jobId === job.id);
     if (jobProposals.length > 0) {
       // Sort by creation date and get the most recent
@@ -316,7 +329,15 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       }
     }
     
-    // Fall back to job.totalAmount if no quote or proposal is linked
+    // THIRD: Check linked quote
+    if (job.quoteId) {
+      const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
+      if (linkedQuote?.amount) {
+        return Number(linkedQuote.amount);
+      }
+    }
+    
+    // FOURTH: Fall back to job.totalAmount
     return job.totalAmount ? Number(job.totalAmount) : 0;
   };
 
