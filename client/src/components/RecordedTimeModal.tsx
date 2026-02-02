@@ -97,7 +97,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     refetchOnWindowFocus: false,
   });
 
-  const employees = (employeesData as any)?.data || [];
+  const employees = ((employeesData as any)?.data || []).filter((emp: any) => emp.isActive !== false);
   const materialsAndServices = (materialsServicesData as any)?.data || [];
   const existingEntries = (timeEntriesData as any)?.data || [];
 
