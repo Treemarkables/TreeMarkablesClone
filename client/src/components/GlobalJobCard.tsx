@@ -4944,6 +4944,78 @@ The Treemarkables Team`;
                             </div>
                           </div>
                         </div>
+
+                        {/* Sent Invoices Section */}
+                        {editingJob && (
+                          <div className="mt-6 border-t border-gray-200 pt-6">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Receipt className="w-4 h-4 text-blue-600" />
+                              <h4 className="font-medium text-gray-800">Sent Invoices</h4>
+                            </div>
+                            
+                            {(() => {
+                              const invoices = (jobInvoiceResponse as any)?.data || [];
+                              const sentInvoices = invoices.filter((inv: any) => inv.status === 'sent' || inv.xeroInvoiceId);
+                              
+                              if (sentInvoices.length === 0) {
+                                return (
+                                  <div className="text-center py-4 text-gray-500 bg-gray-50 rounded-lg">
+                                    <Receipt className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                                    <p className="text-sm">No invoices sent yet</p>
+                                  </div>
+                                );
+                              }
+                              
+                              return (
+                                <div className="space-y-2">
+                                  {sentInvoices.map((invoice: any) => (
+                                    <div 
+                                      key={invoice.id}
+                                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-3">
+                                        <div className={`w-2 h-2 rounded-full ${
+                                          invoice.status === 'paid' ? 'bg-green-500' :
+                                          invoice.status === 'sent' ? 'bg-blue-500' :
+                                          invoice.xeroInvoiceId ? 'bg-purple-500' :
+                                          'bg-gray-400'
+                                        }`} />
+                                        <div>
+                                          <p className="font-medium text-sm text-gray-900">
+                                            Invoice #{invoice.invoiceNumber || invoice.xeroInvoiceNumber || 'N/A'}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            {invoice.xeroInvoiceNumber ? `Xero: ${invoice.xeroInvoiceNumber}` : ''}
+                                            {invoice.sentAt ? ` • Sent ${format(new Date(invoice.sentAt), 'dd/MM/yyyy')}` : ''}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <p className="font-semibold text-sm text-gray-900">
+                                          ${parseFloat(invoice.totalAmount || invoice.amount || '0').toFixed(2)}
+                                        </p>
+                                        <Badge 
+                                          variant="outline" 
+                                          className={`text-xs ${
+                                            invoice.status === 'paid' ? 'border-green-500 text-green-600' :
+                                            invoice.status === 'sent' ? 'border-blue-500 text-blue-600' :
+                                            invoice.xeroInvoiceId ? 'border-purple-500 text-purple-600' :
+                                            'border-gray-400 text-gray-600'
+                                          }`}
+                                        >
+                                          {invoice.status === 'paid' ? 'Paid' :
+                                           invoice.xeroInvoiceId ? 'In Xero' :
+                                           invoice.status === 'sent' ? 'Sent' : 
+                                           invoice.status || 'Draft'}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                     </div>
                   )}
 
