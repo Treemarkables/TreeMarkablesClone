@@ -1684,6 +1684,100 @@ class DatabaseStorage implements IStorage {
     return { deleted, failed, errors };
   }
 
+  // ========================================
+  // STAFF TIME TRACKING METHODS
+  // ========================================
+  
+  async getJobStaffTimeEntries(jobId: string): Promise<Array<{
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }>> {
+    const job = await this.getJob(jobId);
+    if (!job || !job.staffTimeEntries) return [];
+    
+    // staffTimeEntries is stored as JSON in the jobs table
+    const entries = job.staffTimeEntries as any[];
+    return entries || [];
+  }
+  
+  async addStaffTimeEntry(jobId: string, entry: {
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }): Promise<Job> {
+    const job = await this.getJob(jobId);
+    if (!job) throw new Error('Job not found');
+    
+    // Get existing entries or initialize empty array
+    const existingEntries = (job.staffTimeEntries as any[]) || [];
+    
+    // Add the new entry
+    const updatedEntries = [...existingEntries, entry];
+    
+    // Update the job with new entries
+    const [updatedJob] = await db.update(schema.jobs)
+      .set({ 
+        staffTimeEntries: updatedEntries,
+        updatedAt: new Date()
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    
+    return updatedJob;
+  }
+  
+  async updateJobStaffTime(jobId: string, staffTimeEntries: Array<{
+    employeeId: string;
+    hours: number;
+    rate: number;
+    date?: string;
+  }>): Promise<Job> {
+    const job = await this.getJob(jobId);
+    if (!job) throw new Error('Job not found');
+    
+    // Replace all entries with the new array
+    const [updatedJob] = await db.update(schema.jobs)
+      .set({ 
+        staffTimeEntries: staffTimeEntries,
+        updatedAt: new Date()
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    
+    return updatedJob;
+  }
+  
+  async removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job> {
+    const job = await this.getJob(jobId);
+    if (!job) throw new Error('Job not found');
+    
+    const existingEntries = (job.staffTimeEntries as any[]) || [];
+    
+    // Filter out the matching entry
+    const updatedEntries = existingEntries.filter((entry: any) => {
+      if (date) {
+        // If date provided, match both employeeId and date
+        return !(entry.employeeId === employeeId && entry.date === date);
+      } else {
+        // Otherwise just match employeeId
+        return entry.employeeId !== employeeId;
+      }
+    });
+    
+    const [updatedJob] = await db.update(schema.jobs)
+      .set({ 
+        staffTimeEntries: updatedEntries,
+        updatedAt: new Date()
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    
+    return updatedJob;
+  }
+
   async createJobFromCall(params: {
     callId: string;
     customerName: string;
