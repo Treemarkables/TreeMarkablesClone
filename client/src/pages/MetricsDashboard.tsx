@@ -616,11 +616,12 @@ export default function MetricsDashboard() {
   });
 
   // AI Dispatch Board Analyzer - shows workload and days of work
-  const { data: dispatchAI, isLoading: dispatchAILoading, refetch: refetchDispatchAI } = useQuery<DispatchAIData>({
+  const { data: dispatchAIResponse, isLoading: dispatchAILoading, refetch: refetchDispatchAI } = useQuery<{ success: boolean; data: DispatchAIData }>({
     queryKey: ['/api/analytics/dispatch-ai'],
     staleTime: 60000, // Cache for 1 minute
     retry: false
   });
+  const dispatchAI = dispatchAIResponse?.data;
 
   // Pre-populate calculator with real analytics data when available (only once)
   useEffect(() => {
