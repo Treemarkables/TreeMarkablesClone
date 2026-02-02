@@ -14032,6 +14032,80 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // PROPOSAL MANAGEMENT ROUTES
   // ========================================
 
+  // Get accepted proposals for drill-down analytics
+  app.get('/api/proposals-accepted', async (req: Request, res: Response) => {
+    try {
+      const { from, to } = req.query;
+      
+      // Parse dates as NZ timezone
+      let fromDate: Date | undefined;
+      let toDate: Date | undefined;
+      
+      if (from && typeof from === 'string') {
+        fromDate = fromZonedTime(`${from}T00:00:00`, 'Pacific/Auckland');
+      }
+      if (to && typeof to === 'string') {
+        toDate = fromZonedTime(`${to}T23:59:59.999`, 'Pacific/Auckland');
+      }
+      
+      // Get all proposals and filter to accepted ones
+      const allProposals = await storage.getAllProposals();
+      const acceptedProposals = allProposals.filter(p => p.status === 'accepted');
+      
+      // Filter by date range if provided (using accepted_at or sent_date)
+      let filteredProposals = acceptedProposals;
+      if (fromDate || toDate) {
+        filteredProposals = acceptedProposals.filter(p => {
+          const acceptedDate = p.acceptedAt ? new Date(p.acceptedAt) : (p.sentDate ? new Date(p.sentDate) : null);
+          if (!acceptedDate) return false;
+          if (fromDate && acceptedDate < fromDate) return false;
+          if (toDate && acceptedDate > toDate) return false;
+          return true;
+        });
+      }
+      
+      // Fetch job and customer info for each proposal
+      const enrichedProposals = await Promise.all(
+        filteredProposals.map(async (proposal) => {
+          let jobNumber: string | undefined;
+          let customerName: string | undefined;
+          let title: string | undefined;
+          
+          if (proposal.jobId) {
+            const job = await storage.getJobById(proposal.jobId);
+            if (job) {
+              jobNumber = job.jobNumber?.toString();
+              title = job.title || undefined;
+              if (job.customerId) {
+                const customer = await storage.getCustomerById(job.customerId);
+                customerName = customer?.name || undefined;
+              }
+            }
+          } else if (proposal.customerId) {
+            const customer = await storage.getCustomerById(proposal.customerId);
+            customerName = customer?.name || undefined;
+          }
+          
+          return {
+            id: proposal.id,
+            jobId: proposal.jobId,
+            jobNumber,
+            customerName,
+            amount: proposal.totalAmount,
+            sentDate: proposal.sentDate,
+            acceptedDate: proposal.acceptedAt,
+            title
+          };
+        })
+      );
+      
+      res.json({ success: true, data: enrichedProposals });
+    } catch (error) {
+      console.error('Error fetching accepted proposals:', error);
+      res.status(500).json({ success: false, message: 'Error fetching accepted proposals' });
+    }
+  });
+
   // Get all proposals
   app.get('/api/proposals', async (req: Request, res: Response) => {
     try {

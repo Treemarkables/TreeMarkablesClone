@@ -260,6 +260,10 @@ export default function MetricsDashboard() {
   const [quoteBreakdownOpen, setQuoteBreakdownOpen] = useState(false);
   const [avgJobValueBreakdownOpen, setAvgJobValueBreakdownOpen] = useState(false);
   
+  // Drill-down modal state for Jobs Completed and Accepted Quotes
+  const [jobsCompletedDrilldownOpen, setJobsCompletedDrilldownOpen] = useState(false);
+  const [acceptedQuotesDrilldownOpen, setAcceptedQuotesDrilldownOpen] = useState(false);
+  
   const { toast } = useToast();
 
   // Format currency helper
@@ -430,7 +434,29 @@ export default function MetricsDashboard() {
       if (dateRange?.to) params.append('to', dateRange.to);
       return fetch(`/api/revenue-breakdown?${params}`).then(res => res.json()).then(res => res.data);
     },
-    enabled: revenueBreakdownOpen
+    enabled: revenueBreakdownOpen || jobsCompletedDrilldownOpen
+  });
+
+  // Accepted quotes query - fetches list of accepted proposals for drilldown
+  interface AcceptedQuote {
+    id: string;
+    jobId: string;
+    jobNumber?: string;
+    customerName?: string;
+    amount?: string;
+    sentDate?: string;
+    acceptedDate?: string;
+    title?: string;
+  }
+  const { data: acceptedQuotesData, isLoading: acceptedQuotesLoading } = useQuery<AcceptedQuote[]>({
+    queryKey: ['/api/proposals-accepted', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('from', dateRange.from);
+      if (dateRange?.to) params.append('to', dateRange.to);
+      return fetch(`/api/proposals-accepted?${params}`).then(res => res.json()).then(res => res.data || []);
+    },
+    enabled: acceptedQuotesDrilldownOpen
   });
 
   const { data: quoteAnalytics, isLoading: quotesLoading } = useQuery<QuoteAnalytics>({
@@ -715,7 +741,8 @@ export default function MetricsDashboard() {
     icon: Icon, 
     testId,
     colorful = false,
-    valueColor = ""
+    valueColor = "",
+    onClick
   }: {
     title: string;
     value: string | number;
@@ -724,16 +751,21 @@ export default function MetricsDashboard() {
     testId: string;
     colorful?: boolean;
     valueColor?: string;
+    onClick?: () => void;
   }) => (
-    <Card className={`hover-elevate ${colorful ? 'card-colorful' : ''}`} data-testid={testId}>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+    <Card 
+      className={`hover-elevate ${colorful ? 'card-colorful' : ''} ${onClick ? 'cursor-pointer' : ''}`} 
+      data-testid={testId}
+      onClick={onClick}
+    >
+      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             className="h-7 w-7 p-0"
-            onClick={() => handleCustomReport(title)}
+            onClick={(e) => { e.stopPropagation(); handleCustomReport(title); }}
             data-testid={`button-report-${testId}`}
           >
             <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
@@ -1425,6 +1457,7 @@ export default function MetricsDashboard() {
                 subtitle="Completed in period"
                 icon={Briefcase}
                 testId="card-jobs-completed"
+                onClick={() => setJobsCompletedDrilldownOpen(true)}
               />
 
               <MetricCard
@@ -1442,6 +1475,7 @@ export default function MetricsDashboard() {
                 icon={CheckCircle}
                 testId="card-accepted-quotes"
                 valueColor="text-green-600"
+                onClick={() => setAcceptedQuotesDrilldownOpen(true)}
               />
             </div>
           </div>
@@ -2872,6 +2906,167 @@ export default function MetricsDashboard() {
               Only jobs with non-cancelled invoices are included in this calculation
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Jobs Completed Drill-Down Modal */}
+      <Dialog open={jobsCompletedDrilldownOpen} onOpenChange={setJobsCompletedDrilldownOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-primary" />
+              Jobs Completed
+            </DialogTitle>
+            <DialogDescription>
+              All jobs completed in the selected date range
+            </DialogDescription>
+          </DialogHeader>
+          
+          {breakdownLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex justify-between items-center">
+                <span className="font-medium text-blue-800">Total Jobs Completed</span>
+                <span className="text-2xl font-bold text-blue-700">
+                  {revenueBreakdown?.breakdown?.length || 0}
+                </span>
+              </div>
+              
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left py-3 px-4 font-medium text-sm">Job #</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm">Customer</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm hidden md:table-cell">Title</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm hidden md:table-cell">Completed</th>
+                      <th className="text-right py-3 px-4 font-medium text-sm">Invoice</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {revenueBreakdown?.breakdown?.map((job) => (
+                      <tr 
+                        key={job.jobId} 
+                        className="border-t hover:bg-muted/30 cursor-pointer"
+                        onClick={() => {
+                          setJobsCompletedDrilldownOpen(false);
+                          window.location.href = `/jobs?jobId=${job.jobId}`;
+                        }}
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-primary">{job.jobNumber}</td>
+                        <td className="py-3 px-4 text-sm">{job.customerName}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
+                          {job.title || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell">
+                          {job.completedDate ? new Date(job.completedDate).toLocaleDateString('en-NZ') : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-green-600">
+                          {formatCurrency(job.invoiceAmount || 0)}
+                        </td>
+                      </tr>
+                    ))}
+                    {(!revenueBreakdown?.breakdown || revenueBreakdown.breakdown.length === 0) && (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                          No completed jobs in this date range
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="text-sm text-muted-foreground text-center">
+                Click a row to open the job
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Accepted Quotes Drill-Down Modal */}
+      <Dialog open={acceptedQuotesDrilldownOpen} onOpenChange={setAcceptedQuotesDrilldownOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              Accepted Quotes
+            </DialogTitle>
+            <DialogDescription>
+              All quotes accepted in the selected date range
+            </DialogDescription>
+          </DialogHeader>
+          
+          {acceptedQuotesLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex justify-between items-center">
+                <span className="font-medium text-green-800">Total Accepted Quotes</span>
+                <span className="text-2xl font-bold text-green-700">
+                  {acceptedQuotesData?.length || 0}
+                </span>
+              </div>
+              
+              <div className="border rounded-lg overflow-hidden">
+                <table className="w-full">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left py-3 px-4 font-medium text-sm">Job #</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm">Customer</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm hidden md:table-cell">Title</th>
+                      <th className="text-left py-3 px-4 font-medium text-sm hidden md:table-cell">Accepted</th>
+                      <th className="text-right py-3 px-4 font-medium text-sm">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {acceptedQuotesData?.map((quote) => (
+                      <tr 
+                        key={quote.id} 
+                        className="border-t hover:bg-muted/30 cursor-pointer"
+                        onClick={() => {
+                          setAcceptedQuotesDrilldownOpen(false);
+                          if (quote.jobId) {
+                            window.location.href = `/jobs?jobId=${quote.jobId}`;
+                          }
+                        }}
+                      >
+                        <td className="py-3 px-4 text-sm font-medium text-primary">{quote.jobNumber || '-'}</td>
+                        <td className="py-3 px-4 text-sm">{quote.customerName || '-'}</td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell truncate max-w-[200px]">
+                          {quote.title || '-'}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell">
+                          {quote.acceptedDate ? new Date(quote.acceptedDate).toLocaleDateString('en-NZ') : 
+                           quote.sentDate ? new Date(quote.sentDate).toLocaleDateString('en-NZ') : '-'}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-right font-medium text-green-600">
+                          {formatCurrency(parseFloat(quote.amount || '0'))}
+                        </td>
+                      </tr>
+                    ))}
+                    {(!acceptedQuotesData || acceptedQuotesData.length === 0) && (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-muted-foreground">
+                          No accepted quotes in this date range
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              
+              <div className="text-sm text-muted-foreground text-center">
+                Click a row to open the job
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
