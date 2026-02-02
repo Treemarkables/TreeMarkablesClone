@@ -295,87 +295,13 @@ export function GlobalJobCard({
     setInternalMode(mode);
   }, [mode]);
 
-  // Clipboard paste handler for screenshots
-  useEffect(() => {
-    if (!isOpen) return;
-    
-    const handlePaste = async (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      
-      const imageFiles: File[] = [];
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
-            imageFiles.push(file);
-          }
-        }
-      }
-      
-      if (imageFiles.length === 0) return;
-      
-      // Prevent default paste behavior for images
-      e.preventDefault();
-      
-      console.log('📸 Pasted', imageFiles.length, 'image(s) from clipboard');
-      
-      // If we have a job ID, upload directly
-      if (editingJob?.id) {
-        for (const file of imageFiles) {
-          try {
-            const formData = new FormData();
-            formData.append('photo', file);
-            formData.append('authorName', 'User');
-            formData.append('description', 'Pasted from clipboard');
-            
-            const response = await fetch(`/api/jobs/${editingJob.id}/photos`, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            if (response.ok) {
-              toast({
-                title: "Photo Added",
-                description: "Screenshot uploaded successfully.",
-              });
-              queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary-timeline'] });
-            }
-          } catch (error) {
-            console.error('📸 Failed to upload pasted image:', error);
-          }
-        }
-      } else {
-        // In create mode, queue the photos for later upload
-        const newPreviews: string[] = [];
-        for (const file of imageFiles) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            newPreviews.push(reader.result as string);
-            if (newPreviews.length === imageFiles.length) {
-              setPendingPhotoPreviewUrls(prev => [...prev, ...newPreviews]);
-            }
-          };
-          reader.readAsDataURL(file);
-        }
-        setPendingPhotos(prev => [...prev, ...imageFiles]);
-        toast({
-          title: "Photos Queued",
-          description: `${imageFiles.length} screenshot(s) will be uploaded when job is saved.`,
-        });
-      }
-    };
-    
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, [isOpen, editingJob?.id, queryClient, toast]);
-
   // Auto-save state
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastAutoSaveTime, setLastAutoSaveTime] = useState<Date | null>(null);
   const isLoadingDataRef = useRef(false);
   const hasUserChangedRef = useRef(false);
   const lastLoadedJobIdRef = useRef<string | null>(null); // Track which job was loaded to prevent isDirty blocking initial load
+  const currentJobIdRef = useRef<string | null>(null); // For clipboard paste handler
   
   // Description textarea auto-resize ref
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -676,6 +602,88 @@ export function GlobalJobCard({
       }
     }
   }, [editingJob?.id]);
+
+  // Keep ref updated with current job ID for clipboard paste handler
+  useEffect(() => {
+    currentJobIdRef.current = editingJob?.id || null;
+  }, [editingJob?.id]);
+
+  // Clipboard paste handler for screenshots
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const handlePaste = async (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      const imageFiles: File[] = [];
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          const file = item.getAsFile();
+          if (file) {
+            imageFiles.push(file);
+          }
+        }
+      }
+      
+      if (imageFiles.length === 0) return;
+      
+      // Prevent default paste behavior for images
+      e.preventDefault();
+      
+      console.log('📸 Pasted', imageFiles.length, 'image(s) from clipboard');
+      
+      const currentJobId = currentJobIdRef.current;
+      
+      // If we have a job ID, upload directly
+      if (currentJobId) {
+        for (const file of imageFiles) {
+          try {
+            const formData = new FormData();
+            formData.append('photo', file);
+            formData.append('authorName', 'User');
+            formData.append('description', 'Pasted from clipboard');
+            
+            const response = await fetch(`/api/jobs/${currentJobId}/photos`, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            if (response.ok) {
+              toast({
+                title: "Photo Added",
+                description: "Screenshot uploaded successfully.",
+              });
+              queryClient.invalidateQueries({ queryKey: ['/api/jobs', currentJobId, 'diary-timeline'] });
+            }
+          } catch (error) {
+            console.error('📸 Failed to upload pasted image:', error);
+          }
+        }
+      } else {
+        // In create mode, queue the photos for later upload
+        const newPreviews: string[] = [];
+        for (const file of imageFiles) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            newPreviews.push(reader.result as string);
+            if (newPreviews.length === imageFiles.length) {
+              setPendingPhotoPreviewUrls(prev => [...prev, ...newPreviews]);
+            }
+          };
+          reader.readAsDataURL(file);
+        }
+        setPendingPhotos(prev => [...prev, ...imageFiles]);
+        toast({
+          title: "Photos Queued",
+          description: `${imageFiles.length} screenshot(s) will be uploaded when job is saved.`,
+        });
+      }
+    };
+    
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isOpen, queryClient, toast]);
 
   // Listen for reply email events from diary
   useEffect(() => {
