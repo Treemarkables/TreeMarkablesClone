@@ -225,12 +225,13 @@ export function GlobalJobCard({
   // Quote presentation method local state (for immediate UI update)
   const [localQuoteMethod, setLocalQuoteMethod] = useState<string>('');
   
-  // Initialize localQuoteMethod from editingJob when it loads
+  // Initialize localQuoteMethod from editingJob when it loads (only on job ID change)
   useEffect(() => {
-    if (editingJob && (editingJob as any).quotePresentationMethod) {
-      setLocalQuoteMethod((editingJob as any).quotePresentationMethod);
+    if (editingJob) {
+      const jobQuoteMethod = (editingJob as any).quotePresentationMethod || '';
+      setLocalQuoteMethod(jobQuoteMethod);
     }
-  }, [editingJob?.id, (editingJob as any)?.quotePresentationMethod]);
+  }, [editingJob?.id]); // Only reset when job ID changes, not on every refetch
   
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
@@ -3511,16 +3512,38 @@ export function GlobalJobCard({
                               <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Quote Method</label>
                               <Select 
                                 value={localQuoteMethod || ""} 
-                                onValueChange={(value) => {
+                                onValueChange={async (value) => {
                                   // Update local state immediately for UI
                                   setLocalQuoteMethod(value);
                                   
                                   if (editingJob?.id) {
-                                    // Background save
-                                    apiRequest('PATCH', `/api/jobs/${editingJob.id}`, { 
-                                      quotePresentationMethod: value,
-                                      quotePresentedDate: new Date().toISOString()
-                                    }).catch(error => console.error('Error saving quote method:', error));
+                                    try {
+                                      // Save to server
+                                      const response = await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, { 
+                                        quotePresentationMethod: value,
+                                        quotePresentedDate: new Date().toISOString()
+                                      });
+                                      const data = await response.json();
+                                      if (data.success) {
+                                        console.log('✅ Quote method saved:', value);
+                                        // Invalidate job cache to ensure data is fresh
+                                        queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+                                      } else {
+                                        console.error('Failed to save quote method:', data.message);
+                                        toast({
+                                          title: "Error",
+                                          description: "Failed to save quote method",
+                                          variant: "destructive"
+                                        });
+                                      }
+                                    } catch (error) {
+                                      console.error('Error saving quote method:', error);
+                                      toast({
+                                        title: "Error",
+                                        description: "Failed to save quote method",
+                                        variant: "destructive"
+                                      });
+                                    }
                                   }
                                 }}
                               >
