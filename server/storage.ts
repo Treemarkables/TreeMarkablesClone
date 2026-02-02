@@ -2151,6 +2151,19 @@ class DatabaseStorage implements IStorage {
   async removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job> { throw new Error("Not implemented"); }
   async calculateLaborCostFromStaffTime(jobId: string): Promise<number> { return 0; }
   async getJobStaffTimeEntries(jobId: string): Promise<any[]> { return []; }
+  async clearJobStaffTimeEntries(jobId: string): Promise<void> {
+    // Clear all staff time entries for a job
+    const job = await this.getJob(jobId);
+    if (job) {
+      await db.update(schema.jobs)
+        .set({ staffTimeEntries: [] })
+        .where(eq(schema.jobs.id, jobId));
+    }
+  }
+  async deleteStaffTimeEntry(entryId: string): Promise<void> {
+    // Delete a specific time entry - this is a no-op in the current schema since entries are stored in job JSON
+    console.log('deleteStaffTimeEntry called for:', entryId);
+  }
   
   async sendJobToXero(jobId: string, xeroInvoiceId: string): Promise<Job> {
     const [updatedJob] = await db.update(schema.jobs)
