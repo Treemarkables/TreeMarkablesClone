@@ -184,10 +184,17 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       const staff = employees.find((e: any) => e.id === staffId);
       const staffFirstName = staff?.firstName || '';
       
-      // Find matching labour rate by staff first name (case-insensitive)
-      const matchingRate = availableRates.find((r: any) => 
-        r.name.toLowerCase().trim() === staffFirstName.toLowerCase().trim()
-      );
+      // Find matching labour rate by staff first name (case-insensitive, flexible matching)
+      // Matches if: rate name equals first name, or rate name starts with first name, or rate name contains first name
+      const firstName = staffFirstName.toLowerCase().trim();
+      const matchingRate = availableRates.find((r: any) => {
+        const rateName = r.name.toLowerCase().trim();
+        return rateName === firstName || 
+               rateName.startsWith(firstName + ' ') || 
+               rateName.startsWith(firstName + '_') ||
+               rateName.includes(' ' + firstName) ||
+               rateName.split(' ')[0] === firstName;
+      });
       
       if (!matchingRate) {
         staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
