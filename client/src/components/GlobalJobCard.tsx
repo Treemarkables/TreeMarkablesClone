@@ -4799,9 +4799,8 @@ export function GlobalJobCard({
                             setIsQuoteModalOpen(true);
                           }}
                           onInvoiceClick={(invoiceNumber) => {
-                            // Open email composer with invoice context to send the invoice
-                            setEmailContext('invoice');
-                            setIsEmailComposerOpen(true);
+                            // Open InvoiceBuilder to view/send the invoice
+                            setIsInvoiceModalOpen(true);
                           }}
                           onProposalClick={(proposalNumber) => {
                             // Find the proposal by number and open the viewer
@@ -4833,9 +4832,8 @@ export function GlobalJobCard({
                           setIsQuoteModalOpen(true);
                         }}
                         onInvoiceClick={(invoiceNumber) => {
-                          // Open email composer with invoice context to send the invoice
-                          setEmailContext('invoice');
-                          setIsEmailComposerOpen(true);
+                            // Open InvoiceBuilder to view/send the invoice
+                            setIsInvoiceModalOpen(true);
                         }}
                         onProposalClick={(proposalNumber) => {
                           // Find the proposal by number
