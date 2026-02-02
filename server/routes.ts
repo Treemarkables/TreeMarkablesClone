@@ -1579,6 +1579,148 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
     }
   });
 
+  // POST /api/leads/extract-from-message - Extract lead details from pasted text message using AI
+  app.post('/api/leads/extract-from-message', async (req: Request, res: Response) => {
+    try {
+      const { message, phone } = req.body;
+      
+      if (!message) {
+        return res.status(400).json({
+          success: false,
+          message: 'Message text is required'
+        });
+      }
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const extractionResponse = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert at extracting customer information from text messages for a tree removal/arborist company in New Zealand.
+            
+Extract the following information from the message:
+- name: The customer's name (first name and/or last name)
+- phone: Phone number if mentioned (format as +64 XXX XXX XXXX if NZ number)
+- address: Full street address in New Zealand
+- description: Any details about the tree work needed or other job-related information
+
+Look for:
+- Names after "Thank you," or similar greetings
+- Addresses indicated by pin emoji 📍 or "at" or street names
+- NZ phone numbers (start with 02, 03, 04, 06, 07, 09, or +64)
+- Tree/garden work descriptions
+
+Return JSON format: { "name": string, "phone": string, "address": string, "description": string }
+If a field cannot be determined, use an empty string.`
+          },
+          {
+            role: "user",
+            content: message
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 1024,
+      });
+
+      const extracted = JSON.parse(extractionResponse.choices[0].message.content || '{}');
+      
+      // Use provided phone if not found in message
+      if (!extracted.phone && phone) {
+        extracted.phone = phone;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          name: extracted.name || '',
+          phone: extracted.phone || '',
+          address: extracted.address || '',
+          description: extracted.description || '',
+          rawMessage: message
+        }
+      });
+    } catch (error) {
+      console.error('Error extracting from message:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to extract details from message'
+      });
+    }
+  });
+
+  // POST /api/leads/extract-from-screenshot - Extract lead details from SMS screenshot using AI vision
+  app.post('/api/leads/extract-from-screenshot', async (req: Request, res: Response) => {
+    try {
+      const { image } = req.body;
+      
+      if (!image) {
+        return res.status(400).json({
+          success: false,
+          message: 'Screenshot image is required'
+        });
+      }
+
+      // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+      const visionResponse = await openai.chat.completions.create({
+        model: "gpt-5",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Analyze this screenshot of an SMS/text message conversation from an iPhone or Android phone. This is for a tree removal/arborist company in New Zealand.
+
+Extract the following information:
+1. Phone number - Look at the TOP of the screen where the contact info is shown (usually shows the phone number like "+64 21 231 8338")
+2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings
+3. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
+4. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
+
+Return your response as JSON in this exact format:
+{
+  "name": "customer name or empty string",
+  "phone": "phone number from top of screen or empty string",
+  "address": "full street address or empty string", 
+  "description": "any job details mentioned or empty string"
+}
+
+Important: The phone number is typically shown at the very TOP of the iPhone Messages screen as the contact identifier.`
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:image/jpeg;base64,${image}`
+                }
+              }
+            ],
+          },
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 1024,
+      });
+
+      const extracted = JSON.parse(visionResponse.choices[0].message.content || '{}');
+
+      res.json({
+        success: true,
+        data: {
+          name: extracted.name || '',
+          phone: extracted.phone || '',
+          address: extracted.address || '',
+          description: extracted.description || ''
+        }
+      });
+    } catch (error) {
+      console.error('Error extracting from screenshot:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to extract details from screenshot'
+      });
+    }
+  });
+
   app.get('/api/leads', async (req: Request, res: Response) => {
     try {
       const { from, to } = req.query;

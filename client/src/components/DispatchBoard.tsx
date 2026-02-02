@@ -53,6 +53,7 @@ import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { CustomerAvatar } from '@/components/CustomerAvatar';
 import { AddressAutocomplete } from '@/components/AddressAutocomplete';
+import { CreateLeadFromMessageDialog } from '@/components/CreateLeadFromMessageDialog';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -487,6 +488,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     assignedTo: '' // Will hold teamId or staffId based on mode
   });
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
+  const [showCreateFromMessageDialog, setShowCreateFromMessageDialog] = useState(false);
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [jobToSchedule, setJobToSchedule] = useState<JobAssignment | null>(null);
   const [schedulingData, setSchedulingData] = useState({
@@ -1603,6 +1605,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   <Plus className="h-4 w-4 mr-1" />
                   New Job
                 </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowCreateFromMessageDialog(true)}
+                  data-testid="paste-message-button"
+                  className="h-7"
+                >
+                  <MessageSquare className="h-4 w-4 mr-1" />
+                  Paste Message
+                </Button>
               </div>
               
               {/* Search Input - Desktop */}
@@ -1875,6 +1887,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           >
             Job
           </Button>
+          <span className="text-white/60">·</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowCreateFromMessageDialog(true)}
+            data-testid="paste-message-button-mobile"
+            className="text-white hover:bg-white/20 text-sm font-medium"
+          >
+            <MessageSquare className="h-4 w-4 mr-1" />
+            Paste
+          </Button>
         </div>
         
         {/* Search Bar */}
@@ -2118,6 +2141,28 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }}
       />
     </div>
+
+    {/* Create Lead from Message Dialog */}
+    <CreateLeadFromMessageDialog
+      open={showCreateFromMessageDialog}
+      onOpenChange={setShowCreateFromMessageDialog}
+      onLeadCreated={(data) => {
+        setShowCreateFromMessageDialog(false);
+        setInitialJobData({
+          customerName: data.name,
+          customerPhone: data.phone,
+          address: data.address,
+          description: data.description,
+          leadSource: 'sms'
+        });
+        setGlobalJobCardMode('create');
+        setShowGlobalJobCard(true);
+        toast({
+          title: 'Lead Data Ready',
+          description: 'Customer details have been loaded into the job card',
+        });
+      }}
+    />
   </>
   );
 }
