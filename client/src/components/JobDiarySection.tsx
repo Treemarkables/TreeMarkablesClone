@@ -2148,7 +2148,7 @@ export function JobDiarySection({
                     jobId,
                     title: calendarBookingTitle,
                     description: `Job: ${jobId}\nCustomer: ${jobData?.customerName || 'N/A'}\n\nFrom diary entry: ${calendarBookingEntry?.content?.substring(0, 200) || ''}`,
-                    location: address || '',
+                    location: jobData?.jobAddress || jobData?.address || '',
                     startTime: startTime.toISOString(),
                     endTime: endTime.toISOString(),
                     customerEmail: customerEmail || undefined
