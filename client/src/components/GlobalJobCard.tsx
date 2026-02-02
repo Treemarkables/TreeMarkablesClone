@@ -613,25 +613,47 @@ export function GlobalJobCard({
     if (!isOpen) return;
     
     const handlePaste = async (e: ClipboardEvent) => {
+      console.log('📸 Paste event detected in GlobalJobCard');
+      
       const items = e.clipboardData?.items;
-      if (!items) return;
+      const files = e.clipboardData?.files;
+      
+      console.log('📸 Clipboard items:', items?.length, 'files:', files?.length);
       
       const imageFiles: File[] = [];
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          const file = item.getAsFile();
-          if (file) {
+      
+      // Try items first (more reliable for screenshots)
+      if (items) {
+        for (const item of Array.from(items)) {
+          console.log('📸 Item type:', item.type, 'kind:', item.kind);
+          if (item.type.startsWith('image/')) {
+            const file = item.getAsFile();
+            if (file) {
+              imageFiles.push(file);
+            }
+          }
+        }
+      }
+      
+      // Fallback to files array
+      if (imageFiles.length === 0 && files) {
+        for (const file of Array.from(files)) {
+          console.log('📸 File type:', file.type);
+          if (file.type.startsWith('image/')) {
             imageFiles.push(file);
           }
         }
       }
       
-      if (imageFiles.length === 0) return;
+      if (imageFiles.length === 0) {
+        console.log('📸 No images found in clipboard');
+        return;
+      }
       
       // Prevent default paste behavior for images
       e.preventDefault();
       
-      console.log('📸 Pasted', imageFiles.length, 'image(s) from clipboard');
+      console.log('📸 Found', imageFiles.length, 'image(s) to upload');
       
       const currentJobId = currentJobIdRef.current;
       
@@ -681,8 +703,13 @@ export function GlobalJobCard({
       }
     };
     
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
+    // Use capture phase to get events before they might be stopped
+    document.addEventListener('paste', handlePaste, { capture: true });
+    console.log('📸 Paste handler attached (isOpen:', isOpen, ')');
+    return () => {
+      document.removeEventListener('paste', handlePaste, { capture: true });
+      console.log('📸 Paste handler removed');
+    };
   }, [isOpen, queryClient, toast]);
 
   // Listen for reply email events from diary
