@@ -1289,6 +1289,7 @@ export function JobDiarySection({
                               className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
                               onClick={(e) => {
                                 e.stopPropagation();
+                                console.log('📅 Book button clicked, opening calendar dialog');
                                 // Extract any mentioned time from the email content
                                 const content = entry.content || '';
                                 const title = `Quote appointment - ${customerName || 'Customer'}`;
@@ -1297,12 +1298,14 @@ export function JobDiarySection({
                                 tomorrow.setDate(tomorrow.getDate() + 1);
                                 const dateStr = tomorrow.toISOString().split('T')[0];
                                 
+                                console.log('📅 Setting calendar booking state:', { title, dateStr });
                                 setCalendarBookingEntry(entry);
                                 setCalendarBookingTitle(title);
                                 setCalendarBookingDate(dateStr);
                                 setCalendarBookingTime('08:00');
                                 setCalendarBookingDuration('60');
                                 setCalendarBookingOpen(true);
+                                console.log('📅 Calendar dialog should now be open');
                               }}
                               data-testid={`button-calendar-book-${entry.id}`}
                             >
