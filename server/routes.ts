@@ -6164,6 +6164,97 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // STAFF TIME TRACKING API ROUTES
   // ========================================
 
+  // Get time entries for a job (used by RecordedTimeModal)
+  app.get('/api/time-entries/:jobId', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const staffTimeEntries = await storage.getJobStaffTimeEntries(jobId);
+      res.json({ success: true, data: staffTimeEntries });
+    } catch (error) {
+      console.error('Error getting time entries:', error);
+      res.status(500).json({ success: false, message: 'Error getting time entries' });
+    }
+  });
+
+  // Save time entries for a job (used by RecordedTimeModal)
+  app.post('/api/time-entries/:jobId', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { entries, rounding, travelTime, additionalCosts, expenseItems } = req.body;
+
+      if (!Array.isArray(entries)) {
+        return res.status(400).json({ success: false, message: 'entries must be an array' });
+      }
+
+      // Clear existing entries and add new ones
+      await storage.clearJobStaffTimeEntries(jobId);
+
+      const diaryLines: string[] = [];
+
+      for (const entry of entries) {
+        const hours = typeof entry.hours === 'string' ? parseFloat(entry.hours) : entry.hours;
+        const rate = typeof entry.rate === 'string' ? parseFloat(entry.rate) : entry.rate;
+
+        if (isNaN(hours) || hours <= 0) continue;
+
+        await storage.addStaffTimeEntry(jobId, {
+          employeeId: entry.staffId,
+          hours: hours,
+          rate: rate || 0,
+          date: entry.date || new Date().toISOString().split('T')[0]
+        });
+
+        // Build diary entry line
+        const employee = await storage.getEmployee(entry.staffId);
+        const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
+        diaryLines.push(`${employeeName}: ${hours} hours`);
+      }
+
+      // Create diary entry for time tracking if we have entries
+      if (diaryLines.length > 0) {
+        await storage.createJobDiaryEntry({
+          jobId: jobId,
+          entryType: 'note',
+          title: 'Staff Time Recorded',
+          description: diaryLines.join('\n'),
+          authorName: 'System',
+          authorRole: 'system',
+          isPrivate: false,
+        });
+      }
+
+      // Update job expenses if additional costs provided
+      if (additionalCosts && additionalCosts > 0) {
+        await storage.updateJobExpenses(jobId, { additionalCosts: additionalCosts });
+      }
+
+      // Calculate and update labor costs
+      const staffEntries = await storage.getJobStaffTimeEntries(jobId);
+      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
+
+      // Recalculate gross margin
+      const finalJob = await storage.calculateAndUpdateGrossMargin(jobId);
+
+      res.json({ success: true, data: finalJob });
+    } catch (error) {
+      console.error('Error saving time entries:', error);
+      res.status(500).json({ success: false, message: 'Error saving time entries' });
+    }
+  });
+
+  // Delete time entry (used by RecordedTimeModal)
+  app.delete('/api/time-entries/job/:entryId', async (req: Request, res: Response) => {
+    try {
+      const { entryId } = req.params;
+      await storage.deleteStaffTimeEntry(entryId);
+      res.json({ success: true, message: 'Time entry deleted' });
+    } catch (error) {
+      console.error('Error deleting time entry:', error);
+      res.status(500).json({ success: false, message: 'Error deleting time entry' });
+    }
+  });
+
   // Get staff time entries for a job
   app.get('/api/jobs/:id/staff-time', async (req: Request, res: Response) => {
     try {
