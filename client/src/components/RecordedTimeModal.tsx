@@ -179,23 +179,25 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     // Track staff without rates
     const staffWithoutRates: string[] = [];
 
-    // Create one pending entry for each selected staff member with auto-matched rate
+    // Staff to item number mapping
+    const staffItemNumbers: Record<string, string> = {
+      'dan': '1',
+      'kalsey': '4',
+      'jack': '5',
+      'josh': '3',
+      'jullian': '14',
+      'julian': '14',
+    };
+
+    // Create one pending entry for each selected staff member with mapped rate
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map(staffId => {
       const staff = employees.find((e: any) => e.id === staffId);
-      const staffFirstName = staff?.firstName || '';
+      const staffFirstName = (staff?.firstName || '').toLowerCase().trim();
       
-      // Find matching labour rate by staff first name (case-insensitive, flexible matching)
-      const firstName = staffFirstName.toLowerCase().trim();
-      const matchingRate = availableRates.find((r: any) => {
-        const rateName = r.name.toLowerCase().trim();
-        return rateName === firstName || 
-               rateName.startsWith(firstName + ' ') || 
-               rateName.startsWith(firstName + '_') ||
-               rateName.includes(' ' + firstName) ||
-               rateName.split(' ')[0] === firstName;
-      });
+      // Look up the item number for this staff member
+      const itemNumber = staffItemNumbers[staffFirstName] || '';
       
-      if (!matchingRate) {
+      if (!itemNumber) {
         staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
       }
       
@@ -204,7 +206,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         date: new Date().toLocaleDateString('en-GB'),
         staffId: staffId,
         staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
-        rate: matchingRate?.itemNumber || '',
+        rate: itemNumber,
         start: '',
         duration: parseFloat(newEntry.duration),
         billed: true
@@ -470,7 +472,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               
               <div className="bg-blue-100 border border-blue-200 rounded p-2">
                 <p className="text-xs text-blue-800">
-                  <strong>Auto-Rate Matching:</strong> Each staff member will be automatically matched to a labour rate by their first name. Create rates in Settings → Materials/Services.
+                  <strong>Auto-Rate Matching:</strong> Staff are matched to billing rates: Dan→1, Josh→3, Kalsey→4, Jack→5, Jullian→14
                 </p>
               </div>
               
