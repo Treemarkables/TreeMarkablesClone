@@ -216,7 +216,7 @@ export function JobDiarySection({
   const [calendarBookingEntry, setCalendarBookingEntry] = useState<DiaryEntry | null>(null);
   const [calendarBookingDate, setCalendarBookingDate] = useState<string>('');
   const [calendarBookingTime, setCalendarBookingTime] = useState<string>('08:00');
-  const [calendarBookingDuration, setCalendarBookingDuration] = useState<string>('60');
+  const [calendarBookingDuration, setCalendarBookingDuration] = useState<string>('30');
   const [calendarBookingTitle, setCalendarBookingTitle] = useState<string>('');
   const [replySubject, setReplySubject] = useState<string>("");
   const [selectedEmailTemplate, setSelectedEmailTemplate] = useState<string>("none");
@@ -1304,7 +1304,7 @@ export function JobDiarySection({
                                 setCalendarBookingTitle(title);
                                 setCalendarBookingDate(dateStr);
                                 setCalendarBookingTime('08:00');
-                                setCalendarBookingDuration('60');
+                                setCalendarBookingDuration('30');
                                 setCalendarBookingOpen(true);
                                 console.log('📅 Calendar dialog should now be open');
                               }}
@@ -2148,7 +2148,7 @@ export function JobDiarySection({
                     jobId,
                     title: calendarBookingTitle,
                     description: `Job: ${jobId}\nCustomer: ${jobData?.customerName || 'N/A'}\n\nFrom diary entry: ${calendarBookingEntry?.content?.substring(0, 200) || ''}`,
-                    location: jobAddress || '',
+                    location: address || '',
                     startTime: startTime.toISOString(),
                     endTime: endTime.toISOString(),
                     customerEmail: customerEmail || undefined
