@@ -2929,9 +2929,52 @@ The Treemarkables Team`;
 
                             {/* Row 1: Customer Name + Status Badge (Mobile) */}
                             <div className="flex items-start justify-between gap-2">
-                              <h2 className="font-bold text-gray-900 text-xl">
-                                {selectedCustomerName}
-                              </h2>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button className="font-bold text-gray-900 text-xl text-left flex items-center gap-1 hover:text-blue-600 transition-colors">
+                                    {selectedCustomerName}
+                                    <Pencil className="h-3.5 w-3.5 opacity-50" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[280px] p-0" align="start">
+                                  <Command>
+                                    <CommandInput 
+                                      placeholder="Search customers..." 
+                                      value={customerSearchValue}
+                                      onValueChange={setCustomerSearchValue}
+                                    />
+                                    <CommandList className="max-h-[250px]">
+                                      <CommandEmpty>No customers found</CommandEmpty>
+                                      <CommandGroup heading="Customers">
+                                        {customers
+                                          .filter(customer => 
+                                            customer.name?.toLowerCase().includes(customerSearchValue.toLowerCase())
+                                          )
+                                          .slice(0, 15)
+                                          .map((customer) => (
+                                            <CommandItem
+                                              key={customer.id}
+                                              value={customer.name}
+                                              onSelect={() => {
+                                                form.setValue('customerId', customer.id);
+                                                setSelectedCustomerName(customer.name);
+                                                setCustomerSearchValue('');
+                                              }}
+                                            >
+                                              <Check
+                                                className={cn(
+                                                  "mr-2 h-4 w-4",
+                                                  form.watch('customerId') === customer.id ? "opacity-100" : "opacity-0"
+                                                )}
+                                              />
+                                              <span className="truncate">{customer.name}</span>
+                                            </CommandItem>
+                                          ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
                               <Badge 
                                 variant="outline" 
                                 className={`text-xs whitespace-nowrap flex-shrink-0 ${
