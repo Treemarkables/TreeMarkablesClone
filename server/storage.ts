@@ -2916,30 +2916,36 @@ class DatabaseStorage implements IStorage {
     averageValue: number;
   }[]> {
     try {
-      // Build date conditions
+      // Build date conditions for JOBS table (using job's quotePresentationMethod)
       const conditions = [];
       if (fromDate) {
-        conditions.push(sql`${schema.quotes.createdAt} >= ${fromDate}`);
+        conditions.push(sql`${schema.jobs.createdAt} >= ${fromDate}`);
       }
       if (toDate) {
-        conditions.push(sql`${schema.quotes.createdAt} <= ${toDate}`);
+        conditions.push(sql`${schema.jobs.createdAt} <= ${toDate}`);
       }
+      // Only include jobs that have had a quote (not leads or archived)
+      conditions.push(sql`${schema.jobs.status} NOT IN ('lead', 'archived')`);
 
-      // Get all quotes with optional date filtering
-      const quotes = await db
+      // Get all jobs with optional date filtering
+      const jobs = await db
         .select()
-        .from(schema.quotes)
+        .from(schema.jobs)
         .where(conditions.length > 0 ? and(...conditions) : undefined);
 
-      // Define presentation methods with labels
+      // Define presentation methods with labels (matching job card dropdown values)
       const methodLabels: Record<string, string> = {
-        'on-site': 'On-Site (presented in person)',
-        'sent-later': 'Sent Later (email/text)',
-        'phone': 'Over the Phone',
+        'on_site': 'On-Site (presented in person)',
+        'sent_later': 'Sent Later (email/text)',
         'unspecified': 'Not Specified'
       };
 
-      // Group quotes by presentation method
+      // Status definitions for conversion tracking
+      const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+      const rejectedStatuses = ['unsuccessful'];
+      const pendingStatuses = ['quote'];
+
+      // Group jobs by presentation method
       const methodStats = new Map<string, {
         totalQuotes: number;
         acceptedQuotes: number;
@@ -2961,37 +2967,30 @@ class DatabaseStorage implements IStorage {
         });
       }
 
-      // Process each quote
-      for (const quote of quotes) {
-        const method = quote.presentationMethod || 'unspecified';
-        const stats = methodStats.get(method) || {
-          totalQuotes: 0,
-          acceptedQuotes: 0,
-          rejectedQuotes: 0,
-          pendingQuotes: 0,
-          totalValue: 0,
-          acceptedValue: 0
-        };
+      // Process each job
+      for (const job of jobs) {
+        const method = job.quotePresentationMethod || 'unspecified';
+        const stats = methodStats.get(method) || methodStats.get('unspecified')!;
 
         stats.totalQuotes++;
-        const amount = parseFloat(quote.amount?.toString() || '0');
+        const amount = parseFloat(job.totalAmount?.toString() || '0');
         stats.totalValue += amount;
 
-        if (quote.status === 'accepted') {
+        if (acceptedStatuses.includes(job.status || '')) {
           stats.acceptedQuotes++;
           stats.acceptedValue += amount;
-        } else if (quote.status === 'rejected') {
+        } else if (rejectedStatuses.includes(job.status || '')) {
           stats.rejectedQuotes++;
-        } else if (['draft', 'sent', 'viewed'].includes(quote.status)) {
+        } else if (pendingStatuses.includes(job.status || '')) {
           stats.pendingQuotes++;
         }
 
-        methodStats.set(method, stats);
+        methodStats.set(method === 'unspecified' ? 'unspecified' : method, stats);
       }
 
       // Build result array
       const result = Array.from(methodStats.entries())
-        .filter(([_, stats]) => stats.totalQuotes > 0) // Only include methods with quotes
+        .filter(([_, stats]) => stats.totalQuotes > 0) // Only include methods with jobs
         .map(([method, stats]) => ({
           method,
           label: methodLabels[method] || method,
