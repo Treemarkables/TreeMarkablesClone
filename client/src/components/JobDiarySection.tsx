@@ -47,7 +47,8 @@ import {
   Eye,
   EyeOff,
   MousePointerClick,
-  Reply
+  Reply,
+  CalendarPlus
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -209,6 +210,14 @@ export function JobDiarySection({
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
+  
+  // Calendar booking state
+  const [calendarBookingOpen, setCalendarBookingOpen] = useState(false);
+  const [calendarBookingEntry, setCalendarBookingEntry] = useState<DiaryEntry | null>(null);
+  const [calendarBookingDate, setCalendarBookingDate] = useState<string>('');
+  const [calendarBookingTime, setCalendarBookingTime] = useState<string>('08:00');
+  const [calendarBookingDuration, setCalendarBookingDuration] = useState<string>('60');
+  const [calendarBookingTitle, setCalendarBookingTitle] = useState<string>('');
   const [replySubject, setReplySubject] = useState<string>("");
   const [selectedEmailTemplate, setSelectedEmailTemplate] = useState<string>("none");
   const [selectedSmsTemplate, setSelectedSmsTemplate] = useState<string>("");
@@ -1272,6 +1281,35 @@ export function JobDiarySection({
                               {isSent ? 'Follow up' : 'Reply'}
                             </Button>
                           )}
+                          {/* Calendar booking button for emails */}
+                          {entry.type === 'email' && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                // Extract any mentioned time from the email content
+                                const content = entry.content || '';
+                                const title = `Quote appointment - ${customerName || 'Customer'}`;
+                                // Set tomorrow's date as default
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                const dateStr = tomorrow.toISOString().split('T')[0];
+                                
+                                setCalendarBookingEntry(entry);
+                                setCalendarBookingTitle(title);
+                                setCalendarBookingDate(dateStr);
+                                setCalendarBookingTime('08:00');
+                                setCalendarBookingDuration('60');
+                                setCalendarBookingOpen(true);
+                              }}
+                              data-testid={`button-calendar-book-${entry.id}`}
+                            >
+                              <CalendarPlus className="w-3 h-3 mr-0.5" />
+                              Book
+                            </Button>
+                          )}
                           {entry.type === 'sms' && entry.metadata?.phoneNumber && (
                             <Button
                               size="sm"
@@ -2019,6 +2057,124 @@ export function JobDiarySection({
                 ))}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Calendar Booking Dialog */}
+      <Dialog open={calendarBookingOpen} onOpenChange={setCalendarBookingOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CalendarPlus className="w-5 h-5 text-green-600" />
+              Book to Calendar
+            </DialogTitle>
+            <DialogDescription>
+              Create a calendar event for this appointment
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Title</label>
+              <Input
+                value={calendarBookingTitle}
+                onChange={(e) => setCalendarBookingTitle(e.target.value)}
+                placeholder="Quote appointment"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Date</label>
+                <Input
+                  type="date"
+                  value={calendarBookingDate}
+                  onChange={(e) => setCalendarBookingDate(e.target.value)}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Time</label>
+                <Input
+                  type="time"
+                  value={calendarBookingTime}
+                  onChange={(e) => setCalendarBookingTime(e.target.value)}
+                />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Duration</label>
+              <Select value={calendarBookingDuration} onValueChange={setCalendarBookingDuration}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">30 minutes</SelectItem>
+                  <SelectItem value="60">1 hour</SelectItem>
+                  <SelectItem value="90">1.5 hours</SelectItem>
+                  <SelectItem value="120">2 hours</SelectItem>
+                  <SelectItem value="180">3 hours</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setCalendarBookingOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!calendarBookingDate || !calendarBookingTime) {
+                  toast({
+                    title: "Missing information",
+                    description: "Please select a date and time",
+                    variant: "destructive"
+                  });
+                  return;
+                }
+                
+                try {
+                  const startTime = new Date(`${calendarBookingDate}T${calendarBookingTime}:00`);
+                  const endTime = new Date(startTime.getTime() + parseInt(calendarBookingDuration) * 60000);
+                  
+                  const response = await apiRequest('POST', '/api/calendar/quick-book', {
+                    jobId,
+                    title: calendarBookingTitle,
+                    description: `Job: ${jobId}\nCustomer: ${customerName || 'N/A'}\n\nFrom diary entry: ${calendarBookingEntry?.content?.substring(0, 200) || ''}`,
+                    location: jobAddress || '',
+                    startTime: startTime.toISOString(),
+                    endTime: endTime.toISOString(),
+                    customerEmail: customerEmail || undefined
+                  });
+                  
+                  const data = await response.json();
+                  
+                  if (data.success) {
+                    toast({
+                      title: "Booked!",
+                      description: "Appointment added to your Google Calendar"
+                    });
+                    setCalendarBookingOpen(false);
+                    queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary'] });
+                  } else {
+                    throw new Error(data.message || 'Failed to create calendar event');
+                  }
+                } catch (error: any) {
+                  toast({
+                    title: "Error",
+                    description: error.message || "Failed to book calendar event",
+                    variant: "destructive"
+                  });
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <CalendarPlus className="w-4 h-4 mr-2" />
+              Add to Calendar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -9302,6 +9302,69 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   });
 
   // ========================================
+  // GOOGLE CALENDAR QUICK BOOKING ROUTES
+  // ========================================
+
+  // Create a calendar event from job diary (for booking quote appointments etc)
+  app.post('/api/calendar/quick-book', async (req: Request, res: Response) => {
+    try {
+      const { jobId, title, description, location, startTime, endTime, customerEmail } = req.body;
+
+      if (!title || !startTime || !endTime) {
+        return res.status(400).json({
+          success: false,
+          message: 'Title, start time, and end time are required'
+        });
+      }
+
+      // Create the calendar event
+      const eventId = await googleCalendarService.createEvent({
+        summary: title,
+        description: description || '',
+        location: location || '',
+        startTime: new Date(startTime),
+        endTime: new Date(endTime),
+        attendees: customerEmail ? [customerEmail] : []
+      });
+
+      if (eventId) {
+        // If jobId provided, add a diary entry about the booking
+        if (jobId) {
+          try {
+            await storage.createJobDiaryEntry({
+              jobId,
+              entryType: 'note',
+              title: `Calendar booking: ${title}`,
+              description: `Appointment booked for ${new Date(startTime).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}`,
+              authorName: 'System',
+              metadata: { googleCalendarEventId: eventId }
+            });
+          } catch (diaryError) {
+            console.error('Error creating diary entry for calendar booking:', diaryError);
+          }
+        }
+
+        res.json({
+          success: true,
+          eventId,
+          message: 'Calendar event created successfully'
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Failed to create calendar event'
+        });
+      }
+    } catch (error) {
+      console.error('Error creating calendar event:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error creating calendar event'
+      });
+    }
+  });
+
+  // ========================================
   // JOB TEMPLATE MANAGEMENT ROUTES
   // ========================================
 
