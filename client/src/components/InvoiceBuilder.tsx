@@ -21,6 +21,7 @@ interface InvoiceBuilderProps {
   job: Job;
   customer: Customer;
   invoiceTemplate: DocumentTemplate;
+  startFresh?: boolean; // If true, starts a new invoice instead of loading existing
 }
 
 interface InvoiceLineItem {
@@ -49,7 +50,7 @@ interface CreatedInvoice {
   address: string;
 }
 
-export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate }: InvoiceBuilderProps) {
+export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate, startFresh = false }: InvoiceBuilderProps) {
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
