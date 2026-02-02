@@ -189,22 +189,24 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       });
     });
 
-    // Apply discount from proposal
+    // Apply discount from proposal (discount does NOT affect GST calculation)
     const discountAmount = proposal?.discountAmount ? parseFloat(String(proposal.discountAmount)) : 0;
-    const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
     
-    // Recalculate GST on discounted amount
+    // GST is calculated on the ORIGINAL subtotal (before discount)
     const gstRate = 0.15;
-    const gstOnDiscounted = subtotalAfterDiscount * gstRate;
-    const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
+    const gstOnSubtotal = subtotalExGst * gstRate;
     
-    console.log(`📊 FINAL TOTALS: subtotal=${subtotalExGst}, discount=${discountAmount}, subtotalAfterDiscount=${subtotalAfterDiscount}, gst=${gstOnDiscounted}, total=${totalAmount}`);
+    // Discount is applied after GST - it reduces the total but not the GST
+    const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
+    const totalAmount = subtotalExGst + gstOnSubtotal - discountAmount;
+    
+    console.log(`📊 FINAL TOTALS: subtotal=${subtotalExGst}, discount=${discountAmount}, gst=${gstOnSubtotal} (on original subtotal), total=${totalAmount}`);
 
     return {
       subtotal: subtotalExGst,
       discount: discountAmount,
       subtotalAfterDiscount: subtotalAfterDiscount,
-      gst: gstOnDiscounted,
+      gst: gstOnSubtotal,
       total: totalAmount
     };
   };
