@@ -9,7 +9,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Clock, CheckCircle, X, Trash2, Users, Search } from "lucide-react";
 
 interface TimeEntry {
@@ -180,24 +179,12 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     // Track staff without rates
     const staffWithoutRates: string[] = [];
 
-    // Create one pending entry for each selected staff member with auto-matched rate
+    // Create one pending entry for each selected staff member using their hourly rate
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map(staffId => {
       const staff = employees.find((e: any) => e.id === staffId);
-      const staffFirstName = staff?.firstName || '';
+      const staffHourlyRate = staff?.hourlyRate ? parseFloat(staff.hourlyRate) : 0;
       
-      // Find matching labour rate by staff first name (case-insensitive, flexible matching)
-      // Matches if: rate name equals first name, or rate name starts with first name, or rate name contains first name
-      const firstName = staffFirstName.toLowerCase().trim();
-      const matchingRate = availableRates.find((r: any) => {
-        const rateName = r.name.toLowerCase().trim();
-        return rateName === firstName || 
-               rateName.startsWith(firstName + ' ') || 
-               rateName.startsWith(firstName + '_') ||
-               rateName.includes(' ' + firstName) ||
-               rateName.split(' ')[0] === firstName;
-      });
-      
-      if (!matchingRate) {
+      if (!staffHourlyRate || staffHourlyRate <= 0) {
         staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
       }
       
@@ -206,7 +193,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         date: new Date().toLocaleDateString('en-GB'),
         staffId: staffId,
         staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
-        rate: matchingRate?.itemNumber || '',
+        rate: staffHourlyRate.toString(),
         start: '',
         duration: parseFloat(newEntry.duration),
         billed: true
@@ -215,11 +202,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     
     setPendingEntries(prev => [...prev, ...newTimeEntries]);
     
-    // Show warning if some staff don't have matching rates
+    // Show warning if some staff don't have hourly rates set
     if (staffWithoutRates.length > 0) {
       toast({
         title: "Warning",
-        description: `${staffWithoutRates.join(', ')} ${staffWithoutRates.length === 1 ? 'does' : 'do'} not have a matching labour rate set up. Please add a rate in Settings.`,
+        description: `${staffWithoutRates.join(', ')} ${staffWithoutRates.length === 1 ? 'does' : 'do'} not have an hourly rate set in their employee profile.`,
         variant: "destructive",
       });
     }
@@ -425,7 +412,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <ScrollArea className="h-[250px]">
+                    <div className="max-h-[250px] overflow-y-auto overscroll-contain">
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
@@ -434,6 +421,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                           })
                           .map((staff: any) => {
                             const isSelected = newEntry.staffIds.includes(staff.id);
+                            const staffRate = staff.hourlyRate ? parseFloat(staff.hourlyRate) : 0;
                             return (
                               <label
                                 key={staff.id}
@@ -455,17 +443,16 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                                   <div className="text-sm font-medium">
                                     {staff.firstName} {staff.lastName}
                                   </div>
-                                  {staff.position && (
-                                    <div className="text-xs text-gray-500">
-                                      {staff.position}
-                                    </div>
-                                  )}
+                                  <div className="text-xs text-gray-500">
+                                    {staff.position && `${staff.position} • `}
+                                    {staffRate > 0 ? `$${staffRate.toFixed(2)}/hr` : 'No rate set'}
+                                  </div>
                                 </div>
                               </label>
                             );
                           })}
                       </div>
-                    </ScrollArea>
+                    </div>
                   </PopoverContent>
                 </Popover>
               </div>
@@ -550,7 +537,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Rate</div>
-                        <div className="text-[10px]">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate}</div>
+                        <div className="text-[10px]">
+                          {!isNaN(parseFloat(entry.rate)) && parseFloat(entry.rate) > 0
+                            ? `$${parseFloat(entry.rate).toFixed(2)}/hr`
+                            : entry.rate || 'No rate'}
+                        </div>
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Time</div>
@@ -591,7 +582,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Rate</div>
-                        <div className="text-[10px]">{entry.lineItemName}</div>
+                        <div className="text-[10px]">
+                          {entry.rate && !isNaN(parseFloat(entry.rate)) && parseFloat(entry.rate) > 0
+                            ? `$${parseFloat(entry.rate).toFixed(2)}/hr`
+                            : entry.lineItemName || 'No rate'}
+                        </div>
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Time</div>
