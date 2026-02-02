@@ -1226,7 +1226,7 @@ export function EmailComposerModal({
                     }}
                     invoice={showPreview.data}
                     customer={customer}
-                    jobAddress={job?.address || ''}
+                    jobAddress={showPreview.data.address || job?.billingAddress || job?.address || ''}
                     lineItems={showPreview.data.lineItems || []}
                     description={showPreview.data.description || job?.description || job?.title || ''}
                     photos={showPreview.data.photos || []}
