@@ -5110,8 +5110,8 @@ The Treemarkables Team`;
             email: editingJob.billingContactEmail || editingJob.jobContactEmail || selectedCustomer?.email,
             phone: editingJob.billingContactPhone || editingJob.billingContactMobile || editingJob.jobContactPhone || selectedCustomer?.phone,
             address: editingJob.billingAddress || editingJob.address || selectedCustomer?.address,
-            // Use billing name override if set, otherwise fall back to customer name
-            name: editingJob.billingNameOverride || selectedCustomer?.name || `${editingJob.jobContactFirstName || ''} ${editingJob.jobContactLastName || ''}`.trim()
+            // Use billing name override from FORM (current unsaved value) first, then fall back to saved value
+            name: formData?.billingNameOverride || editingJob.billingNameOverride || selectedCustomer?.name || `${editingJob.jobContactFirstName || ''} ${editingJob.jobContactLastName || ''}`.trim()
           } : selectedCustomer}
           quoteData={emailContext === 'quote' && jobQuoteResponse?.success && jobQuoteResponse.data.length > 0 ? {
             id: jobQuoteResponse.data[0].id,
@@ -5426,7 +5426,11 @@ The Treemarkables Team`;
           isOpen={isInvoiceModalOpen}
           onClose={() => setIsInvoiceModalOpen(false)}
           job={editingJob}
-          customer={selectedCustomer}
+          customer={{
+            ...selectedCustomer,
+            // Use billing name override from form (current unsaved value) first, then saved value, then customer name
+            name: formData?.billingNameOverride || editingJob.billingNameOverride || selectedCustomer?.name
+          }}
           invoiceTemplate={invoiceTemplate}
         />
       )}
