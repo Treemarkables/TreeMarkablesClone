@@ -3500,6 +3500,17 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         processedBody.customerId = null;
       }
       
+      // Convert date strings to Date objects
+      if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
+        processedBody.scheduledDate = new Date(processedBody.scheduledDate);
+      }
+      if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
+        processedBody.completedDate = new Date(processedBody.completedDate);
+      }
+      if (processedBody.quotePresentedDate && typeof processedBody.quotePresentedDate === 'string') {
+        processedBody.quotePresentedDate = new Date(processedBody.quotePresentedDate);
+      }
+      
       // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
       const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
                             'otherCosts', 'grossMargin', 'profitMargin', 'laborHours', 'hourlyRate', 
