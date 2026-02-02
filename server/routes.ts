@@ -13399,7 +13399,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const completion = await openai.chat.completions.create({
         model: "gpt-5",
         messages: [{ role: "user", content: prompt }],
-        max_tokens: 500,
+        max_completion_tokens: 500,
         temperature: 0.7
       });
       
