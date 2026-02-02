@@ -64,6 +64,9 @@ interface ProposalTemplateProps {
   onSms?: () => void;
   onDownload?: () => void;
   onCopy?: () => void;
+  allowChoiceSelection?: boolean;
+  selectedChoices?: Record<string, string>;
+  onChoiceSelect?: (lineItemId: string, choiceId: string) => void;
 }
 
 // Lazy loading image component using Intersection Observer with zero layout shift
@@ -137,7 +140,10 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   onEmail,
   onSms,
   onDownload,
-  onCopy
+  onCopy,
+  allowChoiceSelection = false,
+  selectedChoices = {},
+  onChoiceSelect
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -150,8 +156,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       (section.lineItems || []).forEach(item => {
         if (item.selected) {
           let itemPrice = 0;
-          if (item.pricingType === 'choice' && item.selectedChoiceId) {
-            const selectedChoice = item.choices?.find(c => c.id === item.selectedChoiceId);
+          const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
+          if (item.pricingType === 'choice' && effectiveChoiceId) {
+            const selectedChoice = item.choices?.find(c => c.id === effectiveChoiceId);
             if (selectedChoice) {
               itemPrice = Number(selectedChoice.price) * Number(item.quantity);
             }
@@ -505,8 +512,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                         <tbody>
                           {(section.lineItems || []).map((item, index) => {
                             let displayPrice = item.totalPrice;
-                            if (item.pricingType === 'choice' && item.selectedChoiceId) {
-                              const selectedChoice = item.choices?.find(c => c.id === item.selectedChoiceId);
+                            const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
+                            if (item.pricingType === 'choice' && effectiveChoiceId) {
+                              const selectedChoice = item.choices?.find(c => c.id === effectiveChoiceId);
                               if (selectedChoice) {
                                 displayPrice = selectedChoice.price * item.quantity;
                               }
@@ -528,13 +536,37 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                     )}
                                     {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
                                       <div className="mt-2 text-xs">
-                                        <p className="text-gray-600">Options:</p>
-                                        <ul className="ml-3 space-y-1">
-                                          {item.choices.map(choice => (
-                                            <li key={choice.id} className={`${choice.id === item.selectedChoiceId ? 'font-medium text-green-700' : 'text-gray-600'} break-words`}>
-                                              • {choice.label} - {formatCurrency(choice.price)}
-                                            </li>
-                                          ))}
+                                        <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
+                                        <ul className="ml-1 space-y-1.5 mt-1">
+                                          {item.choices.map(choice => {
+                                            const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
+                                            const isSelected = choice.id === effectiveChoiceId;
+                                            return (
+                                              <li 
+                                                key={choice.id} 
+                                                className={`flex items-start gap-2 ${isSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
+                                                onClick={allowChoiceSelection && onChoiceSelect ? () => onChoiceSelect(item.id, choice.id) : undefined}
+                                              >
+                                                {allowChoiceSelection ? (
+                                                  <input 
+                                                    type="radio" 
+                                                    name={`choice-${item.id}`}
+                                                    checked={isSelected}
+                                                    onChange={() => onChoiceSelect?.(item.id, choice.id)}
+                                                    className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                                  />
+                                                ) : (
+                                                  <span>•</span>
+                                                )}
+                                                <span className="flex-1">
+                                                  {choice.label} - {formatCurrency(choice.price)}
+                                                  {choice.description && (
+                                                    <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
+                                                  )}
+                                                </span>
+                                              </li>
+                                            );
+                                          })}
                                         </ul>
                                       </div>
                                     )}

@@ -14829,10 +14829,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.post('/api/proposals/:id/accept', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      const { selectedChoices } = req.body || {};
       console.log('🚀 ACCEPT PROPOSAL REQUEST RECEIVED - Proposal ID:', id);
       console.log('📋 Request method:', req.method);
       console.log('🔐 Session ID:', req.session?.id);
       console.log('👤 Employee ID:', req.session?.employeeId);
+      console.log('🎯 Selected choices:', selectedChoices);
       
       // Get the proposal
       const proposal = await storage.getProposal(id);
@@ -14862,10 +14864,94 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return res.status(400).json({ success: false, message: 'Proposal has expired' });
       }
 
-      // Update proposal status to accepted
+      // If customer selected different choices, update the proposal sections
+      let updatedSections = proposal.sections;
+      let updatedTotalAmount = proposal.totalAmount;
+      let updatedSubtotal = proposal.subtotal;
+      
+      if (selectedChoices && Object.keys(selectedChoices).length > 0 && Array.isArray(proposal.sections)) {
+        console.log('🎯 Applying customer-selected choices to proposal...');
+        
+        // Update sections with selected choices (validate choice IDs)
+        updatedSections = proposal.sections.map((section: any) => ({
+          ...section,
+          lineItems: (section.lineItems || []).map((item: any) => {
+            if (selectedChoices[item.id] && item.pricingType === 'choice') {
+              // Validate that the selected choice exists
+              const validChoice = (item.choices || []).find((c: any) => c.id === selectedChoices[item.id]);
+              if (validChoice) {
+                console.log(`🎯 Updating line item ${item.id} with choice ${selectedChoices[item.id]}`);
+                return {
+                  ...item,
+                  selectedChoiceId: selectedChoices[item.id]
+                };
+              } else {
+                console.log(`⚠️ Invalid choice ${selectedChoices[item.id]} for item ${item.id}, keeping original`);
+              }
+            }
+            return item;
+          })
+        }));
+        
+        // Recalculate totals based on selected choices (matching ProposalTemplate logic)
+        let subtotalExGst = 0;
+        let gstAmount = 0;
+        const gstRate = 0.15;
+        
+        updatedSections.forEach((section: any) => {
+          (section.lineItems || []).forEach((item: any) => {
+            if (item.selected) {
+              let itemPrice = 0;
+              if (item.pricingType === 'choice' && item.selectedChoiceId) {
+                const selectedChoice = (item.choices || []).find((c: any) => c.id === item.selectedChoiceId);
+                if (selectedChoice) {
+                  itemPrice = Number(selectedChoice.price) * Number(item.quantity);
+                }
+              } else if (item.pricingType === 'fixed' && item.fixedPrice) {
+                itemPrice = Number(item.fixedPrice);
+              } else {
+                itemPrice = Number(item.totalPrice);
+              }
+              
+              // Handle priceIncludesTax flag (matching ProposalTemplate logic)
+              const isInclusive = item.priceIncludesTax || false;
+              
+              if (isInclusive) {
+                // Price includes GST - extract the ex-GST amount
+                const exGst = itemPrice / (1 + gstRate);
+                subtotalExGst += exGst;
+                gstAmount += itemPrice - exGst;
+              } else {
+                // Price is ex-GST
+                subtotalExGst += itemPrice;
+                gstAmount += itemPrice * gstRate;
+              }
+            }
+          });
+        });
+        
+        // Apply discount and recalculate GST (matching ProposalTemplate logic exactly)
+        const discountAmount = Number(proposal.discountAmount || 0);
+        const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
+        
+        // Recalculate GST on discounted amount (this is the key: GST is recalculated after discount)
+        const gstOnDiscounted = subtotalAfterDiscount * gstRate;
+        const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
+        
+        // Round to 2 decimal places (matching UI formatting)
+        updatedSubtotal = Math.round(subtotalExGst * 100) / 100; // Original subtotal before discount
+        updatedTotalAmount = Math.round(totalAmount * 100) / 100;
+        const roundedGst = Math.round(gstOnDiscounted * 100) / 100;
+        console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, subtotalAfterDiscount=${Math.round(subtotalAfterDiscount * 100) / 100}, gst=${roundedGst}, total=${updatedTotalAmount}`);
+      }
+      
+      // Update proposal status to accepted (with updated sections/totals if choices were selected)
       const updatedProposal = await storage.updateProposal(id, { 
         status: 'accepted',
-        acceptedDate: new Date()
+        acceptedDate: new Date(),
+        sections: updatedSections,
+        totalAmount: updatedTotalAmount,
+        subtotal: updatedSubtotal
       });
 
       let job;
@@ -14875,15 +14961,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (proposal.jobId) {
         const existingJob = await storage.getJob(proposal.jobId);
         if (existingJob) {
-          // Update existing job to work_order status
+          // Update existing job to work_order status (use updated totals if customer selected different choices)
           job = await storage.updateJob(proposal.jobId, {
             status: 'work_order',
-            totalAmount: proposal.totalAmount,
-            subtotal: proposal.subtotal,
-            gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+            totalAmount: updatedTotalAmount,
+            subtotal: updatedSubtotal,
+            gstAmount: (updatedTotalAmount || 0) - (updatedSubtotal || 0),
           });
           jobNumber = existingJob.jobNumber;
-          console.log(`✅ Updated existing job ${jobNumber} to work_order status`);
+          console.log(`✅ Updated existing job ${jobNumber} to work_order status with totals: ${updatedTotalAmount}`);
         } else {
           // Job not found, create new one
           const jobData = {
@@ -14894,9 +14980,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             quoteId: proposal.quoteId,
             status: 'work_order',
             priority: 'medium',
-            totalAmount: proposal.totalAmount,
-            subtotal: proposal.subtotal,
-            gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+            totalAmount: updatedTotalAmount,
+            subtotal: updatedSubtotal,
+            gstAmount: (updatedTotalAmount || 0) - (updatedSubtotal || 0),
             metricsEligible: true,
             metricsStartDate: new Date()
           };
@@ -14913,9 +14999,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           quoteId: proposal.quoteId,
           status: 'work_order',
           priority: 'medium',
-          totalAmount: proposal.totalAmount,
-          subtotal: proposal.subtotal,
-          gstAmount: (proposal.totalAmount || 0) - (proposal.subtotal || 0),
+          totalAmount: updatedTotalAmount,
+          subtotal: updatedSubtotal,
+          gstAmount: (updatedTotalAmount || 0) - (updatedSubtotal || 0),
           metricsEligible: true,
           metricsStartDate: new Date()
         };
@@ -14927,7 +15013,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
       const notificationData = {
         title: 'Proposal Accepted!',
-        message: `${customer?.name || 'Customer'} has accepted proposal #${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(proposal.totalAmount || 0)}. Work order #${jobNumber} has been created.`,
+        message: `${customer?.name || 'Customer'} has accepted proposal #${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(updatedTotalAmount || 0)}. Work order #${jobNumber} has been created.`,
         type: 'proposal_accepted',
         priority: 'high',
         isRead: false,
@@ -14944,7 +15030,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           jobId: job.id,
           entryType: 'system',
           title: `Proposal Accepted: ${proposal.proposalNumber}`,
-          content: `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(proposal.totalAmount || 0)}. Job converted to work order.`,
+          content: `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(updatedTotalAmount || 0)}. Job converted to work order.`,
           metadata: {
             proposalId: proposal.id,
             proposalNumber: proposal.proposalNumber,
