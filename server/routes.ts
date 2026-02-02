@@ -14930,20 +14930,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           });
         });
         
-        // Apply discount (discount does NOT affect GST calculation - matching ProposalTemplate logic)
+        // Apply discount (discount reduces the taxable amount - matching ProposalTemplate logic)
         const discountAmount = Number(proposal.discountAmount || 0);
+        const subtotalAfterDiscount = Math.max(0, subtotalExGst - discountAmount);
         
-        // GST is calculated on the ORIGINAL subtotal (before discount)
-        const gstOnSubtotal = subtotalExGst * gstRate;
-        
-        // Discount is applied after GST - it reduces the total but not the GST
-        const totalAmount = subtotalExGst + gstOnSubtotal - discountAmount;
+        // GST is calculated on the discounted amount (less GST)
+        const gstOnDiscounted = subtotalAfterDiscount * gstRate;
+        const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
         
         // Round to 2 decimal places (matching UI formatting)
         updatedSubtotal = Math.round(subtotalExGst * 100) / 100;
         updatedTotalAmount = Math.round(totalAmount * 100) / 100;
-        const roundedGst = Math.round(gstOnSubtotal * 100) / 100;
-        console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, gst=${roundedGst} (on original subtotal), total=${updatedTotalAmount}`);
+        const roundedGst = Math.round(gstOnDiscounted * 100) / 100;
+        console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, subtotalAfterDiscount=${Math.round(subtotalAfterDiscount * 100) / 100}, gst=${roundedGst}, total=${updatedTotalAmount}`);
       }
       
       // Update proposal status to accepted (with updated sections/totals if choices were selected)
