@@ -365,6 +365,10 @@ export default function MetricsDashboard() {
     const fromDate = new Date();
     
     switch (dateRangePreset) {
+      case "today": {
+        const todayStr = today.toISOString().split('T')[0];
+        return { from: todayStr, to: todayStr };
+      }
       case "mon-fri": {
         const dayOfWeek = today.getDay();
         const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
@@ -807,13 +811,22 @@ export default function MetricsDashboard() {
           {/* Time Period Tabs */}
           <div className="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg w-fit">
             <Button
+              variant={dateRangePreset === "today" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setDateRangePreset("today")}
+              className={`h-8 px-4 ${dateRangePreset === "today" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+              data-testid="button-date-today"
+            >
+              <Calendar className="h-3.5 w-3.5 mr-1.5" />
+              Today
+            </Button>
+            <Button
               variant={dateRangePreset === "7" ? "default" : "ghost"}
               size="sm"
               onClick={() => setDateRangePreset("7")}
-              className={`h-8 px-4 ${dateRangePreset === "7" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
+              className={`h-8 px-3 ${dateRangePreset === "7" ? 'bg-blue-600 hover:bg-blue-700' : ''}`}
               data-testid="button-date-7"
             >
-              <Calendar className="h-3.5 w-3.5 mr-1.5" />
               This Week
             </Button>
             <Button
