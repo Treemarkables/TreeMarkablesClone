@@ -225,14 +225,6 @@ export function GlobalJobCard({
   // Quote presentation method local state (for immediate UI update)
   const [localQuoteMethod, setLocalQuoteMethod] = useState<string>('');
   
-  // Initialize localQuoteMethod from editingJob when it loads (only on job ID change)
-  useEffect(() => {
-    if (editingJob) {
-      const jobQuoteMethod = (editingJob as any).quotePresentationMethod || '';
-      setLocalQuoteMethod(jobQuoteMethod);
-    }
-  }, [editingJob?.id]); // Only reset when job ID changes, not on every refetch
-  
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | undefined>(undefined);
@@ -576,6 +568,14 @@ export function GlobalJobCard({
     console.log('🔍 editingJob returning null - condition not met');
     return null;
   }, [mode, internalMode, createdJobId, jobId, job, specificJob]);
+
+  // Initialize localQuoteMethod from editingJob when job ID changes
+  useEffect(() => {
+    if (editingJob) {
+      const jobQuoteMethod = (editingJob as any).quotePresentationMethod || '';
+      setLocalQuoteMethod(jobQuoteMethod);
+    }
+  }, [editingJob?.id]);
 
   // Reset internal state when modal closes
   useEffect(() => {
