@@ -3107,6 +3107,14 @@ The Treemarkables Team`;
                                                 form.setValue('customerId', customer.id);
                                                 setSelectedCustomerName(customer.name);
                                                 setCustomerSearchValue('');
+                                                // Pre-fill contact info from customer if not already set
+                                                if (customer.email && !form.getValues('jobContactEmail')) {
+                                                  form.setValue('jobContactEmail', customer.email);
+                                                }
+                                                const customerPhone = customer.mobile || customer.phone;
+                                                if (customerPhone && !form.getValues('jobContactPhone')) {
+                                                  form.setValue('jobContactPhone', customerPhone);
+                                                }
                                               }}
                                             >
                                               <Check
@@ -3277,6 +3285,14 @@ The Treemarkables Team`;
                                             setSelectedCustomerName(customer.name);
                                             setCustomerSearchOpen(false);
                                             setCustomerSearchValue('');
+                                            // Pre-fill contact info from customer if not already set
+                                            if (customer.email && !form.getValues('jobContactEmail')) {
+                                              form.setValue('jobContactEmail', customer.email);
+                                            }
+                                            const customerPhone = customer.mobile || customer.phone;
+                                            if (customerPhone && !form.getValues('jobContactPhone')) {
+                                              form.setValue('jobContactPhone', customerPhone);
+                                            }
                                           }}
                                         >
                                           <Check
@@ -3371,6 +3387,24 @@ The Treemarkables Team`;
                                                 // Pre-fill address from customer if available
                                                 if (customer.address && !form.getValues('address')) {
                                                   form.setValue('address', customer.address);
+                                                }
+                                                // Pre-fill contact info from customer if not already set
+                                                if (customer.email && !form.getValues('jobContactEmail')) {
+                                                  form.setValue('jobContactEmail', customer.email);
+                                                }
+                                                const customerPhone = customer.mobile || customer.phone;
+                                                if (customerPhone && !form.getValues('jobContactPhone')) {
+                                                  form.setValue('jobContactPhone', customerPhone);
+                                                }
+                                                // Split customer name into first/last for contact fields
+                                                if (customer.name && !form.getValues('jobContactFirstName') && !form.getValues('jobContactLastName')) {
+                                                  const nameParts = customer.name.split(' ');
+                                                  if (nameParts.length >= 2) {
+                                                    form.setValue('jobContactFirstName', nameParts[0]);
+                                                    form.setValue('jobContactLastName', nameParts.slice(1).join(' '));
+                                                  } else {
+                                                    form.setValue('jobContactFirstName', customer.name);
+                                                  }
                                                 }
                                                 setCustomerSearchOpen(false);
                                               }}
