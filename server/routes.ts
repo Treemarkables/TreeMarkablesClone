@@ -10605,6 +10605,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       console.log('📧 Sending email via diary:', { to, subject, jobId });
       
+      // Detect if this is a review request email
+      const isReviewRequest = message.toLowerCase().includes('review') && (
+        message.includes('facebook.com') || 
+        message.includes('google.com/local/writereview') ||
+        message.includes('leave us a review') ||
+        message.includes('leave a review') ||
+        message.includes('leave the team a review')
+      );
+      
       // Send email using the service - don't override from, let Resend config handle it
       const emailResult = await emailService.sendEmail({
         to,
@@ -10615,6 +10624,39 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
       
       if (emailResult.success) {
+        let reviewRequestId: string | undefined;
+        
+        // If this is a review request, create a review_request record
+        if (isReviewRequest && jobId) {
+          try {
+            const job = await storage.getJob(jobId);
+            if (job && job.customerId) {
+              const customer = await storage.getCustomer(job.customerId);
+              const token = crypto.randomUUID().replace(/-/g, '');
+              
+              const reviewRequest = await storage.createReviewRequest({
+                jobId,
+                customerId: job.customerId,
+                token,
+                status: 'sent',
+                sentAt: new Date(),
+                sentBy: 'System',
+                sentVia: 'email',
+                customerName: customer?.name || job.customerName || 'Customer',
+                customerEmail: to,
+                customerPhone: customer?.phone || job.customerPhone,
+                jobNumber: job.jobNumber,
+                jobAddress: job.address
+              });
+              reviewRequestId = reviewRequest.id;
+              console.log(`📊 Review request tracked for job ${job.jobNumber}:`, reviewRequestId);
+            }
+          } catch (reviewError) {
+            console.error('Error creating review request record:', reviewError);
+            // Continue - don't fail the email send
+          }
+        }
+        
         // Create diary entry for sent email
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
@@ -10623,14 +10665,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           description: `Email sent to ${to}: ${message}`,
           authorName: 'System',
           metadata: {
-            sendgridMessageId: emailResult.messageId
+            sendgridMessageId: emailResult.messageId,
+            isReviewRequest,
+            reviewRequestId
           }
         });
         
         res.json({ 
           success: true, 
           message: 'Email sent successfully',
-          diaryEntry 
+          diaryEntry,
+          reviewRequestTracked: !!reviewRequestId
         });
       } else {
         console.error('📧 Diary email send failed:', emailResult.error || 'Unknown error');
