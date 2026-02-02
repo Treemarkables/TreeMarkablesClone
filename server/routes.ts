@@ -6197,10 +6197,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         staffTimeEntries.map(async (entry: any, index: number) => {
           const employee = entry.employeeId ? await storage.getEmployee(entry.employeeId) : null;
           // Use stored ID if available, otherwise generate a fallback
-          const entryId = entry.id || `legacy-${index}-${entry.employeeId || 'unknown'}-${entry.date || 'nodate'}`;
+          const entryId = entry.id || `legacy-${index}`;
           return {
             ...entry,
             id: entryId,
+            index: index, // Include index for deletion
             employeeName: employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff',
             lineItemName: entry.rate ? `$${parseFloat(entry.rate).toFixed(2)}/hr` : ''
           };
@@ -6285,9 +6286,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   app.delete('/api/time-entries/job/:entryId', async (req: Request, res: Response) => {
     try {
       const { entryId } = req.params;
-      const { jobId } = req.query;
+      const { jobId, index } = req.query;
       
-      console.log('🗑️ Deleting time entry:', { entryId, jobId });
+      console.log('🗑️ Deleting time entry:', { entryId, jobId, index });
       
       if (!jobId || typeof jobId !== 'string') {
         return res.status(400).json({ success: false, message: 'jobId is required' });
@@ -6295,13 +6296,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       // Get current entries
       const staffTimeEntries = await storage.getJobStaffTimeEntries(jobId);
-      console.log('📋 Current entries before delete:', staffTimeEntries.length);
+      console.log('📋 Current entries before delete:', staffTimeEntries.length, JSON.stringify(staffTimeEntries));
       
-      // Filter out the entry to delete - match by id field
-      const updatedEntries = staffTimeEntries.filter((entry: any) => {
-        // Use the entry's stored id field
-        return entry.id !== entryId;
-      });
+      let updatedEntries: any[];
+      
+      // If index provided, delete by index (for legacy entries without IDs)
+      if (index !== undefined && !isNaN(Number(index))) {
+        const indexNum = Number(index);
+        updatedEntries = staffTimeEntries.filter((_: any, i: number) => i !== indexNum);
+        console.log(`📋 Deleted by index ${indexNum}`);
+      } else {
+        // Try to match by stored id field
+        updatedEntries = staffTimeEntries.filter((entry: any) => entry.id !== entryId);
+      }
       
       console.log('📋 Entries after filter:', updatedEntries.length);
       

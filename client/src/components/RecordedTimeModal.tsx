@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, Clock, CheckCircle, X, Trash2, Users, Search } from "lucide-react";
 
 interface TimeEntry {
@@ -235,8 +236,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   // Delete saved time entry mutation
   const deleteTimeEntryMutation = useMutation({
-    mutationFn: async (entryId: string) => {
-      await apiRequest('DELETE', `/api/time-entries/job/${entryId}?jobId=${jobId}`);
+    mutationFn: async ({ entryId, index }: { entryId: string; index: number }) => {
+      await apiRequest('DELETE', `/api/time-entries/job/${entryId}?jobId=${jobId}&index=${index}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
@@ -383,8 +384,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0" align="start" sideOffset={5} style={{ maxHeight: '400px', display: 'flex', flexDirection: 'column' }}>
-                    <div className="p-2 border-b" style={{ flexShrink: 0 }}>
+                  <PopoverContent className="w-80 p-0" align="start" sideOffset={5}>
+                    <div className="p-2 border-b">
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
@@ -424,7 +425,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', maxHeight: '300px' }}>
+                    <ScrollArea className="h-[250px]">
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
@@ -464,7 +465,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                             );
                           })}
                       </div>
-                    </div>
+                    </ScrollArea>
                   </PopoverContent>
                 </Popover>
               </div>
@@ -581,8 +582,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               </div>
               
               <div className="divide-y divide-gray-100">
-                {existingEntries.map((entry: any) => (
-                  <div key={entry.id} className="p-1 bg-white hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between" data-testid={`saved-entry-${entry.id}`}>
+                {existingEntries.map((entry: any, idx: number) => (
+                  <div key={entry.id || idx} className="p-1 bg-white hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between" data-testid={`saved-entry-${entry.id}`}>
                     <div className="flex-1 grid grid-cols-3 gap-1">
                       <div>
                         <div className="text-[8px] text-gray-500">Staff</div>
@@ -600,7 +601,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => deleteTimeEntryMutation.mutate(entry.id)}
+                      onClick={() => deleteTimeEntryMutation.mutate({ entryId: entry.id, index: entry.index ?? idx })}
                       disabled={deleteTimeEntryMutation.isPending}
                       className="text-red-600 hover:text-red-800 hover:bg-red-50 h-6 px-1"
                       data-testid={`button-delete-${entry.id}`}
