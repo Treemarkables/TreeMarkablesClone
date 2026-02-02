@@ -383,8 +383,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0 max-h-[400px] flex flex-col" align="start" sideOffset={5}>
-                    <div className="p-2 border-b flex-shrink-0">
+                  <PopoverContent className="w-80 p-0" align="start" sideOffset={5} style={{ maxHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+                    <div className="p-2 border-b" style={{ flexShrink: 0 }}>
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
@@ -424,7 +424,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <div className="flex-1 min-h-0 overflow-y-auto" style={{ maxHeight: '300px' }}>
+                    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', maxHeight: '300px' }}>
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
