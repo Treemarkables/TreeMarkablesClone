@@ -2234,12 +2234,82 @@ class DatabaseStorage implements IStorage {
   async getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]> { return []; }
   async getAllJobDiaryEntries(): Promise<JobDiaryEntry[]> { return []; }
 
-  // All other methods - return empty arrays/undefined or default values
-  async updateJobGrossMargin(jobId: string, grossMarginData: any): Promise<Job> { throw new Error("Not implemented"); }
-  async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> { throw new Error("Not implemented"); }
-  async validateGrossMarginComplete(jobId: string): Promise<boolean> { return false; }
-  async updateJobExpenses(jobId: string, expenseData: any): Promise<Job> { throw new Error("Not implemented"); }
-  async updateExpenseCompletionStatus(jobId: string, completionData: any): Promise<Job> { throw new Error("Not implemented"); }
+  // Expense and Margin Tracking implementations
+  async updateJobGrossMargin(jobId: string, grossMarginData: any): Promise<Job> {
+    const [result] = await db.update(schema.jobs)
+      .set({
+        grossMargin: grossMarginData.grossMargin?.toString(),
+        grossMarginCalculated: grossMarginData.grossMarginCalculated ?? true,
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    return result;
+  }
+
+  async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> {
+    const job = await this.getJob(jobId);
+    if (!job) throw new Error("Job not found");
+    
+    const totalRevenue = parseFloat(job.totalAmount?.toString() || "0");
+    const laborCosts = parseFloat(job.actualLaborCosts?.toString() || job.laborCosts?.toString() || "0");
+    const materialsCosts = parseFloat(job.actualMaterialsCosts?.toString() || job.materialsCosts?.toString() || "0");
+    const equipmentCosts = parseFloat(job.equipmentCosts?.toString() || "0");
+    const subcontractorCosts = parseFloat(job.subcontractorCosts?.toString() || "0");
+    const otherCosts = parseFloat(job.otherCosts?.toString() || "0");
+    
+    const totalCosts = laborCosts + materialsCosts + equipmentCosts + subcontractorCosts + otherCosts;
+    const grossProfit = totalRevenue - totalCosts;
+    const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    
+    const [result] = await db.update(schema.jobs)
+      .set({
+        grossMargin: grossMargin.toFixed(2),
+        grossMarginCalculated: true,
+      })
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    return result;
+  }
+
+  async validateGrossMarginComplete(jobId: string): Promise<boolean> {
+    const job = await this.getJob(jobId);
+    if (!job) return false;
+    return job.grossMarginCalculated === true;
+  }
+
+  async updateJobExpenses(jobId: string, expenseData: any): Promise<Job> {
+    const updates: any = {};
+    if (expenseData.actualLaborCosts !== undefined) updates.actualLaborCosts = expenseData.actualLaborCosts.toString();
+    if (expenseData.actualMaterialsCosts !== undefined) updates.actualMaterialsCosts = expenseData.actualMaterialsCosts.toString();
+    if (expenseData.equipmentCosts !== undefined) updates.equipmentCosts = expenseData.equipmentCosts.toString();
+    if (expenseData.subcontractorCosts !== undefined) updates.subcontractorCosts = expenseData.subcontractorCosts.toString();
+    if (expenseData.permitCosts !== undefined) updates.permitCosts = expenseData.permitCosts.toString();
+    if (expenseData.travelCosts !== undefined) updates.travelCosts = expenseData.travelCosts.toString();
+    if (expenseData.disposalCosts !== undefined) updates.disposalCosts = expenseData.disposalCosts.toString();
+    if (expenseData.miscExpenses !== undefined) updates.miscExpenses = expenseData.miscExpenses.toString();
+    if (expenseData.additionalCosts !== undefined) updates.otherCosts = expenseData.additionalCosts.toString();
+    
+    const [result] = await db.update(schema.jobs)
+      .set(updates)
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    return result;
+  }
+
+  async updateExpenseCompletionStatus(jobId: string, completionData: any): Promise<Job> {
+    const updates: any = {};
+    if (completionData.laborCostsComplete !== undefined) updates.laborCostsComplete = completionData.laborCostsComplete;
+    if (completionData.materialsCostsComplete !== undefined) updates.materialsCostsComplete = completionData.materialsCostsComplete;
+    if (completionData.equipmentCostsComplete !== undefined) updates.equipmentCostsComplete = completionData.equipmentCostsComplete;
+    if (completionData.subcontractorCostsComplete !== undefined) updates.subcontractorCostsComplete = completionData.subcontractorCostsComplete;
+    if (completionData.otherExpensesComplete !== undefined) updates.otherExpensesComplete = completionData.otherExpensesComplete;
+    
+    const [result] = await db.update(schema.jobs)
+      .set(updates)
+      .where(eq(schema.jobs.id, jobId))
+      .returning();
+    return result;
+  }
   // Staff time tracking methods - delegated to implementations at lines 1694-1782
   async clearJobStaffTimeEntries(jobId: string): Promise<void> {
     // Clear all staff time entries for a job
