@@ -2240,11 +2240,7 @@ class DatabaseStorage implements IStorage {
   async validateGrossMarginComplete(jobId: string): Promise<boolean> { return false; }
   async updateJobExpenses(jobId: string, expenseData: any): Promise<Job> { throw new Error("Not implemented"); }
   async updateExpenseCompletionStatus(jobId: string, completionData: any): Promise<Job> { throw new Error("Not implemented"); }
-  async updateJobStaffTime(jobId: string, staffTimeEntries: any[]): Promise<Job> { throw new Error("Not implemented"); }
-  async addStaffTimeEntry(jobId: string, entry: any): Promise<Job> { throw new Error("Not implemented"); }
-  async removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job> { throw new Error("Not implemented"); }
-  async calculateLaborCostFromStaffTime(jobId: string): Promise<number> { return 0; }
-  async getJobStaffTimeEntries(jobId: string): Promise<any[]> { return []; }
+  // Staff time tracking methods - delegated to implementations at lines 1694-1782
   async clearJobStaffTimeEntries(jobId: string): Promise<void> {
     // Clear all staff time entries for a job
     const job = await this.getJob(jobId);
