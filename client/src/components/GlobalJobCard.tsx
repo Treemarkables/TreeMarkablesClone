@@ -26,6 +26,7 @@ import { RecordedTimeModal } from "./RecordedTimeModal";
 import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
 import { CustomerAvatar } from "./CustomerAvatar";
+import { JobLocationMap } from "./JobLocationMap";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -3145,6 +3146,14 @@ export function GlobalJobCard({
                             </FormItem>
                           )}
                         />
+                        
+                        {/* Map view of job location */}
+                        {mode === 'edit' && editingJob?.address && (
+                          <JobLocationMap 
+                            jobAddress={editingJob.address} 
+                            className="mt-2"
+                          />
+                        )}
 
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
