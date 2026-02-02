@@ -187,7 +187,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     const contactName = job.jobContactFirstName && job.jobContactLastName 
       ? `${job.jobContactFirstName} ${job.jobContactLastName}`
       : job.jobContactFirstName || job.jobContactLastName || '';
-    setEditableContactName(existingInvoice?.contactName || contactName);
+    const existingInvoiceContactName = existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
+    setEditableContactName(existingInvoiceContactName || contactName);
     setEditableEmail(customer.email || '');
 
     // Get proposals and quotes
