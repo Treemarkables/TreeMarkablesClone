@@ -5382,6 +5382,34 @@ class DatabaseStorage implements IStorage {
     return request;
   }
 
+  async getAllReviewRequests(): Promise<any[]> {
+    return await db.select({
+      id: schema.reviewRequests.id,
+      jobId: schema.reviewRequests.jobId,
+      customerId: schema.reviewRequests.customerId,
+      token: schema.reviewRequests.token,
+      status: schema.reviewRequests.status,
+      sentAt: schema.reviewRequests.sentAt,
+      sentBy: schema.reviewRequests.sentBy,
+      sentVia: schema.reviewRequests.sentVia,
+      customerName: schema.reviewRequests.customerName,
+      customerEmail: schema.reviewRequests.customerEmail,
+      customerPhone: schema.reviewRequests.customerPhone,
+      jobNumber: schema.reviewRequests.jobNumber,
+      jobAddress: schema.reviewRequests.jobAddress,
+      createdAt: schema.reviewRequests.createdAt,
+      updatedAt: schema.reviewRequests.updatedAt,
+      // Join review submission if exists
+      submissionId: schema.reviewSubmissions.id,
+      rating: schema.reviewSubmissions.rating,
+      comment: schema.reviewSubmissions.comment,
+      submittedAt: schema.reviewSubmissions.submittedAt
+    })
+      .from(schema.reviewRequests)
+      .leftJoin(schema.reviewSubmissions, eq(schema.reviewRequests.id, schema.reviewSubmissions.requestId))
+      .orderBy(desc(schema.reviewRequests.sentAt));
+  }
+
   async createReviewSubmission(data: any): Promise<any> {
     const [newSubmission] = await db.insert(schema.reviewSubmissions)
       .values(data)

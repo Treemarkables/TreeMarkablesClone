@@ -17040,6 +17040,17 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
+  // Get all review requests with details
+  app.get("/api/reviews/requests", async (req, res) => {
+    try {
+      const requests = await storage.getAllReviewRequests();
+      res.json({ success: true, data: requests });
+    } catch (error) {
+      console.error("Error fetching review requests:", error);
+      res.status(500).json({ success: false, message: "Failed to fetch review requests" });
+    }
+  });
+
   // ========================================
   // ACTIVITY DASHBOARD
   // ========================================

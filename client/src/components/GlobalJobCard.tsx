@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -1628,6 +1628,70 @@ export function GlobalJobCard({
     }
   };
 
+  // Handle request review click - sends templated review request email
+  const handleRequestReviewClick = async () => {
+    if (!editingJob) return;
+    
+    const customerEmail = editingJob.customerEmail || editingJob.email;
+    const customerName = editingJob.customerName || editingJob.billingName || 'Customer';
+    
+    if (!customerEmail) {
+      toast({
+        title: "No Email Address",
+        description: "This customer doesn't have an email address on file. Please add one to send a review request.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    const reviewMessage = `Hi ${customerName.split(' ')[0]},
+
+Glad to hear you're happy with the work! Would you be able to leave the team a review on Facebook and Google please? Here are links to do so.
+
+Facebook review link
+
+https://www.facebook.com/TreemarkablesGisborne/reviews
+
+Google review link
+
+https://search.google.com/local/writereview?placeid=ChIJyW5ncp55Zm0R3_iU47Axcn8
+
+Thanks so much!
+The Treemarkables Team`;
+    
+    try {
+      const response = await apiRequest('POST', '/api/communications/email', {
+        to: customerEmail,
+        subject: 'We\'d love your feedback!',
+        message: reviewMessage,
+        jobId: editingJob.id,
+        customerId: editingJob.customerId
+      });
+      
+      if (response.success) {
+        toast({
+          title: "Review Request Sent",
+          description: `Email sent to ${customerEmail}${response.reviewRequestTracked ? ' and tracked' : ''}`,
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/reviews/requests'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/reviews/stats'] });
+      } else {
+        toast({
+          title: "Failed to Send",
+          description: response.message || "Could not send review request",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to send review request email",
+        variant: "destructive"
+      });
+    }
+  };
+
   // Handle speech-to-quote data
   const handleSpeechToQuoteGenerated = (quoteData: any) => {
     console.log('📢 Speech to Quote data received:', quoteData);
@@ -2542,6 +2606,12 @@ export function GlobalJobCard({
                       ? 'Sent to Xero' 
                       : 'Send to Xero'}
                   </DropdownMenuItem>
+                  {editingJob?.status === 'completed' && (
+                    <DropdownMenuItem onClick={handleRequestReviewClick}>
+                      <Star className="w-4 h-4 mr-2" />
+                      Request Review
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -2641,6 +2711,12 @@ export function GlobalJobCard({
                       ? 'Sent to Xero' 
                       : 'Send to Xero'}
                   </DropdownMenuItem>
+                  {editingJob?.status === 'completed' && (
+                    <DropdownMenuItem onClick={handleRequestReviewClick} data-testid="menu-item-request-review-mobile">
+                      <Star className="w-4 h-4 mr-2" />
+                      Request Review
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
