@@ -303,6 +303,7 @@ export function JobDiarySection({
   // Fetch job data for variable replacement
   const { data: jobData } = useQuery({
     queryKey: ['/api/jobs', jobId],
+    select: (response: any) => response.data || response,
   });
 
   // Fetch email templates
