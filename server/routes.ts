@@ -6924,20 +6924,22 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let fromDateObj: Date | undefined;
       let toDateObj: Date | undefined;
       
+      // Parse dates as NZ timezone (since the user is in Auckland)
+      // This ensures Feb 2nd NZ time filters correctly even though DB stores UTC
       if (fromDate && typeof fromDate === 'string') {
-        fromDateObj = new Date(fromDate);
+        // Parse as start of day in NZ timezone, then convert to UTC
+        fromDateObj = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
         }
       }
       
       if (toDate && typeof toDate === 'string') {
-        toDateObj = new Date(toDate);
+        // Parse as end of day in NZ timezone, then convert to UTC
+        toDateObj = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
-        // Set to end of day to include all activity that day
-        toDateObj.setHours(23, 59, 59, 999);
       }
       
       const stats = await storage.getDashboardStats(fromDateObj, toDateObj);
@@ -6955,20 +6957,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let fromDate: Date | undefined;
       let toDate: Date | undefined;
       
+      // Parse dates as NZ timezone
       if (from && typeof from === 'string') {
-        fromDate = new Date(from);
+        fromDate = fromZonedTime(`${from}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid from date format' });
         }
       }
       
       if (to && typeof to === 'string') {
-        toDate = new Date(to);
+        toDate = fromZonedTime(`${to}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid to date format' });
         }
-        // Set to end of day to include jobs completed any time that day
-        toDate.setHours(23, 59, 59, 999);
       }
       
       const stats = await storage.getRevenueStats(fromDate, toDate);
@@ -6987,19 +6988,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let fromDate: Date | undefined;
       let toDate: Date | undefined;
       
+      // Parse dates as NZ timezone
       if (from && typeof from === 'string') {
-        fromDate = new Date(from);
+        fromDate = fromZonedTime(`${from}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid from date format' });
         }
       }
       
       if (to && typeof to === 'string') {
-        toDate = new Date(to);
+        toDate = fromZonedTime(`${to}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid to date format' });
         }
-        toDate.setHours(23, 59, 59, 999);
       }
       
       // Get completed jobs with invoices in the date range
@@ -7125,20 +7126,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let fromDateObj: Date | undefined;
       let toDateObj: Date | undefined;
       
+      // Parse dates as NZ timezone
       if (fromDate && typeof fromDate === 'string') {
-        fromDateObj = new Date(fromDate);
+        fromDateObj = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
         }
       }
       
       if (toDate && typeof toDate === 'string') {
-        toDateObj = new Date(toDate);
+        toDateObj = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
-        // Set to end of day to include all activity that day
-        toDateObj.setHours(23, 59, 59, 999);
       }
       
       const analytics = await storage.getQuoteAnalytics(fromDateObj, toDateObj);
@@ -7157,19 +7157,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let fromDateObj: Date | undefined;
       let toDateObj: Date | undefined;
       
+      // Parse dates as NZ timezone
       if (fromDate && typeof fromDate === 'string') {
-        fromDateObj = new Date(fromDate);
+        fromDateObj = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
         }
       }
       
       if (toDate && typeof toDate === 'string') {
-        toDateObj = new Date(toDate);
+        toDateObj = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
-        toDateObj.setHours(23, 59, 59, 999);
       }
       
       const analytics = await storage.getQuoteMethodAnalytics(fromDateObj, toDateObj);
@@ -7188,20 +7188,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let fromDate: Date | undefined;
       let toDate: Date | undefined;
       
+      // Parse dates as NZ timezone
       if (from && typeof from === 'string') {
-        fromDate = new Date(from);
+        fromDate = fromZonedTime(`${from}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid from date format' });
         }
       }
       
       if (to && typeof to === 'string') {
-        toDate = new Date(to);
+        toDate = fromZonedTime(`${to}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDate.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid to date format' });
         }
-        // Set to end of day to include all activity that day
-        toDate.setHours(23, 59, 59, 999);
       }
       
       const metrics = await manHoursService.getOverallEstimationMetrics(fromDate, toDate);
