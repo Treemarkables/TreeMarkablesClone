@@ -1297,7 +1297,7 @@ export function JobDiarySection({
                                 const custName = (jobData?.jobContactFirstName && jobData?.jobContactLastName)
                                   ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                                   : jobData?.jobContactFirstName || jobData?.customerName || 'Customer';
-                                const title = `Quote appointment - ${custName}`;
+                                const title = custName;
                                 // Set tomorrow's date as default
                                 const tomorrow = new Date();
                                 tomorrow.setDate(tomorrow.getDate() + 1);
@@ -2157,7 +2157,7 @@ export function JobDiarySection({
                   
                   const response = await apiRequest('POST', '/api/calendar/quick-book', {
                     jobId,
-                    title: `${calendarBookingTitle} - ${customerName}`,
+                    title: calendarBookingTitle,
                     description: `Customer: ${customerName}\nAddress: ${jobAddress}\nPhone: ${custPhone}\n\nJob ID: ${jobId}`,
                     location: jobAddress,
                     startTime: startTime.toISOString(),
