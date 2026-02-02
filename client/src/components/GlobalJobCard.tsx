@@ -5912,9 +5912,9 @@ The Treemarkables Team`;
         </Dialog>
       )}
 
-      {/* Job Description Popup - Responsive Width */}
+      {/* Job Description Popup - Responsive Width with safe area for iPhone notch */}
       <Dialog open={descriptionPopupOpen} onOpenChange={setDescriptionPopupOpen}>
-        <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl">
+        <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center">Crew Notes</DialogTitle>
           </DialogHeader>
