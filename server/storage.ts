@@ -2657,26 +2657,28 @@ class DatabaseStorage implements IStorage {
     const jobsResult = await this.getAllJobs({ limit: 10000 });
     const allJobs = jobsResult.jobs;
     
-    // Get all proposals that have been sent (status = 'sent' or 'accepted', or has sent_date)
+    // Get all proposals that have been sent (status = 'sent' or 'accepted' or 'viewed', or has sent_date)
     const proposals = await db.select().from(schema.proposals);
-    const sentProposalJobIds = new Set(
-      proposals
-        .filter(p => p.jobId && (p.status === 'sent' || p.status === 'accepted' || p.sentDate))
-        .map(p => p.jobId)
-    );
     
-    // Filter by date if provided (using job creation date)
+    // Create a map of jobId to sent date for filtering
+    const sentProposalsByJobId = new Map<string, Date>();
+    proposals.forEach(p => {
+      if (p.jobId && (p.status === 'sent' || p.status === 'accepted' || p.status === 'viewed' || p.sentDate)) {
+        const sentDate = p.sentDate ? new Date(p.sentDate) : null;
+        if (sentDate) {
+          // Keep the earliest sent date for each job
+          const existing = sentProposalsByJobId.get(p.jobId);
+          if (!existing || sentDate < existing) {
+            sentProposalsByJobId.set(p.jobId, sentDate);
+          }
+        }
+      }
+    });
+    
+    const sentProposalJobIds = new Set(sentProposalsByJobId.keys());
+    
+    // Filter jobs - exclude archived
     let filteredJobs = allJobs.filter(j => !j.archived);
-    
-    if (fromDate || toDate) {
-      filteredJobs = filteredJobs.filter(j => {
-        if (!j.createdAt) return false;
-        const jobDate = new Date(j.createdAt);
-        if (fromDate && jobDate < fromDate) return false;
-        if (toDate && jobDate > toDate) return false;
-        return true;
-      });
-    }
     
     // Quote Acceptance based on JOB STATUS:
     // - Accepted = jobs with status: completed, scheduled, in_progress, invoiced, work_order (customer said yes)
@@ -2694,19 +2696,41 @@ class DatabaseStorage implements IStorage {
       j.status !== 'lead'
     );
     
-    // Jobs with accepted status (customer said yes) - always include these
-    const acceptedJobs = activeJobs.filter(j => acceptedStatuses.includes(j.status || ''));
+    // Filter by date based on QUOTE SENT DATE (not job creation date)
+    // This ensures "Quotes Sent" reflects when quotes were actually sent
+    const filterByQuoteSentDate = (job: any) => {
+      if (!fromDate && !toDate) return true;
+      
+      const sentDate = sentProposalsByJobId.get(job.id);
+      if (!sentDate) return false; // No sent date means no proposal sent
+      
+      if (fromDate && sentDate < fromDate) return false;
+      if (toDate && sentDate > toDate) return false;
+      return true;
+    };
     
-    // Jobs with rejected status (customer said no) - always include these
-    const rejectedJobs = activeJobs.filter(j => rejectedStatuses.includes(j.status || ''));
-    
-    // Jobs with pending status - ONLY include if proposal was actually sent
-    const pendingJobs = activeJobs.filter(j => 
-      pendingStatuses.includes(j.status || '') && 
-      sentProposalJobIds.has(j.id)
+    // Jobs with accepted status (customer said yes) - filter by quote sent date
+    const acceptedJobs = activeJobs.filter(j => 
+      acceptedStatuses.includes(j.status || '') && 
+      sentProposalJobIds.has(j.id) &&
+      filterByQuoteSentDate(j)
     );
     
-    // Total quotes = accepted + rejected + pending (only jobs with proposals sent)
+    // Jobs with rejected status (customer said no) - filter by quote sent date
+    const rejectedJobs = activeJobs.filter(j => 
+      rejectedStatuses.includes(j.status || '') && 
+      sentProposalJobIds.has(j.id) &&
+      filterByQuoteSentDate(j)
+    );
+    
+    // Jobs with pending status - ONLY include if proposal was actually sent and within date range
+    const pendingJobs = activeJobs.filter(j => 
+      pendingStatuses.includes(j.status || '') && 
+      sentProposalJobIds.has(j.id) &&
+      filterByQuoteSentDate(j)
+    );
+    
+    // Total quotes = accepted + rejected + pending (only jobs with proposals sent in date range)
     const totalQuotes = acceptedJobs.length + rejectedJobs.length + pendingJobs.length;
     
     return {
