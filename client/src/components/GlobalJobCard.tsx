@@ -222,6 +222,16 @@ export function GlobalJobCard({
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
   
+  // Quote presentation method local state (for immediate UI update)
+  const [localQuoteMethod, setLocalQuoteMethod] = useState<string>('');
+  
+  // Initialize localQuoteMethod from editingJob when it loads
+  useEffect(() => {
+    if (editingJob && (editingJob as any).quotePresentationMethod) {
+      setLocalQuoteMethod((editingJob as any).quotePresentationMethod);
+    }
+  }, [editingJob?.id, (editingJob as any)?.quotePresentationMethod]);
+  
   // Proposal builder state
   const [isProposalBuilderOpen, setIsProposalBuilderOpen] = useState(false);
   const [editingProposalId, setEditingProposalId] = useState<string | undefined>(undefined);
@@ -3500,21 +3510,12 @@ export function GlobalJobCard({
                             <div className="flex-1">
                               <label className="text-[10px] font-medium text-gray-500 mb-0.5 block">Quote Method</label>
                               <Select 
-                                value={(editingJob as any).quotePresentationMethod || ""} 
+                                value={localQuoteMethod || ""} 
                                 onValueChange={(value) => {
+                                  // Update local state immediately for UI
+                                  setLocalQuoteMethod(value);
+                                  
                                   if (editingJob?.id) {
-                                    // Optimistic update
-                                    queryClient.setQueryData(['/api/jobs', editingJob.id], (oldData: any) => {
-                                      if (!oldData) return oldData;
-                                      return {
-                                        ...oldData,
-                                        data: { 
-                                          ...oldData.data, 
-                                          quotePresentationMethod: value,
-                                          quotePresentedDate: new Date().toISOString()
-                                        }
-                                      };
-                                    });
                                     // Background save
                                     apiRequest('PATCH', `/api/jobs/${editingJob.id}`, { 
                                       quotePresentationMethod: value,
