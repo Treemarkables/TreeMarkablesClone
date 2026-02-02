@@ -1292,7 +1292,8 @@ export function JobDiarySection({
                                 console.log('📅 Book button clicked, opening calendar dialog');
                                 // Extract any mentioned time from the email content
                                 const content = entry.content || '';
-                                const title = `Quote appointment - ${customerName || 'Customer'}`;
+                                const custName = jobData?.customerName || 'Customer';
+                                const title = `Quote appointment - ${custName}`;
                                 // Set tomorrow's date as default
                                 const tomorrow = new Date();
                                 tomorrow.setDate(tomorrow.getDate() + 1);
@@ -2146,7 +2147,7 @@ export function JobDiarySection({
                   const response = await apiRequest('POST', '/api/calendar/quick-book', {
                     jobId,
                     title: calendarBookingTitle,
-                    description: `Job: ${jobId}\nCustomer: ${customerName || 'N/A'}\n\nFrom diary entry: ${calendarBookingEntry?.content?.substring(0, 200) || ''}`,
+                    description: `Job: ${jobId}\nCustomer: ${jobData?.customerName || 'N/A'}\n\nFrom diary entry: ${calendarBookingEntry?.content?.substring(0, 200) || ''}`,
                     location: jobAddress || '',
                     startTime: startTime.toISOString(),
                     endTime: endTime.toISOString(),
