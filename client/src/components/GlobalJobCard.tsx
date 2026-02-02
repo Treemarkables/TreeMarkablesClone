@@ -3513,10 +3513,12 @@ export function GlobalJobCard({
                               <Select 
                                 value={localQuoteMethod || ""} 
                                 onValueChange={async (value) => {
+                                  console.log('🎯 Quote method dropdown changed to:', value);
                                   // Update local state immediately for UI
                                   setLocalQuoteMethod(value);
                                   
                                   if (editingJob?.id) {
+                                    console.log('🎯 Saving quote method for job:', editingJob.id);
                                     try {
                                       // Save to server
                                       const response = await apiRequest('PATCH', `/api/jobs/${editingJob.id}`, { 
@@ -3524,6 +3526,7 @@ export function GlobalJobCard({
                                         quotePresentedDate: new Date().toISOString()
                                       });
                                       const data = await response.json();
+                                      console.log('🎯 Quote method API response:', data);
                                       if (data.success) {
                                         console.log('✅ Quote method saved:', value);
                                         // Invalidate job cache to ensure data is fresh
@@ -3544,6 +3547,8 @@ export function GlobalJobCard({
                                         variant: "destructive"
                                       });
                                     }
+                                  } else {
+                                    console.log('🎯 No editingJob.id available');
                                   }
                                 }}
                               >
