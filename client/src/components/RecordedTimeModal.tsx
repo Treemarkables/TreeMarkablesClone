@@ -179,12 +179,23 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     // Track staff without rates
     const staffWithoutRates: string[] = [];
 
-    // Create one pending entry for each selected staff member using their hourly rate
+    // Create one pending entry for each selected staff member with auto-matched rate
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map(staffId => {
       const staff = employees.find((e: any) => e.id === staffId);
-      const staffHourlyRate = staff?.hourlyRate ? parseFloat(staff.hourlyRate) : 0;
+      const staffFirstName = staff?.firstName || '';
       
-      if (!staffHourlyRate || staffHourlyRate <= 0) {
+      // Find matching labour rate by staff first name (case-insensitive, flexible matching)
+      const firstName = staffFirstName.toLowerCase().trim();
+      const matchingRate = availableRates.find((r: any) => {
+        const rateName = r.name.toLowerCase().trim();
+        return rateName === firstName || 
+               rateName.startsWith(firstName + ' ') || 
+               rateName.startsWith(firstName + '_') ||
+               rateName.includes(' ' + firstName) ||
+               rateName.split(' ')[0] === firstName;
+      });
+      
+      if (!matchingRate) {
         staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
       }
       
@@ -193,7 +204,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         date: new Date().toLocaleDateString('en-GB'),
         staffId: staffId,
         staffName: `${staff?.firstName || ''} ${staff?.lastName || ''}`.trim(),
-        rate: staffHourlyRate.toString(),
+        rate: matchingRate?.itemNumber || '',
         start: '',
         duration: parseFloat(newEntry.duration),
         billed: true
@@ -202,11 +213,11 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
     
     setPendingEntries(prev => [...prev, ...newTimeEntries]);
     
-    // Show warning if some staff don't have hourly rates set
+    // Show warning if some staff don't have matching rates
     if (staffWithoutRates.length > 0) {
       toast({
         title: "Warning",
-        description: `${staffWithoutRates.join(', ')} ${staffWithoutRates.length === 1 ? 'does' : 'do'} not have an hourly rate set in their employee profile.`,
+        description: `${staffWithoutRates.join(', ')} ${staffWithoutRates.length === 1 ? 'does' : 'do'} not have a matching labour rate set up. Please add a rate in Settings.`,
         variant: "destructive",
       });
     }
@@ -371,8 +382,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-80 p-0" align="start" sideOffset={5}>
-                    <div className="p-2 border-b">
+                  <PopoverContent className="w-80 p-0" align="start" sideOffset={5} style={{ maxHeight: '400px', display: 'flex', flexDirection: 'column' }}>
+                    <div className="p-2 border-b flex-shrink-0">
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
@@ -412,7 +423,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <div className="max-h-[250px] overflow-y-auto overscroll-contain">
+                    <div className="flex-1 overflow-y-auto" style={{ minHeight: 0 }}>
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
@@ -459,7 +470,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
               
               <div className="bg-blue-100 border border-blue-200 rounded p-2">
                 <p className="text-xs text-blue-800">
-                  <strong>Auto-Rate Matching:</strong> Each staff member will be automatically assigned their personal hourly rate from Settings.
+                  <strong>Auto-Rate Matching:</strong> Each staff member will be automatically matched to a labour rate by their first name. Create rates in Settings → Materials/Services.
                 </p>
               </div>
               
@@ -537,11 +548,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Rate</div>
-                        <div className="text-[10px]">
-                          {!isNaN(parseFloat(entry.rate)) && parseFloat(entry.rate) > 0
-                            ? `$${parseFloat(entry.rate).toFixed(2)}/hr`
-                            : entry.rate || 'No rate'}
-                        </div>
+                        <div className="text-[10px]">{availableRates.find((r: any) => r.itemNumber === entry.rate)?.name || entry.rate || 'No rate'}</div>
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Time</div>
@@ -582,11 +589,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Rate</div>
-                        <div className="text-[10px]">
-                          {entry.rate && !isNaN(parseFloat(entry.rate)) && parseFloat(entry.rate) > 0
-                            ? `$${parseFloat(entry.rate).toFixed(2)}/hr`
-                            : entry.lineItemName || 'No rate'}
-                        </div>
+                        <div className="text-[10px]">{entry.lineItemName || 'No rate'}</div>
                       </div>
                       <div>
                         <div className="text-[8px] text-gray-500">Time</div>
