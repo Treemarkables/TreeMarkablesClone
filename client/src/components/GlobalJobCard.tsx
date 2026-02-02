@@ -4990,24 +4990,41 @@ The Treemarkables Team`;
                                           </p>
                                         </div>
                                       </div>
-                                      <div className="text-right">
-                                        <p className="font-semibold text-sm text-gray-900">
-                                          ${parseFloat(invoice.totalAmount || invoice.amount || '0').toFixed(2)}
-                                        </p>
-                                        <Badge 
-                                          variant="outline" 
-                                          className={`text-xs ${
-                                            invoice.status === 'paid' ? 'border-green-500 text-green-600' :
-                                            invoice.status === 'sent' ? 'border-blue-500 text-blue-600' :
-                                            invoice.xeroInvoiceId ? 'border-purple-500 text-purple-600' :
-                                            'border-gray-400 text-gray-600'
-                                          }`}
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                          onClick={(e) => {
+                                            e.preventDefault();
+                                            // Set email context to invoice and open email composer
+                                            setEmailContext('invoice');
+                                            setIsInvoiceModalOpen(true);
+                                          }}
                                         >
-                                          {invoice.status === 'paid' ? 'Paid' :
-                                           invoice.xeroInvoiceId ? 'In Xero' :
-                                           invoice.status === 'sent' ? 'Sent' : 
-                                           invoice.status || 'Draft'}
-                                        </Badge>
+                                          <Send className="h-3.5 w-3.5 mr-1" />
+                                          <span className="text-xs">Resend</span>
+                                        </Button>
+                                        <div className="text-right">
+                                          <p className="font-semibold text-sm text-gray-900">
+                                            ${parseFloat(invoice.totalAmount || invoice.amount || '0').toFixed(2)}
+                                          </p>
+                                          <Badge 
+                                            variant="outline" 
+                                            className={`text-xs ${
+                                              invoice.status === 'paid' ? 'border-green-500 text-green-600' :
+                                              invoice.status === 'sent' ? 'border-blue-500 text-blue-600' :
+                                              invoice.xeroInvoiceId ? 'border-purple-500 text-purple-600' :
+                                              'border-gray-400 text-gray-600'
+                                            }`}
+                                          >
+                                            {invoice.status === 'paid' ? 'Paid' :
+                                             invoice.xeroInvoiceId ? 'In Xero' :
+                                             invoice.status === 'sent' ? 'Sent' : 
+                                             invoice.status || 'Draft'}
+                                          </Badge>
+                                        </div>
                                       </div>
                                     </div>
                                   ))}
