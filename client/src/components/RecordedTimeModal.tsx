@@ -426,12 +426,15 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       </div>
                     </div>
                     <div 
-                      className="overflow-y-auto overscroll-contain"
+                      className="overflow-y-scroll overscroll-contain"
                       style={{ 
                         maxHeight: '200px',
                         WebkitOverflowScrolling: 'touch',
-                        touchAction: 'pan-y'
+                        touchAction: 'pan-y',
+                        position: 'relative',
+                        transform: 'translateZ(0)'
                       }}
+                      onTouchStart={(e) => e.stopPropagation()}
                     >
                       <div className="p-2 space-y-1">
                         {employees
