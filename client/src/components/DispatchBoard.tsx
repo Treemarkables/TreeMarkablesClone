@@ -2146,21 +2146,45 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     <CreateLeadFromMessageDialog
       open={showCreateFromMessageDialog}
       onOpenChange={setShowCreateFromMessageDialog}
-      onLeadCreated={(data) => {
+      onLeadCreated={async (data) => {
         setShowCreateFromMessageDialog(false);
-        setInitialJobData({
-          customerName: data.name,
-          customerPhone: data.phone,
-          address: data.address,
-          description: data.description,
-          leadSource: 'sms'
-        });
-        setGlobalJobCardMode('create');
-        setShowGlobalJobCard(true);
-        toast({
-          title: 'Lead Data Ready',
-          description: 'Customer details have been loaded into the job card',
-        });
+        
+        // Automatically create the job from extracted data
+        try {
+          const response = await apiRequest('POST', '/api/jobs', {
+            customerName: data.name || 'New Lead',
+            customerPhone: data.phone || '',
+            customerEmail: '',
+            address: data.address || '',
+            description: data.description || '',
+            leadSource: 'sms',
+            status: 'quote',
+            isNewCustomer: true,
+          });
+          
+          if (response.success && response.data) {
+            // Refresh jobs list
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+            
+            // Open the newly created job for editing
+            setSelectedJobId(response.data.id);
+            setGlobalJobCardMode('edit');
+            setShowGlobalJobCard(true);
+            
+            toast({
+              title: 'Job Created',
+              description: `Job #${response.data.jobNumber} created from SMS lead`,
+            });
+          }
+        } catch (error) {
+          console.error('Failed to create job from lead:', error);
+          toast({
+            title: 'Error',
+            description: 'Failed to create job. Please try again.',
+            variant: 'destructive',
+          });
+        }
       }}
     />
   </>
