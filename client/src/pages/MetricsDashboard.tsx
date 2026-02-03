@@ -400,6 +400,23 @@ export default function MetricsDashboard() {
   };
 
   const dateRange = getDateRange();
+  
+  // Get today's date string for "Today's Metrics" section
+  const todayStr = new Date().toISOString().split('T')[0];
+
+  // Today's metrics query - always shows today's activity regardless of date range
+  const { data: todayStats, isLoading: todayLoading } = useQuery<{
+    newLeads: number;
+    quotesSent: number;
+    jobsCompleted: number;
+    revenue: number;
+    callsReceived: number;
+  }>({
+    queryKey: ['/api/today-metrics', todayStr],
+    queryFn: () => {
+      return fetch(`/api/today-metrics`).then(res => res.json()).then(res => res.data);
+    }
+  });
 
   // Data queries with date filtering
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
@@ -920,6 +937,72 @@ export default function MetricsDashboard() {
               </CardContent>
             </Card>
           )}
+
+          {/* Today's Metrics Section - Always visible */}
+          <div className="space-y-3 mb-6">
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-orange-600" />
+              <h2 className="text-lg font-semibold text-gray-900">Today's Activity</h2>
+              <span className="text-sm text-gray-500">({new Date().toLocaleDateString('en-NZ', { weekday: 'long', day: 'numeric', month: 'short' })})</span>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              {/* New Leads Today */}
+              <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <Users className="h-4 w-4 text-blue-600" />
+                  <p className="text-xs font-medium text-blue-700">New Leads</p>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {todayLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (todayStats?.newLeads || 0)}
+                </p>
+              </div>
+
+              {/* Quotes Sent Today */}
+              <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <Send className="h-4 w-4 text-purple-600" />
+                  <p className="text-xs font-medium text-purple-700">Quotes Sent</p>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {todayLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (todayStats?.quotesSent || 0)}
+                </p>
+              </div>
+
+              {/* Jobs Completed Today */}
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <p className="text-xs font-medium text-green-700">Jobs Done</p>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {todayLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (todayStats?.jobsCompleted || 0)}
+                </p>
+              </div>
+
+              {/* Revenue Today */}
+              <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <DollarSign className="h-4 w-4 text-orange-600" />
+                  <p className="text-xs font-medium text-orange-700">Revenue</p>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {todayLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : formatCurrency(todayStats?.revenue || 0).replace('NZ$', '$')}
+                </p>
+              </div>
+
+              {/* Calls Today */}
+              <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl p-4 border border-teal-200">
+                <div className="flex items-center gap-2 mb-1">
+                  <PhoneCall className="h-4 w-4 text-teal-600" />
+                  <p className="text-xs font-medium text-teal-700">Calls</p>
+                </div>
+                <p className="text-2xl font-bold text-gray-900">
+                  {todayLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : (todayStats?.callsReceived || 0)}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Business Health Section */}
           <div className="space-y-3">
