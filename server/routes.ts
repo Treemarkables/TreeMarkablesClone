@@ -4847,10 +4847,21 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             }
           });
 
-          // Update job's lastActivityAt to move it to top of list
-          await storage.updateJob(proposal.jobId, {
-            lastActivityAt: new Date()
-          });
+          // Update job's lastActivityAt and status to 'quote' when proposal is sent
+          // Only upgrade status if it's currently 'lead' (don't downgrade work_order, scheduled, etc.)
+          const job = await storage.getJob(proposal.jobId);
+          const updateData: any = { 
+            lastActivityAt: new Date(),
+            quotePresentedDate: new Date() // Track when quote was presented
+          };
+          
+          // Auto-upgrade status from Lead to Quote when proposal is sent
+          if (job && job.status === 'lead') {
+            updateData.status = 'quote';
+            console.log(`📊 Auto-upgraded job ${job.jobNumber} status from 'lead' to 'quote'`);
+          }
+          
+          await storage.updateJob(proposal.jobId, updateData);
 
           console.log(`📝 Created diary entry for proposal ${proposalNumber} email`);
         } catch (diaryError) {
