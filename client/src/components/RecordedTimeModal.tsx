@@ -425,7 +425,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <div className="max-h-[40vh] overflow-y-auto -webkit-overflow-scrolling-touch">
+                    <div className="max-h-[40vh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
