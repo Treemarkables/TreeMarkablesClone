@@ -2347,15 +2347,18 @@ The Treemarkables Team`;
                   {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
                 </Badge>
               )}
-              {/* Job Price Display - Check line items, then proposal, then quote, then job total */}
+              {/* Job Price Display - Ex GST amounts only */}
               {mode === 'edit' && (
                 (() => {
-                  // Priority: line items > proposal totalAmount > quote amount > job totalAmount
+                  // Priority: line items > proposal subtotal (ex GST) > quote amount/1.15 > job totalAmount/1.15
                   const lineItemsTotal = (form.watch('lineItems') || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
-                  const proposalTotal = parseFloat(jobProposalResponse?.data?.[0]?.totalAmount || '0');
-                  const quoteTotal = parseFloat(jobQuoteResponse?.data?.[0]?.amount || '0');
-                  const jobStoredTotal = parseFloat(editingJob?.totalAmount || '0');
-                  const jobTotal = lineItemsTotal || proposalTotal || quoteTotal || jobStoredTotal;
+                  // Use proposal subtotal (ex GST) - this is the correct ex GST value
+                  const proposalSubtotal = parseFloat(jobProposalResponse?.data?.[0]?.subtotal || '0');
+                  // Quote amount is typically inc GST, so divide by 1.15
+                  const quoteExGst = (parseFloat(jobQuoteResponse?.data?.[0]?.amount || '0')) / 1.15;
+                  // Job stored total is typically inc GST, so divide by 1.15
+                  const jobStoredExGst = (parseFloat(editingJob?.totalAmount || '0')) / 1.15;
+                  const jobTotal = lineItemsTotal || proposalSubtotal || quoteExGst || jobStoredExGst;
                   return jobTotal > 0 ? (
                     <span className="text-sm sm:text-base font-semibold text-green-600 ml-1" data-testid="text-job-price">
                       {new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(jobTotal)}
