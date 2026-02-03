@@ -7070,6 +7070,86 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // BUSINESS INTELLIGENCE API ROUTES
   // ========================================
 
+  // Today's Metrics - Always returns today's activity (NZ timezone)
+  app.get('/api/today-metrics', async (req: Request, res: Response) => {
+    try {
+      // Get today's date range in NZ timezone
+      const now = new Date();
+      const nzFormatter = new Intl.DateTimeFormat('en-NZ', {
+        timeZone: 'Pacific/Auckland',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+      const parts = nzFormatter.formatToParts(now);
+      const year = parts.find(p => p.type === 'year')?.value;
+      const month = parts.find(p => p.type === 'month')?.value;
+      const day = parts.find(p => p.type === 'day')?.value;
+      const todayStr = `${year}-${month}-${day}`;
+      
+      // Parse as start and end of day in NZ timezone
+      const startOfDay = fromZonedTime(`${todayStr}T00:00:00`, 'Pacific/Auckland');
+      const endOfDay = fromZonedTime(`${todayStr}T23:59:59`, 'Pacific/Auckland');
+
+      // Get all data
+      const [leads, jobs, calls] = await Promise.all([
+        storage.getLeads(),
+        storage.getJobs(),
+        storage.getCallRecordings()
+      ]);
+
+      // Filter to today's data
+      const todayLeads = leads.filter(lead => {
+        if (!lead.createdAt) return false;
+        const leadDate = new Date(lead.createdAt);
+        return leadDate >= startOfDay && leadDate <= endOfDay;
+      });
+
+      const todayJobs = jobs.filter(job => {
+        if (!job.createdAt) return false;
+        const jobDate = new Date(job.createdAt);
+        return jobDate >= startOfDay && jobDate <= endOfDay;
+      });
+
+      const todayQuotesSent = jobs.filter(job => {
+        if (!job.quoteSentAt) return false;
+        const quoteDate = new Date(job.quoteSentAt);
+        return quoteDate >= startOfDay && quoteDate <= endOfDay;
+      });
+
+      const todayJobsCompleted = jobs.filter(job => {
+        if (!job.completedDate) return false;
+        const completedDate = new Date(job.completedDate);
+        return completedDate >= startOfDay && completedDate <= endOfDay;
+      });
+
+      const todayCalls = calls.filter(call => {
+        if (!call.createdAt) return false;
+        const callDate = new Date(call.createdAt);
+        return callDate >= startOfDay && callDate <= endOfDay;
+      });
+
+      // Calculate today's revenue from completed and invoiced jobs
+      const todayRevenue = todayJobsCompleted.reduce((sum, job) => {
+        return sum + (job.invoiceTotal || 0);
+      }, 0);
+
+      res.json({
+        success: true,
+        data: {
+          newLeads: todayLeads.length,
+          quotesSent: todayQuotesSent.length,
+          jobsCompleted: todayJobsCompleted.length,
+          revenue: todayRevenue,
+          callsReceived: todayCalls.length
+        }
+      });
+    } catch (error) {
+      console.error('Error fetching today metrics:', error);
+      res.status(500).json({ success: false, message: 'Error fetching today metrics' });
+    }
+  });
+
   app.get('/api/dashboard-stats', async (req: Request, res: Response) => {
     try {
       const { fromDate, toDate } = req.query;
