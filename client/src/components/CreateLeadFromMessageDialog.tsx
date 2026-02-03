@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -51,6 +51,40 @@ export function CreateLeadFromMessageDialog({
   const [isExtracting, setIsExtracting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  // Handle clipboard paste for screenshots
+  useEffect(() => {
+    if (!open || activeTab !== 'screenshot') return;
+
+    const handlePaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            setSelectedImage(file);
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              setImagePreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+            setExtractedData(null);
+            e.preventDefault();
+            toast({
+              title: "Screenshot Pasted",
+              description: "Image captured from clipboard",
+            });
+            break;
+          }
+        }
+      }
+    };
+
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [open, activeTab, toast]);
 
   const extractFromTextMutation = useMutation({
     mutationFn: async (data: { message: string; phone?: string }) => {
@@ -281,9 +315,9 @@ Thank you, Jack
                 >
                   <CardContent className="flex flex-col items-center justify-center py-8">
                     <Upload className="h-10 w-10 text-muted-foreground mb-3" />
-                    <p className="text-sm font-medium">Click to upload screenshot</p>
+                    <p className="text-sm font-medium">Paste or click to upload</p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Take a screenshot of the Messages app on your iPhone
+                      Press Cmd+V to paste a screenshot, or click to browse
                     </p>
                   </CardContent>
                 </Card>
