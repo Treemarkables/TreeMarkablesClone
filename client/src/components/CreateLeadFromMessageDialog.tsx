@@ -52,9 +52,9 @@ export function CreateLeadFromMessageDialog({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
-  // Handle clipboard paste for screenshots
+  // Handle clipboard paste for screenshots - works from ANY tab
   useEffect(() => {
-    if (!open || activeTab !== 'screenshot') return;
+    if (!open) return;
 
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -71,6 +71,8 @@ export function CreateLeadFromMessageDialog({
             };
             reader.readAsDataURL(file);
             setExtractedData(null);
+            // Auto-switch to screenshot tab when image is pasted
+            setActiveTab('screenshot');
             e.preventDefault();
             toast({
               title: "Screenshot Pasted",
@@ -84,7 +86,7 @@ export function CreateLeadFromMessageDialog({
 
     document.addEventListener('paste', handlePaste);
     return () => document.removeEventListener('paste', handlePaste);
-  }, [open, activeTab, toast]);
+  }, [open, toast]);
 
   const extractFromTextMutation = useMutation({
     mutationFn: async (data: { message: string; phone?: string }) => {
