@@ -16880,10 +16880,42 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
           if (response.ok) {
             const data = await response.json();
-            console.log(`[Address Search] API success: ${data.addresses?.length || 0} results from ${data.matched || 0} matches`);
+            // Filter to only include Gisborne addresses (Gisborne District)
+            const gisborneAddresses = (data.addresses || []).filter((addr: any) => {
+              const address = addr.a?.toLowerCase() || '';
+              // Include addresses that contain Gisborne or are in Gisborne district suburbs
+              return address.includes('gisborne') || 
+                     address.includes('makaraka') ||
+                     address.includes('whataupoko') ||
+                     address.includes('mangapapa') ||
+                     address.includes('elgin') ||
+                     address.includes('kaiti') ||
+                     address.includes('te hapara') ||
+                     address.includes('outer kaiti') ||
+                     address.includes('riverdale') ||
+                     address.includes('lytton west') ||
+                     address.includes('manutuke') ||
+                     address.includes('muriwai') ||
+                     address.includes('patutahi') ||
+                     address.includes('ngatapa') ||
+                     address.includes('ormond') ||
+                     address.includes('waingake') ||
+                     address.includes('wainui') ||
+                     address.includes('okitu') ||
+                     address.includes('sponge bay') ||
+                     address.includes('matawhero') ||
+                     address.includes('hexton') ||
+                     address.includes('tiniroto') ||
+                     address.includes('tolaga bay') ||
+                     address.includes('tokomaru bay') ||
+                     address.includes('ruatoria') ||
+                     address.includes('te araroa') ||
+                     address.includes('tikitiki');
+            });
+            console.log(`[Address Search] API success: ${gisborneAddresses.length} Gisborne results from ${data.matched || 0} total matches`);
             return res.json({ 
               success: true, 
-              addresses: data.addresses || []
+              addresses: gisborneAddresses
             });
           } else {
             const errorText = await response.text();
