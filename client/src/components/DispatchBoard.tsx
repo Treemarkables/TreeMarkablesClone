@@ -2153,9 +2153,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         try {
           console.log('📸 Creating job from extracted data:', data);
           const res = await apiRequest('POST', '/api/jobs', {
-            customerName: data.name || 'New Lead',
-            customerPhone: data.phone || '',
-            customerEmail: '',
+            newCustomerName: data.name || 'New Lead',
+            newCustomerPhone: data.phone || '',
+            newCustomerEmail: '',
             address: data.address || '',
             description: data.description || '',
             leadSource: 'sms',
