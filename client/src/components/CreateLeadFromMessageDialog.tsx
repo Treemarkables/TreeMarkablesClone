@@ -128,11 +128,18 @@ export function CreateLeadFromMessageDialog({
       console.log('📸 onSuccess called with:', JSON.stringify(response));
       // Check for data - response might already be the data object
       const extractedInfo = response?.data || response;
-      if (extractedInfo && (extractedInfo.name || extractedInfo.phone || extractedInfo.address)) {
+      
+      // Check if we got any useful data (non-empty strings)
+      const hasName = extractedInfo?.name && extractedInfo.name.trim() !== '';
+      const hasPhone = extractedInfo?.phone && extractedInfo.phone.trim() !== '';
+      const hasAddress = extractedInfo?.address && extractedInfo.address.trim() !== '';
+      const hasDescription = extractedInfo?.description && extractedInfo.description.trim() !== '';
+      
+      if (hasName || hasPhone || hasAddress || hasDescription) {
         console.log('📸 Extraction successful, auto-creating lead:', extractedInfo);
         toast({
           title: "Creating Job...",
-          description: "Job will open automatically",
+          description: `Found: ${[hasName && 'name', hasPhone && 'phone', hasAddress && 'address', hasDescription && 'details'].filter(Boolean).join(', ')}`,
         });
         // Close dialog and create lead
         setMessageText('');
@@ -143,10 +150,12 @@ export function CreateLeadFromMessageDialog({
         onOpenChange(false);
         onLeadCreated(extractedInfo);
       } else {
-        console.log('📸 No valid data in response:', response);
+        // Still show extracted data state so user can see what happened
+        console.log('📸 No useful data extracted:', response);
+        setExtractedData(extractedInfo);
         toast({
-          title: "No Data Found",
-          description: "Could not extract customer details from the image",
+          title: "No Details Found",
+          description: "The AI couldn't read the image. Make sure it's a clear screenshot of just the SMS conversation (not a screenshot-in-screenshot).",
           variant: "destructive",
         });
       }
