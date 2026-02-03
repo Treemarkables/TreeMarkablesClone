@@ -119,12 +119,17 @@ export function CreateLeadFromMessageDialog({
 
   const extractFromScreenshotMutation = useMutation({
     mutationFn: async (imageBase64: string) => {
-      return apiRequest('POST', '/api/leads/extract-from-screenshot', { image: imageBase64 });
+      console.log('📸 Starting extraction API call...');
+      const result = await apiRequest('POST', '/api/leads/extract-from-screenshot', { image: imageBase64 });
+      console.log('📸 API response received:', JSON.stringify(result));
+      return result;
     },
     onSuccess: (response: any) => {
-      if (response.success && response.data) {
-        // Auto-create the job immediately after extraction
-        console.log('📸 Extraction successful, auto-creating lead:', response.data);
+      console.log('📸 onSuccess called with:', JSON.stringify(response));
+      // Check for data - response might already be the data object
+      const extractedInfo = response?.data || response;
+      if (extractedInfo && (extractedInfo.name || extractedInfo.phone || extractedInfo.address)) {
+        console.log('📸 Extraction successful, auto-creating lead:', extractedInfo);
         toast({
           title: "Creating Job...",
           description: "Job will open automatically",
@@ -136,10 +141,18 @@ export function CreateLeadFromMessageDialog({
         setImagePreview(null);
         setExtractedData(null);
         onOpenChange(false);
-        onLeadCreated(response.data);
+        onLeadCreated(extractedInfo);
+      } else {
+        console.log('📸 No valid data in response:', response);
+        toast({
+          title: "No Data Found",
+          description: "Could not extract customer details from the image",
+          variant: "destructive",
+        });
       }
     },
     onError: (error: any) => {
+      console.log('📸 onError called:', error);
       toast({
         title: "Extraction Failed",
         description: error.message || "Could not extract details from screenshot",
