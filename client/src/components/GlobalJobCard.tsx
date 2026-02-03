@@ -3405,7 +3405,7 @@ The Treemarkables Team`;
                                             <CommandItem
                                               key={customer.id}
                                               value={customer.name}
-                                              onSelect={() => {
+                                              onSelect={async () => {
                                                 form.setValue("customerId", customer.id);
                                                 form.setValue('isNewCustomer', false);
                                                 form.setValue('newCustomerName', '');
@@ -3431,6 +3431,18 @@ The Treemarkables Team`;
                                                     form.setValue('jobContactLastName', nameParts.slice(1).join(' '));
                                                   } else {
                                                     form.setValue('jobContactFirstName', customer.name);
+                                                  }
+                                                }
+                                                // Auto-set lead source to "repeat" for existing customers with previous jobs
+                                                if (mode === 'create' && !form.getValues('leadSource')) {
+                                                  try {
+                                                    const response = await fetch(`/api/jobs?customerId=${customer.id}&limit=1`);
+                                                    const data = await response.json();
+                                                    if (data.success && data.data && data.data.length > 0) {
+                                                      form.setValue('leadSource', 'repeat');
+                                                    }
+                                                  } catch (error) {
+                                                    console.log('Could not check for previous jobs:', error);
                                                   }
                                                 }
                                                 setCustomerSearchOpen(false);
