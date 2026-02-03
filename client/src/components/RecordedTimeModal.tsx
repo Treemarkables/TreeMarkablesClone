@@ -341,7 +341,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-full h-full overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto pt-safe">
+      <DialogContent className="w-full h-[100dvh] overflow-y-auto sm:max-w-4xl sm:max-h-[90vh] sm:h-auto p-4 pt-safe" style={{ WebkitOverflowScrolling: 'touch' }}>
         <Button
           variant="ghost"
           size="icon"
@@ -384,8 +384,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[90vw] sm:w-80 p-0 max-h-[50vh] overflow-hidden" align="start" side="bottom" sideOffset={5} avoidCollisions={true} collisionPadding={{ top: 60, bottom: 20 }}>
-                    <div className="p-2 border-b sticky top-0 bg-white z-10">
+                  <PopoverContent className="w-[90vw] sm:w-80 p-0" align="start" side="bottom" sideOffset={5} avoidCollisions={true} collisionPadding={{ top: 60, bottom: 20 }}>
+                    <div className="p-2 border-b bg-white">
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
@@ -425,7 +425,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <div className="max-h-[30vh] overflow-y-auto">
+                    <div className="max-h-[40vh] overflow-y-auto -webkit-overflow-scrolling-touch">
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {

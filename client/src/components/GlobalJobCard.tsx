@@ -2299,7 +2299,7 @@ The Treemarkables Team`;
           loadingContent
         ) : (
           <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-            <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+            <DialogContent className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
               {loadingContent}
             </DialogContent>
           </Dialog>
@@ -2310,7 +2310,7 @@ The Treemarkables Team`;
 
   // Job card content (can be rendered inline or in a dialog)
   const jobCardContent = (
-    <div className={renderInline ? "h-full w-full flex flex-col bg-gray-50" : "w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"}>
+    <div className={renderInline ? "h-full w-full flex flex-col bg-gray-50" : "w-full h-full max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"}>
       {/* Hidden titles for accessibility */}
       {!renderInline && (
         <>
@@ -5991,7 +5991,7 @@ The Treemarkables Team`;
       ) : (
         // Dialog rendering for mobile and standalone use
         <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-          <DialogContent className="w-full h-full max-w-full flex flex-col p-4 sm:p-0 bg-gray-50 overflow-x-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+          <DialogContent className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
             {jobCardContent}
           </DialogContent>
         </Dialog>
