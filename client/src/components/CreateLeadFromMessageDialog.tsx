@@ -55,18 +55,25 @@ export function CreateLeadFromMessageDialog({
   // Handle clipboard paste for screenshots - works from ANY tab
   useEffect(() => {
     if (!open) return;
+    
+    console.log('📸 Paste handler setup - dialog open:', open);
 
     const handlePaste = (e: ClipboardEvent) => {
+      console.log('📸 Paste event detected!');
       const items = e.clipboardData?.items;
+      console.log('📸 Clipboard items:', items?.length);
       if (!items) return;
 
       for (let i = 0; i < items.length; i++) {
+        console.log('📸 Item', i, 'type:', items[i].type);
         if (items[i].type.indexOf('image') !== -1) {
           const file = items[i].getAsFile();
+          console.log('📸 Got image file:', file?.name, file?.size);
           if (file) {
             setSelectedImage(file);
             const reader = new FileReader();
             reader.onloadend = () => {
+              console.log('📸 Image loaded, setting preview');
               setImagePreview(reader.result as string);
             };
             reader.readAsDataURL(file);
