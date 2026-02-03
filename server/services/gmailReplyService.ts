@@ -406,6 +406,25 @@ class GmailReplyService {
 
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
         
+        // Create notification for email reply so it appears in notification bell
+        try {
+          const { storage } = await import('../storage.js');
+          const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
+          
+          await storage.createNotification({
+            title: `📧 Email Reply from ${customer.name}`,
+            message: emailPreview || `Re: ${email.subject}`,
+            type: 'email_reply',
+            priority: 'medium',
+            jobId: job.id,
+            customerId: job.customerId,
+            actionUrl: `/dispatch?job=${job.id}`
+          });
+          console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
+        } catch (notifError) {
+          console.error('Error creating email reply notification:', notifError);
+        }
+        
         // If reply was to a job-specific email address, ONLY log to job diary, NOT conversations
         // This prevents duplicates when emails are sent from the job card modal
         if (email.to && email.to.match(/job-\d+@/i)) {
