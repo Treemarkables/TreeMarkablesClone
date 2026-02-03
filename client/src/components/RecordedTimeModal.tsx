@@ -384,8 +384,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       )}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-[90vw] sm:w-80 p-0" align="start" side="bottom" sideOffset={5} avoidCollisions={true} collisionPadding={{ top: 60, bottom: 20 }}>
-                    <div className="p-2 border-b bg-white">
+                  <PopoverContent className="w-[90vw] sm:w-80 p-0 max-h-[60vh] flex flex-col" align="start" side="bottom" sideOffset={5} avoidCollisions={true} collisionPadding={{ top: 60, bottom: 20 }}>
+                    <div className="p-2 border-b bg-white flex-shrink-0">
                       <div className="relative">
                         <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
                         <Input
@@ -425,7 +425,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                         </Button>
                       </div>
                     </div>
-                    <div className="max-h-[40vh] overflow-y-auto overscroll-contain" style={{ WebkitOverflowScrolling: 'touch' }}>
+                    <div className="flex-1 overflow-y-auto min-h-0">
                       <div className="p-2 space-y-1">
                         {employees
                           .filter((staff: any) => {
