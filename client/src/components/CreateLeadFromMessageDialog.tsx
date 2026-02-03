@@ -159,6 +159,16 @@ export function CreateLeadFromMessageDialog({
   };
 
   const handleExtractFromScreenshot = async () => {
+    // Use imagePreview directly if available (from paste), or read from selectedImage
+    if (imagePreview) {
+      // imagePreview is already a base64 data URL
+      const base64 = imagePreview.split(',')[1];
+      if (base64) {
+        extractFromScreenshotMutation.mutate(base64);
+        return;
+      }
+    }
+    
     if (!selectedImage) {
       toast({
         title: "No Screenshot",
@@ -326,7 +336,7 @@ Thank you, Jack
 
             <Button 
               onClick={handleExtractFromScreenshot} 
-              disabled={!selectedImage || isExtracting_}
+              disabled={(!selectedImage && !imagePreview) || isExtracting_}
               className="w-full"
               data-testid="button-extract-screenshot"
             >
