@@ -430,11 +430,8 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
                       style={{ 
                         maxHeight: '200px',
                         WebkitOverflowScrolling: 'touch',
-                        touchAction: 'pan-y',
-                        position: 'relative',
-                        transform: 'translateZ(0)'
+                        touchAction: 'pan-y'
                       }}
-                      onTouchStart={(e) => e.stopPropagation()}
                     >
                       <div className="p-2 space-y-1">
                         {employees
