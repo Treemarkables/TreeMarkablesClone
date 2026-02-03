@@ -120,7 +120,8 @@ export function CreateLeadFromMessageDialog({
   const extractFromScreenshotMutation = useMutation({
     mutationFn: async (imageBase64: string) => {
       console.log('📸 Starting extraction API call...');
-      const result = await apiRequest('POST', '/api/leads/extract-from-screenshot', { image: imageBase64 });
+      const response = await apiRequest('POST', '/api/leads/extract-from-screenshot', { image: imageBase64 });
+      const result = await response.json();
       console.log('📸 API response received:', JSON.stringify(result));
       return result;
     },
