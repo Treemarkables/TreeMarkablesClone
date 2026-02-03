@@ -2347,10 +2347,15 @@ The Treemarkables Team`;
                   {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
                 </Badge>
               )}
-              {/* Job Price Display */}
+              {/* Job Price Display - Check line items, then proposal, then quote, then job total */}
               {mode === 'edit' && (
                 (() => {
-                  const jobTotal = lineItems.reduce((sum, item) => sum + (item.total || 0), 0) || parseFloat(editingJob?.totalAmount || '0');
+                  // Priority: line items > proposal totalAmount > quote amount > job totalAmount
+                  const lineItemsTotal = (form.watch('lineItems') || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+                  const proposalTotal = parseFloat(jobProposalResponse?.data?.[0]?.totalAmount || '0');
+                  const quoteTotal = parseFloat(jobQuoteResponse?.data?.[0]?.amount || '0');
+                  const jobStoredTotal = parseFloat(editingJob?.totalAmount || '0');
+                  const jobTotal = lineItemsTotal || proposalTotal || quoteTotal || jobStoredTotal;
                   return jobTotal > 0 ? (
                     <span className="text-sm sm:text-base font-semibold text-green-600 ml-1" data-testid="text-job-price">
                       {new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(jobTotal)}
