@@ -2152,15 +2152,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Automatically create the job from extracted data
         try {
           console.log('📸 Creating job from extracted data:', data);
+          // Detect if phone is a mobile number (NZ mobile prefixes: 21, 22, 27, 29)
+          const phone = data.phone || '';
+          const isMobile = /^\+?64\s?(2[1279])/.test(phone.replace(/\s/g, '')) || 
+                          /^0?2[1279]/.test(phone.replace(/\s/g, ''));
+          
           const res = await apiRequest('POST', '/api/jobs', {
             newCustomerName: data.name || 'New Lead',
-            newCustomerPhone: data.phone || '',
+            newCustomerPhone: isMobile ? '' : phone,
+            newCustomerMobile: isMobile ? phone : '',
             newCustomerEmail: '',
             address: data.address || '',
             description: data.description || '',
             leadSource: 'sms',
             status: 'quote',
             isNewCustomer: true,
+            // Also set job contact mobile for the job card
+            jobContactPhone: isMobile ? phone : '',
           });
           const response = await res.json();
           console.log('📸 Job creation response:', response);

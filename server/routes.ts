@@ -2710,10 +2710,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Handle new customer creation
       if (processedBody.isNewCustomer && processedBody.newCustomerName) {
         try {
+          // Use mobile as phone if phone is empty (mobile is more common for SMS leads)
+          const customerPhone = processedBody.newCustomerPhone?.trim() || processedBody.newCustomerMobile?.trim() || undefined;
+          const customerMobile = processedBody.newCustomerMobile?.trim() || undefined;
+          
           const newCustomer = await storage.createCustomer({
             name: processedBody.newCustomerName.trim(),
             email: processedBody.newCustomerEmail?.trim() || undefined,
-            phone: processedBody.newCustomerPhone?.trim() || undefined,
+            phone: customerPhone,
+            mobile: customerMobile,
             address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
           });
           
