@@ -2347,6 +2347,17 @@ The Treemarkables Team`;
                   {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
                 </Badge>
               )}
+              {/* Job Price Display */}
+              {mode === 'edit' && (
+                (() => {
+                  const jobTotal = lineItems.reduce((sum, item) => sum + (item.total || 0), 0) || parseFloat(editingJob?.totalAmount || '0');
+                  return jobTotal > 0 ? (
+                    <span className="text-sm sm:text-base font-semibold text-green-600 ml-1" data-testid="text-job-price">
+                      {new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(jobTotal)}
+                    </span>
+                  ) : null;
+                })()
+              )}
             </div>
             
             {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
@@ -6008,7 +6019,7 @@ The Treemarkables Team`;
             <Textarea 
               value={form.watch('description') || editingJob?.description || ''}
               onChange={(e) => form.setValue('description', e.target.value)}
-              className="min-h-[450px] text-base font-medium" 
+              className="min-h-[150px] max-h-[40vh] text-base font-medium" 
               placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
               data-testid="textarea-description-popup"
             />
