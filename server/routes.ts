@@ -7112,8 +7112,10 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
 
       const todayQuotesSent = jobs.filter(job => {
-        if (!job.quoteSentAt) return false;
-        const quoteDate = new Date(job.quoteSentAt);
+        // Check both quotePresentedDate and proposalSentDate for quotes sent today
+        const quoteDateStr = job.quotePresentedDate || job.proposalSentDate;
+        if (!quoteDateStr) return false;
+        const quoteDate = new Date(quoteDateStr);
         return quoteDate >= startOfDay && quoteDate <= endOfDay;
       });
 
