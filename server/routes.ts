@@ -1701,16 +1701,22 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         max_completion_tokens: 1024,
       });
 
-      const extracted = JSON.parse(visionResponse.choices[0].message.content || '{}');
+      const rawContent = visionResponse.choices[0].message.content || '{}';
+      console.log('📸 AI Vision raw response:', rawContent);
+      const extracted = JSON.parse(rawContent);
+      console.log('📸 AI Vision extracted data:', JSON.stringify(extracted));
+
+      const responseData = {
+        name: extracted.name || '',
+        phone: extracted.phone || '',
+        address: extracted.address || '',
+        description: extracted.description || ''
+      };
+      console.log('📸 Sending response:', JSON.stringify(responseData));
 
       res.json({
         success: true,
-        data: {
-          name: extracted.name || '',
-          phone: extracted.phone || '',
-          address: extracted.address || '',
-          description: extracted.description || ''
-        }
+        data: responseData
       });
     } catch (error) {
       console.error('Error extracting from screenshot:', error);
