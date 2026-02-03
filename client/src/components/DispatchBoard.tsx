@@ -2151,7 +2151,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         
         // Automatically create the job from extracted data
         try {
-          const response = await apiRequest('POST', '/api/jobs', {
+          console.log('📸 Creating job from extracted data:', data);
+          const res = await apiRequest('POST', '/api/jobs', {
             customerName: data.name || 'New Lead',
             customerPhone: data.phone || '',
             customerEmail: '',
@@ -2161,6 +2162,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             status: 'quote',
             isNewCustomer: true,
           });
+          const response = await res.json();
+          console.log('📸 Job creation response:', response);
           
           if (response.success && response.data) {
             // Refresh jobs list
