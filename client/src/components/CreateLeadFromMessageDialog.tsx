@@ -123,11 +123,20 @@ export function CreateLeadFromMessageDialog({
     },
     onSuccess: (response: any) => {
       if (response.success && response.data) {
-        setExtractedData(response.data);
+        // Auto-create the job immediately after extraction
+        console.log('📸 Extraction successful, auto-creating lead:', response.data);
         toast({
-          title: "Details Extracted",
-          description: "Customer information has been extracted from the screenshot",
+          title: "Creating Job...",
+          description: "Job will open automatically",
         });
+        // Close dialog and create lead
+        setMessageText('');
+        setManualPhone('');
+        setSelectedImage(null);
+        setImagePreview(null);
+        setExtractedData(null);
+        onOpenChange(false);
+        onLeadCreated(response.data);
       }
     },
     onError: (error: any) => {
