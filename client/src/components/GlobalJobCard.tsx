@@ -3107,6 +3107,10 @@ The Treemarkables Team`;
                                                 form.setValue('customerId', customer.id);
                                                 setSelectedCustomerName(customer.name);
                                                 setCustomerSearchValue('');
+                                                // Pre-fill address from customer if available
+                                                if (customer.address && !form.getValues('address')) {
+                                                  form.setValue('address', customer.address);
+                                                }
                                                 // Pre-fill contact info from customer if not already set
                                                 if (customer.email && !form.getValues('jobContactEmail')) {
                                                   form.setValue('jobContactEmail', customer.email);
@@ -3285,6 +3289,10 @@ The Treemarkables Team`;
                                             setSelectedCustomerName(customer.name);
                                             setCustomerSearchOpen(false);
                                             setCustomerSearchValue('');
+                                            // Pre-fill address from customer if available
+                                            if (customer.address && !form.getValues('address')) {
+                                              form.setValue('address', customer.address);
+                                            }
                                             // Pre-fill contact info from customer if not already set
                                             if (customer.email && !form.getValues('jobContactEmail')) {
                                               form.setValue('jobContactEmail', customer.email);
