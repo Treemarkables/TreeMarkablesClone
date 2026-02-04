@@ -33,6 +33,7 @@ const editCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email").optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
+  mobile: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
 });
 
@@ -90,6 +91,7 @@ export default function Clients() {
       name: "",
       email: "",
       phone: "",
+      mobile: "",
       address: "",
     },
   });
@@ -197,6 +199,7 @@ export default function Clients() {
       name: customer.name,
       email: customer.email || "",
       phone: customer.phone || "",
+      mobile: customer.mobile || "",
       address: customer.address || "",
     });
     setShowEditDialog(true);
@@ -690,6 +693,20 @@ export default function Clients() {
               
               <FormField
                 control={editForm.control}
+                name="mobile"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Mobile</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Enter mobile number" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              
+              <FormField
+                control={editForm.control}
                 name="address"
                 render={({ field }) => (
                   <FormItem>
@@ -742,7 +759,7 @@ export default function Clients() {
                     <h2 className="text-xl font-semibold">{selectedCustomerDetails.name}</h2>
                     {getCustomerStatusBadge(selectedCustomerDetails)}
                   </div>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                     <div className="flex items-center gap-1">
                       <Mail className="w-4 h-4" />
                       <span>{selectedCustomerDetails.email || 'No email'}</span>
@@ -751,6 +768,12 @@ export default function Clients() {
                       <Phone className="w-4 h-4" />
                       <span>{selectedCustomerDetails.phone || 'No phone'}</span>
                     </div>
+                    {selectedCustomerDetails.mobile && (
+                      <div className="flex items-center gap-1">
+                        <Phone className="w-4 h-4" />
+                        <span>Mobile: {selectedCustomerDetails.mobile}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
