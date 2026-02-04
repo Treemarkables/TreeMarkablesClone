@@ -72,6 +72,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   jobContactLastName: z.string().optional(), 
   jobContactEmail: z.union([z.string().email(), z.literal("")]).optional(),
   jobContactPhone: z.string().optional(),
+  jobContactMobile: z.string().optional(),
   
   // ServiceM8 Billing Fields
   billingAddress: z.string().optional(),
@@ -191,6 +192,7 @@ export function GlobalJobCard({
       jobContactLastName: "",
       jobContactEmail: "",
       jobContactPhone: "",
+      jobContactMobile: "",
       address: "",
       leadSource: "",
       totalAmount: "0",
@@ -881,6 +883,7 @@ export function GlobalJobCard({
         jobContactLastName: editingJob.jobContactLastName || lastName,
         jobContactEmail: editingJob.jobContactEmail || editingJobCustomer?.email || '',
         jobContactPhone: editingJob.jobContactPhone || editingJobCustomer?.phone || '',
+        jobContactMobile: editingJob.jobContactMobile || editingJobCustomer?.mobile || '',
         billingContactPhone: editingJob.billingContactPhone || '',
         billingContactMobile: editingJob.billingContactMobile || '',
         billingAddress: editingJob.billingAddress || '',
@@ -3134,9 +3137,12 @@ The Treemarkables Team`;
                                                 if (customer.email && !form.getValues('jobContactEmail')) {
                                                   form.setValue('jobContactEmail', customer.email);
                                                 }
-                                                const customerPhone = customer.mobile || customer.phone;
-                                                if (customerPhone && !form.getValues('jobContactPhone')) {
-                                                  form.setValue('jobContactPhone', customerPhone);
+                                                // Route mobile numbers to mobile field, landline to phone field
+                                                if (customer.mobile && !form.getValues('jobContactMobile')) {
+                                                  form.setValue('jobContactMobile', customer.mobile);
+                                                }
+                                                if (customer.phone && !form.getValues('jobContactPhone')) {
+                                                  form.setValue('jobContactPhone', customer.phone);
                                                 }
                                               }}
                                             >
@@ -3316,9 +3322,12 @@ The Treemarkables Team`;
                                             if (customer.email && !form.getValues('jobContactEmail')) {
                                               form.setValue('jobContactEmail', customer.email);
                                             }
-                                            const customerPhone = customer.mobile || customer.phone;
-                                            if (customerPhone && !form.getValues('jobContactPhone')) {
-                                              form.setValue('jobContactPhone', customerPhone);
+                                            // Route mobile numbers to mobile field, landline to phone field
+                                            if (customer.mobile && !form.getValues('jobContactMobile')) {
+                                              form.setValue('jobContactMobile', customer.mobile);
+                                            }
+                                            if (customer.phone && !form.getValues('jobContactPhone')) {
+                                              form.setValue('jobContactPhone', customer.phone);
                                             }
                                           }}
                                         >
@@ -3419,9 +3428,12 @@ The Treemarkables Team`;
                                                 if (customer.email && !form.getValues('jobContactEmail')) {
                                                   form.setValue('jobContactEmail', customer.email);
                                                 }
-                                                const customerPhone = customer.mobile || customer.phone;
-                                                if (customerPhone && !form.getValues('jobContactPhone')) {
-                                                  form.setValue('jobContactPhone', customerPhone);
+                                                // Route mobile numbers to mobile field, landline to phone field
+                                                if (customer.mobile && !form.getValues('jobContactMobile')) {
+                                                  form.setValue('jobContactMobile', customer.mobile);
+                                                }
+                                                if (customer.phone && !form.getValues('jobContactPhone')) {
+                                                  form.setValue('jobContactPhone', customer.phone);
                                                 }
                                                 // Split customer name into first/last for contact fields
                                                 if (customer.name && !form.getValues('jobContactFirstName') && !form.getValues('jobContactLastName')) {
@@ -4373,7 +4385,7 @@ The Treemarkables Team`;
                             />
                             <FormField
                               control={form.control}
-                              name="billingContactMobile"
+                              name="jobContactMobile"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
