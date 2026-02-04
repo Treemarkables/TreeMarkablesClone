@@ -1734,10 +1734,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           <h3 className="font-bold text-gray-900 text-base truncate flex-1" data-testid={`desktop-job-customer-${job.id}`}>
                             {customerName}
                           </h3>
-                          <div className="flex items-center gap-2 flex-shrink-0">
+                          <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                             <span className="text-sm text-gray-400 font-mono">#{job.jobNumber || '0000'}</span>
                             {total > 0 && (
-                              <span className="text-sm font-bold text-gray-700">{formatCurrency(total)}</span>
+                              <span className="text-sm font-bold text-green-600">{formatCurrency(total)}</span>
                             )}
                           </div>
                         </div>
@@ -2053,10 +2053,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <h3 className="font-bold text-gray-900 text-base truncate flex-1">
                           {customerName}
                         </h3>
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                           <span className="text-sm text-gray-400 font-mono">#{job.jobNumber || '0000'}</span>
                           {total > 0 && (
-                            <span className="text-base font-bold text-gray-900">{formatCurrency(total)}</span>
+                            <span className="text-sm font-bold text-green-600">{formatCurrency(total)}</span>
                           )}
                         </div>
                       </div>
