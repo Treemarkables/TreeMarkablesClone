@@ -11,9 +11,14 @@ export default function ProposalAccept() {
   const { proposalId } = useParams();
   const [acceptanceStatus, setAcceptanceStatus] = useState<'viewing' | 'success'>('viewing');
   const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({});
+  const [selectedOptionalItems, setSelectedOptionalItems] = useState<Record<string, boolean>>({});
 
   const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
     setSelectedChoices(prev => ({ ...prev, [lineItemId]: choiceId }));
+  };
+
+  const handleOptionalToggle = (lineItemId: string, selected: boolean) => {
+    setSelectedOptionalItems(prev => ({ ...prev, [lineItemId]: selected }));
   };
   
   // Fetch proposal, customer, and template in one optimized request
@@ -26,7 +31,8 @@ export default function ProposalAccept() {
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest('POST', `/api/proposals/${proposalId}/accept`, {
-        selectedChoices: Object.keys(selectedChoices).length > 0 ? selectedChoices : undefined
+        selectedChoices: Object.keys(selectedChoices).length > 0 ? selectedChoices : undefined,
+        selectedOptionalItems: Object.keys(selectedOptionalItems).length > 0 ? selectedOptionalItems : undefined
       });
       const data = await response.json();
       return data;
@@ -168,6 +174,8 @@ export default function ProposalAccept() {
                 allowChoiceSelection={proposal?.status !== 'accepted'}
                 selectedChoices={selectedChoices}
                 onChoiceSelect={handleChoiceSelect}
+                selectedOptionalItems={selectedOptionalItems}
+                onOptionalToggle={handleOptionalToggle}
               />
             </CardContent>
           </Card>

@@ -67,6 +67,8 @@ interface ProposalTemplateProps {
   allowChoiceSelection?: boolean;
   selectedChoices?: Record<string, string>;
   onChoiceSelect?: (lineItemId: string, choiceId: string) => void;
+  selectedOptionalItems?: Record<string, boolean>;
+  onOptionalToggle?: (lineItemId: string, selected: boolean) => void;
 }
 
 // Lazy loading image component using Intersection Observer with zero layout shift
@@ -143,7 +145,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   onCopy,
   allowChoiceSelection = false,
   selectedChoices = {},
-  onChoiceSelect
+  onChoiceSelect,
+  selectedOptionalItems = {},
+  onOptionalToggle
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
 
@@ -522,70 +526,120 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                               displayPrice = item.fixedPrice;
                             }
 
+                            // Check if this optional item is selected (use state override if available)
+                            const isOptionalSelected = item.isOptional 
+                              ? (selectedOptionalItems[item.id] !== undefined ? selectedOptionalItems[item.id] : item.selected)
+                              : item.selected;
+                            
+                            // Determine if this row is clickable
+                            const isRowClickable = allowChoiceSelection && onOptionalToggle;
+                            
+                            const handleRowClick = () => {
+                              if (isRowClickable) {
+                                onOptionalToggle(item.id, !isOptionalSelected);
+                              }
+                            };
+
                             return (
-                              <tr key={item.id} className={`${item.selected ? 'bg-green-50' : 'even:bg-gray-50'} ${!item.selected && item.isOptional ? 'opacity-60' : ''}`} data-testid={`row-line-item-${sectionIndex}-${index}`}>
+                              <tr 
+                                key={item.id} 
+                                className={`
+                                  ${isOptionalSelected ? 'bg-green-50' : 'even:bg-gray-50'} 
+                                  ${!isOptionalSelected && item.isOptional ? 'opacity-60' : ''}
+                                  ${isRowClickable ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}
+                                `} 
+                                data-testid={`row-line-item-${sectionIndex}-${index}`}
+                                onClick={handleRowClick}
+                              >
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-gray-900">
-                                  <div>
-                                    <span className="font-medium text-xs sm:text-sm break-words">
-                                      <LinkifiedText text={item.description} />
-                                    </span>
-                                    {item.notes && (
-                                      <p className="text-xs text-gray-600 mt-1 break-words">
-                                        <LinkifiedText text={item.notes} />
-                                      </p>
+                                  <div className="flex items-start gap-2">
+                                    {/* Checkbox for selection */}
+                                    {isRowClickable && (
+                                      <input 
+                                        type="checkbox" 
+                                        checked={isOptionalSelected}
+                                        onChange={(e) => {
+                                          e.stopPropagation();
+                                          onOptionalToggle(item.id, e.target.checked);
+                                        }}
+                                        className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer shrink-0 rounded border-gray-300"
+                                      />
                                     )}
-                                    {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
-                                      <div className="mt-2 text-xs">
-                                        <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
-                                        <ul className="ml-1 space-y-1.5 mt-1">
-                                          {item.choices.map(choice => {
-                                            const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
-                                            const isSelected = choice.id === effectiveChoiceId;
-                                            return (
-                                              <li 
-                                                key={choice.id} 
-                                                className={`flex items-start gap-2 ${isSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
-                                                onClick={allowChoiceSelection && onChoiceSelect ? () => onChoiceSelect(item.id, choice.id) : undefined}
-                                              >
-                                                {allowChoiceSelection ? (
-                                                  <input 
-                                                    type="radio" 
-                                                    name={`choice-${item.id}`}
-                                                    checked={isSelected}
-                                                    onChange={() => onChoiceSelect?.(item.id, choice.id)}
-                                                    className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer"
-                                                  />
-                                                ) : (
-                                                  <span>•</span>
-                                                )}
-                                                <span className="flex-1">
-                                                  {choice.label} - {formatCurrency(choice.price)}
-                                                  {choice.description && (
-                                                    <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
+                                    <div className="flex-1">
+                                      <span className="font-medium text-xs sm:text-sm break-words">
+                                        <LinkifiedText text={item.description} />
+                                      </span>
+                                      {item.notes && (
+                                        <p className="text-xs text-gray-600 mt-1 break-words">
+                                          <LinkifiedText text={item.notes} />
+                                        </p>
+                                      )}
+                                      {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
+                                        <div className="mt-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                                          <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
+                                          <ul className="ml-1 space-y-1.5 mt-1">
+                                            {item.choices.map(choice => {
+                                              const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
+                                              const isSelected = choice.id === effectiveChoiceId;
+                                              return (
+                                                <li 
+                                                  key={choice.id} 
+                                                  className={`flex items-start gap-2 ${isSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (allowChoiceSelection && onChoiceSelect) {
+                                                      onChoiceSelect(item.id, choice.id);
+                                                    }
+                                                  }}
+                                                >
+                                                  {allowChoiceSelection ? (
+                                                    <input 
+                                                      type="radio" 
+                                                      name={`choice-${item.id}`}
+                                                      checked={isSelected}
+                                                      onChange={(e) => {
+                                                        e.stopPropagation();
+                                                        onChoiceSelect?.(item.id, choice.id);
+                                                      }}
+                                                      className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                                    />
+                                                  ) : (
+                                                    <span>•</span>
                                                   )}
-                                                </span>
-                                              </li>
-                                            );
-                                          })}
-                                        </ul>
-                                      </div>
-                                    )}
-                                    {item.isOptional && (
-                                      <div className="mt-1 md:hidden">
-                                        <Badge variant={item.selected ? "default" : "secondary"} className="text-xs">
-                                          {item.selected ? "Included" : "Optional"}
-                                        </Badge>
-                                      </div>
-                                    )}
+                                                  <span className="flex-1">
+                                                    {choice.label} - {formatCurrency(choice.price)}
+                                                    {choice.description && (
+                                                      <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
+                                                    )}
+                                                  </span>
+                                                </li>
+                                              );
+                                            })}
+                                          </ul>
+                                        </div>
+                                      )}
+                                      {item.isOptional && !isRowClickable && (
+                                        <div className="mt-1 md:hidden">
+                                          <Badge variant={isOptionalSelected ? "default" : "secondary"} className="text-xs">
+                                            {isOptionalSelected ? "Included" : "Optional"}
+                                          </Badge>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.quantity}</td>
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700 hidden sm:table-cell">{formatCurrency(item.unitPrice)}</td>
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(displayPrice)}</td>
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center hidden md:table-cell">
-                                  {item.isOptional && (
-                                    <Badge variant={item.selected ? "default" : "secondary"} className="text-xs">
-                                      {item.selected ? "Included" : "Optional"}
+                                  {item.isOptional && !isRowClickable && (
+                                    <Badge variant={isOptionalSelected ? "default" : "secondary"} className="text-xs">
+                                      {isOptionalSelected ? "Included" : "Optional"}
+                                    </Badge>
+                                  )}
+                                  {isRowClickable && (
+                                    <Badge variant={isOptionalSelected ? "default" : "secondary"} className="text-xs">
+                                      {isOptionalSelected ? "Selected" : "Click to select"}
                                     </Badge>
                                   )}
                                 </td>
