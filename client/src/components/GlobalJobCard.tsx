@@ -5541,6 +5541,7 @@ The Treemarkables Team`;
           customerId={selectedCustomer?.id}
           mode={editingProposalId ? "edit" : "create"}
           proposalId={editingProposalId}
+          jobDescription={form.watch('description') || ''}
           lineItems={formData?.lineItems || []}
           onRequestJobSave={handleRequestJobSave}
         />

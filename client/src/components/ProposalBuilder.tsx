@@ -50,6 +50,7 @@ interface ProposalBuilderProps {
   mode?: "create" | "edit";
   proposalId?: string;
   onRequestJobSave?: () => Promise<string>; // Callback to save parent job and return job ID
+  jobDescription?: string; // Pass current description from job card to avoid stale data
 }
 
 export function ProposalBuilder({ 
@@ -59,7 +60,8 @@ export function ProposalBuilder({
   customerId, 
   mode = "create",
   proposalId,
-  onRequestJobSave
+  onRequestJobSave,
+  jobDescription
 }: ProposalBuilderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -166,12 +168,14 @@ export function ProposalBuilder({
       
       // Check if job description should be included (defaults to true if not set)
       const includeDescription = job.includeDescriptionInQuotesProposals !== false;
-      const descriptionValue = includeDescription ? (job.description || '') : '';
+      // Use passed jobDescription prop first (to get latest unsaved form data), fallback to API data
+      const descriptionValue = includeDescription ? (jobDescription ?? job.description ?? '') : '';
       
       console.log('🔵 Initializing proposal with job description:', {
         includeDescription,
         descriptionValue,
-        jobDescription: job.description,
+        passedJobDescription: jobDescription,
+        jobDescriptionFromApi: job.description,
         checkbox: job.includeDescriptionInQuotesProposals
       });
       
@@ -211,7 +215,7 @@ export function ProposalBuilder({
       console.log('✅ Proposal initialized with job data:', job);
       console.log('✅ Section description set to:', descriptionValue);
     }
-  }, [jobData, isOpen, form, customerId, mode]);
+  }, [jobData, isOpen, form, customerId, mode, jobDescription]);
 
   // Initialize draftProposalId with existing proposalId when in edit mode
   useEffect(() => {
