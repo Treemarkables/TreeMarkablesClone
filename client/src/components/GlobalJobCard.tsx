@@ -955,7 +955,7 @@ export function GlobalJobCard({
   const autoSaveFieldsRef = useRef<Set<string>>(new Set([
     'title', 'description', 'address', 'status', 'priority', 'leadSource',
     'scheduledDate', 'scheduledTime', 'estimatedDuration', 'estimatedManHours',
-    'jobContactFirstName', 'jobContactLastName', 'jobContactEmail', 'jobContactPhone',
+    'jobContactFirstName', 'jobContactLastName', 'jobContactEmail', 'jobContactPhone', 'jobContactMobile',
     'billingAddress', 'billingNameOverride', 'invoiceDescription', 'billingContactPhone',
     'billingContactMobile', 'billingContactEmail', 'jobContactFirstNameForInvoice', 'jobContactLastNameForInvoice',
     'purchaseOrderNumber', 'sameAsJobAddress', 'quotingMethod', 'unsuccessfulReason',
