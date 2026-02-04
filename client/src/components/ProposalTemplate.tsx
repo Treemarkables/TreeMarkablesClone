@@ -531,17 +531,18 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                               displayPrice = item.fixedPrice;
                             }
 
-                            // Check if this optional item is selected (use state override if available)
-                            const isOptionalSelected = item.isOptional 
-                              ? (selectedOptionalItems[item.id] !== undefined ? selectedOptionalItems[item.id] : item.selected)
+                            // Check if this item is selected (use state override if available, otherwise use original)
+                            // All items can be selected/deselected by the customer, not just optional ones
+                            const isItemSelected = selectedOptionalItems[item.id] !== undefined 
+                              ? selectedOptionalItems[item.id] 
                               : item.selected;
                             
-                            // Determine if this row is clickable
+                            // Determine if this row is clickable - all rows are clickable in customer selection mode
                             const isRowClickable = allowChoiceSelection && onOptionalToggle;
                             
                             const handleRowClick = () => {
                               if (isRowClickable) {
-                                onOptionalToggle(item.id, !isOptionalSelected);
+                                onOptionalToggle(item.id, !isItemSelected);
                               }
                             };
 
@@ -549,8 +550,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                               <tr 
                                 key={item.id} 
                                 className={`
-                                  ${isOptionalSelected ? 'bg-green-50' : 'even:bg-gray-50'} 
-                                  ${!isOptionalSelected && item.isOptional ? 'opacity-60' : ''}
+                                  ${isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'} 
+                                  ${!isItemSelected && item.isOptional ? 'opacity-60' : ''}
                                   ${isRowClickable ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}
                                 `} 
                                 data-testid={`row-line-item-${sectionIndex}-${index}`}
@@ -562,7 +563,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                     {isRowClickable && (
                                       <input 
                                         type="checkbox" 
-                                        checked={isOptionalSelected}
+                                        checked={isItemSelected}
                                         onChange={(e) => {
                                           e.stopPropagation();
                                           onOptionalToggle(item.id, e.target.checked);
@@ -625,8 +626,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                       )}
                                       {item.isOptional && !isRowClickable && (
                                         <div className="mt-1 md:hidden">
-                                          <Badge variant={isOptionalSelected ? "default" : "secondary"} className="text-xs">
-                                            {isOptionalSelected ? "Included" : "Optional"}
+                                          <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                            {isItemSelected ? "Included" : "Optional"}
                                           </Badge>
                                         </div>
                                       )}
@@ -638,13 +639,13 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(displayPrice)}</td>
                                 <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center hidden md:table-cell">
                                   {item.isOptional && !isRowClickable && (
-                                    <Badge variant={isOptionalSelected ? "default" : "secondary"} className="text-xs">
-                                      {isOptionalSelected ? "Included" : "Optional"}
+                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                      {isItemSelected ? "Included" : "Optional"}
                                     </Badge>
                                   )}
                                   {isRowClickable && (
-                                    <Badge variant={isOptionalSelected ? "default" : "secondary"} className="text-xs">
-                                      {isOptionalSelected ? "Selected" : "Click to select"}
+                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                      {isItemSelected ? "Selected" : "Click to select"}
                                     </Badge>
                                   )}
                                 </td>
