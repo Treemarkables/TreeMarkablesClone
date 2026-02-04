@@ -154,6 +154,8 @@ export function GlobalJobCard({
   const [customerSearchValue, setCustomerSearchValue] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
   const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
+  const [deepSearchResults, setDeepSearchResults] = useState<any[]>([]);
+  const [isDeepSearching, setIsDeepSearching] = useState(false);
 
   const { toast: _originalToast } = useToast();
   const toast = () => {}; // Disabled - user preference: no toast notifications
@@ -1573,6 +1575,24 @@ export function GlobalJobCard({
     }
   });
   
+  // Deep search for customers (server-side search)
+  const performDeepSearch = async () => {
+    if (!customerSearchValue.trim()) return;
+    
+    setIsDeepSearching(true);
+    try {
+      const response = await fetch(`/api/customers?search=${encodeURIComponent(customerSearchValue.trim())}`);
+      if (response.ok) {
+        const data = await response.json();
+        setDeepSearchResults(data.data || data || []);
+      }
+    } catch (error) {
+      console.error('Deep search failed:', error);
+    } finally {
+      setIsDeepSearching(false);
+    }
+  };
+
   const handleCallClick = async () => {
     console.log('📞 Call button clicked');
     const phone = selectedCustomer?.phone || form.getValues('jobContactPhone');
@@ -3384,11 +3404,32 @@ The Treemarkables Team`;
                                   </PopoverTrigger>
                                   <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start">
                                     <Command>
-                                      <CommandInput 
-                                        placeholder="Search or add customer..." 
-                                        value={customerSearchValue}
-                                        onValueChange={setCustomerSearchValue}
-                                      />
+                                      <div className="flex items-center gap-1 p-2 border-b">
+                                        <CommandInput 
+                                          placeholder="Search or add customer..." 
+                                          value={customerSearchValue}
+                                          onValueChange={(val) => {
+                                            setCustomerSearchValue(val);
+                                            setDeepSearchResults([]); // Clear deep search on new input
+                                          }}
+                                          className="flex-1"
+                                        />
+                                        <Button
+                                          type="button"
+                                          size="sm"
+                                          variant="outline"
+                                          onClick={performDeepSearch}
+                                          disabled={isDeepSearching || !customerSearchValue.trim()}
+                                          className="shrink-0 h-8 px-2"
+                                        >
+                                          {isDeepSearching ? (
+                                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                          ) : (
+                                            <Search className="h-3.5 w-3.5" />
+                                          )}
+                                          <span className="ml-1 text-xs">Deep</span>
+                                        </Button>
+                                      </div>
                                       <CommandList className="max-h-[300px]">
                                         <CommandEmpty>
                                           <Button 
@@ -3409,6 +3450,64 @@ The Treemarkables Team`;
                                             Create "{customerSearchValue}"
                                           </Button>
                                         </CommandEmpty>
+                                        {/* Deep Search Results */}
+                                        {deepSearchResults.length > 0 && (
+                                          <CommandGroup heading={`Deep Search Results (${deepSearchResults.length})`}>
+                                            {deepSearchResults.map((customer: any) => (
+                                              <CommandItem
+                                                key={`deep-${customer.id}`}
+                                                value={`deep-${customer.name}`}
+                                                onSelect={async () => {
+                                                  form.setValue("customerId", customer.id);
+                                                  form.setValue('isNewCustomer', false);
+                                                  form.setValue('newCustomerName', '');
+                                                  setSelectedCustomerName(customer.name);
+                                                  setHasUserSelectedCustomer(true);
+                                                  setDeepSearchResults([]);
+                                                  setCustomerSearchOpen(false);
+                                                  // Pre-fill fields
+                                                  if (customer.address && !form.getValues('address')) {
+                                                    form.setValue('address', customer.address);
+                                                  }
+                                                  if (customer.email && !form.getValues('jobContactEmail')) {
+                                                    form.setValue('jobContactEmail', customer.email);
+                                                  }
+                                                  if (customer.mobile && !form.getValues('jobContactMobile')) {
+                                                    form.setValue('jobContactMobile', customer.mobile);
+                                                  }
+                                                  if (customer.phone && !form.getValues('jobContactPhone')) {
+                                                    form.setValue('jobContactPhone', customer.phone);
+                                                  }
+                                                  // Auto-set lead source to "repeat" for existing customers
+                                                  if (mode === 'create' && !form.getValues('leadSource')) {
+                                                    try {
+                                                      const response = await fetch(`/api/jobs?customerId=${customer.id}&limit=1`);
+                                                      const data = await response.json();
+                                                      if (data.success && data.data && data.data.length > 0) {
+                                                        form.setValue('leadSource', 'repeat');
+                                                      }
+                                                    } catch (error) {
+                                                      console.log('Could not check for previous jobs:', error);
+                                                    }
+                                                  }
+                                                }}
+                                              >
+                                                <Check
+                                                  className={cn(
+                                                    "mr-2 h-4 w-4",
+                                                    form.watch('customerId') === customer.id ? "opacity-100" : "opacity-0"
+                                                  )}
+                                                />
+                                                <div className="flex flex-col">
+                                                  <span>{customer.name}</span>
+                                                  {customer.address && (
+                                                    <span className="text-xs text-gray-500">{customer.address}</span>
+                                                  )}
+                                                </div>
+                                              </CommandItem>
+                                            ))}
+                                          </CommandGroup>
+                                        )}
                                         <CommandGroup heading="Existing Customers">
                                           {customers.map((customer) => (
                                             <CommandItem
