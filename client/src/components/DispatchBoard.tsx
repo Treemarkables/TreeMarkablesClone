@@ -40,7 +40,8 @@ import {
   TreePine,
   Scissors,
   Axe,
-  Sprout
+  Sprout,
+  Loader2
 } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -1902,27 +1903,77 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         
         {/* Search Bar */}
         <div className="px-4 py-3 bg-white border-b">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-            <Input
-              placeholder="Search..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-10 h-11 text-base bg-gray-50 border-gray-200 rounded-xl"
-              data-testid="mobile-job-search-input"
-            />
-            {searchQuery && (
+          <div className="flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Input
+                placeholder="Search..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  if (!e.target.value.trim()) {
+                    setIsDeepSearchActive(false);
+                    setDeepSearchResults([]);
+                  }
+                }}
+                className="pl-10 pr-10 h-11 text-base bg-gray-50 border-gray-200 rounded-xl"
+                data-testid="mobile-job-search-input"
+              />
+              {searchQuery && !isDeepSearchActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                  onClick={() => setSearchQuery('')}
+                  data-testid="btn-clear-search-mobile"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+              {isDeepSearchActive && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 text-blue-600"
+                  onClick={() => {
+                    setIsDeepSearchActive(false);
+                    setDeepSearchResults([]);
+                    setSearchQuery('');
+                  }}
+                  data-testid="btn-clear-deep-search-mobile"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {/* Deep Search Button - Mobile */}
+            {searchQuery.trim() && !isDeepSearchActive && (
               <Button
                 size="sm"
-                variant="ghost"
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                onClick={() => setSearchQuery('')}
-                data-testid="btn-clear-search-mobile"
+                variant="outline"
+                className="h-11 px-3 shrink-0"
+                onClick={() => performDeepSearch(searchQuery)}
+                disabled={isDeepSearchLoading}
+                data-testid="btn-deep-search-mobile"
               >
-                <X className="h-4 w-4" />
+                {isDeepSearchLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-1" />
+                    Deep
+                  </>
+                )}
               </Button>
             )}
           </div>
+          {/* Deep Search Status - Mobile */}
+          {isDeepSearchActive && (
+            <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-2">
+              <SearchX className="h-3 w-3" />
+              {deepSearchResults.length} results found
+            </div>
+          )}
         </div>
 
         {/* Jobs List - ServiceM8 Style */}
