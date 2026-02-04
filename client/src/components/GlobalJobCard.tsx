@@ -4481,22 +4481,22 @@ The Treemarkables Team`;
                             />
                             <FormField
                               control={form.control}
-                              name="jobContactPhone"
+                              name="jobContactMobile"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
                                   </FormControl>
                                 </FormItem>
                               )}
                             />
                             <FormField
                               control={form.control}
-                              name="jobContactMobile"
+                              name="jobContactPhone"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
                                   </FormControl>
                                 </FormItem>
                               )}
