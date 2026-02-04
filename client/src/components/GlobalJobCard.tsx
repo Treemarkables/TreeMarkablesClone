@@ -6039,7 +6039,7 @@ The Treemarkables Team`;
             <Textarea 
               value={form.watch('description') || editingJob?.description || ''}
               onChange={(e) => form.setValue('description', e.target.value)}
-              className="min-h-[150px] max-h-[40vh] text-base font-medium" 
+              className="min-h-[300px] max-h-[60vh] text-base font-medium" 
               placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
               data-testid="textarea-description-popup"
             />
