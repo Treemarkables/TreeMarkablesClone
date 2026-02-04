@@ -54,15 +54,23 @@ async function processSMSReplies() {
         console.log(`📱 Processing SMS reply from ${reply.Originator} (normalized: ${senderPhone})`);
 
         // Find jobs where this phone number matches
-        // Check jobContactPhone, billingContactPhone, or billingContactMobile
+        // Use last 8 digits to avoid country code mismatches (021959262 vs 6421959262)
+        // Both formats share the same last 8 digits: 21959262
+        const last8Digits = senderPhone.slice(-8);
+        console.log(`📱 Matching with last 8 digits: ${last8Digits}`);
+        
+        // Check jobContactPhone, billingContactPhone, billingContactMobile, AND customer phone/mobile
         const matchedJobs = await db
           .select()
           .from(jobs)
+          .leftJoin(customers, eq(jobs.customerId, customers.id))
           .where(
             or(
-              sql`REGEXP_REPLACE(${jobs.jobContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${senderPhone.slice(-9)} || '%'`,
-              sql`REGEXP_REPLACE(${jobs.billingContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${senderPhone.slice(-9)} || '%'`,
-              sql`REGEXP_REPLACE(${jobs.billingContactMobile}, '[^0-9]', '', 'g') LIKE '%' || ${senderPhone.slice(-9)} || '%'`
+              sql`REGEXP_REPLACE(${jobs.jobContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+              sql`REGEXP_REPLACE(${jobs.billingContactPhone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+              sql`REGEXP_REPLACE(${jobs.billingContactMobile}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+              sql`REGEXP_REPLACE(${customers.phone}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`,
+              sql`REGEXP_REPLACE(${customers.mobile}, '[^0-9]', '', 'g') LIKE '%' || ${last8Digits} || '%'`
             )
           )
           .limit(10);
@@ -72,28 +80,26 @@ async function processSMSReplies() {
           continue;
         }
 
+        // Extract job from join result and find most recent
+        const jobResults = matchedJobs.map(row => ({
+          job: row.jobs,
+          customer: row.customers
+        }));
+        
         // If multiple jobs match, use the most recent one (by lastActivityAt or createdAt)
-        const matchedJob = matchedJobs.reduce((latest, current) => {
-          const latestTime = latest.lastActivityAt || latest.createdAt || new Date(0);
-          const currentTime = current.lastActivityAt || current.createdAt || new Date(0);
+        const bestMatch = jobResults.reduce((latest, current) => {
+          const latestTime = latest.job.lastActivityAt || latest.job.createdAt || new Date(0);
+          const currentTime = current.job.lastActivityAt || current.job.createdAt || new Date(0);
           return currentTime > latestTime ? current : latest;
         });
+        
+        const matchedJob = bestMatch.job;
+        const matchedCustomer = bestMatch.customer;
 
         console.log(`📱 Matched reply to job #${matchedJob.jobNumber} (${matchedJob.id})`);
 
         // Get customer name for diary entry
-        let customerName = 'Customer';
-        if (matchedJob.customerId) {
-          const customer = await db
-            .select()
-            .from(customers)
-            .where(eq(customers.id, matchedJob.customerId))
-            .limit(1);
-          
-          if (customer.length > 0) {
-            customerName = customer[0].name;
-          }
-        }
+        let customerName = matchedCustomer?.name || 'Customer';
 
         // Create diary entry for the SMS reply
         // SMS Everyone NZ timestamps are in NZ local time (NZDT = UTC+13) without timezone indicator
