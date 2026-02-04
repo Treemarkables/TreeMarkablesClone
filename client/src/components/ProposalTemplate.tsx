@@ -158,7 +158,12 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
     
     sections.forEach(section => {
       (section.lineItems || []).forEach(item => {
-        if (item.selected) {
+        // Check if this item is selected - use state override if available, otherwise use original
+        const isItemSelected = selectedOptionalItems[item.id] !== undefined 
+          ? selectedOptionalItems[item.id] 
+          : item.selected;
+        
+        if (isItemSelected) {
           let itemPrice = 0;
           const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
           if (item.pricingType === 'choice' && effectiveChoiceId) {
