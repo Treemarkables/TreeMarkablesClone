@@ -124,6 +124,7 @@ interface JobAssignment {
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
+  totalAmount?: string; // Job price for display on dispatch board
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -764,7 +765,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           teamId: teamId,
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
-          lastActivityAt: apiJob.lastActivityAt
+          lastActivityAt: apiJob.lastActivityAt,
+          totalAmount: apiJob.totalAmount
         });
       });
     }
@@ -822,7 +824,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           teamId: undefined,
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
-          lastActivityAt: apiJob.lastActivityAt
+          lastActivityAt: apiJob.lastActivityAt,
+          totalAmount: apiJob.totalAmount
         });
       });
     }
