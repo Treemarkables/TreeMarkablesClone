@@ -1214,7 +1214,7 @@ export function JobDiarySection({
                         </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-[10px] ${isSent ? 'text-gray-400 dark:text-gray-500' : 'text-purple-500 dark:text-purple-400'}`}>
-                            {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a')}
+                            {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a dd/MM/yy')}
                           </span>
                           <Button
                             size="icon"
