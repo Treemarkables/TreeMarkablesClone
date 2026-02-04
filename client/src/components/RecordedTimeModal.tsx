@@ -358,123 +358,64 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
             <h4 className="font-medium text-blue-900 text-sm sm:text-base">Add Staff Time Entry</h4>
             
             <div className="grid grid-cols-1 gap-3">
+              {/* Staff Selection - Inline list for mobile compatibility */}
               <div>
-                <label className="text-sm font-medium">Staff</label>
-                <Popover>
-                  <PopoverTrigger asChild>
+                <label className="text-sm font-medium flex items-center justify-between mb-2">
+                  <span className="flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Staff ({newEntry.staffIds.length} selected)
+                  </span>
+                  <div className="flex gap-2">
                     <Button
-                      variant="outline"
-                      className="w-full min-h-11 justify-between"
-                      data-testid="button-select-staff"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Users className="h-4 w-4" />
-                        {newEntry.staffIds.length === 0 ? (
-                          <span className="text-gray-500">Select staff members</span>
-                        ) : (
-                          <span>
-                            {newEntry.staffIds.length} staff selected
-                          </span>
-                        )}
-                      </div>
-                      {newEntry.staffIds.length > 0 && (
-                        <Badge variant="secondary" className="ml-2">
-                          {newEntry.staffIds.length}
-                        </Badge>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[90vw] sm:w-80 p-0 max-h-[60vh] flex flex-col" align="start" side="bottom" sideOffset={5} avoidCollisions={true} collisionPadding={{ top: 60, bottom: 20 }}>
-                    <div className="p-2 border-b bg-white flex-shrink-0">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                        <Input
-                          placeholder="Search staff..."
-                          value={staffSearchQuery}
-                          onChange={(e) => setStaffSearchQuery(e.target.value)}
-                          className="pl-8 h-9"
-                          data-testid="input-staff-search"
-                        />
-                      </div>
-                      <div className="flex gap-2 mt-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 h-8 text-xs"
-                          onClick={() => {
-                            const filteredIds = employees
-                              .filter((e: any) => {
-                                const fullName = `${e.firstName} ${e.lastName}`.toLowerCase();
-                                return fullName.includes(staffSearchQuery.toLowerCase());
-                              })
-                              .map((e: any) => e.id);
-                            setNewEntry(prev => ({ ...prev, staffIds: filteredIds }));
-                          }}
-                          data-testid="button-select-all-staff"
-                        >
-                          Select All
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="flex-1 h-8 text-xs"
-                          onClick={() => setNewEntry(prev => ({ ...prev, staffIds: [] }))}
-                          data-testid="button-clear-staff"
-                        >
-                          Clear
-                        </Button>
-                      </div>
-                    </div>
-                    <div 
-                      className="overflow-y-scroll overscroll-contain"
-                      style={{ 
-                        maxHeight: '200px',
-                        WebkitOverflowScrolling: 'touch',
-                        touchAction: 'pan-y'
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs px-2"
+                      onClick={() => {
+                        const allIds = employees.map((e: any) => e.id);
+                        setNewEntry(prev => ({ ...prev, staffIds: allIds }));
                       }}
+                      data-testid="button-select-all-staff"
                     >
-                      <div className="p-2 space-y-1">
-                        {employees
-                          .filter((staff: any) => {
-                            const fullName = `${staff.firstName} ${staff.lastName}`.toLowerCase();
-                            return fullName.includes(staffSearchQuery.toLowerCase());
-                          })
-                          .map((staff: any) => {
-                            const isSelected = newEntry.staffIds.includes(staff.id);
-                            const staffRate = staff.hourlyRate ? parseFloat(staff.hourlyRate) : 0;
-                            return (
-                              <label
-                                key={staff.id}
-                                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
-                                data-testid={`staff-option-${staff.id}`}
-                              >
-                                <Checkbox
-                                  checked={isSelected}
-                                  onCheckedChange={(checked) => {
-                                    setNewEntry(prev => ({
-                                      ...prev,
-                                      staffIds: checked
-                                        ? [...prev.staffIds, staff.id]
-                                        : prev.staffIds.filter(id => id !== staff.id)
-                                    }));
-                                  }}
-                                />
-                                <div className="flex-1">
-                                  <div className="text-sm font-medium">
-                                    {staff.firstName} {staff.lastName}
-                                  </div>
-                                  <div className="text-xs text-gray-500">
-                                    {staff.position && `${staff.position} • `}
-                                    {staffRate > 0 ? `$${staffRate.toFixed(2)}/hr pay rate` : 'No pay rate set'}
-                                  </div>
-                                </div>
-                              </label>
-                            );
-                          })}
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                      All
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs px-2"
+                      onClick={() => setNewEntry(prev => ({ ...prev, staffIds: [] }))}
+                      data-testid="button-clear-staff"
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </label>
+                <div className="bg-white border rounded-lg p-2 grid grid-cols-2 sm:grid-cols-3 gap-1">
+                  {employees.map((staff: any) => {
+                    const isSelected = newEntry.staffIds.includes(staff.id);
+                    return (
+                      <label
+                        key={staff.id}
+                        className={`flex items-center gap-2 p-2 rounded cursor-pointer text-sm ${
+                          isSelected ? 'bg-blue-100 border border-blue-300' : 'hover:bg-gray-50 border border-transparent'
+                        }`}
+                        data-testid={`staff-option-${staff.id}`}
+                      >
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={(checked) => {
+                            setNewEntry(prev => ({
+                              ...prev,
+                              staffIds: checked
+                                ? [...prev.staffIds, staff.id]
+                                : prev.staffIds.filter(id => id !== staff.id)
+                            }));
+                          }}
+                        />
+                        <span className="truncate">{staff.firstName}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
               
               <div className="bg-blue-100 border border-blue-200 rounded p-2">
