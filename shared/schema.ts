@@ -571,6 +571,7 @@ export const proposals = pgTable("proposals", {
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("15.00"),
   discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).default("0.00"),
   discountType: text("discount_type").default("fixed"), // fixed or percentage
+  potentialValue: decimal("potential_value", { precision: 10, scale: 2 }).default("0.00"), // Total of ALL line items for metrics (regardless of selection)
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
