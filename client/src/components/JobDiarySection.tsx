@@ -1212,8 +1212,8 @@ export function JobDiarySection({
                             {isSent ? (recipientInfo ? `to ${recipientInfo}` : '') : 'received'}
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[10px] ${isSent ? 'text-gray-400 dark:text-gray-500' : 'text-purple-500 dark:text-purple-400'}`}>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className={`text-[10px] whitespace-nowrap ${isSent ? 'text-gray-400 dark:text-gray-500' : 'text-purple-500 dark:text-purple-400'}`}>
                             {formatInTimeZone(new Date(entry.timestamp), 'Pacific/Auckland', 'h:mm a dd/MM/yy')}
                           </span>
                           <Button
