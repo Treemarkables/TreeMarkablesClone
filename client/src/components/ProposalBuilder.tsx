@@ -180,7 +180,7 @@ export function ProposalBuilder({
       });
       
       // Update form with job information
-      form.setValue('title', job.title || 'Tree Service Proposal');
+      form.setValue('title', job.title || 'Treemarkables Quote');
       form.setValue('introduction', descriptionValue);
       form.setValue('customerId', job.customerId || customerId || '');
       
@@ -913,7 +913,7 @@ export function ProposalBuilder({
     setEmailForm({
       to: customerEmail,
       cc: '',
-      subject: `Tree Service Proposal`,
+      subject: `Treemarkables Quote`,
       message: `Thank you for your inquiry, we are pleased to provide you with the following estimate.`
     });
   };
