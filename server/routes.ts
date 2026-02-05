@@ -14720,6 +14720,16 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // Note: Diary entries are only created when proposal is SENT (via email/SMS)
       // not when it's saved/created as a draft to prevent duplicate entries
       
+      // Sync job total_amount from proposal subtotal
+      if (proposal.jobId && proposal.subtotal) {
+        try {
+          await storage.updateJob(proposal.jobId, { totalAmount: proposal.subtotal.toString() });
+          console.log('✅ Synced job total_amount from proposal subtotal:', proposal.subtotal);
+        } catch (error) {
+          console.error('❌ Error syncing job total_amount:', error);
+        }
+      }
+      
       res.status(201).json({
         success: true,
         data: proposal,
@@ -14850,6 +14860,33 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         }
       } else {
         console.log('⚠️ PUT proposal - no sections in request body');
+      }
+      
+      // Sync job total_amount from proposal subtotal
+      if (proposal.jobId) {
+        try {
+          // Calculate total from line items in the request
+          let totalAmount = 0;
+          if (req.body.sections && Array.isArray(req.body.sections)) {
+            for (const section of req.body.sections) {
+              if (section.lineItems && Array.isArray(section.lineItems)) {
+                for (const item of section.lineItems) {
+                  if (item.selected !== false) {
+                    totalAmount += parseFloat(item.totalPrice || '0') || 0;
+                  }
+                }
+              }
+            }
+          }
+          // Use proposal subtotal if available, otherwise calculated total
+          const syncAmount = req.body.subtotal || totalAmount;
+          if (syncAmount > 0) {
+            await storage.updateJob(proposal.jobId, { totalAmount: syncAmount.toString() });
+            console.log('✅ Synced job total_amount from proposal:', syncAmount);
+          }
+        } catch (error) {
+          console.error('❌ Error syncing job total_amount:', error);
+        }
       }
       
       res.json({
