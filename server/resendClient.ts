@@ -11,8 +11,8 @@ function getCredentials() {
   
   console.log(`✅ RESEND_API_KEY loaded: ${apiKey.substring(0, 10)}...`);
   
-  // From email configured in Resend dashboard
-  const fromEmail = 'info@updates.treemarkables.co.nz';
+  // From email configured in Resend dashboard with friendly sender name
+  const fromEmail = 'Treemarkables <info@updates.treemarkables.co.nz>';
   
   return { apiKey, fromEmail };
 }
