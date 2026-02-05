@@ -3159,12 +3159,12 @@ The Treemarkables Team`;
                                                 }
                                                 // Route mobile numbers to mobile field, landline to phone field
                                                 const phoneNumber = customer.mobile || customer.phone || '';
-                                                const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, ''));
+                                                const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
                                                 
                                                 if (isMobileNum) {
                                                   form.setValue('jobContactMobile', phoneNumber);
                                                   form.setValue('jobContactPhone', '');
-                                                } else {
+                                                } else if (phoneNumber) {
                                                   form.setValue('jobContactPhone', phoneNumber);
                                                   form.setValue('jobContactMobile', '');
                                                 }
@@ -3481,10 +3481,20 @@ The Treemarkables Team`;
                                                     form.setValue('jobContactEmail', customer.email);
                                                   }
                                                   if (customer.mobile && !form.getValues('jobContactMobile')) {
-                                                    form.setValue('jobContactMobile', customer.mobile);
+                                                    const isMobileNum = /^(\+?64)?0?2[0-9]/.test(customer.mobile.replace(/\s/g, '').replace(/^\+64/, '0'));
+                                                    if (isMobileNum) {
+                                                      form.setValue('jobContactMobile', customer.mobile);
+                                                    } else if (!form.getValues('jobContactPhone')) {
+                                                      form.setValue('jobContactPhone', customer.mobile);
+                                                    }
                                                   }
                                                   if (customer.phone && !form.getValues('jobContactPhone')) {
-                                                    form.setValue('jobContactPhone', customer.phone);
+                                                    const isMobileNum = /^(\+?64)?0?2[0-9]/.test(customer.phone.replace(/\s/g, '').replace(/^\+64/, '0'));
+                                                    if (isMobileNum && !form.getValues('jobContactMobile')) {
+                                                      form.setValue('jobContactMobile', customer.phone);
+                                                    } else {
+                                                      form.setValue('jobContactPhone', customer.phone);
+                                                    }
                                                   }
                                                   // Auto-set lead source to "repeat" for existing customers
                                                   if (mode === 'create' && !form.getValues('leadSource')) {
@@ -3537,7 +3547,7 @@ The Treemarkables Team`;
                                                 }
                                                 // Route mobile numbers to mobile field, landline to phone field
                                                 const phoneNumber = customer.mobile || customer.phone || '';
-                                                const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, ''));
+                                                const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
                                                 
                                                 if (isMobileNum) {
                                                   form.setValue('jobContactMobile', phoneNumber);
@@ -3832,15 +3842,26 @@ The Treemarkables Team`;
                                 name="newCustomerPhone"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <FormLabel className="text-xs font-medium text-gray-600">Phone</FormLabel>
+                                    <FormLabel className="text-xs font-medium text-gray-600">Mobile/Phone</FormLabel>
                                     <FormControl>
                                       <Input 
                                         {...field} 
-                                        placeholder="Phone number"
+                                        placeholder="Mobile or phone number"
                                         onChange={(e) => {
-                                          field.onChange(e);
-                                          // Map to job contact phone for backend compatibility
-                                          form.setValue('jobContactPhone', e.target.value);
+                                          const val = e.target.value;
+                                          field.onChange(val);
+                                          
+                                          // Enhanced NZ Mobile Routing: Detect 02x prefixes
+                                          const cleaned = val.replace(/\s/g, '').replace(/^\+64/, '0');
+                                          const isMobile = /^0?2[0-9]/.test(cleaned);
+                                          
+                                          if (isMobile) {
+                                            form.setValue('jobContactMobile', val);
+                                            form.setValue('jobContactPhone', '');
+                                          } else {
+                                            form.setValue('jobContactPhone', val);
+                                            form.setValue('jobContactMobile', '');
+                                          }
                                         }}
                                         data-testid="input-new-customer-phone"
                                       />
@@ -4485,22 +4506,45 @@ The Treemarkables Team`;
                             />
                             <FormField
                               control={form.control}
-                              name="jobContactPhone"
+                              name="jobContactMobile"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
+                                    <Input 
+                                      {...field} 
+                                      className="h-9 text-base md:text-sm" 
+                                      placeholder="Mobile (02x...)" 
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        field.onChange(val);
+                                      }}
+                                    />
                                   </FormControl>
                                 </FormItem>
                               )}
                             />
                             <FormField
                               control={form.control}
-                              name="jobContactMobile"
+                              name="jobContactPhone"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
+                                    <Input 
+                                      {...field} 
+                                      className="h-9 text-base md:text-sm" 
+                                      placeholder="Phone (Landline)" 
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        field.onChange(val);
+                                        
+                                        // Auto-route mobile numbers to mobile field
+                                        const cleaned = val.replace(/\s/g, '').replace(/^\+64/, '0');
+                                        if (/^0?2[0-9]/.test(cleaned)) {
+                                          form.setValue('jobContactMobile', val);
+                                          form.setValue('jobContactPhone', '');
+                                        }
+                                      }}
+                                    />
                                   </FormControl>
                                 </FormItem>
                               )}
