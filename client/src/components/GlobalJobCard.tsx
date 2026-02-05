@@ -3071,21 +3071,32 @@ The Treemarkables Team`;
                                             onValueChange={setCustomerSearchValue}
                                           />
                                           <CommandList>
+                                            {/* Always show Create New Customer option when search has value */}
+                                            {customerSearchValue.trim() && (
+                                              <CommandGroup heading="New Customer">
+                                                <CommandItem
+                                                  value={`create-new-${customerSearchValue}`}
+                                                  onSelect={() => {
+                                                    form.setValue('isNewCustomer', true);
+                                                    form.setValue('newCustomerName', customerSearchValue);
+                                                    form.setValue('customerId', '');
+                                                    const names = customerSearchValue.split(' ');
+                                                    form.setValue('jobContactFirstName', names[0] || '');
+                                                    form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                                    setSelectedCustomerName(customerSearchValue);
+                                                    setCustomerSearchOpen(false);
+                                                  }}
+                                                  className="text-blue-600"
+                                                >
+                                                  <Plus className="mr-2 h-4 w-4" />
+                                                  Create "{customerSearchValue}"
+                                                </CommandItem>
+                                              </CommandGroup>
+                                            )}
                                             <CommandEmpty>
-                                              <Button 
-                                                variant="ghost" 
-                                                className="w-full justify-start text-blue-600"
-                                                onClick={() => {
-                                                  form.setValue('isNewCustomer', true);
-                                                  form.setValue('newCustomerName', customerSearchValue);
-                                                  setCustomerSearchOpen(false);
-                                                }}
-                                              >
-                                                <Plus className="mr-2 h-4 w-4" />
-                                                Create "{customerSearchValue}"
-                                              </Button>
+                                              <p className="text-sm text-muted-foreground p-2">No customers found</p>
                                             </CommandEmpty>
-                                            <CommandGroup>
+                                            <CommandGroup heading="Existing Customers">
                                               {customers.map((customer) => (
                                                 <CommandItem
                                                   key={customer.id}
@@ -3439,24 +3450,30 @@ The Treemarkables Team`;
                                         </Button>
                                       </div>
                                       <CommandList className="max-h-[300px]">
+                                        {/* Always show Create New Customer option when search has value */}
+                                        {customerSearchValue.trim() && (
+                                          <CommandGroup heading="New Customer">
+                                            <CommandItem
+                                              value={`create-new-${customerSearchValue}`}
+                                              onSelect={() => {
+                                                form.setValue('isNewCustomer', true);
+                                                form.setValue('newCustomerName', customerSearchValue);
+                                                form.setValue('customerId', '');
+                                                const names = customerSearchValue.split(' ');
+                                                form.setValue('jobContactFirstName', names[0] || '');
+                                                form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
+                                                setSelectedCustomerName(customerSearchValue);
+                                                setCustomerSearchOpen(false);
+                                              }}
+                                              className="text-blue-600"
+                                            >
+                                              <Plus className="mr-2 h-4 w-4" />
+                                              Create "{customerSearchValue}"
+                                            </CommandItem>
+                                          </CommandGroup>
+                                        )}
                                         <CommandEmpty>
-                                          <Button 
-                                            variant="ghost" 
-                                            className="w-full justify-start text-blue-600"
-                                            onClick={() => {
-                                              form.setValue('isNewCustomer', true);
-                                              form.setValue('newCustomerName', customerSearchValue);
-                                              form.setValue('customerId', '');
-                                              const names = customerSearchValue.split(' ');
-                                              form.setValue('jobContactFirstName', names[0] || '');
-                                              form.setValue('jobContactLastName', names.slice(1).join(' ') || '');
-                                              setSelectedCustomerName(customerSearchValue);
-                                              setCustomerSearchOpen(false);
-                                            }}
-                                          >
-                                            <Plus className="mr-2 h-4 w-4" />
-                                            Create "{customerSearchValue}"
-                                          </Button>
+                                          <p className="text-sm text-muted-foreground p-2">No customers found</p>
                                         </CommandEmpty>
                                         {/* Deep Search Results */}
                                         {deepSearchResults.length > 0 && (
