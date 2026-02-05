@@ -2744,6 +2744,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       
       // Set lastActivityAt for proper dispatch board sorting (new jobs appear at top)
       processedBody.lastActivityAt = new Date();
+      
+      // Auto-populate address and lead source from existing customer if not provided
+      if (processedBody.customerId && !processedBody.isNewCustomer) {
+        const existingCustomer = await storage.getCustomer(processedBody.customerId);
+        if (existingCustomer) {
+          // Auto-fill address from customer if missing
+          if (!processedBody.address && existingCustomer.address) {
+            processedBody.address = existingCustomer.address;
+            console.log('✅ Auto-filled job address from customer:', existingCustomer.address);
+          }
+          // Auto-set lead source to "repeat" for existing customers
+          if (!processedBody.leadSource) {
+            processedBody.leadSource = 'repeat';
+            console.log('✅ Auto-set lead source to "repeat" for existing customer');
+          }
+        }
+      }
 
       const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
@@ -3385,6 +3402,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Get the old job for status comparison
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
+      
+      // SAFEGUARD: Preserve critical fields if update has empty values (prevents accidental data loss)
+      if (oldJob) {
+        // Preserve address if update has empty address but old job has one
+        if (!validation.data.address && oldJob.address) {
+          (validation.data as any).address = oldJob.address;
+          console.log('✅ Preserved job address from existing job:', oldJob.address);
+        }
+        // Preserve lead source if update has empty leadSource but old job has one
+        if (!validation.data.leadSource && oldJob.leadSource) {
+          (validation.data as any).leadSource = oldJob.leadSource;
+          console.log('✅ Preserved lead source from existing job:', oldJob.leadSource);
+        }
+      }
 
       // Check if job has accepted proposals - prevent status downgrade from work_order to quote
       if (oldJob?.status === 'work_order' && validation.data.status && validation.data.status === 'quote') {
