@@ -57,7 +57,21 @@ export function SMSComposerModal({
     },
   });
 
-  // Only auto-generate message for invoice context, NOT the phone number
+  // Auto-populate phone number when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      // Get best available phone number - prefer mobile for SMS
+      const phone = job?.jobContactMobile || job?.jobContactPhone || job?.billingContactMobile || 
+                    customer?.mobile || customer?.phone || "";
+      if (phone) {
+        form.setValue("phone", phone);
+        console.log('📱 Auto-populated SMS phone number:', phone);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, job?.id, customer?.id]);
+
+  // Only auto-generate message for invoice context
   useEffect(() => {
     if (isOpen && invoiceData && customer) {
       const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.amount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
@@ -67,9 +81,10 @@ export function SMSComposerModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [customer, invoiceData, isOpen]);
 
-  // Helper function to fill in customer's saved phone number
+  // Helper function to fill in customer's saved phone number (prefer mobile for SMS)
   const useCustomerPhone = () => {
-    const phone = job?.jobContactPhone || job?.billingContactMobile || customer?.phone || customer?.mobile || "";
+    const phone = job?.jobContactMobile || job?.jobContactPhone || job?.billingContactMobile || 
+                  customer?.mobile || customer?.phone || "";
     if (phone) {
       form.setValue("phone", phone);
       toast({
