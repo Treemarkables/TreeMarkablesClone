@@ -3347,11 +3347,15 @@ The Treemarkables Team`;
                                               form.setValue('jobContactEmail', customer.email);
                                             }
                                             // Route mobile numbers to mobile field, landline to phone field
-                                            if (customer.mobile && !form.getValues('jobContactMobile')) {
-                                              form.setValue('jobContactMobile', customer.mobile);
-                                            }
-                                            if (customer.phone && !form.getValues('jobContactPhone')) {
-                                              form.setValue('jobContactPhone', customer.phone);
+                                            const phoneNumber = customer.mobile || customer.phone || '';
+                                            const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, ''));
+                                            
+                                            if (isMobileNum) {
+                                              form.setValue('jobContactMobile', phoneNumber);
+                                              form.setValue('jobContactPhone', '');
+                                            } else {
+                                              form.setValue('jobContactPhone', phoneNumber);
+                                              form.setValue('jobContactMobile', '');
                                             }
                                           }}
                                         >
@@ -4481,22 +4485,22 @@ The Treemarkables Team`;
                             />
                             <FormField
                               control={form.control}
-                              name="jobContactMobile"
+                              name="jobContactPhone"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
                                   </FormControl>
                                 </FormItem>
                               )}
                             />
                             <FormField
                               control={form.control}
-                              name="jobContactPhone"
+                              name="jobContactMobile"
                               render={({ field }) => (
                                 <FormItem>
                                   <FormControl>
-                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Phone" />
+                                    <Input {...field} className="h-9 text-base md:text-sm" placeholder="Mobile" />
                                   </FormControl>
                                 </FormItem>
                               )}
