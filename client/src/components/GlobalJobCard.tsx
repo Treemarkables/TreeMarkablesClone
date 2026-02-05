@@ -4349,9 +4349,9 @@ The Treemarkables Team`;
                                       totalExcGst = (parseFloat(jobQuoteResponse.data[0].amount) || 0) / 1.15;
                                     }
                                     
-                                    // Fallback to invoice total (invoice total is typically inc GST)
+                                    // Fallback to invoice total (invoice total is already exc GST)
                                     if (totalExcGst === 0 && (jobInvoiceResponse as any)?.data?.[0]?.total) {
-                                      totalExcGst = (parseFloat((jobInvoiceResponse as any).data[0].total) || 0) / 1.15;
+                                      totalExcGst = parseFloat((jobInvoiceResponse as any).data[0].total) || 0;
                                     }
                                     
                                     return (
