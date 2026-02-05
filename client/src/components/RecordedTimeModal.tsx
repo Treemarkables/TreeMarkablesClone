@@ -268,8 +268,28 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
         return;
       }
       
-      // Prepare entries with all required fields
-      const formattedEntries = pendingEntries.map(entry => {
+      // Format existing entries to preserve them (mark as existing to skip diary creation)
+      const formattedExistingEntries = existingEntries.map((entry: any) => ({
+        jobId,
+        jobNumber: jobNumber || '3317',
+        employeeId: entry.employeeId,
+        employeeName: entry.employeeName || 'Unknown Staff',
+        lineItemId: entry.lineItemId || 'material-11',
+        lineItemNumber: entry.lineItemNumber || '34',
+        lineItemName: entry.lineItemName || 'Labour',
+        lineItemCategory: 'Labour',
+        entryDate: entry.date || today,
+        hours: entry.hours,
+        rate: entry.rate || 0,
+        startTime: entry.startTime,
+        billed: entry.billed !== false,
+        roundingMode: entry.roundingMode || 'none',
+        travelTimeIncluded: entry.travelTimeIncluded || false,
+        isExisting: true // Mark as existing to skip diary entry creation
+      }));
+      
+      // Prepare NEW entries with all required fields
+      const formattedNewEntries = pendingEntries.map(entry => {
         // Find the staff member
         const staff = employees.find((e: any) => e.id === entry.staffId);
         const staffName = staff ? `${staff.firstName} ${staff.lastName}` : 'Unknown Staff';
@@ -304,6 +324,9 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
           travelTimeIncluded: travelTime === 'Included'
         };
       });
+      
+      // Combine existing + new entries to preserve all time records
+      const formattedEntries = [...formattedExistingEntries, ...formattedNewEntries];
       
       // Calculate total additional costs from expense items
       const totalAdditionalCosts = expenses.reduce((sum, exp) => sum + exp.amount, 0);

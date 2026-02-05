@@ -6436,8 +6436,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           employeeId: employeeId,
           hours: hours,
           rate: rate || 0,
-          date: entry.date || new Date().toISOString().split('T')[0]
+          date: entry.date || entry.entryDate || new Date().toISOString().split('T')[0]
         });
+
+        // Only add to diary for NEW entries (skip existing ones being preserved)
+        if (entry.isExisting) continue;
 
         // Build diary entry line - use employeeName from frontend first, then lookup
         let employeeName = entry.employeeName;
