@@ -3073,8 +3073,9 @@ The Treemarkables Team`;
                                           <CommandList>
                                             {/* Always show Create New Customer option when search has value */}
                                             {customerSearchValue.trim() && (
-                                              <CommandGroup heading="New Customer">
+                                              <CommandGroup heading="New Customer" forceMount>
                                                 <CommandItem
+                                                  forceMount
                                                   value={`create-new-${customerSearchValue}`}
                                                   onSelect={() => {
                                                     form.setValue('isNewCustomer', true);
@@ -3086,7 +3087,7 @@ The Treemarkables Team`;
                                                     setSelectedCustomerName(customerSearchValue);
                                                     setCustomerSearchOpen(false);
                                                   }}
-                                                  className="text-blue-600"
+                                                  className="text-blue-600 cursor-pointer"
                                                 >
                                                   <Plus className="mr-2 h-4 w-4" />
                                                   Create "{customerSearchValue}"
@@ -3452,8 +3453,9 @@ The Treemarkables Team`;
                                       <CommandList className="max-h-[300px]">
                                         {/* Always show Create New Customer option when search has value */}
                                         {customerSearchValue.trim() && (
-                                          <CommandGroup heading="New Customer">
+                                          <CommandGroup heading="New Customer" forceMount>
                                             <CommandItem
+                                              forceMount
                                               value={`create-new-${customerSearchValue}`}
                                               onSelect={() => {
                                                 form.setValue('isNewCustomer', true);
@@ -3465,7 +3467,7 @@ The Treemarkables Team`;
                                                 setSelectedCustomerName(customerSearchValue);
                                                 setCustomerSearchOpen(false);
                                               }}
-                                              className="text-blue-600"
+                                              className="text-blue-600 cursor-pointer"
                                             >
                                               <Plus className="mr-2 h-4 w-4" />
                                               Create "{customerSearchValue}"
