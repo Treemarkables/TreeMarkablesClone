@@ -16,7 +16,7 @@ import { MicrophoneButton } from '@/components/MicrophoneButton';
 
 const smsFormSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
-  message: z.string().min(1, "Message is required").max(200, "SMS message must be 200 characters or less"),
+  message: z.string().min(1, "Message is required").max(459, "SMS message must be 459 characters or less (3 SMS segments)"),
 });
 
 type SMSFormData = z.infer<typeof smsFormSchema>;
@@ -317,8 +317,8 @@ export function SMSComposerModal({
                   </FormControl>
                   <div className="flex justify-between items-center text-xs text-muted-foreground">
                     <FormMessage />
-                    <span className={characterCount > 200 ? "text-destructive" : ""}>
-                      {characterCount}/200 characters
+                    <span className={characterCount > 459 ? "text-destructive" : characterCount > 160 ? "text-orange-500" : ""}>
+                      {characterCount}/459 characters{characterCount > 160 ? ` (${Math.ceil(characterCount / 153)} SMS segments)` : ""}
                     </span>
                   </div>
                 </FormItem>
