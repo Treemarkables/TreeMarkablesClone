@@ -3875,11 +3875,11 @@ The Treemarkables Team`;
                                           const isMobile = /^0?2[0-9]/.test(cleaned);
                                           
                                           if (isMobile) {
-                                            form.setValue('jobContactMobile', val);
-                                            form.setValue('jobContactPhone', '');
+                                            form.setValue('jobContactMobile', val, { shouldDirty: true });
+                                            form.setValue('jobContactPhone', '', { shouldDirty: true });
                                           } else {
-                                            form.setValue('jobContactPhone', val);
-                                            form.setValue('jobContactMobile', '');
+                                            form.setValue('jobContactPhone', val, { shouldDirty: true });
+                                            form.setValue('jobContactMobile', '', { shouldDirty: true });
                                           }
                                         }}
                                         data-testid="input-new-customer-phone"
@@ -4564,8 +4564,8 @@ The Treemarkables Team`;
                                         // Auto-route mobile numbers to mobile field
                                         const cleaned = val.replace(/\s/g, '').replace(/^\+64/, '0');
                                         if (/^0?2[0-9]/.test(cleaned)) {
-                                          form.setValue('jobContactMobile', val);
-                                          form.setValue('jobContactPhone', '');
+                                          form.setValue('jobContactMobile', val, { shouldDirty: true });
+                                          form.setValue('jobContactPhone', '', { shouldDirty: true });
                                         }
                                       }}
                                     />
