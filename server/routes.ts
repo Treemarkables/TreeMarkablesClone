@@ -5575,11 +5575,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
 
-      // Validate message length (SMS limit is typically 160 characters)
-      if (message.length > 160) {
+      // Validate message length (multi-part SMS supported, max 459 chars = 3 segments)
+      if (message.length > 459) {
         return res.status(400).json({ 
           success: false, 
-          message: 'SMS message must be 160 characters or less' 
+          message: 'SMS message must be 459 characters or less (3 SMS segments)' 
         });
       }
 
