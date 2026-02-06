@@ -3579,6 +3579,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               customerUpdates.phone = job.jobContactPhone.trim();
             }
             
+            // Sync mobile
+            if (job.jobContactMobile && job.jobContactMobile.trim() !== '') {
+              customerUpdates.mobile = job.jobContactMobile.trim();
+            }
+            
             // Sync email
             if (job.jobContactEmail && job.jobContactEmail.trim() !== '') {
               customerUpdates.email = job.jobContactEmail.trim().toLowerCase();
@@ -3743,6 +3748,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             // Sync phone
             if (job.jobContactPhone && job.jobContactPhone.trim() !== '') {
               customerUpdates.phone = job.jobContactPhone.trim();
+            }
+            
+            // Sync mobile
+            if (job.jobContactMobile && job.jobContactMobile.trim() !== '') {
+              customerUpdates.mobile = job.jobContactMobile.trim();
             }
             
             // Sync email
