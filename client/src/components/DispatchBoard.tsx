@@ -2211,6 +2211,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           const isMobile = /^\+?64\s?(2[1279])/.test(phone.replace(/\s/g, '')) || 
                           /^0?2[1279]/.test(phone.replace(/\s/g, ''));
           
+          const nameParts = (data.name || 'New Lead').trim().split(/\s+/);
+          const firstName = nameParts[0] || '';
+          const lastName = nameParts.slice(1).join(' ') || '';
+          
           const res = await apiRequest('POST', '/api/jobs', {
             newCustomerName: data.name || 'New Lead',
             newCustomerPhone: isMobile ? '' : phone,
@@ -2221,8 +2225,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             leadSource: 'sms',
             status: 'quote',
             isNewCustomer: true,
-            // Also set job contact mobile for the job card
-            jobContactPhone: isMobile ? phone : '',
+            jobContactFirstName: firstName,
+            jobContactLastName: lastName,
+            jobContactPhone: isMobile ? '' : phone,
+            jobContactMobile: isMobile ? phone : '',
           });
           const response = await res.json();
           console.log('📸 Job creation response:', response);

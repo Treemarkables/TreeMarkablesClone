@@ -2724,6 +2724,25 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           
           processedBody.customerId = newCustomer.id;
           console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job`);
+          
+          // Auto-populate job contact fields from new customer if not already set
+          if (!processedBody.jobContactFirstName) {
+            const nameParts = newCustomer.name.trim().split(/\s+/);
+            processedBody.jobContactFirstName = nameParts[0] || '';
+            if (!processedBody.jobContactLastName) {
+              processedBody.jobContactLastName = nameParts.slice(1).join(' ') || '';
+            }
+          }
+          if (!processedBody.jobContactEmail && newCustomer.email) {
+            processedBody.jobContactEmail = newCustomer.email;
+          }
+          if (!processedBody.jobContactPhone && newCustomer.phone) {
+            processedBody.jobContactPhone = newCustomer.phone;
+          }
+          if (!processedBody.jobContactMobile && newCustomer.mobile) {
+            processedBody.jobContactMobile = newCustomer.mobile;
+          }
+          console.log(`✅ Auto-populated job contact from new customer: ${processedBody.jobContactFirstName} ${processedBody.jobContactLastName}`);
         } catch (error) {
           console.error('Error creating new customer:', error);
           return res.status(500).json({
@@ -3376,6 +3395,25 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           
           processedBody.customerId = newCustomer.id;
           console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
+          
+          // Auto-populate job contact fields from new customer if not already set
+          if (!processedBody.jobContactFirstName) {
+            const nameParts = newCustomer.name.trim().split(/\s+/);
+            processedBody.jobContactFirstName = nameParts[0] || '';
+            if (!processedBody.jobContactLastName) {
+              processedBody.jobContactLastName = nameParts.slice(1).join(' ') || '';
+            }
+          }
+          if (!processedBody.jobContactEmail && newCustomer.email) {
+            processedBody.jobContactEmail = newCustomer.email;
+          }
+          if (!processedBody.jobContactPhone && newCustomer.phone) {
+            processedBody.jobContactPhone = newCustomer.phone;
+          }
+          if (!processedBody.jobContactMobile && (newCustomer as any).mobile) {
+            processedBody.jobContactMobile = (newCustomer as any).mobile;
+          }
+          console.log(`✅ Auto-populated job contact from new customer: ${processedBody.jobContactFirstName} ${processedBody.jobContactLastName}`);
         } catch (error) {
           console.error('❌ Error creating new customer:', error);
           return res.status(500).json({
