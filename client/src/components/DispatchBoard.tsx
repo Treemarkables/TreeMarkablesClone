@@ -43,7 +43,7 @@ import {
   Sprout,
   Loader2
 } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
 import { nzTimeToUTC, utcToNZTime } from '@shared/dateUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -491,6 +491,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [showCreateFromMessageDialog, setShowCreateFromMessageDialog] = useState(false);
+  const isCreatingLeadJobRef = useRef(false);
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [jobToSchedule, setJobToSchedule] = useState<JobAssignment | null>(null);
   const [schedulingData, setSchedulingData] = useState({
@@ -2201,6 +2202,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       open={showCreateFromMessageDialog}
       onOpenChange={setShowCreateFromMessageDialog}
       onLeadCreated={async (data) => {
+        // Prevent duplicate job creation from double-clicks
+        if (isCreatingLeadJobRef.current) {
+          console.log('📸 Already creating a lead job, ignoring duplicate call');
+          return;
+        }
+        isCreatingLeadJobRef.current = true;
         setShowCreateFromMessageDialog(false);
         
         // Automatically create the job from extracted data
@@ -2234,12 +2241,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           console.log('📸 Job creation response:', response);
           
           if (response.success && response.data) {
-            // Refresh jobs list
+            // Refresh jobs and customers lists
             queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
             queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
             
             // Open the newly created job for editing
-            setSelectedJobId(response.data.id);
+            setJobToEdit(response.data as JobAssignment);
             setGlobalJobCardMode('edit');
             setShowGlobalJobCard(true);
             
@@ -2255,6 +2262,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             description: 'Failed to create job. Please try again.',
             variant: 'destructive',
           });
+        } finally {
+          isCreatingLeadJobRef.current = false;
         }
       }}
     />
