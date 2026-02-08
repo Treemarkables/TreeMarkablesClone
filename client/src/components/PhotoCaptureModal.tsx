@@ -51,28 +51,41 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
         
         console.log('📸 Uploading photo with cache bypass:', url);
 
-        const response = await fetch(url, {
-          method: 'POST',
-          body: formData,
-          // Force no caching at any level
-          cache: 'no-store',
-          headers: {
-            'Cache-Control': 'no-cache, no-store, must-revalidate',
-            'Pragma': 'no-cache',
-          },
-        });
+        // Use AbortController with timeout to prevent hung uploads
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
 
-        console.log('📸 Upload response status:', response.status);
+        try {
+          const response = await fetch(url, {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+            },
+          });
+          clearTimeout(timeoutId);
 
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('📸 Upload failed:', error);
-          throw new Error(error.message || 'Failed to upload photo');
+          console.log('📸 Upload response status:', response.status);
+
+          if (!response.ok) {
+            const error = await response.json();
+            console.error('📸 Upload failed:', error);
+            throw new Error(error.message || 'Failed to upload photo');
+          }
+
+          const result = await response.json();
+          console.log('📸 Upload success:', result);
+          results.push(result);
+        } catch (err: any) {
+          clearTimeout(timeoutId);
+          if (err.name === 'AbortError') {
+            throw new Error('Upload timed out. Please check your connection and try again.');
+          }
+          throw err;
         }
-
-        const result = await response.json();
-        console.log('📸 Upload success:', result);
-        results.push(result);
       }
       
       return results;
@@ -87,8 +100,8 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
     },
     onError: (error: Error) => {
       toast({
-        title: "Error",
-        description: error.message || "Failed to upload photo",
+        title: "Upload Failed",
+        description: error.message || "Failed to upload photo. Please try again.",
         variant: "destructive",
       });
     },
@@ -250,7 +263,6 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
               <Button
                 variant="outline"
                 onClick={handleClose}
-                disabled={uploadPhotoMutation.isPending}
                 data-testid="button-cancel-upload"
               >
                 Cancel
