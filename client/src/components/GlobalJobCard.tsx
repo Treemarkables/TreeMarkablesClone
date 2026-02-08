@@ -908,6 +908,13 @@ export function GlobalJobCard({
       // Set selected customer name for the search/create combobox
       if (editingJobCustomer?.name) {
         setSelectedCustomerName(editingJobCustomer.name);
+      } else if (editingJob.customerId) {
+        // Customer might not be in cache yet (e.g. just created from lead)
+        // Use job contact fields as fallback for display
+        const fallbackName = [editingJob.jobContactFirstName, editingJob.jobContactLastName].filter(Boolean).join(' ');
+        if (fallbackName) {
+          setSelectedCustomerName(fallbackName);
+        }
       }
       
       // Reset loading flag after a delay to ensure all form updates are done
