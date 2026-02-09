@@ -298,7 +298,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   const newRiskAssessmentForm = useForm<RiskAssessmentFormData>({
     resolver: zodResolver(riskAssessmentInsertSchema),
     defaultValues: {
-      jobId: '',
+      jobId: null,
       assessedBy: 'Current User',
       overallRisk: '',
       weatherRisk: '',
@@ -321,7 +321,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   useEffect(() => {
     if (selectedRiskAssessment) {
       editRiskAssessmentForm.reset({
-        jobId: selectedRiskAssessment.jobId,
+        jobId: selectedRiskAssessment.jobId || null,
         assessedBy: selectedRiskAssessment.assessedBy,
         overallRisk: selectedRiskAssessment.overallRisk,
         weatherRisk: selectedRiskAssessment.weatherRisk || '',
@@ -348,12 +348,14 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
   };
 
   const onSubmitNewRiskAssessment = (data: RiskAssessmentFormData) => {
-    createRiskAssessmentMutation.mutate(data);
+    const submitData = { ...data, jobId: data.jobId || null };
+    createRiskAssessmentMutation.mutate(submitData);
   };
 
   const onSubmitEditRiskAssessment = (data: RiskAssessmentFormData) => {
     if (selectedRiskAssessment) {
-      updateRiskAssessmentMutation.mutate({ id: selectedRiskAssessment.id, data });
+      const submitData = { ...data, jobId: data.jobId || null };
+      updateRiskAssessmentMutation.mutate({ id: selectedRiskAssessment.id, data: submitData });
     }
   };
 
@@ -1017,9 +1019,9 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
                         name="jobId"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Job ID</FormLabel>
+                            <FormLabel>Job (Optional)</FormLabel>
                             <FormControl>
-                              <Input placeholder="Enter job ID" {...field} />
+                              <Input placeholder="Link to a job ID (optional)" {...field} value={field.value || ''} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -1211,7 +1213,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
                           <Badge className={`${getSeverityColor(assessment.overallRisk)} text-white`}>
                             {assessment.overallRisk.toUpperCase()}
                           </Badge>
-                          <span className="font-medium">Job: {assessment.jobId}</span>
+                          <span className="font-medium">{assessment.jobId ? `Job: ${assessment.jobId.substring(0, 8)}...` : 'Standalone Assessment'}</span>
                           {assessment.weatherRisk && (
                             <Badge variant="outline">
                               Weather: {assessment.weatherRisk}
