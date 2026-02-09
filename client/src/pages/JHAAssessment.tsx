@@ -193,16 +193,17 @@ export default function JHAAssessment() {
     const exists = current.find(h => h.hazardTemplateId === hazard.id);
     
     if (exists) {
-      form.setValue("selectedHazards", current.filter(h => h.hazardTemplateId !== hazard.id));
+      form.setValue("selectedHazards", current.filter(h => h.hazardTemplateId !== hazard.id), { shouldDirty: true });
     } else {
+      const riskRating = hazard.defaultRiskRating || 2;
       form.setValue("selectedHazards", [...current, {
         hazardTemplateId: hazard.id,
         hazardName: hazard.name,
-        initialRisk: hazard.defaultRiskRating,
+        initialRisk: riskRating,
         selectedControls: [],
-        residualRisk: hazard.defaultRiskRating,
+        residualRisk: riskRating,
         responsiblePerson: ""
-      }]);
+      }], { shouldDirty: true });
     }
   };
 
@@ -314,13 +315,22 @@ export default function JHAAssessment() {
 
   const handleSubmit = (data: JHAFormValues) => {
     console.log("🔍 Form submit triggered", { 
-      hazardCount: data.selectedHazards.length,
+      hazardCount: data.selectedHazards?.length,
       hasSignature: !!sharedSignature,
       isEditing,
       formData: data 
     });
 
-    if (data.selectedHazards.length === 0) {
+    if (!data.activityDescription || data.activityDescription.trim().length === 0) {
+      toast({
+        title: "Activity Required",
+        description: "Please enter an activity description",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!data.selectedHazards || data.selectedHazards.length === 0) {
       console.log("❌ Validation failed: No hazards selected");
       toast({
         title: "No Hazards Selected",
@@ -386,8 +396,11 @@ export default function JHAAssessment() {
 
       <Form {...form}>
         <form onSubmit={(e) => {
-          console.log("📝 Form onSubmit event fired", e);
-          form.handleSubmit(handleSubmit)(e);
+          e.preventDefault();
+          console.log("📝 Form onSubmit event fired");
+          const values = form.getValues();
+          console.log("📋 Form values at submit:", values);
+          handleSubmit(values);
         }} className="space-y-4">
           {/* Header */}
           <Card>

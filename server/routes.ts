@@ -18490,12 +18490,12 @@ Transcription: ${transcriptText}`;
         teamLeader: z.string().optional(),
         location: z.string().optional(),
         comments: z.string().optional(),
-        jobId: z.number().nullable().optional(),
+        jobId: z.union([z.number(), z.string()]).nullable().optional(),
         selectedHazards: z.array(z.object({
           hazardTemplateId: z.union([z.number(), z.string()]),
           hazardName: z.string(),
-          initialRisk: z.number().min(1).max(4),
-          selectedControls: z.array(z.union([z.number(), z.string()])),
+          initialRisk: z.number().min(1).max(4).optional().default(2),
+          selectedControls: z.array(z.union([z.number(), z.string()])).optional().default([]),
           residualRisk: z.number().min(1).max(4).optional(),
           responsiblePerson: z.string().optional(),
           riskControl: z.string().optional()
@@ -18602,12 +18602,12 @@ Transcription: ${transcriptText}`;
         teamLeader: z.string().optional(),
         location: z.string().optional(),
         comments: z.string().optional(),
-        jobId: z.number().nullable().optional(),
+        jobId: z.union([z.number(), z.string()]).nullable().optional(),
         selectedHazards: z.array(z.object({
           hazardTemplateId: z.union([z.number(), z.string()]),
           hazardName: z.string(),
-          initialRisk: z.number().min(1).max(4),
-          selectedControls: z.array(z.union([z.number(), z.string()])),
+          initialRisk: z.number().min(1).max(4).optional().default(2),
+          selectedControls: z.array(z.union([z.number(), z.string()])).optional().default([]),
           residualRisk: z.number().min(1).max(4).optional(),
           responsiblePerson: z.string().optional(),
           riskControl: z.string().optional()
