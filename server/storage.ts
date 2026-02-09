@@ -4761,11 +4761,24 @@ class DatabaseStorage implements IStorage {
   async getSafetyIncidentsBySeverity(severity: string): Promise<SafetyIncident[]> { return []; }
   async getSafetyIncidentsByStatus(status: string): Promise<SafetyIncident[]> { return []; }
 
-  async createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment> { throw new Error("Not implemented"); }
-  async getRiskAssessment(id: string): Promise<RiskAssessment | undefined> { return undefined; }
-  async updateRiskAssessment(id: string, updates: Partial<InsertRiskAssessment>): Promise<RiskAssessment> { throw new Error("Not implemented"); }
-  async getRiskAssessmentsByJob(jobId: string): Promise<RiskAssessment[]> { return []; }
-  async getAllRiskAssessments(): Promise<RiskAssessment[]> { return []; }
+  async createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment> {
+    const [result] = await db.insert(schema.riskAssessments).values(assessment).returning();
+    return result;
+  }
+  async getRiskAssessment(id: string): Promise<RiskAssessment | undefined> {
+    const [result] = await db.select().from(schema.riskAssessments).where(eq(schema.riskAssessments.id, id));
+    return result;
+  }
+  async updateRiskAssessment(id: string, updates: Partial<InsertRiskAssessment>): Promise<RiskAssessment> {
+    const [result] = await db.update(schema.riskAssessments).set({ ...updates, updatedAt: new Date() }).where(eq(schema.riskAssessments.id, id)).returning();
+    return result;
+  }
+  async getRiskAssessmentsByJob(jobId: string): Promise<RiskAssessment[]> {
+    return await db.select().from(schema.riskAssessments).where(eq(schema.riskAssessments.jobId, jobId)).orderBy(desc(schema.riskAssessments.createdAt));
+  }
+  async getAllRiskAssessments(): Promise<RiskAssessment[]> {
+    return await db.select().from(schema.riskAssessments).orderBy(desc(schema.riskAssessments.createdAt));
+  }
 
   async createComplianceRequirement(requirement: InsertComplianceRequirement): Promise<ComplianceRequirement> { throw new Error("Not implemented"); }
   async getComplianceRequirement(id: string): Promise<ComplianceRequirement | undefined> { return undefined; }
