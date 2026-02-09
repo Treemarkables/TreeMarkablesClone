@@ -169,7 +169,9 @@ class GoogleCalendarService {
       // Get staff emails for attendees
       const attendees: string[] = [];
       
-      const summary = `🌳 ${job.title || 'Tree Service Job'}`;
+      const customerName = job.customerName || 'N/A';
+      const jobLabel = job.jobNumber ? `#${job.jobNumber}` : '';
+      const summary = `🌳 ${customerName}${jobLabel ? ` - ${jobLabel}` : ''}`;
       const description = `
 Job #${job.jobNumber || 'N/A'}
 Customer: ${job.customerName || 'N/A'}
