@@ -9542,7 +9542,14 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         const isSchedulingSelf = currentUserId && employeeIds.includes(currentUserId);
         
         if (isSchedulingSelf) {
-          const googleEventId = await googleCalendarService.syncJobToCalendar(job, created);
+          const calendarJob = { ...job } as any;
+          if (job.customerId) {
+            const customer = await storage.getCustomer(job.customerId);
+            if (customer) {
+              calendarJob.customerName = customer.name;
+            }
+          }
+          const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
           if (googleEventId) {
             console.log(`✅ Job synced to Google Calendar (user scheduling themselves): ${googleEventId}`);
           }
