@@ -377,6 +377,28 @@ function startNotificationQueueWorker() {
       process.exit(1);
     });
 
+    // Graceful shutdown - properly close server and release port
+    const gracefulShutdown = (signal: string) => {
+      log(`Received ${signal}, shutting down gracefully...`, "startup");
+      server.close(() => {
+        log('HTTP server closed', "startup");
+        pool.end().then(() => {
+          log('Database pool closed', "startup");
+          process.exit(0);
+        }).catch(() => {
+          process.exit(0);
+        });
+      });
+      // Force exit after 5 seconds if graceful shutdown hangs
+      setTimeout(() => {
+        log('Forced shutdown after timeout', "error");
+        process.exit(1);
+      }, 5000);
+    };
+
+    process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+    process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
     // Start notification queue worker
     startNotificationQueueWorker();
     
