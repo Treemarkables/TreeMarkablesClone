@@ -231,7 +231,8 @@ export default function Clients() {
     .filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           (customer.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (customer.phone || '').toLowerCase().includes(searchQuery.toLowerCase());
+                          (customer.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+                          (customer.mobile || '').toLowerCase().includes(searchQuery.toLowerCase());
       
       const isHistorical = customer.isActive === false;
       const isActive = customer.isActive !== false;
@@ -557,7 +558,7 @@ export default function Clients() {
                             </div>
                             <div className="flex items-center gap-1">
                               <Phone className="w-4 h-4" />
-                              <span>{customer.phone || 'No phone'}</span>
+                              <span>{customer.phone || customer.mobile || 'No phone'}</span>
                             </div>
                           </div>
                           
