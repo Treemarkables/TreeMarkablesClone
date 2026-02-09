@@ -199,15 +199,17 @@ const formatCurrency = (amount: number) => {
 
 // Calculate total price from job data
 const calculateJobTotal = (job: any): number => {
-  // First check for stored total values
-  if (job.totalAmount && Number(job.totalAmount) > 0) {
-    return Number(job.totalAmount);
-  }
-  if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) {
-    return Number(job.totalIncludingGst);
-  }
+  // Always use subtotal (exc GST) - never show inc GST prices
   if (job.subtotal && Number(job.subtotal) > 0) {
     return Number(job.subtotal);
+  }
+  // Fallback: if totalAmount exists but subtotal doesn't, derive exc GST
+  if (job.totalAmount && Number(job.totalAmount) > 0) {
+    // If totalAmount equals totalIncludingGst, it's inc GST - convert back
+    if (job.totalIncludingGst && Number(job.totalAmount) === Number(job.totalIncludingGst)) {
+      return Math.round(Number(job.totalAmount) / 1.15 * 100) / 100;
+    }
+    return Number(job.totalAmount);
   }
   // Fallback to calculating from line items
   const lineItems = job.lineItems;
