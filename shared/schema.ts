@@ -525,7 +525,7 @@ export const safetyIncidents = pgTable("safety_incidents", {
 // Risk Assessment Management  
 export const riskAssessments = pgTable("risk_assessments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  jobId: varchar("job_id").references(() => jobs.id).notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
   assessmentDate: timestamp("assessment_date").defaultNow(),
   assessedBy: text("assessed_by").notNull(),
   overallRisk: text("overall_risk").notNull(), // low, medium, high, critical
