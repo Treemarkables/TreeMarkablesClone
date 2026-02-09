@@ -14802,13 +14802,34 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // Note: Diary entries are only created when proposal is SENT (via email/SMS)
       // not when it's saved/created as a draft to prevent duplicate entries
       
-      // Sync job total_amount from proposal subtotal
-      if (proposal.jobId && proposal.subtotal) {
+      // Sync job subtotal and totalAmount from proposal
+      if (proposal.jobId) {
         try {
-          await storage.updateJob(proposal.jobId, { totalAmount: proposal.subtotal.toString() });
-          console.log('✅ Synced job total_amount from proposal subtotal:', proposal.subtotal);
+          let syncAmount = parseFloat(req.body.subtotal || '0') || 0;
+          // If no subtotal in body, calculate from line items
+          if (syncAmount === 0 && req.body.sections && Array.isArray(req.body.sections)) {
+            for (const section of req.body.sections) {
+              if (section.lineItems && Array.isArray(section.lineItems)) {
+                for (const item of section.lineItems) {
+                  if (item.selected !== false) {
+                    syncAmount += parseFloat(item.totalPrice || '0') || 0;
+                  }
+                }
+              }
+            }
+          }
+          if (syncAmount > 0) {
+            const gst = syncAmount * 0.15;
+            await storage.updateJob(proposal.jobId, { 
+              subtotal: syncAmount.toString(),
+              totalAmount: syncAmount.toString(),
+              gstAmount: gst.toFixed(2),
+              totalIncludingGst: (syncAmount + gst).toFixed(2)
+            });
+            console.log('✅ Synced job prices from proposal:', { subtotal: syncAmount, gst: gst.toFixed(2), total: (syncAmount + gst).toFixed(2) });
+          }
         } catch (error) {
-          console.error('❌ Error syncing job total_amount:', error);
+          console.error('❌ Error syncing job prices:', error);
         }
       }
       
@@ -14944,30 +14965,33 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         console.log('⚠️ PUT proposal - no sections in request body');
       }
       
-      // Sync job total_amount from proposal subtotal
+      // Sync job prices from proposal subtotal
       if (proposal.jobId) {
         try {
-          // Calculate total from line items in the request
-          let totalAmount = 0;
-          if (req.body.sections && Array.isArray(req.body.sections)) {
+          let syncAmount = parseFloat(req.body.subtotal || '0') || 0;
+          if (syncAmount === 0 && req.body.sections && Array.isArray(req.body.sections)) {
             for (const section of req.body.sections) {
               if (section.lineItems && Array.isArray(section.lineItems)) {
                 for (const item of section.lineItems) {
                   if (item.selected !== false) {
-                    totalAmount += parseFloat(item.totalPrice || '0') || 0;
+                    syncAmount += parseFloat(item.totalPrice || '0') || 0;
                   }
                 }
               }
             }
           }
-          // Use proposal subtotal if available, otherwise calculated total
-          const syncAmount = req.body.subtotal || totalAmount;
           if (syncAmount > 0) {
-            await storage.updateJob(proposal.jobId, { totalAmount: syncAmount.toString() });
-            console.log('✅ Synced job total_amount from proposal:', syncAmount);
+            const gst = syncAmount * 0.15;
+            await storage.updateJob(proposal.jobId, { 
+              subtotal: syncAmount.toString(),
+              totalAmount: syncAmount.toString(),
+              gstAmount: gst.toFixed(2),
+              totalIncludingGst: (syncAmount + gst).toFixed(2)
+            });
+            console.log('✅ Synced job prices from proposal:', { subtotal: syncAmount, gst: gst.toFixed(2), total: (syncAmount + gst).toFixed(2) });
           }
         } catch (error) {
-          console.error('❌ Error syncing job total_amount:', error);
+          console.error('❌ Error syncing job prices:', error);
         }
       }
       
