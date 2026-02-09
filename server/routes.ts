@@ -14132,7 +14132,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // Create a new risk assessment
   app.post('/api/risk-assessments', async (req: Request, res: Response) => {
     try {
-      const validatedData = riskAssessmentInsertSchema.parse(req.body);
+      const body = { ...req.body };
+      if (!body.jobId || body.jobId === '') {
+        body.jobId = null;
+      }
+      const validatedData = riskAssessmentInsertSchema.parse(body);
       
       const assessment = await storage.createRiskAssessment(validatedData);
       res.status(201).json({
@@ -14162,7 +14166,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.put('/api/risk-assessments/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const updateData = req.body;
+      const updateData = { ...req.body };
+      if (updateData.jobId === '' || updateData.jobId === undefined) {
+        updateData.jobId = null;
+      }
 
       const existingAssessment = await storage.getRiskAssessment(id);
       if (!existingAssessment) {
