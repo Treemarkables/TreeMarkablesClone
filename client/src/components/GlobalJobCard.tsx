@@ -1780,6 +1780,14 @@ export function GlobalJobCard({
 
   // Handle invoice click
   const handleInvoiceClick = () => {
+    if (!selectedCustomer?.id) {
+      toast({
+        title: "Customer Required",
+        description: "Please select a customer before creating an invoice.",
+        variant: "destructive"
+      });
+      return;
+    }
     setIsInvoiceModalOpen(true);
   };
 
@@ -5855,18 +5863,29 @@ The Treemarkables Team`;
       )}
 
       {/* Invoice Builder Modal */}
-      {isInvoiceModalOpen && editingJob && invoiceTemplate && selectedCustomer && (
-        <InvoiceBuilder
-          isOpen={isInvoiceModalOpen}
-          onClose={() => setIsInvoiceModalOpen(false)}
-          job={editingJob}
-          customer={{
-            ...selectedCustomer,
-            // Use billing name override from form (current unsaved value) first, then saved value, then customer name
-            name: formData?.billingNameOverride || editingJob.billingNameOverride || selectedCustomer?.name
-          }}
-          invoiceTemplate={invoiceTemplate}
-        />
+      {isInvoiceModalOpen && editingJob && selectedCustomer && (
+        invoiceTemplate ? (
+          <InvoiceBuilder
+            isOpen={isInvoiceModalOpen}
+            onClose={() => setIsInvoiceModalOpen(false)}
+            job={editingJob}
+            customer={{
+              ...selectedCustomer,
+              // Use billing name override from form (current unsaved value) first, then saved value, then customer name
+              name: formData?.billingNameOverride || editingJob.billingNameOverride || selectedCustomer?.name
+            }}
+            invoiceTemplate={invoiceTemplate}
+          />
+        ) : (
+          <Dialog open={isInvoiceModalOpen} onOpenChange={setIsInvoiceModalOpen}>
+            <DialogContent className="flex items-center justify-center min-h-[200px]">
+              <div className="text-center space-y-2">
+                <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
+                <p className="text-sm text-muted-foreground">Loading invoice template...</p>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )
       )}
 
       {/* Profit Tracker */}
