@@ -378,7 +378,7 @@ export function GlobalJobCard({
     enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
   });
 
-  const employees: any[] = (employeesData as any)?.data || [];
+  const employees: any[] = ((employeesData as any)?.data || []).filter((e: any) => e.isActive !== false);
   const specificJob: Job | null = (specificJobData as any)?.data || null;
   
   // Combine materials and services into a single catalog array
