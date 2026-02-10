@@ -225,6 +225,46 @@ export function JobDiarySection({
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  const extractTimeFromText = (text: string): string => {
+    const patterns = [
+      /(\d{1,2})[.:](\d{2})\s*(am|pm)/i,
+      /(\d{1,2})\s*(am|pm)/i,
+    ];
+    for (const pat of patterns) {
+      const m = text.match(pat);
+      if (m) {
+        let hours = parseInt(m[1]);
+        const minutes = m[2] && /^\d+$/.test(m[2]) ? m[2].padStart(2, '0') : '00';
+        const meridiem = (m[3] || m[2] || '').toLowerCase();
+        if (meridiem === 'pm' && hours < 12) hours += 12;
+        if (meridiem === 'am' && hours === 12) hours = 0;
+        return `${hours.toString().padStart(2, '0')}:${minutes}`;
+      }
+    }
+    return '08:00';
+  };
+
+  const extractDateFromText = (text: string): string | null => {
+    const lower = text.toLowerCase();
+    const today = new Date();
+    if (lower.includes('tomorrow')) {
+      const d = new Date(today);
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split('T')[0];
+    }
+    if (lower.includes('today')) {
+      return today.toISOString().split('T')[0];
+    }
+    const dateMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+    if (dateMatch) {
+      const day = dateMatch[1].padStart(2, '0');
+      const month = dateMatch[2].padStart(2, '0');
+      const year = dateMatch[3].length === 2 ? '20' + dateMatch[3] : dateMatch[3];
+      return `${year}-${month}-${day}`;
+    }
+    return null;
+  };
   
   // Forms
   const noteForm = useForm<NoteFormData>({
@@ -1290,27 +1330,22 @@ export function JobDiarySection({
                               className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                console.log('📅 Book button clicked, opening calendar dialog');
-                                // Extract any mentioned time from the email content
                                 const content = entry.content || '';
-                                // Get customer name from job contact fields or customer record
                                 const custName = (jobData?.jobContactFirstName && jobData?.jobContactLastName)
                                   ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                                   : jobData?.jobContactFirstName || jobData?.customerName || 'Customer';
-                                const title = custName;
-                                // Set tomorrow's date as default
-                                const tomorrow = new Date();
-                                tomorrow.setDate(tomorrow.getDate() + 1);
-                                const dateStr = tomorrow.toISOString().split('T')[0];
+                                const extractedTime = extractTimeFromText(content);
+                                const extractedDate = extractDateFromText(content);
+                                const fallbackDate = new Date();
+                                fallbackDate.setDate(fallbackDate.getDate() + 1);
+                                const dateStr = extractedDate || fallbackDate.toISOString().split('T')[0];
                                 
-                                console.log('📅 Setting calendar booking state:', { title, dateStr });
                                 setCalendarBookingEntry(entry);
-                                setCalendarBookingTitle(title);
+                                setCalendarBookingTitle(custName);
                                 setCalendarBookingDate(dateStr);
-                                setCalendarBookingTime('08:00');
+                                setCalendarBookingTime(extractedTime);
                                 setCalendarBookingDuration('30');
                                 setCalendarBookingOpen(true);
-                                console.log('📅 Calendar dialog should now be open');
                               }}
                               data-testid={`button-calendar-book-${entry.id}`}
                             >
@@ -1319,25 +1354,55 @@ export function JobDiarySection({
                             </Button>
                           )}
                           {entry.type === 'sms' && entry.metadata?.phoneNumber && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className={`h-6 text-[10px] px-2 ${
-                                isSent 
-                                  ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800' 
-                                  : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
-                              }`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const replyPhone = entry.metadata?.phoneNumber || '';
-                                setReplyToPhone(replyPhone);
-                                setActiveComposer('sms');
-                              }}
-                              data-testid={`button-reply-sms-${entry.id}`}
-                            >
-                              <Reply className="w-3 h-3 mr-0.5" />
-                              {isSent ? 'Follow up' : 'Reply'}
-                            </Button>
+                            <>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className={`h-6 text-[10px] px-2 ${
+                                  isSent 
+                                    ? 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800' 
+                                    : 'text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800'
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const replyPhone = entry.metadata?.phoneNumber || '';
+                                  setReplyToPhone(replyPhone);
+                                  setActiveComposer('sms');
+                                }}
+                                data-testid={`button-reply-sms-${entry.id}`}
+                              >
+                                <Reply className="w-3 h-3 mr-0.5" />
+                                {isSent ? 'Follow up' : 'Reply'}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const content = entry.content || '';
+                                  const custName = (jobData?.jobContactFirstName && jobData?.jobContactLastName)
+                                    ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
+                                    : jobData?.jobContactFirstName || jobData?.customerName || 'Customer';
+                                  const extractedTime = extractTimeFromText(content);
+                                  const extractedDate = extractDateFromText(content);
+                                  const fallbackDate = new Date();
+                                  fallbackDate.setDate(fallbackDate.getDate() + 1);
+                                  const dateStr = extractedDate || fallbackDate.toISOString().split('T')[0];
+                                  
+                                  setCalendarBookingEntry(entry);
+                                  setCalendarBookingTitle(custName);
+                                  setCalendarBookingDate(dateStr);
+                                  setCalendarBookingTime(extractedTime);
+                                  setCalendarBookingDuration('30');
+                                  setCalendarBookingOpen(true);
+                                }}
+                                data-testid={`button-calendar-book-sms-${entry.id}`}
+                              >
+                                <CalendarPlus className="w-3 h-3 mr-0.5" />
+                                Book
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
