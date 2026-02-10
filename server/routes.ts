@@ -3443,15 +3443,17 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       
       // SAFEGUARD: Preserve critical fields if update has empty values (prevents accidental data loss)
       if (oldJob) {
-        // Preserve address if update has empty address but old job has one
-        if (!validation.data.address && oldJob.address) {
-          (validation.data as any).address = oldJob.address;
-          console.log('✅ Preserved job address from existing job:', oldJob.address);
-        }
-        // Preserve lead source if update has empty leadSource but old job has one
-        if (!validation.data.leadSource && oldJob.leadSource) {
-          (validation.data as any).leadSource = oldJob.leadSource;
-          console.log('✅ Preserved lead source from existing job:', oldJob.leadSource);
+        const preserveFields: (keyof typeof oldJob)[] = [
+          'address', 'leadSource', 'notes', 'description', 'customerId',
+          'jobContactFirstName', 'jobContactLastName', 'jobContactEmail',
+          'jobContactPhone', 'billingNameOverride'
+        ];
+        for (const field of preserveFields) {
+          const updateVal = (validation.data as any)[field];
+          const oldVal = oldJob[field];
+          if ((!updateVal || updateVal === '') && oldVal) {
+            (validation.data as any)[field] = oldVal;
+          }
         }
       }
 
