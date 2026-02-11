@@ -4055,6 +4055,9 @@ The Treemarkables Team`;
                                         <SelectItem value="saw_working">Saw you working</SelectItem>
                                         <SelectItem value="repeat">Repeat</SelectItem>
                                         <SelectItem value="google">Google Search</SelectItem>
+                                        <SelectItem value="ppc">PPC (Google Ads)</SelectItem>
+                                        <SelectItem value="google_maps">Google Maps</SelectItem>
+                                        <SelectItem value="seo">SEO (Organic)</SelectItem>
                                         <SelectItem value="facebook">Facebook</SelectItem>
                                         <SelectItem value="phone">Phone Call</SelectItem>
                                         <SelectItem value="direct">Direct</SelectItem>

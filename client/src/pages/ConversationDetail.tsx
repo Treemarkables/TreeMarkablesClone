@@ -233,6 +233,12 @@ export default function ConversationDetail() {
           // Map common answers to lead source values
           const sourceMap: Record<string, string> = {
             'google': 'google',
+            'google search': 'google',
+            'google ads': 'ppc',
+            'ppc': 'ppc',
+            'google maps': 'google_maps',
+            'seo': 'seo',
+            'organic': 'seo',
             'facebook': 'facebook',
             'instagram': 'instagram',
             'friend': 'referral',
@@ -243,6 +249,10 @@ export default function ConversationDetail() {
             'website': 'website',
             'repeat': 'repeat',
             'previous customer': 'repeat',
+            'council': 'council',
+            'direct': 'direct',
+            'phone': 'phone',
+            'saw you working': 'saw_working',
             'other': 'other'
           };
           
