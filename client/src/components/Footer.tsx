@@ -130,10 +130,13 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="border-t border-gray-700 mt-8 pt-8 text-center">
+        <div className="border-t border-gray-700 mt-8 pt-8 text-center space-y-2">
           <p className="text-gray-400 text-sm" data-testid="text-copyright">
             © {currentYear} Treemarkables. All rights reserved. Professional tree removal services.
           </p>
+          <Link href="/privacy-policy" className="text-gray-400 text-sm hover:text-orange-400 transition-colors" data-testid="link-footer-privacy">
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </footer>

@@ -181,9 +181,16 @@ function DraggableOpportunityCard({
     switch (source.toLowerCase()) {
       case 'facebook': return 'bg-blue-100 text-blue-800';
       case 'google': return 'bg-green-100 text-green-800';
+      case 'ppc': return 'bg-red-100 text-red-800';
+      case 'google_maps': return 'bg-teal-100 text-teal-800';
+      case 'seo': return 'bg-emerald-100 text-emerald-800';
       case 'referral': return 'bg-purple-100 text-purple-800';
       case 'repeat': return 'bg-orange-100 text-orange-800';
-      case 'word of mouth': return 'bg-gray-100 text-gray-800';
+      case 'website': return 'bg-cyan-100 text-cyan-800';
+      case 'direct': return 'bg-indigo-100 text-indigo-800';
+      case 'phone': return 'bg-yellow-100 text-yellow-800';
+      case 'advertisement': return 'bg-pink-100 text-pink-800';
+      case 'council': return 'bg-slate-100 text-slate-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -465,9 +472,16 @@ export default function Pipeline() {
     switch (source.toLowerCase()) {
       case 'facebook': return 'bg-blue-100 text-blue-800';
       case 'google': return 'bg-green-100 text-green-800';
+      case 'ppc': return 'bg-red-100 text-red-800';
+      case 'google_maps': return 'bg-teal-100 text-teal-800';
+      case 'seo': return 'bg-emerald-100 text-emerald-800';
       case 'referral': return 'bg-purple-100 text-purple-800';
       case 'repeat': return 'bg-orange-100 text-orange-800';
-      case 'word of mouth': return 'bg-gray-100 text-gray-800';
+      case 'website': return 'bg-cyan-100 text-cyan-800';
+      case 'direct': return 'bg-indigo-100 text-indigo-800';
+      case 'phone': return 'bg-yellow-100 text-yellow-800';
+      case 'advertisement': return 'bg-pink-100 text-pink-800';
+      case 'council': return 'bg-slate-100 text-slate-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -612,11 +626,21 @@ export default function Pipeline() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">All Sources</SelectItem>
-                      <SelectItem value="facebook">Facebook</SelectItem>
-                      <SelectItem value="google">Google</SelectItem>
+                      <SelectItem value="website">Website</SelectItem>
                       <SelectItem value="referral">Referral</SelectItem>
+                      <SelectItem value="friend">Friend</SelectItem>
+                      <SelectItem value="saw_working">Saw you working</SelectItem>
                       <SelectItem value="repeat">Repeat</SelectItem>
-                      <SelectItem value="word of mouth">Word of Mouth</SelectItem>
+                      <SelectItem value="google">Google Search</SelectItem>
+                      <SelectItem value="ppc">PPC (Google Ads)</SelectItem>
+                      <SelectItem value="google_maps">Google Maps</SelectItem>
+                      <SelectItem value="seo">SEO (Organic)</SelectItem>
+                      <SelectItem value="facebook">Facebook</SelectItem>
+                      <SelectItem value="phone">Phone Call</SelectItem>
+                      <SelectItem value="direct">Direct</SelectItem>
+                      <SelectItem value="advertisement">Advertisement</SelectItem>
+                      <SelectItem value="council">Council</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                   <Badge variant="outline" className="px-3 py-1 self-start sm:self-center" data-testid="opportunity-count">

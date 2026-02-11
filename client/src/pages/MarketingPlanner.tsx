@@ -1423,6 +1423,9 @@ export default function MarketingPlanner() {
                         <SelectItem value="instagram_ad">Instagram Ad</SelectItem>
                         <SelectItem value="social_media">Social Media</SelectItem>
                         <SelectItem value="online_marketing">Online Marketing</SelectItem>
+                        <SelectItem value="ppc">PPC (Google Ads)</SelectItem>
+                        <SelectItem value="google_maps">Google Maps</SelectItem>
+                        <SelectItem value="seo">SEO (Organic)</SelectItem>
                       </SelectContent>
                     </Select>
                     <FormDescription>Link this campaign to a lead source to track ROI</FormDescription>
