@@ -5794,6 +5794,47 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             tags: ['sms', 'communication', 'customer-reply']
           });
           
+          // Extract email address from SMS body if present
+          const emailMatch = Body.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/);
+          if (emailMatch) {
+            const extractedEmail = emailMatch[0].toLowerCase();
+            console.log(`📧 Extracted email from SMS: ${extractedEmail}`);
+            const jobUpdates: any = {};
+            if (!recentJob.jobContactEmail) {
+              jobUpdates.jobContactEmail = extractedEmail;
+            }
+            // Also update customer email if not set
+            if (!customer.email) {
+              await storage.updateCustomer(customer.id, { email: extractedEmail });
+              console.log(`📧 Updated customer ${customer.name} email to ${extractedEmail}`);
+            }
+            if (Object.keys(jobUpdates).length > 0) {
+              await storage.updateJob(recentJob.id, jobUpdates);
+              console.log(`📧 Updated job #${recentJob.jobNumber} contact email to ${extractedEmail}`);
+            }
+          }
+          
+          // Extract full name from SMS body if present (e.g. "Full name is Christopher Garry Bone")
+          const nameMatch = Body.match(/(?:full\s*name\s*(?:is|:)\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+          if (nameMatch) {
+            const fullName = nameMatch[1].trim();
+            const nameParts = fullName.split(/\s+/);
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ');
+            console.log(`👤 Extracted name from SMS: ${firstName} ${lastName}`);
+            const jobNameUpdates: any = {};
+            if (!recentJob.jobContactFirstName && firstName) {
+              jobNameUpdates.jobContactFirstName = firstName;
+            }
+            if (!recentJob.jobContactLastName && lastName) {
+              jobNameUpdates.jobContactLastName = lastName;
+            }
+            if (Object.keys(jobNameUpdates).length > 0) {
+              await storage.updateJob(recentJob.id, jobNameUpdates);
+              console.log(`👤 Updated job #${recentJob.jobNumber} contact name to ${firstName} ${lastName}`);
+            }
+          }
+          
           // Update job's lastActivityAt to trigger activity indicator and sorting
           await storage.updateJob(recentJob.id, { lastActivityAt: new Date() });
           console.log(`✅ SMS logged to job #${recentJob.jobNumber} diary`);
