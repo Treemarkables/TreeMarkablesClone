@@ -16,6 +16,7 @@ import {
   Upload, 
   User, 
   Phone, 
+  Mail,
   MapPin, 
   FileText,
   Sparkles,
@@ -26,6 +27,7 @@ import {
 interface ExtractedLeadData {
   name: string;
   phone: string;
+  email: string;
   address: string;
   description: string;
   rawMessage?: string;
@@ -133,14 +135,15 @@ export function CreateLeadFromMessageDialog({
       // Check if we got any useful data (non-empty strings)
       const hasName = extractedInfo?.name && extractedInfo.name.trim() !== '';
       const hasPhone = extractedInfo?.phone && extractedInfo.phone.trim() !== '';
+      const hasEmail = extractedInfo?.email && extractedInfo.email.trim() !== '';
       const hasAddress = extractedInfo?.address && extractedInfo.address.trim() !== '';
       const hasDescription = extractedInfo?.description && extractedInfo.description.trim() !== '';
       
-      if (hasName || hasPhone || hasAddress || hasDescription) {
+      if (hasName || hasPhone || hasEmail || hasAddress || hasDescription) {
         console.log('📸 Extraction successful, auto-creating lead:', extractedInfo);
         toast({
           title: "Creating Job...",
-          description: `Found: ${[hasName && 'name', hasPhone && 'phone', hasAddress && 'address', hasDescription && 'details'].filter(Boolean).join(', ')}`,
+          description: `Found: ${[hasName && 'name', hasPhone && 'phone', hasEmail && 'email', hasAddress && 'address', hasDescription && 'details'].filter(Boolean).join(', ')}`,
         });
         // Close dialog and create lead
         setMessageText('');
@@ -424,6 +427,16 @@ Thank you, Jack
                 </div>
               )}
               
+              {extractedData.email && (
+                <div className="flex items-start gap-3">
+                  <Mail className="h-4 w-4 mt-0.5 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="font-medium">{extractedData.email}</p>
+                  </div>
+                </div>
+              )}
+
               {extractedData.address && (
                 <div className="flex items-start gap-3">
                   <MapPin className="h-4 w-4 mt-0.5 text-muted-foreground" />

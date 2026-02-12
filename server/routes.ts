@@ -1602,16 +1602,18 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
 Extract the following information from the message:
 - name: The customer's name (first name and/or last name)
 - phone: Phone number if mentioned (format as +64 XXX XXX XXXX if NZ number)
+- email: Email address if mentioned
 - address: Full street address in New Zealand
 - description: Any details about the tree work needed or other job-related information
 
 Look for:
 - Names after "Thank you," or similar greetings
+- Email addresses (e.g. someone@example.com)
 - Addresses indicated by pin emoji 📍 or "at" or street names
 - NZ phone numbers (start with 02, 03, 04, 06, 07, 09, or +64)
 - Tree/garden work descriptions
 
-Return JSON format: { "name": string, "phone": string, "address": string, "description": string }
+Return JSON format: { "name": string, "phone": string, "email": string, "address": string, "description": string }
 If a field cannot be determined, use an empty string.`
           },
           {
@@ -1635,6 +1637,7 @@ If a field cannot be determined, use an empty string.`
         data: {
           name: extracted.name || '',
           phone: extracted.phone || '',
+          email: extracted.email || '',
           address: extracted.address || '',
           description: extracted.description || '',
           rawMessage: message
@@ -1675,18 +1678,20 @@ If a field cannot be determined, use an empty string.`
 Extract the following information:
 1. Phone number - Look at the TOP of the screen where the contact info is shown (usually shows the phone number like "+64 21 231 8338")
 2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings
-3. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
-4. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
+3. Email address - Look for any email addresses mentioned anywhere in the messages (e.g. someone@example.com, someone@gmail.com)
+4. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
+5. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
 
 Return your response as JSON in this exact format:
 {
   "name": "customer name or empty string",
   "phone": "phone number from top of screen or empty string",
+  "email": "email address found in messages or empty string",
   "address": "full street address or empty string", 
   "description": "any job details mentioned or empty string"
 }
 
-Important: The phone number is typically shown at the very TOP of the iPhone Messages screen as the contact identifier.`
+Important: The phone number is typically shown at the very TOP of the iPhone Messages screen as the contact identifier. Look carefully through ALL messages in the conversation for email addresses - they are often shared by the customer as contact information.`
               },
               {
                 type: "image_url",
@@ -1709,6 +1714,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const responseData = {
         name: extracted.name || '',
         phone: extracted.phone || '',
+        email: extracted.email || '',
         address: extracted.address || '',
         description: extracted.description || ''
       };
