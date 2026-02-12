@@ -372,6 +372,11 @@ export default function StaffSchedule() {
                                 <span className="font-bold">{formatCurrency(calculateJobTotal(job))}</span>
                               )}
                             </div>
+                            {job.description && (
+                              <div className="text-xs opacity-80 mt-1 whitespace-pre-line line-clamp-3">
+                                {job.description}
+                              </div>
+                            )}
                             {job.address && (
                               <div className="text-xs opacity-75 mt-1">
                                 {job.address}
