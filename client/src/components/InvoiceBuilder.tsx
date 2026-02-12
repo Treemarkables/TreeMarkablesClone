@@ -1317,6 +1317,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     customer={customer}
                     jobAddress={editableAddress}
                     jobNumber={job.jobNumber}
+                    billingName={job.billingNameOverride || undefined}
+                    contactName={editableContactName}
                     template={invoiceTemplate}
                     lineItems={lineItems}
                     description={editableDescription}

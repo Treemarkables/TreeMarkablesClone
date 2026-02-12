@@ -47,6 +47,7 @@ interface InvoiceTemplateProps {
   showActions?: boolean;
   jobAddress?: string;
   contactName?: string;
+  billingName?: string;
   jobNumber?: number;
   onEmail?: () => void;
   onSms?: () => void;
@@ -66,6 +67,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   showActions = false,
   jobAddress,
   contactName,
+  billingName,
   jobNumber,
   onEmail,
   onSms,
@@ -178,7 +180,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               <div className="flex-1 text-left sm:text-right">
                 <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
                 <p className="text-xs text-gray-600 mt-1">
-                  {customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                  {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                 </p>
               </div>
             </div>
@@ -189,12 +191,17 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             <h2 className="text-xs font-semibold text-black mb-2">Bill To</h2>
             <div>
               <p className="font-semibold text-black text-xs mb-1" data-testid="text-customer-name">
-                {customer?.name || 'Customer'}
+                {billingName || customer?.name || 'Customer'}
               </p>
               {(jobAddress || customer?.address) && (
                 <p className="text-xs text-gray-600 mb-1">{jobAddress || customer.address}</p>
               )}
-              {displayContactName && (
+              {billingName && customer?.name && billingName !== customer.name && (
+                <p className="text-xs text-gray-600 mb-1">
+                  <span className="mr-1">c/o</span>{customer.name}
+                </p>
+              )}
+              {displayContactName && (!billingName || displayContactName !== customer?.name) && (
                 <p className="text-xs text-gray-600 mb-1">
                   <span className="mr-1">c/o</span>{displayContactName}
                 </p>
