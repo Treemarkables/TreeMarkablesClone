@@ -769,7 +769,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
-          totalAmount: apiJob.totalAmount
+          totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0 ? apiJob.subtotal : apiJob.totalAmount
         });
       });
     }
@@ -828,7 +828,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
-          totalAmount: apiJob.totalAmount
+          totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0 ? apiJob.subtotal : apiJob.totalAmount
         });
       });
     }
