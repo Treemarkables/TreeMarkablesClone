@@ -2228,7 +2228,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             newCustomerName: data.name || 'New Lead',
             newCustomerPhone: isMobile ? '' : phone,
             newCustomerMobile: isMobile ? phone : '',
-            newCustomerEmail: '',
+            newCustomerEmail: data.email || '',
             address: data.address || '',
             description: data.description || '',
             leadSource: 'sms',
@@ -2238,6 +2238,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             jobContactLastName: lastName,
             jobContactPhone: isMobile ? '' : phone,
             jobContactMobile: isMobile ? phone : '',
+            jobContactEmail: data.email || '',
           });
           const response = await res.json();
           console.log('📸 Job creation response:', response);
