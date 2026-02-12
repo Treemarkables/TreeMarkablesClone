@@ -5661,6 +5661,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       console.log(`📱 SMS sent successfully to ${phone}`);
       console.log(`📱 Message: ${message}`);
       
+      // Save phone number to job contact and customer so reply matching works
+      if (jobId && job && !job.jobContactPhone) {
+        try {
+          await storage.updateJob(jobId, { jobContactPhone: phone });
+          console.log(`📱 Saved phone ${phone} to job ${jobId} contact`);
+        } catch (e) { console.warn('Failed to save phone to job:', e); }
+      }
+      if (customerId && customer && !customer.phone && !customer.mobile) {
+        try {
+          await storage.updateCustomer(customerId, { phone: phone });
+          console.log(`📱 Saved phone ${phone} to customer ${customerId}`);
+        } catch (e) { console.warn('Failed to save phone to customer:', e); }
+      }
+      
       // Store communication record if customer/job context available
       if (customerId || jobId) {
         try {
@@ -10942,6 +10956,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const success = await smsService.sendSMS({ to, message });
       
       if (success) {
+        // Save phone number to job contact and customer so reply matching works
+        if (jobId) {
+          try {
+            const job = await storage.getJob(jobId);
+            if (job && !job.jobContactPhone) {
+              await storage.updateJob(jobId, { jobContactPhone: to });
+              console.log(`📱 Saved phone ${to} to job ${jobId} contact`);
+            }
+            if (job?.customerId) {
+              const customer = await storage.getCustomer(job.customerId);
+              if (customer && !customer.phone && !customer.mobile) {
+                await storage.updateCustomer(job.customerId, { phone: to });
+                console.log(`📱 Saved phone ${to} to customer ${job.customerId}`);
+              }
+            }
+          } catch (e) { console.warn('Failed to save phone from diary SMS:', e); }
+        }
+
         // Create diary entry for sent SMS
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
