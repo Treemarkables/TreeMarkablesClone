@@ -1228,6 +1228,7 @@ export function EmailComposerModal({
                     customer={customer}
                     jobAddress={showPreview.data.address || job?.billingAddress || job?.address || ''}
                     contactName={showPreview.data.contactName}
+                    billingName={job?.billingNameOverride || undefined}
                     lineItems={showPreview.data.lineItems || []}
                     description={showPreview.data.description || job?.description || job?.title || ''}
                     photos={showPreview.data.photos || []}
