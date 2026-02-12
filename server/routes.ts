@@ -3441,7 +3441,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
       
-      // SAFEGUARD: Preserve critical fields if update has empty values (prevents accidental data loss)
+      // SAFEGUARD: Preserve critical fields only when they were NOT explicitly sent in the request body
+      // If a field is explicitly sent (even as empty string), respect the user's intent to clear it
       if (oldJob) {
         const preserveFields: (keyof typeof oldJob)[] = [
           'address', 'leadSource', 'notes', 'description', 'customerId',
@@ -3451,7 +3452,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         for (const field of preserveFields) {
           const updateVal = (validation.data as any)[field];
           const oldVal = oldJob[field];
-          if ((!updateVal || updateVal === '') && oldVal) {
+          const wasExplicitlySent = field in req.body;
+          if (!wasExplicitlySent && (!updateVal || updateVal === '') && oldVal) {
             (validation.data as any)[field] = oldVal;
           }
         }
