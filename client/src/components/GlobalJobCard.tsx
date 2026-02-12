@@ -306,6 +306,7 @@ export function GlobalJobCard({
   const isLoadingDataRef = useRef(false);
   const hasUserChangedRef = useRef(false);
   const lastLoadedJobIdRef = useRef<string | null>(null); // Track which job was loaded to prevent isDirty blocking initial load
+  const originalLoadedDataRef = useRef<Record<string, any>>({}); // Store original loaded values to detect real changes on manual save
   const currentJobIdRef = useRef<string | null>(null); // For clipboard paste handler
   
   // Description textarea auto-resize ref
@@ -867,7 +868,7 @@ export function GlobalJobCard({
       const firstName = nameParts[0] || '';
       const lastName = nameParts.slice(1).join(' ') || '';
       
-      form.reset({
+      const resetData = {
         // Core job data
         title: editingJob.title || '',
         description: (editingJob.description ?? '') || '',
@@ -897,7 +898,9 @@ export function GlobalJobCard({
         checklist: editingJob.checklist || [],
         includeDescriptionInQuotesProposals: editingJob.includeDescriptionInQuotesProposals ?? true,
         estimatedManHours: editingJob.estimatedManHours || '',
-      });
+      };
+      form.reset(resetData);
+      originalLoadedDataRef.current = { ...resetData };
       
       // Fix: Explicitly sync useFieldArray with line items after form reset
       if (editingJob.lineItems) {
@@ -2141,7 +2144,35 @@ The Treemarkables Team`;
       if (mode === "create") {
         await createJobMutation.mutateAsync(formData);
       } else {
-        await updateJobMutation.mutateAsync(formData);
+        const originalData = originalLoadedDataRef.current;
+        const changedData: Record<string, any> = {};
+        const skipFields = ['isNewCustomer', 'newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerAddress'];
+        
+        for (const [key, value] of Object.entries(formData)) {
+          if (skipFields.includes(key)) continue;
+          const origVal = originalData[key];
+          if (key === 'lineItems' || key === 'checklist') {
+            changedData[key] = value;
+            continue;
+          }
+          if (JSON.stringify(value) !== JSON.stringify(origVal)) {
+            changedData[key] = value;
+          }
+        }
+        
+        if (formData.isNewCustomer) {
+          changedData.isNewCustomer = formData.isNewCustomer;
+          changedData.newCustomerName = formData.newCustomerName;
+          changedData.newCustomerEmail = (formData as any).newCustomerEmail;
+          changedData.newCustomerPhone = (formData as any).newCustomerPhone;
+        }
+        
+        changedData.customerId = formData.customerId;
+        
+        console.log('💾 Manual save - only sending changed fields:', Object.keys(changedData));
+        await updateJobMutation.mutateAsync(changedData as GlobalJobCardFormData);
+        
+        originalLoadedDataRef.current = { ...formData };
       }
     } catch (error) {
       console.error('Save failed:', error);
@@ -2179,10 +2210,25 @@ The Treemarkables Team`;
       if (mode === "create") {
         result = await createJobMutation.mutateAsync(formData);
       } else {
-        result = await updateJobMutation.mutateAsync(formData);
+        const originalData = originalLoadedDataRef.current;
+        const changedData: Record<string, any> = {};
+        const skipFields = ['isNewCustomer', 'newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerAddress'];
+        for (const [key, value] of Object.entries(formData)) {
+          if (skipFields.includes(key)) continue;
+          if (key === 'lineItems' || key === 'checklist') { changedData[key] = value; continue; }
+          if (JSON.stringify(value) !== JSON.stringify(originalData[key])) { changedData[key] = value; }
+        }
+        if (formData.isNewCustomer) {
+          changedData.isNewCustomer = formData.isNewCustomer;
+          changedData.newCustomerName = formData.newCustomerName;
+          changedData.newCustomerEmail = (formData as any).newCustomerEmail;
+          changedData.newCustomerPhone = (formData as any).newCustomerPhone;
+        }
+        changedData.customerId = formData.customerId;
+        result = await updateJobMutation.mutateAsync(changedData as GlobalJobCardFormData);
+        originalLoadedDataRef.current = { ...formData };
       }
       
-      // Extract job ID from response
       const jobId = result?.data?.id || result?.id || editingJob?.id;
       if (!jobId) {
         throw new Error('Failed to get job ID after save');
@@ -2242,7 +2288,33 @@ The Treemarkables Team`;
       if (mode === "create") {
         await createJobMutation.mutateAsync(formData);
       } else {
-        await updateJobMutation.mutateAsync(formData);
+        const originalData = originalLoadedDataRef.current;
+        const changedData: Record<string, any> = {};
+        const skipFields = ['isNewCustomer', 'newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerAddress'];
+        
+        for (const [key, value] of Object.entries(formData)) {
+          if (skipFields.includes(key)) continue;
+          const origVal = originalData[key];
+          if (key === 'lineItems' || key === 'checklist') {
+            changedData[key] = value;
+            continue;
+          }
+          if (JSON.stringify(value) !== JSON.stringify(origVal)) {
+            changedData[key] = value;
+          }
+        }
+        
+        if (formData.isNewCustomer) {
+          changedData.isNewCustomer = formData.isNewCustomer;
+          changedData.newCustomerName = formData.newCustomerName;
+          changedData.newCustomerEmail = (formData as any).newCustomerEmail;
+          changedData.newCustomerPhone = (formData as any).newCustomerPhone;
+        }
+        
+        changedData.customerId = formData.customerId;
+        
+        console.log('💾 Save & close - only sending changed fields:', Object.keys(changedData));
+        await updateJobMutation.mutateAsync(changedData as GlobalJobCardFormData);
       }
       onClose();
     } catch (error) {
@@ -2255,35 +2327,46 @@ The Treemarkables Team`;
   // Handle dialog close - save pending changes before closing
   const handleDialogClose = (open: boolean) => {
     if (!open) {
-      // CRITICAL: Clear all guard refs when closing to prevent stale state on next open
-      hasUserChangedRef.current = false;
+      // CRITICAL: Clear loading ref when closing to prevent stale state on next open
       isLoadingDataRef.current = false;
+      const hadChanges = hasUserChangedRef.current;
+      hasUserChangedRef.current = false;
       
-      if (mode === 'edit' && editingJob?.id) {
-        // Always save when closing in edit mode (form may have changed)
+      if (mode === 'edit' && editingJob?.id && hadChanges) {
         const saveAndClose = async () => {
           try {
             const formData = form.getValues();
+            const originalData = originalLoadedDataRef.current;
+            const changedData: Record<string, any> = {};
+            const skipFields = ['isNewCustomer', 'newCustomerName', 'newCustomerEmail', 'newCustomerPhone', 'newCustomerAddress'];
             
-            // CRITICAL: Preserve original description if form description is empty
-            // This prevents accidental deletion when form hasn't fully loaded or field was unregistered
-            if (!formData.description && editingJob.description) {
-              formData.description = editingJob.description;
+            for (const [key, value] of Object.entries(formData)) {
+              if (skipFields.includes(key)) continue;
+              const origVal = originalData[key];
+              if (key === 'lineItems' || key === 'checklist') {
+                changedData[key] = value;
+                continue;
+              }
+              if (JSON.stringify(value) !== JSON.stringify(origVal)) {
+                changedData[key] = value;
+              }
             }
             
-            // Map new customer fields to job contact fields for backend compatibility
             if (formData.isNewCustomer && formData.newCustomerName) {
-              const names = formData.newCustomerName.split(' ');
-              formData.jobContactFirstName = names[0] || '';
-              formData.jobContactLastName = names.slice(1).join(' ') || '';
-              formData.jobContactEmail = formData.newCustomerEmail || '';
-              formData.jobContactPhone = formData.newCustomerPhone || '';
+              changedData.isNewCustomer = formData.isNewCustomer;
+              changedData.newCustomerName = formData.newCustomerName;
+              changedData.newCustomerEmail = (formData as any).newCustomerEmail;
+              changedData.newCustomerPhone = (formData as any).newCustomerPhone;
             }
             
-            await apiRequest('PUT', `/api/jobs/${editingJob.id}`, formData);
+            changedData.customerId = formData.customerId;
             
-            // Invalidate queries to refresh the list
-            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            const changedKeys = Object.keys(changedData).filter(k => k !== 'customerId' && k !== 'lineItems' && k !== 'checklist');
+            if (changedKeys.length > 0) {
+              console.log('💾 Save on close - only sending changed fields:', changedKeys);
+              await apiRequest('PUT', `/api/jobs/${editingJob.id}`, changedData);
+              queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            }
           } catch (error) {
             console.error('Failed to save on close:', error);
           } finally {

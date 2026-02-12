@@ -3447,8 +3447,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
       
-      // SAFEGUARD: Preserve critical fields only when they were NOT explicitly sent in the request body
-      // If a field is explicitly sent (even as empty string), respect the user's intent to clear it
+      // SAFEGUARD: Prevent accidental overwrites of critical fields with empty values
+      // Defense-in-depth: even if the client sends a field, never replace a non-empty DB value
+      // with an empty/null value unless the client explicitly requests clearing via _clearFields
       if (oldJob) {
         const preserveFields: (keyof typeof oldJob)[] = [
           'address', 'leadSource', 'notes', 'description', 'customerId',
@@ -3459,12 +3460,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           'title', 'priority', 'estimatedManHours', 'scheduledDate'
         ];
         const fieldsInRequest = Object.keys(req.body);
+        const explicitClears: string[] = req.body._clearFields || [];
         console.log(`🔒 Safeguard check for job ${req.params.id}: fields in request: [${fieldsInRequest.join(', ')}]`);
         for (const field of preserveFields) {
           const updateVal = (validation.data as any)[field];
           const oldVal = oldJob[field];
           const wasExplicitlySent = field in req.body;
-          if (!wasExplicitlySent && (!updateVal || updateVal === '') && oldVal) {
+          const isEmpty = updateVal === '' || updateVal === null || updateVal === undefined;
+          const oldHasValue = oldVal !== null && oldVal !== undefined && oldVal !== '';
+          
+          if (isEmpty && oldHasValue && !explicitClears.includes(field)) {
+            console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (would be overwritten with empty)`);
+            (validation.data as any)[field] = oldVal;
+          } else if (!wasExplicitlySent && isEmpty && oldHasValue) {
             console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (not in request body)`);
             (validation.data as any)[field] = oldVal;
           }
