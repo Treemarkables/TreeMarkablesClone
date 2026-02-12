@@ -7,16 +7,8 @@ import { Card, CardContent } from "@/components/ui/card";
 interface AddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
-  onAddressSelect?: (address: {
-    fullAddress: string;
-    streetNumber?: string;
-    streetName?: string;
-    suburb?: string;
-    city?: string;
-    region?: string;
-    postcode?: string;
-  }) => void;
-  onManualEdit?: () => void; // Called when user manually types (not selecting from suggestions)
+  onAddressSelect?: (address: string) => void;
+  onManualEdit?: (value: string) => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
