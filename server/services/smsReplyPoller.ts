@@ -140,6 +140,37 @@ async function processSMSReplies() {
           })
           .where(eq(jobs.id, matchedJob.id));
 
+        // Extract email address from SMS body if present and update job/customer
+        const emailMatch = reply.MessageText.match(/\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Z|a-z]{2,}\b/);
+        if (emailMatch) {
+          const extractedEmail = emailMatch[0].toLowerCase();
+          console.log(`📧 Extracted email from SMS reply: ${extractedEmail}`);
+          if (!matchedJob.jobContactEmail) {
+            await db.update(jobs).set({ jobContactEmail: extractedEmail }).where(eq(jobs.id, matchedJob.id));
+            console.log(`📧 Updated job #${matchedJob.jobNumber} contact email to ${extractedEmail}`);
+          }
+          if (matchedCustomer && !matchedCustomer.email) {
+            await db.update(customers).set({ email: extractedEmail }).where(eq(customers.id, matchedCustomer.id));
+            console.log(`📧 Updated customer ${customerName} email to ${extractedEmail}`);
+          }
+        }
+
+        // Extract full name from SMS body (e.g. "Kasia Green" on its own line, or "Full name is ...")
+        const nameMatch = reply.MessageText.match(/(?:full\s*name\s*(?:is|:)\s*)([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i);
+        if (nameMatch) {
+          const fullName = nameMatch[1].trim();
+          const nameParts = fullName.split(/\s+/);
+          const firstName = nameParts[0];
+          const lastName = nameParts.slice(1).join(' ');
+          if (!matchedJob.jobContactFirstName && firstName) {
+            await db.update(jobs).set({ jobContactFirstName: firstName }).where(eq(jobs.id, matchedJob.id));
+          }
+          if (!matchedJob.jobContactLastName && lastName) {
+            await db.update(jobs).set({ jobContactLastName: lastName }).where(eq(jobs.id, matchedJob.id));
+          }
+          console.log(`👤 Extracted name from SMS: ${firstName} ${lastName}`);
+        }
+
         console.log(`📱 ✅ Stored SMS reply as diary entry and notification in job #${matchedJob.jobNumber}`);
 
         // Also add SMS reply to conversations if there's an active conversation with this phone
