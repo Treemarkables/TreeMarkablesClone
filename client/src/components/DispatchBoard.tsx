@@ -769,7 +769,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
-          totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0 ? apiJob.subtotal : apiJob.totalAmount
+          totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
+            ? apiJob.subtotal
+            : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
+              ? String(Math.round(Number(apiJob.totalIncludingGst) / 1.15 * 100) / 100)
+              : apiJob.totalAmount
         });
       });
     }
@@ -828,7 +832,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
-          totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0 ? apiJob.subtotal : apiJob.totalAmount
+          totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
+            ? apiJob.subtotal
+            : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
+              ? String(Math.round(Number(apiJob.totalIncludingGst) / 1.15 * 100) / 100)
+              : apiJob.totalAmount
         });
       });
     }
