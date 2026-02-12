@@ -3447,13 +3447,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         const preserveFields: (keyof typeof oldJob)[] = [
           'address', 'leadSource', 'notes', 'description', 'customerId',
           'jobContactFirstName', 'jobContactLastName', 'jobContactEmail',
-          'jobContactPhone', 'billingNameOverride'
+          'jobContactPhone', 'jobContactMobile', 'billingNameOverride',
+          'billingAddress', 'billingContactPhone', 'billingContactMobile',
+          'billingContactEmail', 'invoiceDescription', 'totalAmount', 'paidAmount',
+          'title', 'priority', 'estimatedManHours', 'scheduledDate'
         ];
+        const fieldsInRequest = Object.keys(req.body);
+        console.log(`🔒 Safeguard check for job ${req.params.id}: fields in request: [${fieldsInRequest.join(', ')}]`);
         for (const field of preserveFields) {
           const updateVal = (validation.data as any)[field];
           const oldVal = oldJob[field];
           const wasExplicitlySent = field in req.body;
           if (!wasExplicitlySent && (!updateVal || updateVal === '') && oldVal) {
+            console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (not in request body)`);
             (validation.data as any)[field] = oldVal;
           }
         }

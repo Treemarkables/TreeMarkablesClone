@@ -968,38 +968,37 @@ export function GlobalJobCard({
     'purchaseOrderNumber', 'sameAsJobAddress', 'quotingMethod', 'unsuccessfulReason',
     'categoryId', 'crewMembers', 'equipment'
   ]));
+
+  const changedFieldsRef = useRef<Set<string>>(new Set());
   
   useEffect(() => {
     if (mode !== 'edit' || !editingJob?.id) return;
+
+    changedFieldsRef.current.clear();
     
     let timeoutId: NodeJS.Timeout;
     
     const subscription = form.watch((values, { name }) => {
-      // Skip auto-save if we're currently loading data from the server
       if (isLoadingDataRef.current) {
         console.log('🔄 Auto-save skipped - still loading data');
         return;
       }
       
-      // Only auto-save for safe fields (not line items, proposals, etc.)
       if (!name || !autoSaveFieldsRef.current.has(name)) {
         return;
       }
       
       console.log(`📝 Auto-save triggered for field: ${name}, value:`, (values as any)[name]);
       
-      // Mark that the user has made a change
+      changedFieldsRef.current.add(name);
       hasUserChangedRef.current = true;
       
-      // Clear existing timeout
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
       
-      // Set new timeout for auto-save (1.5 second debounce)
       timeoutId = setTimeout(async () => {
-        // Only auto-save if the user actually changed something
-        if (!hasUserChangedRef.current) {
+        if (!hasUserChangedRef.current || changedFieldsRef.current.size === 0) {
           return;
         }
         
@@ -1007,32 +1006,22 @@ export function GlobalJobCard({
           setIsAutoSaving(true);
           const formData = form.getValues();
           
-          console.log('💾 Auto-saving job data...', {
-            jobId: editingJob.id,
-            estimatedManHours: formData.estimatedManHours,
-            description: formData.description?.substring(0, 50)
-          });
-          
-          // EXCLUDE line items from auto-save to prevent data loss
-          // Line items are saved separately via their own mechanisms
-          const safeFormData = { ...formData };
-          delete (safeFormData as any).lineItems;
-          
-          // Map new customer fields to job contact fields for backend compatibility
-          if (safeFormData.isNewCustomer && safeFormData.newCustomerName) {
-            const names = safeFormData.newCustomerName.split(' ');
-            safeFormData.jobContactFirstName = names[0] || '';
-            safeFormData.jobContactLastName = names.slice(1).join(' ') || '';
-            safeFormData.jobContactEmail = safeFormData.newCustomerEmail || '';
-            safeFormData.jobContactPhone = safeFormData.newCustomerPhone || '';
+          const changedData: Record<string, any> = {};
+          for (const field of changedFieldsRef.current) {
+            changedData[field] = (formData as any)[field];
           }
           
-          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, safeFormData);
+          console.log('💾 Auto-saving ONLY changed fields...', {
+            jobId: editingJob.id,
+            changedFields: Array.from(changedFieldsRef.current),
+          });
+          
+          await apiRequest('PUT', `/api/jobs/${editingJob.id}`, changedData);
           console.log('✅ Auto-save completed successfully');
           setLastAutoSaveTime(new Date());
           hasUserChangedRef.current = false;
+          changedFieldsRef.current.clear();
           
-          // Invalidate queries to refresh data across all views (mobile & desktop sync)
           queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         } catch (error) {
           console.error('❌ Auto-save failed:', error);
@@ -1040,7 +1029,7 @@ export function GlobalJobCard({
         } finally {
           setIsAutoSaving(false);
         }
-      }, 1500); // 1.5 second debounce
+      }, 1500);
     });
     
     return () => {
