@@ -5197,7 +5197,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             </div>
             <div style="text-align: right;">
               <div style="font-weight: bold; margin-bottom: 8px;">Bill To:</div>
-              <div>${customer?.name || 'Customer'}</div>
+              <div>${job?.billingNameOverride || customer?.name || 'Customer'}</div>
+              ${job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name ? `<div style="font-size: 11px; color: #666;">c/o ${customer.name}</div>` : ''}
               ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
               ${customer?.email ? `<div>${customer.email}</div>` : ''}
             </div>
@@ -5341,8 +5342,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               45, 
               { align: 'right', width: 205 }
             );
+            const pdfBillingName = job?.billingNameOverride || customer?.name || 'Customer';
             doc.fontSize(9).font('Helvetica').text(
-              `${customer?.name || 'Customer'} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}`,
+              `${pdfBillingName} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}`,
               350,
               doc.y,
               { align: 'right', width: 205 }
@@ -5356,7 +5358,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             doc.y = 100;
             doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
             doc.moveDown(0.3);
-            doc.fontSize(9).font('Helvetica-Bold').text(customer?.name || 'Customer', 40, doc.y);
+            doc.fontSize(9).font('Helvetica-Bold').text(pdfBillingName, 40, doc.y);
+            if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
+              doc.moveDown(0.2);
+              doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
+              doc.fillColor('#000000');
+            }
             doc.moveDown(0.2);
             if (invoiceDetails.address || job?.address) {
               doc.fontSize(8).font('Helvetica').fillColor('#666666')
@@ -6309,8 +6316,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         45, 
         { align: 'right', width: 205 }
       );
+      const pdfBillingName2 = job?.billingNameOverride || customer?.name || 'Customer';
       doc.fontSize(9).font('Helvetica').text(
-        `${customer?.name || 'Customer'} - ${formatDate(invoice.issueDate) || formatDate(new Date())}`,
+        `${pdfBillingName2} - ${formatDate(invoice.issueDate) || formatDate(new Date())}`,
         350,
         doc.y,
         { align: 'right', width: 205 }
@@ -6324,7 +6332,12 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       doc.y = 100;
       doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
       doc.moveDown(0.3);
-      doc.fontSize(9).font('Helvetica-Bold').text(customer?.name || 'Customer', 40, doc.y);
+      doc.fontSize(9).font('Helvetica-Bold').text(pdfBillingName2, 40, doc.y);
+      if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
+        doc.moveDown(0.2);
+        doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
+        doc.fillColor('#000000');
+      }
       doc.moveDown(0.2);
       if (invoice.address || job?.address) {
         doc.fontSize(8).font('Helvetica').fillColor('#666666')
