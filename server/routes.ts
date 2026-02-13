@@ -6485,6 +6485,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Update invoice using proper updateInvoice method
       const updatedInvoice = await storage.updateInvoice(id, updateData);
 
+      // Sync invoice amount to job's totalAmount for revenue/profit tracking
+      if (updateData.amount && invoice.jobId) {
+        try {
+          await storage.updateJob(invoice.jobId, {
+            totalAmount: updateData.amount.toString()
+          });
+          console.log('💰 Synced invoice amount to job total_amount:', updateData.amount);
+        } catch (syncErr) {
+          console.error('⚠️ Failed to sync invoice amount to job:', syncErr);
+        }
+      }
+
       console.log(`📋 Invoice ${invoice.invoiceNumber} updated:`, updateData);
 
       res.json({ success: true, data: updatedInvoice });
