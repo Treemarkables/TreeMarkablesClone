@@ -2611,7 +2611,7 @@ class DatabaseStorage implements IStorage {
         jobsWithRevenue++;
       }
       
-      // Calculate costs: line item costs + calculated labor cost + additional costs
+      // Calculate costs: line item costs + calculated labor cost + staff time entries + additional costs
       const itemCosts = (job.lineItems || []).reduce((sum: number, item: any) => {
         return sum + (item.totalCost || 0);
       }, 0);
@@ -2621,11 +2621,28 @@ class DatabaseStorage implements IStorage {
       const materialsCost = parseFloat(job.materialsCosts?.toString() || '0');
       const otherCost = parseFloat(job.otherCosts?.toString() || '0');
       
-      const jobCosts = itemCosts + calculatedLabor + additionalLabor + materialsCost + otherCost;
+      // Include staff time entry costs (hours * rate for each entry)
+      const staffTimeEntries = (job.staffTimeEntries as any[]) || [];
+      const staffTimeCost = staffTimeEntries.reduce((sum: number, entry: any) => {
+        const hours = Number(entry.hours) || 0;
+        const rate = Number(entry.rate) || 0;
+        return sum + (hours * rate);
+      }, 0);
+      
+      // Include bulk expense fields
+      const equipmentCosts = parseFloat(job.equipmentCosts?.toString() || '0');
+      const subcontractorCosts = parseFloat(job.subcontractorCosts?.toString() || '0');
+      const permitCosts = parseFloat(job.permitCosts?.toString() || '0');
+      const travelCosts = parseFloat(job.travelCosts?.toString() || '0');
+      const disposalCosts = parseFloat(job.disposalCosts?.toString() || '0');
+      const miscExpenses = parseFloat(job.miscExpenses?.toString() || '0');
+      const costOfGoods = parseFloat(job.costOfGoods?.toString() || '0');
+      
+      const jobCosts = itemCosts + calculatedLabor + staffTimeCost + additionalLabor + materialsCost + otherCost + equipmentCosts + subcontractorCosts + permitCosts + travelCosts + disposalCosts + miscExpenses + costOfGoods;
       totalCosts += jobCosts;
       
       // Only include in margin calculation if job has BOTH invoice revenue AND some cost data
-      const hasCostData = itemCosts > 0 || calculatedLabor > 0 || additionalLabor > 0 || materialsCost > 0 || otherCost > 0;
+      const hasCostData = itemCosts > 0 || calculatedLabor > 0 || staffTimeCost > 0 || additionalLabor > 0 || materialsCost > 0 || otherCost > 0 || equipmentCosts > 0 || subcontractorCosts > 0 || costOfGoods > 0;
       if (jobRevenue > 0 && hasCostData) {
         marginRevenue += jobRevenue;
         marginCosts += jobCosts;
