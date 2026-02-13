@@ -90,11 +90,23 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     }
   });
 
+  // Fetch invoices for this job to get invoice-based revenue
+  const { data: invoicesResponse } = useQuery({
+    queryKey: ['/api/invoices', 'job', jobId],
+    queryFn: async () => {
+      const response = await fetch(`/api/invoices?jobId=${jobId}`);
+      if (!response.ok) throw new Error('Failed to fetch invoices');
+      return response.json();
+    },
+    enabled: !!jobId
+  });
+
   
   const job = (jobResponse as any)?.data;
   const employees = (employeesData as any)?.data || [];
   const quotes = (quotesResponse as any)?.data || [];
   const proposals = (proposalsResponse as any)?.data || [];
+  const jobInvoices = (invoicesResponse as any)?.data || [];
 
   // Fetch ALL staff time entries from the new time tracking system
   const today = new Date().toISOString().split('T')[0];
@@ -247,11 +259,21 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     return total;
   };
 
-  // Helper function to get job price from linked quote or proposal
+  // Helper function to get job price from invoice, quote, or proposal
   const getJobPrice = (): number => {
     if (!job) return 0;
 
-    // First try to get price from linked quote
+    // First check invoices - the most authoritative source of revenue (ex-GST amount)
+    if (jobInvoices.length > 0) {
+      const totalInvoiced = jobInvoices.reduce((sum: number, inv: any) => {
+        return sum + (Number(inv.amount) || 0);
+      }, 0);
+      if (totalInvoiced > 0) {
+        return totalInvoiced;
+      }
+    }
+
+    // Then try to get price from linked quote
     if (job.quoteId) {
       const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
       if (linkedQuote?.amount) {
@@ -262,7 +284,6 @@ export function GrossMarginCalculator({ jobId, jobData, compact = false }: Gross
     // Then try to get price from the most recent proposal for this job
     const jobProposals = proposals.filter((p: any) => p.jobId === job.id);
     if (jobProposals.length > 0) {
-      // Sort by creation date and get the most recent
       const sortedProposals = jobProposals.sort((a: any, b: any) => 
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
