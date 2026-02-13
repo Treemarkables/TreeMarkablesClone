@@ -230,7 +230,10 @@ export function EmailComposerModal({
   // Pre-populate email data when modal opens (only on first open, not on data updates)
   useEffect(() => {
     if (isOpen && job && customer && !hasInitialized) {
-      const billingEmail = customEmail || job.jobContactEmail || customer.billingContactEmail || customer.email || customer.jobContactEmail;
+      const isInvoiceContext = !!invoiceData;
+      const billingEmail = customEmail || (isInvoiceContext
+        ? (job.billingContactEmail || customer.billingContactEmail || job.jobContactEmail || customer.email || customer.jobContactEmail)
+        : (job.jobContactEmail || customer.billingContactEmail || customer.email || customer.jobContactEmail));
       
       // Extract first name from customer data
       let firstName = "there";
