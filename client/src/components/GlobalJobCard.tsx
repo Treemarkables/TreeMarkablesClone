@@ -78,6 +78,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   billingAddress: z.string().optional(),
   billingNameOverride: z.string().optional(), // Override customer name for invoicing
   invoiceDescription: z.string().optional(),
+  billingContactEmail: z.string().optional(),
   billingContactPhone: z.string().optional(),
   billingContactMobile: z.string().optional(),
   sameAsJobAddress: z.boolean().optional(),
@@ -205,6 +206,7 @@ export function GlobalJobCard({
       estimatedManHours: "",
       billingAddress: "",
       invoiceDescription: "",
+      billingContactEmail: "",
       billingContactPhone: "",
       billingContactMobile: "",
       sameAsJobAddress: true,
@@ -795,6 +797,7 @@ export function GlobalJobCard({
         jobContactLastName: initialData.customerLastName || '',
         jobContactEmail: initialData.customerEmail || '',
         jobContactPhone: '', // Leave blank - most numbers from conversations are mobile
+        billingContactEmail: initialData.customerEmail || '',
         billingContactPhone: '',
         billingContactMobile: initialData.customerPhone || '', // Put mobile number here
         billingAddress: initialData.address || '',
@@ -820,6 +823,7 @@ export function GlobalJobCard({
         jobContactLastName: '',
         jobContactEmail: '',
         jobContactPhone: '',
+        billingContactEmail: '',
         billingContactPhone: '',
         billingContactMobile: '',
         billingAddress: '',
@@ -887,6 +891,7 @@ export function GlobalJobCard({
         jobContactEmail: editingJob.jobContactEmail || editingJobCustomer?.email || '',
         jobContactPhone: editingJob.jobContactPhone || editingJobCustomer?.phone || '',
         jobContactMobile: editingJob.jobContactMobile || editingJobCustomer?.mobile || '',
+        billingContactEmail: editingJob.billingContactEmail || '',
         billingContactPhone: editingJob.billingContactPhone || '',
         billingContactMobile: editingJob.billingContactMobile || '',
         billingAddress: editingJob.billingAddress || '',
@@ -4759,6 +4764,33 @@ The Treemarkables Team`;
                         />
                       </div>
 
+                      {/* Billing Contact Email */}
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-blue-600" />
+                          <h4 className="font-medium text-gray-800">Billing Email</h4>
+                        </div>
+                        <FormField
+                          control={form.control}
+                          name="billingContactEmail"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="email"
+                                  className="h-9 text-base md:text-sm" 
+                                  placeholder="Email address for invoices (leave blank to use job contact email)"
+                                />
+                              </FormControl>
+                              <p className="text-xs text-gray-500">
+                                Invoices will be sent to this email. If blank, the job contact email is used.
+                              </p>
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
                       {/* Invoice Description */}
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
@@ -5619,11 +5651,11 @@ The Treemarkables Team`;
         <EmailComposerModal
           isOpen={isEmailComposerOpen}
           onClose={() => setIsEmailComposerOpen(false)}
-          job={editingJob}
+          job={{...editingJob, billingContactEmail: formData?.billingContactEmail || editingJob?.billingContactEmail}}
           customer={emailContext === 'invoice' && editingJob ? {
             ...selectedCustomer,
-            billingContactEmail: editingJob.billingContactEmail,
-            email: editingJob.billingContactEmail || editingJob.jobContactEmail || selectedCustomer?.email,
+            billingContactEmail: formData?.billingContactEmail || editingJob.billingContactEmail,
+            email: formData?.billingContactEmail || editingJob.billingContactEmail || editingJob.jobContactEmail || selectedCustomer?.email,
             phone: editingJob.billingContactPhone || editingJob.billingContactMobile || editingJob.jobContactPhone || selectedCustomer?.phone,
             address: editingJob.billingAddress || editingJob.address || selectedCustomer?.address,
             // Use billing name override from FORM (current unsaved value) first, then fall back to saved value

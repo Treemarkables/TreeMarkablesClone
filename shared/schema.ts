@@ -431,6 +431,7 @@ export const jobs = pgTable("jobs", {
   city: text("city"),
   region: text("region"),
   invoiceDescription: text("invoice_description"),
+  billingContactEmail: text("billing_contact_email"),
   billingContactPhone: text("billing_contact_phone"),
   billingContactMobile: text("billing_contact_mobile"),
   sameAsJobAddress: boolean("same_as_job_address").default(true),
