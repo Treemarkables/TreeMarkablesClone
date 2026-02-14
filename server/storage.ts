@@ -3530,27 +3530,28 @@ class DatabaseStorage implements IStorage {
     return filteredNotifications as NotificationWithDetails[];
   }
   
-  // Helper method to filter out notifications for completed jobs
   private async filterCompletedJobNotifications(notifications: any[]): Promise<any[]> {
     if (notifications.length === 0) return notifications;
     
-    // Get unique job IDs from notifications
     const jobIds = [...new Set(notifications.filter(n => n.jobId).map(n => n.jobId))];
     
     if (jobIds.length === 0) return notifications;
     
-    // Fetch jobs to check their status
     const jobs = await db.select({ id: schema.jobs.id, status: schema.jobs.status })
       .from(schema.jobs)
       .where(inArray(schema.jobs.id, jobIds as string[]));
     
-    // Create a set of completed job IDs
     const completedJobIds = new Set(
       jobs.filter(j => j.status === 'completed').map(j => j.id)
     );
     
-    // Filter out notifications for completed jobs
-    return notifications.filter(n => !n.jobId || !completedJobIds.has(n.jobId));
+    const alwaysShowTypes = new Set(['email_reply', 'sms_reply', 'payment_received', 'invoice_paid']);
+    
+    return notifications.filter(n => 
+      !n.jobId || 
+      !completedJobIds.has(n.jobId) || 
+      alwaysShowTypes.has(n.type)
+    );
   }
   async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
     const conditions = [eq(schema.notifications.isRead, false)];
