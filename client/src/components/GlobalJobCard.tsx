@@ -3845,14 +3845,14 @@ The Treemarkables Team`;
                                     <FormControl>
                                       <>
                                         <input type="hidden" {...field} />
-                                        {field.value && (
+                                        {(field.value || editingJob?.description) && (
                                           <div
                                             ref={descriptionTextareaRef}
                                             className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
                                             onClick={() => setDescriptionPopupOpen(true)}
                                             data-testid="div-description-display"
                                           >
-                                            <LinkifyMultiline text={field.value} />
+                                            <LinkifyMultiline text={field.value || editingJob?.description || ''} />
                                           </div>
                                         )}
                                       </>
@@ -4480,7 +4480,7 @@ The Treemarkables Team`;
                                   <Edit3 className="h-3 w-3 text-gray-400" />
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
-                                  {form.watch('description') || <span className="text-gray-400 italic">Click to add crew notes...</span>}
+                                  {(form.watch('description') || editingJob?.description) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
                                 </p>
                               </div>
                             </div>
