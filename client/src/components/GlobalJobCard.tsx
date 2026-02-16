@@ -3845,14 +3845,14 @@ The Treemarkables Team`;
                                     <FormControl>
                                       <>
                                         <input type="hidden" {...field} />
-                                        {(field.value || editingJob?.description) && (
+                                        {(lastLoadedJobIdRef.current === editingJob?.id ? field.value : (field.value || editingJob?.description || '')) && (
                                           <div
                                             ref={descriptionTextareaRef}
                                             className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
                                             onClick={() => setDescriptionPopupOpen(true)}
                                             data-testid="div-description-display"
                                           >
-                                            <LinkifyMultiline text={field.value || editingJob?.description || ''} />
+                                            <LinkifyMultiline text={lastLoadedJobIdRef.current === editingJob?.id ? (field.value || '') : (field.value || editingJob?.description || '')} />
                                           </div>
                                         )}
                                       </>
@@ -4480,7 +4480,7 @@ The Treemarkables Team`;
                                   <Edit3 className="h-3 w-3 text-gray-400" />
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
-                                  {(form.watch('description') || editingJob?.description) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
+                                  {(lastLoadedJobIdRef.current === editingJob?.id ? form.watch('description') : (form.watch('description') || editingJob?.description || '')) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
                                 </p>
                               </div>
                             </div>
@@ -6369,7 +6369,7 @@ The Treemarkables Team`;
               </Button>
             </div>
             <Textarea 
-              value={form.watch('description') || editingJob?.description || ''}
+              value={lastLoadedJobIdRef.current === editingJob?.id ? (form.watch('description') || '') : (form.watch('description') || editingJob?.description || '')}
               onChange={(e) => form.setValue('description', e.target.value)}
               className="min-h-[300px] max-h-[60vh] text-base font-medium" 
               placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
