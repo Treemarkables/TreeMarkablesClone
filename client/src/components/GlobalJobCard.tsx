@@ -251,6 +251,7 @@ export function GlobalJobCard({
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [formLoadedJobId, setFormLoadedJobId] = useState<string | null>(null);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
   
   // Double-tap detection for mobile description
@@ -913,6 +914,7 @@ export function GlobalJobCard({
         estimatedManHours: editingJob.estimatedManHours || '',
       };
       form.reset(resetData);
+      setFormLoadedJobId(editingJob.id);
       originalLoadedDataRef.current = { ...resetData };
       
       // Fix: Explicitly sync useFieldArray with line items after form reset
@@ -3835,7 +3837,7 @@ The Treemarkables Team`;
                                   <FormItem>
                                     <div 
                                       className="flex items-center justify-between cursor-pointer"
-                                      onClick={() => { setDescriptionDraft(field.value || editingJob?.description || ''); setDescriptionPopupOpen(true); }}
+                                      onClick={() => { setDescriptionDraft(formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || editingJob?.description || '')); setDescriptionPopupOpen(true); }}
                                     >
                                       <span className="text-blue-600 font-medium flex items-center gap-2">
                                         <MessageSquare className="h-4 w-4" />
@@ -3846,14 +3848,14 @@ The Treemarkables Team`;
                                     <FormControl>
                                       <>
                                         <input type="hidden" {...field} />
-                                        {(field.value || editingJob?.description) && (
+                                        {(formLoadedJobId === editingJob?.id ? field.value : (field.value || editingJob?.description)) && (
                                           <div
                                             ref={descriptionTextareaRef}
                                             className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
-                                            onClick={() => { setDescriptionDraft(field.value || editingJob?.description || ''); setDescriptionPopupOpen(true); }}
+                                            onClick={() => { setDescriptionDraft(formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || editingJob?.description || '')); setDescriptionPopupOpen(true); }}
                                             data-testid="div-description-display"
                                           >
-                                            <LinkifyMultiline text={field.value || editingJob?.description || ''} />
+                                            <LinkifyMultiline text={formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || editingJob?.description || '')} />
                                           </div>
                                         )}
                                       </>
@@ -4474,14 +4476,14 @@ The Treemarkables Team`;
                             <div className="border-t border-dashed pt-3">
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
-                                onClick={() => { setDescriptionDraft(form.watch('description') || editingJob?.description || ''); setDescriptionPopupOpen(true); }}
+                                onClick={() => { const desc = formLoadedJobId === editingJob?.id ? (form.watch('description') || '') : (form.watch('description') || editingJob?.description || ''); setDescriptionDraft(desc); setDescriptionPopupOpen(true); }}
                               >
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs text-gray-500 font-medium">Crew Notes</span>
                                   <Edit3 className="h-3 w-3 text-gray-400" />
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
-                                  {(form.watch('description') || editingJob?.description) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
+                                  {(formLoadedJobId === editingJob?.id ? form.watch('description') : (form.watch('description') || editingJob?.description)) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
                                 </p>
                               </div>
                             </div>
