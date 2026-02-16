@@ -1547,6 +1547,19 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         customer = await storage.createCustomer(customerData);
       }
       
+      // Detect if phone is a mobile number (NZ mobiles start with 02, +642, etc.)
+      const cleanPhone = (phone || '').replace(/\s/g, '');
+      const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
+      
+      // Also save mobile to customer record if detected as mobile
+      if (isMobileNumber && phone && customer.id) {
+        try {
+          await storage.updateCustomer(customer.id, { mobile: phone });
+        } catch (e) {
+          // Non-critical - continue even if mobile update fails
+        }
+      }
+      
       // Create job with 'lead' status
       const jobNumber = await storage.getNextJobNumber();
       const jobData = {
@@ -1555,12 +1568,14 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         title: `Lead from ${name || 'conversation'}`,
         description: notes || '',
         address: address || 'Address not specified',
-        status: status || 'lead', // Default to 'lead' status for dispatch board
+        status: status || 'lead',
         priority: 'medium' as const,
         leadSource: 'website' as const,
         totalAmount: '0.00',
         metricsEligible: true,
-        metricsStartDate: new Date()
+        metricsStartDate: new Date(),
+        jobContactPhone: isMobileNumber ? '' : (phone || ''),
+        jobContactMobile: isMobileNumber ? (phone || '') : '',
       };
       
       const job = await storage.createJob(jobData);

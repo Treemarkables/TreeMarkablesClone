@@ -796,10 +796,17 @@ export function GlobalJobCard({
         jobContactFirstName: initialData.customerFirstName || '',
         jobContactLastName: initialData.customerLastName || '',
         jobContactEmail: initialData.customerEmail || '',
-        jobContactPhone: '', // Leave blank - most numbers from conversations are mobile
+        jobContactPhone: (() => {
+          const p = (initialData.customerPhone || '').replace(/\s/g, '');
+          return /^(\+?64)?0?2[0-9]/.test(p) ? '' : (initialData.customerPhone || '');
+        })(),
+        jobContactMobile: (() => {
+          const p = (initialData.customerPhone || '').replace(/\s/g, '');
+          return /^(\+?64)?0?2[0-9]/.test(p) ? (initialData.customerPhone || '') : '';
+        })(),
         billingContactEmail: initialData.customerEmail || '',
         billingContactPhone: '',
-        billingContactMobile: initialData.customerPhone || '', // Put mobile number here
+        billingContactMobile: initialData.customerPhone || '',
         billingAddress: initialData.address || '',
         billingNameOverride: '', // Can be set to override customer name for invoicing
         invoiceDescription: initialData.description || '',

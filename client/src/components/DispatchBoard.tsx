@@ -1718,7 +1718,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 };
                 
                 const statusBadge = getDesktopStatusBadge();
-                const hasPhone = job.customerPhone || job.phone;
+                const hasPhone = job.jobContactPhone || job.jobContactMobile || job.customerPhone || job.phone;
                 
                 return (
                   <div
@@ -2019,7 +2019,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               };
               
               const statusBadge = getStatusBadge();
-              const hasPhone = job.customerPhone || job.phone;
+              const hasPhone = job.jobContactPhone || job.jobContactMobile || job.customerPhone || job.phone;
               
               // Get job type icon based on service type
               const getServiceTypeIcon = () => {
@@ -2128,7 +2128,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               className="bg-green-500 rounded-lg"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                window.location.href = `tel:${job.customerPhone || job.phone}`;
+                                window.location.href = `tel:${job.jobContactPhone || job.jobContactMobile || job.customerPhone || job.phone}`;
                               }}
                               data-testid={`call-button-${job.id}`}
                             >
