@@ -60,6 +60,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
             method: 'POST',
             body: formData,
             signal: controller.signal,
+            credentials: 'include',
             cache: 'no-store',
             headers: {
               'Cache-Control': 'no-cache, no-store, must-revalidate',

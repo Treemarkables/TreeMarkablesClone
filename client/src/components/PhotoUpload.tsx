@@ -80,6 +80,7 @@ export default function PhotoUpload({
       const response = await fetch(`/api/jobs/${jobId}/photos`, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
       
       if (!response.ok) {
@@ -126,6 +127,7 @@ export default function PhotoUpload({
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ photoUrl, type }),
+        credentials: 'include',
       });
       
       if (!response.ok) {
