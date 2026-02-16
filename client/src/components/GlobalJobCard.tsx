@@ -679,6 +679,7 @@ export function GlobalJobCard({
             const response = await fetch(`/api/jobs/${currentJobId}/photos`, {
               method: 'POST',
               body: formData,
+              credentials: 'include',
             });
             
             if (response.ok) {
@@ -1143,6 +1144,7 @@ export function GlobalJobCard({
               const response = await fetch(`/api/jobs/${jobId}/photos`, {
                 method: 'POST',
                 body: formData,
+                credentials: 'include',
               });
               
               if (!response.ok) {

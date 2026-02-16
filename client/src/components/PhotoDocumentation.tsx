@@ -216,6 +216,7 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
       const response = await fetch('/api/photos/upload', {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
 
       const result = await response.json();

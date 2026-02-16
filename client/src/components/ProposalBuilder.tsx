@@ -730,6 +730,7 @@ export function ProposalBuilder({
       const response = await fetch(`/api/jobs/${jobId}/photos/batch`, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Upload failed' }));

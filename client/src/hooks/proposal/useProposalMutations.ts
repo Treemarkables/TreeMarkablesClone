@@ -35,6 +35,7 @@ export function useProposalMutations(jobId?: string, onSuccess?: () => void) {
       const response = await fetch(`/api/jobs/${jobId}/photos`, {
         method: 'POST',
         body: formData,
+        credentials: 'include',
       });
       
       if (!response.ok) {
