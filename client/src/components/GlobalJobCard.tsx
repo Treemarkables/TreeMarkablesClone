@@ -250,6 +250,7 @@ export function GlobalJobCard({
   
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState('');
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
   
   // Double-tap detection for mobile description
@@ -3834,7 +3835,7 @@ The Treemarkables Team`;
                                   <FormItem>
                                     <div 
                                       className="flex items-center justify-between cursor-pointer"
-                                      onClick={() => setDescriptionPopupOpen(true)}
+                                      onClick={() => { setDescriptionDraft(field.value || editingJob?.description || ''); setDescriptionPopupOpen(true); }}
                                     >
                                       <span className="text-blue-600 font-medium flex items-center gap-2">
                                         <MessageSquare className="h-4 w-4" />
@@ -3845,14 +3846,14 @@ The Treemarkables Team`;
                                     <FormControl>
                                       <>
                                         <input type="hidden" {...field} />
-                                        {(lastLoadedJobIdRef.current === editingJob?.id ? field.value : (field.value || editingJob?.description || '')) && (
+                                        {(field.value || editingJob?.description) && (
                                           <div
                                             ref={descriptionTextareaRef}
                                             className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
-                                            onClick={() => setDescriptionPopupOpen(true)}
+                                            onClick={() => { setDescriptionDraft(field.value || editingJob?.description || ''); setDescriptionPopupOpen(true); }}
                                             data-testid="div-description-display"
                                           >
-                                            <LinkifyMultiline text={lastLoadedJobIdRef.current === editingJob?.id ? (field.value || '') : (field.value || editingJob?.description || '')} />
+                                            <LinkifyMultiline text={field.value || editingJob?.description || ''} />
                                           </div>
                                         )}
                                       </>
@@ -4473,14 +4474,14 @@ The Treemarkables Team`;
                             <div className="border-t border-dashed pt-3">
                               <div 
                                 className="cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
-                                onClick={() => setDescriptionPopupOpen(true)}
+                                onClick={() => { setDescriptionDraft(form.watch('description') || editingJob?.description || ''); setDescriptionPopupOpen(true); }}
                               >
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-xs text-gray-500 font-medium">Crew Notes</span>
                                   <Edit3 className="h-3 w-3 text-gray-400" />
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
-                                  {(lastLoadedJobIdRef.current === editingJob?.id ? form.watch('description') : (form.watch('description') || editingJob?.description || '')) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
+                                  {(form.watch('description') || editingJob?.description) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
                                 </p>
                               </div>
                             </div>
@@ -6330,7 +6331,12 @@ The Treemarkables Team`;
       )}
 
       {/* Job Description Popup - Responsive Width with safe area for iPhone notch */}
-      <Dialog open={descriptionPopupOpen} onOpenChange={setDescriptionPopupOpen}>
+      <Dialog open={descriptionPopupOpen} onOpenChange={(open) => {
+        if (!open) {
+          form.setValue('description', descriptionDraft, { shouldDirty: true });
+        }
+        setDescriptionPopupOpen(open);
+      }}>
         <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center">Crew Notes</DialogTitle>
@@ -6342,24 +6348,23 @@ The Treemarkables Team`;
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const currentValue = form.watch('description') || '';
                   const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
                   if (textarea) {
                     const start = textarea.selectionStart;
                     const end = textarea.selectionEnd;
-                    const beforeCursor = currentValue.substring(0, start);
-                    const afterCursor = currentValue.substring(end);
+                    const beforeCursor = descriptionDraft.substring(0, start);
+                    const afterCursor = descriptionDraft.substring(end);
                     const isStartOfLine = start === 0 || beforeCursor.endsWith('\n');
                     const bullet = isStartOfLine ? '• ' : '\n• ';
                     const newValue = beforeCursor + bullet + afterCursor;
-                    form.setValue('description', newValue);
+                    setDescriptionDraft(newValue);
                     setTimeout(() => {
                       textarea.focus();
                       const newPos = start + bullet.length;
                       textarea.setSelectionRange(newPos, newPos);
                     }, 0);
                   } else {
-                    form.setValue('description', currentValue + (currentValue ? '\n• ' : '• '));
+                    setDescriptionDraft(prev => prev + (prev ? '\n• ' : '• '));
                   }
                 }}
                 className="flex items-center gap-1"
@@ -6367,10 +6372,22 @@ The Treemarkables Team`;
                 <List className="h-4 w-4" />
                 Add Bullet
               </Button>
+              {descriptionDraft && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setDescriptionDraft('')}
+                  className="flex items-center gap-1 text-red-500"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  Clear
+                </Button>
+              )}
             </div>
             <Textarea 
-              value={lastLoadedJobIdRef.current === editingJob?.id ? (form.watch('description') || '') : (form.watch('description') || editingJob?.description || '')}
-              onChange={(e) => form.setValue('description', e.target.value)}
+              value={descriptionDraft}
+              onChange={(e) => setDescriptionDraft(e.target.value)}
               className="min-h-[300px] max-h-[60vh] text-base font-medium" 
               placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
               data-testid="textarea-description-popup"
@@ -6380,7 +6397,10 @@ The Treemarkables Team`;
             <Button 
               variant="outline" 
               className="flex-1"
-              onClick={() => setDescriptionPopupOpen(false)}
+              onClick={() => {
+                form.setValue('description', descriptionDraft, { shouldDirty: true });
+                setDescriptionPopupOpen(false);
+              }}
               data-testid="btn-description-popup-close"
             >
               Close
