@@ -240,6 +240,10 @@ export default function Opportunities() {
       console.log('✅ Customer created:', customerData.data.id);
       const customerId = customerData.data.id;
 
+      // Detect if phone is a mobile number (NZ mobiles start with 02, +642, etc.)
+      const cleanPhone = (leadData.phone || '').replace(/\s/g, '');
+      const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
+      
       // Create a job with status "quote" so it shows up on dispatch board
       const jobData = {
         customerId: customerId,
@@ -250,7 +254,9 @@ export default function Opportunities() {
         priority: leadData.urgency || 'medium',
         leadSource: 'quote_request',
         totalAmount: '0.00',
-        paidAmount: '0.00'
+        paidAmount: '0.00',
+        jobContactPhone: isMobileNumber ? '' : (leadData.phone || ''),
+        jobContactMobile: isMobileNumber ? (leadData.phone || '') : '',
       };
       
       console.log('🔵 Creating job with data:', jobData);

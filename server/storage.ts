@@ -1552,22 +1552,58 @@ class DatabaseStorage implements IStorage {
     const limit = options?.limit ?? 10; // Default to 10 jobs
     const offset = options?.offset ?? 0;
     
-    // Build the query with optional status filter
-    let query = db.select().from(schema.jobs);
-    
+    // Build WHERE conditions
+    const conditions: any[] = [];
     if (options?.status) {
-      query = query.where(eq(schema.jobs.status, options.status)) as any;
+      conditions.push(eq(schema.jobs.status, options.status));
     }
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    
+    // Query with LEFT JOIN to include customer phone data
+    const jobsQuery = whereClause
+      ? db.select({
+          job: schema.jobs,
+          customerName: schema.customers.name,
+          customerEmail: schema.customers.email,
+          customerPhone: schema.customers.phone,
+          customerMobile: schema.customers.mobile,
+        })
+        .from(schema.jobs)
+        .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+        .where(whereClause)
+        .orderBy(desc(schema.jobs.createdAt))
+        .limit(limit)
+        .offset(offset)
+      : db.select({
+          job: schema.jobs,
+          customerName: schema.customers.name,
+          customerEmail: schema.customers.email,
+          customerPhone: schema.customers.phone,
+          customerMobile: schema.customers.mobile,
+        })
+        .from(schema.jobs)
+        .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+        .orderBy(desc(schema.jobs.createdAt))
+        .limit(limit)
+        .offset(offset);
     
     // Get total count (for pagination)
-    const countQuery = options?.status 
-      ? db.select({ count: sql<number>`count(*)` }).from(schema.jobs).where(eq(schema.jobs.status, options.status))
+    const countQuery = whereClause
+      ? db.select({ count: sql<number>`count(*)` }).from(schema.jobs).where(whereClause)
       : db.select({ count: sql<number>`count(*)` }).from(schema.jobs);
     
-    const [jobs, totalResult] = await Promise.all([
-      query.orderBy(desc(schema.jobs.createdAt)).limit(limit).offset(offset),
+    const [results, totalResult] = await Promise.all([
+      jobsQuery,
       countQuery
     ]);
+    
+    // Transform results to include customer data in job object
+    const jobs = results.map((row: any) => ({
+      ...row.job,
+      customerName: row.customerName,
+      customerEmail: row.customerEmail,
+      customerPhone: row.customerPhone || row.customerMobile,
+    }));
     
     const total = Number(totalResult[0]?.count) || 0;
     
@@ -1604,6 +1640,7 @@ class DatabaseStorage implements IStorage {
         customerName: schema.customers.name,
         customerEmail: schema.customers.email,
         customerPhone: schema.customers.phone,
+        customerMobile: schema.customers.mobile,
       })
       .from(schema.jobs)
       .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
@@ -1617,7 +1654,7 @@ class DatabaseStorage implements IStorage {
       ...row.job,
       customerName: row.customerName,
       customerEmail: row.customerEmail,
-      customerPhone: row.customerPhone,
+      customerPhone: row.customerPhone || row.customerMobile,
     }));
     
     // Get total count
@@ -4440,7 +4477,7 @@ class DatabaseStorage implements IStorage {
         return {
           ...conversation,
           customerName: customer.name || undefined,
-          customerPhone: customer.phone,
+          customerPhone: customer.phone || customer.mobile,
           customerEmail: customer.email,
           customerAddress: customer.address
         };
@@ -4506,6 +4543,7 @@ class DatabaseStorage implements IStorage {
         customerName: schema.customers.name,
         customerEmail: schema.customers.email,
         customerPhone: schema.customers.phone,
+        customerMobile: schema.customers.mobile,
         senderName: firstMessageSubquery.fromName,
         senderContact: firstMessageSubquery.fromContact
       })
@@ -4540,7 +4578,7 @@ class DatabaseStorage implements IStorage {
       ...row.conversations,
       customerName: row.customerName || row.senderName,
       customerEmail: row.customerEmail,
-      customerPhone: row.customerPhone,
+      customerPhone: row.customerPhone || row.customerMobile,
       senderContact: row.senderContact
     })) as Conversation[];
   }
