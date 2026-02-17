@@ -157,6 +157,9 @@ export function GlobalJobCard({
   const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
   const [deepSearchResults, setDeepSearchResults] = useState<any[]>([]);
   const [isDeepSearching, setIsDeepSearching] = useState(false);
+  const [isEditingCustomerName, setIsEditingCustomerName] = useState(false);
+  const [editingNameValue, setEditingNameValue] = useState("");
+  const [isSavingCustomerName, setIsSavingCustomerName] = useState(false);
 
   const { toast: _originalToast } = useToast();
   const toast = () => {}; // Disabled - user preference: no toast notifications
@@ -1606,6 +1609,37 @@ export function GlobalJobCard({
       console.error('Deep search failed:', error);
     } finally {
       setIsDeepSearching(false);
+    }
+  };
+
+  const handleSaveCustomerName = async (newName: string) => {
+    if (!newName.trim() || !editingJob?.customerId) return;
+    
+    setIsSavingCustomerName(true);
+    try {
+      await apiRequest('PUT', `/api/customers/${editingJob.customerId}`, { name: newName.trim() });
+      
+      const names = newName.trim().split(' ');
+      const firstName = names[0] || '';
+      const lastName = names.slice(1).join(' ') || '';
+      form.setValue('jobContactFirstName', firstName, { shouldDirty: true });
+      form.setValue('jobContactLastName', lastName, { shouldDirty: true });
+      
+      setSelectedCustomerName(newName.trim());
+      setIsEditingCustomerName(false);
+      setEditingNameValue('');
+      
+      await apiRequest('PUT', `/api/jobs/${editingJob.id}`, {
+        jobContactFirstName: firstName,
+        jobContactLastName: lastName,
+      });
+      
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    } catch (error) {
+      console.error('Failed to update customer name:', error);
+    } finally {
+      setIsSavingCustomerName(false);
     }
   };
 
@@ -3235,6 +3269,45 @@ The Treemarkables Team`;
 
                             {/* Row 1: Customer Name + Status Badge (Mobile) */}
                             <div className="flex items-start justify-between gap-2">
+                              {isEditingCustomerName ? (
+                                <div className="flex items-center gap-2 flex-1">
+                                  <Input
+                                    autoFocus
+                                    value={editingNameValue}
+                                    onChange={(e) => setEditingNameValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleSaveCustomerName(editingNameValue);
+                                      } else if (e.key === 'Escape') {
+                                        setIsEditingCustomerName(false);
+                                        setEditingNameValue('');
+                                      }
+                                    }}
+                                    className="h-9 text-base font-bold flex-1"
+                                    placeholder="Customer name"
+                                    disabled={isSavingCustomerName}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={isSavingCustomerName || !editingNameValue.trim()}
+                                    onClick={() => handleSaveCustomerName(editingNameValue)}
+                                  >
+                                    {isSavingCustomerName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    size="icon"
+                                    variant="ghost"
+                                    disabled={isSavingCustomerName}
+                                    onClick={() => { setIsEditingCustomerName(false); setEditingNameValue(''); }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              ) : (
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <button className="font-bold text-gray-900 text-xl text-left flex items-center gap-1 hover:text-blue-600 transition-colors">
@@ -3243,6 +3316,21 @@ The Treemarkables Team`;
                                   </button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-[280px] p-0" align="start">
+                                  <div className="p-2 border-b">
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="w-full justify-start text-sm"
+                                      onClick={() => {
+                                        setEditingNameValue(selectedCustomerName);
+                                        setIsEditingCustomerName(true);
+                                      }}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5 mr-2" />
+                                      Edit Name
+                                    </Button>
+                                  </div>
                                   <Command>
                                     <CommandInput 
                                       placeholder="Search customers..." 
@@ -3251,7 +3339,7 @@ The Treemarkables Team`;
                                     />
                                     <CommandList className="max-h-[250px]">
                                       <CommandEmpty>No customers found</CommandEmpty>
-                                      <CommandGroup heading="Customers">
+                                      <CommandGroup heading="Switch Customer">
                                         {customers
                                           .filter(customer => 
                                             customer.name?.toLowerCase().includes(customerSearchValue.toLowerCase())
@@ -3265,15 +3353,12 @@ The Treemarkables Team`;
                                                 form.setValue('customerId', customer.id);
                                                 setSelectedCustomerName(customer.name);
                                                 setCustomerSearchValue('');
-                                                // Pre-fill address from customer if available
                                                 if (customer.address && !form.getValues('address')) {
                                                   form.setValue('address', customer.address);
                                                 }
-                                                // Pre-fill contact info from customer if not already set
                                                 if (customer.email && !form.getValues('jobContactEmail')) {
                                                   form.setValue('jobContactEmail', customer.email);
                                                 }
-                                                // Route mobile numbers to mobile field, landline to phone field
                                                 const phoneNumber = customer.mobile || customer.phone || '';
                                                 const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
                                                 
@@ -3300,6 +3385,7 @@ The Treemarkables Team`;
                                   </Command>
                                 </PopoverContent>
                               </Popover>
+                              )}
                               <Badge 
                                 variant="outline" 
                                 className={`text-xs whitespace-nowrap flex-shrink-0 ${
@@ -3420,6 +3506,45 @@ The Treemarkables Team`;
                       {/* Desktop: Customer Name Display - Clickable to change */}
                       {mode === 'edit' && (
                         <div className="hidden md:block mb-2">
+                          {isEditingCustomerName ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                autoFocus
+                                value={editingNameValue}
+                                onChange={(e) => setEditingNameValue(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleSaveCustomerName(editingNameValue);
+                                  } else if (e.key === 'Escape') {
+                                    setIsEditingCustomerName(false);
+                                    setEditingNameValue('');
+                                  }
+                                }}
+                                className="h-9 text-base font-bold max-w-xs"
+                                placeholder="Customer name"
+                                disabled={isSavingCustomerName}
+                              />
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                disabled={isSavingCustomerName || !editingNameValue.trim()}
+                                onClick={() => handleSaveCustomerName(editingNameValue)}
+                              >
+                                {isSavingCustomerName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                              </Button>
+                              <Button
+                                type="button"
+                                size="icon"
+                                variant="ghost"
+                                disabled={isSavingCustomerName}
+                                onClick={() => { setIsEditingCustomerName(false); setEditingNameValue(''); }}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
                           <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                             <PopoverTrigger asChild>
                               <Button
@@ -3431,6 +3556,22 @@ The Treemarkables Team`;
                               </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start">
+                              <div className="p-2 border-b">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-sm"
+                                  onClick={() => {
+                                    setEditingNameValue(selectedCustomerName);
+                                    setIsEditingCustomerName(true);
+                                    setCustomerSearchOpen(false);
+                                  }}
+                                >
+                                  <Pencil className="h-3.5 w-3.5 mr-2" />
+                                  Edit Name
+                                </Button>
+                              </div>
                               <Command>
                                 <CommandInput 
                                   placeholder="Search customers..." 
@@ -3439,7 +3580,7 @@ The Treemarkables Team`;
                                 />
                                 <CommandList className="max-h-[300px]">
                                   <CommandEmpty>No customers found</CommandEmpty>
-                                  <CommandGroup heading="Customers">
+                                  <CommandGroup heading="Switch Customer">
                                     {customers
                                       .filter(customer => 
                                         customer.name?.toLowerCase().includes(customerSearchValue.toLowerCase())
@@ -3494,8 +3635,10 @@ The Treemarkables Team`;
                               </Command>
                             </PopoverContent>
                           </Popover>
+                          )}
                         </div>
                       )}
+
                       
                       {/* Customer Search/Select for New Jobs (Mobile + Desktop) */}
                       {mode === 'create' && (
