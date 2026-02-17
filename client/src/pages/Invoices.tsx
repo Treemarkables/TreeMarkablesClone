@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Search, Send, CheckCircle, Clock, AlertCircle, Pencil } from "lucide-react";
+import { FileText, Search, Send, CheckCircle, Clock, AlertCircle, Pencil, RotateCcw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
@@ -105,6 +105,29 @@ export default function Invoices() {
           variant: "destructive",
         });
       }
+    },
+  });
+
+  const resetXeroSyncMutation = useMutation({
+    mutationFn: async (invoiceId: string) => {
+      const response = await apiRequest('POST', '/api/xero/reset-invoice-sync', { invoiceId });
+      const data = await response.json();
+      if (!response.ok) throw data;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      toast({
+        title: "Xero Sync Reset",
+        description: "You can now re-send this invoice to Xero.",
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to reset Xero sync",
+        variant: "destructive",
+      });
     },
   });
 
@@ -336,16 +359,31 @@ export default function Invoices() {
                       >
                         <Pencil className="h-4 w-4" />
                       </Button>
-                      {invoice.jobId && (
+                      {invoice.jobId && !invoice.xeroSyncedAt && (
                         <Button
                           className="flex-1 gap-2"
                           onClick={() => handleSendToXero(invoice.jobId!)}
-                          disabled={!!invoice.xeroSyncedAt || sendingJobId === invoice.jobId}
+                          disabled={sendingJobId === invoice.jobId}
                           data-testid={`button-send-to-xero-${invoice.id}`}
                         >
                           <Send className="h-4 w-4" />
-                          {sendingJobId === invoice.jobId ? 'Sending...' : 
-                           invoice.xeroSyncedAt ? 'Sent to Xero' : 'Send to Xero'}
+                          {sendingJobId === invoice.jobId ? 'Sending...' : 'Send to Xero'}
+                        </Button>
+                      )}
+                      {invoice.jobId && invoice.xeroSyncedAt && (
+                        <Button
+                          variant="outline"
+                          className="flex-1 gap-2"
+                          onClick={() => {
+                            if (confirm('This will reset the Xero sync so you can re-send this invoice. Make sure you have already voided the old invoice in Xero first.')) {
+                              resetXeroSyncMutation.mutate(invoice.id);
+                            }
+                          }}
+                          disabled={resetXeroSyncMutation.isPending}
+                          data-testid={`button-resend-xero-${invoice.id}`}
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          {resetXeroSyncMutation.isPending ? 'Resetting...' : 'Re-send to Xero'}
                         </Button>
                       )}
                     </div>

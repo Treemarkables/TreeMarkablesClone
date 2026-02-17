@@ -573,6 +573,54 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     }
   });
 
+  app.post('/api/xero/reset-invoice-sync', async (req: Request, res: Response) => {
+    try {
+      const { invoiceId } = req.body;
+      
+      if (!invoiceId) {
+        return res.status(400).json({ success: false, message: 'Invoice ID is required' });
+      }
+      
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+      
+      await storage.updateInvoice(invoiceId, {
+        xeroInvoiceId: null as any,
+        xeroSyncedAt: null as any,
+        status: 'pending',
+      });
+      
+      if (invoice.jobId) {
+        await storage.updateJob(invoice.jobId, {
+          xeroInvoiceId: null as any,
+          xeroStatus: null as any,
+          sentToXeroDate: null as any,
+        });
+      }
+      
+      console.log(`🔄 Reset Xero sync for invoice ${invoice.invoiceNumber} (job ${invoice.jobId})`);
+      
+      if (invoice.jobId) {
+        await storage.createJobDiaryEntry({
+          jobId: invoice.jobId,
+          entryType: 'note',
+          title: 'Xero Invoice Reset',
+          description: `Invoice #${invoice.invoiceNumber} Xero sync was reset to allow re-sending (previous invoice voided in Xero)`,
+          authorName: 'System',
+          authorRole: 'system',
+          metadata: { action: 'xero_sync_reset' }
+        });
+      }
+      
+      res.json({ success: true, message: 'Invoice sync reset. You can now re-send to Xero.' });
+    } catch (error) {
+      console.error('Error resetting invoice sync:', error);
+      res.status(500).json({ success: false, message: 'Failed to reset invoice sync' });
+    }
+  });
+
   // Test Xero connection
   app.get('/api/xero/test', async (req: Request, res: Response) => {
     try {
