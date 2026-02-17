@@ -215,8 +215,8 @@ class GmailReplyService {
     // Allow emails sent to quotes@
     if (lowerTo.includes('quotes@treemarkables')) return true;
     
-    // Allow emails sent to job-XXXX aliases
-    if (lowerTo.match(/job-\d+@/i)) return true;
+    // Allow emails sent to job-XXXX aliases (both job number format and UUID format)
+    if (lowerTo.match(/job-[\w-]+@/i)) return true;
     
     return false;
   }
@@ -233,20 +233,35 @@ class GmailReplyService {
         return false;
       }
 
-      // STEP 1: Try to extract job number from TO address (job-XXXX@jobs.treemarkables.co.nz)
+      // STEP 1: Try to extract job identifier from TO address (job-XXXX@jobs.treemarkables.co.nz)
+      // Supports both job number format (job-3682@) and UUID format (job-8004ff8a-1618-4d18-...@)
       let job = null;
       let customer = null;
       
       if (email.to) {
-        const jobNumberMatch = email.to.match(/job-(\d+)@/i);
-        if (jobNumberMatch) {
-          const jobNumber = jobNumberMatch[1];
-          console.log(`📧 ✅ Extracted job number ${jobNumber} from TO address: ${email.to}`);
+        const jobAliasMatch = email.to.match(/job-([\w-]+)@/i);
+        if (jobAliasMatch) {
+          const jobIdentifier = jobAliasMatch[1];
+          console.log(`📧 ✅ Extracted job identifier "${jobIdentifier}" from TO address: ${email.to}`);
           
-          // Find job by job number
-          job = await db.query.jobs.findFirst({
-            where: eq(jobs.jobNumber, jobNumber)
-          });
+          // Check if it's a numeric job number or a UUID
+          const isJobNumber = /^\d+$/.test(jobIdentifier);
+          
+          if (isJobNumber) {
+            // Find job by job number
+            job = await db.query.jobs.findFirst({
+              where: eq(jobs.jobNumber, jobIdentifier)
+            });
+          } else {
+            // Find job by UUID (database ID)
+            job = await db.query.jobs.findFirst({
+              where: eq(jobs.id, jobIdentifier)
+            });
+          }
+          
+          if (job) {
+            console.log(`📧 ✅ Found job #${job.jobNumber} (matched by ${isJobNumber ? 'job number' : 'UUID'})`);
+          }
           
           if (job) {
             // Get customer separately
