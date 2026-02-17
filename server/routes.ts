@@ -12477,18 +12477,62 @@ Transcription: ${transcriptText}`;
       const cleanedBody = cleanEmailBody(actualText, html);
       
       // Extract job/quote reference from TO address or subject line
-      // Check TO address first for patterns like: job-3316@jobs.treemarkables.co.nz
-      const toAddressJobMatch = to?.match(/job-(\d+)@/i);
+      // Check TO address first for patterns like: job-3316@jobs.treemarkables.co.nz or job-UUID@jobs.treemarkables.co.nz
+      const toAddressJobMatch = to?.match(/job-([\w-]+)@/i);
+      
+      // Check if the TO address match is a UUID (not a job number) and look up by ID
+      let jobFromUuid = null;
+      if (toAddressJobMatch && !/^\d+$/.test(toAddressJobMatch[1])) {
+        const jobUuid = toAddressJobMatch[1];
+        console.log(`🔍 Looking up job by UUID from TO address: ${jobUuid}`);
+        jobFromUuid = await storage.getJob(jobUuid);
+      }
       
       // Extract job/quote reference from subject line (use actualSubject for forwarded emails)
       // Matches patterns like: "Job 12345", "QTE-3326", "#12345", "Quote QTE-3326"
-      const jobNumberMatch = toAddressJobMatch || actualSubject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
+      const jobNumberFromTo = (toAddressJobMatch && /^\d+$/.test(toAddressJobMatch[1])) ? toAddressJobMatch : null;
+      const jobNumberMatch = jobNumberFromTo || actualSubject?.match(/\b(?:Job\s*#?\s*)?(\d{3,})\b/i);
       const quoteNumberMatch = actualSubject?.match(/\b(?:Quote\s*#?\s*)?(QTE-\d+)\b/i);
       
       let jobFound = false;
       
+      // Try UUID match first (from TO address with UUID format)
+      if (jobFromUuid) {
+        const job = jobFromUuid;
+        console.log(`✅ Found job ${job.jobNumber} by UUID - creating diary entry`);
+        await storage.createJobDiaryEntry({
+          jobId: job.id,
+          entryType: 'email',
+          title: `Email from ${actualFromName || actualFromEmail}`,
+          description: cleanedBody,
+          content: actualSubject || '',
+          authorName: actualFromName || actualFromEmail,
+          authorRole: 'customer',
+          metadata: {
+            emailAddress: actualFromEmail || actualFrom,
+            ...(isForwardingAddress && { forwardedBy })
+          }
+        });
+        await storage.updateJob(job.id, { lastActivityAt: new Date() });
+        jobFound = true;
+        console.log(`📝 Email logged to job ${job.jobNumber} diary (matched by UUID)`);
+        
+        try {
+          const notificationHelper = await import('./services/notificationHelper.js');
+          await notificationHelper.createNotification({
+            type: 'email_reply',
+            title: `Email reply on Job #${job.jobNumber}`,
+            message: `${actualFromName || actualFromEmail} replied to Job #${job.jobNumber}`,
+            jobId: job.id,
+            metadata: { emailAddress: actualFromEmail || actualFrom }
+          });
+        } catch (notifError) {
+          console.error('Failed to create email reply notification:', notifError);
+        }
+      }
+      
       // Try to find job by job number
-      if (jobNumberMatch) {
+      if (!jobFound && jobNumberMatch) {
         const jobNumber = jobNumberMatch[1];
         console.log(`🔍 Looking up job by number: ${jobNumber}`);
         const job = await storage.getJobByJobNumber(jobNumber);
