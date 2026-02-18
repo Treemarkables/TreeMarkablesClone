@@ -152,6 +152,7 @@ export function GlobalJobCard({
   const [sidebarTab, setSidebarTab] = useState("details");
   const [showMobileActions, setShowMobileActions] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
+  const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
   const [selectedCustomerName, setSelectedCustomerName] = useState("");
   const [hasUserSelectedCustomer, setHasUserSelectedCustomer] = useState(false); // Track if user explicitly selected customer
@@ -3308,7 +3309,7 @@ The Treemarkables Team`;
                                   </Button>
                                 </div>
                               ) : (
-                              <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                              <Popover open={mobileNamePopoverOpen} onOpenChange={setMobileNamePopoverOpen}>
                                 <PopoverTrigger asChild>
                                   <button className="font-bold text-gray-900 text-xl text-left flex items-center gap-1 hover:text-blue-600 transition-colors">
                                     {selectedCustomerName}
@@ -3325,7 +3326,7 @@ The Treemarkables Team`;
                                       onClick={() => {
                                         setEditingNameValue(selectedCustomerName);
                                         setIsEditingCustomerName(true);
-                                        setCustomerSearchOpen(false);
+                                        setMobileNamePopoverOpen(false);
                                       }}
                                     >
                                       <Pencil className="h-3.5 w-3.5 mr-2" />
@@ -3354,6 +3355,7 @@ The Treemarkables Team`;
                                                 form.setValue('customerId', customer.id);
                                                 setSelectedCustomerName(customer.name);
                                                 setCustomerSearchValue('');
+                                                setMobileNamePopoverOpen(false);
                                                 if (customer.address && !form.getValues('address')) {
                                                   form.setValue('address', customer.address);
                                                 }
