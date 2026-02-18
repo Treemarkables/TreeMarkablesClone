@@ -3308,7 +3308,7 @@ The Treemarkables Team`;
                                   </Button>
                                 </div>
                               ) : (
-                              <Popover>
+                              <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                                 <PopoverTrigger asChild>
                                   <button className="font-bold text-gray-900 text-xl text-left flex items-center gap-1 hover:text-blue-600 transition-colors">
                                     {selectedCustomerName}
@@ -3325,6 +3325,7 @@ The Treemarkables Team`;
                                       onClick={() => {
                                         setEditingNameValue(selectedCustomerName);
                                         setIsEditingCustomerName(true);
+                                        setCustomerSearchOpen(false);
                                       }}
                                     >
                                       <Pencil className="h-3.5 w-3.5 mr-2" />
