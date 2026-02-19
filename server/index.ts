@@ -202,15 +202,24 @@ app.use((req, res, next) => {
   next();
 });
 
-// Add process-level error handlers for better debugging
 process.on('uncaughtException', (error) => {
-  log(`Uncaught Exception: ${error.message}`, "error");
+  const msg = error.message || '';
+  if (msg.includes('Connection terminated') || msg.includes('terminating connection') || msg.includes('connection unexpectedly')) {
+    log(`Database connection interrupted (recovering): ${msg}`, "error");
+    return;
+  }
+  log(`Uncaught Exception: ${msg}`, "error");
   console.error('Stack trace:', error.stack);
   process.exit(1);
 });
 
-process.on('unhandledRejection', (reason, promise) => {
-  log(`Unhandled Promise Rejection: ${reason}`, "error");
+process.on('unhandledRejection', (reason: any, promise) => {
+  const msg = reason?.message || String(reason);
+  if (msg.includes('Connection terminated') || msg.includes('terminating connection') || msg.includes('connection unexpectedly')) {
+    log(`Database connection promise rejected (recovering): ${msg}`, "error");
+    return;
+  }
+  log(`Unhandled Promise Rejection: ${msg}`, "error");
   console.error('Promise that was rejected:', promise);
   process.exit(1);
 });
