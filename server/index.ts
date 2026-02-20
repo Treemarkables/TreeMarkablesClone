@@ -202,20 +202,41 @@ app.use((req, res, next) => {
   next();
 });
 
+function isRecoverableDatabaseError(msg: string): boolean {
+  const patterns = [
+    'Connection terminated',
+    'terminating connection',
+    'connection unexpectedly',
+    'Cannot set property message of',
+    'ErrorEvent',
+    '_handleErrorWhileConnecting',
+    '_handleErrorEvent',
+    'ECONNRESET',
+    'ECONNREFUSED',
+    'ETIMEDOUT',
+    'socket hang up',
+    'neonConfig',
+    '@neondatabase/serverless',
+  ];
+  return patterns.some(p => msg.includes(p));
+}
+
 process.on('uncaughtException', (error) => {
   const msg = error.message || '';
-  if (msg.includes('Connection terminated') || msg.includes('terminating connection') || msg.includes('connection unexpectedly')) {
-    log(`Database connection interrupted (recovering): ${msg}`, "error");
+  const stack = error.stack || '';
+  if (isRecoverableDatabaseError(msg) || isRecoverableDatabaseError(stack)) {
+    log(`Database connection error (recovering): ${msg}`, "error");
     return;
   }
   log(`Uncaught Exception: ${msg}`, "error");
-  console.error('Stack trace:', error.stack);
+  console.error('Stack trace:', stack);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason: any, promise) => {
   const msg = reason?.message || String(reason);
-  if (msg.includes('Connection terminated') || msg.includes('terminating connection') || msg.includes('connection unexpectedly')) {
+  const stack = reason?.stack || '';
+  if (isRecoverableDatabaseError(msg) || isRecoverableDatabaseError(stack)) {
     log(`Database connection promise rejected (recovering): ${msg}`, "error");
     return;
   }
