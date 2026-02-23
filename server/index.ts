@@ -328,14 +328,20 @@ function startNotificationQueueWorker() {
       throw error;
     }
 
-    // Error handling middleware
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
-
-      log(`Request error: ${status} - ${message}`, "error");
-      res.status(status).json({ message });
-      throw err;
+      if (!res.headersSent) {
+        const errMsg = err?.message || '';
+        const errStack = err?.stack || '';
+        if (isRecoverableDatabaseError(errMsg) || isRecoverableDatabaseError(errStack)) {
+          log(`Transient DB error in request (503): ${errMsg}`, "error");
+          res.status(503).json({ message: "Service temporarily unavailable, please retry" });
+          return;
+        }
+        const status = err.status || err.statusCode || 500;
+        const message = err.message || "Internal Server Error";
+        log(`Request error: ${status} - ${message}`, "error");
+        res.status(status).json({ message });
+      }
     });
 
     // CRITICAL: Force no-cache for PWA files BEFORE any file serving middleware
