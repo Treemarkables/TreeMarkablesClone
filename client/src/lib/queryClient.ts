@@ -66,12 +66,20 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
-      refetchInterval: 30000, // Auto-refresh every 30 seconds for data sync (auth opts out explicitly)
-      refetchOnWindowFocus: "always", // Always refresh on tab focus for instant cross-device sync
-      staleTime: 5000, // Keep data fresh for 5 seconds to reduce duplicate requests
-      retry: false,
-      gcTime: Infinity, // Keep data in cache forever (even after errors)
-      networkMode: 'online', // Only run queries when online
+      refetchInterval: 30000,
+      refetchOnWindowFocus: "always",
+      staleTime: 5000,
+      retry: (failureCount, error) => {
+        if (failureCount >= 3) return false;
+        const msg = (error as Error)?.message || '';
+        if (msg.includes('503') || msg.includes('temporarily unavailable') || msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+          return true;
+        }
+        return false;
+      },
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
+      gcTime: Infinity,
+      networkMode: 'online',
     },
     mutations: {
       retry: false,

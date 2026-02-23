@@ -511,8 +511,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Fetch jobs from backend API with pagination
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
     queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`],
-    retry: 3,
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 10000),
   });
 
   // Calculate if there are more jobs to load
