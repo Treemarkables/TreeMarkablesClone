@@ -944,6 +944,25 @@ export function GlobalJobCard({
       // Longer timeout prevents auto-save trigger when cache refreshes
       setTimeout(() => {
         isLoadingDataRef.current = false;
+        // RC3 FIX: If the user typed something during the loading window (tracked in changedFieldsRef),
+        // trigger a deferred auto-save now that the loading guard has cleared
+        if (hasUserChangedRef.current && changedFieldsRef.current.size > 0) {
+          console.log('💾 Deferred auto-save triggered for changes made during loading window:', Array.from(changedFieldsRef.current));
+          const formData = form.getValues();
+          const changedData: Record<string, any> = {};
+          for (const field of changedFieldsRef.current) {
+            changedData[field] = (formData as any)[field];
+          }
+          apiRequest('PUT', `/api/jobs/${editingJob?.id}`, changedData).then(() => {
+            console.log('✅ Deferred auto-save completed');
+            form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+            hasUserChangedRef.current = false;
+            changedFieldsRef.current.clear();
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          }).catch((err) => {
+            console.error('❌ Deferred auto-save failed:', err);
+          });
+        }
       }, 500);
     }
   // Use editingJobCustomer?.id instead of the full object to prevent form reset on customer data refetch
@@ -1002,12 +1021,16 @@ export function GlobalJobCard({
     let timeoutId: NodeJS.Timeout;
     
     const subscription = form.watch((values, { name }) => {
-      if (isLoadingDataRef.current) {
-        console.log('🔄 Auto-save skipped - still loading data');
+      if (!name || !autoSaveFieldsRef.current.has(name)) {
         return;
       }
-      
-      if (!name || !autoSaveFieldsRef.current.has(name)) {
+
+      if (isLoadingDataRef.current) {
+        // RC3 FIX: Still track the change even during loading — the deferred auto-save
+        // in the setTimeout above will pick it up once the loading guard clears
+        console.log(`🔄 Auto-save deferred during load - tracking field: ${name}`);
+        changedFieldsRef.current.add(name);
+        hasUserChangedRef.current = true;
         return;
       }
       
@@ -1045,10 +1068,30 @@ export function GlobalJobCard({
           hasUserChangedRef.current = false;
           changedFieldsRef.current.clear();
           
+          // RC2 FIX: Update form baseline so isDirty reflects changes since last save,
+          // not since the form first opened. Prevents stale dirty-state triggering resets.
+          form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+          
+          // RC4 FIX: Optimistically update the cache with the saved values BEFORE invalidating,
+          // so any background refetch that fires immediately sees the correct email/fields.
+          queryClient.setQueryData(['/api/jobs', editingJob.id], (old: any) => {
+            if (!old) return old;
+            const jobData = old?.data ?? old;
+            const updated = { ...jobData, ...changedData };
+            return old?.data ? { ...old, data: updated } : updated;
+          });
           queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         } catch (error) {
           console.error('❌ Auto-save failed:', error);
-          hasUserChangedRef.current = false;
+          // RC5 FIX: Show toast so user knows their changes weren't saved.
+          // Do NOT clear changedFieldsRef — preserves fields for next retry attempt.
+          const failedFields = Array.from(changedFieldsRef.current);
+          toast({
+            title: 'Changes not saved',
+            description: `Could not save: ${failedFields.join(', ')}. Will retry automatically.`,
+            variant: 'destructive',
+          });
+          hasUserChangedRef.current = true; // Keep true so next watch triggers a retry
         } finally {
           setIsAutoSaving(false);
         }
@@ -1131,6 +1174,15 @@ export function GlobalJobCard({
       // Switch to edit mode after creating the job - stay in modal
       if (newJob?.data?.id) {
         const jobId = newJob.data.id;
+        
+        // RC1 FIX: Immediately populate the React Query cache with the full job data
+        // (including jobContactEmail) BEFORE switching to edit mode.
+        // Without this, the form reset useEffect fires before the refetch completes
+        // and sees undefined for jobContactEmail, wiping what the user typed.
+        if (newJob.data) {
+          queryClient.setQueryData(['/api/jobs', jobId], newJob.data);
+        }
+        
         setCreatedJobId(jobId);
         setInternalMode('edit');
         setSelectedEquipment([]); // Reset equipment selection for next create
@@ -2187,7 +2239,12 @@ The Treemarkables Team`;
       const names = formData.newCustomerName.split(' ');
       formData.jobContactFirstName = formData.jobContactFirstName || names[0] || '';
       formData.jobContactLastName = formData.jobContactLastName || names.slice(1).join(' ') || '';
-      formData.jobContactEmail = formData.newCustomerEmail || '';
+      // RC1 FIX: Only overwrite jobContactEmail if newCustomerEmail has a real value.
+      // Previously this set jobContactEmail = '' when newCustomerEmail was empty, wiping
+      // any email the user had typed in the jobContactEmail field directly.
+      if (formData.newCustomerEmail) {
+        formData.jobContactEmail = formData.newCustomerEmail;
+      }
       formData.jobContactPhone = formData.newCustomerPhone || '';
     }
     
@@ -5809,7 +5866,8 @@ The Treemarkables Team`;
         <EmailComposerModal
           isOpen={isEmailComposerOpen}
           onClose={() => setIsEmailComposerOpen(false)}
-          job={{...editingJob, billingContactEmail: formData?.billingContactEmail || editingJob?.billingContactEmail}}
+          job={{...editingJob, billingContactEmail: formData?.billingContactEmail || editingJob?.billingContactEmail, jobContactEmail: formData?.jobContactEmail || editingJob?.jobContactEmail}}
+          customEmail={emailContext !== 'invoice' ? (formData?.jobContactEmail || editingJob?.jobContactEmail || undefined) : undefined}
           customer={emailContext === 'invoice' && editingJob ? {
             ...selectedCustomer,
             billingContactEmail: formData?.billingContactEmail || editingJob.billingContactEmail,

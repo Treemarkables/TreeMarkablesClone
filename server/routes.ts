@@ -3387,6 +3387,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
       
+      // RC6 FIX: Early protection for jobContactEmail BEFORE Zod validation runs.
+      // Zod partial() can drop or transform fields — this reads raw req.body to catch erasures.
+      // If the request sends an empty/null email but the DB has a real value, strip it from the
+      // update so the database value is naturally preserved by the partial update pattern.
+      const emailFieldsToProtect = ['jobContactEmail', 'billingContactEmail'];
+      for (const emailField of emailFieldsToProtect) {
+        const rawVal = req.body[emailField];
+        const isEmpty = rawVal === '' || rawVal === null || rawVal === undefined;
+        if (isEmpty && emailField in req.body) {
+          console.log(`🔒 RC6: Stripping empty "${emailField}" from PUT body to preserve DB value`);
+          delete processedBody[emailField];
+        }
+      }
+      
       // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
       const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
                             'otherCosts', 'grossMargin', 'profitMargin', 'laborHours', 'hourlyRate', 

@@ -50,6 +50,28 @@ This application is a comprehensive business management platform for Treemarkabl
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories.
 - **Call Recording**: VoIP call recording with AI transcription via Hero Internet NZ, including sentiment analysis and call summaries, with auto-matching to customers/jobs and embedded audio players in job diary.
 
+## Auto-Save Architecture (GlobalJobCard)
+The job form uses a multi-layered save system to ensure data is never silently lost:
+
+### How Auto-Save Works
+- `form.watch()` tracks field changes in `changedFieldsRef` (only auto-save-eligible fields)
+- Changes are debounced 1.5 seconds then sent as a partial PUT to `/api/jobs/:id` (only changed fields)
+- After a successful save, `form.reset(values, { keepValues: true })` advances the baseline so `isDirty` reflects changes since the last save, not since page load
+
+### Email Field Protection (Multi-Layer Defense)
+Fields like `jobContactEmail` and `billingContactEmail` have special protection at every layer:
+
+1. **Client — handleSave create mode**: `formData.jobContactEmail` is only overwritten from `newCustomerEmail` if `newCustomerEmail` has a real value — prevents blanking the field when customer email is empty
+2. **Client — createJobMutation.onSuccess**: Immediately populates the React Query cache with the full job response (including email) BEFORE switching to edit mode, so the form reset useEffect never sees undefined
+3. **Client — cache optimistic update**: On auto-save success, `queryClient.setQueryData` updates the cache immediately with the saved values before `invalidateQueries` fires, preventing race conditions
+4. **Client — loading window capture**: Field edits made during the 500ms form-load guard are tracked and saved via a deferred auto-save once the guard clears
+5. **Client — auto-save failure**: Toast notification shown listing which fields weren't saved; `changedFieldsRef` preserved for retry
+6. **Server — RC6 early guard**: In the PUT route, any empty `jobContactEmail` or `billingContactEmail` is stripped from `processedBody` BEFORE Zod validation, so Zod can never accidentally allow an empty value through
+7. **Server — existing safeguard**: Post-validation check preserves non-empty DB values if the request tries to overwrite with empty (defense-in-depth)
+
+### Proposal Email Extraction
+`EmailComposerModal` receives `customEmail` prop with the live form value for `jobContactEmail`, so proposal/quote emails are always pre-populated from the most current form state, even if the cache is stale.
+
 ## External Dependencies
 - **Database & Validation**: `drizzle-orm`, `drizzle-kit`, `@neondatabase/serverless`, `zod`
 - **Email**: Resend (for sending), Gmail IMAP (for receiving/reply capture), `imap`, `mailparser`
