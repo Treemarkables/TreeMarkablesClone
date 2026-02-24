@@ -235,40 +235,41 @@ export default function JHAAssessment() {
   const addCustomHazard = () => {
     if (!customHazardName.trim()) {
       toast({
-        title: "Error",
-        description: "Please enter a hazard name",
+        title: "Hazard name required",
+        description: "Please enter a name for the hazard before adding it",
         variant: "destructive"
       });
       return;
     }
 
+    // Use whatever controls the user has entered; filter empty strings.
+    // If nothing was entered, use a placeholder so the hazard can still be added
+    // and the user can fill in proper controls in the hazard detail section.
     const validControls = customControls.filter(c => c.trim());
-    if (validControls.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please add at least one control measure",
-        variant: "destructive"
-      });
-      return;
-    }
+    const finalControls = validControls.length > 0 ? validControls : ["To be determined"];
 
     const customId = `custom-${Date.now()}`;
     const newHazard = {
       hazardTemplateId: customId,
       hazardName: customHazardName.trim(),
       initialRisk: 2,
-      selectedControls: validControls,
+      selectedControls: finalControls,
       residualRisk: 1,
       responsiblePerson: "",
-      riskControl: validControls[0]
+      riskControl: finalControls[0]
     };
 
-    form.setValue("selectedHazards", [...selectedHazards, newHazard]);
+    form.setValue("selectedHazards", [...(selectedHazards || []), newHazard]);
     
     // Reset form
     setCustomHazardName("");
     setCustomControls([""]);
     setShowCustomHazardForm(false);
+
+    toast({
+      title: "Custom hazard added",
+      description: `"${customHazardName.trim()}" has been added. You can update the control measures below.`,
+    });
   };
 
   const toggleControl = (hazardId: number | string, controlId: number | string) => {
