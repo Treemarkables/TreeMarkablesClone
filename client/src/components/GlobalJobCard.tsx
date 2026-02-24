@@ -2589,22 +2589,6 @@ The Treemarkables Team`;
             
             {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
             <div className="flex items-center gap-3 sm:gap-4">
-              {/* Auto-save status - Hide on mobile */}
-              {mode === 'edit' && (
-                <div className="hidden sm:flex text-xs text-gray-500 items-center gap-1.5">
-                  {isAutoSaving ? (
-                    <>
-                      <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
-                      <span>Saving...</span>
-                    </>
-                  ) : lastAutoSaveTime ? (
-                    <>
-                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
-                      <span>Saved</span>
-                    </>
-                  ) : null}
-                </div>
-              )}
               
               {/* Actions Menu - Mobile only (hidden in inline/split-screen mode) */}
               {!renderInline && (
