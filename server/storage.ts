@@ -5553,7 +5553,10 @@ class DatabaseStorage implements IStorage {
       templates.map(async (template) => {
         const controlMeasures = await db.select()
           .from(schema.jhaControlMeasureTemplates)
-          .where(eq(schema.jhaControlMeasureTemplates.hazardTemplateId, template.id))
+          .where(and(
+            eq(schema.jhaControlMeasureTemplates.hazardTemplateId, template.id),
+            eq(schema.jhaControlMeasureTemplates.isActive, true)
+          ))
           .orderBy(schema.jhaControlMeasureTemplates.sortOrder);
         
         return {
