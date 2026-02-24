@@ -1112,6 +1112,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     const sorted = uniqueJobs
       .sort((a, b) => {
+        // When searching, rank by relevance first then by time
+        if (searchQuery.trim()) {
+          const query = searchQuery.toLowerCase().trim();
+          const scoreJob = (job: JobAssignment) => {
+            const name = job.customerName?.toLowerCase() || '';
+            if (name.startsWith(query)) return 4;
+            if (name.includes(query)) return 3;
+            const addr = job.address?.toLowerCase() || '';
+            const svc = job.serviceType?.toLowerCase() || '';
+            if (addr.includes(query) || svc.includes(query)) return 2;
+            return 1; // matched description or jobId
+          };
+          const diff = scoreJob(b) - scoreJob(a);
+          if (diff !== 0) return diff;
+        }
         // Sort by start time (earliest first)
         const timeA = new Date(a.startTime).getTime();
         const timeB = new Date(b.startTime).getTime();
