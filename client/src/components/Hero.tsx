@@ -28,7 +28,8 @@ export default function Hero() {
           <h1
             className="text-white mb-6 font-bold whitespace-nowrap overflow-hidden text-[13px]"
             style={{ fontSize: 'clamp(10px, 2.5vw, 36px)' }}
-          >Gisborne's Number 1 Arborist & Tree Removal Company</h1>
+          >Gisborne's Number 1 Arborist
+           & Tree Removal Company</h1>
 
         </div>
       </div>
