@@ -417,10 +417,14 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`📋 Found ${invoiceItems.length} line item(s) in invoice`);
           
           for (const item of invoiceItems) {
+            const qty = Number(item.quantity) || 1;
+            const unitAmt = Number(item.rate || item.unitPrice) > 0
+              ? Number(item.rate || item.unitPrice)
+              : (Number(item.total || item.amount || item.totalPrice) || 0) / qty;
             invoiceLineItems.push({
               description: item.description || 'Tree Service',
-              quantity: Number(item.quantity) || 1,
-              unitAmount: Number(item.rate || item.unitPrice) || 0,
+              quantity: qty,
+              unitAmount: unitAmt,
               accountCode,
               taxType,
             });
@@ -442,10 +446,16 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
             console.log(`📋 Found ${allLineItems.length} total line item(s) for proposal ${proposal.id}`);
             
             for (const item of allLineItems) {
+              if (item.selected === false) continue;
+              const qty = Number(item.quantity) || 1;
+              // Use unitPrice if set, otherwise derive from totalPrice (lump-sum entries)
+              const unitAmt = Number(item.unitPrice) > 0
+                ? Number(item.unitPrice)
+                : (Number(item.totalPrice) || 0) / qty;
               invoiceLineItems.push({
                 description: item.description || 'Tree Service',
-                quantity: Number(item.quantity) || 1,
-                unitAmount: Number(item.unitPrice) || 0,
+                quantity: qty,
+                unitAmount: unitAmt,
                 accountCode,
                 taxType,
               });
@@ -512,8 +522,13 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent'`);
         }
         
-        // Create diary entry for Xero send - use invoice amount (not job.totalAmount which is often $0)
-        const invoiceTotal = invoice?.amount ? parseFloat(invoice.amount.toString()).toFixed(2) : (job.totalAmount || '0.00');
+        // Create diary entry for Xero send - prefer Xero's confirmed total, then local invoice amount
+        const xeroTotal = xeroInvoice.total ?? xeroInvoice.subTotal;
+        const invoiceTotal = xeroTotal !== undefined && xeroTotal !== null
+          ? parseFloat(xeroTotal.toString()).toFixed(2)
+          : invoice?.amount
+            ? parseFloat(invoice.amount.toString()).toFixed(2)
+            : (job.totalAmount || '0.00');
         await storage.createJobDiaryEntry({
           jobId,
           entryType: 'note',
