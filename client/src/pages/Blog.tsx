@@ -9,6 +9,15 @@ import { Link } from "wouter";
 
 const blogPosts = [
   {
+    slug: "hazardous-tree-removal-gisborne-5-signs-dangerous-tree",
+    title: "5 Signs Your Tree Is a Hazard and Needs Removing",
+    excerpt: "Worried a tree on your Gisborne property is a hazard? Learn 5 critical signs of a dangerous tree, from dead branches to root decay. Contact Treemarkables for a free assessment.",
+    date: "February 25, 2026",
+    author: "Treemarkables Team",
+    readTime: "9 min read",
+    image: "/hazardous-tree-gisborne.jpg"
+  },
+  {
     slug: "why-regular-tree-pruning-protects-your-home-gisborne",
     title: "Why Regular Tree Pruning Protects Your Home in Gisborne",
     excerpt: "Gisborne's mild climate and coastal winds create conditions where branches can grow quickly and pose risks to homes. Learn why regular pruning is essential preventive maintenance.",

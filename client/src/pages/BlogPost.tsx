@@ -9,6 +9,93 @@ import { Link } from "wouter";
 
 // Blog post data - in a real app this would come from a CMS or database
 const blogPosts = {
+  "hazardous-tree-removal-gisborne-5-signs-dangerous-tree": {
+    title: "5 Signs Your Tree Is a Hazard and Needs Removing",
+    excerpt: "Worried a tree on your Gisborne property is a hazard? Learn 5 critical signs of a dangerous tree, from dead branches to root decay. Contact Treemarkables for a free hazardous tree removal assessment.",
+    date: "February 25, 2026",
+    author: "Treemarkables Team",
+    readTime: "9 min read",
+    image: "/hazardous-tree-gisborne.jpg",
+    content: `
+      <p>As a homeowner in Gisborne, your trees are a beautiful and valuable asset. They provide shade in the summer, enhance your property's appeal, and connect you with the natural beauty of the Tairāwhiti region. However, there comes a time when a beloved tree can become a significant liability. A hazardous tree is one with structural defects that make it likely to fail, in whole or in part, posing a risk to people or property.</p>
+
+      <p>Recognising the warning signs early is crucial. Ignoring them can lead to catastrophic damage to your home, vehicle, or even cause serious injury. This guide will walk you through five critical signs that indicate you may need hazardous tree removal in Gisborne.</p>
+
+      <h2>1. Large, Dead or Hanging Branches (Widow-Makers)</h2>
+
+      <p>One of the most obvious signs of a hazardous tree is the presence of large, dead branches, often called "widow-makers." These are branches that have died off but remain attached to the tree. They are incredibly dangerous because they can break and fall at any moment, without any warning from wind or rain.</p>
+
+      <p>What to look for:</p>
+      <ul>
+        <li>Branches with no leaves or buds during the growing season.</li>
+        <li>Branches that have lost their bark.</li>
+        <li>Large, heavy branches that are cracked or appear weakly attached.</li>
+      </ul>
+
+      <p>If you spot widow-makers in the canopy, it is a clear signal that the tree requires immediate attention from a qualified arborist for safe, professional hazardous tree removal in Gisborne.</p>
+
+      <h2>2. Trunk Damage and Cavities</h2>
+
+      <p>The trunk is the backbone of the tree. Any sign of significant damage or decay compromises its entire structure. Look for deep cracks, splits, or large cavities in the trunk. While some surface-level damage may be harmless, deep wounds can allow rot and disease to penetrate the core of the tree, weakening it from the inside out.</p>
+
+      <p>What to look for:</p>
+      <ul>
+        <li><strong>Vertical Cracks:</strong> Deep splits that run down the length of the trunk.</li>
+        <li><strong>Cavities or Hollows:</strong> Large holes in the trunk where wood has decayed.</li>
+        <li><strong>Missing Bark:</strong> Large patches of missing bark can indicate a dead section of the tree.</li>
+      </ul>
+
+      <p>If more than 30% of the trunk is damaged or hollow, the tree is generally considered a significant hazard and a professional assessment is essential.</p>
+
+      <h2>3. Leaning and Root Problems</h2>
+
+      <p>A sudden or significant lean is a major red flag. While many trees have a natural lean towards sunlight, a change in the angle of the trunk indicates root failure or ground instability. This is particularly dangerous after heavy rain or storms when the ground is saturated.</p>
+
+      <p>What to look for:</p>
+      <ul>
+        <li>A noticeable new lean that wasn't there before.</li>
+        <li>Heaving soil or exposed roots on the side of the tree opposite the lean.</li>
+        <li>Fungi, such as mushrooms, growing around the base of the tree, which is a strong indicator of root rot.</li>
+      </ul>
+
+      <p>A tree with compromised roots can fall without warning. If you notice any of these signs, it is critical to call for an expert in hazardous tree removal in Gisborne immediately.</p>
+
+      <h2>4. Included Bark at Branch Unions</h2>
+
+      <p>Included bark is one of the most commonly overlooked — yet most dangerous — structural defects in trees. It occurs when bark becomes trapped between two co-dominant stems or branches as they grow together, rather than forming a strong, interlocking wood union. The result is a V-shaped crotch that looks solid from the outside but is fundamentally weak and prone to splitting, often with catastrophic force.</p>
+
+      <p>This is a defect that an untrained eye will almost always miss, which is exactly why it is so dangerous. Many homeowners in Gisborne have trees with included bark that appear perfectly healthy right up until the moment they fail — often during summer storms or under the weight of heavy autumn foliage.</p>
+
+      <p>What to look for:</p>
+      <ul>
+        <li>A tight, V-shaped fork between two major stems or branches, rather than a wide, U-shaped union.</li>
+        <li>A visible ridge of bark running down into the crotch between the two stems, rather than a raised bark ridge running across it.</li>
+        <li>Cracks or splits forming at the base of the fork, particularly after wind or rain.</li>
+      </ul>
+
+      <p>If your tree has included bark at a major union — especially one overhanging your home, driveway, or outdoor living area — it is a serious structural hazard. A qualified arborist can assess whether the defect can be managed with cabling and bracing, or whether hazardous tree removal in Gisborne is the safest course of action.</p>
+
+      <h2>5. Proximity to Targets</h2>
+
+      <p>Finally, a tree's risk is also determined by its location. A decaying tree in the middle of a large, empty field is not nearly as hazardous as a healthy tree looming over your house, your driveway, or your children's play area. This is what arborists call the "target."</p>
+
+      <p>Assess the risk:</p>
+      <ul>
+        <li>Is the tree within falling distance of your home, garage, or power lines?</li>
+        <li>Are there large branches overhanging your deck, patio, or a neighbour's property?</li>
+      </ul>
+
+      <p>If a tree has any of the warning signs listed above AND it is located near a high-value target, the risk is significantly elevated. In these situations, proactive removal is not just a precaution — it is a necessary safety measure.</p>
+
+      <h2>Your Trusted Partner for Hazardous Tree Removal in Gisborne</h2>
+
+      <p>At Treemarkables, we are your local experts in identifying and safely removing hazardous trees. Our qualified arborists have the training, experience, and equipment to handle even the most challenging tree removals in the Gisborne and East Coast region.</p>
+
+      <p>Don't wait for a storm to find out if your tree is a hazard. If you have noticed any of these five signs, or if you simply have a gut feeling that something is not right, it is always best to get a professional opinion.</p>
+
+      <p>Contact Treemarkables today for a free, no-obligation assessment of your trees. We will provide you with an honest evaluation and a clear plan to ensure the safety of your property and family. Call us on 027 216 6882 or contact us online to schedule your consultation.</p>
+    `
+  },
   "why-regular-tree-pruning-protects-your-home-gisborne": {
     title: "Why Regular Tree Pruning Protects Your Home in Gisborne",
     excerpt: "Gisborne's mild climate and coastal winds create conditions where branches can grow quickly and pose risks to homes. Learn why regular pruning is essential preventive maintenance.",
