@@ -15988,6 +15988,37 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const validatedData = updateProposalLineItemSchema.parse(req.body);
       const lineItem = await storage.updateProposalLineItem(req.params.id, validatedData);
       
+      // Recalculate and sync the proposal's subtotal + totalAmount from all its line items
+      if (lineItem.proposalId) {
+        try {
+          const allLineItems = await storage.getProposalLineItemsByProposal(lineItem.proposalId);
+          const newSubtotal = allLineItems
+            .filter((i: any) => i.selected !== false)
+            .reduce((sum: number, i: any) => {
+              const price = parseFloat(i.totalPrice || '0') || 0;
+              return sum + (i.priceIncludesTax ? price / 1.15 : price);
+            }, 0);
+          const gst = newSubtotal * 0.15;
+          const newTotal = newSubtotal + gst;
+          await storage.updateProposal(lineItem.proposalId, {
+            subtotal: parseFloat(newSubtotal.toFixed(2)),
+            totalAmount: parseFloat(newTotal.toFixed(2)),
+          });
+          console.log(`✅ Recalculated proposal ${lineItem.proposalId} subtotal: $${newSubtotal.toFixed(2)} exc GST`);
+
+          // Also sync the linked job's price fields
+          const proposal = await storage.getProposal(lineItem.proposalId);
+          if (proposal?.jobId && newSubtotal > 0) {
+            await storage.updateJob(proposal.jobId, {
+              subtotal: newSubtotal.toFixed(2),
+              totalAmount: newTotal.toFixed(2),
+            });
+          }
+        } catch (syncErr) {
+          console.error('⚠️ Failed to recalculate proposal subtotal:', syncErr);
+        }
+      }
+
       res.json({
         success: true,
         data: lineItem,
