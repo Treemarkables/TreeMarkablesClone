@@ -20,16 +20,18 @@ export default function Hero() {
           alt="Treemarkables arborist team at work in Gisborne" 
           className="w-full h-full object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/20 to-black/10"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-black/10"></div>
       </div>
       {/* Content */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-16 md:pt-20">
-        <div className="max-w-4xl">
+        <div className="max-w-3xl">
           <h1
-            className="text-white mb-6 font-bold whitespace-nowrap overflow-hidden text-[13px]"
-            style={{ fontSize: 'clamp(10px, 2.5vw, 36px)' }}
-          >Gisborne's Number 1 Arborist
-           & Tree Removal Company</h1>
+            className="text-white mb-6 font-extrabold leading-tight tracking-tight"
+            style={{
+              fontSize: 'clamp(36px, 6vw, 72px)',
+              textShadow: '0 2px 24px rgba(0,0,0,0.55)',
+            }}
+          >Gisborne's Number 1<br />Arborist & Tree Removal</h1>
 
         </div>
       </div>
