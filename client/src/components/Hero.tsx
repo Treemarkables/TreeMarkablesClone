@@ -30,6 +30,7 @@ export default function Hero() {
             style={{
               fontSize: 'clamp(36px, 6vw, 72px)',
               textShadow: '0 2px 24px rgba(0,0,0,0.55)',
+              fontFamily: "'TT Norms Pro', sans-serif",
             }}
           >Gisborne's Number 1<br />Arborist & Tree Removal</h1>
 
