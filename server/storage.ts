@@ -69,7 +69,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, sql, inArray } from "drizzle-orm";
+import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
 
@@ -1040,7 +1040,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async getAllCustomers(): Promise<Customer[]> {
-    return await db.select().from(schema.customers).orderBy(desc(schema.customers.createdAt));
+    return await db.select().from(schema.customers).orderBy(asc(schema.customers.name));
   }
 
   async clearAllCustomers(): Promise<number> {
@@ -1054,7 +1054,7 @@ class DatabaseStorage implements IStorage {
       .where(
         sql`${schema.customers.name} ILIKE ${searchTerm} OR ${schema.customers.email} ILIKE ${searchTerm}`
       )
-      .orderBy(desc(schema.customers.createdAt));
+      .orderBy(asc(schema.customers.name));
   }
 
   // ========================================

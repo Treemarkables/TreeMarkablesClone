@@ -1665,6 +1665,22 @@ export function GlobalJobCard({
     }
   };
 
+  const deepSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (deepSearchTimerRef.current) clearTimeout(deepSearchTimerRef.current);
+    if (customerSearchValue.trim().length >= 2 && customerSearchOpen) {
+      deepSearchTimerRef.current = setTimeout(() => {
+        performDeepSearch();
+      }, 400);
+    } else {
+      setDeepSearchResults([]);
+    }
+    return () => {
+      if (deepSearchTimerRef.current) clearTimeout(deepSearchTimerRef.current);
+    };
+  }, [customerSearchValue, customerSearchOpen]);
+
   const handleSaveCustomerName = async (newName: string) => {
     if (!newName.trim() || !editingJob?.customerId) return;
     
@@ -3243,7 +3259,7 @@ The Treemarkables Team`;
                                           </Button>
                                         </FormControl>
                                       </PopoverTrigger>
-                                      <PopoverContent className="w-[300px] p-0" align="start">
+                                      <PopoverContent className="w-[300px] p-0" align="start" onWheel={(e) => e.stopPropagation()}>
                                         <Command>
                                           <CommandInput 
                                             placeholder="Search customers..." 
@@ -3357,7 +3373,7 @@ The Treemarkables Team`;
                                     <Pencil className="h-3.5 w-3.5 opacity-50" />
                                   </button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-[280px] p-0" align="start">
+                                <PopoverContent className="w-[280px] p-0" align="start" onWheel={(e) => e.stopPropagation()}>
                                   <div className="p-2 border-b">
                                     <Button
                                       type="button"
@@ -3387,7 +3403,6 @@ The Treemarkables Team`;
                                           .filter(customer => 
                                             customer.name?.toLowerCase().includes(customerSearchValue.toLowerCase())
                                           )
-                                          .slice(0, 15)
                                           .map((customer) => (
                                             <CommandItem
                                               key={customer.id}
@@ -3599,7 +3614,7 @@ The Treemarkables Team`;
                                 <Pencil className="ml-2 h-4 w-4 opacity-50" />
                               </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start">
+                            <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start" onWheel={(e) => e.stopPropagation()}>
                               <div className="p-2 border-b">
                                 <Button
                                   type="button"
@@ -3713,7 +3728,7 @@ The Treemarkables Team`;
                                       </Button>
                                     </FormControl>
                                   </PopoverTrigger>
-                                  <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start">
+                                  <PopoverContent className="w-[300px] md:w-[400px] p-0" align="start" onWheel={(e) => e.stopPropagation()}>
                                     <Command>
                                       <div className="flex items-center gap-1 p-2 border-b">
                                         <CommandInput 
@@ -4418,6 +4433,7 @@ The Treemarkables Team`;
                             {/* Multi-select button for equipment */}
                             <div className="w-[200px]">
                               <Button
+                                type="button"
                                 variant="outline"
                                 size="sm"
                                 className="h-8 text-xs w-full justify-between"

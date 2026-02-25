@@ -989,6 +989,7 @@ export function JobDiarySection({
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">Job Diary</h3>
             <div className="flex gap-1">
               <Button 
+                type="button"
                 size="icon" 
                 variant="ghost"
                 onClick={handleRefresh}
@@ -997,7 +998,7 @@ export function JobDiarySection({
               >
                 <RefreshCw className="w-3 h-3" />
               </Button>
-              <Button size="icon" variant="ghost" className="h-7 w-7">
+              <Button type="button" size="icon" variant="ghost" className="h-7 w-7">
                 <Settings className="w-3 h-3" />
               </Button>
             </div>
@@ -1011,15 +1012,20 @@ export function JobDiarySection({
               ref={quickNoteInputRef}
               placeholder="Add note..."
               className="pl-9 pr-9 h-9 text-sm"
-              onKeyPress={(e) => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  createNoteMutation.mutate({ content: e.currentTarget.value.trim() });
-                  e.currentTarget.value = '';
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (e.currentTarget.value.trim()) {
+                    createNoteMutation.mutate({ content: e.currentTarget.value.trim() });
+                    e.currentTarget.value = '';
+                  }
                 }
               }}
               data-testid="input-quick-note"
             />
             <Button 
+              type="button"
               size="icon" 
               variant="ghost" 
               className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
@@ -1028,6 +1034,7 @@ export function JobDiarySection({
             </Button>
           </div>
           <Button 
+            type="button"
             size="icon"
             className="h-9 w-20 bg-primary hover:bg-primary/90 text-primary-foreground"
             onClick={() => {
@@ -1749,6 +1756,7 @@ export function JobDiarySection({
       <div className="flex-shrink-0 p-2 border-t bg-gray-50 dark:bg-gray-900">
         <div className="flex gap-1 flex-wrap">
           <Button 
+            type="button"
             size="sm" 
             variant="outline"
             onClick={() => setActiveComposer('sms')}
@@ -1760,6 +1768,7 @@ export function JobDiarySection({
             SMS
           </Button>
           <Button 
+            type="button"
             size="sm" 
             variant="outline"
             onClick={() => setActiveComposer('email')}
@@ -1770,7 +1779,7 @@ export function JobDiarySection({
             <Mail className="w-3 h-3 mr-1" />
             Email
           </Button>
-          <Button size="sm" variant="outline" data-testid="button-call-customer" className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap">
+          <Button type="button" size="sm" variant="outline" data-testid="button-call-customer" className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap">
             <Phone className="w-3 h-3 mr-1" />
             Call
           </Button>
