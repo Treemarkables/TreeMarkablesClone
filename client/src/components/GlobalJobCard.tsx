@@ -2755,7 +2755,7 @@ The Treemarkables Team`;
                 size="sm" 
                 className="h-7 sm:h-9 px-2 sm:px-3 md:px-4 text-xs bg-orange-500 text-white hover:bg-orange-600 border-0 font-semibold transition-all" 
                 onClick={handleSave}
-                disabled={isSaving || createJobMutation.isPending || updateJobMutation.isPending || isAutoSaving}
+                disabled={isSaving || createJobMutation.isPending || updateJobMutation.isPending}
                 data-testid="button-save"
               >
                 {(isSaving || createJobMutation.isPending || updateJobMutation.isPending) ? 'Saving...' : 'Save'}
