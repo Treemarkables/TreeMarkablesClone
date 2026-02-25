@@ -4608,14 +4608,31 @@ The Treemarkables Team`;
                                 <span className="text-xs text-gray-500 font-medium">Job Price</span>
                                 <div className="flex items-center gap-1">
                                   {(() => {
-                                    // Priority: proposal subtotal > line items > job totalAmount > quote amount
+                                    // Priority: proposal subtotal > proposal sections line items > job line items > job totalAmount > quote amount
                                     // Proposal subtotal is already exc GST (before tax), so use directly
-                                    if (jobProposalResponse?.data?.[0]?.subtotal) {
-                                      const subtotal = parseFloat(jobProposalResponse.data[0].subtotal) || 0;
+                                    const proposalSubtotalStored = parseFloat(jobProposalResponse?.data?.[0]?.subtotal || '0') || 0;
+                                    
+                                    // Also try summing line items from proposal sections (handles stale subtotal field)
+                                    let proposalSectionsTotal = 0;
+                                    const proposalSections = jobProposalResponse?.data?.[0]?.sections || [];
+                                    if (Array.isArray(proposalSections) && proposalSections.length > 0) {
+                                      proposalSections.forEach((section: any) => {
+                                        (section.lineItems || []).forEach((item: any) => {
+                                          if (item.selected !== false) {
+                                            const price = parseFloat(item.totalPrice || '0') || 0;
+                                            proposalSectionsTotal += item.priceIncludesTax ? price / 1.15 : price;
+                                          }
+                                        });
+                                      });
+                                    }
+                                    
+                                    const proposalSubtotal = proposalSubtotalStored > 0 ? proposalSubtotalStored : proposalSectionsTotal;
+                                    
+                                    if (proposalSubtotal > 0) {
                                       return (
                                         <>
                                           <span className="text-lg font-semibold text-gray-900">
-                                            ${subtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
+                                            ${proposalSubtotal.toLocaleString('en-NZ', { minimumFractionDigits: 2 })}
                                           </span>
                                           <span className="text-xs text-gray-500">exc GST</span>
                                         </>
