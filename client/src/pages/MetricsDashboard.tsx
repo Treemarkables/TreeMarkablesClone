@@ -946,7 +946,6 @@ export default function MetricsDashboard() {
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Business Health</h2>
-              <span className="text-sm text-gray-500">(Last {dateRangePreset === "7" ? "7" : dateRangePreset === "30" ? "30" : dateRangePreset === "90" ? "90" : "30"} Days)</span>
             </div>
             
             {/* Top Row - 4 Key Metrics */}
