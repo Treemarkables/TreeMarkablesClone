@@ -62,7 +62,7 @@ export default function Home() {
       ]
     },
     "sameAs": [
-      "https://www.facebook.com/treemarkables"
+      "https://www.facebook.com/TreemarkablesGisborne"
     ],
     "priceRange": "$$"
   };
