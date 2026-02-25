@@ -23,9 +23,9 @@ export default function Hero() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/20 to-black/10"></div>
       </div>
       {/* Content */}
-      <div className="relative z-10 max-w-6xl mx-auto px-6 pt-32 md:pt-36">
-        <div className="max-w-2xl">
-          <h1 className="md:text-5xl lg:text-6xl text-white mb-6 font-bold text-[40px]">Gisborne's number 1 tree care company</h1>
+      <div className="relative z-10 max-w-6xl mx-auto px-6 pt-16 md:pt-20">
+        <div className="max-w-4xl">
+          <h1 className="md:text-5xl lg:text-6xl text-white mb-6 font-bold text-[40px] whitespace-nowrap">Gisborne's number 1 tree care company</h1>
 
         </div>
       </div>
