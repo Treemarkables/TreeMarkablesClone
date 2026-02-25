@@ -16,7 +16,7 @@ export default function Hero() {
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
-          src="/team-photo-new.png" 
+          src="/team-photo.jpg" 
           alt="Treemarkables arborist team at work in Gisborne" 
           className="w-full h-full object-cover"
         />
