@@ -131,7 +131,7 @@ export default function StumpGrinding() {
   return (
     <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
       <SEO 
-        title="Stump Grinding Gisborne – Fast & Tidy Stump Removal"
+        title="Stump Grinding Gisborne – Complete Stump Removal"
         description="Eliminate unsightly stumps with our powerful stump grinding service. Serving Gisborne, Wairoa and rural properties. Book your stump removal today."
         keywords="stump grinding Gisborne, fast stump removal, tidy stump grinding, Wairoa stump removal, rural stump grinding, powerful stump grinder, book stump removal"
         ogTitle="Stump Grinding Gisborne – Fast & Tidy Stump Removal"

@@ -32,7 +32,7 @@ export default function Blog() {
   return (
     <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
       <SEO 
-        title="Tree Care Blog - Expert Tips from Gisborne Arborists | Treemarkables"
+        title="Tree Care Blog – Gisborne Arborist Tips | Treemarkables"
         description="Expert tree care advice from Gisborne's professional arborists. Get tips on tree pruning, removal, and maintenance for your property's safety and health."
         keywords="tree care blog, arborist tips, Gisborne tree care, tree pruning advice, tree removal tips, professional tree care"
         ogTitle="Tree Care Blog - Expert Tips from Gisborne Arborists"

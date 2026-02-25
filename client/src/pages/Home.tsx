@@ -70,7 +70,7 @@ export default function Home() {
   return (
     <div className="bg-background pt-16 md:pt-20 lg:pt-24">
       <SEO 
-        title="Treemarkables – Qualified Arborists in Gisborne & East Coast"
+        title="Tree Removal & Arborist Services Gisborne | Treemarkables"
         description="Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast. Get a free quote today."
         keywords="arborists Gisborne, tree removal Gisborne, tree pruning, stump grinding, hedge trimming, East Coast tree services, Wairoa tree removal, qualified arborist NZ"
         ogTitle="Treemarkables – Qualified Arborists in Gisborne & East Coast"
