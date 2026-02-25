@@ -503,23 +503,34 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         const xeroInvoice = invoiceResponse.body.invoices![0];
         console.log(`✅ Invoice created in Xero: ${xeroInvoice.invoiceID}`);
         
-        // Update job with Xero invoice ID and mark as completed
+        // Capture confirmed totals from Xero response
+        const confirmedSubtotal = xeroInvoice.subTotal !== undefined ? parseFloat(xeroInvoice.subTotal.toString()) : null;
+        const confirmedTotal = xeroInvoice.total !== undefined ? parseFloat(xeroInvoice.total.toString()) : null;
+
+        // Update job with Xero invoice ID, mark as completed, and write back confirmed amounts
         await storage.updateJob(jobId, {
           status: 'completed',
           completedDate: new Date(),
           xeroInvoiceId: xeroInvoice.invoiceID || undefined,
           xeroStatus: 'sent',
           sentToXeroDate: new Date(),
+          ...(confirmedSubtotal !== null && confirmedSubtotal > 0 && {
+            subtotal: confirmedSubtotal.toFixed(2),
+            totalAmount: (confirmedTotal ?? confirmedSubtotal).toFixed(2),
+          }),
         });
         
-        // Update the invoice status to 'sent' so it disappears from Pending tab
+        // Update the invoice status to 'sent' and write back confirmed amount
         if (invoice) {
           await storage.updateInvoice(invoice.id, {
             status: 'sent',
             xeroInvoiceId: xeroInvoice.invoiceID || undefined,
             xeroSyncedAt: new Date(),
+            ...(confirmedTotal !== null && confirmedTotal > 0 && {
+              amount: confirmedTotal.toFixed(2),
+            }),
           });
-          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent'`);
+          console.log(`✅ Updated invoice ${invoice.invoiceNumber} status to 'sent', amount: $${confirmedTotal}`);
         }
         
         // Create diary entry for Xero send - prefer Xero's confirmed total, then local invoice amount
