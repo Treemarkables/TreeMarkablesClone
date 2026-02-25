@@ -22,13 +22,10 @@ export default function Hero() {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-black/30 via-black/20 to-black/10"></div>
       </div>
-
       {/* Content */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-32 md:pt-36">
         <div className="max-w-2xl">
-          <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6">
-            We're just a bunch of Gizzy guys and we climb trees
-          </h1>
+          <h1 className="md:text-5xl lg:text-6xl font-bold text-white mb-6 text-[40px]">Gisborne's number tree care company</h1>
 
         </div>
       </div>
