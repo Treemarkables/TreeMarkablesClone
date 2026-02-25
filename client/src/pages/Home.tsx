@@ -35,18 +35,35 @@ export default function Home() {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
     "name": "Treemarkables",
-    "description": "Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast.",
+    "description": "Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast",
     "url": "https://www.treemarkables.co.nz",
     "telephone": "027-216-6882",
     "email": "quotes@treemarkables.nz",
+    "image": "https://www.treemarkables.co.nz/logo.jpg",
+    "logo": "https://www.treemarkables.co.nz/logo.jpg",
     "address": {
       "@type": "PostalAddress",
       "addressLocality": "Gisborne",
       "addressRegion": "Gisborne",
       "addressCountry": "NZ"
     },
-    "areaServed": ["Gisborne", "Wairoa", "East Coast", "Poverty Bay"],
-    "serviceType": ["Tree Removal", "Tree Pruning", "Stump Grinding", "Hedge Trimming"],
+    "areaServed": ["Gisborne", "Wairoa", "East Coast", "Tairāwhiti"],
+    "openingHours": "Mo-Su 00:00-24:00",
+    "hasOfferCatalog": {
+      "@type": "OfferCatalog",
+      "name": "Tree Services",
+      "itemListElement": [
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Tree Removal" } },
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Tree Pruning" } },
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Stump Grinding" } },
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Hedge Trimming" } },
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Emergency Tree Removal" } },
+        { "@type": "Offer", "itemOffered": { "@type": "Service", "name": "Mulch Deliveries" } }
+      ]
+    },
+    "sameAs": [
+      "https://www.facebook.com/treemarkables"
+    ],
     "priceRange": "$$"
   };
 
