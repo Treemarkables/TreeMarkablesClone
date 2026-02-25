@@ -25,7 +25,7 @@ export default function Hero() {
       {/* Content */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-32 md:pt-36">
         <div className="max-w-2xl">
-          <h1 className="md:text-5xl lg:text-6xl font-bold text-white mb-6 text-[40px]">Gisborne's number tree care company</h1>
+          <h1 className="md:text-5xl lg:text-6xl text-white mb-6 font-bold text-[40px]">Gisborne's number 1 tree care company</h1>
 
         </div>
       </div>
