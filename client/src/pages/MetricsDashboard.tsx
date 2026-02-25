@@ -942,106 +942,100 @@ export default function MetricsDashboard() {
           )}
 
           {/* Business Health Section */}
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Business Health</h2>
-            </div>
-            
-            {/* Top Row - 4 Key Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Revenue */}
-              <div 
-                className="bg-blue-50 rounded-xl p-4 cursor-pointer hover:bg-blue-100 transition-colors"
-                onClick={() => setRevenueBreakdownOpen(true)}
-                data-testid="card-total-revenue"
-              >
-                <p className="text-xs font-medium text-blue-600 mb-1">Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(dashboardStats?.totalRevenue || 0).replace('NZ$', '$')}</p>
-                {getTrendIndicator(true, 16.5)}
+          <Card data-testid="card-total-revenue">
+            <CardHeader className="pb-2">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-base font-semibold">Business Health</CardTitle>
               </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {(() => {
+                const totalRevenue = dashboardStats?.totalRevenue || 0;
+                const netProfit = xeroPL?.netProfit || totalRevenue * 0.15;
+                const labour = totalRevenue * 0.40;
+                const materials = totalRevenue * 0.30;
+                const overhead = Math.max(0, totalRevenue - netProfit - labour - materials);
+                const jobsWonPct = quoteAnalytics?.totalQuotes
+                  ? Math.round((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100)
+                  : 0;
 
-              {/* New Leads */}
-              <div className="bg-green-50 rounded-xl p-4" data-testid="card-active-leads">
-                <p className="text-xs font-medium text-green-600 mb-1">New Leads</p>
-                <p className="text-2xl font-bold text-gray-900">{dashboardStats?.totalLeads || 0}</p>
-                {getTrendIndicator(false, 4.1)}
-              </div>
+                const pieData = totalRevenue > 0
+                  ? [
+                      { name: 'Net Profit', value: netProfit, color: '#22c55e' },
+                      { name: 'Labour', value: labour, color: '#3b82f6' },
+                      { name: 'Materials', value: materials, color: '#f97316' },
+                      { name: 'Overhead', value: overhead, color: '#a855f7' },
+                    ]
+                  : [{ name: 'No data', value: 1, color: '#e5e7eb' }];
 
-              {/* Net Profit */}
-              <div className="bg-orange-50 rounded-xl p-4" data-testid="card-net-profit">
-                <p className="text-xs font-medium text-orange-600 mb-1">Net Profit</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(xeroPL?.netProfit || (dashboardStats?.totalRevenue || 0) * 0.15).replace('NZ$', '$')}</p>
-                {getTrendIndicator(true, 39.4)}
-              </div>
+                const stats = [
+                  { label: 'Revenue', value: formatCurrency(totalRevenue).replace('NZ$', '$'), color: 'text-gray-900', dot: null },
+                  { label: 'Net Profit', value: formatCurrency(netProfit).replace('NZ$', '$'), color: 'text-green-600', dot: '#22c55e' },
+                  { label: 'Labour (est.)', value: formatCurrency(labour).replace('NZ$', '$'), color: 'text-blue-600', dot: '#3b82f6' },
+                  { label: 'Materials (est.)', value: formatCurrency(materials).replace('NZ$', '$'), color: 'text-orange-600', dot: '#f97316' },
+                  { label: 'Avg Job Value', value: formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$'), color: 'text-gray-900', dot: null },
+                  { label: 'Quotes Sent', value: String(quoteAnalytics?.totalQuotes || 0), color: 'text-gray-900', dot: null },
+                  { label: 'Jobs Won', value: `${jobsWonPct}%`, color: 'text-green-600', dot: null },
+                  { label: 'New Leads', value: String(dashboardStats?.totalLeads || 0), color: 'text-gray-900', dot: null },
+                ];
 
-              {/* Avg Job Value */}
-              <div 
-                className="bg-purple-50 rounded-xl p-4 cursor-pointer hover:bg-purple-100 transition-colors"
-                onClick={() => setAvgJobValueBreakdownOpen(true)}
-                data-testid="card-avg-quote"
-              >
-                <p className="text-xs font-medium text-purple-600 mb-1">Avg Job Value</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$')}</p>
-                {getTrendIndicator(true, 2.5)}
-              </div>
-            </div>
+                return (
+                  <div className="flex flex-col sm:flex-row items-center gap-6">
+                    {/* Donut Chart */}
+                    <div className="relative flex-shrink-0" style={{ width: 180, height: 180 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={pieData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={56}
+                            outerRadius={82}
+                            paddingAngle={totalRevenue > 0 ? 2 : 0}
+                            dataKey="value"
+                            strokeWidth={0}
+                          >
+                            {pieData.map((entry, index) => (
+                              <Cell key={index} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value: number, name: string) => [
+                              name === 'No data' ? '—' : formatCurrency(value).replace('NZ$', '$'),
+                              name,
+                            ]}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      {/* Centre label */}
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <p className="text-xs text-gray-500 leading-none">Revenue</p>
+                        <p className="text-sm font-bold text-gray-900 leading-tight mt-0.5">
+                          {formatCurrency(totalRevenue).replace('NZ$', '$')}
+                        </p>
+                      </div>
+                    </div>
 
-            {/* Second Row - Pipeline Metrics */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Leads */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <Users className="h-4 w-4 text-blue-500" />
-                  <p className="text-xs font-medium text-gray-600">Leads</p>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-xl font-bold text-gray-900">{dashboardStats?.totalLeads || 0}</p>
-                  {getTrendIndicator(true, 15)}
-                </div>
-              </div>
-
-              {/* Quotes Sent */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200" data-testid="card-quotes-sent">
-                <div className="flex items-center gap-2 mb-1">
-                  <FileText className="h-4 w-4 text-gray-500" />
-                  <p className="text-xs font-medium text-gray-600">Quotes Sent</p>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-xl font-bold text-gray-900">{quoteAnalytics?.totalQuotes || 0}</p>
-                  <span className="text-xs text-gray-500">{((quoteAnalytics?.acceptedQuotes || 0) / Math.max(quoteAnalytics?.totalQuotes || 1, 1) * 100).toFixed(1)}%</span>
-                  {getTrendIndicator(false, 11.3)}
-                </div>
-              </div>
-
-              {/* Jobs Won */}
-              <div 
-                className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
-                onClick={() => setQuoteBreakdownOpen(true)}
-                data-testid="card-quote-acceptance"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                  <p className="text-xs font-medium text-gray-600">Jobs Won</p>
-                </div>
-                <div className="flex items-baseline gap-2">
-                  <p className="text-xl font-bold text-green-600">
-                    {quoteAnalytics?.totalQuotes ? ((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100).toFixed(0) : 0}%
-                  </p>
-                  {getTrendIndicator(true, 15)}
-                </div>
-              </div>
-
-              {/* Revenue per job */}
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <div className="flex items-center gap-2 mb-1">
-                  <DollarSign className="h-4 w-4 text-green-500" />
-                  <p className="text-xs font-medium text-gray-600">Revenue</p>
-                </div>
-                <p className="text-xl font-bold text-gray-900">{formatCurrency((dashboardStats?.totalRevenue || 0) / Math.max(dashboardStats?.totalLeads || 1, 1)).replace('NZ$', '$')}</p>
-              </div>
-            </div>
-          </div>
+                    {/* Stats list */}
+                    <div className="flex-1 w-full grid grid-cols-2 gap-x-6 gap-y-2.5">
+                      {stats.map((s) => (
+                        <div key={s.label} className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {s.dot && (
+                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.dot }} />
+                            )}
+                            <span className="text-xs text-gray-500 truncate">{s.label}</span>
+                          </div>
+                          <span className={`text-sm font-semibold ${s.color} flex-shrink-0`}>{s.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
 
           {/* Unconverted Quote Value Banner */}
           {staleQuotesCount > 0 && (
