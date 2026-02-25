@@ -25,7 +25,10 @@ export default function Hero() {
       {/* Content */}
       <div className="relative z-10 max-w-6xl mx-auto px-6 pt-16 md:pt-20">
         <div className="max-w-4xl">
-          <h1 className="text-white mb-6 font-bold whitespace-nowrap text-[2.8vw] md:text-[36px]">Gisborne's Number 1 Arborist & Tree Removal Company</h1>
+          <h1
+            className="text-white mb-6 font-bold whitespace-nowrap overflow-hidden"
+            style={{ fontSize: 'clamp(10px, 2.5vw, 36px)' }}
+          >Gisborne's Number 1 Arborist & Tree Removal Company</h1>
 
         </div>
       </div>
