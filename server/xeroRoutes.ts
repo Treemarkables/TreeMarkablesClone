@@ -429,6 +429,19 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
               taxType,
             });
           }
+
+          // Fallback: invoice exists with a total amount but no itemised lines
+          // (happens when a job is invoiced directly without a proposal or line-by-line breakdown)
+          if (invoiceLineItems.length === 0 && Number(invoice.amount) > 0) {
+            console.log(`💡 No invoice line items found — using invoice.amount ($${invoice.amount}) as single Xero line item`);
+            invoiceLineItems.push({
+              description: invoice.description || job.title || 'Tree Service',
+              quantity: 1,
+              unitAmount: Number(invoice.amount),
+              accountCode,
+              taxType,
+            });
+          }
         }
         
         // PRIORITY 2: Check for proposal line items if no invoice found
