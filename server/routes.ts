@@ -2773,6 +2773,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      // If job address is empty but newCustomerAddress was provided, carry it through.
+      // The new customer address field saves to the customer record; the job needs its own copy.
+      if (!processedBody.address && processedBody.newCustomerAddress) {
+        processedBody.address = processedBody.newCustomerAddress;
+        console.log('✅ Carried newCustomerAddress to job address:', processedBody.address);
+      }
+
       // Auto-generate job number if not provided
       if (!processedBody.jobNumber || processedBody.jobNumber.trim() === '') {
         processedBody.jobNumber = await storage.getNextJobNumber();
