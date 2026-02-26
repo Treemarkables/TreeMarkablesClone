@@ -1012,14 +1012,16 @@ export function ProposalBuilder({
   const initializeSmsForm = () => {
     const previewData = getPreviewData();
     const formData = form.getValues();
-    // Check customer phone first, then fall back to job contact phones (including mobile)
+    // Check customer phone first, then fall back to job contact phones (mobile takes priority over landline)
     const customerPhone = previewData.customer?.phone || 
+                          previewData.job?.jobContactMobile ||
                           previewData.job?.billingContactMobile ||
                           previewData.job?.jobContactPhone || 
                           previewData.job?.billingContactPhone ||
                           '';
     console.log('SMS phone lookup:', { 
       customerPhone: previewData.customer?.phone,
+      jobContactMobile: previewData.job?.jobContactMobile,
       billingMobile: previewData.job?.billingContactMobile,
       jobContactPhone: previewData.job?.jobContactPhone,
       billingPhone: previewData.job?.billingContactPhone,

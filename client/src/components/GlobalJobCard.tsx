@@ -3644,7 +3644,6 @@ The Treemarkables Team`;
                                       .filter(customer => 
                                         customer.name?.toLowerCase().includes(customerSearchValue.toLowerCase())
                                       )
-                                      .slice(0, 20)
                                       .map((customer) => (
                                         <CommandItem
                                           key={customer.id}
