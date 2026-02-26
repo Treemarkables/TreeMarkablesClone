@@ -704,6 +704,18 @@ export function JobDiarySection({
     return groups;
   }, [diaryEntries]);
 
+  // Function to handle opening invoices from diary entries
+  const handleOpenInvoice = (invoiceNumber: string) => {
+    if (onInvoiceClick) {
+      onInvoiceClick(invoiceNumber);
+    } else {
+      toast({
+        title: "Invoice",
+        description: `Invoice ${invoiceNumber} — open the Billing tab to view.`,
+      });
+    }
+  };
+
   // Function to handle opening proposals from diary entries
   const handleOpenProposal = async (proposalNumber: string) => {
     if (onProposalClick) {
@@ -1726,6 +1738,7 @@ export function JobDiarySection({
                               </Badge>
                             )}
                             <Button 
+                              type="button"
                               size="sm" 
                               variant="ghost" 
                               className="text-xs h-6 whitespace-nowrap"
@@ -1739,6 +1752,37 @@ export function JobDiarySection({
                             >
                               <ExternalLink className="w-3 h-3 mr-1" />
                               View Proposal
+                            </Button>
+                          </div>
+                        );
+                      })()}
+
+                      {(() => {
+                        // Show "View Invoice" button for invoice diary entries
+                        const invoiceNumber = entry.metadata?.invoiceNumber || entry.metadata?.documentNumber || docInfo?.number;
+                        const isInvoiceEntry = entry.metadata?.documentType === 'invoice' || docInfo?.type === 'invoice';
+                        if (!isInvoiceEntry || !invoiceNumber) return null;
+
+                        return (
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
+                            {entry.metadata?.status && (
+                              <Badge variant="outline" className="text-xs whitespace-nowrap">
+                                {entry.metadata.status}
+                              </Badge>
+                            )}
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-xs h-6 whitespace-nowrap"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenInvoice(invoiceNumber);
+                              }}
+                              data-testid="button-view-invoice"
+                            >
+                              <ExternalLink className="w-3 h-3 mr-1" />
+                              View Invoice
                             </Button>
                           </div>
                         );
