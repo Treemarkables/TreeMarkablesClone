@@ -2262,6 +2262,11 @@ The Treemarkables Team`;
         formData.jobContactEmail = formData.newCustomerEmail;
       }
       formData.jobContactPhone = formData.newCustomerPhone || '';
+      // Copy new customer address to job address if job address is empty.
+      // newCustomerAddress saves to the customer record but the job needs its own copy.
+      if (!formData.address && (formData as any).newCustomerAddress) {
+        formData.address = (formData as any).newCustomerAddress;
+      }
     }
     
     setIsSaving(true);
@@ -2328,6 +2333,9 @@ The Treemarkables Team`;
       formData.jobContactLastName = names.slice(1).join(' ') || '';
       formData.jobContactEmail = formData.newCustomerEmail || '';
       formData.jobContactPhone = formData.newCustomerPhone || '';
+      if (!formData.address && (formData as any).newCustomerAddress) {
+        formData.address = (formData as any).newCustomerAddress;
+      }
     }
     
     try {
@@ -2406,6 +2414,9 @@ The Treemarkables Team`;
       formData.jobContactLastName = names.slice(1).join(' ') || '';
       formData.jobContactEmail = formData.newCustomerEmail || '';
       formData.jobContactPhone = formData.newCustomerPhone || '';
+      if (!formData.address && (formData as any).newCustomerAddress) {
+        formData.address = (formData as any).newCustomerAddress;
+      }
     }
     
     setIsSaving(true);
