@@ -211,6 +211,9 @@ export const customers = pgTable("customers", {
   preferredContactMethod: text("preferred_contact_method"), // phone, email, sms
   tags: text("tags").array(), // loyal, difficult, high-value, etc
   isActive: boolean("is_active").default(true),
+  isVipMember: boolean("is_vip_member").default(false),
+  vipMemberSince: timestamp("vip_member_since"),
+  vipDiscountPercent: decimal("vip_discount_percent", { precision: 5, scale: 2 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
