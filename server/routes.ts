@@ -1894,7 +1894,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.put('/api/customers/:id', async (req: Request, res: Response) => {
     try {
-      const updates = insertCustomerSchema.partial().safeParse(req.body);
+      const body = { ...req.body };
+      if (body.vipMemberSince && typeof body.vipMemberSince === 'string') {
+        body.vipMemberSince = new Date(body.vipMemberSince);
+      }
+      const updates = insertCustomerSchema.partial().safeParse(body);
       if (!updates.success) {
         return res.status(400).json({ 
           success: false, 
