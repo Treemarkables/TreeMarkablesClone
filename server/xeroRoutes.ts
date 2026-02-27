@@ -660,6 +660,55 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
     }
   });
 
+  // Reset Xero sync by job ID — use this after voiding an invoice in Xero to re-enable sending
+  app.post('/api/xero/reset-job-sync', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.body;
+      if (!jobId) {
+        return res.status(400).json({ success: false, message: 'jobId is required' });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Clear Xero fields on the job
+      await storage.updateJob(jobId, {
+        xeroInvoiceId: null as any,
+        xeroStatus: null as any,
+        sentToXeroDate: null as any,
+      });
+
+      // Also reset any linked local invoice records so they can be re-synced
+      const linkedInvoices = await storage.getInvoicesByJob(jobId);
+      for (const invoice of linkedInvoices) {
+        await storage.updateInvoice(invoice.id, {
+          xeroInvoiceId: null as any,
+          xeroSyncedAt: null as any,
+          status: 'pending',
+        });
+      }
+
+      console.log(`🔄 Reset Xero sync for job ${job.jobNumber || jobId} (${linkedInvoices.length} invoice(s) reset)`);
+
+      await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'note',
+        title: 'Xero Sync Reset',
+        description: `Xero invoice sync was reset to allow re-sending. Previous Xero invoice should be voided before re-sending.`,
+        authorName: 'System',
+        authorRole: 'system',
+        metadata: { action: 'xero_sync_reset' }
+      });
+
+      res.json({ success: true, message: 'Xero sync reset. You can now re-send to Xero.' });
+    } catch (error) {
+      console.error('Error resetting job Xero sync:', error);
+      res.status(500).json({ success: false, message: 'Failed to reset Xero sync' });
+    }
+  });
+
   // Test Xero connection
   app.get('/api/xero/test', async (req: Request, res: Response) => {
     try {

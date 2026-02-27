@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -250,6 +250,7 @@ export function GlobalJobCard({
   
   // Booking cancellation state
   const [cancelBookingDialogOpen, setCancelBookingDialogOpen] = useState(false);
+  const [showXeroResetConfirm, setShowXeroResetConfirm] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
   
   // Description popup state
@@ -1361,6 +1362,30 @@ export function GlobalJobCard({
       toast({
         title: "Xero Error",
         description: "Failed to send invoice to Xero. Please try again.",
+        variant: "destructive"
+      });
+    }
+  });
+
+  const resetXeroSyncMutation = useMutation({
+    mutationFn: async () => {
+      if (!editingJob?.id) throw new Error('No job ID');
+      const response = await apiRequest('POST', '/api/xero/reset-job-sync', { jobId: editingJob.id });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob?.id] });
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices', editingJob?.id] });
+      toast({
+        title: "Xero Sync Reset",
+        description: "You can now re-send this invoice to Xero.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Reset Failed",
+        description: "Could not reset the Xero sync status. Please try again.",
         variant: "destructive"
       });
     }
@@ -2762,6 +2787,18 @@ The Treemarkables Team`;
                         : 'Send to Xero'}
                     </span>
                   </DropdownMenuItem>
+                  {editingJob?.xeroStatus === 'sent' && (
+                    <DropdownMenuItem
+                      onClick={() => setShowXeroResetConfirm(true)}
+                      disabled={resetXeroSyncMutation.isPending}
+                      className="py-3"
+                    >
+                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-md mr-3">
+                        <RotateCcw className="h-6 w-6 text-white" strokeWidth={2.5} />
+                      </div>
+                      <span className="font-medium">Re-send to Xero</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
               )}
@@ -3003,6 +3040,15 @@ The Treemarkables Team`;
                       ? 'Sent to Xero' 
                       : 'Send to Xero'}
                   </DropdownMenuItem>
+                  {editingJob?.xeroStatus === 'sent' && (
+                    <DropdownMenuItem
+                      onClick={() => setShowXeroResetConfirm(true)}
+                      disabled={resetXeroSyncMutation.isPending}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2 text-amber-600" />
+                      Re-send to Xero
+                    </DropdownMenuItem>
+                  )}
                   {editingJob?.status === 'completed' && (
                     <DropdownMenuItem onClick={handleRequestReviewClick}>
                       <Star className="w-4 h-4 mr-2" />
@@ -3108,6 +3154,15 @@ The Treemarkables Team`;
                       ? 'Sent to Xero' 
                       : 'Send to Xero'}
                   </DropdownMenuItem>
+                  {editingJob?.xeroStatus === 'sent' && (
+                    <DropdownMenuItem
+                      onClick={() => setShowXeroResetConfirm(true)}
+                      disabled={resetXeroSyncMutation.isPending}
+                    >
+                      <RotateCcw className="w-4 h-4 mr-2 text-amber-600" />
+                      Re-send to Xero
+                    </DropdownMenuItem>
+                  )}
                   {editingJob?.status === 'completed' && (
                     <DropdownMenuItem onClick={handleRequestReviewClick} data-testid="menu-item-request-review-mobile">
                       <Star className="w-4 h-4 mr-2" />
@@ -6674,6 +6729,33 @@ The Treemarkables Team`;
               className="bg-red-600 hover:bg-red-700"
             >
               Cancel Booking
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Xero Re-send Confirmation Dialog */}
+      <AlertDialog open={showXeroResetConfirm} onOpenChange={setShowXeroResetConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Re-send to Xero?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will unlock the Send to Xero button so you can send a new invoice.
+              <span className="block mt-2 font-medium text-amber-700">
+                Make sure you have already voided the existing invoice in Xero before continuing — otherwise you will end up with duplicate invoices.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowXeroResetConfirm(false);
+                resetXeroSyncMutation.mutate();
+              }}
+              className="bg-amber-600 hover:bg-amber-700"
+            >
+              Yes, Reset Xero Sync
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
