@@ -1612,24 +1612,33 @@ Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
         messages: [
           {
             role: "system",
-            content: `You are an expert at extracting customer information from text messages for a tree removal/arborist company in New Zealand.
-            
-Extract the following information from the message:
-- name: The customer's name (first name and/or last name)
-- phone: Phone number if mentioned (format as +64 XXX XXX XXXX if NZ number)
-- email: Email address if mentioned
-- address: Full street address in New Zealand
-- description: Any details about the tree work needed or other job-related information
+            content: `You are an expert at extracting customer contact information from messages and emails for a tree removal/arborist company in New Zealand called Treemarkables.
 
-Look for:
-- Names after "Thank you," or similar greetings
-- Email addresses (e.g. someone@example.com)
-- Addresses indicated by pin emoji 📍 or "at" or street names
-- NZ phone numbers (start with 02, 03, 04, 06, 07, 09, or +64)
-- Tree/garden work descriptions
+Extract the following information:
+- name: The REQUESTER's name — the person or company requesting the tree service (not Treemarkables staff). Check:
+  • Email signature block (lines at the end with a person's name, company, and phone)
+  • "For access contact" table field (may be a tenant, not the requester — prefer the sender's name)
+  • "From" line or opening greeting
+  • Property managers often sign off with their name, company, and number at the end
+- phone: The REQUESTER's phone number (from signature block or "contact" field). Format NZ numbers as 02X XXX XXXX.
+- email: The REQUESTER's email address (from signature block or From/Reply-To)
+- address: The SERVICE ADDRESS (the property where tree work is needed). Look for:
+  • Table fields labelled "Address", "Property address", "Location", or "at <address>"
+  • "67A Valley Rd", "2/2 Maclean Street" style NZ addresses
+  • Do NOT use business addresses from email signatures
+- description: Summary of the tree work requested. Combine:
+  • "Quote summary", "Quote details", "Service", or "Message" table fields
+  • Any description of the tree issue, size, or access notes
+  • Keep it concise but include the key service requested
 
-Return JSON format: { "name": string, "phone": string, "email": string, "address": string, "description": string }
-If a field cannot be determined, use an empty string.`
+Common email formats to handle:
+1. Property management table emails — have fields: Address, Due date, For access contact, Quote summary, Quote details. Sender info is in the signature block.
+2. Website contact forms — have fields: Name, Email, Phone, Message, How they heard.
+3. Plain SMS/email — informal text with embedded address, phone, description.
+4. Email signatures — "Crystal Merrilees\\nNew Zealand Property Managers\\n0212440626\\nnzpm@email.propertyme.com"
+
+Return JSON: { "name": string, "phone": string, "email": string, "address": string, "description": string }
+Use empty string if a field cannot be determined.`
           },
           {
             role: "user",
