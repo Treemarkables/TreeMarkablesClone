@@ -7,7 +7,7 @@ import { apiRequest } from "@/lib/queryClient";
 import {
   X, Plus, Upload, Image, Trash2, Eye, Download, Send, FileText,
   DollarSign, Calculator, Package, Clock, MapPin, User, Camera, 
-  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical, Check, Percent
+  Edit, Copy, Save, FolderPlus, GripVertical, Mail, MessageSquare, CheckCircle, Mic, MoreVertical, Check, Percent, Crown
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -122,6 +122,7 @@ export function ProposalBuilder({
     queryKey: ['/api/customers', activeCustomerId],
     enabled: !!activeCustomerId && isOpen,
   });
+  const vipCustomer = (customerData as any)?.success ? (customerData as any).data : null;
 
   // Component state - must be declared before useEffect hooks
   const [sections, setSections] = useState<ProposalSectionData[]>([
@@ -1415,6 +1416,33 @@ export function ProposalBuilder({
               </div>
             </DialogHeader>
           </div>
+
+          {/* VIP Member Banner */}
+          {vipCustomer?.isVipMember && (
+            <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-2.5 bg-amber-50 border-b border-amber-200">
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-amber-800">
+                  VIP Member — {vipCustomer.name?.split(' ')[0]} receives
+                  {vipCustomer.vipDiscountPercent ? ` a ${parseFloat(vipCustomer.vipDiscountPercent)}% discount` : ' a VIP discount'}
+                </span>
+              </div>
+              {vipCustomer.vipDiscountPercent && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="border-amber-300 text-amber-800 bg-white hover:bg-amber-100 flex-shrink-0"
+                  onClick={() => {
+                    form.setValue('discountAmount', parseFloat(vipCustomer.vipDiscountPercent) as any);
+                    form.setValue('discountType', 'percentage');
+                  }}
+                >
+                  Apply {parseFloat(vipCustomer.vipDiscountPercent)}% Discount
+                </Button>
+              )}
+            </div>
+          )}
 
           <div className="flex-1 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0 bg-muted/30">
             <Form {...form}>

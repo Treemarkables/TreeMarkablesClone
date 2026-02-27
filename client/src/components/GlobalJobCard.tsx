@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw, Crown } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -221,6 +221,7 @@ export function GlobalJobCard({
 
   // Watch customerId and update selectedCustomerName when it changes
   const watchedCustomerId = form.watch('customerId');
+  const selectedVipCustomer = customers.find(c => c.id === watchedCustomerId);
   useEffect(() => {
     if (watchedCustomerId && customers && customers.length > 0) {
       const customer = customers.find(c => c.id === watchedCustomerId);
@@ -3436,6 +3437,7 @@ The Treemarkables Team`;
                                 <PopoverTrigger asChild>
                                   <button className="font-bold text-gray-900 text-xl text-left flex items-center gap-1 hover:text-blue-600 transition-colors">
                                     {selectedCustomerName}
+                                    {selectedVipCustomer?.isVipMember && <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />}
                                     <Pencil className="h-3.5 w-3.5 opacity-50" />
                                   </button>
                                 </PopoverTrigger>
@@ -3533,6 +3535,14 @@ The Treemarkables Team`;
                                  currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
                               </Badge>
                             </div>
+
+                            {/* VIP Member Strip (Mobile) */}
+                            {selectedVipCustomer?.isVipMember && (
+                              <div className="flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md">
+                                <Crown className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                                <span>VIP Member{selectedVipCustomer.vipDiscountPercent ? ` — ${parseFloat(selectedVipCustomer.vipDiscountPercent)}% discount applies` : ''}</span>
+                              </div>
+                            )}
                             
                             {/* Row 2: Est time | Rate | Crew */}
                             <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
@@ -3677,6 +3687,7 @@ The Treemarkables Team`;
                                 className="p-0 h-auto font-bold text-gray-900 text-xl hover:bg-transparent hover:underline"
                               >
                                 {selectedCustomerName || 'Select Customer'}
+                                {selectedVipCustomer?.isVipMember && <Crown className="ml-1 h-4 w-4 text-amber-500 flex-shrink-0" />}
                                 <Pencil className="ml-2 h-4 w-4 opacity-50" />
                               </Button>
                             </PopoverTrigger>
@@ -3759,6 +3770,13 @@ The Treemarkables Team`;
                               </Command>
                             </PopoverContent>
                           </Popover>
+                          )}
+                          {/* VIP Member Strip (Desktop) */}
+                          {selectedVipCustomer?.isVipMember && (
+                            <div className="flex items-center gap-1.5 text-xs text-amber-800 bg-amber-50 border border-amber-200 px-2 py-1 rounded-md mt-1">
+                              <Crown className="h-3 w-3 text-amber-500 flex-shrink-0" />
+                              <span>VIP Member{selectedVipCustomer.vipDiscountPercent ? ` — ${parseFloat(selectedVipCustomer.vipDiscountPercent)}% discount applies` : ''}</span>
+                            </div>
                           )}
                         </div>
                       )}

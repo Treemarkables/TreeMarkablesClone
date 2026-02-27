@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle, Edit, X, Archive, Eye } from "lucide-react";
+import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle, Edit, X, Archive, Eye, Crown } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useForm } from "react-hook-form";
@@ -42,7 +44,8 @@ export default function Clients() {
   const [sortBy, setSortBy] = useState("name");
   const [activeTab, setActiveTab] = useState("list");
   const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<"all" | "active" | "historical" | "customers" | "potential_expenses">("all");
+  const [filterType, setFilterType] = useState<"all" | "active" | "historical" | "customers" | "potential_expenses" | "vip">("all");
+  const [vipDiscountInput, setVipDiscountInput] = useState<string>("10");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -166,6 +169,21 @@ export default function Clients() {
     }
   });
 
+  // VIP update mutation
+  const updateVipMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { isVipMember: boolean; vipMemberSince?: string | null; vipDiscountPercent?: string | null } }) => {
+      return await apiRequest('PUT', `/api/customers/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
+      toast({ title: "VIP Status Updated", description: "Customer VIP settings have been saved" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Update Failed", description: error.message || "Failed to update VIP status", variant: "destructive" });
+    }
+  });
+
   // Selection handlers
   const handleSelectCustomer = (customerId: string, checked: boolean) => {
     const newSelected = new Set(selectedCustomers);
@@ -247,6 +265,8 @@ export default function Clients() {
             return !isPotentialExpenseCompany(customer);
           case 'potential_expenses':
             return isPotentialExpenseCompany(customer);
+          case 'vip':
+            return !!customer.isVipMember;
           default:
             return true;
         }
@@ -410,6 +430,7 @@ export default function Clients() {
               <SelectItem value="historical">Historical Only</SelectItem>
               <SelectItem value="customers">Customers Only</SelectItem>
               <SelectItem value="potential_expenses">Potential Expenses</SelectItem>
+              <SelectItem value="vip">VIP Members</SelectItem>
             </SelectContent>
           </Select>
 
@@ -543,10 +564,16 @@ export default function Clients() {
                         </Avatar>
                         
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <h3 className="text-lg font-semibold text-gray-900" data-testid={`text-client-name-${customer.id}`}>
                               {customer.name}
                             </h3>
+                            {customer.isVipMember && (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                <Crown className="h-3 w-3 text-amber-500" />
+                                VIP
+                              </span>
+                            )}
                             <Badge className={tier.color}>{tier.label}</Badge>
                             {getCustomerStatusBadge(customer)}
                           </div>
@@ -802,6 +829,68 @@ export default function Clients() {
                     <p><strong>Total Jobs:</strong> {selectedCustomerDetails.totalJobs || 0}</p>
                   </div>
                 </div>
+              </div>
+
+              {/* VIP Membership Section */}
+              <div className="space-y-3 border rounded-lg p-4 bg-amber-50 border-amber-200">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Crown className="w-5 h-5 text-amber-500" />
+                    <h3 className="font-medium text-gray-900">VIP Membership</h3>
+                    {selectedCustomerDetails.isVipMember && selectedCustomerDetails.vipMemberSince && (
+                      <span className="text-xs text-amber-700">
+                        Member since {new Date(selectedCustomerDetails.vipMemberSince).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                  <Switch
+                    checked={!!selectedCustomerDetails.isVipMember}
+                    onCheckedChange={(checked) => {
+                      const now = new Date().toISOString();
+                      const vipSince = checked ? (selectedCustomerDetails.vipMemberSince ? String(selectedCustomerDetails.vipMemberSince) : now) : null;
+                      updateVipMutation.mutate({
+                        id: selectedCustomerDetails.id,
+                        data: {
+                          isVipMember: checked,
+                          vipMemberSince: vipSince,
+                          vipDiscountPercent: checked ? (selectedCustomerDetails.vipDiscountPercent || vipDiscountInput) : null,
+                        }
+                      });
+                    }}
+                    disabled={updateVipMutation.isPending}
+                  />
+                </div>
+                {selectedCustomerDetails.isVipMember && (
+                  <div className="flex items-center gap-3 pt-1">
+                    <Label className="text-sm text-gray-700 whitespace-nowrap">Discount %</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="50"
+                      step="0.5"
+                      defaultValue={selectedCustomerDetails.vipDiscountPercent ? parseFloat(selectedCustomerDetails.vipDiscountPercent).toString() : "10"}
+                      onChange={(e) => setVipDiscountInput(e.target.value)}
+                      className="w-24 h-8 text-sm"
+                      placeholder="10"
+                    />
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={updateVipMutation.isPending}
+                      onClick={() => {
+                        updateVipMutation.mutate({
+                          id: selectedCustomerDetails.id,
+                          data: {
+                            isVipMember: true,
+                            vipDiscountPercent: vipDiscountInput,
+                          }
+                        });
+                      }}
+                    >
+                      Save Discount
+                    </Button>
+                  </div>
+                )}
               </div>
 
               {/* Notes */}
