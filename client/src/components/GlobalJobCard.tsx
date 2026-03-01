@@ -6082,7 +6082,7 @@ The Treemarkables Team`;
               
               // Use existing invoice number if one exists, otherwise generate new one
               const existingInvoice = jobInvoiceResponse?.data?.[0];
-              const invoiceNumber = existingInvoice?.invoiceNumber || `INV-${editingJob?.jobNumber || '0000'}`;
+              const invoiceNumber = existingInvoice?.invoiceNumber || `${editingJob?.jobNumber || '0000'}`;
               
               return {
                 id: existingInvoice?.id || editingJob?.id,
@@ -6193,7 +6193,7 @@ The Treemarkables Team`;
             return {
               id: editingJob?.id,
               jobId: editingJob?.id,
-              invoiceNumber: `INV-${editingJob?.jobNumber || '0000'}`,
+              invoiceNumber: `${editingJob?.jobNumber || '0000'}`,
               customerId: editingJob?.customerId || '',
               amount: subtotal,
               totalAmount,

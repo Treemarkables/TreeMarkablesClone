@@ -504,6 +504,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           lineItems,
           date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
           dueDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 14 days from now
+          invoiceNumber: String(job.jobNumber || job.id), // Match invoice number to job number
           reference: `Job #${job.jobNumber || job.id}`,
           status: 'AUTHORISED' as any,
         };
