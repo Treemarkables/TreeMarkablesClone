@@ -2184,6 +2184,8 @@ export const invoices = pgTable("invoices", {
   status: text("status").notNull(), // pending, paid, overdue, cancelled
   items: jsonb("items").notNull(), // Array of {description, quantity, rate, amount}
   notes: text("notes"),
+  paidAt: timestamp("paid_at"), // When payment was received
+  paidNotes: text("paid_notes"), // Notes about how payment was received
   xeroInvoiceId: text("xero_invoice_id"), // Xero invoice ID for synced invoices
   xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
   createdAt: timestamp("created_at").defaultNow(),

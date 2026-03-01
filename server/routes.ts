@@ -6531,6 +6531,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         return res.status(404).json({ success: false, message: 'Invoice not found' });
       }
 
+      // Auto-set paidAt when status changes to 'paid' for the first time
+      if (updateData.status === 'paid' && invoice.status !== 'paid' && !updateData.paidAt) {
+        (updateData as any).paidAt = new Date();
+      }
+
       // Update invoice using proper updateInvoice method
       const updatedInvoice = await storage.updateInvoice(id, updateData);
 
