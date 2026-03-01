@@ -1505,4 +1505,103 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       });
     }
   });
+
+  // Sync payment status from Xero — checks real invoice status and updates local DB if paid
+  // POST /api/xero/sync-payment-status { jobId } — single job
+  // POST /api/xero/sync-payment-status { all: true } — bulk sync all jobs with a Xero invoice
+  app.post('/api/xero/sync-payment-status', async (req: Request, res: Response) => {
+    try {
+      const { jobId, all } = req.body;
+
+      const client = await getValidXeroClient();
+      if (!client) {
+        return res.status(400).json({ success: false, message: 'Not connected to Xero. Please connect first.' });
+      }
+
+      const connection = await storage.getActiveXeroConnection();
+      const tenantId = connection!.tenantId;
+
+      if (all) {
+        // Bulk sync — find all jobs that have a Xero invoice ID and aren't already marked paid
+        const allJobs = await storage.getJobs();
+        const xeroJobs = allJobs.filter((j: any) => j.xeroInvoiceId && j.xeroStatus !== 'paid');
+        let synced = 0;
+        let nowPaid = 0;
+
+        for (const job of xeroJobs) {
+          try {
+            const xeroResp = await client.accountingApi.getInvoice(tenantId, job.xeroInvoiceId!);
+            const xeroInvoice = xeroResp.body.invoices?.[0];
+            if (!xeroInvoice) continue;
+
+            if (xeroInvoice.status === 'PAID') {
+              const paidDate = xeroInvoice.fullyPaidOnDate ? new Date(xeroInvoice.fullyPaidOnDate) : new Date();
+              await storage.updateJob(job.id, { xeroStatus: 'paid' });
+              const invoices = await storage.getInvoicesByJob(job.id);
+              for (const inv of invoices) {
+                await storage.updateInvoice(inv.id, {
+                  status: 'paid',
+                  paidAt: paidDate,
+                  paidNotes: 'Payment confirmed via Xero sync',
+                });
+              }
+              nowPaid++;
+            }
+            synced++;
+          } catch (err) {
+            console.warn(`⚠️ Could not sync Xero status for job ${job.jobNumber}:`, err);
+          }
+        }
+
+        console.log(`✅ Xero bulk payment sync: checked ${synced} invoices, ${nowPaid} newly marked paid`);
+        return res.json({ success: true, synced, nowPaid });
+      }
+
+      // Single job sync
+      if (!jobId) {
+        return res.status(400).json({ success: false, message: 'jobId is required' });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      if (!job.xeroInvoiceId) {
+        return res.json({ success: true, status: null, message: 'Job has no Xero invoice' });
+      }
+
+      const xeroResp = await client.accountingApi.getInvoice(tenantId, job.xeroInvoiceId);
+      const xeroInvoice = xeroResp.body.invoices?.[0];
+
+      if (!xeroInvoice) {
+        return res.json({ success: true, status: null, message: 'Invoice not found in Xero' });
+      }
+
+      const xeroStatus = xeroInvoice.status; // DRAFT, SUBMITTED, AUTHORISED, PAID, VOIDED, DELETED
+
+      if (xeroStatus === 'PAID') {
+        const paidDate = xeroInvoice.fullyPaidOnDate ? new Date(xeroInvoice.fullyPaidOnDate) : new Date();
+        await storage.updateJob(jobId, { xeroStatus: 'paid' });
+        const invoices = await storage.getInvoicesByJob(jobId);
+        for (const inv of invoices) {
+          await storage.updateInvoice(inv.id, {
+            status: 'paid',
+            paidAt: paidDate,
+            paidNotes: 'Payment confirmed via Xero sync',
+          });
+        }
+        console.log(`✅ Job ${job.jobNumber} marked as PAID via Xero sync`);
+        return res.json({ success: true, status: 'paid', paidAt: paidDate });
+      }
+
+      // Not yet paid — return current Xero status for info
+      console.log(`ℹ️ Job ${job.jobNumber} Xero invoice status: ${xeroStatus}`);
+      return res.json({ success: true, status: xeroStatus?.toLowerCase() || 'sent' });
+
+    } catch (error: any) {
+      console.error('Error syncing payment status from Xero:', error);
+      res.status(500).json({ success: false, message: 'Failed to sync payment status from Xero' });
+    }
+  });
 }
