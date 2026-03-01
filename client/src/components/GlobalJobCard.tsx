@@ -2624,65 +2624,60 @@ The Treemarkables Team`;
       {/* ServiceM8-style Header - White with colored status badge */}
         <div className="border-b border-gray-200 bg-white px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg" style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}>
           <div className="flex items-center justify-between gap-2 sm:gap-4">
-            {/* Left: Job Title & Status */}
-            <div className="flex items-center gap-1 sm:gap-2 flex-1 min-w-0">
-              <h1 className="text-base sm:text-xl md:text-2xl font-bold text-gray-900 truncate tracking-tight" data-testid="text-job-title">
-                {mode === "create" ? "New Job" : `Job ${editingJob?.jobNumber || ""}`}
-              </h1>
-              {currentStatus && (
-                <Badge 
-                  className={`text-xs whitespace-nowrap rounded-full ${
-                    currentStatus === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
-                    currentStatus === 'work_order' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                    currentStatus === 'quote' ? 'bg-orange-500 hover:bg-orange-600 text-white' :
-                    currentStatus === 'lead' ? 'bg-cyan-600 hover:bg-cyan-700 text-white' :
-                    currentStatus === 'scheduled' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
-                    currentStatus === 'unsuccessful' ? 'bg-red-600 hover:bg-red-700 text-white' :
-                    'bg-gray-600 hover:bg-gray-700 text-white'
-                  }`}
-                  data-testid="badge-job-status"
-                >
-                  {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
-                </Badge>
-              )}
-              {/* Job Price Display - Ex GST amounts only */}
-              {mode === 'edit' && (
-                (() => {
-                  // Priority: line items > proposal subtotal (ex GST) > quote amount/1.15 > job totalAmount/1.15
-                  const lineItemsTotal = (form.watch('lineItems') || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
-                  // Use proposal subtotal (ex GST) - this is the correct ex GST value
-                  const proposalSubtotal = parseFloat(jobProposalResponse?.data?.[0]?.subtotal || '0');
-                  // Quote amount is typically inc GST, so divide by 1.15
-                  const quoteExGst = (parseFloat(jobQuoteResponse?.data?.[0]?.amount || '0')) / 1.15;
-                  // Job stored total is typically inc GST, so divide by 1.15
-                  const jobStoredExGst = (parseFloat(editingJob?.totalAmount || '0')) / 1.15;
-                  const jobTotal = lineItemsTotal || proposalSubtotal || quoteExGst || jobStoredExGst;
-                  return jobTotal > 0 ? (
-                    <span className="text-sm sm:text-base font-semibold text-green-600 ml-1" data-testid="text-job-price">
-                      {new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(jobTotal)}
-                    </span>
-                  ) : null;
-                })()
-              )}
-              {/* Invoice Payment Status Badge */}
+            {/* Left: Job Title, Status, Price & Payment Badge — stacked to prevent truncation */}
+            <div className="flex flex-col justify-center flex-1 min-w-0">
+              {/* Row 1: Job number + status badge */}
+              <div className="flex items-center gap-1 sm:gap-2">
+                <h1 className="text-base sm:text-xl md:text-2xl font-bold text-gray-900 whitespace-nowrap tracking-tight" data-testid="text-job-title">
+                  {mode === "create" ? "New Job" : `Job ${editingJob?.jobNumber || ""}`}
+                </h1>
+                {currentStatus && (
+                  <Badge 
+                    className={`text-xs whitespace-nowrap rounded-full ${
+                      currentStatus === 'completed' ? 'bg-green-600 hover:bg-green-700 text-white' :
+                      currentStatus === 'work_order' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                      currentStatus === 'quote' ? 'bg-orange-500 hover:bg-orange-600 text-white' :
+                      currentStatus === 'lead' ? 'bg-cyan-600 hover:bg-cyan-700 text-white' :
+                      currentStatus === 'scheduled' ? 'bg-blue-600 hover:bg-blue-700 text-white' :
+                      currentStatus === 'unsuccessful' ? 'bg-red-600 hover:bg-red-700 text-white' :
+                      'bg-gray-600 hover:bg-gray-700 text-white'
+                    }`}
+                    data-testid="badge-job-status"
+                  >
+                    {currentStatus.charAt(0).toUpperCase() + currentStatus.slice(1)}
+                  </Badge>
+                )}
+              </div>
+              {/* Row 2: Price + Payment status badge (only rendered when there's something to show) */}
               {mode === 'edit' && (() => {
+                const lineItemsTotal = (form.watch('lineItems') || []).reduce((sum: number, item: any) => sum + (item.total || 0), 0);
+                const proposalSubtotal = parseFloat(jobProposalResponse?.data?.[0]?.subtotal || '0');
+                const quoteExGst = (parseFloat(jobQuoteResponse?.data?.[0]?.amount || '0')) / 1.15;
+                const jobStoredExGst = (parseFloat(editingJob?.totalAmount || '0')) / 1.15;
+                const jobTotal = lineItemsTotal || proposalSubtotal || quoteExGst || jobStoredExGst;
                 const invoiceStatus = (jobInvoiceResponse as any)?.data?.[0]?.status;
                 const isPaid = invoiceStatus === 'paid' || editingJob?.xeroStatus === 'paid';
-                if (isPaid) {
-                  return (
-                    <Badge className="text-xs whitespace-nowrap rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" data-testid="badge-invoice-paid">
-                      PAID
-                    </Badge>
-                  );
-                }
-                if (invoiceStatus === 'overdue') {
-                  return (
-                    <Badge className="text-xs whitespace-nowrap rounded-full bg-red-600 hover:bg-red-700 text-white font-bold" data-testid="badge-invoice-overdue">
-                      OVERDUE
-                    </Badge>
-                  );
-                }
-                return null;
+                const isOverdue = invoiceStatus === 'overdue';
+                if (!jobTotal && !isPaid && !isOverdue) return null;
+                return (
+                  <div className="flex items-center gap-1.5">
+                    {jobTotal > 0 && (
+                      <span className="text-xs sm:text-sm font-semibold text-green-600" data-testid="text-job-price">
+                        {new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(jobTotal)}
+                      </span>
+                    )}
+                    {isPaid && (
+                      <Badge className="text-xs whitespace-nowrap rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" data-testid="badge-invoice-paid">
+                        PAID
+                      </Badge>
+                    )}
+                    {!isPaid && isOverdue && (
+                      <Badge className="text-xs whitespace-nowrap rounded-full bg-red-600 hover:bg-red-700 text-white font-bold" data-testid="badge-invoice-overdue">
+                        OVERDUE
+                      </Badge>
+                    )}
+                  </div>
+                );
               })()}
             </div>
             
