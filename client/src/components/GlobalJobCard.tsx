@@ -274,6 +274,8 @@ export function GlobalJobCard({
   const [isSMSComposerOpen, setIsSMSComposerOpen] = useState(false);
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
   const [isInvoiceModalOpen, setIsInvoiceModalOpen] = useState(false);
+  const [paidNotesValue, setPaidNotesValue] = useState('');
+  const [paidNotesSaving, setPaidNotesSaving] = useState(false);
   
   // Scheduling modal state
   const [isSchedulingModalOpen, setIsSchedulingModalOpen] = useState(false);
@@ -1485,6 +1487,14 @@ export function GlobalJobCard({
     },
     enabled: !!editingJob?.id,
   });
+
+  // Sync paidNotes from invoice data when it loads
+  useEffect(() => {
+    const invoice = (jobInvoiceResponse as any)?.data?.[0];
+    if (invoice?.paidNotes !== undefined) {
+      setPaidNotesValue(invoice.paidNotes || '');
+    }
+  }, [jobInvoiceResponse]);
 
   // Fetch all equipment for quick-add dropdown
   const { data: equipmentData } = useQuery({
@@ -5915,6 +5925,56 @@ The Treemarkables Team`;
                             })()}
                           </div>
                         )}
+
+                        {/* Payment Details Section */}
+                        {editingJob && (() => {
+                          const invoice = (jobInvoiceResponse as any)?.data?.[0];
+                          if (!invoice || invoice.status !== 'paid') return null;
+                          return (
+                            <div className="mt-6 border-t border-gray-200 pt-6">
+                              <div className="flex items-center gap-2 mb-4">
+                                <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                <h4 className="font-medium text-gray-800">Payment Details</h4>
+                              </div>
+                              {invoice.paidAt && (
+                                <p className="text-sm text-gray-600 mb-3">
+                                  <span className="font-medium text-gray-700">Paid on:</span>{' '}
+                                  {format(new Date(invoice.paidAt), "dd/MM/yyyy 'at' h:mm a")}
+                                </p>
+                              )}
+                              <div className="space-y-2">
+                                <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Payment Notes</label>
+                                <Textarea
+                                  value={paidNotesValue}
+                                  onChange={(e) => setPaidNotesValue(e.target.value)}
+                                  placeholder="e.g. Paid by bank transfer, receipt #123, cash received..."
+                                  className="text-sm resize-none"
+                                  rows={3}
+                                />
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={paidNotesSaving}
+                                  onClick={async () => {
+                                    setPaidNotesSaving(true);
+                                    try {
+                                      await apiRequest('PATCH', `/api/invoices/${invoice.id}`, { paidNotes: paidNotesValue });
+                                      queryClient.invalidateQueries({ queryKey: ['/api/invoices', editingJob?.id] });
+                                      toast({ title: 'Payment notes saved' });
+                                    } catch {
+                                      toast({ title: 'Failed to save notes', variant: 'destructive' });
+                                    } finally {
+                                      setPaidNotesSaving(false);
+                                    }
+                                  }}
+                                >
+                                  {paidNotesSaving ? 'Saving...' : 'Save Notes'}
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })()}
                     </div>
                   )}
 
