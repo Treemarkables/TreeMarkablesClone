@@ -626,6 +626,22 @@ export function GlobalJobCard({
     currentJobIdRef.current = editingJob?.id || null;
   }, [editingJob?.id]);
 
+  // Auto-sync payment status from Xero when a job card opens
+  // Silently checks Xero and marks the invoice paid locally if Xero shows PAID
+  useEffect(() => {
+    if (!editingJob?.id || !editingJob?.xeroInvoiceId || editingJob?.xeroStatus === 'paid') return;
+    const jobId = editingJob.id;
+    apiRequest('POST', '/api/xero/sync-payment-status', { jobId })
+      .then((result: any) => {
+        if (result?.status === 'paid') {
+          queryClient.invalidateQueries({ queryKey: ['/api/invoices', jobId] });
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+          console.log(`✅ Xero payment sync: job ${editingJob.jobNumber} marked PAID`);
+        }
+      })
+      .catch(() => {});
+  }, [editingJob?.id, editingJob?.xeroInvoiceId]);
+
   // Clipboard paste handler for screenshots
   useEffect(() => {
     if (!isOpen) return;
@@ -2651,7 +2667,8 @@ The Treemarkables Team`;
               {/* Invoice Payment Status Badge */}
               {mode === 'edit' && (() => {
                 const invoiceStatus = (jobInvoiceResponse as any)?.data?.[0]?.status;
-                if (invoiceStatus === 'paid') {
+                const isPaid = invoiceStatus === 'paid' || editingJob?.xeroStatus === 'paid';
+                if (isPaid) {
                   return (
                     <Badge className="text-xs whitespace-nowrap rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" data-testid="badge-invoice-paid">
                       PAID

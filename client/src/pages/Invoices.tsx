@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Search, Send, CheckCircle, Clock, AlertCircle, Pencil, RotateCcw } from "lucide-react";
+import { FileText, Search, Send, CheckCircle, Clock, AlertCircle, Pencil, RotateCcw, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
@@ -107,6 +107,30 @@ export default function Invoices() {
       }
     },
   });
+
+  const [isSyncingPayments, setIsSyncingPayments] = useState(false);
+
+  const syncPaymentsFromXero = async () => {
+    setIsSyncingPayments(true);
+    try {
+      const response = await apiRequest('POST', '/api/xero/sync-payment-status', { all: true });
+      const data = await response.json();
+      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      toast({
+        title: "Xero Payment Sync Complete",
+        description: `Checked ${data.synced ?? 0} invoice(s). ${data.nowPaid ?? 0} newly marked as paid.`,
+      });
+    } catch {
+      toast({
+        title: "Sync Failed",
+        description: "Could not sync payment status from Xero. Check your Xero connection.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSyncingPayments(false);
+    }
+  };
 
   const resetXeroSyncMutation = useMutation({
     mutationFn: async (invoiceId: string) => {
@@ -263,6 +287,16 @@ export default function Invoices() {
             data-testid="input-search-invoices"
           />
         </div>
+        <Button
+          variant="outline"
+          onClick={syncPaymentsFromXero}
+          disabled={isSyncingPayments}
+          data-testid="button-sync-xero-payments"
+          className="shrink-0"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingPayments ? 'animate-spin' : ''}`} />
+          {isSyncingPayments ? 'Syncing...' : 'Sync from Xero'}
+        </Button>
       </div>
 
       <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
