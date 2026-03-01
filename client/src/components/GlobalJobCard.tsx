@@ -2638,6 +2638,25 @@ The Treemarkables Team`;
                   ) : null;
                 })()
               )}
+              {/* Invoice Payment Status Badge */}
+              {mode === 'edit' && (() => {
+                const invoiceStatus = (jobInvoiceResponse as any)?.data?.[0]?.status;
+                if (invoiceStatus === 'paid') {
+                  return (
+                    <Badge className="text-xs whitespace-nowrap rounded-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold" data-testid="badge-invoice-paid">
+                      PAID
+                    </Badge>
+                  );
+                }
+                if (invoiceStatus === 'overdue') {
+                  return (
+                    <Badge className="text-xs whitespace-nowrap rounded-full bg-red-600 hover:bg-red-700 text-white font-bold" data-testid="badge-invoice-overdue">
+                      OVERDUE
+                    </Badge>
+                  );
+                }
+                return null;
+              })()}
             </div>
             
             {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
