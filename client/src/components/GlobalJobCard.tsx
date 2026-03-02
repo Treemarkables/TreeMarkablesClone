@@ -1199,8 +1199,12 @@ export function GlobalJobCard({
         // (including jobContactEmail) BEFORE switching to edit mode.
         // Without this, the form reset useEffect fires before the refetch completes
         // and sees undefined for jobContactEmail, wiping what the user typed.
+        // IMPORTANT: store `newJob` (the full { success, data } wrapper), NOT `newJob.data`.
+        // The query reads specificJobData?.data to get the job — if we store the raw job object,
+        // specificJob is null, editingJob is null, and the split-screen diary panel never appears.
+        // With staleTime:30000 the query won't refetch the wrong-format cache, so it must be right.
         if (newJob.data) {
-          queryClient.setQueryData(['/api/jobs', jobId], newJob.data);
+          queryClient.setQueryData(['/api/jobs', jobId], newJob);
         }
         
         setCreatedJobId(jobId);
