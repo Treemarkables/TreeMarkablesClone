@@ -3428,7 +3428,14 @@ The Treemarkables Team`;
                                                   value={customer.name}
                                                   onSelect={() => {
                                                     form.setValue("customerId", customer.id);
+                                                    form.setValue("isNewCustomer", false);
+                                                    form.setValue("newCustomerName", "");
+                                                    setSelectedCustomerName(customer.name);
+                                                    setHasUserSelectedCustomer(true);
                                                     setCustomerSearchOpen(false);
+                                                    if (customer.address && !form.getValues('address')) {
+                                                      form.setValue('address', customer.address);
+                                                    }
                                                   }}
                                                 >
                                                   <Check
