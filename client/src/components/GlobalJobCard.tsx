@@ -1205,6 +1205,7 @@ export function GlobalJobCard({
         
         setCreatedJobId(jobId);
         setInternalMode('edit');
+        setDescriptionPopupOpen(false); // Close popup after mode transition so split-screen renders cleanly
         setSelectedEquipment([]); // Reset equipment selection for next create
         
         // Upload any pending photos that were added before job was saved
@@ -2224,9 +2225,11 @@ The Treemarkables Team`;
 
     // Commit any open description popup draft before reading form values.
     // Without this, clicking Save while the crew notes popup is open loses the typed text.
+    // Do NOT call setDescriptionPopupOpen(false) here — closing the Radix Dialog mid-save
+    // triggers focus management that disrupts the create→edit split-screen transition.
+    // The popup is closed in createJobMutation.onSuccess after the transition completes.
     if (descriptionPopupOpen && descriptionDraft) {
       form.setValue('description', descriptionDraft, { shouldDirty: true });
-      setDescriptionPopupOpen(false);
     }
     
     let formData = form.getValues();
@@ -2459,10 +2462,10 @@ The Treemarkables Team`;
       return;
     }
 
-    // Commit any open description popup draft before reading form values
+    // Commit any open description popup draft before reading form values.
+    // Do NOT close the popup here — see handleSave comment for why.
     if (descriptionPopupOpen && descriptionDraft) {
       form.setValue('description', descriptionDraft, { shouldDirty: true });
-      setDescriptionPopupOpen(false);
     }
     
     const formData = form.getValues();
