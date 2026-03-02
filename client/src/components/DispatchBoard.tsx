@@ -475,6 +475,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [isDeepSearchLoading, setIsDeepSearchLoading] = useState<boolean>(false);
   const [assignmentMode, setAssignmentMode] = useState<AssignmentMode>('individual');
   const [jobFilter, setJobFilter] = useState<string>('all');
+
+  const STATUS_TAB_FILTERS = [
+    { value: 'quote', label: 'Quote' },
+    { value: 'work_order', label: 'Work Order' },
+    { value: 'scheduled', label: 'Scheduled' },
+    { value: 'completed', label: 'Complete' },
+  ];
+
+  const filterMeta: Record<string, { title: string; subtitle: string }> = {
+    all: { title: 'Active Jobs', subtitle: 'All upcoming jobs' },
+    quote: { title: 'Quotes', subtitle: 'Quote status' },
+    work_order: { title: 'Work Orders', subtitle: 'Work order status' },
+    scheduled: { title: 'Scheduled', subtitle: 'Scheduled status' },
+    completed: { title: 'Completed', subtitle: 'Completed jobs' },
+  };
+
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [globalJobCardMode, setGlobalJobCardMode] = useState<'create' | 'edit'>('create');
@@ -1056,10 +1072,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const filtered = jobs
       .filter(job => {
-        // Exclude completed, unsuccessful, invoiced, and archived jobs from dispatch board
+        // When a specific status filter is active, show only matching jobs (no exclusions)
+        if (jobFilter === 'quote') return job.status === 'quote';
+        if (jobFilter === 'work_order') return job.status === 'work_order';
+        if (jobFilter === 'scheduled') return job.status === 'scheduled';
+        if (jobFilter === 'completed') return job.status === 'completed';
+        // Default 'all': exclude terminal/archive states
         return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
       })
       .filter(job => {
+        // When a specific status filter is active, show all matching jobs regardless of date
+        if (jobFilter !== 'all') return true;
+
         // Always include jobs with 'scheduled' or 'work_order' status - these are active jobs that need dispatching
         if (job.status === 'scheduled' || job.status === 'work_order') {
           return true;
@@ -1618,35 +1642,55 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               <div className="flex w-[40%] h-full flex-col" data-testid="job-cards-container">
                 <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
                   <CardHeader className="flex-shrink-0 border-b pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">Scheduled Jobs</CardTitle>
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="min-w-0">
+                  <CardTitle className="text-base">{filterMeta[jobFilter]?.title ?? 'Active Jobs'}</CardTitle>
                   <div className="text-xs text-muted-foreground mt-0.5">
-                    All upcoming jobs
+                    {filterMeta[jobFilter]?.subtitle ?? 'All upcoming jobs'}
                   </div>
                 </div>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handleCreateJob}
-                  data-testid="create-job-button"
-                  className="h-7"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  New Job
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCreateFromMessageDialog(true)}
-                  data-testid="paste-message-button"
-                  className="h-7"
-                >
-                  <MessageSquare className="h-4 w-4 mr-1" />
-                  Paste Message
-                </Button>
+                <div className="flex gap-1 flex-shrink-0">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={handleCreateJob}
+                    data-testid="create-job-button"
+                    className="h-7"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    New Job
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCreateFromMessageDialog(true)}
+                    data-testid="paste-message-button"
+                    className="h-7"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-1" />
+                    Paste
+                  </Button>
+                </div>
               </div>
-              
+
+              {/* Status Filter Tabs - Desktop */}
+              <div className="flex gap-1 mt-2">
+                {STATUS_TAB_FILTERS.map((tab) => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setJobFilter(jobFilter === tab.value ? 'all' : tab.value)}
+                    className={`flex-1 text-xs py-1 px-1 rounded-md font-medium transition-colors ${
+                      jobFilter === tab.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/70'
+                    }`}
+                    data-testid={`desktop-filter-tab-${tab.value}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Search Input - Desktop */}
               <div className="mt-3 relative">
                 <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-gray-400" />
@@ -2003,6 +2047,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               {deepSearchResults.length} results found
             </div>
           )}
+        </div>
+
+        {/* Status Filter Tabs - Mobile */}
+        <div className="px-4 py-2 bg-white border-b flex gap-1.5">
+          {STATUS_TAB_FILTERS.map((tab) => (
+            <button
+              key={tab.value}
+              onClick={() => setJobFilter(jobFilter === tab.value ? 'all' : tab.value)}
+              className={`flex-1 text-xs py-1.5 px-1 rounded-md font-medium transition-colors ${
+                jobFilter === tab.value
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+              data-testid={`mobile-filter-tab-${tab.value}`}
+            >
+              {tab.label}
+            </button>
+          ))}
         </div>
 
         {/* Jobs List - ServiceM8 Style */}
