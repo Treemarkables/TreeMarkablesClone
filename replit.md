@@ -48,7 +48,7 @@ This application is a comprehensive business management platform for Treemarkabl
 - **Push Notifications**: Firebase Cloud Messaging for real-time alerts (job assignments, schedule changes, new leads, invoice payments, quote acceptances) with user preference management.
 - **Customer Notifications**: User-controlled job booking notifications via sendClientNotification checkbox.
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories.
-- **Call Recording**: VoIP call recording with AI transcription via Hero Internet NZ, including sentiment analysis and call summaries, with auto-matching to customers/jobs and embedded audio players in job diary.
+- **Call Recording**: VoIP call recording with AI transcription via Telnyx, including call summaries and embedded audio players in job diary.
 
 ## Auto-Save Architecture (GlobalJobCard)
 The job form uses a multi-layered save system to ensure data is never silently lost:

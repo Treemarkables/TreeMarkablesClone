@@ -905,7 +905,7 @@ export interface IStorage {
   getNotificationPreferences(employeeId: string): Promise<schema.NotificationPreferences | undefined>;
   updateNotificationPreferences(employeeId: string, updates: Partial<schema.InsertNotificationPreferences>): Promise<schema.NotificationPreferences>;
 
-  // Call Records - Hero Internet Integration
+  // Call Records
   createCallRecord(record: schema.InsertCallRecord): Promise<schema.CallRecord>;
   getCallRecord(id: string): Promise<schema.CallRecord | null>;
   updateCallRecord(id: string, updates: Partial<schema.InsertCallRecord>): Promise<schema.CallRecord>;
