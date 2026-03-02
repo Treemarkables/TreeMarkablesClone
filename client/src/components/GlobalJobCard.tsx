@@ -2221,6 +2221,13 @@ The Treemarkables Team`;
       console.log('Save already in progress, ignoring duplicate click');
       return;
     }
+
+    // Commit any open description popup draft before reading form values.
+    // Without this, clicking Save while the crew notes popup is open loses the typed text.
+    if (descriptionPopupOpen && descriptionDraft) {
+      form.setValue('description', descriptionDraft, { shouldDirty: true });
+      setDescriptionPopupOpen(false);
+    }
     
     let formData = form.getValues();
     console.log('Form data before save:', formData);
@@ -2450,6 +2457,12 @@ The Treemarkables Team`;
     if (isSaving) {
       console.log('Save already in progress, ignoring duplicate click');
       return;
+    }
+
+    // Commit any open description popup draft before reading form values
+    if (descriptionPopupOpen && descriptionDraft) {
+      form.setValue('description', descriptionDraft, { shouldDirty: true });
+      setDescriptionPopupOpen(false);
     }
     
     const formData = form.getValues();
