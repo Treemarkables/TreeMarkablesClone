@@ -2853,20 +2853,21 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             return true;
           }
           
-          // Layer 2: RELAXED - Warn about same customer + address within 24 hours (likely duplicate entry)
-          // Only block if description is also similar
+          // Layer 2: RELAXED - Only block if both descriptions are non-empty AND identical/similar
+          // Empty description = new/different work being created, not a duplicate entry
+          // Note: "".includes("") === true in JS so we must guard with non-empty check first
           if (jobCreatedDate >= twentyFourHoursAgo && sameAddress) {
             const existingDesc = (existingJob.description || '').trim().toLowerCase();
             const newDesc = (validation.data.description || '').trim().toLowerCase();
             
-            // Check for similar descriptions (either same, or one contains the other, or both empty)
-            const sameDescription = existingDesc === newDesc;
-            const similarDescription = existingDesc.includes(newDesc) || newDesc.includes(existingDesc);
-            const bothEmpty = !existingDesc && !newDesc;
-            
-            if (sameDescription || similarDescription || bothEmpty) {
-              console.log(`[DUPLICATE CHECK] Blocked similar job - job #${existingJob.jobNumber} has same address and similar description`);
-              return true;
+            if (existingDesc && newDesc) {
+              const sameDescription = existingDesc === newDesc;
+              const similarDescription = existingDesc.includes(newDesc) || newDesc.includes(existingDesc);
+              
+              if (sameDescription || similarDescription) {
+                console.log(`[DUPLICATE CHECK] Blocked similar job - job #${existingJob.jobNumber} has same address and similar description`);
+                return true;
+              }
             }
           }
           
