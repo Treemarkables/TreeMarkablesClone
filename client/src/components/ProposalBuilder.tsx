@@ -51,6 +51,7 @@ interface ProposalBuilderProps {
   proposalId?: string;
   onRequestJobSave?: () => Promise<string>; // Callback to save parent job and return job ID
   jobDescription?: string; // Pass current description from job card to avoid stale data
+  customEmail?: string; // Live job contact email from parent form — takes priority over DB values
 }
 
 export function ProposalBuilder({ 
@@ -61,7 +62,8 @@ export function ProposalBuilder({
   mode = "create",
   proposalId,
   onRequestJobSave,
-  jobDescription
+  jobDescription,
+  customEmail
 }: ProposalBuilderProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -908,12 +910,13 @@ export function ProposalBuilder({
   };
 
   // Initialize email form with customer data
+  // Priority: customEmail prop (live form value from parent) > job.jobContactEmail > customer.email
   const initializeEmailForm = () => {
     const previewData = getPreviewData();
-    const customerEmail = previewData.customer?.email || '';
+    const emailAddress = customEmail || previewData.job?.jobContactEmail || previewData.customer?.email || '';
     
     setEmailForm({
-      to: customerEmail,
+      to: emailAddress,
       cc: '',
       subject: `Treemarkables Quote`,
       message: `Thank you for your inquiry, we are pleased to provide you with the following estimate.`

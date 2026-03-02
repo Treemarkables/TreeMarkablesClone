@@ -6290,6 +6290,7 @@ The Treemarkables Team`;
           proposalId={editingProposalId}
           jobDescription={form.watch('description') || ''}
           lineItems={formData?.lineItems || []}
+          customEmail={form.watch('jobContactEmail') || editingJob?.jobContactEmail || undefined}
           onRequestJobSave={handleRequestJobSave}
         />
       )}
