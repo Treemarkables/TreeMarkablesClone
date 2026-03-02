@@ -1735,7 +1735,11 @@ export function GlobalJobCard({
   };
 
   const handleCallClick = () => {
-    const phone = selectedCustomer?.phone || form.getValues('jobContactPhone');
+    const phone =
+      form.getValues('jobContactMobile') ||
+      selectedCustomer?.mobile ||
+      form.getValues('jobContactPhone') ||
+      selectedCustomer?.phone;
     if (!phone) {
       toast({
         title: "No Phone Number",
@@ -1744,7 +1748,9 @@ export function GlobalJobCard({
       });
       return;
     }
-    window.location.href = `tel:${phone}`;
+    const a = document.createElement('a');
+    a.href = `tel:${phone}`;
+    a.click();
   };
 
   // Handle schedule click
