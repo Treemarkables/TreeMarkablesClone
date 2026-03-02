@@ -3200,7 +3200,7 @@ export type NotificationPreferences = typeof notificationPreferences.$inferSelec
 export type InsertNotificationPreferences = z.infer<typeof insertNotificationPreferencesSchema>;
 
 // ========================================
-// CALL RECORDS - Hero Internet Integration
+// CALL RECORDS
 // ========================================
 
 export const callRecords = pgTable("call_records", {
@@ -3229,7 +3229,7 @@ export const callRecords = pgTable("call_records", {
   // VoIP provider identification
   provider: text("provider").default('hero'), // 'hero' or 'telnyx'
   
-  // Hero Internet specific
+  // Call metadata
   heroCallId: text("hero_call_id"), // Hero's unique call ID
   heroExtension: text("hero_extension"), // Which Hero extension handled the call
   

@@ -327,7 +327,7 @@ export default function CommunicationsManagement() {
                     Call History
                   </CardTitle>
                   <CardDescription>
-                    View and manage all recorded calls via Hero Internet
+                    View and manage all recorded calls
                   </CardDescription>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
@@ -364,7 +364,7 @@ export default function CommunicationsManagement() {
                   <Phone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                   <h3 className="text-lg font-medium mb-2">No call records</h3>
                   <p className="text-muted-foreground">
-                    Call recordings will appear here when Hero Internet is configured and calls are made.
+                    No call recordings found.
                   </p>
                 </div>
               ) : (

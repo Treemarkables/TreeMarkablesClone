@@ -368,7 +368,7 @@ export async function processTelnyxWebhook(payload: TelnyxWebhookPayload): Promi
     
     if (direction === 'incoming' && callControlId) {
       // Forward to the configured number (use TELNYX_FORWARD_NUMBER or fallback)
-      const forwardNumber = process.env.TELNYX_FORWARD_NUMBER || process.env.HERO_PHONE_NUMBER;
+      const forwardNumber = process.env.TELNYX_FORWARD_NUMBER;
       
       if (forwardNumber) {
         console.log(`📞 Incoming call detected, forwarding to ${forwardNumber}`);

@@ -19523,112 +19523,6 @@ Transcription: ${transcriptText}`;
   });
 
   // ========================================
-  // HERO INTERNET - CALL RECORDING INTEGRATION
-  // ========================================
-
-  // Hero Internet webhook - catch GET requests (in case Hero uses GET)
-  app.get("/api/hero/webhook/call-complete", async (req, res) => {
-    console.log('📞 ============ HERO WEBHOOK GET REQUEST ============');
-    console.log('📞 Timestamp:', new Date().toISOString());
-    console.log('📞 Query params:', JSON.stringify(req.query, null, 2));
-    console.log('📞 This endpoint expects POST, not GET');
-    console.log('📞 ================================================');
-    res.status(200).json({ 
-      success: false, 
-      message: 'Webhook received as GET - please use POST',
-      received_params: req.query 
-    });
-  });
-
-  // Hero Internet webhook for completed calls
-  // Made permissive - accepts with or without auth header to debug Hero's actual requests
-  app.post("/api/hero/webhook/call-complete", async (req, res) => {
-    try {
-      console.log('📞 ============ HERO WEBHOOK RECEIVED ============');
-      console.log('📞 Timestamp:', new Date().toISOString());
-      console.log('📞 Headers:', JSON.stringify(req.headers, null, 2));
-      console.log('📞 Body:', JSON.stringify(req.body, null, 2));
-      console.log('📞 Raw Body Type:', typeof req.body);
-      console.log('📞 ==============================================');
-      
-      const { processCallWebhook } = await import('./services/heroInternetService.js');
-      
-      // Log auth header status but don't reject - Hero may not be sending it
-      const authHeader = req.headers['authorization'] as string | undefined;
-      const expectedSecret = process.env.HERO_WEBHOOK_SECRET;
-      
-      if (authHeader && expectedSecret && authHeader === expectedSecret) {
-        console.log('📞 Webhook auth: VERIFIED');
-      } else if (authHeader) {
-        console.log('📞 Webhook auth: Header present but mismatch - received:', authHeader?.substring(0, 10) + '...');
-      } else {
-        console.log('📞 Webhook auth: No Authorization header received - processing anyway');
-      }
-      
-      // Process the webhook regardless of auth (for debugging)
-      const callRecord = await processCallWebhook(req.body);
-      
-      console.log('📞 Call record created successfully:', callRecord.id);
-      res.status(200).json({ success: true, callRecordId: callRecord.id });
-    } catch (error) {
-      console.error('📞 ERROR processing Hero Internet webhook:', error);
-      // Still return 200 to prevent Hero from retrying with same bad data
-      res.status(200).json({ success: false, message: 'Logged but failed to process', error: String(error) });
-    }
-  });
-
-  // Test Hero Internet connection
-  app.get("/api/hero/status", async (req, res) => {
-    try {
-      const { testHeroConnection } = await import('./services/heroInternetService.js');
-      const result = await testHeroConnection();
-      res.json(result);
-    } catch (error) {
-      res.json({ success: false, message: 'Hero Internet not configured' });
-    }
-  });
-
-  // Initiate click-to-call via Hero Internet
-  app.post("/api/hero/call", async (req, res) => {
-    try {
-      const { fromNumber, toNumber, jobId, customerId } = req.body;
-      
-      if (!toNumber) {
-        return res.status(400).json({ success: false, message: 'Destination phone number is required' });
-      }
-      
-      const { initiateCall } = await import('./services/heroInternetService.js');
-      
-      // Use configured Hero number if fromNumber not provided
-      const heroFromNumber = fromNumber || process.env.HERO_PHONE_NUMBER;
-      if (!heroFromNumber) {
-        return res.status(400).json({ success: false, message: 'Hero phone number not configured' });
-      }
-      
-      const result = await initiateCall(heroFromNumber, toNumber);
-      
-      // Create a pending call record
-      const callRecord = await storage.createCallRecord({
-        direction: 'outbound',
-        status: 'ringing',
-        fromNumber: heroFromNumber,
-        toNumber,
-        jobId: jobId || undefined,
-        customerId: customerId || undefined,
-      });
-      
-      res.json({ 
-        success: result.success, 
-        message: result.message,
-        callRecordId: callRecord.id 
-      });
-    } catch (error) {
-      console.error('Error initiating call:', error);
-      res.status(500).json({ success: false, message: 'Failed to initiate call' });
-    }
-  });
-
-  // ========================================
   // TELNYX - CALL RECORDING INTEGRATION
   // ========================================
 
@@ -19779,14 +19673,6 @@ Transcription: ${transcriptText}`;
     try {
       const updates = req.body;
       const call = await storage.updateCallRecord(req.params.id, updates);
-      
-      // If linking to a job, create a diary entry
-      if (updates.jobId && !call.jobDiaryEntryId) {
-        const { linkCallToJob } = await import('./services/heroInternetService.js');
-        const updatedCall = await linkCallToJob(req.params.id, updates.jobId);
-        return res.json({ success: true, data: updatedCall });
-      }
-      
       res.json({ success: true, data: call });
     } catch (error) {
       console.error('Error updating call record:', error);
