@@ -327,17 +327,13 @@ export function GlobalJobCard({
   // Separate ref specifically for the popup textarea element
   const descriptionPopupRef = useRef<HTMLTextAreaElement>(null);
 
-  // When the description popup opens: init auto-grow height, focus, and cursor-to-end
+  // When the description popup opens: focus the textarea and place cursor at end
   useEffect(() => {
     if (!descriptionPopupOpen) return;
-    // Give React & Dialog animation time to mount the textarea into the DOM
+    // Give Dialog animation time to fully mount
     const timer = setTimeout(() => {
       const ta = descriptionPopupRef.current;
       if (!ta) return;
-      // Expand to fit all existing content (no internal scroll on first open)
-      ta.style.height = 'auto';
-      ta.style.height = Math.max(ta.scrollHeight, 300) + 'px';
-      // Focus and send cursor to end so mobile keyboard opens
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }, 80);
@@ -6826,22 +6822,21 @@ The Treemarkables Team`;
               )}
             </div>
 
-            {/* Textarea — grows to fit content so iOS drag-to-select never conflicts with scroll */}
-            <Textarea
+            {/* Raw textarea with dynamic rows — the rows attribute is CSS-computed at render time,
+                so the element is always tall enough for its content with zero internal scroll.
+                This is the only reliable way to prevent iOS from treating drag as scroll. */}
+            <textarea
               ref={descriptionPopupRef}
               value={descriptionDraft}
-              onChange={(e) => {
-                setDescriptionDraft(e.target.value);
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.max(e.target.scrollHeight, 300) + 'px';
-              }}
-              onFocus={(e) => {
-                // Re-measure on focus in case content changed while blurred
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.max(e.target.scrollHeight, 300) + 'px';
-              }}
-              className="min-h-[300px] resize-none overflow-hidden text-base font-medium w-full"
-              placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
+              onChange={(e) => setDescriptionDraft(e.target.value)}
+              rows={Math.max(12, (() => {
+                // Count visual rows: each \n is a new row, long lines wrap at ~42 chars on mobile
+                return descriptionDraft.split('\n').reduce((acc, line) => {
+                  return acc + Math.max(1, Math.ceil((line.length || 1) / 42));
+                }, 0) + 3;
+              })())}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none overflow-hidden"
+              placeholder={"Describe the work that needs to be done\n\nUse the 'Add Bullet' button or type • for bullet points"}
               data-testid="textarea-description-popup"
             />
           </div>
