@@ -566,6 +566,169 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
   }
 }
 
+// ---------------------------------------------------------------------------
+// Shared PDF generation helper — used by both the email route and the
+// standalone /api/invoices/:id/pdf download endpoint.
+// Accepts either a DB invoice record (.items) or frontend invoice data
+// (.lineItems) so it works whether or not the invoice has been saved to the DB.
+// ---------------------------------------------------------------------------
+async function generateInvoicePDFBuffer(
+  invoiceData: any,
+  job?: any,
+  customer?: any
+): Promise<Buffer> {
+  const PDFDocument = (await import('pdfkit')).default;
+
+  return new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDocument({ size: 'A4', margin: 40 });
+    const chunks: Buffer[] = [];
+
+    doc.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const formatDate = (date: any) => {
+      if (!date) return '';
+      return new Date(date).toLocaleDateString('en-NZ', {
+        day: '2-digit', month: '2-digit', year: 'numeric'
+      });
+    };
+
+    const formatCurrency = (num: number) =>
+      new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
+
+    // Logo
+    try {
+      doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
+    } catch {
+      // logo optional — continue without it
+    }
+
+    // Invoice header
+    const billingName = job?.billingNameOverride || customer?.name || 'Customer';
+    doc.fontSize(12).font('Helvetica-Bold').text(
+      `Invoice #${invoiceData.invoiceNumber}`, 350, 45, { align: 'right', width: 205 }
+    );
+    doc.fontSize(9).font('Helvetica').text(
+      `${billingName} - ${formatDate(invoiceData.issueDate) || formatDate(new Date())}`,
+      350, doc.y, { align: 'right', width: 205 }
+    );
+
+    doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
+
+    // Bill To
+    doc.y = 100;
+    doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
+    doc.moveDown(0.3);
+    doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
+    if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
+      doc.moveDown(0.2);
+      doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
+      doc.fillColor('#000000');
+    }
+    doc.moveDown(0.2);
+    if (invoiceData.address || job?.address) {
+      doc.fontSize(8).font('Helvetica').fillColor('#666666')
+        .text(invoiceData.address || job?.address || '', 40, doc.y);
+      doc.moveDown(0.2);
+    }
+    if (customer?.email) {
+      doc.fontSize(8).fillColor('#666666').text(customer.email, 40, doc.y);
+      doc.moveDown(0.2);
+    }
+    doc.fillColor('#000000');
+    doc.moveDown(0.5);
+
+    // Description
+    doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
+    doc.moveDown(0.3);
+
+    // Support both DB (.items) and frontend (.lineItems) field names
+    const lineItems: any[] = invoiceData.items || invoiceData.lineItems || [];
+    const hasLineItems = lineItems.length > 0;
+
+    if (job?.description) {
+      doc.fontSize(8).font('Helvetica').fillColor('#333333')
+        .text(job.description, 40, doc.y, { width: 515 });
+      doc.fillColor('#000000');
+      doc.moveDown(0.3);
+    }
+
+    if (invoiceData.notes) {
+      doc.fontSize(8).font('Helvetica').fillColor('#333333')
+        .text(invoiceData.notes, 40, doc.y, { width: 515 });
+      doc.fillColor('#000000');
+      doc.moveDown(0.3);
+    }
+
+    let subtotal = 0;
+    if (hasLineItems) {
+      lineItems.forEach((item: any) => {
+        const raw = item.total ?? item.amount ?? 0;
+        const total = typeof raw === 'string' ? parseFloat(raw) : raw;
+        subtotal += total;
+        doc.fontSize(8).font('Helvetica').fillColor('#000000')
+          .text(item.description || '', 40, doc.y, { width: 515 });
+        doc.moveDown(0.2);
+      });
+    } else {
+      const raw = invoiceData.amount ?? 0;
+      subtotal = typeof raw === 'string' ? parseFloat(raw) : raw;
+    }
+
+    doc.moveDown(0.5);
+
+    // Totals
+    const gstAmount = subtotal * 0.15;
+    const totalAmount = subtotal + gstAmount;
+
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+    doc.moveDown(0.5);
+
+    const totalsX = 380;
+    const valuesX = 470;
+
+    doc.fontSize(8).font('Helvetica').fillColor('#666666');
+    doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
+    doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+    doc.moveDown(0.3);
+
+    doc.fillColor('#666666');
+    doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
+    doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+    doc.moveDown(0.5);
+
+    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+    doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
+    doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+    doc.moveDown(1);
+
+    // Payment box
+    const boxY = doc.y;
+    doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
+    doc.fillColor('#000000');
+    doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
+    doc.fontSize(8).font('Helvetica');
+    doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
+    doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
+    doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
+    doc.fillColor('#000000');
+    doc.y = boxY + 70;
+    doc.moveDown(0.5);
+
+    // Footer
+    doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+    doc.moveDown(0.3);
+    doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
+      .text(
+        'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
+        40, doc.y, { align: 'center', width: 515 }
+      );
+
+    doc.end();
+  });
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // TEMP DEBUG: Verify fresh code is running
   app.get('/api/test-fresh-code', (req: Request, res: Response) => {
@@ -5360,186 +5523,24 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
-      // Generate and attach invoice PDF if invoice data is available
+      // Generate and attach invoice PDF using the shared helper
       if (invoice || validatedInvoiceData) {
         try {
-          const invoiceDetails = invoice || validatedInvoiceData;
-          const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-            const doc = new PDFDocument({ size: 'A4', margin: 40 });
-            const chunks: Buffer[] = [];
-            
-            doc.on('data', (chunk: Buffer) => {
-              chunks.push(Buffer.from(chunk));
-            });
-            doc.on('end', () => {
-              const finalBuffer = Buffer.concat(chunks);
-              resolve(finalBuffer);
-            });
-            doc.on('error', (err) => {
-              console.error('PDF generation error:', err);
-              reject(err);
-            });
-            
-            // Add logo
-            try {
-              doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
-            } catch (err) {
-              console.error('Failed to load logo:', err);
-            }
-            
-            // Invoice header on the right
-            doc.fontSize(12).font('Helvetica-Bold').text(
-              `Invoice #${invoiceDetails.invoiceNumber}`, 
-              350, 
-              45, 
-              { align: 'right', width: 205 }
-            );
-            const pdfBillingName = job?.billingNameOverride || customer?.name || 'Customer';
-            doc.fontSize(9).font('Helvetica').text(
-              `${pdfBillingName} - ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}`,
-              350,
-              doc.y,
-              { align: 'right', width: 205 }
-            );
-            
-            // Black border separator
-            doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
-            doc.moveDown(1.5);
-            
-            // Bill To section
-            doc.y = 100;
-            doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
-            doc.moveDown(0.3);
-            doc.fontSize(9).font('Helvetica-Bold').text(pdfBillingName, 40, doc.y);
-            if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
-              doc.moveDown(0.2);
-              doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
-              doc.fillColor('#000000');
-            }
-            doc.moveDown(0.2);
-            if (invoiceDetails.address || job?.address) {
-              doc.fontSize(8).font('Helvetica').fillColor('#666666')
-                .text(invoiceDetails.address || job?.address || '', 40, doc.y);
-              doc.moveDown(0.2);
-            }
-            if (customer?.email) {
-              doc.fontSize(8).fillColor('#666666').text(`✉ ${customer.email}`, 40, doc.y);
-              doc.moveDown(0.2);
-            }
-            doc.fillColor('#000000');
-            
-            doc.moveDown(0.5);
-            
-            // Description section
-            doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
-            doc.moveDown(0.3);
-            
-            const lineItems = invoiceDetails.items || validatedInvoiceData?.lineItems || [];
-            const hasLineItems = lineItems.length > 0;
-            
-            // Include job description if available
-            if (job?.description) {
-              doc.fontSize(8).font('Helvetica').fillColor('#333333')
-                .text(job.description, 40, doc.y, { width: 515 });
-              doc.fillColor('#000000');
-              doc.moveDown(0.3);
-            }
-            
-            if (invoiceDetails.notes) {
-              doc.fontSize(8).font('Helvetica').fillColor('#333333')
-                .text(invoiceDetails.notes, 40, doc.y, { width: 515 });
-              doc.fillColor('#000000');
-              doc.moveDown(0.3);
-            }
-            
-            // Line items as description entries
-            let subtotal = 0;
-            if (hasLineItems) {
-              lineItems.forEach((item: any) => {
-                const itemTotal = item.total || item.amount || 0;
-                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal;
-                subtotal += total;
-                
-                doc.fontSize(8).font('Helvetica').fillColor('#000000')
-                  .text(item.description || '', 40, doc.y, { width: 515 });
-                doc.moveDown(0.2);
-              });
-            } else {
-              const amount = typeof invoiceDetails.amount === 'string' ? parseFloat(invoiceDetails.amount) : (invoiceDetails.amount || 0);
-              subtotal = amount;
-            }
-            
-            doc.moveDown(0.5);
-            
-            // Totals section (right-aligned)
-            const gstRate = 0.15;
-            const gstAmount = subtotal * gstRate;
-            const totalAmount = subtotal + gstAmount;
-            
-            doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-            doc.moveDown(0.5);
-            
-            const totalsX = 380;
-            const valuesX = 470;
-            
-            doc.fontSize(8).font('Helvetica').fillColor('#666666');
-            doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
-            doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-            doc.moveDown(0.3);
-            
-            doc.fillColor('#666666');
-            doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
-            doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-            doc.moveDown(0.5);
-            
-            doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-            doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
-            doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-            
-            doc.moveDown(1);
-            
-            // Payment Information box with gray background
-            const boxY = doc.y;
-            doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
-            
-            doc.fillColor('#000000');
-            doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
-            doc.fontSize(8).font('Helvetica');
-            doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
-            doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
-            doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
-            
-            doc.fillColor('#000000');
-            doc.y = boxY + 70;
-            doc.moveDown(0.5);
-            
-            // Footer
-            doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-            doc.moveDown(0.3);
-            doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
-              .text(
-                'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
-                40,
-                doc.y,
-                { align: 'center', width: 515 }
-              );
-            
-            doc.end();
-          });
-          
-          const pdfBase64 = pdfBuffer.toString('base64');
-          
+          const invoiceForPdf = invoice || validatedInvoiceData;
+          console.log(`📄 Generating invoice PDF for email (invoice #${invoiceForPdf.invoiceNumber}, lineItems: ${(invoiceForPdf.items || invoiceForPdf.lineItems || []).length})`);
+          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer);
           emailAttachments.push({
-            content: pdfBase64,
-            filename: `Invoice-${invoiceDetails.invoiceNumber || 'unknown'}.pdf`,
+            content: pdfBuffer.toString('base64'),
+            filename: `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`,
             type: 'application/pdf',
             disposition: 'attachment'
           });
-          console.log(`📄 Generated invoice PDF: Invoice-${invoiceDetails.invoiceNumber}.pdf`);
+          console.log(`📄 Invoice PDF attached: Invoice-${invoiceForPdf.invoiceNumber}.pdf (${Math.round(pdfBuffer.length / 1024)}KB)`);
         } catch (pdfError) {
-          console.error('Error generating invoice PDF:', pdfError);
+          console.error('Error generating invoice PDF for email:', pdfError);
         }
       }
+
       
       // Add logo as inline attachment for emails with invoices
       if (validatedInvoiceData || invoiceId || invoice) {
@@ -6329,179 +6330,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const customer = customerData[0] || null;
       const job = jobData[0] || null;
       
-      // Generate PDF
-      const doc = new PDFDocument({ size: 'A4', margin: 40 });
-      const chunks: Buffer[] = [];
-      
-      doc.on('data', (chunk: Buffer) => {
-        chunks.push(Buffer.from(chunk));
-      });
-      
-      const pdfPromise = new Promise<Buffer>((resolve, reject) => {
-        doc.on('end', () => {
-          resolve(Buffer.concat(chunks));
-        });
-        doc.on('error', reject);
-      });
-      
-      // Format helpers
-      const formatDate = (date: any) => {
-        if (!date) return '';
-        return new Date(date).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' });
-      };
-      
-      const formatCurrency = (num: number) => {
-        return new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
-      };
-      
-      // Add logo
-      try {
-        doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
-      } catch (err) {
-        console.error('Failed to load logo:', err);
-      }
-      
-      // Invoice header on the right
-      doc.fontSize(12).font('Helvetica-Bold').text(
-        `Invoice #${invoice.invoiceNumber}`, 
-        350, 
-        45, 
-        { align: 'right', width: 205 }
-      );
-      const pdfBillingName2 = job?.billingNameOverride || customer?.name || 'Customer';
-      doc.fontSize(9).font('Helvetica').text(
-        `${pdfBillingName2} - ${formatDate(invoice.issueDate) || formatDate(new Date())}`,
-        350,
-        doc.y,
-        { align: 'right', width: 205 }
-      );
-      
-      // Black border separator
-      doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
-      doc.moveDown(1.5);
-      
-      // Bill To section
-      doc.y = 100;
-      doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
-      doc.moveDown(0.3);
-      doc.fontSize(9).font('Helvetica-Bold').text(pdfBillingName2, 40, doc.y);
-      if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
-        doc.moveDown(0.2);
-        doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
-        doc.fillColor('#000000');
-      }
-      doc.moveDown(0.2);
-      if (invoice.address || job?.address) {
-        doc.fontSize(8).font('Helvetica').fillColor('#666666')
-          .text(invoice.address || job?.address || '', 40, doc.y);
-        doc.moveDown(0.2);
-      }
-      if (customer?.email) {
-        doc.fontSize(8).fillColor('#666666').text(`✉ ${customer.email}`, 40, doc.y);
-        doc.moveDown(0.2);
-      }
-      doc.fillColor('#000000');
-      
-      doc.moveDown(0.5);
-      
-      // Description section
-      doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
-      doc.moveDown(0.3);
-      
-      const lineItems = invoice.items || [];
-      const hasLineItems = lineItems.length > 0;
-      
-      // Include job description if available
-      if (job?.description) {
-        doc.fontSize(8).font('Helvetica').fillColor('#333333')
-          .text(job.description, 40, doc.y, { width: 515 });
-        doc.fillColor('#000000');
-        doc.moveDown(0.3);
-      }
-      
-      if (invoice.notes) {
-        doc.fontSize(8).font('Helvetica').fillColor('#333333')
-          .text(invoice.notes, 40, doc.y, { width: 515 });
-        doc.fillColor('#000000');
-        doc.moveDown(0.3);
-      }
-      
-      // Line items as description entries
-      let subtotal = 0;
-      if (hasLineItems) {
-        lineItems.forEach((item: any) => {
-          const itemTotal = item.total || item.amount || 0;
-          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal;
-          subtotal += total;
-          
-          doc.fontSize(8).font('Helvetica').fillColor('#000000')
-            .text(item.description || '', 40, doc.y, { width: 515 });
-          doc.moveDown(0.2);
-        });
-      } else {
-        const amount = typeof invoice.amount === 'string' ? parseFloat(invoice.amount) : (invoice.amount || 0);
-        subtotal = amount;
-      }
-      
-      doc.moveDown(0.5);
-      
-      // Totals section (right-aligned)
-      const gstRate = 0.15;
-      const gstAmount = subtotal * gstRate;
-      const totalAmount = subtotal + gstAmount;
-      
-      doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-      doc.moveDown(0.5);
-      
-      const totalsX = 380;
-      const valuesX = 470;
-      
-      doc.fontSize(8).font('Helvetica').fillColor('#666666');
-      doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
-      doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-      doc.moveDown(0.3);
-      
-      doc.fillColor('#666666');
-      doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
-      doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-      doc.moveDown(0.5);
-      
-      doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-      doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
-      doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-      
-      doc.moveDown(1);
-      
-      // Payment Information box with gray background
-      const boxY = doc.y;
-      doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
-      
-      doc.fillColor('#000000');
-      doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
-      doc.fontSize(8).font('Helvetica');
-      doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
-      doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
-      doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
-      
-      doc.fillColor('#000000');
-      doc.y = boxY + 70;
-      doc.moveDown(0.5);
-      
-      // Footer
-      doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-      doc.moveDown(0.3);
-      doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
-        .text(
-          'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
-          40,
-          doc.y,
-          { align: 'center', width: 515 }
-        );
-      
-      doc.end();
-      
-      const pdfBuffer = await pdfPromise;
-      
+      // Generate PDF using the shared helper (same code as email attachment)
+      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer);
+
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
       res.send(pdfBuffer);
