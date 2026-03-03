@@ -1408,6 +1408,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       specialInstructions: schedulingData.notes
     };
 
+    // When booking a job in, advance its status to 'scheduled' if it isn't already
+    // (e.g. a quote that's been accepted and is now being scheduled)
+    if (jobToSchedule && jobToSchedule.status !== 'scheduled' && jobToSchedule.status !== 'completed' && jobToSchedule.status !== 'invoiced' && jobToSchedule.status !== 'archived') {
+      updates.status = 'scheduled';
+    }
+
     // Handle assignment based on mode (aligned with schema)
     if (assignmentMode === 'teams') {
       // assignedTeam is an array of team member IDs
