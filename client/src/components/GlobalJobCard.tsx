@@ -327,18 +327,29 @@ export function GlobalJobCard({
   // Separate ref specifically for the popup textarea element
   const descriptionPopupRef = useRef<HTMLTextAreaElement>(null);
 
-  // When the description popup opens: focus the textarea and place cursor at end
+  // When the description popup opens: focus the textarea, place cursor at end, and size to content
   useEffect(() => {
     if (!descriptionPopupOpen) return;
     // Give Dialog animation time to fully mount
     const timer = setTimeout(() => {
       const ta = descriptionPopupRef.current;
       if (!ta) return;
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
       ta.focus();
       ta.setSelectionRange(ta.value.length, ta.value.length);
     }, 80);
     return () => clearTimeout(timer);
   }, [descriptionPopupOpen]);
+
+  // Re-measure height whenever descriptionDraft changes via programmatic updates (Add Bullet, Clear, etc.)
+  useEffect(() => {
+    if (!descriptionPopupOpen) return;
+    const ta = descriptionPopupRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  }, [descriptionDraft, descriptionPopupOpen]);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -6811,7 +6822,10 @@ The Treemarkables Team`;
                     setDescriptionDraft('');
                     setTimeout(() => {
                       const ta = descriptionPopupRef.current;
-                      if (ta) { ta.style.height = '300px'; }
+                      if (ta) {
+                        ta.style.height = 'auto';
+                        ta.style.height = ta.scrollHeight + 'px';
+                      }
                     }, 0);
                   }}
                   className="flex items-center gap-1 text-red-500"
@@ -6822,20 +6836,20 @@ The Treemarkables Team`;
               )}
             </div>
 
-            {/* Raw textarea with dynamic rows — the rows attribute is CSS-computed at render time,
-                so the element is always tall enough for its content with zero internal scroll.
-                This is the only reliable way to prevent iOS from treating drag as scroll. */}
+            {/* Raw textarea — height is set via scrollHeight (exact browser measurement),
+                so there is zero internal overflow. iOS never sees a scrollable element and
+                interprets all touch drags as text-selection gestures. */}
             <textarea
               ref={descriptionPopupRef}
               value={descriptionDraft}
               onChange={(e) => setDescriptionDraft(e.target.value)}
-              rows={Math.max(12, (() => {
-                // Count visual rows: each \n is a new row, long lines wrap at ~42 chars on mobile
-                return descriptionDraft.split('\n').reduce((acc, line) => {
-                  return acc + Math.max(1, Math.ceil((line.length || 1) / 42));
-                }, 0) + 3;
-              })())}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none overflow-hidden"
+              onInput={(e) => {
+                const ta = e.currentTarget;
+                ta.style.height = 'auto';
+                ta.style.height = ta.scrollHeight + 'px';
+              }}
+              rows={12}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
               placeholder={"Describe the work that needs to be done\n\nUse the 'Add Bullet' button or type • for bullet points"}
               data-testid="textarea-description-popup"
             />
