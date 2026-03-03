@@ -258,6 +258,7 @@ export function GlobalJobCard({
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
   const [descriptionCopied, setDescriptionCopied] = useState(false);
+  const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [formLoadedJobId, setFormLoadedJobId] = useState<string | null>(null);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
   
@@ -6739,7 +6740,7 @@ The Treemarkables Team`;
         }
         setDescriptionPopupOpen(open);
       }}>
-        <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] overflow-y-auto">
+        <DialogContent className={`w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] ${descriptionFocused ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <DialogHeader>
             <DialogTitle className="text-center">Crew Notes</DialogTitle>
           </DialogHeader>
@@ -6784,7 +6785,10 @@ The Treemarkables Team`;
                   size="sm"
                   onClick={() => {
                     const ta = descriptionPopupRef.current;
-                    if (ta) { ta.focus(); ta.select(); }
+                    if (ta) {
+                      ta.focus();
+                      ta.setSelectionRange(0, ta.value.length);
+                    }
                   }}
                   className="flex items-center gap-1"
                 >
@@ -6848,6 +6852,8 @@ The Treemarkables Team`;
                 ta.style.height = 'auto';
                 ta.style.height = ta.scrollHeight + 'px';
               }}
+              onFocus={() => setDescriptionFocused(true)}
+              onBlur={() => setDescriptionFocused(false)}
               rows={12}
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-base font-medium ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 resize-none"
               placeholder={"Describe the work that needs to be done\n\nUse the 'Add Bullet' button or type • for bullet points"}
