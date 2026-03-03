@@ -53,6 +53,7 @@ interface CreatedInvoice {
 export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate, startFresh = false }: InvoiceBuilderProps) {
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [showSmsComposer, setShowSmsComposer] = useState(false);
@@ -1236,15 +1237,37 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                 {createdInvoice?.id && (
                   <Button
                     type="button"
-                    onClick={() => {
-                      window.open(`/api/invoices/${createdInvoice.id}/pdf`, '_blank');
+                    onClick={async () => {
+                      setIsDownloadingPdf(true);
+                      try {
+                        const response = await fetch(`/api/invoices/${createdInvoice.id}/pdf`);
+                        if (!response.ok) throw new Error('Failed to fetch PDF');
+                        const blob = await response.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `Invoice-${createdInvoice.invoiceNumber || createdInvoice.id}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      } catch (err) {
+                        toast({ title: 'Download failed', description: 'Could not download the PDF. Please try again.', variant: 'destructive' });
+                      } finally {
+                        setIsDownloadingPdf(false);
+                      }
                     }}
+                    disabled={isDownloadingPdf}
                     variant="outline"
                     data-testid="button-download-pdf"
                     className="w-full sm:w-auto"
                   >
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Download PDF
+                    {isDownloadingPdf ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <FileDown className="h-4 w-4 mr-2" />
+                    )}
+                    {isDownloadingPdf ? 'Preparing...' : 'Download PDF'}
                   </Button>
                 )}
                 <Button
