@@ -3217,7 +3217,7 @@ export const callRecords = pgTable("call_records", {
   recordingUrl: text("recording_url"),
   transcription: text("transcription"),
   transcriptionSummary: text("transcription_summary"), // AI-generated summary
-  sentiment: text("sentiment"), // 'positive', 'neutral', 'negative' from Hero AI
+  sentiment: text("sentiment"), // 'positive', 'neutral', 'negative'
   
   // Linking to entities
   jobId: varchar("job_id").references(() => jobs.id),
@@ -3225,17 +3225,6 @@ export const callRecords = pgTable("call_records", {
   leadId: varchar("lead_id").references(() => leads.id),
   employeeId: varchar("employee_id").references(() => employees.id), // Staff member who made/received call
   jobDiaryEntryId: varchar("job_diary_entry_id").references(() => jobDiaryEntries.id),
-  
-  // VoIP provider identification
-  provider: text("provider").default('hero'), // 'hero' or 'telnyx'
-  
-  // Call metadata
-  heroCallId: text("hero_call_id"), // Hero's unique call ID
-  heroExtension: text("hero_extension"), // Which Hero extension handled the call
-  
-  // Telnyx specific
-  telnyxCallId: text("telnyx_call_id"), // Telnyx call control ID
-  telnyxRecordingId: text("telnyx_recording_id"), // Telnyx recording ID
   
   // Contact info (cached for quick display)
   callerName: text("caller_name"),
