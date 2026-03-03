@@ -4909,8 +4909,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const total = subtotal + gst;
 
       // Get base URL for customer-facing links
-      // Use production domain to avoid security warnings in emails
-      const baseUrl = 'https://app.treemarkables.co.nz';
+      // Derive from the incoming request so it always matches the actual deployed domain
+      const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol;
+      const host = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string) || 'app.treemarkables.co.nz';
+      const baseUrl = `${protocol}://${host}`;
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
@@ -4934,7 +4936,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const customerPhone = customer?.phone || job?.jobContactPhone || '';
       
       // Generate proposal acceptance URL - goes directly to acceptance page
-      const proposalAcceptUrl = `https://${baseUrl.replace(/^https?:\/\//, '')}/proposal/${proposalId}/accept`;
+      const proposalAcceptUrl = `${baseUrl}/proposal/${proposalId}/accept`;
       
       const htmlContent = `
         <div style="font-family: Arial, sans-serif; padding: 20px;">
