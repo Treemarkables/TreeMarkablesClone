@@ -1070,8 +1070,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return deepSearchResults;
     }
 
+    const isSearching = searchQuery.trim().length > 0;
+
     const filtered = jobs
       .filter(job => {
+        // When searching, bypass the tab filter and show all non-archived active jobs
+        // so the user can find a job regardless of which status tab is selected
+        if (isSearching) {
+          return job.status !== 'archived';
+        }
         // When a specific status filter is active, show only matching jobs (no exclusions)
         if (jobFilter === 'quote') return job.status === 'quote';
         if (jobFilter === 'work_order') return job.status === 'work_order';
@@ -1081,8 +1088,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
       })
       .filter(job => {
-        // When a specific status filter is active, show all matching jobs regardless of date
-        if (jobFilter !== 'all') return true;
+        // When searching or a specific status filter is active, skip the date window
+        if (isSearching || jobFilter !== 'all') return true;
 
         // Always include jobs with 'scheduled' or 'work_order' status - these are active jobs that need dispatching
         if (job.status === 'scheduled' || job.status === 'work_order') {
@@ -1106,8 +1113,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }
       })
       .filter(job => {
-        // Apply search filter
-        if (!searchQuery.trim()) return true;
+        // Apply search filter across all searchable fields including job number
+        if (!isSearching) return true;
         
         const query = searchQuery.toLowerCase().trim();
         const customerName = job.customerName?.toLowerCase() || '';
@@ -1115,12 +1122,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const serviceType = job.serviceType?.toLowerCase() || '';
         const description = job.description?.toLowerCase() || '';
         const jobId = job.id?.toLowerCase() || '';
+        const jobNumber = String(job.jobNumber ?? '').toLowerCase();
         
         return customerName.includes(query) ||
                address.includes(query) ||
                serviceType.includes(query) ||
                description.includes(query) ||
-               jobId.includes(query);
+               jobId.includes(query) ||
+               jobNumber.includes(query);
       });
     
     // Deduplicate jobs by ID (keep the most recent assignment for each unique job)
