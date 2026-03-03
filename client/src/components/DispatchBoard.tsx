@@ -1005,8 +1005,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     setIsDeepSearchLoading(true);
     
     try {
+      // Strip leading '#' so searching "#3571" finds job number 3571
+      const cleanQuery = query.trim().startsWith('#') ? query.trim().slice(1) : query.trim();
       // Call the server-side search endpoint
-      const response = await fetch(`/api/jobs/search?q=${encodeURIComponent(query.trim())}&limit=100&excludeArchived=true`);
+      const response = await fetch(`/api/jobs/search?q=${encodeURIComponent(cleanQuery)}&limit=100&excludeArchived=true`);
       
       if (!response.ok) {
         throw new Error('Search failed');
@@ -1116,7 +1118,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Apply search filter across all searchable fields including job number
         if (!isSearching) return true;
         
-        const query = searchQuery.toLowerCase().trim();
+        const rawQuery = searchQuery.toLowerCase().trim();
+        // Strip a leading '#' so typing "#3571" matches job number "3571"
+        const query = rawQuery.startsWith('#') ? rawQuery.slice(1) : rawQuery;
         const customerName = job.customerName?.toLowerCase() || '';
         const address = job.address?.toLowerCase() || '';
         const serviceType = job.serviceType?.toLowerCase() || '';
