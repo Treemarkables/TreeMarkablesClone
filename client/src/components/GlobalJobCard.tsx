@@ -257,6 +257,7 @@ export function GlobalJobCard({
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState('');
+  const [descriptionCopied, setDescriptionCopied] = useState(false);
   const [formLoadedJobId, setFormLoadedJobId] = useState<string | null>(null);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
   
@@ -6711,13 +6712,28 @@ The Treemarkables Team`;
           form.setValue('description', descriptionDraft, { shouldDirty: true });
         }
         setDescriptionPopupOpen(open);
+        if (open) {
+          // Auto-focus textarea and place cursor at end when popup opens
+          setTimeout(() => {
+            const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
+            if (textarea) {
+              textarea.focus();
+              const len = textarea.value.length;
+              textarea.setSelectionRange(len, len);
+              // Initialise height for auto-grow
+              textarea.style.height = 'auto';
+              textarea.style.height = Math.max(textarea.scrollHeight, 300) + 'px';
+            }
+          }, 80);
+        }
       }}>
         <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center">Crew Notes</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <div className="flex gap-2 mb-2">
+            {/* Toolbar */}
+            <div className="flex flex-wrap gap-2 mb-2">
               <Button
                 type="button"
                 variant="outline"
@@ -6747,6 +6763,47 @@ The Treemarkables Team`;
                 <List className="h-4 w-4" />
                 Add Bullet
               </Button>
+
+              {/* Select All */}
+              {descriptionDraft && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
+                    if (textarea) {
+                      textarea.focus();
+                      textarea.select();
+                    }
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  <Pencil className="h-4 w-4" />
+                  Select All
+                </Button>
+              )}
+
+              {/* Copy All */}
+              {descriptionDraft && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(descriptionDraft).then(() => {
+                      setDescriptionCopied(true);
+                      setTimeout(() => setDescriptionCopied(false), 1500);
+                    });
+                  }}
+                  className="flex items-center gap-1"
+                >
+                  {descriptionCopied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  {descriptionCopied ? 'Copied!' : 'Copy'}
+                </Button>
+              )}
+
+              {/* Clear */}
               {descriptionDraft && (
                 <Button
                   type="button"
@@ -6760,17 +6817,25 @@ The Treemarkables Team`;
                 </Button>
               )}
             </div>
-            <Textarea 
+
+            {/* Textarea — no internal scroll so drag-to-select works correctly */}
+            <Textarea
               value={descriptionDraft}
-              onChange={(e) => setDescriptionDraft(e.target.value)}
-              className="min-h-[300px] max-h-[60vh] text-base font-medium" 
+              onChange={(e) => {
+                setDescriptionDraft(e.target.value);
+                // Auto-grow: reset to auto so shrinking also works
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.max(e.target.scrollHeight, 300) + 'px';
+              }}
+              className="min-h-[300px] overflow-hidden resize-none text-base font-medium"
+              style={{ height: '300px' }}
               placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
               data-testid="textarea-description-popup"
             />
           </div>
           <div className="flex gap-2 pt-2">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="flex-1"
               onClick={() => {
                 form.setValue('description', descriptionDraft, { shouldDirty: true });
