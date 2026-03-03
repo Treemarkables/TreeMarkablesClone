@@ -322,8 +322,27 @@ export function GlobalJobCard({
   const originalLoadedDataRef = useRef<Record<string, any>>({}); // Store original loaded values to detect real changes on manual save
   const currentJobIdRef = useRef<string | null>(null); // For clipboard paste handler
   
-  // Description textarea auto-resize ref
+  // Description textarea auto-resize ref (for the inline preview div that opens the popup)
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Separate ref specifically for the popup textarea element
+  const descriptionPopupRef = useRef<HTMLTextAreaElement>(null);
+
+  // When the description popup opens: init auto-grow height, focus, and cursor-to-end
+  useEffect(() => {
+    if (!descriptionPopupOpen) return;
+    // Give React & Dialog animation time to mount the textarea into the DOM
+    const timer = setTimeout(() => {
+      const ta = descriptionPopupRef.current;
+      if (!ta) return;
+      // Expand to fit all existing content (no internal scroll on first open)
+      ta.style.height = 'auto';
+      ta.style.height = Math.max(ta.scrollHeight, 300) + 'px';
+      // Focus and send cursor to end so mobile keyboard opens
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [descriptionPopupOpen]);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -6712,20 +6731,6 @@ The Treemarkables Team`;
           form.setValue('description', descriptionDraft, { shouldDirty: true });
         }
         setDescriptionPopupOpen(open);
-        if (open) {
-          // Auto-focus textarea and place cursor at end when popup opens
-          setTimeout(() => {
-            const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
-            if (textarea) {
-              textarea.focus();
-              const len = textarea.value.length;
-              textarea.setSelectionRange(len, len);
-              // Initialise height for auto-grow
-              textarea.style.height = 'auto';
-              textarea.style.height = Math.max(textarea.scrollHeight, 300) + 'px';
-            }
-          }, 80);
-        }
       }}>
         <DialogContent className="w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -6739,10 +6744,10 @@ The Treemarkables Team`;
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
-                  if (textarea) {
-                    const start = textarea.selectionStart;
-                    const end = textarea.selectionEnd;
+                  const ta = descriptionPopupRef.current;
+                  if (ta) {
+                    const start = ta.selectionStart;
+                    const end = ta.selectionEnd;
                     const beforeCursor = descriptionDraft.substring(0, start);
                     const afterCursor = descriptionDraft.substring(end);
                     const isStartOfLine = start === 0 || beforeCursor.endsWith('\n');
@@ -6750,9 +6755,9 @@ The Treemarkables Team`;
                     const newValue = beforeCursor + bullet + afterCursor;
                     setDescriptionDraft(newValue);
                     setTimeout(() => {
-                      textarea.focus();
+                      ta.focus();
                       const newPos = start + bullet.length;
-                      textarea.setSelectionRange(newPos, newPos);
+                      ta.setSelectionRange(newPos, newPos);
                     }, 0);
                   } else {
                     setDescriptionDraft(prev => prev + (prev ? '\n• ' : '• '));
@@ -6771,11 +6776,8 @@ The Treemarkables Team`;
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    const textarea = document.querySelector('[data-testid="textarea-description-popup"]') as HTMLTextAreaElement;
-                    if (textarea) {
-                      textarea.focus();
-                      textarea.select();
-                    }
+                    const ta = descriptionPopupRef.current;
+                    if (ta) { ta.focus(); ta.select(); }
                   }}
                   className="flex items-center gap-1"
                 >
@@ -6809,7 +6811,13 @@ The Treemarkables Team`;
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setDescriptionDraft('')}
+                  onClick={() => {
+                    setDescriptionDraft('');
+                    setTimeout(() => {
+                      const ta = descriptionPopupRef.current;
+                      if (ta) { ta.style.height = '300px'; }
+                    }, 0);
+                  }}
                   className="flex items-center gap-1 text-red-500"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -6818,17 +6826,21 @@ The Treemarkables Team`;
               )}
             </div>
 
-            {/* Textarea — no internal scroll so drag-to-select works correctly */}
+            {/* Textarea — grows to fit content so iOS drag-to-select never conflicts with scroll */}
             <Textarea
+              ref={descriptionPopupRef}
               value={descriptionDraft}
               onChange={(e) => {
                 setDescriptionDraft(e.target.value);
-                // Auto-grow: reset to auto so shrinking also works
                 e.target.style.height = 'auto';
                 e.target.style.height = Math.max(e.target.scrollHeight, 300) + 'px';
               }}
-              className="min-h-[300px] overflow-hidden resize-none text-base font-medium"
-              style={{ height: '300px' }}
+              onFocus={(e) => {
+                // Re-measure on focus in case content changed while blurred
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.max(e.target.scrollHeight, 300) + 'px';
+              }}
+              className="min-h-[300px] resize-none overflow-hidden text-base font-medium w-full"
               placeholder="Describe the work that needs to be done&#10;&#10;Use the 'Add Bullet' button or type • for bullet points"
               data-testid="textarea-description-popup"
             />
