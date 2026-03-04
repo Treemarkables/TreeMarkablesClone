@@ -442,6 +442,24 @@ export function GlobalJobCard({
   const quoteTemplate = (quoteTemplateData as any)?.data || null;
   const proposalTemplate = (proposalTemplateData as any)?.data || null;
 
+  // Immediately persist lineItems to the server so that any subsequent auto-save
+  // invalidateQueries refetch doesn't wipe out unsaved local changes.
+  const saveLineItemsNow = async (updatedItems: any[]) => {
+    if (mode !== 'edit' || !editingJob?.id) return;
+    try {
+      await apiRequest('PUT', `/api/jobs/${editingJob.id}`, { lineItems: updatedItems });
+      // Optimistically update cache so the next refetch sees the correct data
+      queryClient.setQueryData(['/api/jobs', editingJob.id], (old: any) => {
+        if (!old) return old;
+        const jobData = old?.data ?? old;
+        const updated = { ...jobData, lineItems: updatedItems };
+        return old?.data ? { ...old, data: updated } : updated;
+      });
+    } catch (err) {
+      console.error('❌ Failed to save line items:', err);
+    }
+  };
+
   // Line item management functions
   const addLineItem = () => {
     const unitPriceNum = typeof newLineItem.unitPrice === 'string' ? parseFloat(newLineItem.unitPrice) : newLineItem.unitPrice;
@@ -467,8 +485,15 @@ export function GlobalJobCard({
       priceIncludesTax: false // Default to tax exclusive
     };
 
+    // Build updated array manually (before appendLineItem runs its state update)
+    // so we can save it to the server immediately without waiting for React re-render.
+    const updatedItems = [...(form.getValues('lineItems') || []), lineItem];
+
     // Use useFieldArray helper to properly update the field array
     appendLineItem(lineItem);
+
+    // Persist immediately so invalidateQueries refetches see the new item
+    saveLineItemsNow(updatedItems);
     
     // Reset form
     setNewLineItem({
@@ -490,8 +515,12 @@ export function GlobalJobCard({
   };
 
   const removeLineItem = (index: number) => {
+    const currentItems = form.getValues('lineItems') || [];
+    const updatedItems = currentItems.filter((_: any, i: number) => i !== index);
     // Use useFieldArray helper to properly update the field array
     removeLineItemField(index);
+    // Persist immediately
+    saveLineItemsNow(updatedItems);
   };
 
   const selectFromCatalog = (catalogItem: any) => {
@@ -549,8 +578,13 @@ export function GlobalJobCard({
       priceIncludesTax: false // Default to tax exclusive
     };
 
+    const updatedItems = [...(form.getValues('lineItems') || []), lineItem];
+
     // Use appendLineItem from useFieldArray for proper form integration
     appendLineItem(lineItem);
+
+    // Persist immediately so server has latest lineItems
+    saveLineItemsNow(updatedItems);
     
     // Reset search
     setSearchQuery('');
