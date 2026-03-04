@@ -8,6 +8,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Conversation, ConversationMessage } from '@shared/schema';
 import { insertLeadSchema } from '@shared/schema';
+import { SiFacebook } from 'react-icons/si';
 import {
   Menu,
   ChevronDown,
@@ -18,8 +19,10 @@ import {
   MoreVertical,
   Briefcase,
   UserPlus,
-  Trash2
+  Trash2,
+  Wand2
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -49,6 +52,9 @@ export default function Opportunities() {
   const [replyContent, setReplyContent] = useState('');
   const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
   const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
+  const [showFacebookPasteDialog, setShowFacebookPasteDialog] = useState(false);
+  const [facebookPasteText, setFacebookPasteText] = useState('');
+  const [isExtractingFacebook, setIsExtractingFacebook] = useState(false);
   const [, setLocation] = useLocation();
   
   // Bulk delete state
@@ -286,6 +292,49 @@ export default function Opportunities() {
     }
   });
 
+  // Facebook message extraction handler
+  const handleExtractFacebookMessage = async () => {
+    if (!facebookPasteText.trim()) return;
+    setIsExtractingFacebook(true);
+    try {
+      const res = await apiRequest('POST', '/api/ai/extract-facebook-message', { messageText: facebookPasteText });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
+      const extracted = data.data;
+      const firstName = extracted.firstName || '';
+      const lastName  = extracted.lastName  || '';
+      const fullName  = [firstName, lastName].filter(Boolean).join(' ') || '';
+      opportunityForm.reset({
+        name:             fullName,
+        email:            extracted.email   || '',
+        phone:            extracted.phone   || '',
+        address:          extracted.address || '',
+        serviceRequested: extracted.description || '',
+        urgency:          'medium',
+        status:           'new',
+        source:           'facebook',
+        notes:            facebookPasteText
+      });
+      setShowFacebookPasteDialog(false);
+      setFacebookPasteText('');
+      setShowCreateOpportunityDialog(true);
+    } catch (err) {
+      toast({
+        title: 'Could not extract details — please fill in manually',
+        variant: 'destructive'
+      });
+      setShowFacebookPasteDialog(false);
+      opportunityForm.reset({
+        name: '', email: '', phone: '', address: '', serviceRequested: '',
+        urgency: 'medium', status: 'new', source: 'facebook',
+        notes: facebookPasteText
+      });
+      setShowCreateOpportunityDialog(true);
+    } finally {
+      setIsExtractingFacebook(false);
+    }
+  };
+
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
@@ -377,7 +426,7 @@ export default function Opportunities() {
   return (
     <div className="flex flex-col h-full bg-white w-full overflow-x-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b w-full">
+      <div className="flex items-center justify-between px-3 sm:px-4 py-3 border-b w-full gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <Button variant="ghost" size="icon" className="flex-shrink-0" data-testid="button-menu">
             <Menu className="h-5 w-5" />
@@ -391,6 +440,16 @@ export default function Opportunities() {
             <p className="text-xs text-gray-500">Gisborne</p>
           </div>
         </div>
+        <Button
+          size="sm"
+          variant="outline"
+          className="flex-shrink-0 flex items-center gap-1.5 text-[#1877F2] border-[#1877F2]/30"
+          onClick={() => { setFacebookPasteText(''); setShowFacebookPasteDialog(true); }}
+          data-testid="button-from-facebook"
+        >
+          <SiFacebook className="h-4 w-4" />
+          <span className="hidden sm:inline">From Facebook</span>
+        </Button>
       </div>
 
       {/* Filter Buttons */}
@@ -562,6 +621,18 @@ export default function Opportunities() {
                     <p className="text-xs sm:text-sm text-gray-600 truncate flex-1 min-w-0" data-testid={`text-preview-${conversation.id}`}>
                       {truncateMessage(conversation.title)}
                     </p>
+                    {(conversation as any).source === 'facebook_messenger' && (
+                      <Badge className="flex-shrink-0 bg-[#1877F2] text-white text-[9px] px-1.5 py-0 h-4 gap-0.5 no-default-active-elevate">
+                        <SiFacebook className="h-2.5 w-2.5" />
+                        Messenger
+                      </Badge>
+                    )}
+                    {(conversation as any).source === 'facebook' && (
+                      <Badge className="flex-shrink-0 bg-[#1877F2] text-white text-[9px] px-1.5 py-0 h-4 gap-0.5 no-default-active-elevate">
+                        <SiFacebook className="h-2.5 w-2.5" />
+                        Facebook
+                      </Badge>
+                    )}
                     {conversation.unreadCount && conversation.unreadCount > 0 && (
                       <div 
                         className="flex-shrink-0 bg-green-500 text-white text-[10px] sm:text-xs font-semibold rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center ml-auto"
@@ -758,6 +829,58 @@ export default function Opportunities() {
         includeStatus={true}
         testIdPrefix="opportunity"
       />
+
+      {/* Facebook Paste Dialog */}
+      <Dialog open={showFacebookPasteDialog} onOpenChange={setShowFacebookPasteDialog}>
+        <DialogContent className="sm:max-w-[560px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <SiFacebook className="h-5 w-5 text-[#1877F2]" />
+              Create Lead from Facebook Message
+            </DialogTitle>
+            <DialogDescription>
+              Copy the conversation from your Facebook inbox and paste it below. AI will extract the customer's details and pre-fill the lead form.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Textarea
+              placeholder={"Paste the Facebook message conversation here...\n\nE.g.:\nHi, I need 3 large pine trees removed from my property at 24 Oak Street, Gisborne. Can you give me a quote? My number is 021 234 5678.\n— Sarah"}
+              value={facebookPasteText}
+              onChange={(e) => setFacebookPasteText(e.target.value)}
+              rows={10}
+              className="resize-none"
+              data-testid="textarea-facebook-paste"
+            />
+          </div>
+          <DialogFooter className="flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowFacebookPasteDialog(false)}
+              data-testid="button-facebook-paste-cancel"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleExtractFacebookMessage}
+              disabled={!facebookPasteText.trim() || isExtractingFacebook}
+              className="bg-[#1877F2] text-white"
+              data-testid="button-facebook-extract"
+            >
+              {isExtractingFacebook ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Extracting...
+                </>
+              ) : (
+                <>
+                  <Wand2 className="h-4 w-4 mr-2" />
+                  Extract Details
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

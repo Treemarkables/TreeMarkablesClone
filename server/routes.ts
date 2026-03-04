@@ -19485,6 +19485,172 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // ─── Facebook Messenger Webhook ─────────────────────────────────────────────
+  // GET: Facebook calls this to verify the webhook endpoint
+  app.get('/api/webhooks/facebook/messenger', (req: Request, res: Response) => {
+    const mode      = req.query['hub.mode'];
+    const token     = req.query['hub.verify_token'];
+    const challenge = req.query['hub.challenge'];
+
+    const verifyToken = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN;
+    if (mode === 'subscribe' && token === verifyToken) {
+      console.log('✅ Facebook Messenger webhook verified');
+      return res.status(200).send(challenge);
+    }
+    console.warn('⚠️ Facebook Messenger webhook verification failed');
+    return res.sendStatus(403);
+  });
+
+  // POST: Facebook sends message events here
+  app.post('/api/webhooks/facebook/messenger', async (req: Request, res: Response) => {
+    // Acknowledge immediately so Facebook doesn't retry
+    res.sendStatus(200);
+
+    try {
+      const body = req.body;
+      if (body.object !== 'page') return;
+
+      const PAGE_TOKEN = process.env.FACEBOOK_PAGE_ACCESS_TOKEN;
+      if (!PAGE_TOKEN) {
+        console.warn('⚠️ FACEBOOK_PAGE_ACCESS_TOKEN not set — cannot process Messenger webhook');
+        return;
+      }
+
+      for (const entry of (body.entry || [])) {
+        for (const event of (entry.messaging || [])) {
+          // Skip echoes (messages sent by the page itself)
+          if (!event.message || event.message.is_echo) continue;
+
+          const senderId   = event.sender?.id;
+          const messageText = event.message?.text || '';
+
+          if (!senderId || !messageText.trim()) continue;
+
+          console.log(`📨 Facebook Messenger message from PSID ${senderId}: ${messageText.substring(0, 80)}`);
+
+          // Fetch sender's name from Graph API
+          let senderName = '';
+          try {
+            const profileUrl = `https://graph.facebook.com/v18.0/${senderId}?fields=name&access_token=${PAGE_TOKEN}`;
+            const profileRes = await fetch(profileUrl);
+            if (profileRes.ok) {
+              const profile = await profileRes.json() as { name?: string };
+              senderName = profile.name || '';
+            }
+          } catch (err) {
+            console.warn('Could not fetch Facebook sender profile:', err);
+          }
+
+          // Use AI to extract job details from the message
+          let extracted: { firstName?: string; lastName?: string; phone?: string; email?: string; address?: string; description?: string } = {};
+          try {
+            const aiResponse = await openai.chat.completions.create({
+              model: 'gpt-5',
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are a lead extraction assistant for a New Zealand tree removal company. Extract structured information from Facebook messages. Respond ONLY with valid JSON — no markdown, no explanation.'
+                },
+                {
+                  role: 'user',
+                  content: `Extract lead details from this Facebook message. Return JSON with keys: firstName, lastName, phone, email, address, description (nature of tree work), isJobInquiry (boolean).\n\nMessage:\n${messageText}\n\nSender name from profile: "${senderName}"`
+                }
+              ],
+              response_format: { type: 'json_object' }
+            });
+            extracted = JSON.parse(aiResponse.choices[0].message.content || '{}');
+          } catch (err) {
+            console.warn('AI extraction failed for Messenger message:', err);
+          }
+
+          // Only create a lead if it looks like a genuine job inquiry
+          if (extracted.isJobInquiry !== false) {
+            const nameParts = senderName.split(' ');
+            const firstName = extracted.firstName || nameParts[0] || 'Facebook';
+            const lastName  = extracted.lastName  || nameParts.slice(1).join(' ') || 'Messenger';
+            const fullName  = `${firstName} ${lastName}`.trim();
+
+            try {
+              const lead = await storage.createPipelineLead({
+                name:             fullName,
+                phone:            extracted.phone   || '',
+                email:            extracted.email   || '',
+                address:          extracted.address || '',
+                serviceRequested: extracted.description || messageText,
+                source:           'facebook_messenger',
+                status:           'new',
+                urgency:          'medium',
+                notes:            `Facebook Messenger message:\n\n${messageText}`
+              });
+
+              console.log(`✅ Lead created from Facebook Messenger: ${lead.id} (${fullName})`);
+
+              // Auto-reply to the sender
+              try {
+                const replyUrl = `https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_TOKEN}`;
+                await fetch(replyUrl, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    recipient: { id: senderId },
+                    message:   { text: "Hi! Thanks for reaching out to Treemarkables. We've received your message and will be in touch shortly!" }
+                  })
+                });
+              } catch (err) {
+                console.warn('Could not send Messenger auto-reply:', err);
+              }
+            } catch (err) {
+              console.error('Failed to create lead from Facebook Messenger:', err);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error processing Facebook Messenger webhook:', err);
+    }
+  });
+
+  // ─── AI: Extract lead details from pasted Facebook message ──────────────────
+  app.post('/api/ai/extract-facebook-message', async (req: Request, res: Response) => {
+    try {
+      const { messageText } = req.body;
+      if (!messageText || typeof messageText !== 'string' || !messageText.trim()) {
+        return res.status(400).json({ success: false, message: 'messageText is required' });
+      }
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a lead extraction assistant for a New Zealand tree removal company called Treemarkables. Extract structured information from copied Facebook message threads. Respond ONLY with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: `Extract customer contact details and job request from the following Facebook message conversation. Return JSON with these exact keys:
+- firstName (string or null)
+- lastName (string or null)
+- phone (NZ phone number string or null)
+- email (string or null)
+- address (job site address string or null)
+- description (description of the tree work they want done, or null)
+- preferredTime (any date/time they mentioned, as a human-readable string or null)
+
+Message conversation:
+${messageText}`
+          }
+        ],
+        response_format: { type: 'json_object' }
+      });
+
+      const extracted = JSON.parse(aiResponse.choices[0].message.content || '{}');
+      return res.json({ success: true, data: extracted });
+    } catch (error) {
+      console.error('Error extracting Facebook message details:', error);
+      return res.status(500).json({ success: false, message: 'Failed to extract details from message' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
