@@ -227,6 +227,8 @@ export function JobDiarySection({
   const [touchEnd, setTouchEnd] = useState<number | null>(null);
 
   const extractTimeFromText = (text: string): string => {
+    // Normalise dotted abbreviations: "a.m." → "am", "p.m." → "pm"
+    const normalised = text.replace(/\ba\.m\./gi, 'am').replace(/\bp\.m\./gi, 'pm');
     const patterns = [
       /(\d{1,2}):(\d{2}):\d{2}\s*(am|pm)/i,  // "10:30:00 am" (with seconds)
       /(\d{1,2})[.:](\d{2})\s*(am|pm)/i,      // "10:30 am" or "10.30 am"
@@ -235,7 +237,7 @@ export function JobDiarySection({
       /\b([01]?\d|2[0-3]):([0-5]\d)\b/,        // "10:30" 24-hour plain
     ];
     for (const pat of patterns) {
-      const m = text.match(pat);
+      const m = normalised.match(pat);
       if (m) {
         let hours = parseInt(m[1]);
         const minutes = m[2] && /^\d+$/.test(m[2]) ? m[2].padStart(2, '0') : '00';
