@@ -19651,6 +19651,100 @@ ${messageText}`
     }
   });
 
+  // ─── Mulch Drops ────────────────────────────────────────────────────────────
+  app.get('/api/mulch-drops', async (req: Request, res: Response) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const drops = await storage.getMulchDrops(status);
+      return res.json({ success: true, data: drops });
+    } catch (error) {
+      console.error('Error fetching mulch drops:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch mulch drops' });
+    }
+  });
+
+  app.post('/api/mulch-drops', async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.insertMulchDropSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ success: false, message: 'Invalid data', errors: parsed.error.errors });
+      const drop = await storage.createMulchDrop(parsed.data);
+      return res.status(201).json({ success: true, data: drop });
+    } catch (error) {
+      console.error('Error creating mulch drop:', error);
+      return res.status(500).json({ success: false, message: 'Failed to create mulch drop' });
+    }
+  });
+
+  app.get('/api/mulch-drops/:id', async (req: Request, res: Response) => {
+    try {
+      const drop = await storage.getMulchDrop(req.params.id);
+      if (!drop) return res.status(404).json({ success: false, message: 'Not found' });
+      return res.json({ success: true, data: drop });
+    } catch (error) {
+      console.error('Error fetching mulch drop:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch mulch drop' });
+    }
+  });
+
+  app.patch('/api/mulch-drops/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.updateMulchDropSchema.safeParse(req.body);
+      if (!parsed.success) return res.status(400).json({ success: false, message: 'Invalid data', errors: parsed.error.errors });
+      const drop = await storage.updateMulchDrop(req.params.id, parsed.data);
+      return res.json({ success: true, data: drop });
+    } catch (error) {
+      console.error('Error updating mulch drop:', error);
+      return res.status(500).json({ success: false, message: 'Failed to update mulch drop' });
+    }
+  });
+
+  app.delete('/api/mulch-drops/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteMulchDrop(req.params.id);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting mulch drop:', error);
+      return res.status(500).json({ success: false, message: 'Failed to delete mulch drop' });
+    }
+  });
+
+  // Upload photo for a mulch drop
+  app.post('/api/mulch-drops/:id/photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      const drop = await storage.getMulchDrop(req.params.id);
+      if (!drop) return res.status(404).json({ success: false, message: 'Not found' });
+      if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+      const photoStorage = new PhotoStorageService();
+      const { url: photoUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.mimetype,
+        `mulch-drop-${drop.id}-${Date.now()}`
+      );
+      const updatedPhotos = [...(drop.photos ?? []), photoUrl];
+      const updated = await storage.updateMulchDrop(drop.id, { photos: updatedPhotos });
+      return res.json({ success: true, data: updated, photoUrl });
+    } catch (error) {
+      console.error('Error uploading mulch drop photo:', error);
+      return res.status(500).json({ success: false, message: 'Failed to upload photo' });
+    }
+  });
+
+  // Delete a specific photo from a mulch drop
+  app.delete('/api/mulch-drops/:id/photos', async (req: Request, res: Response) => {
+    try {
+      const { photoUrl } = req.body;
+      const drop = await storage.getMulchDrop(req.params.id);
+      if (!drop) return res.status(404).json({ success: false, message: 'Not found' });
+      const updatedPhotos = (drop.photos ?? []).filter(p => p !== photoUrl);
+      const updated = await storage.updateMulchDrop(drop.id, { photos: updatedPhotos });
+      return res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error removing mulch drop photo:', error);
+      return res.status(500).json({ success: false, message: 'Failed to remove photo' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

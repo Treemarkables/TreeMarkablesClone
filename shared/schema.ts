@@ -3293,5 +3293,27 @@ export type TreeMarker = typeof treeMarkers.$inferSelect;
 export type InsertTreeMarker = z.infer<typeof insertTreeMarkerSchema>;
 export type UpdateTreeMarker = z.infer<typeof updateTreeMarkerSchema>;
 
+// ─── Mulch Drops ────────────────────────────────────────────────────────────
+export const mulchDrops = pgTable("mulch_drops", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  address: text("address").notNull(),
+  dropNotes: text("drop_notes"),           // where exactly on the property
+  status: text("status").notNull().default('pending'), // pending | delivered | cancelled
+  photos: text("photos").array().default([]),
+  notes: text("notes"),                    // general internal notes
+  source: text("source").default('manual'), // manual | facebook
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertMulchDropSchema = createInsertSchema(mulchDrops).omit({ id: true, createdAt: true, updatedAt: true });
+export const updateMulchDropSchema = insertMulchDropSchema.partial();
+
+export type MulchDrop = typeof mulchDrops.$inferSelect;
+export type InsertMulchDrop = z.infer<typeof insertMulchDropSchema>;
+export type UpdateMulchDrop = z.infer<typeof updateMulchDropSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

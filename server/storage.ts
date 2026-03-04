@@ -926,6 +926,13 @@ export interface IStorage {
   updateTreeMarker(id: string, updates: schema.UpdateTreeMarker): Promise<schema.TreeMarker>;
   deleteTreeMarker(id: string): Promise<boolean>;
   getTreeMarkersByJob(jobId: string): Promise<schema.TreeMarker[]>;
+
+  // Mulch Drops
+  createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
+  getMulchDrop(id: string): Promise<schema.MulchDrop | null>;
+  getMulchDrops(status?: string): Promise<schema.MulchDrop[]>;
+  updateMulchDrop(id: string, updates: schema.UpdateMulchDrop): Promise<schema.MulchDrop>;
+  deleteMulchDrop(id: string): Promise<boolean>;
 }
 
 // Database Storage Implementation
@@ -6149,6 +6156,39 @@ class DatabaseStorage implements IStorage {
       .from(schema.treeMarkers)
       .where(eq(schema.treeMarkers.jobId, jobId))
       .orderBy(schema.treeMarkers.createdAt);
+  }
+
+  // ─── Mulch Drops ──────────────────────────────────────────────────────────
+  async createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop> {
+    const [created] = await db.insert(schema.mulchDrops).values(drop).returning();
+    return created;
+  }
+
+  async getMulchDrop(id: string): Promise<schema.MulchDrop | null> {
+    const [drop] = await db.select().from(schema.mulchDrops).where(eq(schema.mulchDrops.id, id));
+    return drop ?? null;
+  }
+
+  async getMulchDrops(status?: string): Promise<schema.MulchDrop[]> {
+    const query = db.select().from(schema.mulchDrops);
+    if (status) {
+      return query.where(eq(schema.mulchDrops.status, status)).orderBy(schema.mulchDrops.createdAt);
+    }
+    return query.orderBy(schema.mulchDrops.createdAt);
+  }
+
+  async updateMulchDrop(id: string, updates: schema.UpdateMulchDrop): Promise<schema.MulchDrop> {
+    const [updated] = await db.update(schema.mulchDrops)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.mulchDrops.id, id))
+      .returning();
+    if (!updated) throw new Error(`Mulch drop ${id} not found`);
+    return updated;
+  }
+
+  async deleteMulchDrop(id: string): Promise<boolean> {
+    const result = await db.delete(schema.mulchDrops).where(eq(schema.mulchDrops.id, id));
+    return (result.rowCount ?? 0) > 0;
   }
 }
 

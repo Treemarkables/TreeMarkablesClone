@@ -64,6 +64,7 @@ import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
+import MulchDrops from "@/pages/MulchDrops";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import { Button } from "@/components/ui/button";
@@ -709,6 +710,13 @@ function Router() {
       </Route>
       
       {/* Account dropdown pages - Admin only */}
+      <Route path="/mulch-drops">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <MulchDrops />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/history">
         <ProtectedRoute>
           <SidebarLayout>
