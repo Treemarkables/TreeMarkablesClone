@@ -49,6 +49,7 @@ This application is a comprehensive business management platform for Treemarkabl
 - **Customer Notifications**: User-controlled job booking notifications via sendClientNotification checkbox.
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories.
 - **Call Records**: Historical call record log viewable in the Communications tab, with linking to jobs and customers.
+- **Mulch Drops**: Dedicated page for tracking mulch delivery orders (name, phone, address, drop-location notes, photos, status: Pending/Delivered/Cancelled). Includes "From Facebook" paste-and-extract flow using the AI extraction endpoint. Mobile-optimised card list with photo upload (camera capture), status toggle, and CRUD dialogs. Route: `/mulch-drops`. DB table: `mulch_drops`.
 
 ## Auto-Save Architecture (GlobalJobCard)
 The job form uses a multi-layered save system to ensure data is never silently lost:
