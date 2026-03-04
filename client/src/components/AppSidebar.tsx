@@ -277,6 +277,18 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {/* Mulch Drops - Available to all users */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/mulch-drops"}>
+                  <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
+                      <Leaf className="h-4 w-4" />
+                    </span>
+                    <span>Mulch Drops</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
@@ -400,16 +412,6 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                         <Inbox className="h-4 w-4" />
                       </span>
                       <span>Inbox</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/mulch-drops"}>
-                    <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
-                        <Leaf className="h-4 w-4" />
-                      </span>
-                      <span>Mulch Drops</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
