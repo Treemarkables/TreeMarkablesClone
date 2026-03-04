@@ -57,6 +57,7 @@ import {
   ChevronUp,
   Loader2,
   X,
+  ImageIcon,
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
 import type { MulchDrop } from "@shared/schema";
@@ -67,8 +68,8 @@ type Status = "pending" | "delivered" | "cancelled";
 // ─── Schemas ─────────────────────────────────────────────────────────────────
 const dropFormSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  phone: z.string().min(1, "Phone is required"),
-  address: z.string().min(1, "Address is required"),
+  phone: z.string().optional().default(""),
+  address: z.string().optional().default(""),
   dropNotes: z.string().optional(),
   notes: z.string().optional(),
   status: z.enum(["pending", "delivered", "cancelled"]).default("pending"),
@@ -136,10 +137,12 @@ function DropCard({
                 </Badge>
               )}
             </div>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground mt-0.5">
-              <Phone className="h-3 w-3 shrink-0" />
-              <a href={`tel:${drop.phone}`} className="hover:underline">{drop.phone}</a>
-            </div>
+            {drop.phone && (
+              <div className="flex items-center gap-1 text-sm text-muted-foreground mt-0.5">
+                <Phone className="h-3 w-3 shrink-0" />
+                <a href={`tel:${drop.phone}`} className="hover:underline">{drop.phone}</a>
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -155,10 +158,12 @@ function DropCard({
       </CardHeader>
 
       <CardContent className="space-y-2 pt-0">
-        <div className="flex items-start gap-1.5 text-sm">
-          <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5" />
-          <span className="text-foreground">{drop.address}</span>
-        </div>
+        {drop.address && (
+          <div className="flex items-start gap-1.5 text-sm">
+            <MapPin className="h-3.5 w-3.5 shrink-0 text-muted-foreground mt-0.5" />
+            <span className="text-foreground">{drop.address}</span>
+          </div>
+        )}
 
         {drop.dropNotes && (
           <div className="flex items-start gap-1.5 text-sm">
@@ -273,6 +278,8 @@ export default function MulchDrops() {
   const [fbOpen, setFbOpen] = useState(false);
   const [fbText, setFbText] = useState("");
   const [fbLoading, setFbLoading] = useState(false);
+  const [screenshotLoading, setScreenshotLoading] = useState(false);
+  const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Data ───────────────────────────────────────────────────────────────────
   const { data: dropsRes, isLoading } = useQuery<{ success: boolean; data: MulchDrop[] }>({
@@ -335,6 +342,42 @@ export default function MulchDrops() {
   // ─── Status toggle ──────────────────────────────────────────────────────────
   const handleStatusToggle = (id: string, next: Status) => {
     updateMutation.mutate({ id, data: { status: next } });
+  };
+
+  // ─── Screenshot AI extraction ────────────────────────────────────────────────
+  const handleScreenshotExtract = async (file: File) => {
+    setScreenshotLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/api/ai/extract-screenshot", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const result = await res.json();
+      if (!result.success) throw new Error();
+      const { name, phone, address, notes } = result.data ?? {};
+      addForm.reset({
+        name: name ?? "",
+        phone: phone ?? "",
+        address: address ?? "",
+        dropNotes: "",
+        notes: notes ?? "",
+        status: "pending",
+        source: "facebook",
+      });
+      setAddOpen(true);
+      if (!name) {
+        toast({ title: "Details extracted — check and fill in anything missing" });
+      }
+    } catch {
+      toast({ title: "Could not read screenshot — please fill in manually", variant: "destructive" });
+      addForm.reset({ name: "", phone: "", address: "", dropNotes: "", notes: "", status: "pending", source: "manual" });
+      setAddOpen(true);
+    } finally {
+      setScreenshotLoading(false);
+    }
   };
 
   // ─── Facebook AI extraction ─────────────────────────────────────────────────
@@ -415,7 +458,32 @@ export default function MulchDrops() {
           <h1 className="text-lg font-semibold">Mulch Drops</h1>
           <p className="text-xs text-muted-foreground">{drops.length} total orders</p>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <input
+            ref={screenshotInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleScreenshotExtract(file);
+              e.target.value = "";
+            }}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => screenshotInputRef.current?.click()}
+            disabled={screenshotLoading}
+          >
+            {screenshotLoading ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <ImageIcon className="h-3.5 w-3.5" />
+            )}
+            From Screenshot
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -504,14 +572,14 @@ export default function MulchDrops() {
               )} />
               <FormField control={addForm.control} name="phone" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone</FormLabel>
+                  <FormLabel>Phone <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                   <FormControl><Input placeholder="021 000 0000" type="tel" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={addForm.control} name="address" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Delivery Address</FormLabel>
+                  <FormLabel>Delivery Address <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                   <FormControl><Input placeholder="123 Example St, Auckland" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
@@ -575,14 +643,14 @@ export default function MulchDrops() {
               )} />
               <FormField control={editForm.control} name="phone" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Phone</FormLabel>
+                  <FormLabel>Phone <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                   <FormControl><Input type="tel" {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
               <FormField control={editForm.control} name="address" render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Delivery Address</FormLabel>
+                  <FormLabel>Delivery Address <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
                   <FormControl><Input {...field} /></FormControl>
                   <FormMessage />
                 </FormItem>
