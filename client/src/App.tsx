@@ -709,13 +709,13 @@ function Router() {
         </ProtectedRoute>
       </Route>
       
-      {/* Account dropdown pages - Admin only */}
+      {/* Mulch Drops - accessible to all logged-in users */}
       <Route path="/mulch-drops">
-        <ProtectedRoute>
+        <AuthenticatedRoute>
           <SidebarLayout>
             <MulchDrops />
           </SidebarLayout>
-        </ProtectedRoute>
+        </AuthenticatedRoute>
       </Route>
       <Route path="/history">
         <ProtectedRoute>
