@@ -3297,8 +3297,8 @@ export type UpdateTreeMarker = z.infer<typeof updateTreeMarkerSchema>;
 export const mulchDrops = pgTable("mulch_drops", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
-  phone: text("phone").notNull(),
-  address: text("address").notNull(),
+  phone: text("phone").notNull().default(''),
+  address: text("address").notNull().default(''),
   dropNotes: text("drop_notes"),           // where exactly on the property
   status: text("status").notNull().default('pending'), // pending | delivered | cancelled
   photos: text("photos").array().default([]),

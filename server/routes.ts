@@ -19651,6 +19651,52 @@ ${messageText}`
     }
   });
 
+  // ─── Screenshot extraction for Mulch Drops ─────────────────────────────────
+  app.post('/api/ai/extract-screenshot', imageUpload.single('image'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No image uploaded' });
+      }
+      const base64Image = req.file.buffer.toString('base64');
+      const mimeType = req.file.mimetype || 'image/jpeg';
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: `You are a data extraction assistant for Treemarkables, a New Zealand tree service company that delivers free wood mulch. This screenshot is likely from a Facebook post, comment, message, or website form requesting a mulch delivery.
+
+Extract the following information and return ONLY valid JSON with these exact keys:
+- name (full name of the person requesting mulch, string or null)
+- phone (NZ phone number, string or null)
+- address (delivery address, string or null)
+- notes (any extra details about where to drop it, how much they want, timing preferences, etc., string or null)
+
+If you cannot find a value, use null. Do not guess.`
+              },
+              {
+                type: 'image_url',
+                image_url: { url: `data:${mimeType};base64,${base64Image}` }
+              }
+            ]
+          }
+        ],
+        response_format: { type: 'json_object' },
+        max_tokens: 500
+      });
+
+      const extracted = JSON.parse(aiResponse.choices[0].message.content || '{}');
+      return res.json({ success: true, data: extracted });
+    } catch (error) {
+      console.error('Error extracting screenshot details:', error);
+      return res.status(500).json({ success: false, message: 'Failed to extract details from screenshot' });
+    }
+  });
+
   // ─── Mulch Drops ────────────────────────────────────────────────────────────
   app.get('/api/mulch-drops', async (req: Request, res: Response) => {
     try {
