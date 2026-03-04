@@ -228,8 +228,11 @@ export function JobDiarySection({
 
   const extractTimeFromText = (text: string): string => {
     const patterns = [
-      /(\d{1,2})[.:](\d{2})\s*(am|pm)/i,
-      /(\d{1,2})\s*(am|pm)/i,
+      /(\d{1,2}):(\d{2}):\d{2}\s*(am|pm)/i,  // "10:30:00 am" (with seconds)
+      /(\d{1,2})[.:](\d{2})\s*(am|pm)/i,      // "10:30 am" or "10.30 am"
+      /(\d{1,2})\s*(am|pm)/i,                  // "10 am"
+      /(\d{1,2}):(\d{2}):\d{2}(?!\s*[ap]m)/i, // "10:30:00" 24-hour with seconds
+      /\b([01]?\d|2[0-3]):([0-5]\d)\b/,        // "10:30" 24-hour plain
     ];
     for (const pat of patterns) {
       const m = text.match(pat);
