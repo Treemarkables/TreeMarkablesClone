@@ -367,7 +367,8 @@ export default function ConversationDetail() {
 
     try {
       const response = await apiRequest('POST', '/api/leads/extract-from-message', { message: allText });
-      const data = (response as any).data || {};
+      const parsed = await response.json();
+      const data = parsed.data || {};
       const nameParts = (data.name || '').trim().split(/\s+/);
       return {
         name: data.name || '',
