@@ -99,7 +99,8 @@ export function CreateLeadFromMessageDialog({
 
   const extractFromTextMutation = useMutation({
     mutationFn: async (data: { message: string; phone?: string }) => {
-      return apiRequest('POST', '/api/leads/extract-from-message', data);
+      const response = await apiRequest('POST', '/api/leads/extract-from-message', data);
+      return response.json();
     },
     onSuccess: (response: any) => {
       if (response.success && response.data) {
