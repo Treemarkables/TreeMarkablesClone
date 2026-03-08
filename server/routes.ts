@@ -3567,6 +3567,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
+      if (processedBody.scheduledEndDate && typeof processedBody.scheduledEndDate === 'string') {
+        processedBody.scheduledEndDate = new Date(processedBody.scheduledEndDate);
+      }
+      if (processedBody.scheduledEndDate === '' || processedBody.scheduledEndDate === null) {
+        processedBody.scheduledEndDate = null;
+      }
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
@@ -3967,6 +3973,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Convert date strings to Date objects
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
+      }
+      if (processedBody.scheduledEndDate && typeof processedBody.scheduledEndDate === 'string') {
+        processedBody.scheduledEndDate = new Date(processedBody.scheduledEndDate);
+      }
+      if (processedBody.scheduledEndDate === '' || processedBody.scheduledEndDate === null) {
+        processedBody.scheduledEndDate = null;
       }
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);

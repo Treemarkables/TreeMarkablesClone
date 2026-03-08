@@ -125,6 +125,7 @@ interface JobAssignment {
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
   totalAmount?: string; // Job price for display on dispatch board
+  scheduledEndDate?: string; // For multi-day jobs
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -848,6 +849,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          scheduledEndDate: apiJob.scheduledEndDate || undefined,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -1847,7 +1849,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </Badge>
                         </div>
                         
-                        {/* Row 3: Description snippet */}
+                        {/* Row 3: Multi-day badge or description */}
+                        {job.scheduledEndDate && (
+                          <div className="flex items-center gap-1 mb-1">
+                            <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
+                              {format(new Date(job.startTime), 'MMM d')} – {format(new Date(job.scheduledEndDate), 'MMM d')}
+                            </Badge>
+                          </div>
+                        )}
                         {job.description && (
                           <p className="text-sm text-gray-500 line-clamp-1 mb-2">
                             {job.description}
@@ -2207,12 +2216,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               Urgent
                             </Badge>
                           )}
-                          {job.scheduledDate && (
+                          {job.scheduledEndDate ? (
+                            <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
+                              {format(new Date(job.startTime), 'MMM d')} – {format(new Date(job.scheduledEndDate), 'MMM d')}
+                            </Badge>
+                          ) : job.startTime ? (
                             <span className="flex items-center gap-1 text-xs text-gray-500">
                               <Calendar className="h-3 w-3" />
-                              {format(new Date(job.scheduledDate), 'MMM d')}
+                              {format(new Date(job.startTime), 'MMM d')}
                             </span>
-                          )}
+                          ) : null}
                         </div>
                         
                         {/* Call & Message Buttons - using proper icon button styling */}
