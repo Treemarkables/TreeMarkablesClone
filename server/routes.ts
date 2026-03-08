@@ -5153,7 +5153,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             jobId: proposal.jobId,
             entryType: 'email',
             title: `Proposal Sent: ${proposalNumber}`,
-            description: `Proposal "${proposal.title || 'Treemarkables Quote'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${total.toFixed(2)} NZD`,
+            description: `Proposal "${proposal.title || 'Treemarkables Quote'}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${subtotal.toFixed(2)} NZD excl. GST`,
             authorName: 'System',
             metadata: {
               proposalId,
