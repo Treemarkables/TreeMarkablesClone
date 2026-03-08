@@ -340,6 +340,7 @@ export const jobs = pgTable("jobs", {
   leadSource: text("lead_source"), // phone, website, referral, google, facebook, direct, other
   address: text("address").notNull().default("Address not specified"),
   scheduledDate: timestamp("scheduled_date"),
+  scheduledEndDate: timestamp("scheduled_end_date"), // For multi-day jobs — last day of the job
   scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),

@@ -283,6 +283,7 @@ export function GlobalJobCard({
   const [isSchedulingModalOpen, setIsSchedulingModalOpen] = useState(false);
   const [schedulingData, setSchedulingData] = useState({
     date: '',
+    endDate: '', // For multi-day jobs — blank means single-day
     startTime: '',
     duration: '', // in minutes
     assignedTo: [] as string[],
@@ -1843,8 +1844,16 @@ export function GlobalJobCard({
         // Remove duplicate employee IDs when loading existing assignments
         const uniqueEmployeeIds = [...new Set(data.data.map((a: any) => a.employeeId))];
         
+        // Pre-populate endDate from the job's scheduledEndDate if set
+        let existingEndDate = '';
+        if (editingJob?.scheduledEndDate) {
+          const endDateNZ = utcToNZTime(new Date(editingJob.scheduledEndDate));
+          existingEndDate = endDateNZ.date;
+        }
+
         setSchedulingData({
           date: startNZ.date, // NZ date, not UTC!
+          endDate: existingEndDate,
           startTime: startNZ.time, // NZ time, not UTC!
           duration: durationMinutes.toString(),
           assignedTo: uniqueEmployeeIds,
@@ -2165,11 +2174,20 @@ The Treemarkables Team`;
 
       // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, assignedTo, and status
       // Send scheduledDate as UTC ISO string to avoid timezone interpretation issues
+      // Calculate scheduledEndDate if multi-day
+      let scheduledEndDateISO: string | null = null;
+      if (schedulingData.endDate && schedulingData.endDate !== schedulingData.date) {
+        // End of the last day (use end time on the final day)
+        const endDateUTCFinal = nzTimeToUTC(schedulingData.endDate, endTimeNZ.time);
+        scheduledEndDateISO = endDateUTCFinal.toISOString();
+      }
+
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           scheduledDate: startTimeISO, // Send full UTC ISO string
+          scheduledEndDate: scheduledEndDateISO, // null for single-day jobs
           scheduledStartTime: timeStr, // NZ local time (HH:MM format)
           scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
           assignedTo: uniqueEmployeeIds,
@@ -2196,9 +2214,11 @@ The Treemarkables Team`;
 
       if (data.success) {
         const scheduledDate = new Date(startTimeISO);
+        const isMultiDay = !!scheduledEndDateISO;
+        const endDateDisplay = isMultiDay ? ` – ${format(new Date(scheduledEndDateISO!), 'PPP')}` : '';
         toast({
           title: "Job Scheduled",
-          description: `${uniqueEmployeeIds.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
+          description: `${uniqueEmployeeIds.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')}${endDateDisplay} at ${format(scheduledDate, 'p')}`,
         });
 
         // Update form's status to match database
@@ -2212,6 +2232,7 @@ The Treemarkables Team`;
         setIsSchedulingModalOpen(false);
         setSchedulingData({
           date: '',
+          endDate: '',
           startTime: '',
           duration: '',
           assignedTo: [],
@@ -4948,13 +4969,15 @@ The Treemarkables Team`;
                               const employee = employees.find((e: any) => e.id === employeeId);
                               const employeeName = employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown Staff';
                               const scheduledDate = editingJob.scheduledDate ? new Date(editingJob.scheduledDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+                              const scheduledEndDateDisplay = editingJob.scheduledEndDate ? new Date(editingJob.scheduledEndDate).toLocaleDateString('en-NZ', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
                               const scheduledTime = editingJob.scheduledStartTime ? formatTime12Hour(editingJob.scheduledStartTime) : '';
+                              const dateRange = scheduledEndDateDisplay ? `${scheduledDate} – ${scheduledEndDateDisplay}` : scheduledDate;
                               
                               return (
                                 <div key={employeeId} className="flex items-center justify-between gap-2">
                                   <div className="flex items-center gap-2">
                                     <Calendar className="w-4 h-4 text-blue-600" />
-                                    <span className="font-medium">{employeeName} on {scheduledDate} {scheduledTime}</span>
+                                    <span className="font-medium">{employeeName} on {dateRange} {scheduledTime}</span>
                                   </div>
                                   <Button
                                     size="icon"
@@ -6472,14 +6495,38 @@ The Treemarkables Team`;
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
           <div className="space-y-4">
-            <div>
-              <label className="text-sm font-medium">Date</label>
-              <Input
-                type="date"
-                value={schedulingData.date}
-                onChange={(e) => setSchedulingData(prev => ({ ...prev, date: e.target.value }))}
-                data-testid="input-schedule-date"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Start Date</label>
+                <Input
+                  type="date"
+                  value={schedulingData.date}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    setSchedulingData(prev => ({
+                      ...prev,
+                      date: newDate,
+                      // If end date is now before start date, clear it
+                      endDate: prev.endDate && prev.endDate < newDate ? '' : prev.endDate
+                    }));
+                  }}
+                  data-testid="input-schedule-date"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium">
+                  End Date
+                  <span className="text-xs text-muted-foreground font-normal ml-1">(multi-day)</span>
+                </label>
+                <Input
+                  type="date"
+                  value={schedulingData.endDate}
+                  min={schedulingData.date || undefined}
+                  onChange={(e) => setSchedulingData(prev => ({ ...prev, endDate: e.target.value }))}
+                  data-testid="input-schedule-end-date"
+                  placeholder="Same day"
+                />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
