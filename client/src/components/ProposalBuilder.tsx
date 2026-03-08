@@ -87,9 +87,14 @@ export function ProposalBuilder({
   });
 
   // Fetch existing proposal data when in edit mode
+  // staleTime: Infinity + refetchOnWindowFocus: false prevent background re-fetches
+  // from triggering the useEffect that resets local sections state mid-edit
   const { data: existingProposalData } = useQuery({
     queryKey: ['/api/proposals', proposalId],
     enabled: !!proposalId && mode === 'edit' && isOpen,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
   });
 
   // Fetch materials/services for line item selection
@@ -153,6 +158,10 @@ export function ProposalBuilder({
   const [autoSaveStatus, setAutoSaveStatus] = useState<'saved' | 'saving' | 'unsaved'>('saved');
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const lastSavedSnapshot = useRef<string | null>(null);
+  // Guard: track whether sections have been initialised from server data for the
+  // current proposalId.  Prevents a background re-fetch of existingProposalData
+  // from overwriting unsaved local edits (e.g. newly-added line items).
+  const sectionsInitializedRef = useRef<string | null>(null);
   const [emailForm, setEmailForm] = useState({
     to: '',
     cc: '',
@@ -234,9 +243,27 @@ export function ProposalBuilder({
     }
   }, [isOpen]);
 
+  // Reset the guard whenever the modal closes or the proposalId changes so it
+  // re-initialises correctly the next time it opens for a (possibly different) proposal.
+  useEffect(() => {
+    if (!isOpen) {
+      sectionsInitializedRef.current = null;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    sectionsInitializedRef.current = null;
+  }, [proposalId]);
+
   // Load existing proposal data when in edit mode
   useEffect(() => {
     if (existingProposalData && (existingProposalData as any)?.success && mode === 'edit' && isOpen) {
+      // Guard: only initialise once per (proposalId + open session).
+      // Without this, any background re-fetch of existingProposalData would call
+      // setSections() again and wipe out unsaved changes like newly-added line items.
+      const currentKey = `${proposalId}-${isOpen}`;
+      if (sectionsInitializedRef.current === currentKey) return;
+
       const proposal = (existingProposalData as any).data;
       
       console.log('Loading existing proposal:', proposal);
@@ -276,10 +303,11 @@ export function ProposalBuilder({
         }));
         
         setSections(loadedSections);
+        sectionsInitializedRef.current = currentKey;
         console.log('Loaded sections with photos and line items:', loadedSections);
       }
     }
-  }, [existingProposalData, mode, isOpen, form]);
+  }, [existingProposalData, mode, isOpen, form, proposalId]);
 
   // Line item form
   const [currentLineItem, setCurrentLineItem] = useState<Partial<LineItem>>({
