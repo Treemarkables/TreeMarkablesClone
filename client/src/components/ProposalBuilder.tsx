@@ -162,6 +162,10 @@ export function ProposalBuilder({
   // current proposalId.  Prevents a background re-fetch of existingProposalData
   // from overwriting unsaved local edits (e.g. newly-added line items).
   const sectionsInitializedRef = useRef<string | null>(null);
+  // Guard: track whether create-mode sections have been initialised from jobData.
+  // Prevents GlobalJobCard auto-save cache updates (which create a new jobData
+  // object reference) from re-triggering the useEffect and wiping user-added items.
+  const createModeInitializedRef = useRef(false);
   const [emailForm, setEmailForm] = useState({
     to: '',
     cc: '',
@@ -176,6 +180,13 @@ export function ProposalBuilder({
   // Initialize proposal with job data when available (only in create mode)
   useEffect(() => {
     if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen && mode === 'create') {
+      // Guard: only initialize sections once per open session.
+      // Without this, GlobalJobCard's 1.5-second auto-save updates the job query
+      // cache (new object reference for jobData), which re-triggers this effect and
+      // calls setSections([initialSection]), wiping any line items the user has added.
+      if (createModeInitializedRef.current) return;
+      createModeInitializedRef.current = true;
+
       const job = (jobData as any).data;
       
       // Check if job description should be included (defaults to true if not set)
@@ -243,11 +254,12 @@ export function ProposalBuilder({
     }
   }, [isOpen]);
 
-  // Reset the guard whenever the modal closes or the proposalId changes so it
-  // re-initialises correctly the next time it opens for a (possibly different) proposal.
+  // Reset both guards whenever the modal closes so they re-initialise correctly
+  // the next time it opens (possibly for a different proposal/job).
   useEffect(() => {
     if (!isOpen) {
       sectionsInitializedRef.current = null;
+      createModeInitializedRef.current = false;
     }
   }, [isOpen]);
 
