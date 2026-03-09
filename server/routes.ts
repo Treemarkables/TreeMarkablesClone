@@ -974,7 +974,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.send(`User-agent: *
 Allow: /
 
-Sitemap: https://www.treemarkables.co.nz/sitemap.xml`);
+Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       }
     } catch (error) {
       console.error('Error serving robots.txt:', error);
