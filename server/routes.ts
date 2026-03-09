@@ -5532,6 +5532,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Prepare email content with any necessary formatting
       let emailHtml = emailBody.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\*(.*?)\*/g, '<em>$1</em>') + invoiceHtml;
       
+      // If no invoice was found via invoiceId but the client explicitly attached an invoice,
+      // fetch it from storage so the PDF gets generated
+      if (!invoice && !validatedInvoiceData && Array.isArray(attachments)) {
+        const invoiceAttachment = attachments.find((a: any) => a.type === 'invoice' && a.id);
+        if (invoiceAttachment) {
+          try {
+            invoice = await storage.getInvoice(invoiceAttachment.id);
+            console.log(`📄 Resolved invoice from client attachments array: ${invoiceAttachment.id}`);
+          } catch (err) {
+            console.warn('Could not fetch invoice from client attachments array:', err);
+          }
+        }
+      }
+
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       

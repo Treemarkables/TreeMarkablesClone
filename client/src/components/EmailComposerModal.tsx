@@ -277,6 +277,7 @@ export function EmailComposerModal({
       
       const populatedSubject = template.subject
         .replace(/{jobNumber}/g, job.jobNumber || "")
+        .replace(/{address}/g, job.address || customer.address || "")
         .replace(/{customerAddress}/g, job.address || "")
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
         .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`)
@@ -285,6 +286,7 @@ export function EmailComposerModal({
       let populatedBody = template.body
         .replace(/{firstName}/g, firstName || "there")
         .replace(/{customerName}/g, customerName || "Valued Customer")
+        .replace(/{jobNumber}/g, job.jobNumber || "")
         .replace(/{jobDescription}/g, job.description || job.title || "tree service")
         .replace(/{address}/g, job.address || customer.address || "")
         .replace(/{invoiceLink}/g, invoiceData?.id ? `${baseUrl}/invoice/${invoiceData.id}` : "View invoice in your customer portal")
@@ -307,6 +309,23 @@ export function EmailComposerModal({
         body: populatedBody,
         selectedTemplate: template.id
       });
+
+      // Auto-attach invoice PDF if the pre-selected template has attachInvoicePdf: true
+      if ((template as any).attachInvoicePdf && invoiceData) {
+        setAttachments(prev => {
+          const alreadyAttached = prev.some((a: any) => a.type === 'invoice');
+          if (alreadyAttached) return prev;
+          return [
+            ...prev,
+            {
+              name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
+              type: 'invoice' as const,
+              id: invoiceData.id,
+              url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
+            }
+          ];
+        });
+      }
       
       setHasInitialized(true);
     } else if (!isOpen) {
@@ -499,6 +518,7 @@ export function EmailComposerModal({
     
     const populatedSubject = template.subject
       .replace(/{jobNumber}/g, job?.jobNumber || "")
+      .replace(/{address}/g, job?.address || customer?.address || "")
       .replace(/{customerAddress}/g, job?.address || "")
       .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
       .replace(/{invoiceAmount}/g, `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`)
@@ -511,6 +531,7 @@ export function EmailComposerModal({
     let populatedBody = template.body
       .replace(/{firstName}/g, firstName || "there")
       .replace(/{customerName}/g, customerName || "Valued Customer")
+      .replace(/{jobNumber}/g, job?.jobNumber || "")
       .replace(/{jobDescription}/g, job?.description || job?.title || "tree service")
       .replace(/{address}/g, job?.address || customer?.address || "")
       .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
