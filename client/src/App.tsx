@@ -482,9 +482,9 @@ function Router() {
   const [location] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
   
-  // Redirect root to home page for everyone
+  // Render Home directly at / with no redirect — better for SEO (no "Page with redirect" in Search Console)
   if (location === '/') {
-    return <Redirect to="/home" />;
+    return <Home />;
   }
   
   return (
