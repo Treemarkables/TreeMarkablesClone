@@ -739,13 +739,21 @@ export function ProposalBuilder({
   // Mutations
   const createProposalMutation = useMutation({
     mutationFn: async (data: any) => {
-      console.log('Creating proposal with data:', data);
-      const response = await apiRequest('POST', '/api/proposals', data);
-      console.log('Proposal creation response:', response);
-      return response;
+      // Pull out internal routing flag — never sent to the server
+      const { _proposalId, ...payload } = data;
+      if (_proposalId) {
+        // EDIT MODE: update existing proposal via PUT
+        console.log('Updating proposal', _proposalId, 'with data:', payload);
+        const response = await apiRequest('PUT', `/api/proposals/${_proposalId}`, payload);
+        return await response.json();
+      }
+      // CREATE MODE: create new proposal via POST
+      console.log('Creating proposal with data:', payload);
+      const response = await apiRequest('POST', '/api/proposals', payload);
+      return await response.json();
     },
     onSuccess: (response: any) => {
-      console.log('Proposal created successfully:', response);
+      console.log('Proposal saved successfully:', response);
       queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
       
       // Also invalidate the job diary timeline if this proposal is associated with a job
@@ -757,16 +765,16 @@ export function ProposalBuilder({
       form.reset();
       setSections([]);
       
-      // Close modal with a slight delay to show success toast
+      // Close modal with a slight delay
       setTimeout(() => {
         onClose();
       }, 1500);
     },
     onError: (error: any) => {
-      console.error('Proposal creation error:', error);
+      console.error('Proposal save error:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create proposal. Please try again.",
+        description: error.message || "Failed to save proposal. Please try again.",
         variant: "destructive",
       });
     },
@@ -1360,19 +1368,31 @@ export function ProposalBuilder({
     try {
       let effectiveJobId = data.jobId || jobId;
       
-      // If no job ID and we have a callback to save the parent job, call it first
-      if (!effectiveJobId && onRequestJobSave) {
-        try {
+      // In edit mode the proposal already has a jobId — no need to save the parent job
+      if (mode !== 'edit') {
+        // If no job ID and we have a callback to save the parent job, call it first
+        if (!effectiveJobId && onRequestJobSave) {
+          try {
+            toast({
+              title: "Saving Job",
+              description: "Saving job before creating proposal...",
+            });
+            effectiveJobId = await onRequestJobSave();
+            form.setValue('jobId', effectiveJobId);
+          } catch (error) {
+            console.error('Failed to save parent job:', error);
+            toast({
+              title: "Save Failed",
+              description: "Please save the job before creating a proposal",
+              variant: "destructive",
+            });
+            return;
+          }
+        }
+        
+        if (!effectiveJobId) {
           toast({
-            title: "Saving Job",
-            description: "Saving job before creating proposal...",
-          });
-          effectiveJobId = await onRequestJobSave();
-          form.setValue('jobId', effectiveJobId);
-        } catch (error) {
-          console.error('Failed to save parent job:', error);
-          toast({
-            title: "Save Failed",
+            title: "Job Required",
             description: "Please save the job before creating a proposal",
             variant: "destructive",
           });
@@ -1380,20 +1400,11 @@ export function ProposalBuilder({
         }
       }
       
-      if (!effectiveJobId) {
-        toast({
-          title: "Job Required",
-          description: "Please save the job before creating a proposal",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      const proposalData = {
+      const proposalData: any = {
         customerId: data.customerId || customerId,
         jobId: effectiveJobId,
-        quoteId: data.quoteId, // Optional - can be undefined
-        proposalNumber: data.proposalNumber || `PROP-${Date.now()}`, // Auto-generate if not provided
+        quoteId: data.quoteId,
+        proposalNumber: data.proposalNumber || `PROP-${Date.now()}`,
         title: data.title,
         introduction: data.introduction,
         subtotal: subtotal.toString(),
@@ -1405,9 +1416,14 @@ export function ProposalBuilder({
         status: 'draft',
         deliveryMethod: data.deliveryMethod,
         notes: data.notes,
-        createdBy: 'system', // Replace with actual user
-        sections: sections, // Include sections and line items
+        createdBy: 'system',
+        sections: sections,
       };
+
+      // In edit mode, pass the proposal ID so the mutation uses PUT instead of POST
+      if (mode === 'edit' && draftProposalId) {
+        proposalData._proposalId = draftProposalId;
+      }
 
       await createProposalMutation.mutateAsync(proposalData);
     } catch (error) {
