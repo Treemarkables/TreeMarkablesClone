@@ -98,10 +98,10 @@ export default function HedgeTrimming() {
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
-    "@id": "https://www.treemarkables.co.nz/hedge-trimming#business",
+    "@id": "https://app.treemarkables.co.nz/hedge-trimming#business",
     "name": "Treemarkables Hedge Trimming Services",
     "description": "Professional hedge trimming and maintenance services in Gisborne, New Zealand. Expert shaping, pruning, and regular maintenance for residential and commercial hedges.",
-    "url": "https://www.treemarkables.co.nz/hedge-trimming",
+    "url": "https://app.treemarkables.co.nz/hedge-trimming",
     "telephone": "+64272166882",
     "address": {
       "@type": "PostalAddress",
@@ -136,8 +136,8 @@ export default function HedgeTrimming() {
         keywords="hedge trimming Gisborne, neat hedges, year-round hedge care, coastal hedge trimming, hedge shaping, hedge maintenance, surrounding areas hedge care"
         ogTitle="Hedge Trimming Gisborne – Neat & Healthy Hedges"
         ogDescription="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."
-        ogImage="https://www.treemarkables.co.nz/hedge-trimming.jpg"
-        canonicalUrl="https://www.treemarkables.co.nz/hedge-trimming"
+        ogImage="https://app.treemarkables.co.nz/hedge-trimming.jpg"
+        canonicalUrl="https://app.treemarkables.co.nz/hedge-trimming"
         structuredData={structuredData}
       />
       <Header />

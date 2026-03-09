@@ -36,11 +36,11 @@ export default function Home() {
     "@type": "LocalBusiness",
     "name": "Treemarkables",
     "description": "Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast",
-    "url": "https://www.treemarkables.co.nz",
+    "url": "https://app.treemarkables.co.nz",
     "telephone": "027-216-6882",
     "email": "quotes@treemarkables.nz",
-    "image": "https://www.treemarkables.co.nz/logo.jpg",
-    "logo": "https://www.treemarkables.co.nz/logo.jpg",
+    "image": "https://app.treemarkables.co.nz/logo.jpg",
+    "logo": "https://app.treemarkables.co.nz/logo.jpg",
     "address": {
       "@type": "PostalAddress",
       "addressLocality": "Gisborne",
@@ -75,7 +75,7 @@ export default function Home() {
         keywords="arborists Gisborne, tree removal Gisborne, tree pruning, stump grinding, hedge trimming, East Coast tree services, Wairoa tree removal, qualified arborist NZ"
         ogTitle="Treemarkables – Qualified Arborists in Gisborne & East Coast"
         ogDescription="Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast. Get a free quote today."
-        canonicalUrl="https://www.treemarkables.co.nz"
+        canonicalUrl="https://app.treemarkables.co.nz"
         structuredData={structuredData}
       />
       <Header />
