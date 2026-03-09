@@ -180,10 +180,12 @@ export function ProposalBuilder({
   // Initialize proposal with job data when available (only in create mode)
   useEffect(() => {
     if (jobData && (jobData as any)?.success && (jobData as any)?.data && isOpen && mode === 'create') {
-      // Guard: only initialize sections once per open session.
-      // Without this, GlobalJobCard's 1.5-second auto-save updates the job query
-      // cache (new object reference for jobData), which re-triggers this effect and
-      // calls setSections([initialSection]), wiping any line items the user has added.
+      // Guard: only initialize once per open session.
+      // Set the ref synchronously here so that:
+      //   a) form.setValue calls below don't re-run on every jobData cache update
+      //   b) the ref is already true before the functional-updater runs,
+      //      which is fine because the updater falls back to the hasUserContent
+      //      check as an extra layer of protection.
       if (createModeInitializedRef.current) return;
       createModeInitializedRef.current = true;
 
@@ -194,20 +196,7 @@ export function ProposalBuilder({
       // Use passed jobDescription prop first (to get latest unsaved form data), fallback to API data
       const descriptionValue = includeDescription ? (jobDescription ?? job.description ?? '') : '';
       
-      console.log('🔵 Initializing proposal with job description:', {
-        includeDescription,
-        descriptionValue,
-        passedJobDescription: jobDescription,
-        jobDescriptionFromApi: job.description,
-        checkbox: job.includeDescriptionInQuotesProposals
-      });
-      
-      // Update form with job information
-      form.setValue('title', job.title || 'Treemarkables Quote');
-      form.setValue('introduction', descriptionValue);
-      form.setValue('customerId', job.customerId || customerId || '');
-      
-      // Initialize sections with job description and line items (only if checkbox is checked)
+      // Build the initial section
       const initialSection: ProposalSectionData = {
         id: 'section-1',
         title: job.serviceType || 'Tree Removal Services',
@@ -232,8 +221,22 @@ export function ProposalBuilder({
         })) : [],
         sortOrder: 1
       };
-      
-      setSections([initialSection]);
+
+      // Use a functional updater as an extra safety net: if, despite the ref
+      // guard above, sections already contain user-added content (e.g. in React
+      // StrictMode dev double-mount), we must never overwrite them.
+      setSections(currentSections => {
+        const hasUserContent = currentSections.some(s =>
+          (s.lineItems || []).length > 0 || (s.photos || []).length > 0
+        );
+        if (hasUserContent) return currentSections;
+        return [initialSection];
+      });
+
+      // Populate proposal form fields — only runs once thanks to the ref guard
+      form.setValue('title', job.title || 'Treemarkables Quote');
+      form.setValue('introduction', descriptionValue);
+      form.setValue('customerId', job.customerId || customerId || '');
       
       console.log('✅ Proposal initialized with job data:', job);
       console.log('✅ Section description set to:', descriptionValue);
@@ -294,8 +297,8 @@ export function ProposalBuilder({
         const loadedSections = proposal.sections.map((section: any) => ({
           id: section.id,
           title: section.title,
-          description: section.description || '', // Already mapped by backend (content → description)
-          photos: section.photos || [], // Already mapped by backend
+          description: section.description || '',
+          photos: section.photos || [],
           lineItems: (section.lineItems || []).map((item: any) => ({
             id: item.id,
             description: item.description || '',
@@ -308,14 +311,19 @@ export function ProposalBuilder({
             isOptional: item.isOptional || false,
             selected: item.selected !== false,
             pricingType: item.pricingType || 'normal',
-            choices: [], // Choices would be loaded separately if needed
+            choices: [],
             priceIncludesTax: item.priceIncludesTax || false,
           })),
           sortOrder: section.sortOrder || 0
         }));
         
-        setSections(loadedSections);
-        sectionsInitializedRef.current = currentKey;
+        // Use a functional updater so we atomically check the ref inside the setter.
+        // If already initialized, preserve any unsaved user additions (line items etc.)
+        setSections(currentSections => {
+          if (sectionsInitializedRef.current === currentKey) return currentSections;
+          sectionsInitializedRef.current = currentKey;
+          return loadedSections;
+        });
         console.log('Loaded sections with photos and line items:', loadedSections);
       }
     }
