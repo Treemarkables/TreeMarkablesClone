@@ -2,26 +2,58 @@
 # Website: https://app.treemarkables.co.nz
 
 User-agent: *
-Allow: /
 
-# Allow access to all pages and resources
-Allow: /tree-removal
-Allow: /tree-pruning  
-Allow: /stump-grinding
-Allow: /hedge-trimming
-Allow: /blog
-Allow: /blog/*
-
-# Block access to admin/private areas (if any in future)
-Disallow: /admin/
-Disallow: /api/
-Disallow: /private/
-
-# Explicitly allow sitemap access (2025 Google Search Console fix)
+# ── Public SEO pages (allow crawling) ──────────────────────────────────────
+Allow: /$
+Allow: /home$
+Allow: /tree-removal$
+Allow: /tree-pruning$
+Allow: /stump-grinding$
+Allow: /hedge-trimming$
+Allow: /blog$
+Allow: /blog/
+Allow: /summer-offer$
+Allow: /contact$
+Allow: /privacy-policy$
 Allow: /sitemap.xml
+
+# ── Block all private app routes ─────────────────────────────────────────────
+Disallow: /dispatch
+Disallow: /dispatch-board
+Disallow: /job-dashboard
+Disallow: /metrics
+Disallow: /overview
+Disallow: /pipeline
+Disallow: /opportunities
+Disallow: /follow-up-queue
+Disallow: /reputation
+Disallow: /reviews
+Disallow: /marketing
+Disallow: /inbox
+Disallow: /integrations
+Disallow: /communications
+Disallow: /conversation/
+Disallow: /time-tracking
+Disallow: /invoices
+Disallow: /templates
+Disallow: /equipment
+Disallow: /calendar
+Disallow: /staff-schedule
+Disallow: /workflows
+Disallow: /mulch-drops
+Disallow: /history
+Disallow: /clients
+Disallow: /materials-services
+Disallow: /settings
+Disallow: /vehicle-inspection
+Disallow: /jha-assessment
+Disallow: /jha-history
+Disallow: /safety/
+Disallow: /apply-signature
+Disallow: /dashboard
+Disallow: /login
+Disallow: /diary
+Disallow: /api/
 
 # XML Sitemap location for search engines
 Sitemap: https://app.treemarkables.co.nz/sitemap.xml
-
-# Crawl delay (optional - be respectful to search engines)
-Crawl-delay: 1
