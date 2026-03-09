@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { format, addDays, subDays, startOfDay, addWeeks, subWeeks, addMonths, subMonths, parseISO, isWithinInterval, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
-import { utcToNZTime, isSameDayNZ, getNZDateString } from '@shared/dateUtils';
+import { utcToNZTime, isSameDayNZ, getNZDateString, isBetweenNZ } from '@shared/dateUtils';
 import { useQuery } from '@tanstack/react-query';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 
@@ -25,6 +25,7 @@ interface Job {
   customerId?: string;
   address: string;
   scheduledDate: string;
+  scheduledEndDate?: string;
   scheduledStartTime?: string;
   scheduledEndTime?: string;
   status: string;
@@ -152,24 +153,15 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       if (job.status === 'archived') return false;
       
       // Check if job is scheduled for this date (primary filter)
+      // For multi-day jobs, match any day in the start→end range.
       // Use NZ timezone-aware comparison to handle UTC->NZ conversion correctly
       if (!job.scheduledDate) return false;
-      
-      const sameDayResult = isSameDayNZ(job.scheduledDate, date);
-      
-      // Debug logging - show ALL Nov 14 matches and first 10 checks
-      const checkingNov14 = format(date, 'yyyy-MM-dd') === '2025-11-14';
-      if (checkingNov14 && (sameDayResult || allJobs.indexOf(job) < 10)) {
-        console.log(`🗓️ [${sameDayResult ? 'MATCH' : 'NO MATCH'}] Job #${job.jobNumber}:`, {
-          scheduledDate: job.scheduledDate,
-          checkingDate: format(date, 'yyyy-MM-dd'),
-          isSameDay: sameDayResult,
-          assignedTo: job.assignedTo,
-          status: job.status
-        });
-      }
-      
-      if (!sameDayResult) return false;
+
+      const dateOnJob = job.scheduledEndDate
+        ? isBetweenNZ(date, job.scheduledDate, job.scheduledEndDate)
+        : isSameDayNZ(job.scheduledDate, date);
+
+      if (!dateOnJob) return false;
 
       // If job has employee assignment, check if this employee is assigned
       // Otherwise, show job in the first employee row only (unassigned jobs)
