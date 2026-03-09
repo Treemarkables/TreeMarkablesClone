@@ -123,6 +123,18 @@ export function EmailComposerModal({
     }))
   ];
 
+  // Fetch job invoices so we can auto-attach the PDF even when invoiceData prop isn't set
+  const { data: jobInvoicesResponse } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ['/api/invoices', job?.id, 'modal'],
+    queryFn: async () => {
+      if (!job?.id) return { success: true, data: [] };
+      const res = await fetch(`/api/invoices?jobId=${job.id}`, { credentials: 'include' });
+      return res.json();
+    },
+    enabled: !!job?.id && isOpen,
+  });
+  const jobInvoice = jobInvoicesResponse?.data?.[0] ?? null;
+
   // Fetch job photos for Smart Attachments
   const { data: jobPhotos } = useQuery<{
     success: boolean;
@@ -311,17 +323,19 @@ export function EmailComposerModal({
       });
 
       // Auto-attach invoice PDF if the pre-selected template has attachInvoicePdf: true
-      if ((template as any).attachInvoicePdf && invoiceData) {
+      // Fall back to the job's existing invoice if invoiceData prop wasn't passed in
+      const invoiceForAttach = invoiceData || jobInvoice;
+      if ((template as any).attachInvoicePdf && invoiceForAttach) {
         setAttachments(prev => {
           const alreadyAttached = prev.some((a: any) => a.type === 'invoice');
           if (alreadyAttached) return prev;
           return [
             ...prev,
             {
-              name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
+              name: `Treemarkables LTD Invoice ${invoiceForAttach.invoiceNumber}`,
               type: 'invoice' as const,
-              id: invoiceData.id,
-              url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
+              id: invoiceForAttach.id,
+              url: invoiceForAttach.id ? `/api/invoices/${invoiceForAttach.id}/pdf` : undefined
             }
           ];
         });
@@ -332,7 +346,24 @@ export function EmailComposerModal({
       // Reset initialization flag when modal closes
       setHasInitialized(false);
     }
-  }, [isOpen, job, customer, invoiceData, quoteData, proposalData, templateType, hasInitialized]);
+  }, [isOpen, job, customer, invoiceData, quoteData, proposalData, templateType, hasInitialized, jobInvoice]);
+
+  // When job invoice loads asynchronously (after init ran), auto-attach if the active template needs it
+  useEffect(() => {
+    if (!jobInvoice || !hasInitialized || invoiceData) return;
+    const currentTemplate = EMAIL_TEMPLATES.find(t => t.id === emailData.selectedTemplate);
+    if (!(currentTemplate as any)?.attachInvoicePdf) return;
+    setAttachments(prev => {
+      const alreadyAttached = prev.some(a => a.type === 'invoice');
+      if (alreadyAttached) return prev;
+      return [...prev, {
+        name: `Treemarkables LTD Invoice ${jobInvoice.invoiceNumber}`,
+        type: 'invoice' as const,
+        id: jobInvoice.id,
+        url: `/api/invoices/${jobInvoice.id}/pdf`
+      }];
+    });
+  }, [jobInvoice, hasInitialized]);
 
   // Sync emailData.body to contentEditable div (for template updates and initial render)
   useEffect(() => {
@@ -557,21 +588,26 @@ export function EmailComposerModal({
       selectedTemplate: templateId
     }));
 
-    // Auto-attach invoice PDF if the template requests it and invoice data is available
-    if (template.attachInvoicePdf && invoiceData) {
+    // Auto-attach invoice PDF if the template requests it
+    // Fall back to the job's existing invoice if invoiceData prop wasn't passed in
+    const invoiceForAttach = invoiceData || jobInvoice;
+    if (template.attachInvoicePdf && invoiceForAttach) {
       setAttachments(prev => {
         const alreadyAttached = prev.some(a => a.type === 'invoice');
         if (alreadyAttached) return prev;
         return [
           ...prev,
           {
-            name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
+            name: `Treemarkables LTD Invoice ${invoiceForAttach.invoiceNumber}`,
             type: 'invoice' as const,
-            id: invoiceData.id,
-            url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
+            id: invoiceForAttach.id,
+            url: invoiceForAttach.id ? `/api/invoices/${invoiceForAttach.id}/pdf` : undefined
           }
         ];
       });
+    } else if (template.attachInvoicePdf && !invoiceForAttach) {
+      // Template wants PDF but no invoice found — clear any stale invoice attachment
+      setAttachments(prev => prev.filter(a => a.type !== 'invoice'));
     }
   };
 
