@@ -157,8 +157,10 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       // Use NZ timezone-aware comparison to handle UTC->NZ conversion correctly
       if (!job.scheduledDate) return false;
 
+      // For multi-day jobs: match any calendar day in the start→end range (NZ tz).
+      // Pass Date objects so isBetweenNZ correctly converts UTC timestamps to NZ dates.
       const dateOnJob = job.scheduledEndDate
-        ? isBetweenNZ(date, job.scheduledDate, job.scheduledEndDate)
+        ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
         : isSameDayNZ(job.scheduledDate, date);
 
       if (!dateOnJob) return false;
@@ -401,12 +403,14 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
                 dateRange.map(date => {
                   // Get all jobs for this employee on this date
                   // Use NZ timezone-aware comparison to handle UTC->NZ conversion correctly
-                  const dayJobs = allJobs.filter(job => 
-                    job.status !== 'archived' &&
-                    job.assignedTo?.includes(employee.id) &&
-                    job.scheduledDate &&
-                    isSameDayNZ(job.scheduledDate, date)
-                  );
+                  const dayJobs = allJobs.filter(job => {
+                    if (job.status === 'archived') return false;
+                    if (!job.assignedTo?.includes(employee.id)) return false;
+                    if (!job.scheduledDate) return false;
+                    return job.scheduledEndDate
+                      ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
+                      : isSameDayNZ(job.scheduledDate, date);
+                  });
                   
                   return (
                     <div
