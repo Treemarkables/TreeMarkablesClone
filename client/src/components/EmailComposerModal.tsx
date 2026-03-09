@@ -30,7 +30,9 @@ import {
   Mail,
   Eye,
   Mic,
-  MicOff
+  MicOff,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
@@ -124,7 +126,7 @@ export function EmailComposerModal({
   ];
 
   // Fetch job invoices so we can auto-attach the PDF even when invoiceData prop isn't set
-  const { data: jobInvoicesResponse } = useQuery<{ success: boolean; data: any[] }>({
+  const { data: jobInvoicesResponse, isLoading: isLoadingJobInvoice } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/invoices', job?.id, 'modal'],
     queryFn: async () => {
       if (!job?.id) return { success: true, data: [] };
@@ -1137,6 +1139,32 @@ export function EmailComposerModal({
                 </div>
               </div>
             )}
+
+            {/* Invoice PDF status — shown when template wants PDF but none is attached yet */}
+            {(() => {
+              const currentTemplate = EMAIL_TEMPLATES.find(t => t.id === emailData.selectedTemplate);
+              const needsPdf = (currentTemplate as any)?.attachInvoicePdf;
+              const invoiceAttached = attachments.some(a => a.type === 'invoice');
+              if (!needsPdf || invoiceAttached) return null;
+              return (
+                <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-start">
+                  <div className="sm:col-span-1" />
+                  <div className="sm:col-span-11">
+                    {isLoadingJobInvoice ? (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin flex-shrink-0" />
+                        Checking for invoice PDF…
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                        <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                        No invoice found for this job — create one in the Billing tab first to attach the PDF
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Hidden file input - using sr-only for accessibility */}
             <input
