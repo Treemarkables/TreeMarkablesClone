@@ -9,7 +9,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, MessageSquare, Plus, Pencil, Trash2, ChevronLeft } from "lucide-react";
+import { Mail, MessageSquare, Plus, Pencil, Trash2, ChevronLeft, Paperclip } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -28,6 +29,7 @@ const emailTemplateSchema = z.object({
   description: z.string().optional(),
   isActive: z.boolean().default(true),
   isDefault: z.boolean().default(false),
+  attachInvoicePdf: z.boolean().default(false),
   createdBy: z.string().default("admin"),
 });
 
@@ -77,6 +79,7 @@ export default function CommunicationTemplates() {
       description: "",
       isActive: true,
       isDefault: false,
+      attachInvoicePdf: false,
       createdBy: "admin"
     }
   });
@@ -193,6 +196,7 @@ export default function CommunicationTemplates() {
         description: "",
         isActive: true,
         isDefault: false,
+        attachInvoicePdf: false,
         createdBy: "admin"
       });
     } else {
@@ -224,6 +228,7 @@ export default function CommunicationTemplates() {
         description: template.description || "",
         isActive: template.isActive ?? true,
         isDefault: template.isDefault ?? false,
+        attachInvoicePdf: template.attachInvoicePdf ?? false,
         createdBy: template.createdBy || "admin",
       });
     } else {
@@ -357,6 +362,12 @@ export default function CommunicationTemplates() {
                         <p className="text-sm font-medium text-muted-foreground">Message:</p>
                         <p className="text-sm line-clamp-3">{template.htmlContent}</p>
                       </div>
+                      {template.attachInvoicePdf && (
+                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
+                          <Paperclip className="h-3 w-3" />
+                          <span>Invoice PDF auto-attached</span>
+                        </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -485,6 +496,30 @@ export default function CommunicationTemplates() {
                         />
                       </FormControl>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={emailForm.control}
+                  name="attachInvoicePdf"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-md border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel className="flex items-center gap-1.5">
+                          <Paperclip className="h-3.5 w-3.5" />
+                          Attach invoice PDF
+                        </FormLabel>
+                        <FormDescription className="text-xs">
+                          Automatically attach the invoice PDF when this template is used
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-attach-invoice-pdf"
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />

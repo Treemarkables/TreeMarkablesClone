@@ -53,6 +53,7 @@ interface EmailTemplate {
   name: string;
   subject: string;
   body: string;
+  attachInvoicePdf?: boolean;
 }
 
 export function EmailComposerModal({ 
@@ -117,7 +118,8 @@ export function EmailComposerModal({
       id: t.id,
       name: t.name,
       subject: t.subject || "",
-      body: t.textContent || t.htmlContent || ""
+      body: t.textContent || t.htmlContent || "",
+      attachInvoicePdf: t.attachInvoicePdf ?? false
     }))
   ];
 
@@ -533,6 +535,23 @@ export function EmailComposerModal({
       body: populatedBody,
       selectedTemplate: templateId
     }));
+
+    // Auto-attach invoice PDF if the template requests it and invoice data is available
+    if (template.attachInvoicePdf && invoiceData) {
+      setAttachments(prev => {
+        const alreadyAttached = prev.some(a => a.type === 'invoice');
+        if (alreadyAttached) return prev;
+        return [
+          ...prev,
+          {
+            name: `Treemarkables LTD Invoice ${invoiceData.invoiceNumber}`,
+            type: 'invoice' as const,
+            id: invoiceData.id,
+            url: invoiceData.id ? `/api/invoices/${invoiceData.id}/pdf` : undefined
+          }
+        ];
+      });
+    }
   };
 
   const handleSendEmail = () => {

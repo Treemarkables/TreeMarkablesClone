@@ -1434,6 +1434,7 @@ export const emailTemplates = pgTable("email_templates", {
   description: text("description"),
   isActive: boolean("is_active").notNull().default(true),
   isDefault: boolean("is_default").notNull().default(false),
+  attachInvoicePdf: boolean("attach_invoice_pdf").notNull().default(false),
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
