@@ -5278,7 +5278,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             issueDate: validatedInvoiceData.issueDate ? new Date(validatedInvoiceData.issueDate) : undefined,
             status: 'sent', // Mark as sent since we're sending it now
             items: validatedInvoiceData.lineItems || [],
-            notes: validatedInvoiceData.description,
+            description: validatedInvoiceData.description,
+            notes: validatedInvoiceData.notes || '',
             jobTitle: job?.title || job?.description || 'Service'
           });
           invoice = newInvoice;
