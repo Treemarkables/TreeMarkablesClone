@@ -177,8 +177,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       }
       
       // Populate notes and description from existing invoice (always set, even if empty)
+      // description is the primary field; fall back to notes for older invoices that stored description there
       setEditableNotes(existingInvoice.notes ?? '');
-      setEditableDescription(existingInvoice.description ?? '');
+      setEditableDescription(existingInvoice.description ?? existingInvoice.notes ?? '');
     } else {
       console.log('⚠️ No existing invoices found for this job');
     }
@@ -601,6 +602,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         contactName: editableContactName || undefined,
         items: formattedLineItems,
         amount: subtotal.toString(),
+        description: editableDescription,
         notes: editableNotes
       };
 
