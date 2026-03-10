@@ -488,7 +488,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         customData: {
           address: editableAddress,
           contactName: editableContactName || undefined,
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           notes: editableNotes,
           description: editableDescription,
           lineItems: formattedLineItems
@@ -1326,7 +1326,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       jobId: job.id,
                       amount: subtotal.toString(),
                       status: 'draft' as const,
-                      dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+                      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
                       issueDate: new Date().toISOString(),
                       items: lineItems.map(item => ({
                         description: item.description,
