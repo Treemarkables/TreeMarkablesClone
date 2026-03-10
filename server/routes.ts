@@ -4835,7 +4835,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         dueDate = new Date(customData.dueDate);
       } else {
         dueDate = new Date();
-        const defaultDueDays = 30; // fallback to 30 days
+        const defaultDueDays = 7; // fallback to 7 days
         dueDate.setDate(dueDate.getDate() + defaultDueDays);
       }
 
@@ -4891,7 +4891,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         items: transformedLineItems,
         notes: customData.notes || '',
         templateId: defaultTemplate?.id || null,
-        paymentTerms: defaultTemplate?.paymentTerms || 'Payment due within 30 days'
+        paymentTerms: defaultTemplate?.paymentTerms || 'Payment due within 7 days'
       };
 
       // Create the invoice
