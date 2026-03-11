@@ -65,19 +65,21 @@ export default function StaffSchedule() {
     return 'No Customer';
   };
 
-  // Calculate job total from job data
+  // Calculate job total from job data — always returns ex-GST price
   const calculateJobTotal = (job: any): number => {
-    // First check for stored total values
-    if (job.totalAmount && Number(job.totalAmount) > 0) {
-      return Number(job.totalAmount);
-    }
-    if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) {
-      return Number(job.totalIncludingGst);
-    }
+    // subtotal is always ex-GST
     if (job.subtotal && Number(job.subtotal) > 0) {
       return Number(job.subtotal);
     }
-    // Fallback to calculating from line items
+    // totalAmount matches subtotal (ex-GST) for most jobs
+    if (job.totalAmount && Number(job.totalAmount) > 0) {
+      return Number(job.totalAmount);
+    }
+    // totalIncludingGst is GST-inclusive — divide by 1.15 to get ex-GST
+    if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) {
+      return Number(job.totalIncludingGst) / 1.15;
+    }
+    // Fallback to calculating from line items (ex-GST)
     const lineItems = job.lineItems;
     if (!lineItems || !Array.isArray(lineItems)) return 0;
     return lineItems.reduce((sum: number, item: any) => {
