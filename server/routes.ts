@@ -7204,11 +7204,12 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const endOfDay = fromZonedTime(`${todayStr}T23:59:59`, 'Pacific/Auckland');
 
       // Get all data
-      const [leads, jobs, calls] = await Promise.all([
+      const [leads, jobsResult, calls] = await Promise.all([
         storage.getLeads(),
-        storage.getJobs(),
+        storage.getAllJobs({ limit: 999999 }),
         storage.getCallRecordings()
       ]);
+      const jobs = jobsResult.jobs;
 
       // Filter to today's data
       const todayLeads = leads.filter(lead => {
