@@ -954,8 +954,7 @@ export default function MetricsDashboard() {
                 const totalRevenue = dashboardStats?.totalRevenue || 0;
                 const netProfit = xeroPL?.netProfit || totalRevenue * 0.15;
                 const labour = totalRevenue * 0.40;
-                const materials = totalRevenue * 0.30;
-                const overhead = Math.max(0, totalRevenue - netProfit - labour - materials);
+                const overhead = Math.max(0, totalRevenue - netProfit - labour);
                 const jobsWonPct = quoteAnalytics?.totalQuotes
                   ? Math.round((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100)
                   : 0;
@@ -964,7 +963,6 @@ export default function MetricsDashboard() {
                   ? [
                       { name: 'Net Profit', value: netProfit, color: '#22c55e' },
                       { name: 'Labour', value: labour, color: '#3b82f6' },
-                      { name: 'Materials', value: materials, color: '#f97316' },
                       { name: 'Overhead', value: overhead, color: '#a855f7' },
                     ]
                   : [{ name: 'No data', value: 1, color: '#e5e7eb' }];
@@ -973,7 +971,6 @@ export default function MetricsDashboard() {
                   { label: 'Revenue', value: formatCurrency(totalRevenue).replace('NZ$', '$'), color: 'text-gray-900', dot: null },
                   { label: 'Net Profit', value: formatCurrency(netProfit).replace('NZ$', '$'), color: 'text-green-600', dot: '#22c55e' },
                   { label: 'Labour (est.)', value: formatCurrency(labour).replace('NZ$', '$'), color: 'text-blue-600', dot: '#3b82f6' },
-                  { label: 'Materials (est.)', value: formatCurrency(materials).replace('NZ$', '$'), color: 'text-orange-600', dot: '#f97316' },
                   { label: 'Avg Job Value', value: formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$'), color: 'text-gray-900', dot: null },
                   { label: 'Quotes Sent', value: String(quoteAnalytics?.totalQuotes || 0), color: 'text-gray-900', dot: null },
                   { label: 'Jobs Won', value: `${jobsWonPct}%`, color: 'text-green-600', dot: null },
