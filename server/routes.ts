@@ -7207,7 +7207,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const [leads, jobsResult, calls] = await Promise.all([
         storage.getLeads(),
         storage.getAllJobs({ limit: 999999 }),
-        storage.getCallRecordings()
+        storage.getCallRecords()
       ]);
       const jobs = jobsResult.jobs;
 
@@ -13674,8 +13674,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const completion = await openai.chat.completions.create({
         model: "gpt-5",
         messages: [{ role: "user", content: prompt }],
-        max_completion_tokens: 500,
-        temperature: 0.7
+        max_completion_tokens: 500
       });
       
       const aiInsight = completion.choices[0]?.message?.content || 'Unable to generate insights.';
