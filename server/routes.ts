@@ -10902,7 +10902,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Send SMS from diary
   app.post('/api/communications/sms', async (req: Request, res: Response) => {
     try {
-      const { to, message, jobId, customerId } = req.body;
+      const { to, message, jobId, customerId, proposalId } = req.body;
       
       if (!to || !message) {
         return res.status(400).json({ 
@@ -10935,14 +10935,23 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           } catch (e) { console.warn('Failed to save phone from diary SMS:', e); }
         }
 
+        // Look up proposal number if this is a proposal SMS
+        let proposalNumber: string | null = null;
+        if (proposalId) {
+          try {
+            const proposal = await storage.getProposal(proposalId);
+            proposalNumber = proposal?.proposalNumber || null;
+          } catch (e) { /* non-fatal */ }
+        }
+
         // Create diary entry for sent SMS
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId,
           entryType: 'sms',
-          title: 'SMS Sent',
+          title: proposalNumber ? `Proposal Sent via SMS: ${proposalNumber}` : 'SMS Sent',
           description: message,
           authorName: 'System',
-          metadata: { phoneNumber: to }
+          metadata: { phoneNumber: to, ...(proposalId ? { proposalId, proposalNumber } : {}) }
         });
         
         res.json({ 
