@@ -1064,7 +1064,8 @@ export function ProposalBuilder({
       to: smsForm.to,
       message: smsForm.message,
       jobId: jobId,
-      customerId: customerId || previewData.customer?.id
+      customerId: customerId || previewData.customer?.id,
+      proposalId: draftProposalId || proposalId || undefined
     });
   };
 

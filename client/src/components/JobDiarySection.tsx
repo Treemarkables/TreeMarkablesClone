@@ -1719,14 +1719,14 @@ export function JobDiarySection({
                       {(() => {
                         // Extract proposal number from title if not in metadata (for old entries)
                         let proposalNumber = entry.metadata?.proposalNumber;
-                        if (entry.type === 'email' && !proposalNumber && entry.title) {
+                        if ((entry.type === 'email' || entry.type === 'sms') && !proposalNumber && entry.title) {
                           const match = entry.title.match(/PROP-\d+|DRAFT-\d+/);
                           if (match) {
                             proposalNumber = match[0];
                           }
                         }
                         
-                        const shouldShowButton = entry.type === 'proposal' || (entry.type === 'email' && proposalNumber);
+                        const shouldShowButton = entry.type === 'proposal' || ((entry.type === 'email' || entry.type === 'sms') && proposalNumber);
                         if (!shouldShowButton) return null;
                         
                         return (
