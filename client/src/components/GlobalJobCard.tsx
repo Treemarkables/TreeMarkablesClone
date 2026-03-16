@@ -2165,12 +2165,35 @@ The Treemarkables Team`;
       
       // Create staff assignments - remove duplicates first
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
-      const staffAssignments = uniqueEmployeeIds.map(employeeId => ({
-        employeeId,
-        startTime: startTimeISO,
-        endTime: endTimeISO,
-        notes: schedulingData.notes
-      }));
+      const endDateStr = (schedulingData.endDate && schedulingData.endDate !== schedulingData.date)
+        ? schedulingData.endDate
+        : schedulingData.date;
+
+      // Build list of all days in range (YYYY-MM-DD NZ dates)
+      const allDays: string[] = [];
+      {
+        const d = new Date(schedulingData.date + 'T12:00:00Z');
+        const last = new Date(endDateStr + 'T12:00:00Z');
+        while (d <= last) {
+          allDays.push(d.toISOString().split('T')[0]);
+          d.setUTCDate(d.getUTCDate() + 1);
+        }
+      }
+
+      // One assignment per employee per day (multi-day jobs show on each day of the schedule)
+      const staffAssignments: Array<{ employeeId: string; startTime: string; endTime: string; notes: string }> = [];
+      for (const dayStr of allDays) {
+        const dayStartUTC = nzTimeToUTC(dayStr, timeStr);
+        const dayEndUTC = new Date(dayStartUTC.getTime() + durationMs);
+        for (const employeeId of uniqueEmployeeIds) {
+          staffAssignments.push({
+            employeeId,
+            startTime: dayStartUTC.toISOString(),
+            endTime: dayEndUTC.toISOString(),
+            notes: schedulingData.notes
+          });
+        }
+      }
 
       // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, assignedTo, and status
       // Send scheduledDate as UTC ISO string to avoid timezone interpretation issues
