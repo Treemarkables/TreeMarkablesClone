@@ -9349,8 +9349,68 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         });
       }
 
-      // Conflict checking disabled - staff can be double-booked
-      const employeeIds = staffAssignments.map((a: any) => a.employeeId);
+      // Deduplicate employee IDs from submitted assignments
+      const uniqueEmployeeIds = [...new Set(staffAssignments.map((a: any) => a.employeeId))];
+
+      // Use first submitted assignment as the time-of-day template
+      const templateAssignment = staffAssignments[0];
+      const templateStartUTC = new Date(templateAssignment.startTime);
+      const templateEndUTC = new Date(templateAssignment.endTime);
+      const durationMs = templateEndUTC.getTime() - templateStartUTC.getTime();
+
+      // Extract NZ time-of-day from template using toZonedTime
+      const templateStartNZ = toZonedTime(templateStartUTC, 'Pacific/Auckland');
+      const nzTimeStr = format(templateStartNZ, 'HH:mm');
+
+      // Load the job to determine its date range
+      const job = await storage.getJob(jobId);
+
+      // Build the list of per-day assignments to create
+      // Server is authoritative: always expand to cover every day in scheduledDate..scheduledEndDate
+      const allAssignmentsToCreate: Array<{
+        employeeId: string;
+        startTime: Date;
+        endTime: Date;
+        role?: string | null;
+        notes?: string | null;
+      }> = [];
+
+      if (job?.scheduledDate && job?.scheduledEndDate) {
+        // Multi-day job: generate one assignment per employee per day
+        const startNZDate = format(toZonedTime(new Date(job.scheduledDate), 'Pacific/Auckland'), 'yyyy-MM-dd');
+        const endNZDate = format(toZonedTime(new Date(job.scheduledEndDate), 'Pacific/Auckland'), 'yyyy-MM-dd');
+
+        // Iterate day-by-day using noon-UTC anchoring to avoid DST boundary issues
+        const d = new Date(startNZDate + 'T12:00:00Z');
+        const last = new Date(endNZDate + 'T12:00:00Z');
+        while (d <= last) {
+          const dayNZDate = d.toISOString().split('T')[0];
+          const dayStartUTC = fromZonedTime(`${dayNZDate}T${nzTimeStr}:00`, 'Pacific/Auckland');
+          const dayEndUTC = new Date(dayStartUTC.getTime() + durationMs);
+          for (const employeeId of uniqueEmployeeIds) {
+            allAssignmentsToCreate.push({
+              employeeId,
+              startTime: dayStartUTC,
+              endTime: dayEndUTC,
+              role: templateAssignment.role || null,
+              notes: templateAssignment.notes || null,
+            });
+          }
+          d.setUTCDate(d.getUTCDate() + 1);
+        }
+        console.log(`📅 Multi-day job: generating ${allAssignmentsToCreate.length} assignments across ${Math.round((last.getTime() - new Date(startNZDate + 'T12:00:00Z').getTime()) / 86400000) + 1} day(s) for ${uniqueEmployeeIds.length} employee(s)`);
+      } else {
+        // Single-day or no end date: use submitted assignments as-is
+        for (const assignment of staffAssignments) {
+          allAssignmentsToCreate.push({
+            employeeId: assignment.employeeId,
+            startTime: new Date(assignment.startTime),
+            endTime: new Date(assignment.endTime),
+            role: assignment.role || null,
+            notes: assignment.notes || null,
+          });
+        }
+      }
 
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
@@ -9359,22 +9419,22 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       }
       console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
 
-      // Create all staff assignments
+      // Create all per-day assignments
       const created = [];
-      for (const assignment of staffAssignments) {
+      for (const assignment of allAssignmentsToCreate) {
         const newAssignment = await storage.createJobStaffAssignment({
           jobId,
           employeeId: assignment.employeeId,
-          startTime: new Date(assignment.startTime),
-          endTime: new Date(assignment.endTime),
+          startTime: assignment.startTime,
+          endTime: assignment.endTime,
           role: assignment.role,
           notes: assignment.notes
         });
         created.push(newAssignment);
       }
 
-      // Update job's assignedTeam array
-      const job = await storage.getJob(jobId);
+      // Update job's assignedTeam (deduplicated)
+      const employeeIds = uniqueEmployeeIds;
       if (job) {
         await storage.updateJob(jobId, {
           assignedTeam: employeeIds,
