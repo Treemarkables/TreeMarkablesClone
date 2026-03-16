@@ -109,66 +109,61 @@ export default function StaffSchedule() {
   }, [jobs]);
 
   // Get jobs for each employee based on staff assignments
+  // Uses two strategies:
+  //   1. Direct match: assignment.startTime NZ date === selected date  (primary)
+  //   2. Date-range fallback: job has scheduledDate..scheduledEndDate covering selected date
+  //      and employee has at least one assignment for that job  (safety net for missing per-day assignments)
   const getEmployeeJobs = (employeeId: string) => {
-    // Convert selected date to NZ timezone date string for comparison
-    const selectedDateStr = selectedDate.toLocaleDateString('en-NZ', {
-      timeZone: 'Pacific/Auckland',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    });
+    const selectedDateNZ = formatInTimeZone(selectedDate, 'Pacific/Auckland', 'yyyy-MM-dd');
 
-    console.log(`🔍 Staff Schedule - Getting jobs for employee ${employeeId}`);
-    console.log(`  Selected date: ${selectedDateStr}`);
-    console.log(`  Total staff assignments: ${staffAssignments.length}`);
+    // All assignments for this employee
+    const allEmployeeAssignments = staffAssignments.filter((a: any) => a.employeeId === employeeId);
 
-    // Filter assignments for this employee and date
-    const employeeAssignments = staffAssignments.filter(assignment => {
-      if (assignment.employeeId !== employeeId) return false;
-      
-      // Database stores times in UTC, we need to convert to NZ timezone for comparison
+    // --- Strategy 1: direct date match ---
+    const directMatches = allEmployeeAssignments.filter((assignment: any) => {
       const startTimeStr = assignment.startTime;
       if (!startTimeStr) return false;
-      
-      // Convert UTC timestamp to NZ date
       const assignmentDateNZ = formatInTimeZone(new Date(startTimeStr), 'Pacific/Auckland', 'yyyy-MM-dd');
-      
-      // Format selected date as YYYY-MM-DD in NZ timezone
-      const selectedDateNZ = formatInTimeZone(selectedDate, 'Pacific/Auckland', 'yyyy-MM-dd');
-      
-      const matches = assignmentDateNZ === selectedDateNZ;
-      if (matches) {
-        console.log(`  ✅ Match found: ${assignment.jobId} at ${startTimeStr} (NZ: ${assignmentDateNZ})`);
-      }
-      
-      return matches;
+      return assignmentDateNZ === selectedDateNZ;
     });
 
-    console.log(`  Found ${employeeAssignments.length} assignments for this employee`);
+    const includedJobIds = new Set(directMatches.map((a: any) => a.jobId));
 
-    // Get jobs from assignments and sort by start time
-    const jobsWithAssignments = employeeAssignments
-      .map(assignment => {
-        const job = jobMap.get(assignment.jobId);
-        if (!job) {
-          console.log(`  ❌ Job not found for assignment: ${assignment.jobId}`);
-          return null;
+    // --- Strategy 2: multi-day range fallback ---
+    // If a job spans multiple days and is missing a per-day assignment for the selected date,
+    // but this employee is assigned to the job (has any assignment for it), show it anyway.
+    const fallbackMatches: any[] = [];
+    const employeeJobIds = new Set(allEmployeeAssignments.map((a: any) => a.jobId));
+
+    for (const jobId of employeeJobIds) {
+      if (includedJobIds.has(jobId)) continue; // Already showing from strategy 1
+      const job = jobMap.get(jobId as string);
+      if (!job?.scheduledDate || !(job as any).scheduledEndDate) continue;
+
+      const jobStartNZ = formatInTimeZone(new Date((job as any).scheduledDate), 'Pacific/Auckland', 'yyyy-MM-dd');
+      const jobEndNZ = formatInTimeZone(new Date((job as any).scheduledEndDate), 'Pacific/Auckland', 'yyyy-MM-dd');
+
+      if (selectedDateNZ >= jobStartNZ && selectedDateNZ <= jobEndNZ) {
+        // Use day-1 assignment as template for the time display (same start time each day)
+        const templateAssignment = allEmployeeAssignments.find((a: any) => a.jobId === jobId);
+        if (templateAssignment) {
+          fallbackMatches.push(templateAssignment);
+          includedJobIds.add(jobId as string);
         }
-        
-        // Attach the assignment start time to the job for display (keep it for timezone conversion)
-        return {
-          ...job,
-          _assignmentStartTime: assignment.startTime
-        };
+      }
+    }
+
+    const matchedAssignments = [...directMatches, ...fallbackMatches];
+
+    // Map to jobs with attached assignment start time, then sort by start time
+    return matchedAssignments
+      .map((assignment: any) => {
+        const job = jobMap.get(assignment.jobId);
+        if (!job) return null;
+        return { ...job, _assignmentStartTime: assignment.startTime };
       })
       .filter((job): job is Job & { _assignmentStartTime: string } => job !== null)
-      .sort((a, b) => {
-        // Sort by assignment start time
-        return new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime();
-      });
-    
-    console.log(`  Returning ${jobsWithAssignments.length} jobs for employee`);
-    return jobsWithAssignments;
+      .sort((a, b) => new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime());
   };
 
   const getStatusColor = (status?: string) => {
