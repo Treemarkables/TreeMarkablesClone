@@ -3698,18 +3698,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
-      // Check if job has accepted proposals - prevent status downgrade from work_order to quote
-      if (oldJob?.status === 'work_order' && validation.data.status && validation.data.status === 'quote') {
-        // Check if there's an accepted proposal for this job
-        const allProposals = await storage.getAllProposals();
-        const acceptedProposal = allProposals.find(p => p.jobId === req.params.id && p.status === 'accepted');
-        
-        if (acceptedProposal) {
-          console.log(`⚠️ Cannot change job status from work_order to quote - proposal ${acceptedProposal.proposalNumber} is accepted`);
-          // Keep the status as work_order
-          validation.data.status = 'work_order';
-        }
-      }
+      // Status changes are always honoured — user has explicit intent when manually changing status
 
       // Xero Invoice Resend Workflow: Clear Xero sync fields when job leaves 'completed' status
       // This allows the job to be resent to Xero when it's marked completed again (after voiding in Xero)

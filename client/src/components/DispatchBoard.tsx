@@ -1829,11 +1829,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     case 'lead':
                       return { label: 'Lead', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: true };
                     case 'quote':
-                      return { label: 'Quote Sent', bg: 'bg-blue-100', text: 'text-blue-700', icon: '≡' };
+                      return { label: 'Quote', bg: 'bg-blue-100', text: 'text-blue-700', icon: '≡' };
                     case 'work_order':
-                      return { label: 'Scheduled', bg: 'bg-gray-100', text: 'text-gray-700', icon: '≡' };
+                      return { label: 'Work Order', bg: 'bg-orange-100', text: 'text-orange-700', icon: '≡' };
                     case 'scheduled':
-                      return { label: 'In Progress', bg: 'bg-green-100', text: 'text-green-700' };
+                      return { label: 'Scheduled', bg: 'bg-green-100', text: 'text-green-700' };
                     case 'completed':
                       return { label: 'Completed', bg: 'bg-green-500', text: 'text-white' };
                     case 'unsuccessful':
@@ -2180,11 +2180,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   case 'lead':
                     return { label: 'Lead', bg: 'bg-emerald-100', text: 'text-emerald-700', dot: 'bg-emerald-500' };
                   case 'quote':
-                    return { label: 'Quote Sent', bg: 'bg-blue-100', text: 'text-blue-700', icon: '≡' };
+                    return { label: 'Quote', bg: 'bg-blue-100', text: 'text-blue-700', icon: '≡' };
                   case 'work_order':
-                    return { label: 'Scheduled', bg: 'bg-gray-100', text: 'text-gray-700', icon: '≡' };
+                    return { label: 'Work Order', bg: 'bg-orange-100', text: 'text-orange-700', icon: '≡' };
                   case 'scheduled':
-                    return { label: 'In Progress', bg: 'bg-green-100', text: 'text-green-700' };
+                    return { label: 'Scheduled', bg: 'bg-green-100', text: 'text-green-700' };
                   case 'completed':
                     return { label: 'Completed', bg: 'bg-green-500', text: 'text-white' };
                   case 'unsuccessful':
