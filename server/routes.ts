@@ -17330,7 +17330,17 @@ Keep the tone professional but conversational. Use NZD for currency.`;
                      address.includes('tokomaru bay') ||
                      address.includes('ruatoria') ||
                      address.includes('te araroa') ||
-                     address.includes('tikitiki');
+                     address.includes('tikitiki') ||
+                     address.includes('mahia') ||
+                     address.includes('nuhaka') ||
+                     address.includes('opoutama') ||
+                     address.includes('morere') ||
+                     address.includes('wairoa') ||
+                     address.includes('frasertown') ||
+                     address.includes('mohaka') ||
+                     address.includes('raupunga') ||
+                     address.includes('putorino') ||
+                     address.includes('tutira');
             });
             console.log(`[Address Search] API success: ${gisborneAddresses.length} Gisborne results from ${data.matched || 0} total matches`);
             return res.json({ 
