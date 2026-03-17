@@ -38,6 +38,8 @@ interface Job {
   assignedTo: string[];
   serviceType?: string;
   totalAmount?: string;
+  totalIncludingGst?: string;
+  subtotal?: string;
 }
 
 interface StaffAssignment {
@@ -251,11 +253,20 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   const DAY_TARGET = 3500;
 
   // Revenue total for a single date
+  // Priority: totalIncludingGst (explicit inc-GST) → totalAmount (invoice-synced) → subtotal × 1.15
+  // Mirrors the fallback chain used in DispatchBoard and analytics
+  const jobRevenue = (job: Job): number => {
+    const incGst = parseFloat(job.totalIncludingGst || '0');
+    if (incGst > 0) return incGst;
+    const total = parseFloat(job.totalAmount || '0');
+    if (total > 0) return total;
+    const sub = parseFloat(job.subtotal || '0');
+    if (sub > 0) return Math.round(sub * 1.15 * 100) / 100;
+    return 0;
+  };
+
   const revenueForDate = (date: Date): number =>
-    getUniqueJobsForDate(date).reduce((sum, job) => {
-      const v = parseFloat(job.totalAmount || '0');
-      return sum + (isNaN(v) ? 0 : v);
-    }, 0);
+    getUniqueJobsForDate(date).reduce((sum, job) => sum + jobRevenue(job), 0);
 
   // Day-view: single total for currentDate
   const dayRevenue = useMemo(() => {
@@ -328,7 +339,9 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       {/* Day revenue bar */}
       {viewMode === 'day' && dayRevenue !== null && (
         <div className="flex items-center gap-3 px-4 py-2 border-b bg-gray-50 flex-shrink-0" data-testid="day-revenue-bar">
-          <span className="text-xs text-muted-foreground whitespace-nowrap">Today's jobs:</span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {format(currentDate, 'd MMM')} jobs:
+          </span>
           <span className={`text-sm font-semibold px-2 py-0.5 rounded border ${revenueColor(dayRevenue)}`}>
             {formatNZD(dayRevenue)}
           </span>
