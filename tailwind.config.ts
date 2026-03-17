@@ -36,6 +36,36 @@ export default {
           foreground: "hsl(var(--blue-foreground) / <alpha-value>)",
           border: "var(--blue-border)",
         },
+        green: {
+          DEFAULT: "hsl(var(--green) / <alpha-value>)",
+          foreground: "hsl(var(--green-foreground) / <alpha-value>)",
+          border: "var(--green-border)",
+        },
+        purple: {
+          DEFAULT: "hsl(var(--purple) / <alpha-value>)",
+          foreground: "hsl(var(--purple-foreground) / <alpha-value>)",
+          border: "var(--purple-border)",
+        },
+        orange: {
+          DEFAULT: "hsl(var(--orange) / <alpha-value>)",
+          foreground: "hsl(var(--orange-foreground) / <alpha-value>)",
+          border: "var(--orange-border)",
+        },
+        yellow: {
+          DEFAULT: "hsl(var(--yellow) / <alpha-value>)",
+          foreground: "hsl(var(--yellow-foreground) / <alpha-value>)",
+          border: "var(--yellow-border)",
+        },
+        teal: {
+          DEFAULT: "hsl(var(--teal) / <alpha-value>)",
+          foreground: "hsl(var(--teal-foreground) / <alpha-value>)",
+          border: "var(--teal-border)",
+        },
+        pink: {
+          DEFAULT: "hsl(var(--pink) / <alpha-value>)",
+          foreground: "hsl(var(--pink-foreground) / <alpha-value>)",
+          border: "var(--pink-border)",
+        },
         secondary: {
           DEFAULT: "hsl(var(--secondary) / <alpha-value>)",
           foreground: "hsl(var(--secondary-foreground) / <alpha-value>)",
