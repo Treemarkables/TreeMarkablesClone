@@ -19,7 +19,8 @@ import {
   Trash2,
   Briefcase,
   Copy,
-  Check
+  Check,
+  Link2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -141,15 +142,30 @@ export default function ConversationDetail() {
 
   // Derive the sender display name — use the first inbound message's fromName,
   // or fall back to extracting it from the conversation title ("Email from X" → "X")
+  const firstInboundMessage = messages.find(m => m.direction === 'inbound');
+  const senderEmail = firstInboundMessage?.fromContact || null;
+
   const senderDisplayName = (() => {
-    const firstInbound = messages.find(m => m.direction === 'inbound' && m.fromName);
-    if (firstInbound?.fromName) return firstInbound.fromName;
+    if (firstInboundMessage?.fromName) return firstInboundMessage.fromName;
     if (conversation?.title) {
       const match = conversation.title.match(/^(?:Email from|SMS from|Message from)\s+(.+)$/i);
       if (match) return match[1];
     }
     return null;
   })();
+
+  // Look up any existing jobs that have this sender's email as the contact email
+  const { data: linkedJobsResponse } = useQuery({
+    queryKey: ['/api/jobs/by-contact-email', senderEmail],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/by-contact-email?email=${encodeURIComponent(senderEmail!)}`);
+      if (!res.ok) return { data: [] };
+      return res.json();
+    },
+    enabled: !!senderEmail && senderEmail.includes('@'),
+    staleTime: 30000,
+  });
+  const linkedJobs: Array<{ id: string; jobNumber: number; title: string | null; address: string | null; status: string }> = linkedJobsResponse?.data || [];
 
   // Helper function to extract contact details from conversation and messages
   const extractContactDetails = () => {
@@ -558,6 +574,32 @@ export default function ConversationDetail() {
           <MoreVertical className="h-5 w-5" />
         </Button>
       </div>
+
+      {/* Linked jobs banner — shown when the sender's email matches a job contact */}
+      {linkedJobs.length > 0 && (
+        <div className="flex-shrink-0 border-b border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 px-3 sm:px-4 py-2">
+          <div className="flex items-start gap-2">
+            <Link2 className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 leading-snug">
+                This sender is already a contact on {linkedJobs.length === 1 ? 'a job' : `${linkedJobs.length} jobs`}:
+              </p>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {linkedJobs.map(job => (
+                  <button
+                    key={job.id}
+                    onClick={() => setLocation(`/jobs/${job.id}`)}
+                    className="text-xs bg-amber-100 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 rounded px-2 py-0.5 hover-elevate font-medium truncate max-w-[200px]"
+                    title={job.address || job.title || `Job #${job.jobNumber}`}
+                  >
+                    #{job.jobNumber}{job.address ? ` · ${job.address}` : job.title ? ` · ${job.title}` : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <ScrollArea className="flex-1 px-3 sm:px-4 py-2">
