@@ -252,15 +252,15 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
 
   const DAY_TARGET = 3500;
 
-  // Revenue total for a single date
-  // Priority: totalAmount (the quoted/entered price) → totalIncludingGst → subtotal
+  // Revenue total for a single date — always returns exc-GST value
+  // subtotal = exc-GST directly; totalIncludingGst / totalAmount = inc-GST, divide by 1.15
   const jobRevenue = (job: Job): number => {
-    const total = parseFloat(job.totalAmount || '0');
-    if (total > 0) return total;
-    const incGst = parseFloat(job.totalIncludingGst || '0');
-    if (incGst > 0) return incGst;
     const sub = parseFloat(job.subtotal || '0');
     if (sub > 0) return sub;
+    const incGst = parseFloat(job.totalIncludingGst || '0');
+    if (incGst > 0) return Math.round(incGst / 1.15 * 100) / 100;
+    const total = parseFloat(job.totalAmount || '0');
+    if (total > 0) return Math.round(total / 1.15 * 100) / 100;
     return 0;
   };
 
@@ -345,7 +345,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
             {formatNZD(dayRevenue)}
           </span>
           <span className="text-xs text-muted-foreground whitespace-nowrap">
-            {getUniqueJobsForDate(currentDate).length} job{getUniqueJobsForDate(currentDate).length !== 1 ? 's' : ''} · target $3.5k
+            {getUniqueJobsForDate(currentDate).length} job{getUniqueJobsForDate(currentDate).length !== 1 ? 's' : ''} · target $3.5k exc. GST
           </span>
           <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
             <div
