@@ -7,9 +7,12 @@ import {
   addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek,
   startOfMonth, endOfMonth,
 } from 'date-fns';
-import { isSameDayNZ, isBetweenNZ } from '@shared/dateUtils';
+import { toZonedTime } from 'date-fns-tz';
+import { isSameDayNZ, isBetweenNZ, getNZDateString } from '@shared/dateUtils';
 import { useQuery } from '@tanstack/react-query';
-import { GlobalJobCard } from '@/components/GlobalJobCard';
+
+const NZ_TZ = 'Pacific/Auckland';
+
 
 interface Employee {
   id: string;
@@ -102,13 +105,15 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   }, [allJobs]);
 
   // employee+date → [{assignment, job}]
+  // Keys use NZ date strings so UTC-stored startTimes are bucketed correctly
   const assignmentsByEmployeeDate = useMemo(() => {
     const map = new Map<string, { assignment: StaffAssignment; job: Job }[]>();
     allAssignments.forEach(a => {
       const job = jobMap.get(a.jobId);
       if (!job || job.status === 'archived') return;
-      const date = new Date(a.startTime);
-      const key = `${a.employeeId}__${format(date, 'yyyy-MM-dd')}`;
+      // getNZDateString converts UTC → NZ date (e.g. "2026-03-16T19:00Z" → "2026-03-17")
+      const nzDateStr = getNZDateString(a.startTime);
+      const key = `${a.employeeId}__${nzDateStr}`;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push({ assignment: a, job });
     });
@@ -171,11 +176,12 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     const assigned = assignmentsByEmployeeDate.get(`${employeeId}__${dateKey}`) || [];
 
     // Filter to assignments that overlap with this hour
+    // Convert UTC → NZ local time before extracting hours
     const fromAssignments = assigned.filter(({ assignment }) => {
-      const start = new Date(assignment.startTime);
-      const end = new Date(assignment.endTime);
-      const startH = start.getHours() + start.getMinutes() / 60;
-      const endH = end.getHours() + end.getMinutes() / 60;
+      const startNZ = toZonedTime(new Date(assignment.startTime), NZ_TZ);
+      const endNZ = toZonedTime(new Date(assignment.endTime), NZ_TZ);
+      const startH = startNZ.getHours() + startNZ.getMinutes() / 60;
+      const endH = endNZ.getHours() + endNZ.getMinutes() / 60;
       return startH < hour + 1 && endH > hour;
     });
 
