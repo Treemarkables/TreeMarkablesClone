@@ -3547,6 +3547,39 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  app.get('/api/jobs/by-contact-email', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Unauthorized' });
+    try {
+      const { email } = req.query;
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        return res.status(400).json({ success: false, message: 'Valid email required' });
+      }
+      const normalised = email.trim().toLowerCase();
+      const matched = await db
+        .select({
+          id: schema.jobs.id,
+          jobNumber: schema.jobs.jobNumber,
+          title: schema.jobs.title,
+          address: schema.jobs.address,
+          status: schema.jobs.status,
+          jobContactEmail: schema.jobs.jobContactEmail,
+          jobContactFirstName: schema.jobs.jobContactFirstName,
+          jobContactLastName: schema.jobs.jobContactLastName,
+        })
+        .from(schema.jobs)
+        .where(
+          sql`LOWER(${schema.jobs.jobContactEmail}) = ${normalised}
+            OR LOWER(${schema.jobs.billingContactEmail}) = ${normalised}`
+        )
+        .orderBy(sql`${schema.jobs.createdAt} DESC`)
+        .limit(5);
+      return res.json({ success: true, data: matched });
+    } catch (error) {
+      console.error('Error looking up jobs by contact email:', error);
+      return res.status(500).json({ success: false, message: 'Lookup failed' });
+    }
+  });
+
   app.get('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
       const job = await storage.getJob(req.params.id);
