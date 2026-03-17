@@ -1871,8 +1871,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <div className="flex-1 min-w-0">
                         {/* Row 1: Customer Name + Job Number + Price */}
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <h3 className="font-bold text-gray-900 text-base truncate flex-1" data-testid={`desktop-job-customer-${job.id}`}>
-                            {customerName}
+                          <h3 className="font-bold text-base flex-1 min-w-0" data-testid={`desktop-job-customer-${job.id}`}>
+                            <span className="inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap border border-orange-400 rounded px-1.5 bg-orange-50 text-orange-900 dark:bg-orange-950/30 dark:border-orange-500/60 dark:text-orange-200">
+                              {customerName}
+                            </span>
                           </h3>
                           <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                             <span className="text-sm text-gray-400 font-mono">#{job.jobNumber || '0000'}</span>
@@ -2240,8 +2242,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     <div className="flex-1 min-w-0">
                       {/* Row 1: Customer Name + Job Number + Price */}
                       <div className="flex items-start justify-between gap-2 mb-1">
-                        <h3 className="font-bold text-gray-900 text-base truncate flex-1">
-                          {customerName}
+                        <h3 className="font-bold text-base flex-1 min-w-0">
+                          <span className="inline-block max-w-full overflow-hidden text-ellipsis whitespace-nowrap border border-orange-400 rounded px-1.5 bg-orange-50 text-orange-900 dark:bg-orange-950/30 dark:border-orange-500/60 dark:text-orange-200">
+                            {customerName}
+                          </span>
                         </h3>
                         <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
                           <span className="text-sm text-gray-400 font-mono">#{job.jobNumber || '0000'}</span>
