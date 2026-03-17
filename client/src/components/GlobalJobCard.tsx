@@ -3609,14 +3609,17 @@ The Treemarkables Team`;
                                                   form.setValue('jobContactEmail', customer.email);
                                                 }
                                                 const phoneNumber = customer.mobile || customer.phone || '';
-                                                const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
-                                                
-                                                if (isMobileNum) {
-                                                  form.setValue('jobContactMobile', phoneNumber);
-                                                  form.setValue('jobContactPhone', '');
-                                                } else if (phoneNumber) {
-                                                  form.setValue('jobContactPhone', phoneNumber);
-                                                  form.setValue('jobContactMobile', '');
+                                                if (phoneNumber) {
+                                                  const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
+                                                  if (isMobileNum) {
+                                                    if (!form.getValues('jobContactMobile')) {
+                                                      form.setValue('jobContactMobile', phoneNumber);
+                                                    }
+                                                  } else {
+                                                    if (!form.getValues('jobContactPhone')) {
+                                                      form.setValue('jobContactPhone', phoneNumber);
+                                                    }
+                                                  }
                                                 }
                                               }}
                                             >
@@ -3861,15 +3864,19 @@ The Treemarkables Team`;
                                               form.setValue('jobContactEmail', customer.email);
                                             }
                                             // Route mobile numbers to mobile field, landline to phone field
+                                            // Only populate fields that are currently empty — never overwrite existing values
                                             const phoneNumber = customer.mobile || customer.phone || '';
-                                            const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, ''));
-                                            
-                                            if (isMobileNum) {
-                                              form.setValue('jobContactMobile', phoneNumber);
-                                              form.setValue('jobContactPhone', '');
-                                            } else {
-                                              form.setValue('jobContactPhone', phoneNumber);
-                                              form.setValue('jobContactMobile', '');
+                                            if (phoneNumber) {
+                                              const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, ''));
+                                              if (isMobileNum) {
+                                                if (!form.getValues('jobContactMobile')) {
+                                                  form.setValue('jobContactMobile', phoneNumber);
+                                                }
+                                              } else {
+                                                if (!form.getValues('jobContactPhone')) {
+                                                  form.setValue('jobContactPhone', phoneNumber);
+                                                }
+                                              }
                                             }
                                           }}
                                         >
@@ -4076,15 +4083,19 @@ The Treemarkables Team`;
                                                   form.setValue('jobContactEmail', customer.email);
                                                 }
                                                 // Route mobile numbers to mobile field, landline to phone field
+                                                // Only populate fields that are currently empty — never overwrite existing values
                                                 const phoneNumber = customer.mobile || customer.phone || '';
-                                                const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
-                                                
-                                                if (isMobileNum) {
-                                                  form.setValue('jobContactMobile', phoneNumber);
-                                                  form.setValue('jobContactPhone', '');
-                                                } else {
-                                                  form.setValue('jobContactPhone', phoneNumber);
-                                                  form.setValue('jobContactMobile', '');
+                                                if (phoneNumber) {
+                                                  const isMobileNum = /^(\+?64)?0?2[0-9]/.test(phoneNumber.replace(/\s/g, '').replace(/^\+64/, '0'));
+                                                  if (isMobileNum) {
+                                                    if (!form.getValues('jobContactMobile')) {
+                                                      form.setValue('jobContactMobile', phoneNumber);
+                                                    }
+                                                  } else {
+                                                    if (!form.getValues('jobContactPhone')) {
+                                                      form.setValue('jobContactPhone', phoneNumber);
+                                                    }
+                                                  }
                                                 }
                                                 // Split customer name into first/last for contact fields
                                                 if (customer.name && !form.getValues('jobContactFirstName') && !form.getValues('jobContactLastName')) {
