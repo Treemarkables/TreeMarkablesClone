@@ -139,6 +139,18 @@ export default function ConversationDetail() {
 
   const messages: ConversationMessage[] = messagesResponse?.data || [];
 
+  // Derive the sender display name — use the first inbound message's fromName,
+  // or fall back to extracting it from the conversation title ("Email from X" → "X")
+  const senderDisplayName = (() => {
+    const firstInbound = messages.find(m => m.direction === 'inbound' && m.fromName);
+    if (firstInbound?.fromName) return firstInbound.fromName;
+    if (conversation?.title) {
+      const match = conversation.title.match(/^(?:Email from|SMS from|Message from)\s+(.+)$/i);
+      if (match) return match[1];
+    }
+    return null;
+  })();
+
   // Helper function to extract contact details from conversation and messages
   const extractContactDetails = () => {
     let name = '';
@@ -530,6 +542,9 @@ export default function ConversationDetail() {
             </h1>
             <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 capitalize mt-0.5 pr-4">
               {conversation.source}
+              {senderDisplayName && (
+                <span className="normal-case"> · From: <span className="font-medium text-gray-700 dark:text-gray-300">{senderDisplayName}</span></span>
+              )}
             </p>
           </div>
         </div>
@@ -561,36 +576,43 @@ export default function ConversationDetail() {
                   className={`flex w-full pr-4 ${message.direction === 'outbound' ? 'justify-end' : 'justify-start'}`}
                   data-testid={`message-${message.id}`}
                 >
-                  <div
-                    className={`max-w-[55%] sm:max-w-[75%] rounded-lg px-3 py-2 ${
-                      message.direction === 'outbound'
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
-                    }`}
-                  >
-                    {contactForm.isContactForm ? (
-                      <div className="space-y-1">
-                        {contactForm.name && <ContactField label="Name" value={contactForm.name} />}
-                        {contactForm.email && <ContactField label="Email" value={contactForm.email} />}
-                        {contactForm.phone && <ContactField label="Phone" value={contactForm.phone} />}
-                        {contactForm.hearAbout && <ContactField label="How they heard about us" value={contactForm.hearAbout} />}
-                        {contactForm.message && (
-                          <div className="pt-2 mt-2 border-t border-gray-200">
-                            <span className="text-xs text-gray-500">Message:</span>
-                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed mt-1">{contactForm.message}</p>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                  <div className="max-w-[55%] sm:max-w-[75%]">
+                    {message.direction === 'inbound' && message.fromName && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-0.5 px-1 font-medium">
+                        {message.fromName}
+                      </p>
                     )}
-                    <p
-                      className={`text-xs mt-1 ${
-                        message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-500'
+                    <div
+                      className={`rounded-lg px-3 py-2 ${
+                        message.direction === 'outbound'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                       }`}
                     >
-                      {formatMessageTime(message.createdAt || new Date())}
-                    </p>
+                      {contactForm.isContactForm ? (
+                        <div className="space-y-1">
+                          {contactForm.name && <ContactField label="Name" value={contactForm.name} />}
+                          {contactForm.email && <ContactField label="Email" value={contactForm.email} />}
+                          {contactForm.phone && <ContactField label="Phone" value={contactForm.phone} />}
+                          {contactForm.hearAbout && <ContactField label="How they heard about us" value={contactForm.hearAbout} />}
+                          {contactForm.message && (
+                            <div className="pt-2 mt-2 border-t border-gray-200">
+                              <span className="text-xs text-gray-500">Message:</span>
+                              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed mt-1">{contactForm.message}</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
+                      )}
+                      <p
+                        className={`text-xs mt-1 ${
+                          message.direction === 'outbound' ? 'text-blue-100' : 'text-gray-500'
+                        }`}
+                      >
+                        {formatMessageTime(message.createdAt || new Date())}
+                      </p>
+                    </div>
                   </div>
                 </div>
               );
