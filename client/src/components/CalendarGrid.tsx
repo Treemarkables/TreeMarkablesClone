@@ -76,7 +76,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     queryKey: ['/api/employees/active'],
   });
   const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
-    queryKey: ['/api/jobs'],
+    queryKey: ['/api/jobs?limit=10000&offset=0'],
   });
   const { data: assignmentsData } = useQuery<{ success: boolean; data: StaffAssignment[] }>({
     queryKey: ['/api/staff-assignments'],
