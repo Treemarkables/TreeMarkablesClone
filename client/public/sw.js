@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v11-dispatch-fix';
-const STATIC_CACHE = 'treemarkables-static-v11-dispatch-fix';
-const API_CACHE = 'treemarkables-api-v11-dispatch-fix';
+const CACHE_NAME = 'treemarkables-v12-queue-tab';
+const STATIC_CACHE = 'treemarkables-static-v12-queue-tab';
+const API_CACHE = 'treemarkables-api-v12-queue-tab';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,36 +10,35 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v7] Installing - Mutations never cached - FORCING immediate activation');
+  console.log('[SW v12] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v7] Installed - skipping waiting');
+        console.log('[SW v12] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
 });
 
-// Activate event - clean up old caches  
+// Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v9] Activating - deleting ALL old caches');
+  console.log('[SW v12] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v9] Found caches:', cacheNames);
+      console.log('[SW v12] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          // Delete ANY cache that's not v11
-          if (!cacheName.includes('v11-dispatch-fix')) {
-            console.log('[SW v11] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v12-queue-tab')) {
+            console.log('[SW v12] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v9] Taking control of all clients');
+      console.log('[SW v12] Taking control of all clients');
       return self.clients.claim();
     })
   );
@@ -48,60 +47,38 @@ self.addEventListener('activate', function(event) {
 // Fetch event - network first for API, cache first for assets
 self.addEventListener('fetch', function(event) {
   const url = new URL(event.request.url);
-  
+
   // BYPASS Service Worker entirely for critical Dispatch Board endpoints
-  // These endpoints use localStorage fallback in React Query and must not be intercepted
-  if (url.pathname === '/api/jobs' || 
-      url.pathname === '/api/customers' || 
+  if (url.pathname === '/api/jobs' ||
+      url.pathname === '/api/customers' ||
       url.pathname === '/api/staff-assignments' ||
       url.pathname === '/api/conversations' ||
       url.pathname.includes('/api/conversations/')) {
-    console.log('[SW v11] BYPASSING Service Worker for localStorage-backed endpoint:', url.pathname);
-    // Don't call event.respondWith() - let the browser handle it directly
     return;
   }
-  
+
   // API requests - network first, fallback to cache
   if (url.pathname.startsWith('/api/')) {
     // CRITICAL: NEVER cache or return cached responses for POST/PUT/DELETE (mutations)
     if (event.request.method !== 'GET') {
-      console.log('[SW v7] Mutation request - bypassing cache:', event.request.method, url.pathname);
       event.respondWith(
-        fetch(event.request)
-          .then(response => {
-            console.log('[SW v7] Mutation response:', response.status);
-            return response;
-          })
-          .catch(function(error) {
-            console.error('[SW v7] Mutation fetch failed:', error);
-            throw error; // NEVER fallback to cache for mutations
-          })
+        fetch(event.request).catch(function(error) {
+          throw error;
+        })
       );
       return;
     }
-    
+
     // NEVER cache diary endpoints - always fetch fresh
     if (url.pathname.includes('/diary')) {
-      console.log('[SW v7] Diary request - fetching fresh from network:', url.pathname);
-      event.respondWith(
-        fetch(event.request)
-          .then(response => {
-            console.log('[SW v7] Diary response received:', response.status);
-            return response;
-          })
-          .catch(function(error) {
-            console.error('[SW v7] Diary fetch failed:', error);
-            throw error; // Don't fallback to cache for diary
-          })
-      );
+      event.respondWith(fetch(event.request));
       return;
     }
-    
+
     // GET requests - network first, cache fallback
     event.respondWith(
       fetch(event.request)
         .then(function(response) {
-          // Only cache successful GET requests
           if (response.status === 200) {
             const responseClone = response.clone();
             caches.open(API_CACHE).then(function(cache) {
@@ -111,19 +88,17 @@ self.addEventListener('fetch', function(event) {
           return response;
         })
         .catch(function() {
-          // Only fallback to cache for GET requests
           return caches.match(event.request);
         })
     );
     return;
   }
-  
+
   // Object storage (photos) - network first for fresh content
   if (url.pathname.startsWith('/objects/')) {
     event.respondWith(
       fetch(event.request)
         .then(function(response) {
-          // Cache successful responses for offline access
           if (response.status === 200) {
             const responseClone = response.clone();
             caches.open(STATIC_CACHE).then(function(cache) {
@@ -133,25 +108,17 @@ self.addEventListener('fetch', function(event) {
           return response;
         })
         .catch(function() {
-          // Fallback to cache if offline
           return caches.match(event.request);
         })
     );
     return;
   }
-  
+
   // Navigation requests - ALWAYS fetch fresh HTML (never cache index.html)
   if (event.request.mode === 'navigate') {
-    console.log('[SW v7] Navigation request - fetching fresh HTML:', event.request.url);
     event.respondWith(
       fetch(event.request, { cache: 'reload' })
-        .then(function(response) {
-          console.log('[SW v7] Fresh HTML loaded:', response.status);
-          return response;
-        })
-        .catch(function(error) {
-          console.error('[SW v7] HTML fetch failed:', error);
-          // Show offline page instead of cached stale HTML
+        .catch(function() {
           return new Response('Offline - please check your connection', {
             status: 503,
             headers: { 'Content-Type': 'text/html' }
@@ -160,8 +127,28 @@ self.addEventListener('fetch', function(event) {
     );
     return;
   }
-  
-  // Static assets - cache first, fallback to network
+
+  // JS and CSS files - ALWAYS network first so code changes appear immediately
+  if (url.pathname.endsWith('.js') || url.pathname.endsWith('.ts') || url.pathname.endsWith('.css') || url.pathname.includes('/assets/')) {
+    event.respondWith(
+      fetch(event.request)
+        .then(function(response) {
+          if (response.status === 200) {
+            const responseClone = response.clone();
+            caches.open(STATIC_CACHE).then(function(cache) {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(function() {
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // Other static assets (images, icons) - cache first, fallback to network
   event.respondWith(
     caches.match(event.request)
       .then(function(response) {
@@ -170,7 +157,6 @@ self.addEventListener('fetch', function(event) {
         }
         return fetch(event.request)
           .then(function(response) {
-            // Cache successful responses
             if (response.status === 200) {
               const responseClone = response.clone();
               caches.open(STATIC_CACHE).then(function(cache) {
@@ -196,7 +182,7 @@ self.addEventListener('push', function(event) {
     },
     actions: [
       {
-        action: 'explore', 
+        action: 'explore',
         title: 'View Jobs',
         icon: '/tree-icon-192.png'
       },
