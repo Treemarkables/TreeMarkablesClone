@@ -37,6 +37,7 @@ interface Job {
   status: string;
   assignedTo: string[];
   serviceType?: string;
+  totalAmount?: string;
 }
 
 interface StaffAssignment {
@@ -223,6 +224,64 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     });
   };
 
+  // ── Revenue helpers ─────────────────────────────────────────────────────────
+  // Returns the unique set of jobs scheduled on a given date (no duplicates across staff rows)
+  const getUniqueJobsForDate = (date: Date): Job[] => {
+    const dateKey = getNZDateString(date);
+    const seen = new Set<string>();
+    const result: Job[] = [];
+    // Primary: staff assignments
+    for (const [key, items] of assignmentsByEmployeeDate.entries()) {
+      if (!key.endsWith(`__${dateKey}`)) continue;
+      items.forEach(({ job }) => {
+        if (!seen.has(job.id)) { seen.add(job.id); result.push(job); }
+      });
+    }
+    // Fallback: jobs with scheduledDate (no assignment record)
+    allJobs.forEach(job => {
+      if (seen.has(job.id) || job.status === 'archived' || !job.scheduledDate) return;
+      const spans = job.scheduledEndDate
+        ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
+        : isSameDayNZ(job.scheduledDate, date);
+      if (spans) { seen.add(job.id); result.push(job); }
+    });
+    return result;
+  };
+
+  const DAY_TARGET = 3500;
+
+  // Revenue total for a single date
+  const revenueForDate = (date: Date): number =>
+    getUniqueJobsForDate(date).reduce((sum, job) => {
+      const v = parseFloat(job.totalAmount || '0');
+      return sum + (isNaN(v) ? 0 : v);
+    }, 0);
+
+  // Day-view: single total for currentDate
+  const dayRevenue = useMemo(() => {
+    if (viewMode !== 'day') return null;
+    return revenueForDate(currentDate);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, currentDate, assignmentsByEmployeeDate, allJobs]);
+
+  // Week/2week-view: per-date totals keyed by ISO date string
+  const weekRevenue = useMemo(() => {
+    if (viewMode === 'day') return {};
+    const map: Record<string, number> = {};
+    dateRange.forEach(d => { map[format(d, 'yyyy-MM-dd')] = revenueForDate(d); });
+    return map;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, dateRange, assignmentsByEmployeeDate, allJobs]);
+
+  const revenueColor = (amount: number) => {
+    if (amount >= DAY_TARGET) return 'text-green-700 bg-green-50 border-green-200';
+    if (amount >= DAY_TARGET * 0.7) return 'text-amber-700 bg-amber-50 border-amber-200';
+    return 'text-red-700 bg-red-50 border-red-200';
+  };
+
+  const formatNZD = (amount: number) =>
+    amount === 0 ? '$0' : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + 'k' : amount.toLocaleString()}`;
+
   // ── Date range label ───────────────────────────────────────────────────────
   const dateRangeDisplay = useMemo(() => {
     if (viewMode === 'day') return format(currentDate, 'EEE d MMMM yyyy');
@@ -266,6 +325,33 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
         </div>
       </div>
 
+      {/* Day revenue bar */}
+      {viewMode === 'day' && dayRevenue !== null && (
+        <div className="flex items-center gap-3 px-4 py-2 border-b bg-gray-50 flex-shrink-0" data-testid="day-revenue-bar">
+          <span className="text-xs text-muted-foreground whitespace-nowrap">Today's jobs:</span>
+          <span className={`text-sm font-semibold px-2 py-0.5 rounded border ${revenueColor(dayRevenue)}`}>
+            {formatNZD(dayRevenue)}
+          </span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">
+            {getUniqueJobsForDate(currentDate).length} job{getUniqueJobsForDate(currentDate).length !== 1 ? 's' : ''} · target $3.5k
+          </span>
+          <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? 'bg-green-500' : dayRevenue >= DAY_TARGET * 0.7 ? 'bg-amber-400' : 'bg-red-400'}`}
+              style={{ width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%` }}
+            />
+          </div>
+          {dayRevenue >= DAY_TARGET && (
+            <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
+          )}
+          {dayRevenue > 0 && dayRevenue < DAY_TARGET && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatNZD(DAY_TARGET - dayRevenue)} to go
+            </span>
+          )}
+        </div>
+      )}
+
       {/* Grid */}
       <div className="flex-1 overflow-auto">
         <div className="flex flex-col min-w-max h-full">
@@ -280,12 +366,21 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
                     {slot.label}
                   </div>
                 ))
-              : dateRange.map(date => (
-                  <div key={date.toISOString()} className="w-36 flex-shrink-0 border-r p-2 text-xs text-center font-medium" data-testid={`date-header-${format(date, 'yyyy-MM-dd')}`}>
-                    <div>{format(date, 'EEE')}</div>
-                    <div className="font-semibold">{format(date, 'd MMM')}</div>
-                  </div>
-                ))
+              : dateRange.map(date => {
+                  const dateKey = format(date, 'yyyy-MM-dd');
+                  const rev = weekRevenue[dateKey] ?? 0;
+                  return (
+                    <div key={date.toISOString()} className="w-36 flex-shrink-0 border-r p-2 text-xs text-center font-medium" data-testid={`date-header-${dateKey}`}>
+                      <div>{format(date, 'EEE')}</div>
+                      <div className="font-semibold">{format(date, 'd MMM')}</div>
+                      {rev > 0 && (
+                        <div className={`mt-1 text-[10px] font-medium px-1 py-0.5 rounded ${rev >= DAY_TARGET ? 'text-green-700 bg-green-50' : rev >= DAY_TARGET * 0.7 ? 'text-amber-700 bg-amber-50' : 'text-red-700 bg-red-50'}`}>
+                          {formatNZD(rev)}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
             }
           </div>
 
