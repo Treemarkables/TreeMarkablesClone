@@ -19588,7 +19588,7 @@ Transcription: ${transcriptText}`;
     const token     = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    const verifyToken = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN || process.env.HERO_WEBHOOK_SECRET;
+    const verifyToken = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN;
     if (mode === 'subscribe' && token === verifyToken) {
       console.log('✅ Facebook Messenger webhook verified');
       return res.status(200).send(challenge);
