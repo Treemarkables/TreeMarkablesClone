@@ -17302,7 +17302,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             const data = await response.json();
             // Filter to only include Gisborne addresses (Gisborne District)
             const gisborneAddresses = (data.addresses || []).filter((addr: any) => {
-              const address = addr.a?.toLowerCase() || '';
+              // Normalize diacritics (e.g. "Māhia" → "mahia", "Tōlaga" → "tolaga") before matching
+              const address = (addr.a || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
               // Include addresses that contain Gisborne or are in Gisborne district suburbs
               return address.includes('gisborne') || 
                      address.includes('makaraka') ||
