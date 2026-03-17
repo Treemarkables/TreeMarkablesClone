@@ -19582,23 +19582,28 @@ Transcription: ${transcriptText}`;
   });
 
   // ─── Facebook Messenger Webhook ─────────────────────────────────────────────
-  // GET: Facebook calls this to verify the webhook endpoint
-  app.get('/api/webhooks/facebook/messenger', (req: Request, res: Response) => {
+  // Shared verify handler — checks FACEBOOK_WEBHOOK_VERIFY_TOKEN or HERO_WEBHOOK_SECRET
+  const handleFacebookWebhookVerify = (req: Request, res: Response) => {
     const mode      = req.query['hub.mode'];
     const token     = req.query['hub.verify_token'];
     const challenge = req.query['hub.challenge'];
 
-    const verifyToken = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN;
+    const verifyToken = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN || process.env.HERO_WEBHOOK_SECRET;
     if (mode === 'subscribe' && token === verifyToken) {
       console.log('✅ Facebook Messenger webhook verified');
       return res.status(200).send(challenge);
     }
-    console.warn('⚠️ Facebook Messenger webhook verification failed');
+    console.warn(`⚠️ Facebook Messenger webhook verification failed (token mismatch)`);
     return res.sendStatus(403);
-  });
+  };
 
-  // POST: Facebook sends message events here
-  app.post('/api/webhooks/facebook/messenger', async (req: Request, res: Response) => {
+  // GET: Facebook calls this to verify the webhook endpoint
+  app.get('/api/webhooks/facebook/messenger', handleFacebookWebhookVerify);
+  // Alias path (shorter URL registered in Meta Developer Console)
+  app.get('/api/webhooks/messenger', handleFacebookWebhookVerify);
+
+  // POST: Facebook sends message events here (both paths — /facebook/messenger is canonical, /messenger is alias)
+  app.post(['/api/webhooks/facebook/messenger', '/api/webhooks/messenger'], async (req: Request, res: Response) => {
     // Acknowledge immediately so Facebook doesn't retry
     res.sendStatus(200);
 
