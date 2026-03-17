@@ -253,15 +253,14 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   const DAY_TARGET = 3500;
 
   // Revenue total for a single date
-  // Priority: totalIncludingGst (explicit inc-GST) → totalAmount (invoice-synced) → subtotal × 1.15
-  // Mirrors the fallback chain used in DispatchBoard and analytics
+  // Priority: totalAmount (the quoted/entered price) → totalIncludingGst → subtotal
   const jobRevenue = (job: Job): number => {
-    const incGst = parseFloat(job.totalIncludingGst || '0');
-    if (incGst > 0) return incGst;
     const total = parseFloat(job.totalAmount || '0');
     if (total > 0) return total;
+    const incGst = parseFloat(job.totalIncludingGst || '0');
+    if (incGst > 0) return incGst;
     const sub = parseFloat(job.subtotal || '0');
-    if (sub > 0) return Math.round(sub * 1.15 * 100) / 100;
+    if (sub > 0) return sub;
     return 0;
   };
 
