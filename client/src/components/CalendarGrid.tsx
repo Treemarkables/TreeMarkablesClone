@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   format, addDays, subDays, startOfDay, addWeeks, subWeeks,
   addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek,
@@ -120,6 +120,20 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     return map;
   }, [allAssignments, jobMap]);
 
+  // Debug: log map keys so we can verify timezone matching
+  useEffect(() => {
+    if (allAssignments.length === 0) return;
+    const keys = Array.from(assignmentsByEmployeeDate.keys());
+    const todayKey = getNZDateString(currentDate);
+    console.log('[CalendarGrid] assignments loaded:', allAssignments.length);
+    console.log('[CalendarGrid] map size:', assignmentsByEmployeeDate.size);
+    console.log('[CalendarGrid] sample map keys (first 5):', keys.slice(0, 5));
+    console.log('[CalendarGrid] today NZ lookup key:', todayKey);
+    // Show first assignment raw for comparison
+    const a = allAssignments[0];
+    console.log('[CalendarGrid] first assignment startTime:', a.startTime, '→ nzDate:', getNZDateString(a.startTime));
+  }, [allAssignments.length, assignmentsByEmployeeDate.size, currentDate.toDateString()]);
+
   // ── Navigation ─────────────────────────────────────────────────────────────
   const goToPrevious = () => {
     if (viewMode === 'day') setCurrentDate(subDays(currentDate, 1));
@@ -172,7 +186,8 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   // Jobs for a specific employee + hour slot (day view)
   // Uses staff assignments as primary source; falls back to job.assignedTo
   const getItemsForHour = (employeeId: string, date: Date, hour: number) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
+    // Use NZ timezone for lookup to match the NZ-timezone keys in assignmentsByEmployeeDate
+    const dateKey = getNZDateString(date);
     const assigned = assignmentsByEmployeeDate.get(`${employeeId}__${dateKey}`) || [];
 
     // Filter to assignments that overlap with this hour
@@ -204,7 +219,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
 
   // Jobs for a specific employee + date cell (week/month view)
   const getItemsForDate = (employeeId: string, date: Date) => {
-    const dateKey = format(date, 'yyyy-MM-dd');
+    const dateKey = getNZDateString(date);
     const assigned = assignmentsByEmployeeDate.get(`${employeeId}__${dateKey}`) || [];
 
     if (assigned.length > 0) return assigned.map(x => x.job);
