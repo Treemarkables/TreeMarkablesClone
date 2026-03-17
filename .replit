@@ -64,3 +64,7 @@ defaultBucketID = "replit-objstore-bab24a24-4208-4d38-af19-cd2b8f9946d4"
 
 [userenv.shared]
 FACEBOOK_WEBHOOK_VERIFY_TOKEN = "treemarkables-webhook-2026"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000
