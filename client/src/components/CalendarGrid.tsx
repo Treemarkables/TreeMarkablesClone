@@ -10,6 +10,7 @@ import {
 import { toZonedTime } from 'date-fns-tz';
 import { isSameDayNZ, isBetweenNZ, getNZDateString } from '@shared/dateUtils';
 import { useQuery } from '@tanstack/react-query';
+import { GlobalJobCard } from '@/components/GlobalJobCard';
 
 const NZ_TZ = 'Pacific/Auckland';
 
@@ -120,19 +121,6 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     return map;
   }, [allAssignments, jobMap]);
 
-  // Debug: log map keys so we can verify timezone matching
-  useEffect(() => {
-    if (allAssignments.length === 0) return;
-    const keys = Array.from(assignmentsByEmployeeDate.keys());
-    const todayKey = getNZDateString(currentDate);
-    console.log('[CalendarGrid] assignments loaded:', allAssignments.length);
-    console.log('[CalendarGrid] map size:', assignmentsByEmployeeDate.size);
-    console.log('[CalendarGrid] sample map keys (first 5):', keys.slice(0, 5));
-    console.log('[CalendarGrid] today NZ lookup key:', todayKey);
-    // Show first assignment raw for comparison
-    const a = allAssignments[0];
-    console.log('[CalendarGrid] first assignment startTime:', a.startTime, '→ nzDate:', getNZDateString(a.startTime));
-  }, [allAssignments.length, assignmentsByEmployeeDate.size, currentDate.toDateString()]);
 
   // ── Navigation ─────────────────────────────────────────────────────────────
   const goToPrevious = () => {
