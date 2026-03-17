@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,7 +41,8 @@ import {
   Scissors,
   Axe,
   Sprout,
-  Loader2
+  Loader2,
+  Inbox
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -126,6 +127,8 @@ interface JobAssignment {
   lastActivityAt?: string; // For activity-based sorting
   totalAmount?: string; // Job price for display on dispatch board
   scheduledEndDate?: string; // For multi-day jobs
+  inQueue?: boolean; // Whether job is parked in the dispatch queue
+  queueReason?: string | null; // Reason for being in queue
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -478,19 +481,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [jobFilter, setJobFilter] = useState<string>('all');
 
   const STATUS_TAB_FILTERS = [
+    { value: 'queue', label: 'Queue' },
     { value: 'quote', label: 'Quote' },
-    { value: 'work_order', label: 'Work Order' },
+    { value: 'work_order', label: 'W/O' },
     { value: 'scheduled', label: 'Scheduled' },
     { value: 'completed', label: 'Complete' },
   ];
 
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
     all: { title: 'Active Jobs', subtitle: 'All upcoming jobs' },
+    queue: { title: 'Dispatch Queue', subtitle: 'Jobs parked and waiting' },
     quote: { title: 'Quotes', subtitle: 'Quote status' },
     work_order: { title: 'Work Orders', subtitle: 'Work order status' },
     scheduled: { title: 'Scheduled', subtitle: 'Scheduled status' },
     completed: { title: 'Completed', subtitle: 'Completed jobs' },
   };
+
+  const QUEUE_REASONS = [
+    'Weather Hold',
+    'Awaiting Permit',
+    'Customer Not Ready',
+    'Awaiting Quote Approval',
+    'Materials Needed',
+    'Crew Unavailable',
+    'Other',
+  ];
 
   const [showJobCreationModal, setShowJobCreationModal] = useState(false);
   const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
@@ -510,6 +525,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
   const [showCreateFromMessageDialog, setShowCreateFromMessageDialog] = useState(false);
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [queueTargetJob, setQueueTargetJob] = useState<JobAssignment | null>(null);
+  const [queueReasonInput, setQueueReasonInput] = useState<string>('');
   const isCreatingLeadJobRef = useRef(false);
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [jobToSchedule, setJobToSchedule] = useState<JobAssignment | null>(null);
@@ -786,6 +804,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          scheduledEndDate: apiJob.scheduledEndDate || undefined,
+          inQueue: apiJob.inQueue || false,
+          queueReason: apiJob.queueReason || null,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -850,6 +871,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
+          inQueue: apiJob.inQueue || false,
+          queueReason: apiJob.queueReason || null,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -1084,11 +1107,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           return job.status !== 'archived';
         }
         // When a specific status filter is active, show only matching jobs (no exclusions)
+        if (jobFilter === 'queue') return job.inQueue === true;
         if (jobFilter === 'quote') return job.status === 'quote';
         if (jobFilter === 'work_order') return job.status === 'work_order';
         if (jobFilter === 'scheduled') return job.status === 'scheduled';
         if (jobFilter === 'completed') return job.status === 'completed';
-        // Default 'all': exclude terminal/archive states
+        // Default 'all': exclude terminal/archive states and queued jobs
         return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
       })
       .filter(job => {
@@ -1237,6 +1261,28 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         variant: "destructive"
       });
     }
+  });
+
+  const queueJobMutation = useMutation({
+    mutationFn: async ({ id, inQueue, queueReason }: { id: string; inQueue: boolean; queueReason?: string | null }) => {
+      const response = await apiRequest('PUT', `/api/jobs/${id}`, { inQueue, queueReason: queueReason || null });
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs?limit=10000&offset=0'] });
+      toast({
+        title: variables.inQueue ? 'Added to Queue' : 'Removed from Queue',
+        description: variables.inQueue
+          ? `Job queued${variables.queueReason ? `: ${variables.queueReason}` : ''}`
+          : 'Job returned to active jobs',
+      });
+      setShowQueueDialog(false);
+      setQueueTargetJob(null);
+      setQueueReasonInput('');
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Could not update queue status', variant: 'destructive' });
+    },
   });
 
   // Job Management Functions
@@ -1842,11 +1888,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                             <span className="truncate">{suburb || 'No location'}</span>
                           </div>
-                          <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0 flex-shrink-0`}>
-                            {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5 bg-current" />}
-                            {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
-                            {statusBadge.label}
-                          </Badge>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            {job.inQueue && (
+                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                {job.queueReason || 'Queued'}
+                              </Badge>
+                            )}
+                            <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}>
+                              {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5 bg-current" />}
+                              {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
+                              {statusBadge.label}
+                            </Badge>
+                          </div>
                         </div>
                         
                         {/* Row 3: Multi-day badge or description */}
@@ -1864,8 +1917,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         )}
                       </div>
                       
-                      {/* Message Icon */}
-                      <div className="flex-shrink-0 ml-2">
+                      {/* Action Icons */}
+                      <div className="flex-shrink-0 ml-2 flex flex-col gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1876,6 +1929,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           }}
                         >
                           <MessageSquare className="h-5 w-5 text-blue-500" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={job.inQueue ? 'Remove from Queue' : 'Add to Queue'}
+                          className={`h-10 w-10 rounded-lg border hover:bg-gray-100 ${job.inQueue ? 'border-amber-300 bg-amber-50' : 'border-gray-200'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (job.inQueue) {
+                              queueJobMutation.mutate({ id: job.id, inQueue: false, queueReason: null });
+                            } else {
+                              setQueueTargetJob(job);
+                              setQueueReasonInput('');
+                              setShowQueueDialog(true);
+                            }
+                          }}
+                        >
+                          <Inbox className={`h-4 w-4 ${job.inQueue ? 'text-amber-600' : 'text-gray-400'}`} />
                         </Button>
                       </div>
                     </div>
@@ -2193,11 +2264,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </>
                           )}
                         </div>
-                        <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0 flex-shrink-0`}>
-                          {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: 'currentColor' }} />}
-                          {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
-                          {statusBadge.label}
-                        </Badge>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {job.inQueue && (
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              {job.queueReason || 'Queued'}
+                            </Badge>
+                          )}
+                          <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}>
+                            {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5" style={{ backgroundColor: 'currentColor' }} />}
+                            {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
+                            {statusBadge.label}
+                          </Badge>
+                        </div>
                       </div>
                       
                       {/* Row 3: Description snippet */}
@@ -2228,7 +2306,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           ) : null}
                         </div>
                         
-                        {/* Call & Message Buttons - using proper icon button styling */}
+                        {/* Call & Message & Queue Buttons */}
                         <div className="flex items-center gap-2">
                           {hasPhone && (
                             <Button
@@ -2257,6 +2335,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             data-testid={`message-button-${job.id}`}
                           >
                             <MessageSquare className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            title={job.inQueue ? 'Remove from Queue' : 'Add to Queue'}
+                            className={job.inQueue ? 'border-amber-300 bg-amber-50 rounded-lg' : 'rounded-lg'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (job.inQueue) {
+                                queueJobMutation.mutate({ id: job.id, inQueue: false, queueReason: null });
+                              } else {
+                                setQueueTargetJob(job);
+                                setQueueReasonInput('');
+                                setShowQueueDialog(true);
+                              }
+                            }}
+                          >
+                            <Inbox className={`h-4 w-4 ${job.inQueue ? 'text-amber-600' : 'text-gray-500'}`} />
                           </Button>
                         </div>
                       </div>
@@ -2387,6 +2483,60 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }
       }}
     />
+
+    {/* Queue Reason Dialog */}
+    <Dialog open={showQueueDialog} onOpenChange={(open) => {
+      if (!open) { setShowQueueDialog(false); setQueueTargetJob(null); setQueueReasonInput(''); }
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Inbox className="h-5 w-5 text-amber-500" />
+            Add to Dispatch Queue
+          </DialogTitle>
+          <DialogDescription>
+            {queueTargetJob && (
+              <span>
+                #{queueTargetJob.jobNumber} — {queueTargetJob.customerName}
+              </span>
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="py-2">
+          <Label className="text-sm font-medium mb-2 block">Reason for queuing</Label>
+          <Select value={queueReasonInput} onValueChange={setQueueReasonInput}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a reason…" />
+            </SelectTrigger>
+            <SelectContent>
+              {QUEUE_REASONS.map((reason) => (
+                <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={() => {
+            setShowQueueDialog(false);
+            setQueueTargetJob(null);
+            setQueueReasonInput('');
+          }}>
+            Cancel
+          </Button>
+          <Button
+            disabled={!queueReasonInput || queueJobMutation.isPending}
+            onClick={() => {
+              if (queueTargetJob && queueReasonInput) {
+                queueJobMutation.mutate({ id: queueTargetJob.id, inQueue: true, queueReason: queueReasonInput });
+              }
+            }}
+          >
+            {queueJobMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Inbox className="h-4 w-4 mr-1" />}
+            Add to Queue
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </>
   );
 }

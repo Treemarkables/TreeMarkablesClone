@@ -468,6 +468,10 @@ export const jobs = pgTable("jobs", {
   unsuccessfulNotes: text("unsuccessful_notes"), // Additional notes explaining why job was unsuccessful
   unsuccessfulDate: timestamp("unsuccessful_date"), // When the job was marked unsuccessful
   
+  // Dispatch Queue
+  inQueue: boolean("in_queue").default(false),
+  queueReason: text("queue_reason"), // Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),

@@ -50,6 +50,7 @@ This application is a comprehensive business management platform for Treemarkabl
 - **System Settings**: ServiceM8-style Settings Interface for managing staff, materials, job categories.
 - **Call Records**: Historical call record log viewable in the Communications tab, with linking to jobs and customers.
 - **Mulch Drops**: Dedicated page for tracking mulch delivery orders (name, phone, address, drop-location notes, photos, status: Pending/Delivered/Cancelled). Includes "From Facebook" paste-and-extract flow using the AI extraction endpoint. Mobile-optimised card list with photo upload (camera capture), status toggle, and CRUD dialogs. Route: `/mulch-drops`. DB table: `mulch_drops`.
+- **Dispatch Queue**: Jobs can be parked in a queue with a reason (Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other). Queue button (inbox icon) on every job card in DispatchBoard. "Queue" tab in the filter bar shows all queued jobs. Queued jobs show an amber badge with the reason. Schema fields: `inQueue boolean default false`, `queueReason text nullable` on the `jobs` table.
 
 ## Auto-Save Architecture (GlobalJobCard)
 The job form uses a multi-layered save system to ensure data is never silently lost:
