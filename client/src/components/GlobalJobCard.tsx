@@ -309,7 +309,7 @@ export function GlobalJobCard({
 
   // Speech to quote modal state
   const [isSpeechToQuoteOpen, setIsSpeechToQuoteOpen] = useState(false);
-  const [speechToQuoteContext, setSpeechToQuoteContext] = useState<'full' | 'job-description' | 'invoice-description'>('full');
+  const [speechToQuoteContext, setSpeechToQuoteContext] = useState<'full' | 'job-description' | 'invoice-description' | 'internal-notes'>('full');
 
   // Track created job for edit mode switching
   const [createdJobId, setCreatedJobId] = useState<string | null>(null);
@@ -2124,6 +2124,21 @@ The Treemarkables Team`;
         toast({
           title: "Invoice Description Added!",
           description: "Your voice note has been transcribed into the invoice description.",
+        });
+      }
+      return;
+    }
+
+    if (speechToQuoteContext === 'internal-notes') {
+      if (quoteData.transcription) {
+        const appended = internalNotesDraft
+          ? internalNotesDraft + '\n' + quoteData.transcription
+          : quoteData.transcription;
+        setInternalNotesDraft(appended);
+        form.setValue('internalNotes', appended, { shouldDirty: true });
+        toast({
+          title: "Voice Note Added!",
+          description: "Your voice note has been transcribed into internal notes.",
         });
       }
       return;
@@ -7098,9 +7113,25 @@ The Treemarkables Team`;
       }}>
         <DialogContent className={`w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] ${internalNotesFocused ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <DialogHeader>
-            <DialogTitle className="text-center flex items-center justify-center gap-2 text-amber-700">
-              <Lock className="h-4 w-4" />
-              Internal Notes
+            <DialogTitle className="flex items-center justify-between text-amber-700">
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4" />
+                Internal Notes
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                onClick={() => {
+                  setSpeechToQuoteContext('internal-notes');
+                  setIsSpeechToQuoteOpen(true);
+                }}
+                data-testid="button-voice-internal-notes"
+              >
+                <Mic className="h-4 w-4 mr-1" />
+                <span className="text-xs">Voice</span>
+              </Button>
             </DialogTitle>
             <p className="text-center text-xs text-amber-600 mt-1">Staff only — never visible to customers</p>
           </DialogHeader>
