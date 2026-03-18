@@ -398,7 +398,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           
                           // Create image element
                           const img = document.createElement('img');
-                          img.className = 'max-w-full max-h-full object-contain';
+                          img.style.cssText = 'max-width: calc(100vw - 4rem); max-height: calc(100vh - 4rem); width: auto; height: auto; object-fit: contain; display: block; border-radius: 4px;';
                           img.onclick = (e) => e.stopPropagation();
                           
                           // Create counter
@@ -494,7 +494,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                         <LazyImage
                           src={photo.thumbnailUrl || photo.url}
                           alt={photo.filename}
-                          className="w-full aspect-square object-cover"
+                          className="w-full h-40 object-contain bg-gray-100 rounded-lg"
                         />
                       </div>
                     ))}
