@@ -56,7 +56,7 @@ interface Customer {
   name: string;
 }
 
-type ViewMode = 'day' | 'week' | '2weeks' | 'month';
+type ViewMode = 'day' | 'week' | '2weeks' | '4weeks' | 'month';
 
 interface CalendarGridProps {
   selectedDate?: Date;
@@ -130,12 +130,14 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     if (viewMode === 'day') setCurrentDate(subDays(currentDate, 1));
     else if (viewMode === 'week') setCurrentDate(subWeeks(currentDate, 1));
     else if (viewMode === '2weeks') setCurrentDate(subWeeks(currentDate, 2));
+    else if (viewMode === '4weeks') setCurrentDate(subWeeks(currentDate, 4));
     else setCurrentDate(subMonths(currentDate, 1));
   };
   const goToNext = () => {
     if (viewMode === 'day') setCurrentDate(addDays(currentDate, 1));
     else if (viewMode === 'week') setCurrentDate(addWeeks(currentDate, 1));
     else if (viewMode === '2weeks') setCurrentDate(addWeeks(currentDate, 2));
+    else if (viewMode === '4weeks') setCurrentDate(addWeeks(currentDate, 4));
     else setCurrentDate(addMonths(currentDate, 1));
   };
   const goToToday = () => setCurrentDate(new Date());
@@ -145,6 +147,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     if (viewMode === 'day') return [startOfDay(currentDate)];
     if (viewMode === 'week') return eachDayOfInterval({ start: startOfWeek(currentDate), end: endOfWeek(currentDate) });
     if (viewMode === '2weeks') return eachDayOfInterval({ start: startOfWeek(currentDate), end: endOfWeek(addWeeks(currentDate, 1)) });
+    if (viewMode === '4weeks') return eachDayOfInterval({ start: startOfWeek(currentDate), end: endOfWeek(addWeeks(currentDate, 3)) });
     return eachDayOfInterval({ start: startOfMonth(currentDate), end: endOfMonth(currentDate) });
   }, [currentDate, viewMode]);
 
@@ -295,7 +298,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   // ── Date range label ───────────────────────────────────────────────────────
   const dateRangeDisplay = useMemo(() => {
     if (viewMode === 'day') return format(currentDate, 'EEE d MMMM yyyy');
-    if (viewMode === 'week' || viewMode === '2weeks') {
+    if (viewMode === 'week' || viewMode === '2weeks' || viewMode === '4weeks') {
       return `${format(dateRange[0], 'd MMM')} – ${format(dateRange[dateRange.length - 1], 'd MMM yyyy')}`;
     }
     return format(currentDate, 'MMMM yyyy');
@@ -321,7 +324,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
         </div>
 
         <div className="flex items-center gap-1">
-          {(['day', 'week', '2weeks'] as ViewMode[]).map(v => (
+          {(['day', 'week', '2weeks', '4weeks'] as ViewMode[]).map(v => (
             <Button
               key={v}
               variant={viewMode === v ? 'default' : 'ghost'}
@@ -329,7 +332,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
               onClick={() => setViewMode(v)}
               data-testid={`button-view-${v}`}
             >
-              {v === '2weeks' ? '2 weeks' : v.charAt(0).toUpperCase() + v.slice(1)}
+              {v === '2weeks' ? '2 wks' : v === '4weeks' ? '4 wks' : v.charAt(0).toUpperCase() + v.slice(1)}
             </Button>
           ))}
         </div>
