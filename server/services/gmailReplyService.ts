@@ -535,22 +535,30 @@ class GmailReplyService {
 
     let cleaned = body;
 
-    // Remove common reply headers
+    // Remove everything after a line of 3+ underscores (HR separator in plain text)
+    // This strips the quoted original email footer (e.g. "___\nFrom: Treemarkables")
+    cleaned = cleaned.replace(/\n[_\-]{3,}[\s\S]*$/m, '');
+
+    // Remove common reply headers ("On X wrote:" blocks)
     cleaned = cleaned.replace(/^On .+? wrote:[\s\S]*$/im, '');
+    cleaned = cleaned.replace(/\n*On .+? wrote:\s*$/is, '');
+    cleaned = cleaned.replace(/\n+On\s+.+$/is, '');
+
+    // Remove Outlook-style quoted header blocks (From: / Sent: / To: / Subject:)
     cleaned = cleaned.replace(/^From:.+?Sent:.+?To:.+?Subject:[\s\S]*$/im, '');
-    
+    cleaned = cleaned.replace(/\n*From:\s*Treemarkables[\s\S]*$/im, '');
+
     // Remove quoted lines starting with >
     cleaned = cleaned.split('\n')
       .filter(line => !line.trim().startsWith('>'))
       .join('\n');
 
-    // Remove trailing quoted content
-    cleaned = cleaned.replace(/\n*On .+? wrote:\s*$/is, '');
-    cleaned = cleaned.replace(/\n+On\s+.+$/is, '');
-
     // Remove common email signatures
     cleaned = cleaned.replace(/--\s*\n[\s\S]*$/im, '');
     cleaned = cleaned.replace(/Sent from my.*/i, '');
+
+    // Collapse multiple blank lines into one
+    cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
 
     return cleaned.trim();
   }
