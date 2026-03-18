@@ -933,6 +933,7 @@ export function GlobalJobCard({
         checklist: [],
         includeDescriptionInQuotesProposals: true,
         estimatedManHours: '',
+        internalNotes: '',
       } : {
         title: '',
         description: '',
@@ -959,6 +960,7 @@ export function GlobalJobCard({
         taxMode: 'tax_exclusive',
         checklist: [],
         includeDescriptionInQuotesProposals: true,
+        internalNotes: '',
       };
       
       // Reset form with appropriate data
@@ -4323,7 +4325,7 @@ The Treemarkables Team`;
                                   <FormItem>
                                     <div
                                       className="flex items-center justify-between cursor-pointer"
-                                      onClick={() => { setInternalNotesDraft(field.value || ''); setInternalNotesPopupOpen(true); }}
+                                      onClick={() => { const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || ''); setInternalNotesDraft(val); setInternalNotesPopupOpen(true); }}
                                     >
                                       <span className="text-amber-700 font-medium flex items-center gap-2">
                                         <Lock className="h-4 w-4" />
@@ -4338,7 +4340,7 @@ The Treemarkables Team`;
                                         {field.value && (
                                           <div
                                             className="text-sm text-amber-800 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-4 bg-amber-50 rounded-lg p-2"
-                                            onClick={() => { setInternalNotesDraft(field.value || ''); setInternalNotesPopupOpen(true); }}
+                                            onClick={() => { const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || ''); setInternalNotesDraft(val); setInternalNotesPopupOpen(true); }}
                                           >
                                             {field.value}
                                           </div>
@@ -5000,7 +5002,7 @@ The Treemarkables Team`;
                                   <FormItem>
                                     <div
                                       className="cursor-pointer rounded-lg p-2 -m-2 transition-colors hover:bg-amber-50"
-                                      onClick={() => { setInternalNotesDraft(field.value || ''); setInternalNotesPopupOpen(true); }}
+                                      onClick={() => { const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || ''); setInternalNotesDraft(val); setInternalNotesPopupOpen(true); }}
                                     >
                                       <div className="flex items-center justify-between mb-1">
                                         <span className="text-xs text-amber-700 font-medium flex items-center gap-1.5">
