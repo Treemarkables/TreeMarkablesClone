@@ -2676,8 +2676,24 @@ export function ProposalBuilder({
             </div>
 
             <div className="border-t p-4 flex items-center justify-between bg-gray-50">
-              <div className="text-sm text-gray-600">
-                {selectedDiaryPhotos.length} photo(s) selected
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-600">
+                  {selectedDiaryPhotos.length} photo(s) selected
+                </span>
+                {getDiaryPhotos().length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const allPhotos = getDiaryPhotos();
+                      const allSelected = allPhotos.every(p => selectedDiaryPhotos.includes(p));
+                      setSelectedDiaryPhotos(allSelected ? [] : allPhotos);
+                    }}
+                    data-testid="button-select-all-diary-photos"
+                  >
+                    {getDiaryPhotos().every(p => selectedDiaryPhotos.includes(p)) ? 'Deselect All' : 'Select All'}
+                  </Button>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button
