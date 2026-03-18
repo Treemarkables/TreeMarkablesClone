@@ -373,7 +373,7 @@ export default function StaffSchedule() {
                               <span className="text-sm font-bold text-green tabular-nums">
                                 {timeDisplay}
                               </span>
-                              <span className="font-bold text-sm min-w-0 overflow-hidden text-ellipsis whitespace-nowrap border border-orange-400 rounded px-1.5 bg-orange-50 text-orange-900 dark:bg-orange-950/30 dark:border-orange-500/60 dark:text-orange-200">
+                              <span className="font-bold text-sm truncate">
                                 {getCustomerName(job)}
                               </span>
                             </div>
