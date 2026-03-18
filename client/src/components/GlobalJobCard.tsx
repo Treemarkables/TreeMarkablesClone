@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw, Crown } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw, Crown, Lock } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -216,6 +216,7 @@ export function GlobalJobCard({
       sameAsJobAddress: true,
       taxMode: "tax_exclusive",
       includeDescriptionInQuotesProposals: true,
+      internalNotes: "",
     },
   });
 
@@ -260,6 +261,11 @@ export function GlobalJobCard({
   const [descriptionCopied, setDescriptionCopied] = useState(false);
   const [descriptionFocused, setDescriptionFocused] = useState(false);
   const [formLoadedJobId, setFormLoadedJobId] = useState<string | null>(null);
+
+  // Internal Notes popup state
+  const [internalNotesPopupOpen, setInternalNotesPopupOpen] = useState(false);
+  const [internalNotesDraft, setInternalNotesDraft] = useState('');
+  const [internalNotesFocused, setInternalNotesFocused] = useState(false);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
   
   // Double-tap detection for mobile description
@@ -352,6 +358,28 @@ export function GlobalJobCard({
     ta.style.height = 'auto';
     ta.style.height = ta.scrollHeight + 'px';
   }, [descriptionDraft, descriptionPopupOpen]);
+
+  // Internal Notes popup ref and auto-focus/resize effects
+  const internalNotesPopupRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!internalNotesPopupOpen) return;
+    const timer = setTimeout(() => {
+      const ta = internalNotesPopupRef.current;
+      if (!ta) return;
+      ta.style.height = 'auto';
+      ta.style.height = ta.scrollHeight + 'px';
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [internalNotesPopupOpen]);
+  useEffect(() => {
+    if (!internalNotesPopupOpen) return;
+    const ta = internalNotesPopupRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  }, [internalNotesDraft, internalNotesPopupOpen]);
 
   // Line item management state
   const [isAddingLineItem, setIsAddingLineItem] = useState(false);
@@ -1000,6 +1028,7 @@ export function GlobalJobCard({
         checklist: editingJob.checklist || [],
         includeDescriptionInQuotesProposals: editingJob.includeDescriptionInQuotesProposals ?? true,
         estimatedManHours: editingJob.estimatedManHours || '',
+        internalNotes: (editingJob as any).internalNotes || '',
       };
       form.reset(resetData);
       setFormLoadedJobId(editingJob.id);
@@ -1091,7 +1120,7 @@ export function GlobalJobCard({
     'billingAddress', 'billingNameOverride', 'invoiceDescription', 'billingContactPhone',
     'billingContactMobile', 'billingContactEmail', 'jobContactFirstNameForInvoice', 'jobContactLastNameForInvoice',
     'purchaseOrderNumber', 'sameAsJobAddress', 'quotingMethod', 'unsuccessfulReason',
-    'categoryId', 'crewMembers', 'equipment'
+    'categoryId', 'crewMembers', 'equipment', 'internalNotes'
   ]));
 
   const changedFieldsRef = useRef<Set<string>>(new Set());
@@ -4284,6 +4313,42 @@ The Treemarkables Team`;
                                 )}
                               />
                             </div>
+
+                            {/* Internal Notes (Mobile) — staff only, never shown to customers */}
+                            <div className="border-t pt-3">
+                              <FormField
+                                control={form.control}
+                                name="internalNotes"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <div
+                                      className="flex items-center justify-between cursor-pointer"
+                                      onClick={() => { setInternalNotesDraft(field.value || ''); setInternalNotesPopupOpen(true); }}
+                                    >
+                                      <span className="text-amber-700 font-medium flex items-center gap-2">
+                                        <Lock className="h-4 w-4" />
+                                        Internal Notes
+                                      </span>
+                                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                                    </div>
+                                    <p className="text-xs text-amber-600 mt-0.5">Staff only — not visible to customers</p>
+                                    <FormControl>
+                                      <>
+                                        <input type="hidden" {...field} />
+                                        {field.value && (
+                                          <div
+                                            className="text-sm text-amber-800 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-4 bg-amber-50 rounded-lg p-2"
+                                            onClick={() => { setInternalNotesDraft(field.value || ''); setInternalNotesPopupOpen(true); }}
+                                          >
+                                            {field.value}
+                                          </div>
+                                        )}
+                                      </>
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
                             
                             {/* Est. Man Hours */}
                             <div className="border-t border-dashed pt-3">
@@ -4924,6 +4989,37 @@ The Treemarkables Team`;
                                   {(formLoadedJobId === editingJob?.id ? form.watch('description') : (form.watch('description') || editingJob?.description)) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
                                 </p>
                               </div>
+                            </div>
+
+                            {/* Internal Notes (Desktop) — staff only, never shown to customers */}
+                            <div className="border-t pt-3">
+                              <FormField
+                                control={form.control}
+                                name="internalNotes"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <div
+                                      className="cursor-pointer rounded-lg p-2 -m-2 transition-colors hover:bg-amber-50"
+                                      onClick={() => { setInternalNotesDraft(field.value || ''); setInternalNotesPopupOpen(true); }}
+                                    >
+                                      <div className="flex items-center justify-between mb-1">
+                                        <span className="text-xs text-amber-700 font-medium flex items-center gap-1.5">
+                                          <Lock className="h-3 w-3" />
+                                          Internal Notes
+                                        </span>
+                                        <Edit3 className="h-3 w-3 text-amber-400" />
+                                      </div>
+                                      <p className="text-xs text-amber-600 mb-1">Staff only — not visible to customers</p>
+                                      <p className="text-sm text-amber-800 whitespace-pre-wrap min-h-[32px]">
+                                        {field.value || <span className="text-amber-300 italic">Click to add internal notes...</span>}
+                                      </p>
+                                    </div>
+                                    <FormControl>
+                                      <input type="hidden" {...field} />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
                             </div>
                             
                             {/* Est. Man Hours */}
@@ -6984,6 +7080,55 @@ The Treemarkables Team`;
                 setDescriptionPopupOpen(false);
               }}
               data-testid="btn-description-popup-close"
+            >
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Internal Notes Popup */}
+      <Dialog open={internalNotesPopupOpen} onOpenChange={(open) => {
+        if (!open) {
+          form.setValue('internalNotes', internalNotesDraft, { shouldDirty: true });
+        }
+        setInternalNotesPopupOpen(open);
+      }}>
+        <DialogContent className={`w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] ${internalNotesFocused ? 'overflow-hidden' : 'overflow-y-auto'}`}>
+          <DialogHeader>
+            <DialogTitle className="text-center flex items-center justify-center gap-2 text-amber-700">
+              <Lock className="h-4 w-4" />
+              Internal Notes
+            </DialogTitle>
+            <p className="text-center text-xs text-amber-600 mt-1">Staff only — never visible to customers</p>
+          </DialogHeader>
+          <div className="py-4">
+            <textarea
+              ref={internalNotesPopupRef}
+              value={internalNotesDraft}
+              onChange={(e) => setInternalNotesDraft(e.target.value)}
+              onInput={(e) => {
+                const ta = e.currentTarget;
+                ta.style.height = 'auto';
+                ta.style.height = ta.scrollHeight + 'px';
+              }}
+              onFocus={() => setInternalNotesFocused(true)}
+              onBlur={() => setInternalNotesFocused(false)}
+              rows={12}
+              className="w-full rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-base font-medium text-amber-900 ring-offset-background placeholder:text-amber-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 resize-none"
+              placeholder={"Add internal notes for staff...\n\nExamples:\n• Access via side gate, code is 1234\n• Customer prefers no contact before 9am\n• Neighbour's tree overhangs — check permit"}
+              data-testid="textarea-internal-notes-popup"
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                form.setValue('internalNotes', internalNotesDraft, { shouldDirty: true });
+                setInternalNotesPopupOpen(false);
+              }}
+              data-testid="btn-internal-notes-popup-close"
             >
               Close
             </Button>

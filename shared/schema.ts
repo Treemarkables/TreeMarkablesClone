@@ -408,6 +408,7 @@ export const jobs = pgTable("jobs", {
   checklist: jsonb("checklist").$type<ChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "text": "Task description", "completed": false}]
   equipmentChecklist: jsonb("equipment_checklist").$type<EquipmentChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "equipment": "Chainsaw", "checked": false, "checkedAt": "timestamp", "checkedBy": "name"}]
   notes: text("notes"), // Job notes and comments
+  internalNotes: text("internal_notes"), // Staff-only internal notes — never shown to customers
   lineItems: jsonb("line_items").$type<ServiceM8LineItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
   
   // ServiceM8-Style Proposal Sections
