@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -42,7 +43,9 @@ import {
   Axe,
   Sprout,
   Loader2,
-  Inbox
+  Inbox,
+  ChevronDown,
+  UserPlus
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -481,6 +484,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [jobFilter, setJobFilter] = useState<string>('all');
 
   const STATUS_TAB_FILTERS = [
+    { value: 'lead', label: 'Lead' },
     { value: 'queue', label: 'Queue' },
     { value: 'quote', label: 'Quote' },
     { value: 'work_order', label: 'W/O' },
@@ -490,6 +494,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
     all: { title: 'Active Jobs', subtitle: 'All upcoming jobs' },
+    lead: { title: 'Leads', subtitle: 'Enquiries & unqualified leads' },
     queue: { title: 'Dispatch Queue', subtitle: 'Jobs parked and waiting' },
     quote: { title: 'Quotes', subtitle: 'Quote status' },
     work_order: { title: 'Work Orders', subtitle: 'Work order status' },
@@ -1107,6 +1112,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           return job.status !== 'archived';
         }
         // When a specific status filter is active, show only matching jobs (no exclusions)
+        if (jobFilter === 'lead') return job.status === 'lead';
         if (jobFilter === 'queue') return job.inQueue === true;
         if (jobFilter === 'quote') return job.status === 'quote';
         if (jobFilter === 'work_order') return job.status === 'work_order';
@@ -1409,6 +1415,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     setJobToEdit(null);
     setGlobalJobCardMode('create');
     setShowGlobalJobCard(true);
+  };
+
+  const handleCreateLead = () => {
+    setJobToEdit(null);
+    setGlobalJobCardMode('create');
+    setShowGlobalJobCard(true);
+    // After the card opens, switch the filter to Lead so new lead is visible
+    setJobFilter('lead');
   };
 
   const saveSchedule = () => {
@@ -1717,16 +1731,30 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={handleCreateJob}
-                    data-testid="create-job-button"
-                    className="h-7"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    New Job
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        data-testid="create-job-button"
+                        className="h-7"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        New
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={handleCreateJob}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        New Job
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleCreateLead}>
+                        <UserPlus className="h-4 w-4 mr-2" />
+                        New Lead
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     variant="outline"
                     size="sm"
