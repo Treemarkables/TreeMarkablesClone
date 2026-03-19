@@ -20051,13 +20051,14 @@ If you cannot find a value, use null. Do not guess.`
     try {
       const { db } = await import('./db');
       const { checklistTemplates } = await import('../shared/schema');
-      const { sql: sqlExpr } = await import('drizzle-orm');
+      const { max } = await import('drizzle-orm');
       const { text, sortOrder } = req.body;
       if (!text?.trim()) return res.status(400).json({ success: false, message: 'Text is required' });
-      // Auto-assign sortOrder as max + 1
-      const [{ maxOrder }] = await db.execute(sqlExpr`SELECT COALESCE(MAX(sort_order), -1) as "maxOrder" FROM checklist_templates`) as any;
+      // Auto-assign sortOrder as max + 1 using Drizzle aggregate (works on all DB environments)
+      const [maxResult] = await db.select({ maxOrder: max(checklistTemplates.sortOrder) }).from(checklistTemplates);
+      const nextOrder = sortOrder ?? ((maxResult?.maxOrder ?? -1) + 1);
       const [result] = await db.insert(checklistTemplates)
-        .values({ text: text.trim(), sortOrder: sortOrder ?? (parseInt(maxOrder) + 1) })
+        .values({ text: text.trim(), sortOrder: nextOrder })
         .returning();
       return res.json({ success: true, data: result });
     } catch (error) {
