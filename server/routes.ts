@@ -5139,11 +5139,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         <div style="font-family: Arial, sans-serif; padding: 20px;">
           <p>Dear ${customerName},</p>
           
-          <p>${message || `Thank you for your inquiry, we are pleased to provide you with the following estimate.`}</p>
+          <p>${message || `Thank you for your inquiry, we are pleased to provide you with the following proposal.`}</p>
           
           <p><strong>Total cost: $${total.toFixed(2)}</strong></p>
           
-          <p>View and accept your estimate online here: <a href="${proposalAcceptUrl}">${proposalAcceptUrl}</a></p>
+          <p>View and accept your proposal online here: <a href="${proposalAcceptUrl}">${proposalAcceptUrl}</a></p>
           
           <p>Regards,<br>
           Treemarkables</p>
