@@ -4,6 +4,7 @@ import Hero from "@/components/Hero";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import ServicesOffered from "@/components/ServicesOffered";
 import OurProcess from "@/components/OurProcess";
+import CTASection from "@/components/CTASection";
 import Reviews from "@/components/Reviews";
 import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
@@ -83,6 +84,7 @@ export default function Home() {
       <ServicesOffered />
       <WhyChooseUs />
       <OurProcess />
+      <CTASection />
       <Reviews />
       <ContactSection />
       <Footer />
