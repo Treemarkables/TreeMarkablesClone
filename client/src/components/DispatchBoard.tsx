@@ -1911,17 +1911,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         </div>
                         
                         {/* Row 2: Location + Status Badge */}
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                        <div className="flex items-center justify-between gap-2 mb-1">
                           <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
                             <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                             <span className="truncate">{suburb || 'No location'}</span>
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
-                            {job.inQueue && (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
-                                {job.queueReason || 'Queued'}
-                              </Badge>
-                            )}
                             <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}>
                               {statusBadge.dot && <span className="w-2 h-2 rounded-full mr-1.5 bg-current" />}
                               {statusBadge.icon && <span className="mr-1">{statusBadge.icon}</span>}
@@ -1929,6 +1924,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Badge>
                           </div>
                         </div>
+
+                        {/* Row 2b: Queue reason badge (only when in queue) */}
+                        {job.inQueue && (
+                          <div className="mb-1">
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              {job.queueReason || 'Queued'}
+                            </Badge>
+                          </div>
+                        )}
                         
                         {/* Row 3: Multi-day badge or description */}
                         {job.scheduledEndDate && (
