@@ -3323,5 +3323,31 @@ export type MulchDrop = typeof mulchDrops.$inferSelect;
 export type InsertMulchDrop = z.infer<typeof insertMulchDropSchema>;
 export type UpdateMulchDrop = z.infer<typeof updateMulchDropSchema>;
 
+// Daily Briefing tables
+export const dailyBriefings = pgTable("daily_briefings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  date: text("date").notNull().unique(), // YYYY-MM-DD
+  content: text("content").notNull().default(''),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const dailyJobNotes = pgTable("daily_job_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  date: text("date").notNull(), // YYYY-MM-DD
+  note: text("note").notNull(),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertDailyBriefingSchema = createInsertSchema(dailyBriefings).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertDailyJobNoteSchema = createInsertSchema(dailyJobNotes).omit({ id: true, createdAt: true });
+export type DailyBriefing = typeof dailyBriefings.$inferSelect;
+export type InsertDailyBriefing = z.infer<typeof insertDailyBriefingSchema>;
+export type DailyJobNote = typeof dailyJobNotes.$inferSelect;
+export type InsertDailyJobNote = z.infer<typeof insertDailyJobNoteSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';
