@@ -20029,6 +20029,76 @@ If you cannot find a value, use null. Do not guess.`
     }
   });
 
+  // ─── Checklist Templates ─────────────────────────────────────────────────
+  // GET /api/checklist-templates
+  app.get('/api/checklist-templates', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { checklistTemplates } = await import('../shared/schema');
+      const { asc } = await import('drizzle-orm');
+      const items = await db.select().from(checklistTemplates).orderBy(asc(checklistTemplates.sortOrder), asc(checklistTemplates.createdAt));
+      return res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error fetching checklist templates:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch checklist templates' });
+    }
+  });
+
+  // POST /api/checklist-templates
+  app.post('/api/checklist-templates', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { checklistTemplates } = await import('../shared/schema');
+      const { sql: sqlExpr } = await import('drizzle-orm');
+      const { text, sortOrder } = req.body;
+      if (!text?.trim()) return res.status(400).json({ success: false, message: 'Text is required' });
+      // Auto-assign sortOrder as max + 1
+      const [{ maxOrder }] = await db.execute(sqlExpr`SELECT COALESCE(MAX(sort_order), -1) as "maxOrder" FROM checklist_templates`) as any;
+      const [result] = await db.insert(checklistTemplates)
+        .values({ text: text.trim(), sortOrder: sortOrder ?? (parseInt(maxOrder) + 1) })
+        .returning();
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error creating checklist template:', error);
+      return res.status(500).json({ success: false, message: 'Failed to create checklist template' });
+    }
+  });
+
+  // PUT /api/checklist-templates/:id
+  app.put('/api/checklist-templates/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { checklistTemplates } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const updates: Record<string, any> = {};
+      if (req.body.text !== undefined) updates.text = req.body.text;
+      if (req.body.sortOrder !== undefined) updates.sortOrder = req.body.sortOrder;
+      const [result] = await db.update(checklistTemplates).set(updates).where(eq(checklistTemplates.id, req.params.id)).returning();
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error updating checklist template:', error);
+      return res.status(500).json({ success: false, message: 'Failed to update checklist template' });
+    }
+  });
+
+  // DELETE /api/checklist-templates/:id
+  app.delete('/api/checklist-templates/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { checklistTemplates } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      await db.delete(checklistTemplates).where(eq(checklistTemplates.id, req.params.id));
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting checklist template:', error);
+      return res.status(500).json({ success: false, message: 'Failed to delete checklist template' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

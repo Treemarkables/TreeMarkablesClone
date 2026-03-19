@@ -134,6 +134,14 @@ const settingsOptions = [
     icon: ShieldCheck,
     color: "bg-emerald-100 text-emerald-600",
     path: "/settings/jha-risk-controls"
+  },
+  {
+    id: "checklist-template",
+    title: "Default Job Checklist",
+    description: "Tasks that auto-load into every new job card",
+    icon: CheckSquare,
+    color: "bg-green-100 text-green-600",
+    path: "/settings/checklist-template"
   }
 ];
 

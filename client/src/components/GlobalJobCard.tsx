@@ -231,6 +231,20 @@ export function GlobalJobCard({
       }
     }
   }, [watchedCustomerId, customers]);
+
+  // Pre-populate checklist from template when creating a new job
+  useEffect(() => {
+    if (mode === 'create' && isOpen) {
+      const templateItems: ChecklistItem[] = ((checklistTemplatesData as any)?.data ?? []).map((t: any) => ({
+        id: crypto.randomUUID(),
+        text: t.text,
+        completed: false,
+      }));
+      if (templateItems.length > 0) {
+        setChecklist(templateItems);
+      }
+    }
+  }, [mode, isOpen, checklistTemplatesData]);
   
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
@@ -446,6 +460,11 @@ export function GlobalJobCard({
   const { data: servicesData } = useQuery({
     queryKey: ['/api/services'],
     enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
+  });
+
+  const { data: checklistTemplatesData } = useQuery({
+    queryKey: ['/api/checklist-templates'],
+    enabled: isOpen && mode === 'create',
   });
 
   const employees: any[] = ((employeesData as any)?.data || []).filter((e: any) => e.isActive !== false);
