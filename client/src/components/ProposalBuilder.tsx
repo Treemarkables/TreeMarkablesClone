@@ -2451,7 +2451,7 @@ export function ProposalBuilder({
       {/* Email Dialog */}
       {showEmailDialog && (
         <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
-          <DialogContent className="max-w-full sm:max-w-2xl p-4 sm:p-6">
+          <DialogContent className="max-w-full sm:max-w-2xl p-4 sm:p-6" onOpenAutoFocus={(e) => e.preventDefault()}>
             <DialogHeader className="pb-2 sm:pb-4">
               <DialogTitle className="flex items-center gap-2 text-lg sm:text-xl">
                 <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
