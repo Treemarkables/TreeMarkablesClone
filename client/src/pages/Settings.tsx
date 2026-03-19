@@ -32,6 +32,14 @@ import { Link } from "wouter";
 // Settings sections data - simplified without complex features
 const settingsOptions = [
   {
+    id: "checklist-template",
+    title: "Default Job Checklist",
+    description: "Tasks that auto-load into every new job card",
+    icon: CheckSquare,
+    color: "bg-green-100 text-green-600",
+    path: "/settings/checklist-template"
+  },
+  {
     id: "staff",
     title: "Staff",
     description: "Manage team members, roles and permissions",
@@ -134,20 +142,12 @@ const settingsOptions = [
     icon: ShieldCheck,
     color: "bg-emerald-100 text-emerald-600",
     path: "/settings/jha-risk-controls"
-  },
-  {
-    id: "checklist-template",
-    title: "Default Job Checklist",
-    description: "Tasks that auto-load into every new job card",
-    icon: CheckSquare,
-    color: "bg-green-100 text-green-600",
-    path: "/settings/checklist-template"
   }
 ];
 
 export default function Settings() {
   return (
-    <div className="flex flex-col h-full p-6 space-y-6">
+    <div className="flex flex-col min-h-full overflow-y-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
