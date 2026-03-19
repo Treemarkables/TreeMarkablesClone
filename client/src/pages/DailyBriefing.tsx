@@ -21,6 +21,7 @@ import {
   FileText,
   ShieldAlert,
   Wrench,
+  ListChecks,
 } from "lucide-react";
 
 function formatNZDate(dateStr: string): string {
@@ -40,6 +41,12 @@ function addDays(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d + delta);
   return date.toISOString().slice(0, 10);
+}
+
+interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
 }
 
 interface EquipmentChecklistItem {
@@ -65,6 +72,7 @@ interface Job {
   specialInstructions?: string;
   equipment?: string[];
   equipmentChecklist?: EquipmentChecklistItem[];
+  checklist?: ChecklistItem[];
 }
 
 interface DailyJobNote {
@@ -92,9 +100,7 @@ function buildGearList(job: Job): { name: string; fromChecklist: boolean; checke
   const seen = new Set<string>();
   const items: { name: string; fromChecklist: boolean; checked: boolean }[] = [];
 
-  // First pull from structured checklist (has tick state)
-  const checklist = job.equipmentChecklist ?? [];
-  for (const item of checklist) {
+  for (const item of job.equipmentChecklist ?? []) {
     const key = item.equipment.trim().toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
@@ -102,9 +108,7 @@ function buildGearList(job: Job): { name: string; fromChecklist: boolean; checke
     }
   }
 
-  // Then pull from simple equipment text array
-  const equipArr = job.equipment ?? [];
-  for (const eq of equipArr) {
+  for (const eq of job.equipment ?? []) {
     const trimmed = eq.trim();
     if (!trimmed) continue;
     const key = trimmed.toLowerCase();
@@ -136,6 +140,11 @@ function JobCard({
   const [adding, setAdding] = useState(false);
   const [newNote, setNewNote] = useState("");
 
+  // Optimistic checklist state — initialised from the job prop
+  const [checklist, setChecklist] = useState<ChecklistItem[]>(
+    Array.isArray(job.checklist) ? job.checklist : []
+  );
+
   const addMutation = useMutation({
     mutationFn: () =>
       apiRequest("POST", "/api/daily-job-notes", { jobId: job.id, date, note: newNote.trim() }),
@@ -153,6 +162,21 @@ function JobCard({
     onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
   });
 
+  const toggleChecklistItem = (itemId: string) => {
+    const prev = checklist;
+    const updated = prev.map((item) =>
+      item.id === itemId ? { ...item, completed: !item.completed } : item
+    );
+    // Optimistic update
+    setChecklist(updated);
+
+    apiRequest("PATCH", `/api/jobs/${job.id}`, { checklist: updated }).catch(() => {
+      // Revert on failure
+      setChecklist(prev);
+      toast({ title: "Couldn't save — please try again", variant: "destructive" });
+    });
+  };
+
   const address = job.jobAddress || job.address || "No address";
   const type = job.serviceType || job.jobType || job.title || "Job";
 
@@ -167,6 +191,10 @@ function JobCard({
   const hasSpecialInstructions = !!job.specialInstructions?.trim();
   const hasGear = gearItems.length > 0;
   const hasBriefingNotes = notes.length > 0 || isAdmin;
+  const hasChecklist = checklist.length > 0;
+
+  const doneCount = checklist.filter((i) => i.completed).length;
+  const allDone = hasChecklist && doneCount === checklist.length;
 
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -195,7 +223,7 @@ function JobCard({
         </div>
       </div>
 
-      {/* ── Work Scope ─────────────────────────────────────────────── */}
+      {/* ── Work Scope ──────────────────────────────────────────────── */}
       {hasDescription && (
         <div className="mx-3 mb-3 rounded-lg p-3 bg-muted/50 border border-border">
           <p className="text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1.5">
@@ -208,7 +236,7 @@ function JobCard({
         </div>
       )}
 
-      {/* ── Special Instructions ────────────────────────────────────── */}
+      {/* ── Special Instructions ─────────────────────────────────────── */}
       {hasSpecialInstructions && (
         <div className="mx-3 mb-3 rounded-lg p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
           <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1.5 flex items-center gap-1.5">
@@ -221,7 +249,7 @@ function JobCard({
         </div>
       )}
 
-      {/* ── Gear Required ───────────────────────────────────────────── */}
+      {/* ── Gear Required ────────────────────────────────────────────── */}
       {hasGear && (
         <div className="mx-3 mb-3 rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
           <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
@@ -261,7 +289,78 @@ function JobCard({
         </div>
       )}
 
-      {/* ── Briefing Notes (admin-added per-job notes) ─────────────── */}
+      {/* ── Task Checklist ───────────────────────────────────────────── */}
+      {hasChecklist && (
+        <div className="mx-3 mb-3 rounded-lg overflow-hidden border border-green-200 dark:border-green-800">
+          {/* Header */}
+          <div className="flex items-center justify-between px-3 py-2 bg-green-50 dark:bg-green-950/40">
+            <p className="text-xs font-semibold text-green-700 dark:text-green-400 flex items-center gap-1.5">
+              <ListChecks className="w-3.5 h-3.5" />
+              Task Checklist
+            </p>
+            <span
+              className={`text-xs font-bold px-2 py-0.5 rounded-full ${
+                allDone
+                  ? "bg-green-500 text-white"
+                  : "bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300"
+              }`}
+            >
+              {doneCount}/{checklist.length}
+            </span>
+          </div>
+
+          {/* Progress bar */}
+          <div className="h-1 bg-green-100 dark:bg-green-900/30">
+            <div
+              className="h-full bg-green-500 transition-all duration-300"
+              style={{ width: `${checklist.length > 0 ? (doneCount / checklist.length) * 100 : 0}%` }}
+            />
+          </div>
+
+          {/* Items */}
+          <ul className="divide-y divide-green-100 dark:divide-green-900/30 bg-card">
+            {checklist.map((item) => (
+              <li key={item.id}>
+                <button
+                  onClick={() => toggleChecklistItem(item.id)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left active-elevate-2"
+                >
+                  {/* Checkbox */}
+                  <span
+                    className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
+                      item.completed
+                        ? "bg-green-500 border-green-500"
+                        : "border-muted-foreground/40"
+                    }`}
+                  >
+                    {item.completed && <Check className="w-3 h-3 text-white" />}
+                  </span>
+                  {/* Label */}
+                  <span
+                    className={`text-sm leading-snug flex-1 ${
+                      item.completed
+                        ? "line-through text-muted-foreground"
+                        : "text-foreground"
+                    }`}
+                  >
+                    {item.text}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+
+          {/* All done banner */}
+          {allDone && (
+            <div className="flex items-center justify-center gap-1.5 py-2 bg-green-500">
+              <Check className="w-3.5 h-3.5 text-white" />
+              <span className="text-xs font-bold text-white">All tasks complete</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Briefing Notes (admin-added per-job notes) ──────────────── */}
       {hasBriefingNotes && (
         <div className="mx-3 mb-3 rounded-lg p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800">
           <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-2 flex items-center gap-1.5">
