@@ -154,7 +154,19 @@ function setupStaticServing(app: express.Express, staticPath: string) {
       return next();
     }
     
+    // Skip asset routes - stale cached assets should get 404, not index.html
+    // (serving index.html for .js/.css requests causes "execute HTML as JS" crash)
+    if (req.originalUrl.startsWith('/assets/') || req.originalUrl.match(/\.(js|css|map|woff|woff2|ttf|png|jpg|svg|ico)(\?.*)?$/)) {
+      return res.status(404).send('Asset not found');
+    }
+    
     const indexPath = path.join(staticPath, "index.html");
+    
+    // Always serve index.html with no-cache so browsers never use a stale version
+    // that references old content-hashed JS bundle filenames
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     
     log(`Serving SPA fallback: ${req.originalUrl} -> index.html`, "static");
     
