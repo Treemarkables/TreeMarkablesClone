@@ -4334,7 +4334,39 @@ The Treemarkables Team`;
                                   </span>
                                 </div>
                               ))}
-                              
+
+                              {/* Add task input */}
+                              {mode === 'edit' && (
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (!newChecklistItem.trim()) return;
+                                    const newItem = { id: crypto.randomUUID(), text: newChecklistItem.trim(), completed: false };
+                                    const updated = [...checklist, newItem];
+                                    setChecklist(updated);
+                                    setNewChecklistItem("");
+                                    if (editingJob?.id) {
+                                      updateJobMutation.mutate({ id: editingJob.id, updates: { checklist: updated } });
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 mt-2"
+                                >
+                                  <input
+                                    type="text"
+                                    value={newChecklistItem}
+                                    onChange={(e) => setNewChecklistItem(e.target.value)}
+                                    placeholder="Add a task..."
+                                    className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none py-1 text-gray-700 placeholder-gray-400"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={!newChecklistItem.trim()}
+                                    className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5 text-gray-600" />
+                                  </button>
+                                </form>
+                              )}
 
                             </div>
                             
@@ -4972,7 +5004,39 @@ The Treemarkables Team`;
                                   </span>
                                 </div>
                               ))}
-                              
+
+                              {/* Add task input */}
+                              {mode === 'edit' && (
+                                <form
+                                  onSubmit={(e) => {
+                                    e.preventDefault();
+                                    if (!newChecklistItem.trim()) return;
+                                    const newItem = { id: crypto.randomUUID(), text: newChecklistItem.trim(), completed: false };
+                                    const updated = [...checklist, newItem];
+                                    setChecklist(updated);
+                                    setNewChecklistItem("");
+                                    if (editingJob?.id) {
+                                      updateJobMutation.mutate({ id: editingJob.id, updates: { checklist: updated } });
+                                    }
+                                  }}
+                                  className="flex items-center gap-2 mt-2"
+                                >
+                                  <input
+                                    type="text"
+                                    value={newChecklistItem}
+                                    onChange={(e) => setNewChecklistItem(e.target.value)}
+                                    placeholder="Add a task..."
+                                    className="flex-1 text-sm bg-transparent border-0 border-b border-dashed border-gray-300 focus:border-gray-500 focus:outline-none py-1 text-gray-700 placeholder-gray-400"
+                                  />
+                                  <button
+                                    type="submit"
+                                    disabled={!newChecklistItem.trim()}
+                                    className="w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center flex-shrink-0 disabled:opacity-30 transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5 text-gray-600" />
+                                  </button>
+                                </form>
+                              )}
 
                             </div>
                             
