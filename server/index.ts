@@ -50,12 +50,12 @@ app.use(
       pruneSessionInterval: 60 * 15, // Prune expired sessions every 15 minutes
     }),
     cookie: {
-      secure: !isDevelopment, // Only require HTTPS in production
+      secure: true, // Replit always serves over HTTPS — required for sameSite: 'none'
       httpOnly: true,
       maxAge: isDevelopment 
         ? 1000 * 60 * 60 * 24 * 90  // 90 days in development for convenience
         : 1000 * 60 * 60 * 24 * 30,   // 30 days in production
-      sameSite: isDevelopment ? 'lax' : 'none', // Safari needs 'none' with secure in production
+      sameSite: 'none', // Allow cross-origin iframe (Replit preview pane + production)
       domain: isDevelopment ? undefined : '.treemarkables.co.nz', // Explicit domain in production
     },
   })
