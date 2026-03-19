@@ -66,6 +66,7 @@ import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import MulchDrops from "@/pages/MulchDrops";
 import DailyBriefing from "@/pages/DailyBriefing";
+import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import { Button } from "@/components/ui/button";
@@ -828,6 +829,12 @@ function Router() {
       <Route path="/settings/jha-risk-controls">
         <SidebarLayout>
           <JHARiskControlTemplates />
+        </SidebarLayout>
+      </Route>
+
+      <Route path="/settings/checklist-template">
+        <SidebarLayout>
+          <ChecklistTemplatePage />
         </SidebarLayout>
       </Route>
       
