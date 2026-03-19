@@ -58,12 +58,12 @@ export function CTASection() {
                     }
                     className="px-8 py-3 rounded font-bold text-sm tracking-widest uppercase"
                     style={{
-                      backgroundColor: "#4ade80",
+                      backgroundColor: "#39FF14",
                       color: "#0a160a",
                       letterSpacing: "0.12em",
                     }}
                   >
-                    Request a Quote
+                    Get a Free Quote
                   </button>
                   {/* Secondary link */}
                   <a
