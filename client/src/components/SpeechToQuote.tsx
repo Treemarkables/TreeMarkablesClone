@@ -8,7 +8,7 @@ interface SpeechToQuoteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onQuoteGenerated: (quoteData: any) => void;
-  context?: 'full' | 'job-description' | 'invoice-description';
+  context?: 'full' | 'job-description' | 'invoice-description' | 'internal-notes';
 }
 
 export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 'full' }: SpeechToQuoteProps) {

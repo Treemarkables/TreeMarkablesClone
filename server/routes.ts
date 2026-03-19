@@ -18063,12 +18063,24 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       
       console.log('📝 Transcription:', transcriptText);
 
-      // If context is description-only, format transcription as structured list
-      if (context === 'job-description' || context === 'invoice-description') {
-        console.log('📝 Formatting transcription as structured list (context: ' + context + ')');
-        
-        // Use GPT to structure the transcription into a clean bullet-point list
-        const formattingPrompt = `You are a job description formatter for a tree removal service in New Zealand.
+      // If context is description-only or internal notes, format transcription (no full quote extraction)
+      if (context === 'job-description' || context === 'invoice-description' || context === 'internal-notes') {
+        console.log('📝 Formatting transcription (context: ' + context + ')');
+
+        let formattingPrompt: string;
+        let systemPrompt: string;
+
+        if (context === 'internal-notes') {
+          systemPrompt = 'You are a note cleaner. Clean up voice transcriptions into readable plain text notes. Keep all the content but remove filler words.';
+          formattingPrompt = `Clean up this voice transcription into a readable note. Remove filler words like "okay", "um", "uh", "so", etc. Fix capitalisation of proper nouns. Keep sentences natural — do NOT convert to a task list. When the speaker says "new line" or "next line", start a new line. Return ONLY the cleaned note text.
+
+Voice transcription:
+"${transcriptText}"
+
+Cleaned note:`;
+        } else {
+          systemPrompt = 'You are a professional job description formatter. Format voice transcriptions into clean, structured task lists.';
+          formattingPrompt = `You are a job description formatter for a tree removal service in New Zealand.
 
 Take this voice transcription and format it as a clean, structured list of tasks. Each task should be on its own line.
 
@@ -18086,21 +18098,19 @@ Voice transcription:
 "${transcriptText}"
 
 Formatted task list:`;
+        }
 
         const formattingResponse = await openai.chat.completions.create({
           model: "gpt-4o",
           messages: [
-            { 
-              role: "system", 
-              content: "You are a professional job description formatter. Format voice transcriptions into clean, structured task lists."
-            },
+            { role: "system", content: systemPrompt },
             { role: "user", content: formattingPrompt }
           ],
           temperature: 0.3,
         });
 
         const formattedText = formattingResponse.choices[0].message.content?.trim() || transcriptText;
-        console.log('📝 Formatted description:', formattedText);
+        console.log('📝 Formatted text:', formattedText);
         
         return res.json({
           success: true,
