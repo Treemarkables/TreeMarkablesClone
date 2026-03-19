@@ -308,6 +308,21 @@ function startNotificationQueueWorker() {
 (async () => {
   try {
     log("Starting server initialization...", "startup");
+
+    // Run startup migrations to ensure schema is up to date
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS checklist_templates (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          text TEXT NOT NULL,
+          sort_order INTEGER DEFAULT 0,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      log("✅ Schema migration: checklist_templates ready", "startup");
+    } catch (migErr) {
+      log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
+    }
     
     // Register API routes with error handling
     let server;
