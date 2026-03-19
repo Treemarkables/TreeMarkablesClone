@@ -19935,6 +19935,100 @@ If you cannot find a value, use null. Do not guess.`
     }
   });
 
+  // ─── Daily Briefing ──────────────────────────────────────────────────────────
+
+  // GET /api/daily-briefing?date=YYYY-MM-DD
+  app.get('/api/daily-briefing', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const date = (req.query.date as string) || new Date().toISOString().slice(0, 10);
+      const { db } = await import('./db');
+      const { dailyBriefings, dailyJobNotes, jobs } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+
+      const [briefing] = await db.select().from(dailyBriefings).where(eq(dailyBriefings.date, date));
+      const notes = await db.select().from(dailyJobNotes).where(eq(dailyJobNotes.date, date));
+
+      // Fetch jobs scheduled on this date (compare date portion of scheduledDate)
+      const allJobs = await db.select().from(jobs);
+      const scheduledJobs = allJobs.filter(j => {
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        const jDate = d.toISOString().slice(0, 10);
+        return jDate === date;
+      });
+
+      return res.json({ success: true, data: { briefing: briefing || null, jobNotes: notes, jobs: scheduledJobs } });
+    } catch (error) {
+      console.error('Error fetching daily briefing:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch daily briefing' });
+    }
+  });
+
+  // PUT /api/daily-briefing — upsert general day note (admin only)
+  app.put('/api/daily-briefing', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { date, content } = req.body;
+      if (!date) return res.status(400).json({ success: false, message: 'date is required' });
+      const { db } = await import('./db');
+      const { dailyBriefings } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+
+      const [existing] = await db.select().from(dailyBriefings).where(eq(dailyBriefings.date, date));
+      let result;
+      if (existing) {
+        [result] = await db.update(dailyBriefings)
+          .set({ content: content ?? '', updatedAt: new Date(), createdBy: req.session.employeeId })
+          .where(eq(dailyBriefings.date, date))
+          .returning();
+      } else {
+        [result] = await db.insert(dailyBriefings)
+          .values({ date, content: content ?? '', createdBy: req.session.employeeId })
+          .returning();
+      }
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error saving daily briefing:', error);
+      return res.status(500).json({ success: false, message: 'Failed to save daily briefing' });
+    }
+  });
+
+  // POST /api/daily-job-notes — add a per-job note (admin only)
+  app.post('/api/daily-job-notes', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { jobId, date, note } = req.body;
+      if (!jobId || !date || !note) return res.status(400).json({ success: false, message: 'jobId, date and note are required' });
+      const { db } = await import('./db');
+      const { dailyJobNotes } = await import('../shared/schema');
+
+      const [result] = await db.insert(dailyJobNotes)
+        .values({ jobId, date, note, createdBy: req.session.employeeId })
+        .returning();
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error adding job note:', error);
+      return res.status(500).json({ success: false, message: 'Failed to add job note' });
+    }
+  });
+
+  // DELETE /api/daily-job-notes/:id
+  app.delete('/api/daily-job-notes/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { dailyJobNotes } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+
+      await db.delete(dailyJobNotes).where(eq(dailyJobNotes.id, req.params.id));
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting job note:', error);
+      return res.status(500).json({ success: false, message: 'Failed to delete note' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

@@ -21,6 +21,7 @@ import {
   Shield,
   LogOut,
   ClipboardCheck,
+  ClipboardList,
   History as HistoryIconLucide,
   Megaphone,
   Clock,
@@ -286,6 +287,18 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                       <Leaf className="h-4 w-4" />
                     </span>
                     <span>Mulch Drops</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Daily Briefing - Available to all users */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/daily-briefing"}>
+                  <Link href="/daily-briefing" onClick={handleLinkClick} data-testid="link-daily-briefing">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-700">
+                      <ClipboardList className="h-4 w-4" />
+                    </span>
+                    <span>Daily Briefing</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

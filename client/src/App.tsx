@@ -65,6 +65,7 @@ import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import MulchDrops from "@/pages/MulchDrops";
+import DailyBriefing from "@/pages/DailyBriefing";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import { Button } from "@/components/ui/button";
@@ -714,6 +715,15 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <MulchDrops />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+
+      {/* Daily Briefing - accessible to all logged-in users */}
+      <Route path="/daily-briefing">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <DailyBriefing />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
