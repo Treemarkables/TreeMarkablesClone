@@ -3746,11 +3746,11 @@ The Treemarkables Team`;
                           </div>
                           
                           {/* Action Buttons Row */}
-                          <div className="flex items-center gap-2 mt-4">
+                          <div className="grid grid-cols-2 gap-2 mt-4">
                             <Button
                               type="button"
                               size="sm"
-                              className="flex-1 bg-green-500 hover:bg-green-600 text-white rounded-full"
+                              className="w-full bg-green-500 hover:bg-green-600 text-white rounded-full"
                               onClick={(e) => {
                                 e.preventDefault();
                                 handleCallClick();
@@ -3763,7 +3763,7 @@ The Treemarkables Team`;
                             <Button
                               type="button"
                               size="sm"
-                              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full"
+                              className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-full"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setIsSMSComposerOpen(true);
@@ -3776,7 +3776,7 @@ The Treemarkables Team`;
                             <Button
                               type="button"
                               size="sm"
-                              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full"
+                              className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-full"
                               onClick={(e) => {
                                 e.preventDefault();
                                 const address = form.getValues('address');
@@ -3792,7 +3792,7 @@ The Treemarkables Team`;
                             <Button
                               type="button"
                               size="sm"
-                              className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full relative"
+                              className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-full relative"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setIsPhotoCaptureOpen(true);
