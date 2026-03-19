@@ -4338,15 +4338,31 @@ The Treemarkables Team`;
                                 name="internalNotes"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <div
-                                      className="flex items-center justify-between cursor-pointer"
-                                      onClick={() => { const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || ''); setInternalNotesDraft(val); setInternalNotesPopupOpen(true); }}
-                                    >
-                                      <span className="text-amber-700 font-medium flex items-center gap-2">
+                                    <div className="flex items-center justify-between">
+                                      <span
+                                        className="text-amber-700 font-medium flex items-center gap-2 cursor-pointer"
+                                        onClick={() => { const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || ''); setInternalNotesDraft(val); setInternalNotesPopupOpen(true); }}
+                                      >
                                         <Lock className="h-4 w-4" />
                                         Internal Notes
                                       </span>
-                                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || '');
+                                          setInternalNotesDraft(val);
+                                          setSpeechToQuoteContext('internal-notes');
+                                          setIsSpeechToQuoteOpen(true);
+                                        }}
+                                        data-testid="button-voice-internal-notes-mobile"
+                                      >
+                                        <Mic className="h-4 w-4 mr-1" />
+                                        <span className="text-xs">Voice</span>
+                                      </Button>
                                     </div>
                                     <p className="text-xs text-amber-600 mt-0.5">Staff only — not visible to customers</p>
                                     <FormControl>
@@ -5024,7 +5040,23 @@ The Treemarkables Team`;
                                           <Lock className="h-3 w-3" />
                                           Internal Notes
                                         </span>
-                                        <Edit3 className="h-3 w-3 text-amber-400" />
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const val = formLoadedJobId === editingJob?.id ? (field.value || '') : (field.value || (editingJob as any)?.internalNotes || '');
+                                            setInternalNotesDraft(val);
+                                            setSpeechToQuoteContext('internal-notes');
+                                            setIsSpeechToQuoteOpen(true);
+                                          }}
+                                          data-testid="button-voice-internal-notes-desktop"
+                                        >
+                                          <Mic className="h-4 w-4 mr-1" />
+                                          <span className="text-xs">Voice</span>
+                                        </Button>
                                       </div>
                                       <p className="text-xs text-amber-600 mb-1">Staff only — not visible to customers</p>
                                       <p className="text-sm text-amber-800 whitespace-pre-wrap min-h-[32px]">
