@@ -3,6 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { utcToNZTime } from "@shared/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -31,16 +32,16 @@ function formatNZDate(dateStr: string): string {
 }
 
 function getTodayNZ(): string {
-  const now = new Date();
-  const offset = 13 * 60;
-  const nz = new Date(now.getTime() + offset * 60000 - now.getTimezoneOffset() * 60000);
-  return nz.toISOString().slice(0, 10);
+  return utcToNZTime(new Date()).date;
 }
 
 function addDays(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d + delta);
-  return date.toISOString().slice(0, 10);
+  const yr = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  const dy = String(date.getDate()).padStart(2, "0");
+  return `${yr}-${mo}-${dy}`;
 }
 
 interface ChecklistItem {
