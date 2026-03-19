@@ -3684,19 +3684,18 @@ The Treemarkables Team`;
                                 </PopoverContent>
                               </Popover>
                               )}
-                              <Badge 
-                                variant="outline" 
-                                className={`text-xs whitespace-nowrap flex-shrink-0 ${
-                                  currentStatus === 'completed' ? 'border-green-500 text-green-600' :
-                                  currentStatus === 'work_order' ? 'border-blue-500 text-blue-600' :
-                                  currentStatus === 'quote' ? 'border-blue-500 text-blue-600' :
-                                  currentStatus === 'lead' ? 'border-cyan-500 text-cyan-600' :
-                                  currentStatus === 'scheduled' ? 'border-blue-500 text-blue-600' :
-                                  currentStatus === 'unsuccessful' ? 'border-red-500 text-red-600' :
-                                  'border-gray-400 text-gray-600'
+                              <span
+                                className={`inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap flex-shrink-0 px-2.5 py-1 rounded-full ${
+                                  currentStatus === 'completed' ? 'bg-green-100 text-green-700' :
+                                  currentStatus === 'work_order' ? 'bg-blue-100 text-blue-700' :
+                                  currentStatus === 'quote' ? 'bg-indigo-100 text-indigo-700' :
+                                  currentStatus === 'lead' ? 'bg-cyan-100 text-cyan-700' :
+                                  currentStatus === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+                                  currentStatus === 'unsuccessful' ? 'bg-red-100 text-red-700' :
+                                  'bg-gray-100 text-gray-600'
                                 }`}
                               >
-                                <FileText className="h-3 w-3 mr-1" />
+                                <FileText className="h-3 w-3" />
                                 {currentStatus === 'quote' ? 'Quote Sent' : 
                                  currentStatus === 'work_order' ? 'Work Order' :
                                  currentStatus === 'completed' ? 'Completed' :
@@ -3704,7 +3703,7 @@ The Treemarkables Team`;
                                  currentStatus === 'scheduled' ? 'Scheduled' :
                                  currentStatus === 'unsuccessful' ? 'Unsuccessful' :
                                  currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
-                              </Badge>
+                              </span>
                             </div>
 
                             {/* VIP Member Strip (Mobile) */}
@@ -3715,29 +3714,35 @@ The Treemarkables Team`;
                               </div>
                             )}
                             
-                            {/* Row 2: Est time | Rate | Crew */}
-                            <div className="flex items-center gap-1.5 text-sm text-gray-600 flex-wrap">
+                            {/* Row 2: Est time | Rate | Crew — pill chips */}
+                            <div className="flex items-center gap-1.5 flex-wrap">
                               {editingJob?.estimatedManHours && (
-                                <>
-                                  <Clock className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                  <span>Est: {editingJob.estimatedManHours} hrs</span>
-                                  <span className="text-gray-300">|</span>
-                                </>
+                                <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                                  <Clock className="h-3 w-3" />
+                                  {editingJob.estimatedManHours} hrs
+                                </span>
                               )}
                               {editingJob?.hourlyRate && (
-                                <>
-                                  <DollarSign className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                  <span>${editingJob.hourlyRate}/hr</span>
-                                  <span className="text-gray-300">|</span>
-                                </>
+                                <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
+                                  <DollarSign className="h-3 w-3" />
+                                  ${editingJob.hourlyRate}/hr
+                                </span>
                               )}
                               {editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
-                                <>
-                                  <User className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                  <span>{editingJob.assignedTo.length} crew</span>
-                                </>
+                                <span className="inline-flex items-center gap-1 text-xs font-medium bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full">
+                                  <User className="h-3 w-3" />
+                                  {editingJob.assignedTo.length} crew
+                                </span>
                               )}
                             </div>
+
+                            {/* Row 3: Address */}
+                            {form.watch('address') && (
+                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
+                                <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                                <span className="truncate">{form.watch('address')}</span>
+                              </div>
+                            )}
                           </div>
                           
                           {/* Action Buttons Row */}
@@ -3758,8 +3763,7 @@ The Treemarkables Team`;
                             <Button
                               type="button"
                               size="sm"
-                              variant="outline"
-                              className="flex-1 border-blue-500 text-blue-600 rounded-full"
+                              className="flex-1 bg-blue-500 hover:bg-blue-600 text-white rounded-full"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setIsSMSComposerOpen(true);
@@ -3772,8 +3776,7 @@ The Treemarkables Team`;
                             <Button
                               type="button"
                               size="sm"
-                              variant="outline"
-                              className="flex-1 border-blue-500 text-blue-600 rounded-full"
+                              className="flex-1 bg-amber-500 hover:bg-amber-600 text-white rounded-full"
                               onClick={(e) => {
                                 e.preventDefault();
                                 const address = form.getValues('address');
@@ -3789,8 +3792,7 @@ The Treemarkables Team`;
                             <Button
                               type="button"
                               size="sm"
-                              variant="outline"
-                              className="flex-1 border-blue-500 text-blue-600 rounded-full relative"
+                              className="flex-1 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full relative"
                               onClick={(e) => {
                                 e.preventDefault();
                                 setIsPhotoCaptureOpen(true);
@@ -3953,6 +3955,48 @@ The Treemarkables Team`;
                               <span>VIP Member{selectedVipCustomer.vipDiscountPercent ? ` — ${parseFloat(selectedVipCustomer.vipDiscountPercent)}% discount applies` : ''}</span>
                             </div>
                           )}
+
+                          {/* Desktop: Status badge + Info chips row */}
+                          <div className="flex items-center gap-1.5 flex-wrap mt-2">
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-semibold whitespace-nowrap px-2.5 py-1 rounded-full ${
+                                currentStatus === 'completed' ? 'bg-green-100 text-green-700' :
+                                currentStatus === 'work_order' ? 'bg-blue-100 text-blue-700' :
+                                currentStatus === 'quote' ? 'bg-indigo-100 text-indigo-700' :
+                                currentStatus === 'lead' ? 'bg-cyan-100 text-cyan-700' :
+                                currentStatus === 'scheduled' ? 'bg-blue-100 text-blue-700' :
+                                currentStatus === 'unsuccessful' ? 'bg-red-100 text-red-700' :
+                                'bg-gray-100 text-gray-600'
+                              }`}
+                            >
+                              <FileText className="h-3 w-3" />
+                              {currentStatus === 'quote' ? 'Quote Sent' :
+                               currentStatus === 'work_order' ? 'Work Order' :
+                               currentStatus === 'completed' ? 'Completed' :
+                               currentStatus === 'lead' ? 'Lead' :
+                               currentStatus === 'scheduled' ? 'Scheduled' :
+                               currentStatus === 'unsuccessful' ? 'Unsuccessful' :
+                               currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
+                            </span>
+                            {editingJob?.estimatedManHours && (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
+                                <Clock className="h-3 w-3" />
+                                {editingJob.estimatedManHours} hrs
+                              </span>
+                            )}
+                            {editingJob?.hourlyRate && (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
+                                <DollarSign className="h-3 w-3" />
+                                ${editingJob.hourlyRate}/hr
+                              </span>
+                            )}
+                            {editingJob?.assignedTo && editingJob.assignedTo.length > 0 && (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium bg-violet-50 text-violet-700 px-2 py-0.5 rounded-full">
+                                <User className="h-3 w-3" />
+                                {editingJob.assignedTo.length} crew
+                              </span>
+                            )}
+                          </div>
                         </div>
                       )}
 
