@@ -176,6 +176,12 @@ export function GlobalJobCard({
     refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
   });
 
+  // Must be declared BEFORE the useEffect at line ~236 that uses it in its dependency array
+  const { data: checklistTemplatesData } = useQuery({
+    queryKey: ['/api/checklist-templates'],
+    enabled: isOpen && mode === 'create',
+  });
+
   const customers: Customer[] = (customersData as any)?.data || [];
 
   // Form setup
@@ -460,11 +466,6 @@ export function GlobalJobCard({
   const { data: servicesData } = useQuery({
     queryKey: ['/api/services'],
     enabled: isOpen && (activeTab === 'billing' || sidebarTab === 'billing'),
-  });
-
-  const { data: checklistTemplatesData } = useQuery({
-    queryKey: ['/api/checklist-templates'],
-    enabled: isOpen && mode === 'create',
   });
 
   const employees: any[] = ((employeesData as any)?.data || []).filter((e: any) => e.isActive !== false);

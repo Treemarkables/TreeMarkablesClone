@@ -3,34 +3,57 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import "./index.css";
 
-// v13 - DISABLE service worker completely and force clean old caches
-console.log('🚀 [v13] Starting cache cleanup...');
+// v14 - Auto-recover from stale cached JS bundles
+// When a new deployment happens, old cached index.html references old JS filenames.
+// Those files return 404 → "Failed to fetch dynamically imported module" error.
+// This handler detects that and forces a full hard reload to get the fresh HTML + JS.
+window.addEventListener('error', (event) => {
+  const msg = event.message || '';
+  const isChunkError = (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('Loading chunk') ||
+    msg.includes('ChunkLoadError') ||
+    (event.filename && event.filename.includes('/assets/') && msg.includes('SyntaxError'))
+  );
 
+  if (isChunkError) {
+    console.warn('⚠️ Stale JS bundle detected — forcing reload to get fresh version');
+    // Use location.replace so the back button still works
+    window.location.replace(window.location.href);
+  }
+});
+
+// Also catch unhandled promise rejections (dynamic import errors)
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  const msg = reason?.message || String(reason) || '';
+  const isChunkError = (
+    msg.includes('Failed to fetch dynamically imported module') ||
+    msg.includes('Importing a module script failed') ||
+    msg.includes('Loading chunk') ||
+    msg.includes('ChunkLoadError')
+  );
+
+  if (isChunkError) {
+    console.warn('⚠️ Stale JS chunk import failed — forcing reload to get fresh version');
+    event.preventDefault();
+    window.location.replace(window.location.href);
+  }
+});
+
+// Keep cache cleanup to remove any old service worker / cache that was left behind
 if ('serviceWorker' in navigator) {
-  // Unregister ALL service workers
   navigator.serviceWorker.getRegistrations().then(registrations => {
-    console.log('🧹 [v13] Found', registrations.length, 'service worker(s) - unregistering ALL');
-    registrations.forEach(registration => {
-      registration.unregister().then(() => {
-        console.log('✅ [v13] Service worker unregistered');
-      });
-    });
+    registrations.forEach(registration => registration.unregister());
   });
 }
 
-// Delete ALL caches
 if ('caches' in window) {
   caches.keys().then(keys => {
-    console.log('🧹 [v13] Found', keys.length, 'cache(s) - deleting ALL');
-    keys.forEach(key => {
-      caches.delete(key).then(() => {
-        console.log('✅ [v13] Deleted cache:', key);
-      });
-    });
+    keys.forEach(key => caches.delete(key));
   });
 }
-
-console.log('✅ [v13] Cache cleanup complete - Service Worker DISABLED');
 
 createRoot(document.getElementById("root")!).render(
   <App />
