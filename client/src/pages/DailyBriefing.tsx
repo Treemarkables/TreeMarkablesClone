@@ -18,6 +18,9 @@ import {
   Pencil,
   Check,
   X,
+  FileText,
+  ShieldAlert,
+  Wrench,
 } from "lucide-react";
 
 function formatNZDate(dateStr: string): string {
@@ -27,9 +30,8 @@ function formatNZDate(dateStr: string): string {
 }
 
 function getTodayNZ(): string {
-  // Use NZ date based on local clock — close enough for operational use
   const now = new Date();
-  const offset = 13 * 60; // NZDT UTC+13 (approximate, covers most of the year)
+  const offset = 13 * 60;
   const nz = new Date(now.getTime() + offset * 60000 - now.getTimezoneOffset() * 60000);
   return nz.toISOString().slice(0, 10);
 }
@@ -38,6 +40,15 @@ function addDays(dateStr: string, delta: number): string {
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d + delta);
   return date.toISOString().slice(0, 10);
+}
+
+interface EquipmentChecklistItem {
+  id: string;
+  equipment: string;
+  checked: boolean;
+  checkedAt?: string;
+  checkedBy?: string;
+  notes?: string;
 }
 
 interface Job {
@@ -50,6 +61,10 @@ interface Job {
   status?: string;
   serviceType?: string;
   jobType?: string;
+  description?: string;
+  specialInstructions?: string;
+  equipment?: string[];
+  equipmentChecklist?: EquipmentChecklistItem[];
 }
 
 interface DailyJobNote {
@@ -61,16 +76,45 @@ interface DailyJobNote {
   createdAt: string;
 }
 
-interface DailyBriefing {
+interface DailyBriefingRecord {
   id: string;
   date: string;
   content: string;
 }
 
 interface BriefingData {
-  briefing: DailyBriefing | null;
+  briefing: DailyBriefingRecord | null;
   jobNotes: DailyJobNote[];
   jobs: Job[];
+}
+
+function buildGearList(job: Job): { name: string; fromChecklist: boolean; checked: boolean }[] {
+  const seen = new Set<string>();
+  const items: { name: string; fromChecklist: boolean; checked: boolean }[] = [];
+
+  // First pull from structured checklist (has tick state)
+  const checklist = job.equipmentChecklist ?? [];
+  for (const item of checklist) {
+    const key = item.equipment.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      items.push({ name: item.equipment.trim(), fromChecklist: true, checked: item.checked });
+    }
+  }
+
+  // Then pull from simple equipment text array
+  const equipArr = job.equipment ?? [];
+  for (const eq of equipArr) {
+    const trimmed = eq.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      items.push({ name: trimmed, fromChecklist: false, checked: false });
+    }
+  }
+
+  return items;
 }
 
 function JobCard({
@@ -112,16 +156,21 @@ function JobCard({
   const address = job.jobAddress || job.address || "No address";
   const type = job.serviceType || job.jobType || job.title || "Job";
 
-  // Format scheduled time
   let timeStr = "";
   if (job.scheduledDate) {
     const d = new Date(job.scheduledDate);
     timeStr = d.toLocaleTimeString("en-NZ", { hour: "numeric", minute: "2-digit", hour12: true });
   }
 
+  const gearItems = buildGearList(job);
+  const hasDescription = !!job.description?.trim();
+  const hasSpecialInstructions = !!job.specialInstructions?.trim();
+  const hasGear = gearItems.length > 0;
+  const hasBriefingNotes = notes.length > 0 || isAdmin;
+
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
-      {/* Job header strip */}
+      {/* Job header */}
       <div className="flex items-start gap-3 px-4 pt-4 pb-3">
         {timeStr && (
           <div className="flex flex-col items-center min-w-[52px] pt-0.5">
@@ -146,10 +195,76 @@ function JobCard({
         </div>
       </div>
 
-      {/* Briefing notes section */}
-      {(notes.length > 0 || isAdmin) && (
-        <div className="mx-3 mb-3 rounded-lg p-3 bg-amber-50 dark:bg-amber-950/30 border-l-[3px] border-amber-400">
-          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-2 flex items-center gap-1.5">
+      {/* ── Work Scope ─────────────────────────────────────────────── */}
+      {hasDescription && (
+        <div className="mx-3 mb-3 rounded-lg p-3 bg-muted/50 border border-border">
+          <p className="text-xs font-semibold text-foreground mb-1.5 flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5 text-primary" />
+            Work Scope
+          </p>
+          <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+            {job.description!.trim()}
+          </p>
+        </div>
+      )}
+
+      {/* ── Special Instructions ────────────────────────────────────── */}
+      {hasSpecialInstructions && (
+        <div className="mx-3 mb-3 rounded-lg p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 mb-1.5 flex items-center gap-1.5">
+            <ShieldAlert className="w-3.5 h-3.5" />
+            Special Instructions
+          </p>
+          <p className="text-sm text-amber-900 dark:text-amber-200 leading-relaxed whitespace-pre-wrap">
+            {job.specialInstructions!.trim()}
+          </p>
+        </div>
+      )}
+
+      {/* ── Gear Required ───────────────────────────────────────────── */}
+      {hasGear && (
+        <div className="mx-3 mb-3 rounded-lg p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+          <p className="text-xs font-semibold text-blue-700 dark:text-blue-400 mb-2 flex items-center gap-1.5">
+            <Wrench className="w-3.5 h-3.5" />
+            Gear Required
+          </p>
+          <ul className="space-y-1.5">
+            {gearItems.map((item, idx) => (
+              <li key={idx} className="flex items-center gap-2">
+                {item.fromChecklist ? (
+                  <span
+                    className={`flex-shrink-0 w-4 h-4 rounded border flex items-center justify-center ${
+                      item.checked
+                        ? "bg-blue-500 border-blue-500"
+                        : "border-blue-300 dark:border-blue-700"
+                    }`}
+                  >
+                    {item.checked && <Check className="w-2.5 h-2.5 text-white" />}
+                  </span>
+                ) : (
+                  <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 dark:bg-blue-500" />
+                  </span>
+                )}
+                <span
+                  className={`text-sm leading-snug ${
+                    item.checked
+                      ? "line-through text-muted-foreground"
+                      : "text-blue-900 dark:text-blue-100"
+                  }`}
+                >
+                  {item.name}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* ── Briefing Notes (admin-added per-job notes) ─────────────── */}
+      {hasBriefingNotes && (
+        <div className="mx-3 mb-3 rounded-lg p-3 bg-orange-50 dark:bg-orange-950/30 border border-orange-200 dark:border-orange-800">
+          <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 mb-2 flex items-center gap-1.5">
             <AlertCircle className="w-3.5 h-3.5" />
             Briefing Notes
           </p>
@@ -160,7 +275,7 @@ function JobCard({
             <ul className="space-y-2">
               {notes.map((n) => (
                 <li key={n.id} className="flex items-start gap-2">
-                  <span className="text-amber-400 mt-0.5 flex-shrink-0 text-xs">•</span>
+                  <span className="text-orange-400 mt-0.5 flex-shrink-0 text-xs">•</span>
                   <span className="text-xs text-foreground leading-snug flex-1">{n.note}</span>
                   {isAdmin && (
                     <button
@@ -179,7 +294,7 @@ function JobCard({
           {isAdmin && !adding && (
             <button
               onClick={() => setAdding(true)}
-              className="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 font-medium"
+              className="mt-2 flex items-center gap-1 text-xs text-orange-600 dark:text-orange-400 font-medium"
             >
               <Plus className="w-3.5 h-3.5" />
               Add note
