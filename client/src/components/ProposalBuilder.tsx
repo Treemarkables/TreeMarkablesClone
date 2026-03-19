@@ -975,7 +975,7 @@ export function ProposalBuilder({
       to: emailAddress,
       cc: '',
       subject: `Treemarkables Quote`,
-      message: `Thank you for your inquiry, we are pleased to provide you with the following estimate.`
+      message: `Thank you for your inquiry, we are pleased to provide you with the following proposal.`
     });
   };
 
