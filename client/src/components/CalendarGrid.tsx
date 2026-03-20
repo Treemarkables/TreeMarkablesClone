@@ -120,6 +120,25 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       const key = `${a.employeeId}__${nzDateStr}`;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push({ assignment: a, job });
+
+      // For multi-day jobs: backfill days 2+ so the job appears on every day
+      // of its span even when only one assignment record exists per employee
+      if (job.scheduledEndDate) {
+        const endNZ = getNZDateString(new Date(job.scheduledEndDate));
+        const cursor = new Date(nzDateStr + 'T12:00:00Z');
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        while (true) {
+          const dayStr = cursor.toISOString().split('T')[0];
+          if (dayStr > endNZ) break;
+          const nextKey = `${a.employeeId}__${dayStr}`;
+          if (!map.has(nextKey)) map.set(nextKey, []);
+          // Only add if this job isn't already present for that key
+          if (!map.get(nextKey)!.some(x => x.job.id === job.id)) {
+            map.get(nextKey)!.push({ assignment: a, job });
+          }
+          cursor.setUTCDate(cursor.getUTCDate() + 1);
+        }
+      }
     });
     return map;
   }, [allAssignments, jobMap]);
@@ -197,11 +216,16 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     if (fromAssignments.length > 0) return fromAssignments.map(x => x.job);
 
     // Fallback: jobs with job.assignedTo that include this employee
+    // For multi-day jobs use isBetweenNZ so day 2+ still appears when only
+    // one assignment record exists (legacy data or edge cases)
     return allJobs.filter(job => {
       if (job.status === 'archived') return false;
       if (!job.scheduledDate) return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
-      if (!isSameDayNZ(job.scheduledDate, date)) return false;
+      const spans = job.scheduledEndDate
+        ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
+        : isSameDayNZ(job.scheduledDate, date);
+      if (!spans) return false;
       if (job.scheduledStartTime) {
         const [sh] = job.scheduledStartTime.split(':').map(Number);
         const eh = job.scheduledEndTime ? Number(job.scheduledEndTime.split(':')[0]) : sh + 2;
