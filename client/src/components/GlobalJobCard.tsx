@@ -147,6 +147,7 @@ export function GlobalJobCard({
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : []
   );
+  const [checklistCollapsed, setChecklistCollapsed] = useState(false);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [sidebarTab, setSidebarTab] = useState("details");
@@ -4320,15 +4321,20 @@ The Treemarkables Team`;
                                   <span className="text-xs">Voice</span>
                                 </Button>
                                 {checklist.length > 0 && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => setChecklistCollapsed(c => !c)}
+                                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                  >
                                     {checklist.length}
-                                    <ChevronDown className="h-3 w-3 ml-1" />
-                                  </Badge>
+                                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '-rotate-90' : ''}`} />
+                                  </button>
                                 )}
                               </div>
                             </div>
                             
                             {/* Checklist Items */}
+                            {!checklistCollapsed && (
                             <div className="space-y-2 mb-3">
                               {checklist.map((item, index) => (
                                 <div 
@@ -4389,6 +4395,7 @@ The Treemarkables Team`;
                               )}
 
                             </div>
+                            )} {/* end !checklistCollapsed */}
                             
                             {/* Crew Notes (Job Description) */}
                             <div className="border-t pt-3">
@@ -4991,14 +4998,20 @@ The Treemarkables Team`;
                                   <span className="text-xs">Voice</span>
                                 </Button>
                                 {checklist.length > 0 && (
-                                  <Badge variant="outline" className="text-xs">
+                                  <button
+                                    type="button"
+                                    onClick={() => setChecklistCollapsed(c => !c)}
+                                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                  >
                                     {checklist.length}
-                                  </Badge>
+                                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '-rotate-90' : ''}`} />
+                                  </button>
                                 )}
                               </div>
                             </div>
                             
                             {/* Checklist Items */}
+                            {!checklistCollapsed && (
                             <div className="space-y-2">
                               {checklist.map((item, index) => (
                                 <div 
@@ -5059,6 +5072,7 @@ The Treemarkables Team`;
                               )}
 
                             </div>
+                            )} {/* end !checklistCollapsed */}
                             
                             {/* Job Price */}
                             <div className="border-t border-dashed pt-3">
