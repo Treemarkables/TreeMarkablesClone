@@ -293,7 +293,13 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   };
 
   const formatNZD = (amount: number) =>
-    amount === 0 ? '$0' : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + 'k' : amount.toLocaleString()}`;
+    amount === 0 ? '$0' : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + 'k' : Math.round(amount).toLocaleString()}`;
+
+  // Round to the same $100 display unit that the k-formatter uses, so the badge
+  // ("$3.0k") and "to go" always add up to the target on screen.
+  const displayDayRevenue = dayRevenue !== null
+    ? (dayRevenue >= 1000 ? Math.round(dayRevenue / 100) * 100 : Math.round(dayRevenue))
+    : null;
 
   // ── Date range label ───────────────────────────────────────────────────────
   const dateRangeDisplay = useMemo(() => {
@@ -339,13 +345,13 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       </div>
 
       {/* Day revenue bar */}
-      {viewMode === 'day' && dayRevenue !== null && (
+      {viewMode === 'day' && dayRevenue !== null && displayDayRevenue !== null && (
         <div className="flex items-center gap-3 px-4 py-2 border-b bg-gray-50 flex-shrink-0" data-testid="day-revenue-bar">
           <span className="text-xs text-muted-foreground whitespace-nowrap">
             {format(currentDate, 'd MMM')} jobs:
           </span>
           <span className={`text-sm font-semibold px-2 py-0.5 rounded border ${revenueColor(dayRevenue)}`}>
-            {formatNZD(dayRevenue)}
+            {formatNZD(displayDayRevenue)}
           </span>
           <span className="text-xs text-muted-foreground whitespace-nowrap">
             {getUniqueJobsForDate(currentDate).length} job{getUniqueJobsForDate(currentDate).length !== 1 ? 's' : ''} · target $3.5k exc. GST
@@ -356,12 +362,12 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
               style={{ width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%` }}
             />
           </div>
-          {dayRevenue >= DAY_TARGET && (
+          {displayDayRevenue >= DAY_TARGET && (
             <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
           )}
-          {dayRevenue > 0 && dayRevenue < DAY_TARGET && (
+          {displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
             <span className="text-xs text-muted-foreground whitespace-nowrap">
-              {formatNZD(DAY_TARGET - dayRevenue)} to go
+              {formatNZD(DAY_TARGET - displayDayRevenue)} to go
             </span>
           )}
         </div>
