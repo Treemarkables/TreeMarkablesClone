@@ -120,28 +120,38 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       const key = `${a.employeeId}__${nzDateStr}`;
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push({ assignment: a, job });
+    });
+    return map;
+  }, [allAssignments, jobMap]);
 
-      // For multi-day jobs: backfill days 2+ so the job appears on every day
-      // of its span even when only one assignment record exists per employee
-      if (job.scheduledEndDate) {
-        const endNZ = getNZDateString(new Date(job.scheduledEndDate));
-        const cursor = new Date(nzDateStr + 'T12:00:00Z');
-        cursor.setUTCDate(cursor.getUTCDate() + 1);
-        while (true) {
-          const dayStr = cursor.toISOString().split('T')[0];
-          if (dayStr > endNZ) break;
-          const nextKey = `${a.employeeId}__${dayStr}`;
-          if (!map.has(nextKey)) map.set(nextKey, []);
-          // Only add if this job isn't already present for that key
-          if (!map.get(nextKey)!.some(x => x.job.id === job.id)) {
-            map.get(nextKey)!.push({ assignment: a, job });
-          }
-          cursor.setUTCDate(cursor.getUTCDate() + 1);
-        }
+  // Separate index: employee → list of multi-day jobs (one entry per job, not per day).
+  // Used to make day 2+ of a multi-day job appear when only one assignment record
+  // exists for the employee (the one keyed to the start day).
+  const multiDayByEmployee = useMemo(() => {
+    const map = new Map<string, { assignment: StaffAssignment; job: Job }[]>();
+    allAssignments.forEach(a => {
+      const job = jobMap.get(a.jobId);
+      if (!job || job.status === 'archived' || !job.scheduledDate || !job.scheduledEndDate) return;
+      const startNZ = getNZDateString(new Date(job.scheduledDate));
+      const endNZ   = getNZDateString(new Date(job.scheduledEndDate));
+      if (startNZ >= endNZ) return; // single-day or bad data — skip
+      if (!map.has(a.employeeId)) map.set(a.employeeId, []);
+      const list = map.get(a.employeeId)!;
+      if (!list.some(x => x.job.id === job.id)) {
+        list.push({ assignment: a, job });
       }
     });
     return map;
   }, [allAssignments, jobMap]);
+
+  // Helper: returns multiDay entries for an employee that span a given NZ date
+  // AND whose start date is NOT the same as that date (so we don't double-count day 1).
+  const multiDaySpanningDate = (employeeId: string, dateKey: string) =>
+    (multiDayByEmployee.get(employeeId) || []).filter(({ job }) => {
+      const startNZ = getNZDateString(new Date(job.scheduledDate!));
+      const endNZ   = getNZDateString(new Date(job.scheduledEndDate!));
+      return dateKey > startNZ && dateKey <= endNZ;
+    });
 
 
   // ── Navigation ─────────────────────────────────────────────────────────────
@@ -199,12 +209,10 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
   // Jobs for a specific employee + hour slot (day view)
   // Uses staff assignments as primary source; falls back to job.assignedTo
   const getItemsForHour = (employeeId: string, date: Date, hour: number) => {
-    // Use NZ timezone for lookup to match the NZ-timezone keys in assignmentsByEmployeeDate
     const dateKey = getNZDateString(date);
     const assigned = assignmentsByEmployeeDate.get(`${employeeId}__${dateKey}`) || [];
 
     // Filter to assignments that overlap with this hour
-    // Convert UTC → NZ local time before extracting hours
     const fromAssignments = assigned.filter(({ assignment }) => {
       const startNZ = toZonedTime(new Date(assignment.startTime), NZ_TZ);
       const endNZ = toZonedTime(new Date(assignment.endTime), NZ_TZ);
@@ -213,19 +221,27 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
       return startH < hour + 1 && endH > hour;
     });
 
-    if (fromAssignments.length > 0) return fromAssignments.map(x => x.job);
+    // Day 2+ of multi-day jobs: the assignment is only stored under day 1's key,
+    // so look it up from multiDayByEmployee instead of the date-keyed map.
+    const seenIds = new Set(fromAssignments.map(x => x.job.id));
+    const fromMultiDay = multiDaySpanningDate(employeeId, dateKey).filter(({ job }) => {
+      if (seenIds.has(job.id)) return false;
+      if (!job.scheduledStartTime) return hour === 7;
+      const [sh] = job.scheduledStartTime.split(':').map(Number);
+      const eh = job.scheduledEndTime ? Number(job.scheduledEndTime.split(':')[0]) : sh + 2;
+      return sh < hour + 1 && eh > hour;
+    });
 
-    // Fallback: jobs with job.assignedTo that include this employee
-    // For multi-day jobs use isBetweenNZ so day 2+ still appears when only
-    // one assignment record exists (legacy data or edge cases)
+    if (fromAssignments.length > 0 || fromMultiDay.length > 0) {
+      return [...fromAssignments.map(x => x.job), ...fromMultiDay.map(x => x.job)];
+    }
+
+    // Fallback: jobs with job.assignedTo (no assignment record at all)
     return allJobs.filter(job => {
       if (job.status === 'archived') return false;
       if (!job.scheduledDate) return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
-      const spans = job.scheduledEndDate
-        ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
-        : isSameDayNZ(job.scheduledDate, date);
-      if (!spans) return false;
+      if (!isSameDayNZ(job.scheduledDate, date)) return false;
       if (job.scheduledStartTime) {
         const [sh] = job.scheduledStartTime.split(':').map(Number);
         const eh = job.scheduledEndTime ? Number(job.scheduledEndTime.split(':')[0]) : sh + 2;
@@ -240,9 +256,16 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
     const dateKey = getNZDateString(date);
     const assigned = assignmentsByEmployeeDate.get(`${employeeId}__${dateKey}`) || [];
 
-    if (assigned.length > 0) return assigned.map(x => x.job);
+    // Day 2+ of multi-day jobs (assignment only stored under day 1 key)
+    const seenIds = new Set(assigned.map(x => x.job.id));
+    const fromMultiDay = multiDaySpanningDate(employeeId, dateKey)
+      .filter(x => !seenIds.has(x.job.id));
 
-    // Fallback
+    if (assigned.length > 0 || fromMultiDay.length > 0) {
+      return [...assigned.map(x => x.job), ...fromMultiDay.map(x => x.job)];
+    }
+
+    // Fallback: jobs with job.assignedTo (no assignment record at all)
     return allJobs.filter(job => {
       if (job.status === 'archived') return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
