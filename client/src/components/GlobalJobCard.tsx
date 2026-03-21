@@ -2322,6 +2322,12 @@ The Treemarkables Team`;
             description: "The confirmation email wasn't sent because this job has no client email address. Add one in the Contact Details section and try again.",
             variant: "destructive",
           });
+        } else if (schedulingData.sendClientNotification && data.clientEmailFailed) {
+          toast({
+            title: "Email failed to send",
+            description: "The job was scheduled but the confirmation email couldn't be delivered. Please check your email settings or send it manually.",
+            variant: "destructive",
+          });
         }
 
         // Update form's status to match database

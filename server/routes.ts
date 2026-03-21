@@ -9490,9 +9490,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       // Send client notification email if requested
       let clientEmailMissing = false;
+      let clientEmailFailed = false;
       if (sendClientNotification && job) {
         try {
-          const clientEmail = job.jobContactEmail || job.billingContactEmail;
+          // Try job contact fields first, then fall back to linked customer record
+          let clientEmail = job.jobContactEmail || job.billingContactEmail;
+          if (!clientEmail && job.customerId) {
+            const linkedCustomer = await storage.getCustomer(job.customerId);
+            if (linkedCustomer?.email) {
+              clientEmail = linkedCustomer.email;
+              console.log(`📧 Using customer record email for notification: ${clientEmail}`);
+            }
+          }
+
           const clientName = job.jobContactFirstName 
             ? `${job.jobContactFirstName} ${job.jobContactLastName || ''}`.trim()
             : 'Valued Customer';
@@ -9526,14 +9536,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
               </div>
             `;
 
-            await emailService.sendEmail({
+            const emailResult = await emailService.sendEmail({
               to: clientEmail,
               subject: emailSubject,
               html: emailBody,
               text: `Hi ${clientName},\n\nYour job is scheduled for ${scheduleDate} at ${startTimeStr} – ${endTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\nThe Treemarkables Team`
             });
 
-            console.log(`✅ Client notification email sent to ${clientEmail}`);
+            if (emailResult.success) {
+              console.log(`✅ Client notification email sent to ${clientEmail}`);
+            } else {
+              clientEmailFailed = true;
+              console.error(`❌ Client notification email failed to send to ${clientEmail}: ${emailResult.error}`);
+            }
 
             // Send SMS if client has phone number
             const clientPhone = job.jobContactPhone || job.billingContactPhone;
@@ -9658,7 +9673,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         success: true,
         data: created,
         message: `${created.length} staff member(s) scheduled successfully`,
-        clientEmailMissing
+        clientEmailMissing,
+        clientEmailFailed
       });
     } catch (error) {
       console.error('Error creating staff assignments:', error);
