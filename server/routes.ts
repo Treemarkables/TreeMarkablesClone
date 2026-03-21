@@ -9503,9 +9503,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             }
           }
 
-          const clientName = job.jobContactFirstName 
-            ? `${job.jobContactFirstName} ${job.jobContactLastName || ''}`.trim()
-            : 'Valued Customer';
+          const clientName = job.jobContactFirstName || 'Valued Customer';
 
           if (clientEmail) {
             const scheduleDate = templateStartUTC.toLocaleDateString('en-NZ', { 
