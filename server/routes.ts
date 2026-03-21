@@ -9518,23 +9518,10 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             const emailSubject = `Booking Confirmed - ${job.title || 'Tree Service'} on ${scheduleDate}`;
             const emailBody = `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2 style="color: #2563eb;">Booking Confirmation</h2>
-                <p>Dear ${clientName},</p>
-                <p>Your tree service has been scheduled! Here are the details:</p>
-                
-                <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
-                  <p style="margin: 5px 0;"><strong>Date:</strong> ${scheduleDate}</p>
-                  <p style="margin: 5px 0;"><strong>Time:</strong> ${startTimeStr} - ${endTimeStr}</p>
-                  <p style="margin: 5px 0;"><strong>Address:</strong> ${job.address || 'As discussed'}</p>
-                  ${job.description ? `<p style="margin: 15px 0 5px 0;"><strong>Service Details:</strong></p><p style="margin: 5px 0; white-space: pre-wrap;">${job.description}</p>` : ''}
-                </div>
-
-                <p>Our team will arrive at your property at the scheduled time. If you have any questions or need to reschedule, please don't hesitate to contact us.</p>
-                
-                <p style="margin-top: 30px;">Best regards,<br><strong>Treemarkables Team</strong></p>
-                
-                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-                <p style="font-size: 12px; color: #6b7280;">This is an automated booking confirmation. Please do not reply to this email.</p>
+                <p>Hi ${clientName},</p>
+                <p>Your job is scheduled for ${scheduleDate} at ${startTimeStr} – ${endTimeStr}.</p>
+                <p>We look forward to completing your job.</p>
+                <p style="margin-top: 30px;">Thanks,<br><strong>The Treemarkables Team</strong></p>
               </div>
             `;
 
@@ -9542,7 +9529,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
               to: clientEmail,
               subject: emailSubject,
               html: emailBody,
-              text: `Booking Confirmation\n\nDear ${clientName},\n\nYour tree service has been scheduled!\n\nDate: ${scheduleDate}\nTime: ${startTimeStr} - ${endTimeStr}\nAddress: ${job.address || 'As discussed'}\n\n${job.description ? `Service Details:\n${job.description}\n\n` : ''}Our team will arrive at your property at the scheduled time.\n\nBest regards,\nTreemarkables Team`
+              text: `Hi ${clientName},\n\nYour job is scheduled for ${scheduleDate} at ${startTimeStr} – ${endTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\nThe Treemarkables Team`
             });
 
             console.log(`✅ Client notification email sent to ${clientEmail}`);
