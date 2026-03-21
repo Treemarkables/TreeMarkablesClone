@@ -312,7 +312,8 @@ export function GlobalJobCard({
     date: '',
     endDate: '', // For multi-day jobs — blank means single-day
     startTime: '',
-    duration: '', // in minutes
+    duration: '', // in minutes — day 1
+    day2Duration: '', // in minutes — last day (only used when endDate is set)
     assignedTo: [] as string[],
     notes: '',
     sendClientNotification: false
@@ -2221,20 +2222,24 @@ The Treemarkables Team`;
       const startTimeUTC = nzTimeToUTC(dateStr, timeStr);
       const startTimeISO = startTimeUTC.toISOString();
       
-      // Calculate end time
+      // Calculate end times — day 1 and last day may differ
+      const isMultiDay = !!(schedulingData.endDate && schedulingData.endDate !== schedulingData.date);
       const durationMs = parseInt(schedulingData.duration) * 60000;
+      const day2DurationMs = (isMultiDay && schedulingData.day2Duration)
+        ? parseInt(schedulingData.day2Duration) * 60000
+        : durationMs;
+
+      // Day 1 end time (used for single-day scheduledEndTime on job record)
       const endTimeUTC = new Date(startTimeUTC.getTime() + durationMs);
       const endTimeISO = endTimeUTC.toISOString();
 
       // Convert end time back to NZ local time for display
       const endTimeNZ = utcToNZTime(endTimeUTC);
       const [endHours, endMinutes] = endTimeNZ.time.split(':').map(Number);
-      
+
       // Create staff assignments - remove duplicates first
       const uniqueEmployeeIds = [...new Set(schedulingData.assignedTo)];
-      const endDateStr = (schedulingData.endDate && schedulingData.endDate !== schedulingData.date)
-        ? schedulingData.endDate
-        : schedulingData.date;
+      const endDateStr = isMultiDay ? schedulingData.endDate : schedulingData.date;
 
       // Build list of all days in range (YYYY-MM-DD NZ dates)
       const allDays: string[] = [];
@@ -2247,11 +2252,13 @@ The Treemarkables Team`;
         }
       }
 
-      // One assignment per employee per day (multi-day jobs show on each day of the schedule)
+      // One assignment per employee per day — last day uses day2DurationMs if set
       const staffAssignments: Array<{ employeeId: string; startTime: string; endTime: string; notes: string }> = [];
       for (const dayStr of allDays) {
+        const isLastDay = dayStr === endDateStr;
+        const thisDurationMs = (isMultiDay && isLastDay) ? day2DurationMs : durationMs;
         const dayStartUTC = nzTimeToUTC(dayStr, timeStr);
-        const dayEndUTC = new Date(dayStartUTC.getTime() + durationMs);
+        const dayEndUTC = new Date(dayStartUTC.getTime() + thisDurationMs);
         for (const employeeId of uniqueEmployeeIds) {
           staffAssignments.push({
             employeeId,
@@ -2262,14 +2269,12 @@ The Treemarkables Team`;
         }
       }
 
-      // First, update the job with scheduledDate, scheduledStartTime, scheduledEndTime, assignedTo, and status
-      // Send scheduledDate as UTC ISO string to avoid timezone interpretation issues
-      // Calculate scheduledEndDate if multi-day
+      // Calculate scheduledEndDate if multi-day (timestamp = start of last day + day2Duration)
       let scheduledEndDateISO: string | null = null;
-      if (schedulingData.endDate && schedulingData.endDate !== schedulingData.date) {
-        // End of the last day (use end time on the final day)
-        const endDateUTCFinal = nzTimeToUTC(schedulingData.endDate, endTimeNZ.time);
-        scheduledEndDateISO = endDateUTCFinal.toISOString();
+      if (isMultiDay) {
+        const lastDayStartUTC = nzTimeToUTC(endDateStr, timeStr);
+        const lastDayEndUTC = new Date(lastDayStartUTC.getTime() + day2DurationMs);
+        scheduledEndDateISO = lastDayEndUTC.toISOString();
       }
 
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
@@ -2325,6 +2330,7 @@ The Treemarkables Team`;
           endDate: '',
           startTime: '',
           duration: '',
+          day2Duration: '',
           assignedTo: [],
           notes: '',
           sendClientNotification: false
@@ -6872,7 +6878,9 @@ The Treemarkables Team`;
                 </Select>
               </div>
               <div>
-                <label className="text-sm font-medium">Duration</label>
+                <label className="text-sm font-medium">
+                  {schedulingData.endDate && schedulingData.endDate !== schedulingData.date ? 'Day 1 Duration' : 'Duration'}
+                </label>
                 <Select
                   value={schedulingData.duration}
                   onValueChange={(value) => setSchedulingData(prev => ({ ...prev, duration: value }))}
@@ -6905,6 +6913,44 @@ The Treemarkables Team`;
                 </Select>
               </div>
             </div>
+            {schedulingData.endDate && schedulingData.endDate !== schedulingData.date && (
+              <div>
+                <label className="text-sm font-medium">
+                  Day 2 Duration
+                  <span className="text-xs text-muted-foreground font-normal ml-1">(last day)</span>
+                </label>
+                <Select
+                  value={schedulingData.day2Duration}
+                  onValueChange={(value) => setSchedulingData(prev => ({ ...prev, day2Duration: value }))}
+                >
+                  <SelectTrigger data-testid="select-schedule-day2-duration">
+                    <SelectValue placeholder="Same as Day 1" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15 minutes</SelectItem>
+                    <SelectItem value="30">30 minutes</SelectItem>
+                    <SelectItem value="45">45 minutes</SelectItem>
+                    <SelectItem value="60">1 hour</SelectItem>
+                    <SelectItem value="75">1 hour 15 min</SelectItem>
+                    <SelectItem value="90">1 hour 30 min</SelectItem>
+                    <SelectItem value="105">1 hour 45 min</SelectItem>
+                    <SelectItem value="120">2 hours</SelectItem>
+                    <SelectItem value="135">2 hours 15 min</SelectItem>
+                    <SelectItem value="150">2 hours 30 min</SelectItem>
+                    <SelectItem value="165">2 hours 45 min</SelectItem>
+                    <SelectItem value="180">3 hours</SelectItem>
+                    <SelectItem value="195">3 hours 15 min</SelectItem>
+                    <SelectItem value="210">3 hours 30 min</SelectItem>
+                    <SelectItem value="225">3 hours 45 min</SelectItem>
+                    <SelectItem value="240">4 hours</SelectItem>
+                    <SelectItem value="300">5 hours</SelectItem>
+                    <SelectItem value="360">6 hours</SelectItem>
+                    <SelectItem value="420">7 hours</SelectItem>
+                    <SelectItem value="480">8 hours</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div>
               <label className="text-sm font-medium">Assign Staff Members</label>
               <div className="mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
@@ -6980,8 +7026,10 @@ The Treemarkables Team`;
                 setIsSchedulingModalOpen(false);
                 setSchedulingData({
                   date: '',
+                  endDate: '',
                   startTime: '',
                   duration: '',
+                  day2Duration: '',
                   assignedTo: [],
                   notes: '',
                   sendClientNotification: false
