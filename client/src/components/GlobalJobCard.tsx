@@ -2334,15 +2334,16 @@ The Treemarkables Team`;
         form.setValue('status', 'scheduled');
 
         // Immediately patch the job's cache entry so any form reset triggered by
-        // invalidation picks up status='scheduled' (not stale 'quote')
-        const patchCache = (old: any) => {
-          if (!old) return old;
-          const job = old?.data ?? old;
-          return old?.data
-            ? { ...old, data: { ...job, status: 'scheduled' } }
-            : { ...old, status: 'scheduled' };
-        };
-        queryClient.setQueryData(['/api/jobs', editingJob.id], patchCache);
+        // invalidation picks up status='scheduled' (not stale 'quote').
+        // Follows the same pattern as the auto-save cache update (RC4 FIX).
+        queryClient.setQueryData(['/api/jobs', editingJob.id], (old: unknown) => {
+          if (!old || typeof old !== 'object') return old;
+          const wrapper = old as Record<string, unknown>;
+          if (wrapper.data && typeof wrapper.data === 'object') {
+            return { ...wrapper, data: { ...(wrapper.data as object), status: 'scheduled' } };
+          }
+          return { ...wrapper, status: 'scheduled' };
+        });
 
         // Flush form to a clean baseline — prevents the 1.5s debounce from firing
         // with stale status='quote' after the query invalidation resets the form.
