@@ -9520,17 +9520,11 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
               hour: '2-digit', 
               minute: '2-digit' 
             });
-            const endTimeStr = templateEndUTC.toLocaleTimeString('en-NZ', { 
-              timeZone: 'Pacific/Auckland',
-              hour: '2-digit', 
-              minute: '2-digit' 
-            });
 
             const emailSubject = `Booking Confirmed - ${job.title || 'Tree Service'} on ${scheduleDate}`;
             const emailBody = `
               <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                <p>Hi ${clientName},</p>
-                <p>Your job is scheduled for ${scheduleDate} at ${startTimeStr} – ${endTimeStr}.</p>
+                <p>Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.</p>
                 <p>We look forward to completing your job.</p>
                 <p style="margin-top: 30px;">Thanks,<br><strong>The Treemarkables Team</strong></p>
               </div>
@@ -9540,7 +9534,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
               to: clientEmail,
               subject: emailSubject,
               html: emailBody,
-              text: `Hi ${clientName},\n\nYour job is scheduled for ${scheduleDate} at ${startTimeStr} – ${endTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\nThe Treemarkables Team`
+              text: `Hi ${clientName}, your job is scheduled for ${scheduleDate} at ${startTimeStr}.\n\nWe look forward to completing your job.\n\nThanks,\nThe Treemarkables Team`
             });
 
             if (emailResult.success) {
