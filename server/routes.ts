@@ -9489,6 +9489,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       }
 
       // Send client notification email if requested
+      let clientEmailMissing = false;
       if (sendClientNotification && job) {
         try {
           const clientEmail = job.jobContactEmail || job.billingContactEmail;
@@ -9564,6 +9565,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             } catch (diaryError) {
               console.error('❌ Error creating diary entry for email notification:', diaryError);
             }
+          } else {
+            clientEmailMissing = true;
+            console.warn(`⚠️ Client notification requested but no email address found for job ${jobId}`);
           }
         } catch (emailError) {
           console.error('❌ Error sending client notification email:', emailError);
@@ -9653,7 +9657,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       res.json({
         success: true,
         data: created,
-        message: `${created.length} staff member(s) scheduled successfully`
+        message: `${created.length} staff member(s) scheduled successfully`,
+        clientEmailMissing
       });
     } catch (error) {
       console.error('Error creating staff assignments:', error);
