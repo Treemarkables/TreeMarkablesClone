@@ -22,12 +22,6 @@ export default function CTASection() {
 
         {/* Right: CTA text + button */}
         <div className="flex-1 flex flex-col justify-center px-8 py-14 md:py-0 md:pl-10 md:pr-16 lg:pl-14 lg:pr-24">
-          <h2
-            className="text-white font-extrabold leading-tight mb-3"
-            style={{ fontSize: 'clamp(26px, 3.5vw, 46px)' }}
-          >
-            Interested in our services?
-          </h2>
           <p
             className="font-bold mb-8"
             style={{ fontSize: 'clamp(20px, 2.5vw, 36px)', color: '#39FF14' }}
