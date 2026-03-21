@@ -1,52 +1,52 @@
 export default function CTASection() {
-  const scrollToContact = () => {
-    document.querySelector("#contact")?.scrollIntoView({ behavior: "smooth" });
+  const handleRequestQuote = () => {
+    document.querySelector('#contact')?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
-    <section
-      className="relative overflow-hidden"
-      style={{ backgroundColor: "#0f1f0f", minHeight: "360px" }}
-    >
-      <div className="absolute inset-0 bg-gradient-to-br from-[#0f1f0f] via-[#102010] to-[#0a150a]" />
-
-      <div className="relative flex flex-col md:flex-row min-h-[360px]">
-        {/* LEFT: Photo panel with diagonal cut */}
-        <div className="relative md:w-[48%] overflow-hidden" style={{ minHeight: "260px" }}>
+    <section className="relative overflow-hidden bg-[#0f1f0f]">
+      <div className="flex flex-col md:flex-row min-h-[360px] md:min-h-[420px]">
+        {/* Left: site photo with angled diagonal clip on the right edge */}
+        <div
+          className="relative w-full min-h-[240px] md:min-h-0 md:w-[48%] flex-shrink-0"
+          style={{ clipPath: 'polygon(0 0, 93% 0, 100% 100%, 0 100%)' }}
+        >
           <img
-            src="/arborist-drone.jpg"
-            alt="Treemarkables arborist working at height"
+            src="/tree-removal-real.png"
+            alt="Treemarkables arborists at work"
             className="absolute inset-0 w-full h-full object-cover object-center"
+            loading="lazy"
           />
-          <div className="absolute inset-0 bg-black/20" />
-          <div
-            className="absolute inset-y-0 right-0 w-24"
-            style={{
-              backgroundColor: "#0f1f0f",
-              clipPath: "polygon(60% 0%, 100% 0%, 100% 100%, 0% 100%)",
-            }}
-          />
+          <div className="absolute inset-0 bg-black/25" />
         </div>
 
-        {/* RIGHT: Text and CTA */}
-        <div className="relative md:w-[52%] flex items-center px-8 py-12 md:pl-12 md:pr-16">
+        {/* Right: CTA text + button */}
+        <div className="flex-1 flex flex-col justify-center px-8 py-14 md:py-0 md:pl-10 md:pr-16 lg:pl-14 lg:pr-24">
+          <h2
+            className="text-white font-extrabold leading-tight mb-3"
+            style={{ fontSize: 'clamp(26px, 3.5vw, 46px)' }}
+          >
+            Interested in our services?
+          </h2>
+          <p
+            className="font-bold mb-8"
+            style={{ fontSize: 'clamp(20px, 2.5vw, 36px)', color: '#39FF14' }}
+          >
+            Get a free quote.
+          </p>
           <div>
-            <p
-              className="text-white font-extrabold leading-tight mb-8"
-              style={{ fontSize: "clamp(1.8rem, 3vw, 2.5rem)", fontFamily: "inherit" }}
-            >
-              Get a free quote.
-            </p>
             <button
-              onClick={scrollToContact}
-              className="px-8 py-3 rounded font-bold text-sm uppercase tracking-widest transition-opacity hover:opacity-90"
+              onClick={handleRequestQuote}
+              className="inline-block font-bold uppercase tracking-widest px-10 py-4 rounded-md transition-colors duration-200 text-sm"
               style={{
-                backgroundColor: "#39FF14",
-                color: "#0a160a",
-                letterSpacing: "0.12em",
+                backgroundColor: '#39FF14',
+                color: '#0a160a',
+                letterSpacing: '0.12em',
               }}
+              onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#32CD32'; }}
+              onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#39FF14'; }}
             >
-              Get a Free Quote
+              Request a Quote
             </button>
           </div>
         </div>
