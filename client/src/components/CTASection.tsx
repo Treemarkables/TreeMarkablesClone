@@ -12,8 +12,8 @@ export default function CTASection() {
           style={{ clipPath: 'polygon(0 0, 93% 0, 100% 100%, 0 100%)' }}
         >
           <img
-            src="/tree-removal-real.png"
-            alt="Treemarkables arborists at work"
+            src="/cta-drone.jpg"
+            alt="Treemarkables arborist climbing high in a tree"
             className="absolute inset-0 w-full h-full object-cover object-center"
             loading="lazy"
           />
