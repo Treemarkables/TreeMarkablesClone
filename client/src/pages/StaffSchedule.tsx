@@ -59,15 +59,32 @@ export default function StaffSchedule() {
     return 'No Customer';
   };
 
+  // Number of calendar days a job spans (minimum 1) — used to split revenue per day
+  const jobDayCount = (job: any): number => {
+    if (!job.scheduledDate || !job.scheduledEndDate) return 1;
+    const startNZ = formatInTimeZone(new Date(job.scheduledDate), 'Pacific/Auckland', 'yyyy-MM-dd');
+    const endNZ = formatInTimeZone(new Date(job.scheduledEndDate), 'Pacific/Auckland', 'yyyy-MM-dd');
+    if (endNZ <= startNZ) return 1;
+    const startMs = new Date(startNZ + 'T12:00:00Z').getTime();
+    const endMs = new Date(endNZ + 'T12:00:00Z').getTime();
+    return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+  };
+
+  // Revenue attributed to one day of the job (exc-GST, split evenly across all scheduled days)
   const calculateJobTotal = (job: any): number => {
-    if (job.subtotal && Number(job.subtotal) > 0) return Number(job.subtotal);
-    if (job.totalAmount && Number(job.totalAmount) > 0) return Number(job.totalAmount);
-    if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) return Number(job.totalIncludingGst) / 1.15;
-    const lineItems = job.lineItems;
-    if (!lineItems || !Array.isArray(lineItems)) return 0;
-    return lineItems.reduce((sum: number, item: any) => {
-      return sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
-    }, 0);
+    let raw = 0;
+    if (job.subtotal && Number(job.subtotal) > 0) raw = Number(job.subtotal);
+    else if (job.totalAmount && Number(job.totalAmount) > 0) raw = Number(job.totalAmount);
+    else if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) raw = Number(job.totalIncludingGst) / 1.15;
+    else {
+      const lineItems = job.lineItems;
+      if (lineItems && Array.isArray(lineItems)) {
+        raw = lineItems.reduce((sum: number, item: any) => {
+          return sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+        }, 0);
+      }
+    }
+    return raw / jobDayCount(job);
   };
 
   const formatCurrency = (amount: number) => {
