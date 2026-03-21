@@ -2316,6 +2316,14 @@ The Treemarkables Team`;
           description: `${uniqueEmployeeIds.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')}${endDateDisplay} at ${format(scheduledDate, 'p')}`,
         });
 
+        if (schedulingData.sendClientNotification && data.clientEmailMissing) {
+          toast({
+            title: "No email address on file",
+            description: "The confirmation email wasn't sent because this job has no client email address. Add one in the Contact Details section and try again.",
+            variant: "destructive",
+          });
+        }
+
         // Update form's status to match database
         form.setValue('status', 'scheduled');
 
