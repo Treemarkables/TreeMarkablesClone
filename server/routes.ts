@@ -9554,7 +9554,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             const clientPhone = job.jobContactPhone || job.billingContactPhone;
             if (clientPhone) {
               const formattedDateTime = formatNZTime(templateStartUTC, 'full');
-              const smsMessage = `Hi ${clientName}, your job is scheduled for ${formattedDateTime} (NZ time). - Treemarkables`;
+              const smsFirstName = job.jobContactFirstName || clientName;
+              const smsMessage = `Hi ${smsFirstName},\nYour job is scheduled for ${formattedDateTime} (NZ time). - Treemarkables`;
               await smsService.sendSMS({
                 to: clientPhone,
                 message: smsMessage
