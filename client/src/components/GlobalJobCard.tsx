@@ -2333,6 +2333,23 @@ The Treemarkables Team`;
         // Update form's status to match database
         form.setValue('status', 'scheduled');
 
+        // Immediately patch the job's cache entry so any form reset triggered by
+        // invalidation picks up status='scheduled' (not stale 'quote')
+        const patchCache = (old: any) => {
+          if (!old) return old;
+          const job = old?.data ?? old;
+          return old?.data
+            ? { ...old, data: { ...job, status: 'scheduled' } }
+            : { ...old, status: 'scheduled' };
+        };
+        queryClient.setQueryData(['/api/jobs', editingJob.id], patchCache);
+
+        // Flush form to a clean baseline — prevents the 1.5s debounce from firing
+        // with stale status='quote' after the query invalidation resets the form.
+        changedFieldsRef.current.clear();
+        hasUserChangedRef.current = false;
+        form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+
         // Refresh job data and staff assignments for dispatch board
         queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
