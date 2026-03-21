@@ -302,16 +302,29 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
 
   const DAY_TARGET = 3500;
 
-  // Revenue total for a single date — always returns exc-GST value
-  // subtotal = exc-GST directly; totalIncludingGst / totalAmount = inc-GST, divide by 1.15
+  // Number of calendar days a job spans (minimum 1)
+  const jobDayCount = (job: Job): number => {
+    if (!job.scheduledDate || !job.scheduledEndDate) return 1;
+    const startKey = getNZDateString(new Date(job.scheduledDate));
+    const endKey = getNZDateString(new Date(job.scheduledEndDate));
+    if (endKey <= startKey) return 1;
+    const startMs = new Date(startKey + 'T12:00:00Z').getTime();
+    const endMs = new Date(endKey + 'T12:00:00Z').getTime();
+    return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+  };
+
+  // Revenue attributed to one day of the job (exc-GST, split evenly across all days)
   const jobRevenue = (job: Job): number => {
-    const sub = parseFloat(job.subtotal || '0');
-    if (sub > 0) return sub;
-    const incGst = parseFloat(job.totalIncludingGst || '0');
-    if (incGst > 0) return Math.round(incGst / 1.15 * 100) / 100;
-    const total = parseFloat(job.totalAmount || '0');
-    if (total > 0) return Math.round(total / 1.15 * 100) / 100;
-    return 0;
+    const raw = (() => {
+      const sub = parseFloat(job.subtotal || '0');
+      if (sub > 0) return sub;
+      const incGst = parseFloat(job.totalIncludingGst || '0');
+      if (incGst > 0) return Math.round(incGst / 1.15 * 100) / 100;
+      const total = parseFloat(job.totalAmount || '0');
+      if (total > 0) return Math.round(total / 1.15 * 100) / 100;
+      return 0;
+    })();
+    return raw / jobDayCount(job);
   };
 
   const revenueForDate = (date: Date): number =>
