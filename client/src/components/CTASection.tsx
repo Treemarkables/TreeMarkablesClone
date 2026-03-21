@@ -37,14 +37,7 @@ export default function CTASection() {
           <div>
             <button
               onClick={handleRequestQuote}
-              className="inline-block font-bold uppercase tracking-widest px-10 py-4 rounded-md transition-colors duration-200 text-sm"
-              style={{
-                backgroundColor: '#39FF14',
-                color: '#0a160a',
-                letterSpacing: '0.12em',
-              }}
-              onMouseOver={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#32CD32'; }}
-              onMouseOut={(e) => { (e.currentTarget as HTMLButtonElement).style.backgroundColor = '#39FF14'; }}
+              className="inline-block bg-[#39FF14] hover:bg-[#32CD32] text-[#0a160a] font-bold uppercase tracking-[0.12em] px-10 py-4 rounded-md transition-colors duration-200 text-sm"
             >
               Request a Quote
             </button>
