@@ -9508,19 +9508,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             : 'Valued Customer';
 
           if (clientEmail) {
-            const scheduleDate = startTime.toLocaleDateString('en-NZ', { 
+            const scheduleDate = templateStartUTC.toLocaleDateString('en-NZ', { 
               timeZone: 'Pacific/Auckland',
               weekday: 'long',
               year: 'numeric', 
               month: 'long', 
               day: 'numeric' 
             });
-            const startTimeStr = startTime.toLocaleTimeString('en-NZ', { 
+            const startTimeStr = templateStartUTC.toLocaleTimeString('en-NZ', { 
               timeZone: 'Pacific/Auckland',
               hour: '2-digit', 
               minute: '2-digit' 
             });
-            const endTimeStr = endTime.toLocaleTimeString('en-NZ', { 
+            const endTimeStr = templateEndUTC.toLocaleTimeString('en-NZ', { 
               timeZone: 'Pacific/Auckland',
               hour: '2-digit', 
               minute: '2-digit' 
@@ -9553,7 +9553,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             // Send SMS if client has phone number
             const clientPhone = job.jobContactPhone || job.billingContactPhone;
             if (clientPhone) {
-              const formattedDateTime = formatNZTime(startTime, 'full');
+              const formattedDateTime = formatNZTime(templateStartUTC, 'full');
               const smsMessage = `Hi ${clientName}, your job is scheduled for ${formattedDateTime} (NZ time). - Treemarkables`;
               await smsService.sendSMS({
                 to: clientPhone,
