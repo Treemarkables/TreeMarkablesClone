@@ -1624,7 +1624,7 @@ export function ProposalBuilder({
                               value={section.description}
                               onChange={(e) => updateSectionDescription(section.id, e.target.value)}
                               placeholder="Describe this section of work..."
-                              className="min-h-[80px] border-0 p-0 focus-visible:ring-0"
+                              className="min-h-[160px] border-0 p-0 focus-visible:ring-0"
                               data-testid={`textarea-section-description-${section.id}`}
                             />
                           </div>
@@ -1675,13 +1675,13 @@ export function ProposalBuilder({
                             </div>
 
                             {(section.photos || []).length > 0 && (
-                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
                                 {(section.photos || []).map((photo) => (
                                   <div key={photo.id} className="relative group">
                                     <img
                                       src={photo.url}
                                       alt={photo.filename}
-                                      className="w-full h-20 object-cover rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                      className="w-full h-14 object-cover rounded-md cursor-pointer hover:opacity-90 transition-opacity"
                                       onClick={() => setEnlargedPhotoUrl(photo.url)}
                                     />
                                     <Button
