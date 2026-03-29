@@ -50,7 +50,7 @@ export default function WhyChooseUs() {
               className="text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full"
               style={{ color: "#39FF14", border: "1px solid #39FF14", letterSpacing: "0.15em" }}
             >
-              #1 Choice for Tree Removal in Gisborne
+              #1 Choice for Tree Care in Gisborne
             </span>
           </div>
 
