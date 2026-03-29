@@ -83,7 +83,6 @@ export default function Home() {
       <Hero />
       <ServicesOffered />
       <WhyChooseUs />
-      <OurProcess />
       <CTASection />
       <Reviews />
       <GuaranteeSection />
