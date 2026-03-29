@@ -6,6 +6,7 @@ import ServicesOffered from "@/components/ServicesOffered";
 import OurProcess from "@/components/OurProcess";
 import CTASection from "@/components/CTASection";
 import Reviews from "@/components/Reviews";
+import GuaranteeSection from "@/components/GuaranteeSection";
 import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
@@ -86,6 +87,7 @@ export default function Home() {
       <OurProcess />
       <CTASection />
       <Reviews />
+      <GuaranteeSection />
       <ContactSection />
       <Footer />
     </div>
