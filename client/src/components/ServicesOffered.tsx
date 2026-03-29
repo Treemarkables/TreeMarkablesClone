@@ -3,18 +3,18 @@ import { Link } from "wouter";
 
 const services = [
   {
-    title: "Hazardous Tree Removal",
+    title: "Hazardous Tree Care",
     description: "Identifying and removing trees that pose a danger to your property and its surroundings.",
     image: "/hazardous-tree-removal.jpg",
     route: "/tree-removal",
     altText: "Arborist safely removing hazardous tree near house",
   },
   {
-    title: "Emergency Tree Removal", 
+    title: "Emergency Tree Care", 
     description: "We understand that tree emergencies can happen at any time. Our team is available 24/7 for prompt response and resolution.",
     image: "/emergency-tree-removal.jpg",
     route: "/tree-removal",
-    altText: "Emergency tree removal after storm damage",
+    altText: "Emergency tree care after storm damage",
   },
   {
     title: "Tree Pruning",

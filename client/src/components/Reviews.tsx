@@ -28,7 +28,7 @@ const reviews: Review[] = [
     location: "Gisborne",
     rating: 5,
     comment: "The Gizzy guys did an amazing job removing a massive pine tree from our backyard. Professional, quick, and cleaned up everything perfectly. Highly recommend!",
-    service: "Tree Removal"
+    service: "Tree Care"
   },
   {
     id: "2",
@@ -68,7 +68,7 @@ const reviews: Review[] = [
     location: "Wainui",
     rating: 5,
     comment: "Called for a free quote and they came out the same week. Fair pricing, excellent work, and they left the place spotless. Can't ask for more!",
-    service: "Tree Removal"
+    service: "Tree Care"
   }
 ];
 
