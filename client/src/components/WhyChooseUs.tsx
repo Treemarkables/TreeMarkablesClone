@@ -1,60 +1,173 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { GraduationCap, Shield, TreePine } from "lucide-react";
+import { Target, MessageSquare, ClipboardList, FileText, Truck, Leaf, Check, Star } from "lucide-react";
 
-const features = [
+const whyCards = [
   {
-    icon: GraduationCap,
-    title: "Expertise",
-    description: "Our skilled arborists are trained in the latest techniques for safe and effective tree removal.",
+    icon: Target,
+    title: "Precision Execution",
+    description: "Zero guesswork. We plan thoroughly and deliver safely.",
+    showStars: true,
   },
   {
-    icon: Shield,
-    title: "Safety First",
-    description: "We prioritize safety in every aspect of our work, using state-of-the-art equipment and industry best practices.",
+    icon: MessageSquare,
+    title: "Clear Communication",
+    description: "You're in the loop with timing updates, so you always know what's going on.",
+    showStars: false,
   },
   {
-    icon: TreePine,
-    title: "Insured",
-    description: "Fully licensed and insured, giving you peace of mind throughout the tree removal process.",
+    icon: ClipboardList,
+    title: "Job Done Right",
+    description: "Straightforward quotes. Complicated jobs handled properly — no mess left behind.",
+    showStars: false,
   },
 ];
 
+const steps = [
+  { number: 1, icon: ClipboardList, title: "On-Site Assessment", description: "We assess access, risk and scope." },
+  { number: 2, icon: FileText, title: "Clear Plan & Quote", description: "No hidden fees. All clear upfront." },
+  { number: 3, icon: Truck, title: "Controlled Removal", description: "Skilled crew, right gear, precise work." },
+  { number: 4, icon: Leaf, title: "Thorough Clean-Up", description: "Your property left tidy and safe to use." },
+];
+
+const trustBadges = ["5+ Years Experience", "Fully Insured", "Local Gisborne Crew", "Fast Response"];
+
 export default function WhyChooseUs() {
   return (
-    <section className="py-16 bg-muted/30">
-      <div className="max-w-6xl mx-auto px-6">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
-            So why choose Treemarkables?
-          </h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            We combine expertise, safety, and care to deliver exceptional tree removal services
-          </p>
-        </div>
+    <>
+      {/* ── Top: Why Treemarkables ── */}
+      <section
+        className="relative py-16 md:py-20"
+        style={{ background: "linear-gradient(135deg, #0a1a0a 0%, #0f2a0f 50%, #0a1a0a 100%)" }}
+      >
+        {/* Subtle texture overlay */}
+        <div className="absolute inset-0 opacity-10"
+          style={{ backgroundImage: "radial-gradient(circle at 30% 50%, #39FF14 0%, transparent 60%)" }}
+        />
 
-        <div className="grid md:grid-cols-3 gap-8">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-            return (
-              <Card key={index} className="text-center hover-elevate" data-testid={`card-feature-${index}`}>
-                <CardContent className="pt-8 pb-6">
-                  <div className="flex justify-center mb-6">
-                    <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                      <Icon className="h-8 w-8 text-primary" data-testid={`icon-feature-${index}`} />
-                    </div>
+        <div className="relative max-w-6xl mx-auto px-6">
+          {/* Badge */}
+          <div className="flex justify-center mb-6">
+            <span
+              className="text-xs font-bold tracking-widest uppercase px-4 py-1.5 rounded-full"
+              style={{ color: "#39FF14", border: "1px solid #39FF14", letterSpacing: "0.15em" }}
+            >
+              #1 Choice for Tree Removal in Gisborne
+            </span>
+          </div>
+
+          {/* Heading */}
+          <h2
+            className="text-center font-extrabold leading-tight tracking-tight text-white mb-4"
+            style={{ fontSize: "clamp(28px, 5vw, 56px)", fontFamily: "'TT Norms Pro', sans-serif" }}
+          >
+            Why Treemarkables Gets Called First —{" "}
+            <span style={{ color: "#39FF14" }}>And Called Back Again</span>
+          </h2>
+
+          {/* Subheading */}
+          <p className="text-center text-white/70 max-w-2xl mx-auto mb-12" style={{ fontSize: "clamp(15px, 1.6vw, 18px)" }}>
+            Trusted by homeowners who want{" "}
+            <strong className="text-white">tree jobs done once, done right</strong> — without the runaround.
+          </p>
+
+          {/* Cards */}
+          <div className="grid md:grid-cols-3 gap-6">
+            {whyCards.map((card, index) => {
+              const Icon = card.icon;
+              return (
+                <div
+                  key={index}
+                  className="bg-white rounded-2xl p-6 flex flex-col gap-4"
+                  data-testid={`card-feature-${index}`}
+                >
+                  <div
+                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "#e8fce8", border: "1px solid #39FF14" }}
+                  >
+                    <Icon className="h-6 w-6" style={{ color: "#1a7a1a" }} data-testid={`icon-feature-${index}`} />
                   </div>
-                  <h3 className="text-xl font-semibold text-foreground mb-4" data-testid={`title-feature-${index}`}>
-                    {feature.title}
+                  <h3
+                    className="text-xl font-bold text-gray-900"
+                    data-testid={`title-feature-${index}`}
+                  >
+                    {card.title}
                   </h3>
-                  <p className="text-muted-foreground leading-relaxed" data-testid={`description-feature-${index}`}>
-                    {feature.description}
+                  <p className="text-gray-600 leading-relaxed flex-1" data-testid={`description-feature-${index}`}>
+                    {card.description}
                   </p>
-                </CardContent>
-              </Card>
-            );
-          })}
+                  {card.showStars && (
+                    <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-100">
+                      <div className="flex">
+                        {[...Array(5)].map((_, i) => (
+                          <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                        ))}
+                      </div>
+                      <span className="text-xs text-gray-500 font-medium">200+ Five-Star Reviews</span>
+                    </div>
+                  )}
+                  {!card.showStars && (
+                    <div className="mt-auto pt-2 border-t border-gray-100">
+                      <div className="h-1 w-12 rounded-full" style={{ background: "#39FF14" }} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      {/* ── Bottom: How We Do Every Job ── */}
+      <section id="process" className="py-16 bg-muted/30">
+        <div className="max-w-6xl mx-auto px-6">
+          {/* Heading */}
+          <div className="text-center mb-10">
+            <h2
+              className="font-extrabold text-foreground mb-3"
+              style={{ fontSize: "clamp(24px, 4vw, 42px)", fontFamily: "'TT Norms Pro', sans-serif" }}
+            >
+              How We Do Every Job
+            </h2>
+            <p className="text-muted-foreground" style={{ fontSize: "clamp(15px, 1.6vw, 18px)" }}>
+              Tight, efficient jobs ending with <strong>zero loose ends.</strong>
+            </p>
+          </div>
+
+          {/* Steps */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+            {steps.map((step) => {
+              const Icon = step.icon;
+              return (
+                <div
+                  key={step.number}
+                  className="bg-background rounded-2xl p-5 shadow-sm border border-border/50"
+                  data-testid={`card-process-${step.number - 1}`}
+                >
+                  <Icon className="h-7 w-7 text-muted-foreground mb-4" data-testid={`icon-process-${step.number - 1}`} />
+                  <p className="text-sm font-bold mb-1" style={{ color: "#39FF14" }}>
+                    {step.number}
+                  </p>
+                  <h3 className="font-bold text-foreground mb-2" data-testid={`title-process-${step.number - 1}`}>
+                    {step.title}
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid={`description-process-${step.number - 1}`}>
+                    {step.description}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Trust badges */}
+          <div className="flex flex-wrap justify-center gap-6">
+            {trustBadges.map((badge) => (
+              <div key={badge} className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#39FF14" }} />
+                {badge}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    </>
   );
 }

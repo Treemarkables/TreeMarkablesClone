@@ -3,7 +3,6 @@ import Header from "@/components/Header";
 import Hero from "@/components/Hero";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import ServicesOffered from "@/components/ServicesOffered";
-import OurProcess from "@/components/OurProcess";
 import CTASection from "@/components/CTASection";
 import Reviews from "@/components/Reviews";
 import GuaranteeSection from "@/components/GuaranteeSection";
