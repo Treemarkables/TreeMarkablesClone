@@ -13,7 +13,7 @@ export default function GuaranteeSection() {
                 fontFamily: "'TT Norms Pro', sans-serif",
               }}
             >
-              Our Tree Services Guarantee
+              Our Treemarkables Guarantee
             </h2>
           </div>
 
