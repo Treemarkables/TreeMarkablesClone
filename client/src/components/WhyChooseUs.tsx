@@ -101,7 +101,7 @@ export default function WhyChooseUs() {
                           <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                         ))}
                       </div>
-                      <span className="text-xs text-gray-500 font-medium">200+ Five-Star Reviews</span>
+                      <span className="text-xs text-gray-500 font-medium">90+ Five-Star Reviews</span>
                     </div>
                   )}
                   {!card.showStars && (
