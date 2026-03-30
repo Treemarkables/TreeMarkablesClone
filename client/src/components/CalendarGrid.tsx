@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import {
   format, addDays, subDays, startOfDay, addWeeks, subWeeks,
@@ -40,6 +40,7 @@ interface Job {
   totalAmount?: string;
   totalIncludingGst?: string;
   subtotal?: string;
+  customerConfirmed?: boolean;
 }
 
 interface StaffAssignment {
@@ -491,7 +492,10 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
                               onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
                               data-testid={`job-block-${job.id}`}
                             >
-                              <div className="font-semibold line-clamp-2 leading-tight">{getCustomerName(job)}</div>
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="font-semibold line-clamp-2 leading-tight flex-1">{getCustomerName(job)}</div>
+                                {job.customerConfirmed && <Check className="h-3 w-3 text-green-600 flex-shrink-0" />}
+                              </div>
                               <div className="opacity-70 truncate mt-0.5">{job.address?.split(',')[0]}</div>
                               <div className="opacity-80 mt-0.5 font-mono">#{job.jobNumber}</div>
                             </div>
@@ -510,7 +514,10 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
                               onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
                               data-testid={`job-block-${job.id}`}
                             >
-                              <div className="font-semibold line-clamp-2 leading-tight">{getCustomerName(job)}</div>
+                              <div className="flex items-center justify-between gap-1">
+                                <div className="font-semibold line-clamp-2 leading-tight flex-1">{getCustomerName(job)}</div>
+                                {job.customerConfirmed && <Check className="h-3 w-3 text-green-600 flex-shrink-0" />}
+                              </div>
                               <div className="opacity-70 truncate mt-0.5">{job.address?.split(',')[0]}</div>
                               <div className="opacity-80 mt-0.5 font-mono">#{job.jobNumber}</div>
                             </div>
