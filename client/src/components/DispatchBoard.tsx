@@ -132,6 +132,7 @@ interface JobAssignment {
   scheduledEndDate?: string; // For multi-day jobs
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
+  customerConfirmed?: boolean; // Whether the customer has confirmed the booking
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -812,6 +813,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          customerConfirmed: apiJob.customerConfirmed || false,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -878,6 +880,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
+          customerConfirmed: apiJob.customerConfirmed || false,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -1288,6 +1291,25 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     },
     onError: () => {
       toast({ title: 'Error', description: 'Could not update queue status', variant: 'destructive' });
+    },
+  });
+
+  const confirmJobMutation = useMutation({
+    mutationFn: async ({ id, customerConfirmed }: { id: string; customerConfirmed: boolean }) => {
+      const response = await apiRequest('PUT', `/api/jobs/${id}`, { customerConfirmed });
+      return response.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs?limit=10000&offset=0'] });
+      toast({
+        title: variables.customerConfirmed ? 'Booking Confirmed' : 'Confirmation Removed',
+        description: variables.customerConfirmed
+          ? 'Customer has confirmed this booking'
+          : 'Booking marked as unconfirmed',
+      });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Could not update confirmation status', variant: 'destructive' });
     },
   });
 
@@ -1933,6 +1955,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Badge>
                           </div>
                         )}
+
+                        {/* Row 2c: Customer confirmed badge */}
+                        {job.customerConfirmed && (
+                          <div className="mb-1">
+                            <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+                              <Check className="h-3 w-3 mr-1" />
+                              Confirmed
+                            </Badge>
+                          </div>
+                        )}
                         
                         {/* Row 3: Multi-day badge or description */}
                         {job.scheduledEndDate && (
@@ -1979,6 +2011,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           }}
                         >
                           <Inbox className={`h-4 w-4 ${job.inQueue ? 'text-amber-600' : 'text-gray-400'}`} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={job.customerConfirmed ? 'Mark as Unconfirmed' : 'Mark as Confirmed'}
+                          className={`h-10 w-10 rounded-lg border hover:bg-gray-100 ${job.customerConfirmed ? 'border-green-300 bg-green-50' : 'border-gray-200'}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            confirmJobMutation.mutate({ id: job.id, customerConfirmed: !job.customerConfirmed });
+                          }}
+                        >
+                          <Check className={`h-4 w-4 ${job.customerConfirmed ? 'text-green-600' : 'text-gray-400'}`} />
                         </Button>
                       </div>
                     </div>
@@ -2296,10 +2340,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
+                        <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
                           {job.inQueue && (
                             <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
                               {job.queueReason || 'Queued'}
+                            </Badge>
+                          )}
+                          {job.customerConfirmed && (
+                            <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+                              <Check className="h-3 w-3 mr-1" />
+                              Confirmed
                             </Badge>
                           )}
                           <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}>
@@ -2385,6 +2435,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             }}
                           >
                             <Inbox className={`h-4 w-4 ${job.inQueue ? 'text-amber-600' : 'text-gray-500'}`} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            title={job.customerConfirmed ? 'Mark as Unconfirmed' : 'Mark as Confirmed'}
+                            className={job.customerConfirmed ? 'border-green-300 bg-green-50 rounded-lg' : 'rounded-lg'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              confirmJobMutation.mutate({ id: job.id, customerConfirmed: !job.customerConfirmed });
+                            }}
+                          >
+                            <Check className={`h-4 w-4 ${job.customerConfirmed ? 'text-green-600' : 'text-gray-500'}`} />
                           </Button>
                         </div>
                       </div>

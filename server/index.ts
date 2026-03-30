@@ -332,6 +332,12 @@ function startNotificationQueueWorker() {
         )
       `);
       log("✅ Schema migration: checklist_templates ready", "startup");
+
+      // Add customer_confirmed column to jobs table if it doesn't exist
+      await pool.query(`
+        ALTER TABLE jobs ADD COLUMN IF NOT EXISTS customer_confirmed BOOLEAN NOT NULL DEFAULT false
+      `);
+      log("✅ Schema migration: jobs.customer_confirmed ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

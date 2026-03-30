@@ -83,6 +83,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   billingContactMobile: z.string().optional(),
   sameAsJobAddress: z.boolean().optional(),
   taxMode: z.string().optional(),
+  customerConfirmed: z.boolean().optional(),
   
 }).refine((data) => {
   // Check if we have a valid customer identifier
@@ -224,6 +225,7 @@ export function GlobalJobCard({
       taxMode: "tax_exclusive",
       includeDescriptionInQuotesProposals: true,
       internalNotes: "",
+      customerConfirmed: false,
     },
   });
 
@@ -1053,6 +1055,7 @@ export function GlobalJobCard({
         includeDescriptionInQuotesProposals: editingJob.includeDescriptionInQuotesProposals ?? true,
         estimatedManHours: editingJob.estimatedManHours || '',
         internalNotes: (editingJob as any).internalNotes || '',
+        customerConfirmed: (editingJob as any).customerConfirmed ?? false,
       };
       form.reset(resetData);
       setFormLoadedJobId(editingJob.id);
@@ -1144,7 +1147,7 @@ export function GlobalJobCard({
     'billingAddress', 'billingNameOverride', 'invoiceDescription', 'billingContactPhone',
     'billingContactMobile', 'billingContactEmail', 'jobContactFirstNameForInvoice', 'jobContactLastNameForInvoice',
     'purchaseOrderNumber', 'sameAsJobAddress', 'quotingMethod', 'unsuccessfulReason',
-    'categoryId', 'crewMembers', 'equipment', 'internalNotes'
+    'categoryId', 'crewMembers', 'equipment', 'internalNotes', 'customerConfirmed'
   ]));
 
   const changedFieldsRef = useRef<Set<string>>(new Set());
@@ -4874,6 +4877,31 @@ The Treemarkables Team`;
                             </div>
                           )}
                         </div>
+
+                        {/* Customer Confirmed Toggle */}
+                        {mode === 'edit' && (
+                          <FormField
+                            control={form.control}
+                            name="customerConfirmed"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <div className="flex items-center gap-2 p-2 rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                    <Checkbox
+                                      id="customer-confirmed"
+                                      checked={!!field.value}
+                                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                                      data-testid="checkbox-customer-confirmed"
+                                    />
+                                    <label htmlFor="customer-confirmed" className="text-sm font-medium text-green-800 dark:text-green-200 leading-none cursor-pointer select-none">
+                                      Customer confirmed this booking
+                                    </label>
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        )}
 
                         {/* ServiceM8-Style Gear List Card - show in both create and edit modes */}
                         {allEquipment.length > 0 && (

@@ -473,6 +473,9 @@ export const jobs = pgTable("jobs", {
   inQueue: boolean("in_queue").default(false),
   queueReason: text("queue_reason"), // Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other
 
+  // Customer confirmation
+  customerConfirmed: boolean("customer_confirmed").default(false),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),
