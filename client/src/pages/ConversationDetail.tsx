@@ -1081,6 +1081,7 @@ export default function ConversationDetail() {
                   address: extracted.address,
                   description: extracted.description,
                   leadSource: extracted.leadSource || 'website',
+                  status: 'lead',
                   fromConversation: true,
                   conversationId: conversationId
                 }));

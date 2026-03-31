@@ -127,6 +127,7 @@ interface GlobalJobCardProps {
     description?: string;
     leadSource?: string;
     conversationId?: string;
+    status?: string;
   };
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
@@ -957,7 +958,7 @@ export function GlobalJobCard({
       const resetData = initialData ? {
         title: '',
         description: initialData.description || '',
-        status: 'quote',
+        status: initialData.status || 'lead',
         priority: 'medium',
         customerId: '',
         leadSource: initialData.leadSource || '',
