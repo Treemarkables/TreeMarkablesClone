@@ -181,7 +181,7 @@ export function GlobalJobCard({
   // Must be declared BEFORE the useEffect at line ~236 that uses it in its dependency array
   const { data: checklistTemplatesData } = useQuery({
     queryKey: ['/api/checklist-templates'],
-    enabled: isOpen && mode === 'create',
+    enabled: isOpen,
   });
 
   const customers: Customer[] = (customersData as any)?.data || [];
