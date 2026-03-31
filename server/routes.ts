@@ -6398,11 +6398,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
   app.post('/api/webhooks/vonage-voice', async (req: Request, res: Response) => {
     try {
-      if (!validateVonageWebhookToken(req)) {
-        console.error('❌ Vonage voice POST: invalid webhook token');
-        return res.status(403).json({ error: 'Forbidden' });
-      }
-
+      // NOTE: Vonage does NOT sign Answer URL requests with JWT by default,
+      // so we skip token validation here to avoid blocking the NCCO response.
       const forwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
       const from = String(req.body.from || req.body.msisdn || 'unknown');
       const to = String(req.body.to || process.env.VONAGE_NUMBER || 'unknown');
