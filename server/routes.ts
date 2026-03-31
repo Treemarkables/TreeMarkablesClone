@@ -6344,12 +6344,14 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Vonage calls this when an inbound call arrives. We return an NCCO that records
   // the full call and simultaneously connects through to the owner's mobile.
   function buildVonageNcco(req: Request) {
-    const rawForwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
-    if (!rawForwardTo) throw new Error('VONAGE_FORWARD_TO_NUMBER not set');
+    // VONAGE_NUMBER holds the owner's personal mobile (forward destination)
+    // VONAGE_FORWARD_TO_NUMBER holds the Vonage virtual number (used as caller-ID in connect)
+    const rawForwardTo = process.env.VONAGE_NUMBER;
+    if (!rawForwardTo) throw new Error('VONAGE_NUMBER not set');
     // Ensure E.164 format with + prefix required by Vonage
     const forwardTo = rawForwardTo.startsWith('+') ? rawForwardTo : `+${rawForwardTo}`;
-    // 'from' in the connect action MUST be the Vonage number you own, not the caller or forward number
-    const rawVonageNumber = process.env.VONAGE_NUMBER || '';
+    // 'from' in the connect action MUST be the Vonage virtual number you own
+    const rawVonageNumber = process.env.VONAGE_FORWARD_TO_NUMBER || '';
     const vonageFrom = rawVonageNumber.startsWith('+') ? rawVonageNumber : `+${rawVonageNumber}`;
     return [
       {
