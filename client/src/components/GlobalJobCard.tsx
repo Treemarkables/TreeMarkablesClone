@@ -255,12 +255,13 @@ export function GlobalJobCard({
     }
   }, [mode, isOpen, checklistTemplatesData]);
 
-  // Sync checklist from editingJob when opening in edit mode
+  // Sync checklist from editingJob when opening in edit mode (dep on id only to avoid array-reference loop)
   useEffect(() => {
-    if (mode === 'edit' && editingJob?.checklist) {
+    if (mode === 'edit' && editingJob?.id) {
       setChecklist(Array.isArray(editingJob.checklist) ? editingJob.checklist : []);
     }
-  }, [mode, editingJob?.id, editingJob?.checklist]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, editingJob?.id]);
   
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
