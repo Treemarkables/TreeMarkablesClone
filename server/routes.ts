@@ -54,6 +54,7 @@ import {
 import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
+import jwt from "jsonwebtoken";
 import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI from "openai";
@@ -6317,9 +6318,6 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
       try {
-        // jsonwebtoken is a CJS package; use require() which is available in tsx/Node CJS
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const jwt = require('jsonwebtoken');
         jwt.verify(token, secret, { algorithms: ['HS256'] });
         return true;
       } catch (jwtErr) {
@@ -6346,8 +6344,10 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Vonage calls this when an inbound call arrives. We return an NCCO that records
   // the full call and simultaneously connects through to the owner's mobile.
   function buildVonageNcco(req: Request, fromNumber: string) {
-    const forwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
-    if (!forwardTo) throw new Error('VONAGE_FORWARD_TO_NUMBER not set');
+    const rawForwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
+    if (!rawForwardTo) throw new Error('VONAGE_FORWARD_TO_NUMBER not set');
+    // Ensure E.164 format with + prefix required by Vonage
+    const forwardTo = rawForwardTo.startsWith('+') ? rawForwardTo : `+${rawForwardTo}`;
     return [
       {
         action: 'record',
