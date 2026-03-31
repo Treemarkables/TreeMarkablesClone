@@ -148,7 +148,7 @@ export function GlobalJobCard({
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : []
   );
-  const [checklistCollapsed, setChecklistCollapsed] = useState(false);
+  const [checklistCollapsed, setChecklistCollapsed] = useState(true);
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [sidebarTab, setSidebarTab] = useState("details");
@@ -4361,16 +4361,15 @@ The Treemarkables Team`;
                                   <Mic className="h-4 w-4 mr-1" />
                                   <span className="text-xs">Voice</span>
                                 </Button>
-                                {checklist.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setChecklistCollapsed(c => !c)}
-                                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
-                                  >
-                                    {checklist.length}
-                                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '-rotate-90' : ''}`} />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setChecklistCollapsed(c => !c)}
+                                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                >
+                                  <List className="h-3 w-3" />
+                                  Checklist{checklist.length > 0 ? ` (${checklist.length})` : ''}
+                                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '' : 'rotate-180'}`} />
+                                </button>
                               </div>
                             </div>
                             
@@ -5063,16 +5062,15 @@ The Treemarkables Team`;
                                   <Mic className="h-4 w-4 mr-1" />
                                   <span className="text-xs">Voice</span>
                                 </Button>
-                                {checklist.length > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => setChecklistCollapsed(c => !c)}
-                                    className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
-                                  >
-                                    {checklist.length}
-                                    <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '-rotate-90' : ''}`} />
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setChecklistCollapsed(c => !c)}
+                                  className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                >
+                                  <List className="h-3 w-3" />
+                                  Checklist{checklist.length > 0 ? ` (${checklist.length})` : ''}
+                                  <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '' : 'rotate-180'}`} />
+                                </button>
                               </div>
                             </div>
                             
