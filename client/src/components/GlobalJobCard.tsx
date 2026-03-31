@@ -4378,7 +4378,7 @@ The Treemarkables Team`;
                                 <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
                                   <FileText className="h-4 w-4 text-gray-600" />
                                 </div>
-                                <h3 className="font-bold text-gray-900">Job Scope</h3>
+                                <h3 className="font-bold text-gray-900">Job Description</h3>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
@@ -5079,7 +5079,7 @@ The Treemarkables Team`;
                                 <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
                                   <FileText className="h-4 w-4 text-gray-600" />
                                 </div>
-                                <h3 className="font-bold text-gray-900">Job Scope</h3>
+                                <h3 className="font-bold text-gray-900">Job Description</h3>
                               </div>
                               <div className="flex items-center gap-2">
                                 <Button
