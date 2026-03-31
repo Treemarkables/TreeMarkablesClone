@@ -255,6 +255,16 @@ export function GlobalJobCard({
     }
   }, [mode, isOpen, checklistTemplatesData]);
 
+  // When opening an existing job in edit mode, sync its saved checklist items into local state.
+  // Depends only on the job's ID (not the array ref) to avoid infinite re-renders.
+  const syncedJobIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (mode === 'edit' && editingJob?.id && editingJob.id !== syncedJobIdRef.current) {
+      syncedJobIdRef.current = editingJob.id;
+      setChecklist(Array.isArray(editingJob.checklist) ? editingJob.checklist as ChecklistItem[] : []);
+    }
+  });
+
   
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
