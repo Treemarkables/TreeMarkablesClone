@@ -4484,7 +4484,7 @@ The Treemarkables Team`;
                                     >
                                       <span className="text-blue-600 font-medium flex items-center gap-2">
                                         <MessageSquare className="h-4 w-4" />
-                                        Crew Notes
+                                        Job Description
                                       </span>
                                       <ChevronDown className="h-4 w-4 text-gray-400" />
                                     </div>
@@ -5255,11 +5255,11 @@ The Treemarkables Team`;
                                 onClick={() => { const desc = formLoadedJobId === editingJob?.id ? (form.watch('description') || '') : (form.watch('description') || editingJob?.description || ''); setDescriptionDraft(desc); setDescriptionPopupOpen(true); }}
                               >
                                 <div className="flex items-center justify-between mb-1">
-                                  <span className="text-xs text-gray-500 font-medium">Crew Notes</span>
+                                  <span className="text-xs text-gray-500 font-medium">Job Description</span>
                                   <Edit3 className="h-3 w-3 text-gray-400" />
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
-                                  {(formLoadedJobId === editingJob?.id ? form.watch('description') : (form.watch('description') || editingJob?.description)) || <span className="text-gray-400 italic">Click to add crew notes...</span>}
+                                  {(formLoadedJobId === editingJob?.id ? form.watch('description') : (form.watch('description') || editingJob?.description)) || <span className="text-gray-400 italic">Click to add a job description...</span>}
                                 </p>
                               </div>
                             </div>
@@ -7284,7 +7284,7 @@ The Treemarkables Team`;
       }}>
         <DialogContent className={`w-[95vw] sm:w-[50vw] max-w-3xl mt-[env(safe-area-inset-top,0px)] max-h-[85vh] ${descriptionFocused ? 'overflow-hidden' : 'overflow-y-auto'}`}>
           <DialogHeader>
-            <DialogTitle className="text-center">Crew Notes</DialogTitle>
+            <DialogTitle className="text-center">Job Description</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             {/* Toolbar */}
