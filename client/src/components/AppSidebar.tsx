@@ -128,6 +128,13 @@ const businessItems = [
     isTab: false
   },
   {
+    title: "Unlinked Calls",
+    url: "/unlinked-calls",
+    icon: PhoneCall,
+    value: "unlinked-calls",
+    isTab: false
+  },
+  {
     title: "Integrations",
     url: "/integrations",
     icon: Plug,
