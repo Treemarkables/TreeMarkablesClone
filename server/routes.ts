@@ -6344,15 +6344,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Vonage calls this when an inbound call arrives. We return an NCCO that records
   // the full call and simultaneously connects through to the owner's mobile.
   function buildVonageNcco(req: Request) {
-    // VONAGE_NUMBER holds the owner's personal mobile (forward destination)
-    // VONAGE_FORWARD_TO_NUMBER holds the Vonage virtual number (used as caller-ID in connect)
-    const rawForwardTo = process.env.VONAGE_NUMBER;
-    if (!rawForwardTo) throw new Error('VONAGE_NUMBER not set');
-    // Ensure E.164 format with + prefix required by Vonage
-    const forwardTo = rawForwardTo.startsWith('+') ? rawForwardTo : `+${rawForwardTo}`;
-    // 'from' in the connect action MUST be the Vonage virtual number you own
+    // Calls arrive here forwarded from the owner's personal mobile via iPhone call forwarding.
+    // We record the call then connect to the owner's Zoiper SIP client registered on sip.nexmo.com.
+    // The Vonage virtual number (VONAGE_FORWARD_TO_NUMBER) is used as the caller-ID in the connect action.
     const rawVonageNumber = process.env.VONAGE_FORWARD_TO_NUMBER || '';
     const vonageFrom = rawVonageNumber.startsWith('+') ? rawVonageNumber : `+${rawVonageNumber}`;
+    // SIP URI: the owner's Zoiper app registers as <apiKey>@sip.nexmo.com
+    const apiKey = process.env.VONAGE_API_KEY;
+    if (!apiKey) throw new Error('VONAGE_API_KEY not set');
+    const sipUri = `sip:${apiKey}@sip.nexmo.com`;
     return [
       {
         action: 'record',
@@ -6368,7 +6368,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         action: 'connect',
         eventUrl: [vonageCallbackUrl(req, '/api/webhooks/vonage-event')],
         from: vonageFrom,
-        endpoint: [{ type: 'phone', number: forwardTo }]
+        endpoint: [{ type: 'sip', uri: sipUri }]
       }
     ];
   }
