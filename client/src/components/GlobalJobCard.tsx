@@ -4373,14 +4373,7 @@ The Treemarkables Team`;
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                            <div className="flex items-center justify-between mb-3">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                                  <FileText className="h-4 w-4 text-gray-600" />
-                                </div>
-                                <h3 className="font-bold text-gray-900">Job Description</h3>
-                              </div>
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-end mb-3 gap-2">
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -4404,7 +4397,6 @@ The Treemarkables Team`;
                                   Checklist{checklist.length > 0 ? ` (${checklist.length})` : ''}
                                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '' : 'rotate-180'}`} />
                                 </button>
-                              </div>
                             </div>
                             
                             {/* Checklist Items */}
@@ -5074,14 +5066,7 @@ The Treemarkables Team`;
                         {/* Desktop Job Scope - below Gear List */}
                         <div className="hidden md:block">
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                                  <FileText className="h-4 w-4 text-gray-600" />
-                                </div>
-                                <h3 className="font-bold text-gray-900">Job Description</h3>
-                              </div>
-                              <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-end gap-2">
                                 <Button
                                   type="button"
                                   variant="ghost"
@@ -5105,7 +5090,6 @@ The Treemarkables Team`;
                                   Checklist{checklist.length > 0 ? ` (${checklist.length})` : ''}
                                   <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? '' : 'rotate-180'}`} />
                                 </button>
-                              </div>
                             </div>
                             
                             {/* Checklist Items */}
