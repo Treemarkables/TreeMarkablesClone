@@ -1435,12 +1435,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const handleCreateJob = () => {
     setJobToEdit(null);
+    setInitialJobData(null);
     setGlobalJobCardMode('create');
     setShowGlobalJobCard(true);
   };
 
   const handleCreateLead = () => {
     setJobToEdit(null);
+    setInitialJobData({ status: 'lead' });
     setGlobalJobCardMode('create');
     setShowGlobalJobCard(true);
     // After the card opens, switch the filter to Lead so new lead is visible
