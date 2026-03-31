@@ -4364,7 +4364,7 @@ The Treemarkables Team`;
                                 </Button>
                                 <button
                                   type="button"
-                                  onClick={() => setChecklistCollapsed(c => !c)}
+                                  onClick={(e) => { e.stopPropagation(); setChecklistCollapsed(c => !c); }}
                                   className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
                                 >
                                   <List className="h-3 w-3" />
@@ -5065,7 +5065,7 @@ The Treemarkables Team`;
                                 </Button>
                                 <button
                                   type="button"
-                                  onClick={() => setChecklistCollapsed(c => !c)}
+                                  onClick={(e) => { e.stopPropagation(); setChecklistCollapsed(c => !c); }}
                                   className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
                                 >
                                   <List className="h-3 w-3" />
