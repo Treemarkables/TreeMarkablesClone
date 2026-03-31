@@ -256,12 +256,35 @@ export function GlobalJobCard({
   }, [mode, isOpen, checklistTemplatesData]);
 
   // When opening an existing job in edit mode, sync its saved checklist items into local state.
-  // Depends only on the job's ID (not the array ref) to avoid infinite re-renders.
+  // Uses ref guards to prevent infinite re-renders.
   const syncedJobIdRef = useRef<string | null>(null);
+  const templateFallbackAppliedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (mode === 'edit' && editingJob?.id && editingJob.id !== syncedJobIdRef.current) {
+    if (mode !== 'edit' || !editingJob?.id) return;
+
+    // Step 1: When job changes, sync its stored checklist (runs once per job)
+    if (editingJob.id !== syncedJobIdRef.current) {
       syncedJobIdRef.current = editingJob.id;
-      setChecklist(Array.isArray(editingJob.checklist) ? editingJob.checklist as ChecklistItem[] : []);
+      templateFallbackAppliedRef.current = null; // reset fallback for this new job
+      const jobChecklist = Array.isArray(editingJob.checklist) ? editingJob.checklist as ChecklistItem[] : [];
+      setChecklist(jobChecklist);
+      return;
+    }
+
+    // Step 2: Job is already synced but checklist is empty — try template fallback (once per job)
+    if (
+      checklist.length === 0 &&
+      templateFallbackAppliedRef.current !== editingJob.id
+    ) {
+      const templateItems: ChecklistItem[] = ((checklistTemplatesData as any)?.data ?? []).map((t: any) => ({
+        id: crypto.randomUUID(),
+        text: t.text,
+        completed: false,
+      }));
+      if (templateItems.length > 0) {
+        templateFallbackAppliedRef.current = editingJob.id;
+        setChecklist(templateItems);
+      }
     }
   });
 
