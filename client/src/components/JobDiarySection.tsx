@@ -487,6 +487,7 @@ export function JobDiarySection({
                   entryType === 'photo' ? 'photo' :
                   entryType === 'email' ? 'email' :
                   entryType === 'sms' ? 'sms' :
+                  entryType === 'call' ? 'call' :
                   'job_event',
             title: entry.title,
             content: entry.description,

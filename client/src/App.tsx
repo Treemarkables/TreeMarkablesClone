@@ -69,6 +69,7 @@ import DailyBriefing from "@/pages/DailyBriefing";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
+import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -613,6 +614,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <TimeTracking />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/unlinked-calls">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <UnlinkedCalls />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
