@@ -3812,12 +3812,6 @@ The Treemarkables Team`;
                             
                             {/* Row 2: Est time | Rate | Crew — pill chips */}
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              {editingJob?.estimatedManHours && (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                                  <Clock className="h-3 w-3" />
-                                  {editingJob.estimatedManHours} hrs
-                                </span>
-                              )}
                               {editingJob?.hourlyRate && (
                                 <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
                                   <DollarSign className="h-3 w-3" />
@@ -4074,12 +4068,6 @@ The Treemarkables Team`;
                                currentStatus === 'unsuccessful' ? 'Unsuccessful' :
                                currentStatus?.charAt(0).toUpperCase() + currentStatus?.slice(1) || 'Job'}
                             </span>
-                            {editingJob?.estimatedManHours && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">
-                                <Clock className="h-3 w-3" />
-                                {editingJob.estimatedManHours} hrs
-                              </span>
-                            )}
                             {editingJob?.hourlyRate && (
                               <span className="inline-flex items-center gap-1 text-xs font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full">
                                 <DollarSign className="h-3 w-3" />
@@ -4552,45 +4540,6 @@ The Treemarkables Team`;
                               />
                             </div>
                             
-                            {/* Est. Man Hours */}
-                            <div className="border-t border-dashed pt-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-500 font-medium">Est. Man Hours</span>
-                                <FormField
-                                  control={form.control}
-                                  name="estimatedManHours"
-                                  render={({ field }) => (
-                                    <FormItem className="flex-shrink-0">
-                                      <FormControl>
-                                        <Select value={field.value ? String(parseFloat(field.value)) : ""} onValueChange={field.onChange}>
-                                          <SelectTrigger className="h-7 text-xs w-[120px]">
-                                            <SelectValue placeholder="Select hours" />
-                                          </SelectTrigger>
-                                          <SelectContent className="max-h-[300px]">
-                                            {Array.from({ length: 160 }, (_, i) => {
-                                              const hours = (i + 1) * 0.25;
-                                              const wholeHours = Math.floor(hours);
-                                              const minutes = Math.round((hours - wholeHours) * 60);
-                                              let label = '';
-                                              if (wholeHours === 0) {
-                                                label = `${minutes} min`;
-                                              } else if (minutes === 0) {
-                                                label = wholeHours === 1 ? '1 hr' : `${wholeHours} hrs`;
-                                              } else {
-                                                label = wholeHours === 1 ? `1 hr ${minutes} min` : `${wholeHours} hrs ${minutes} min`;
-                                              }
-                                              return (
-                                                <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>
-                                              );
-                                            })}
-                                          </SelectContent>
-                                        </Select>
-                                      </FormControl>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                            </div>
                           </div>
                         </div>
 
@@ -5295,45 +5244,6 @@ The Treemarkables Team`;
                               />
                             </div>
                             
-                            {/* Est. Man Hours */}
-                            <div className="border-t border-dashed pt-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-xs text-gray-500 font-medium">Est. Man Hours</span>
-                                <FormField
-                                  control={form.control}
-                                  name="estimatedManHours"
-                                  render={({ field }) => (
-                                    <FormItem className="flex-shrink-0">
-                                      <FormControl>
-                                        <Select value={field.value ? String(parseFloat(field.value)) : ""} onValueChange={field.onChange}>
-                                          <SelectTrigger className="h-7 text-xs w-[120px]">
-                                            <SelectValue placeholder="Select hours" />
-                                          </SelectTrigger>
-                                          <SelectContent className="max-h-[300px]">
-                                            {Array.from({ length: 160 }, (_, i) => {
-                                              const hours = (i + 1) * 0.25;
-                                              const wholeHours = Math.floor(hours);
-                                              const minutes = Math.round((hours - wholeHours) * 60);
-                                              let label = '';
-                                              if (wholeHours === 0) {
-                                                label = `${minutes} min`;
-                                              } else if (minutes === 0) {
-                                                label = wholeHours === 1 ? '1 hr' : `${wholeHours} hrs`;
-                                              } else {
-                                                label = wholeHours === 1 ? `1 hr ${minutes} min` : `${wholeHours} hrs ${minutes} min`;
-                                              }
-                                              return (
-                                                <SelectItem key={hours} value={String(hours)}>{label}</SelectItem>
-                                              );
-                                            })}
-                                          </SelectContent>
-                                        </Select>
-                                      </FormControl>
-                                    </FormItem>
-                                  )}
-                                />
-                              </div>
-                            </div>
                           </div>
                         </div>
 
