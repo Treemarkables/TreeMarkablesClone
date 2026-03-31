@@ -255,13 +255,6 @@ export function GlobalJobCard({
     }
   }, [mode, isOpen, checklistTemplatesData]);
 
-  // Sync checklist from editingJob when opening in edit mode (dep on id only to avoid array-reference loop)
-  useEffect(() => {
-    if (mode === 'edit' && editingJob?.id) {
-      setChecklist(Array.isArray(editingJob.checklist) ? editingJob.checklist : []);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, editingJob?.id]);
   
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
@@ -4371,7 +4364,7 @@ The Treemarkables Team`;
                                 </Button>
                                 <button
                                   type="button"
-                                  onClick={(e) => { e.stopPropagation(); setChecklistCollapsed(c => !c); }}
+                                  onClick={() => setChecklistCollapsed(c => !c)}
                                   className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
                                 >
                                   <List className="h-3 w-3" />
@@ -4384,9 +4377,6 @@ The Treemarkables Team`;
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                             <div className="space-y-2 mb-3">
-                              {checklist.length === 0 && mode !== 'edit' && (
-                                <p className="text-xs text-muted-foreground italic py-1">No checklist items yet.</p>
-                              )}
                               {checklist.map((item, index) => (
                                 <div 
                                   key={index} 
@@ -5075,7 +5065,7 @@ The Treemarkables Team`;
                                 </Button>
                                 <button
                                   type="button"
-                                  onClick={(e) => { e.stopPropagation(); setChecklistCollapsed(c => !c); }}
+                                  onClick={() => setChecklistCollapsed(c => !c)}
                                   className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
                                 >
                                   <List className="h-3 w-3" />
@@ -5088,9 +5078,6 @@ The Treemarkables Team`;
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                             <div className="space-y-2">
-                              {checklist.length === 0 && mode !== 'edit' && (
-                                <p className="text-xs text-muted-foreground italic py-1">No checklist items yet.</p>
-                              )}
                               {checklist.map((item, index) => (
                                 <div 
                                   key={index} 
