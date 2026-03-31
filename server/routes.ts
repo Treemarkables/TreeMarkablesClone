@@ -6343,11 +6343,14 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // GET/POST /api/webhooks/vonage-voice — Vonage NCCO response for inbound calls
   // Vonage calls this when an inbound call arrives. We return an NCCO that records
   // the full call and simultaneously connects through to the owner's mobile.
-  function buildVonageNcco(req: Request, fromNumber: string) {
+  function buildVonageNcco(req: Request) {
     const rawForwardTo = process.env.VONAGE_FORWARD_TO_NUMBER;
     if (!rawForwardTo) throw new Error('VONAGE_FORWARD_TO_NUMBER not set');
     // Ensure E.164 format with + prefix required by Vonage
     const forwardTo = rawForwardTo.startsWith('+') ? rawForwardTo : `+${rawForwardTo}`;
+    // 'from' in the connect action MUST be the Vonage number you own, not the caller or forward number
+    const rawVonageNumber = process.env.VONAGE_NUMBER || '';
+    const vonageFrom = rawVonageNumber.startsWith('+') ? rawVonageNumber : `+${rawVonageNumber}`;
     return [
       {
         action: 'record',
@@ -6362,7 +6365,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       {
         action: 'connect',
         eventUrl: [vonageCallbackUrl(req, '/api/webhooks/vonage-event')],
-        from: fromNumber,
+        from: vonageFrom,
         endpoint: [{ type: 'phone', number: forwardTo }]
       }
     ];
@@ -6389,7 +6392,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         return res.json([{ action: 'talk', text: 'This number is not properly configured.' }]);
       }
 
-      res.json(buildVonageNcco(req, to));
+      res.json(buildVonageNcco(req));
     } catch (error: any) {
       console.error('❌ Vonage voice GET webhook error:', error);
       res.json([{ action: 'talk', text: 'An error occurred.' }]);
@@ -6417,7 +6420,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         return res.json([{ action: 'talk', text: 'This number is not properly configured.' }]);
       }
 
-      res.json(buildVonageNcco(req, to));
+      res.json(buildVonageNcco(req));
     } catch (error: any) {
       console.error('❌ Vonage voice POST webhook error:', error);
       res.json([{ action: 'talk', text: 'An error occurred.' }]);
