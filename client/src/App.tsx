@@ -474,8 +474,31 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
 }
 
 function Router() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
+
+  // Handle push notification clicks from service worker
+  // When the app is already open and a push notification is tapped,
+  // the service worker posts NOTIFICATION_CLICKED — we listen and navigate
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'NOTIFICATION_CLICKED') {
+        const url: string | undefined = event.data?.url;
+        if (url) {
+          setLocation(url);
+          // If navigating to dispatch with a job, fire the event so DispatchBoard opens that job card
+          if (url.startsWith('/dispatch')) {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('notification-navigation', { detail: { url } }));
+            }, 150);
+          }
+        }
+      }
+    };
+    navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+  }, [setLocation]);
   
   // Render Home directly at / with no redirect — better for SEO (no "Page with redirect" in Search Console)
   if (location === '/') {

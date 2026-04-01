@@ -3972,7 +3972,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             await notificationHelper.notifyScheduleChange(
               employeeId,
               job.jobNumber || '',
-              newDateStr
+              newDateStr,
+              job.id
             );
           }
         }
@@ -9937,7 +9938,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             await notificationHelper.notifyJobAssignment(
               employee.id,
               job.jobNumber || '',
-              job.title || ''
+              job.title || '',
+              job.id
             );
           }
         }

@@ -647,24 +647,32 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         currentlyEditing: jobToEdit?.id
       });
       
-      // Only process if we have a jobId parameter and jobs data is loaded
-      if (jobId && jobsData?.data) {
+      // Only process if we have a jobId parameter
+      if (jobId) {
         console.log('🔔 Processing job from URL parameter:', { jobId, tab });
+
+        // Wait until jobs data is loaded before acting
+        if (!jobsData?.data) {
+          console.log('🔔 jobsData not yet loaded — will retry when it arrives');
+          return;
+        }
         
         // Find the job in the loaded data
         const job = jobsData.data.find((j: any) => j.id === jobId);
         
         console.log('🔔 Job search result:', { found: !!job, jobId });
         
-        // Always clear the URL parameter first to prevent re-triggering
-        window.history.replaceState({}, '', '/dispatch');
-        
         if (job) {
           // Guard: Don't re-open if we're already editing this job
           if (showGlobalJobCard && jobToEdit?.id === jobId) {
             console.log('🔔 Job already open, skipping re-open:', jobId);
+            // Still clear the URL param to keep the URL clean
+            window.history.replaceState({}, '', '/dispatch');
             return;
           }
+          
+          // Clear the URL parameter only after we've confirmed the job exists
+          window.history.replaceState({}, '', '/dispatch');
           
           // Open the job card
           setShowGlobalJobCard(true);
@@ -674,6 +682,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           console.log('✅ Job card opened');
         } else {
           console.warn('⚠️ Job not found in loaded data:', jobId);
+          // Clear URL param so we don't keep retrying on every re-render
+          window.history.replaceState({}, '', '/dispatch');
         }
       }
     };

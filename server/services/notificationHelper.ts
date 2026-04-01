@@ -63,19 +63,22 @@ export async function notifyEmployees(employeeIds: string[], options: Notificati
 /**
  * Notify about job assignment
  */
-export async function notifyJobAssignment(employeeId: string, jobNumber: string, jobTitle: string) {
+export async function notifyJobAssignment(employeeId: string, jobNumber: string, jobTitle: string, jobId?: string) {
   const prefs = await storage.getNotificationPreferences(employeeId);
   if (!prefs?.enableJobAssignments) {
     return false;
   }
   
+  const clickUrl = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
+  
   return notifyEmployee(employeeId, {
     title: '📋 New Job Assignment',
     body: `You've been assigned to Job #${jobNumber}${jobTitle ? `: ${jobTitle}` : ''}`,
-    clickAction: '/dispatch',
+    clickAction: clickUrl,
     data: {
       type: 'job_assignment',
       jobNumber,
+      jobId: jobId || '',
     },
   });
 }
@@ -83,19 +86,22 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
 /**
  * Notify about schedule change
  */
-export async function notifyScheduleChange(employeeId: string, jobNumber: string, newDate: string) {
+export async function notifyScheduleChange(employeeId: string, jobNumber: string, newDate: string, jobId?: string) {
   const prefs = await storage.getNotificationPreferences(employeeId);
   if (!prefs?.enableScheduleChanges) {
     return false;
   }
   
+  const clickUrl = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
+  
   return notifyEmployee(employeeId, {
     title: '🕒 Schedule Update',
     body: `Job #${jobNumber} has been rescheduled to ${newDate}`,
-    clickAction: '/dispatch',
+    clickAction: clickUrl,
     data: {
       type: 'schedule_change',
       jobNumber,
+      jobId: jobId || '',
     },
   });
 }
