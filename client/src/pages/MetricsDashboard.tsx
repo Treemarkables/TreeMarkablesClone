@@ -1039,28 +1039,6 @@ export default function MetricsDashboard() {
             </CardContent>
           </Card>
 
-          {/* Unconverted Quote Value Banner */}
-          {staleQuotesCount > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-amber-500 rounded-full" />
-                <div>
-                  <p className="font-medium text-amber-800 flex items-center gap-2">
-                    Unconverted Quote Value 
-                    <span className="text-xs font-normal text-amber-600">(Est.)</span>
-                  </p>
-                  <p className="text-sm text-amber-700">
-                    <span className="font-semibold">{staleQuotesCount}</span> stale quotes · 
-                    <span className="font-semibold text-amber-800"> {formatCurrency(estimatedStaleValue).replace('NZ$', '$')}</span> · 
-                    <span className="font-semibold">{quoteAnalytics?.pendingQuotes || 0}</span> pending
-                  </p>
-                </div>
-              </div>
-              <Button variant="default" size="sm" className="bg-amber-600 hover:bg-amber-700">
-                Fix data capture
-              </Button>
-            </div>
-          )}
 
           {/* Revenue Breakdown Section */}
           <Card className="overflow-hidden">
