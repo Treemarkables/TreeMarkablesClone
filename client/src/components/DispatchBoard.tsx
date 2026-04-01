@@ -2145,7 +2145,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleCreateJob}
+            onClick={handleCreateLead}
             data-testid="create-lead-button-mobile"
             className="text-white hover:bg-white/20 text-sm font-medium"
           >
