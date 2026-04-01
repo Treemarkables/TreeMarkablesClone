@@ -1,0 +1,171 @@
+import { storage } from '../storage.js';
+
+// De-duplication helper: check if a reminder of this type for this entity was already sent in the last 24 hours
+async function wasReminderSentRecently(type: string, entityId: string, entityField: 'jobId' | 'quoteId'): Promise<boolean> {
+  const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const recentNotifications = await storage.getNotificationsCreatedSince(since);
+
+  return recentNotifications.some(n => {
+    if (n.type !== type) return false;
+    if (entityField === 'jobId') return n.jobId === entityId;
+    if (entityField === 'quoteId') return n.quoteId === entityId;
+    return false;
+  });
+}
+
+// Check 1: Formally sent quotes with no customer response after 3+ days
+async function checkStaleQuotes(): Promise<void> {
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const allQuotes = await storage.getAllQuotes();
+
+  for (const quote of allQuotes) {
+    if (quote.status !== 'sent' || quote.responseDate) continue;
+    if (!quote.sentDate || new Date(quote.sentDate) > threeDaysAgo) continue;
+
+    const alreadySent = await wasReminderSentRecently('reminder_stale_quote', quote.id, 'quoteId');
+    if (alreadySent) continue;
+
+    const customer = quote.customerId ? await storage.getCustomer(quote.customerId) : null;
+    const customerName = customer?.name || 'Customer';
+    const daysSince = Math.floor((Date.now() - new Date(quote.sentDate).getTime()) / (1000 * 60 * 60 * 24));
+
+    await storage.createNotification({
+      title: 'Quote follow-up needed',
+      message: `Quote #${quote.quoteNumber} sent to ${customerName} ${daysSince} day${daysSince === 1 ? '' : 's'} ago — no response yet`,
+      type: 'reminder_stale_quote',
+      priority: 'medium',
+      isRead: false,
+      quoteId: quote.id,
+      jobId: quote.jobId || undefined,
+      customerId: quote.customerId || undefined,
+      actionUrl: quote.jobId ? `/dispatch?job=${quote.jobId}` : '/dispatch',
+      metadata: { quoteNumber: quote.quoteNumber, customerName, daysSince },
+    });
+    console.log(`[ReminderChecker] Stale quote reminder: Quote #${quote.quoteNumber} (${customerName}, ${daysSince}d)`);
+  }
+}
+
+// Check 2: Jobs scheduled for tomorrow with no crew assigned
+async function checkUnstaffedTomorrowJobs(): Promise<void> {
+  const now = new Date();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  const dayAfterTomorrow = new Date(tomorrow);
+  dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
+
+  const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'scheduled' });
+
+  for (const job of jobs) {
+    if (!job.scheduledDate) continue;
+    const jobDate = new Date(job.scheduledDate);
+    if (jobDate < tomorrow || jobDate >= dayAfterTomorrow) continue;
+    if (job.assignedTeam && job.assignedTeam.length > 0) continue;
+
+    const alreadySent = await wasReminderSentRecently('reminder_no_crew', job.id, 'jobId');
+    if (alreadySent) continue;
+
+    const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+    const customerName = customer?.name || 'Customer';
+
+    await storage.createNotification({
+      title: 'Tomorrow\'s job has no crew',
+      message: `Job #${job.jobNumber} (${job.title || customerName}) is scheduled for tomorrow with no crew assigned`,
+      type: 'reminder_no_crew',
+      priority: 'high',
+      isRead: false,
+      jobId: job.id,
+      customerId: job.customerId || undefined,
+      actionUrl: `/dispatch?job=${job.id}`,
+      metadata: { jobNumber: job.jobNumber, customerName, jobTitle: job.title },
+    });
+    console.log(`[ReminderChecker] No-crew reminder: Job #${job.jobNumber} (${customerName})`);
+  }
+}
+
+// Check 3: Completed jobs with no invoice raised after 7+ days
+async function checkUninvoicedCompletedJobs(): Promise<void> {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const completedJobs = await storage.getJobsByStatus('completed');
+
+  for (const job of completedJobs) {
+    if (!job.completedDate || new Date(job.completedDate) > sevenDaysAgo) continue;
+
+    const invoices = await storage.getInvoicesByJob(job.id);
+    if (invoices.length > 0) continue;
+
+    const alreadySent = await wasReminderSentRecently('reminder_uninvoiced', job.id, 'jobId');
+    if (alreadySent) continue;
+
+    const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+    const customerName = customer?.name || 'Customer';
+    const daysSince = Math.floor((Date.now() - new Date(job.completedDate).getTime()) / (1000 * 60 * 60 * 24));
+
+    await storage.createNotification({
+      title: 'Completed job not yet invoiced',
+      message: `Job #${job.jobNumber} (${customerName}) completed ${daysSince} day${daysSince === 1 ? '' : 's'} ago — no invoice raised`,
+      type: 'reminder_uninvoiced',
+      priority: 'high',
+      isRead: false,
+      jobId: job.id,
+      customerId: job.customerId || undefined,
+      actionUrl: `/dispatch?job=${job.id}`,
+      metadata: { jobNumber: job.jobNumber, customerName, daysSince },
+    });
+    console.log(`[ReminderChecker] Uninvoiced reminder: Job #${job.jobNumber} (${customerName}, ${daysSince}d)`);
+  }
+}
+
+// Check 4: Leads with no activity for 24+ hours
+async function checkStaleLeads(): Promise<void> {
+  const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const leadJobs = await storage.getJobsByStatus('lead');
+
+  for (const job of leadJobs) {
+    const lastActivity = job.lastActivityAt
+      ? new Date(job.lastActivityAt)
+      : job.createdAt
+        ? new Date(job.createdAt)
+        : null;
+
+    if (!lastActivity || lastActivity > twentyFourHoursAgo) continue;
+
+    const alreadySent = await wasReminderSentRecently('reminder_stale_lead', job.id, 'jobId');
+    if (alreadySent) continue;
+
+    const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+    const customerName = customer?.name || 'New lead';
+    const hoursAgo = Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60));
+
+    await storage.createNotification({
+      title: 'Lead needs follow-up',
+      message: `Lead from ${customerName} (Job #${job.jobNumber}) has had no activity for ${hoursAgo} hour${hoursAgo === 1 ? '' : 's'}`,
+      type: 'reminder_stale_lead',
+      priority: 'medium',
+      isRead: false,
+      jobId: job.id,
+      customerId: job.customerId || undefined,
+      actionUrl: `/dispatch?job=${job.id}`,
+      metadata: { jobNumber: job.jobNumber, customerName, hoursAgo },
+    });
+    console.log(`[ReminderChecker] Stale lead reminder: Job #${job.jobNumber} (${customerName}, ${hoursAgo}h)`);
+  }
+}
+
+// Run all reminder checks — called by AutomatedTriggers every hour
+export async function runAllReminderChecks(): Promise<void> {
+  console.log('[ReminderChecker] Running proactive business reminder checks...');
+  const results = await Promise.allSettled([
+    checkStaleQuotes(),
+    checkUnstaffedTomorrowJobs(),
+    checkUninvoicedCompletedJobs(),
+    checkStaleLeads(),
+  ]);
+
+  const errors = results.filter(r => r.status === 'rejected');
+  if (errors.length > 0) {
+    errors.forEach(e => console.error('[ReminderChecker] Check failed:', (e as PromiseRejectedResult).reason));
+  } else {
+    console.log('[ReminderChecker] All checks complete.');
+  }
+}
