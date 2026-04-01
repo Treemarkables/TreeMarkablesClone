@@ -1817,46 +1817,6 @@ export default function MetricsDashboard() {
         )}
 
 
-        {/* Staff Work Days Section - Hours and Days Worked from Xero */}
-        {dateRange?.from && dateRange?.to && (
-          <div className="mt-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <div 
-                  className="flex items-center justify-between cursor-pointer hover-elevate rounded-lg p-2 -m-2"
-                  onClick={() => setStaffWorkDaysCollapsed(!staffWorkDaysCollapsed)}
-                >
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Calendar className="h-5 w-5 text-purple-500" />
-                    Staff Work Days
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    {staffWorkDays?.totals && (
-                      <span className="text-sm font-medium text-purple-600">
-                        {staffWorkDays.totals.avgAttendance.toFixed(0)}% Avg Attendance
-                      </span>
-                    )}
-                    {staffWorkDaysCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
-                  </div>
-                </div>
-              </CardHeader>
-              {!staffWorkDaysCollapsed && (
-                <CardContent>
-                  {staffWorkDaysLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-muted-foreground">
-                      <p>Unable to load staff work days data.</p>
-                      <p className="text-xs mt-1">Make sure Xero is connected and has timesheet data.</p>
-                    </div>
-                  )}
-                </CardContent>
-              )}
-            </Card>
-          </div>
-        )}
 
         {/* Lead Source Analytics Section */}
         <div className="mt-8">
