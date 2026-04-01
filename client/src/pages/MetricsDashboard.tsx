@@ -1305,23 +1305,6 @@ export default function MetricsDashboard() {
             </CardContent>
           </Card>
 
-          {/* Insights Section */}
-          <Card className="bg-amber-50 border-amber-200">
-            <CardContent className="py-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
-                  <FileText className="h-4 w-4 text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-amber-900 mb-1">Insights</h3>
-                  <p className="text-sm text-amber-800">
-                    Focusing on follow-ups could recover an estimated <span className="font-bold text-amber-900">{formatCurrency(estimatedStaleValue).replace('NZ$', '$')}</span> in 
-                    quote value from <span className="font-semibold">{staleQuotesCount}</span> stale quotes.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
 
           {/* Quote Method Comparison Card */}
           {quoteMethodAnalytics?.hasData && (
