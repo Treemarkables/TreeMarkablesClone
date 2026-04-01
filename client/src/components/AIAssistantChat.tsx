@@ -186,7 +186,7 @@ export function AIAssistantChat() {
         <button
           onClick={() => setOpen(true)}
           aria-label="Open AI assistant"
-          className="fixed bottom-5 right-5 z-50 flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-lg px-4 py-3 hover-elevate active-elevate-2 transition-transform"
+          className="fixed bottom-5 right-5 z-[9999] flex items-center gap-2 rounded-full bg-primary text-primary-foreground shadow-lg px-4 py-3 hover-elevate active-elevate-2 transition-transform"
         >
           <Bot className="h-5 w-5" />
           <span className="text-sm font-medium hidden sm:block">Ask AI</span>
@@ -195,7 +195,7 @@ export function AIAssistantChat() {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-5 right-5 z-50 flex flex-col rounded-xl border border-border bg-background shadow-xl"
+        <div className="fixed bottom-5 right-5 z-[9999] flex flex-col rounded-xl border border-border bg-background shadow-xl"
           style={{ width: "min(420px, calc(100vw - 2.5rem))", height: "min(580px, calc(100dvh - 5rem))" }}>
 
           {/* Header */}
