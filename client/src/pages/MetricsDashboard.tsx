@@ -29,6 +29,11 @@ import {
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import {
+  Tooltip as UITooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -2115,9 +2120,22 @@ export default function MetricsDashboard() {
                             })()}
                           </td>
                           <td className="text-right py-3 px-4">
-                            <span className={source.averageProfitMargin > 40 ? 'text-green-600 font-semibold' : source.averageProfitMargin > 20 ? 'text-yellow-600' : source.averageProfitMargin > 0 ? 'text-orange-600' : 'text-gray-500'}>
-                              {source.averageProfitMargin?.toFixed(1) || '0.0'}%
-                            </span>
+                            {source.averageProfitMargin > 0 ? (
+                              <span className={source.averageProfitMargin > 40 ? 'text-green-600 font-semibold' : source.averageProfitMargin > 20 ? 'text-yellow-600' : 'text-orange-600'}>
+                                {source.averageProfitMargin.toFixed(1)}%
+                              </span>
+                            ) : source.wonCount > 0 ? (
+                              <UITooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="text-muted-foreground cursor-help border-b border-dashed border-muted-foreground">—</span>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">
+                                  <p className="text-xs max-w-[200px]">Enter costs in the Gross Margin section of each job card to see margin data.</p>
+                                </TooltipContent>
+                              </UITooltip>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -2135,6 +2153,10 @@ export default function MetricsDashboard() {
                         <td className="text-right py-3 px-4 text-blue-600">100.0%</td>
                         <td className="text-right py-3 px-4">
                           {(() => {
+                            const hasAnyMargin = leadSourceData.some(s => s.averageProfitMargin > 0);
+                            if (!hasAnyMargin) {
+                              return <span className="text-muted-foreground">—</span>;
+                            }
                             const totalRev = leadSourceData.reduce((sum, s) => sum + s.totalRevenue, 0);
                             const totalProfit = leadSourceData.reduce((sum, s) => sum + (s.totalProfit || 0), 0);
                             const overallMargin = totalRev > 0 ? (totalProfit / totalRev) * 100 : 0;
