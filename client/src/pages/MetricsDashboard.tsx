@@ -1478,37 +1478,6 @@ export default function MetricsDashboard() {
           </Card>
         </div>
 
-        {/* Service Performance Section */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-              <CardTitle className="text-xl flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-blue-600" />
-                Service Performance
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setServicePerformanceCollapsed(!servicePerformanceCollapsed)}
-                className="md:hidden"
-              >
-                {servicePerformanceCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-              </Button>
-            </CardHeader>
-            <CardContent className={servicePerformanceCollapsed ? 'hidden md:block' : ''}>
-              {servicePerformanceLoading ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">Loading service performance data...</p>
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">No service performance data available yet.</p>
-                  <p className="text-sm text-muted-foreground mt-2">Create invoices with linked services/materials to track their performance.</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
         
         {/* Unsuccessful Jobs Analysis Section */}
         <div className="col-span-full">
