@@ -545,8 +545,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Pagination state
-  const [jobsLimit, setJobsLimit] = useState(10000); // Increased limit to show all jobs
+  // Pagination state — start with 50, user can load more; keeps initial fetch fast
+  const [jobsLimit, setJobsLimit] = useState(50);
   const [loadingMore, setLoadingMore] = useState(false);
 
   // Fetch jobs from backend API with pagination
@@ -607,6 +607,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       }
     }
   }, []); // Run only on mount
+
+  // Clear deep search and search query whenever the user navigates away from the dispatch board,
+  // so they start fresh on return instead of seeing stale deep-search results.
+  useEffect(() => {
+    if (!location.startsWith('/dispatch')) {
+      setIsDeepSearchActive(false);
+      setDeepSearchResults([]);
+      setSearchQuery('');
+    }
+  }, [location]);
 
   // Handle URL parameters for opening specific jobs (e.g., from notifications)
   useEffect(() => {
@@ -1145,8 +1155,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (jobFilter === 'work_order') return job.status === 'work_order';
         if (jobFilter === 'scheduled') return job.status === 'scheduled';
         if (jobFilter === 'completed') return job.status === 'completed';
-        // Default 'all': exclude terminal/archive states and queued jobs
-        return job.status !== 'unsuccessful' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived';
+        // Default 'all': only show the three most actionable statuses
+        return job.status === 'lead' || job.status === 'quote' || job.status === 'work_order';
       })
       .filter(job => {
         // When searching or a specific status filter is active, skip the date window
@@ -1302,7 +1312,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs?limit=10000&offset=0'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`] });
       toast({
         title: variables.inQueue ? 'Added to Queue' : 'Removed from Queue',
         description: variables.inQueue
@@ -1324,7 +1334,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs?limit=10000&offset=0'] });
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`] });
       toast({
         title: variables.customerConfirmed ? 'Booking Confirmed' : 'Confirmation Removed',
         description: variables.customerConfirmed
