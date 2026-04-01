@@ -1816,39 +1816,6 @@ export default function MetricsDashboard() {
           </div>
         )}
 
-        {/* Crew Efficiency Section - Billable vs Paid Hours from Xero */}
-        {dateRange?.from && dateRange?.to && (
-          <div className="mt-8">
-            <Card>
-              <CardHeader 
-                className="cursor-pointer hover-elevate rounded-t-lg"
-                onClick={() => setCrewEfficiencyCollapsed(!crewEfficiencyCollapsed)}
-              >
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <Users className="h-5 w-5 text-blue-500" />
-                    Crew Efficiency
-                  </CardTitle>
-                  <div className="flex items-center gap-2">
-                    {crewEfficiency?.totals && (
-                      <span className={`text-lg font-bold ${
-                        crewEfficiency.totals.overallEfficiencyRate >= 80 ? 'text-green-600' :
-                        crewEfficiency.totals.overallEfficiencyRate >= 60 ? 'text-yellow-600' : 'text-red-600'
-                      }`}>
-                        {crewEfficiency.totals.overallEfficiencyRate.toFixed(1)}% Overall
-                      </span>
-                    )}
-                    {crewEfficiencyCollapsed ? <ChevronDown className="h-5 w-5" /> : <ChevronUp className="h-5 w-5" />}
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Compares billable job hours vs paid hours from Xero Payroll
-                </p>
-              </CardHeader>
-              
-            </Card>
-          </div>
-        )}
 
         {/* Staff Work Days Section - Hours and Days Worked from Xero */}
         {dateRange?.from && dateRange?.to && (
