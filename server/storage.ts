@@ -2930,6 +2930,10 @@ class DatabaseStorage implements IStorage {
         .select()
         .from(schema.jobs);
 
+      // Fetch business settings for default gross margin fallback
+      const [bizSettings] = await db.select().from(schema.businessSettings).limit(1);
+      const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
+
       // Build invoice date conditions - filter invoices by issue date for revenue
       const invoiceConditions = [sql`${schema.invoices.status} != 'cancelled'`];
       if (fromDate) {
@@ -3068,27 +3072,49 @@ class DatabaseStorage implements IStorage {
             existing.wonCount++;
             existing.totalRevenue += invoiceRevenue;
 
-            // Calculate costs and profit
+            // Calculate costs and profit — priority order:
+            // 1. Line item totalCost fields (most accurate — set during job quoting)
+            // 2. Manual cost fields (laborCosts, materialsCosts, etc.)
+            // 3. Stored grossMargin percentage from the Gross Margin Calculator
+            
+            // Priority 1: sum costs from job line items
+            let lineItemCosts = 0;
+            const lineItems = (job.lineItems as any[]) || [];
+            for (const item of lineItems) {
+              const itemCost = parseFloat(item.totalCost?.toString() || item.costExGst?.toString() || '0') || 0;
+              if (itemCost > 0) {
+                lineItemCosts += itemCost;
+              } else if (item.unitCost && item.quantity) {
+                // Fall back to unitCost * quantity if totalCost missing
+                lineItemCosts += (parseFloat(item.unitCost.toString()) || 0) * (parseFloat(item.quantity.toString()) || 1);
+              }
+            }
+            
+            // Priority 2: manual cost fields
             const laborCosts = parseFloat(job.laborCosts || '0') || 0;
             const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
             const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
             const otherCosts = parseFloat(job.otherCosts || '0') || 0;
             const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
-            const totalCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
+            const manualCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
+            
+            // Use line item costs if available, otherwise manual costs
+            const totalCosts = lineItemCosts > 0 ? lineItemCosts : manualCosts;
             
             existing.totalCosts += totalCosts;
             existing.totalProfit += (invoiceRevenue - totalCosts);
             
-            // Priority 1: use detailed cost breakdown if any cost fields are entered
             if (totalCosts > 0) {
               existing.jobsWithCostData++;
               existing.revenueWithCostData += invoiceRevenue;
               existing.profitWithCostData += (invoiceRevenue - totalCosts);
             } else {
-              // Priority 2: fall back to the stored grossMargin percentage on the job
+              // Priority 3: fall back to the stored grossMargin percentage on the job
               const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
-              if (storedMarginPct > 0) {
-                const impliedProfit = invoiceRevenue * (storedMarginPct / 100);
+              // Priority 4: use business-wide default gross margin if configured
+              const effectiveMarginPct = storedMarginPct > 0 ? storedMarginPct : defaultMarginPct;
+              if (effectiveMarginPct > 0) {
+                const impliedProfit = invoiceRevenue * (effectiveMarginPct / 100);
                 existing.jobsWithCostData++;
                 existing.revenueWithCostData += invoiceRevenue;
                 existing.profitWithCostData += impliedProfit;

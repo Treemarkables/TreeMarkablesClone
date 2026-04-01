@@ -355,6 +355,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS employee_id VARCHAR NOT NULL DEFAULT ''
       `);
       log("✅ Schema migration: assistant_messages ready", "startup");
+
+      // Add default_gross_margin_pct to business_settings for analytics fallback
+      await pool.query(`
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS default_gross_margin_pct NUMERIC(5,2) NOT NULL DEFAULT 0
+      `);
+      log("✅ Schema migration: business_settings.default_gross_margin_pct ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

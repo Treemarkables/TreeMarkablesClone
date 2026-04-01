@@ -1045,6 +1045,9 @@ export const businessSettings = pgTable("business_settings", {
   passwordExpiration: integer("password_expiration").default(90), // days
   auditLogging: boolean("audit_logging").default(true),
   
+  // Analytics Defaults
+  defaultGrossMarginPct: decimal("default_gross_margin_pct", { precision: 5, scale: 2 }).notNull().default("0"),
+
   // Metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
