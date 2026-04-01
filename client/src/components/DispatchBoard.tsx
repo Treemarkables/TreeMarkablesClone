@@ -1205,8 +1205,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     const sorted = uniqueJobs
       .sort((a, b) => {
-        // When searching, rank by relevance first then by time
+        // When searching, sort by: 1) active status tier, 2) relevance, 3) time
         if (searchQuery.trim()) {
+          // Active statuses get tier 1 (highest), terminal/completed get tier 0
+          const statusTier = (job: JobAssignment) => {
+            const activeStatuses = ['lead', 'quote', 'work_order', 'scheduled'];
+            return activeStatuses.includes(job.status as string) ? 1 : 0;
+          };
+          const tierDiff = statusTier(b) - statusTier(a);
+          if (tierDiff !== 0) return tierDiff;
+
+          // Within the same tier, rank by match relevance
           const query = searchQuery.toLowerCase().trim();
           const scoreJob = (job: JobAssignment) => {
             const name = job.customerName?.toLowerCase() || '';
