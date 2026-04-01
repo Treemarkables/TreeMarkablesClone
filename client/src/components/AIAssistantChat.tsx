@@ -81,6 +81,13 @@ export function AIAssistantChat() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
 
+  // Listen for external open trigger (e.g. from header button)
+  useEffect(() => {
+    const handler = () => setOpen(true);
+    window.addEventListener('open-ai-assistant', handler);
+    return () => window.removeEventListener('open-ai-assistant', handler);
+  }, []);
+
   // Scroll to bottom when new messages arrive
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
