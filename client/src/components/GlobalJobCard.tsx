@@ -4675,11 +4675,12 @@ The Treemarkables Team`;
                                       value={field.value || ""} 
                                       onValueChange={(value) => {
                                         field.onChange(value);
-                                        // Auto-save status change for existing jobs
+                                        // Auto-save status change for existing jobs — send ONLY the
+                                        // status field so we never accidentally overwrite address or
+                                        // other fields with stale form state captured mid-transition.
+                                        // The server safeguard preserves all other DB values.
                                         if (mode === 'edit' && editingJob?.id) {
-                                          const formData = form.getValues();
                                           updateJobMutation.mutate({
-                                            ...formData,
                                             id: editingJob.id,
                                             status: value
                                           } as GlobalJobCardFormData);
