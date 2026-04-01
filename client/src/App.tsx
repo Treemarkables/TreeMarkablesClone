@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { AIAssistantChat } from "@/components/AIAssistantChat";
 import { AuthProvider } from "@/contexts/AuthContext";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
@@ -872,6 +873,12 @@ function Router() {
   );
 }
 
+function AuthenticatedOverlays() {
+  const { isAuthenticated } = useAuth();
+  if (!isAuthenticated) return null;
+  return <AIAssistantChat />;
+}
+
 function App() {
   // Initialize Firebase on app startup for push notifications
   useEffect(() => {
@@ -891,6 +898,7 @@ function App() {
             <ScrollToTop />
             <Toaster />
             <InstallPrompt />
+            <AuthenticatedOverlays />
             <Router />
           </AuthProvider>
         </TooltipProvider>

@@ -20558,6 +20558,48 @@ If you cannot find a value, use null. Do not guess.`
     }
   });
 
+  // ===========================
+  // AI ASSISTANT CHAT ENDPOINT
+  // ===========================
+  app.post('/api/assistant/chat', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { runAssistantChat } = await import('./services/aiAssistant');
+      const { message, sessionId, history = [] } = req.body;
+      if (!message || typeof message !== 'string') {
+        return res.status(400).json({ success: false, message: 'message is required' });
+      }
+      if (!sessionId || typeof sessionId !== 'string') {
+        return res.status(400).json({ success: false, message: 'sessionId is required' });
+      }
+      const reply = await runAssistantChat(message, history, sessionId);
+      return res.json({ success: true, data: { reply } });
+    } catch (error) {
+      console.error('[AI Assistant] Chat error:', error);
+      return res.status(500).json({ success: false, message: 'AI assistant error' });
+    }
+  });
+
+  app.get('/api/assistant/history/:sessionId', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const messages = await storage.getAssistantMessages(req.params.sessionId);
+      return res.json({ success: true, data: messages });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: 'Failed to fetch history' });
+    }
+  });
+
+  app.delete('/api/assistant/history/:sessionId', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      await storage.deleteAssistantSession(req.params.sessionId);
+      return res.json({ success: true });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: 'Failed to clear history' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;

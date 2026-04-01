@@ -338,6 +338,18 @@ function startNotificationQueueWorker() {
         ALTER TABLE jobs ADD COLUMN IF NOT EXISTS customer_confirmed BOOLEAN NOT NULL DEFAULT false
       `);
       log("✅ Schema migration: jobs.customer_confirmed ready", "startup");
+
+      // Create assistant_messages table for AI chat history
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS assistant_messages (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          session_id VARCHAR NOT NULL,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW()
+        )
+      `);
+      log("✅ Schema migration: assistant_messages ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

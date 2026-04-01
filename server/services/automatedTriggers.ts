@@ -1,6 +1,7 @@
 import { notificationService } from './notificationService';
 import { storage } from '../storage';
 import { workflowAutomationService } from './workflowAutomation';
+import { runAllReminderChecks } from './reminderChecker';
 import type { Job, Customer, InsertJob } from '@shared/schema';
 
 // Hook into job status changes to trigger automated notifications
@@ -258,6 +259,16 @@ export class AutomatedTriggers {
       this.scheduleFollowUpReminders();
     }, 4 * 60 * 60 * 1000); // 4 hours
 
+    // Run proactive business reminder checks every hour
+    setInterval(() => {
+      runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Reminder check error:', err));
+    }, 60 * 60 * 1000); // 1 hour
+
+    // Run once shortly after startup (90 second delay to let DB connect)
+    setTimeout(() => {
+      runAllReminderChecks().catch(err => console.error('[AutomatedTriggers] Initial reminder check error:', err));
+    }, 90 * 1000);
+
     console.log('✅ Automated communication system initialized');
   }
 
@@ -267,7 +278,8 @@ export class AutomatedTriggers {
       ...notificationService.getServiceStatus(),
       backgroundTasks: {
         overdueJobChecks: 'Running (hourly)',
-        followUpReminders: 'Running (every 4 hours)'
+        followUpReminders: 'Running (every 4 hours)',
+        proactiveReminders: 'Running (hourly)'
       },
       lastChecked: new Date().toISOString()
     };

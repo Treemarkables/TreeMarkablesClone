@@ -413,6 +413,7 @@ export interface IStorage {
   updateNotification(id: string, updates: UpdateNotification): Promise<Notification>;
   getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]>;
   getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]>;
+  getNotificationsCreatedSince(since: Date): Promise<Notification[]>;
   markNotificationAsRead(id: string): Promise<Notification>;
   markAllNotificationsAsRead(userId?: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
@@ -933,6 +934,11 @@ export interface IStorage {
   getMulchDrops(status?: string): Promise<schema.MulchDrop[]>;
   updateMulchDrop(id: string, updates: schema.UpdateMulchDrop): Promise<schema.MulchDrop>;
   deleteMulchDrop(id: string): Promise<boolean>;
+
+  // AI Assistant Messages
+  createAssistantMessage(message: schema.InsertAssistantMessage): Promise<schema.AssistantMessage>;
+  getAssistantMessages(sessionId: string, limit?: number): Promise<schema.AssistantMessage[]>;
+  deleteAssistantSession(sessionId: string): Promise<void>;
 }
 
 // Database Storage Implementation
@@ -3611,6 +3617,13 @@ class DatabaseStorage implements IStorage {
     const filteredNotifications = await this.filterCompletedJobNotifications(notifications);
     return filteredNotifications as NotificationWithDetails[];
   }
+  async getNotificationsCreatedSince(since: Date): Promise<Notification[]> {
+    const notifications = await db.select()
+      .from(schema.notifications)
+      .where(gte(schema.notifications.createdAt, since))
+      .orderBy(desc(schema.notifications.createdAt));
+    return notifications;
+  }
   async markNotificationAsRead(id: string): Promise<Notification> {
     const [updatedNotification] = await db.update(schema.notifications)
       .set({ isRead: true, readAt: new Date() })
@@ -6189,6 +6202,23 @@ class DatabaseStorage implements IStorage {
   async deleteMulchDrop(id: string): Promise<boolean> {
     const result = await db.delete(schema.mulchDrops).where(eq(schema.mulchDrops.id, id));
     return (result.rowCount ?? 0) > 0;
+  }
+
+  async createAssistantMessage(message: schema.InsertAssistantMessage): Promise<schema.AssistantMessage> {
+    const [created] = await db.insert(schema.assistantMessages).values(message).returning();
+    return created;
+  }
+
+  async getAssistantMessages(sessionId: string, limit = 50): Promise<schema.AssistantMessage[]> {
+    return await db.select()
+      .from(schema.assistantMessages)
+      .where(eq(schema.assistantMessages.sessionId, sessionId))
+      .orderBy(asc(schema.assistantMessages.createdAt))
+      .limit(limit);
+  }
+
+  async deleteAssistantSession(sessionId: string): Promise<void> {
+    await db.delete(schema.assistantMessages).where(eq(schema.assistantMessages.sessionId, sessionId));
   }
 }
 

@@ -3363,5 +3363,18 @@ export type InsertDailyBriefing = z.infer<typeof insertDailyBriefingSchema>;
 export type DailyJobNote = typeof dailyJobNotes.$inferSelect;
 export type InsertDailyJobNote = z.infer<typeof insertDailyJobNoteSchema>;
 
+// AI Assistant Messages
+export const assistantMessages = pgTable("assistant_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  role: text("role").notNull(), // 'user' | 'assistant'
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertAssistantMessageSchema = createInsertSchema(assistantMessages).omit({ id: true, createdAt: true });
+export type AssistantMessage = typeof assistantMessages.$inferSelect;
+export type InsertAssistantMessage = z.infer<typeof insertAssistantMessageSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';
