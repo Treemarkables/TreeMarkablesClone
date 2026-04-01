@@ -3079,11 +3079,20 @@ class DatabaseStorage implements IStorage {
             existing.totalCosts += totalCosts;
             existing.totalProfit += (invoiceRevenue - totalCosts);
             
-            // Only track jobs with actual cost data for margin calculation
+            // Priority 1: use detailed cost breakdown if any cost fields are entered
             if (totalCosts > 0) {
               existing.jobsWithCostData++;
               existing.revenueWithCostData += invoiceRevenue;
               existing.profitWithCostData += (invoiceRevenue - totalCosts);
+            } else {
+              // Priority 2: fall back to the stored grossMargin percentage on the job
+              const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
+              if (storedMarginPct > 0) {
+                const impliedProfit = invoiceRevenue * (storedMarginPct / 100);
+                existing.jobsWithCostData++;
+                existing.revenueWithCostData += invoiceRevenue;
+                existing.profitWithCostData += impliedProfit;
+              }
             }
           }
         } else if (!fromDate && !toDate) {
