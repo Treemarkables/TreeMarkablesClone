@@ -615,6 +615,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       const params = new URLSearchParams(window.location.search);
       const jobId = params.get('job');
       const tab = params.get('tab');
+      const newJob = params.get('newJob');
+
+      // Handle ?newJob=true — open the create job flow (same as blue "+ New Job" button)
+      if (newJob === 'true') {
+        window.history.replaceState({}, '', '/dispatch');
+        setJobToEdit(null);
+        setInitialJobData(null);
+        setGlobalJobCardMode('create');
+        setShowGlobalJobCard(true);
+        return;
+      }
       
       console.log('🔔 DispatchBoard URL check:', { 
         jobId, 
@@ -667,12 +678,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       handleUrlChange();
     };
 
+    // Handle the "New Job" orange header button firing a custom event when already on /dispatch
+    const handleNewJobEvent = () => {
+      setJobToEdit(null);
+      setInitialJobData(null);
+      setGlobalJobCardMode('create');
+      setShowGlobalJobCard(true);
+    };
+
     window.addEventListener('notification-navigation', handleNotificationNav);
     window.addEventListener('popstate', handleUrlChange);
+    window.addEventListener('dispatch-new-job', handleNewJobEvent);
 
     return () => {
       window.removeEventListener('notification-navigation', handleNotificationNav);
       window.removeEventListener('popstate', handleUrlChange);
+      window.removeEventListener('dispatch-new-job', handleNewJobEvent);
     };
   }, [jobsData, location]); // Re-run when jobs data loads OR location changes
 
