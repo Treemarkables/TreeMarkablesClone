@@ -24,7 +24,8 @@ import {
   Briefcase,
   AlertCircle,
   Bot,
-  RefreshCw
+  RefreshCw,
+  Info
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -959,80 +960,72 @@ export default function MetricsDashboard() {
                 const totalRevenue = dashboardStats?.totalRevenue || 0;
                 const netProfit = xeroPL?.netProfit || totalRevenue * 0.15;
                 const labour = totalRevenue * 0.40;
-                const overhead = Math.max(0, totalRevenue - netProfit - labour);
                 const jobsWonPct = quoteAnalytics?.totalQuotes
                   ? Math.round((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100)
                   : 0;
 
-                const pieData = totalRevenue > 0
-                  ? [
-                      { name: 'Net Profit', value: netProfit, color: '#22c55e' },
-                      { name: 'Labour', value: labour, color: '#3b82f6' },
-                      { name: 'Overhead', value: overhead, color: '#a855f7' },
-                    ]
-                  : [{ name: 'No data', value: 1, color: '#e5e7eb' }];
 
-                const stats = [
-                  { label: 'Revenue', value: formatCurrency(totalRevenue).replace('NZ$', '$'), color: 'text-gray-900', dot: null },
-                  { label: 'Net Profit', value: formatCurrency(netProfit).replace('NZ$', '$'), color: 'text-green-600', dot: '#22c55e' },
-                  { label: 'Labour (est.)', value: formatCurrency(labour).replace('NZ$', '$'), color: 'text-blue-600', dot: '#3b82f6' },
-                  { label: 'Avg Job Value', value: formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$'), color: 'text-gray-900', dot: null },
-                  { label: 'Quotes Sent', value: String(quoteAnalytics?.totalQuotes || 0), color: 'text-gray-900', dot: null },
-                  { label: 'Jobs Won', value: `${jobsWonPct}%`, color: 'text-green-600', dot: null },
-                  { label: 'New Leads', value: String(dashboardStats?.totalLeads || 0), color: 'text-gray-900', dot: null },
+                const tiles = [
+                  {
+                    label: 'Revenue',
+                    value: formatCurrency(totalRevenue).replace('NZ$', '$'),
+                    sub: `${revenueStats?.jobsWithInvoices || 0} invoiced jobs`,
+                  },
+                  {
+                    label: 'Jobs Completed',
+                    value: String(revenueStats?.jobsWithInvoices || 0),
+                    sub: 'Jobs with invoices',
+                  },
+                  {
+                    label: 'Average Job Value',
+                    value: formatCurrency(revenueStats?.averageJobValue || 0).replace('NZ$', '$'),
+                    sub: 'Per invoiced job',
+                  },
+                  {
+                    label: 'Quote Win Rate',
+                    value: `${jobsWonPct}%`,
+                    sub: `${quoteAnalytics?.acceptedQuotes || 0} of ${quoteAnalytics?.totalQuotes || 0} quoted`,
+                  },
+                  {
+                    label: 'Net Profit (est.)',
+                    value: (netProfit < 0 ? '-' : '') + formatCurrency(Math.abs(netProfit)).replace('NZ$', '$'),
+                    sub: `${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(0) : 0}% of revenue`,
+                    valueColor: netProfit >= 0 ? '' : 'text-red-600',
+                  },
+                  {
+                    label: 'Labour (est.)',
+                    value: formatCurrency(labour).replace('NZ$', '$'),
+                    sub: '~40% of revenue',
+                  },
+                  {
+                    label: 'Quotes Sent',
+                    value: String(quoteAnalytics?.totalQuotes || 0),
+                    sub: `${quoteAnalytics?.pendingQuotes || 0} still pending`,
+                  },
+                  {
+                    label: 'New Leads',
+                    value: String(dashboardStats?.totalLeads || 0),
+                    sub: 'In selected period',
+                  },
                 ];
 
                 return (
-                  <div className="flex flex-col sm:flex-row items-center gap-6">
-                    {/* Donut Chart */}
-                    <div className="relative flex-shrink-0" style={{ width: 180, height: 180 }}>
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={pieData}
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={56}
-                            outerRadius={82}
-                            paddingAngle={totalRevenue > 0 ? 2 : 0}
-                            dataKey="value"
-                            strokeWidth={0}
-                          >
-                            {pieData.map((entry, index) => (
-                              <Cell key={index} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            formatter={(value: number, name: string) => [
-                              name === 'No data' ? '—' : formatCurrency(value).replace('NZ$', '$'),
-                              name,
-                            ]}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
-                      {/* Centre label */}
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <p className="text-xs text-gray-500 leading-none">Revenue</p>
-                        <p className="text-sm font-bold text-gray-900 leading-tight mt-0.5">
-                          {formatCurrency(totalRevenue).replace('NZ$', '$')}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Stats list */}
-                    <div className="flex-1 w-full grid grid-cols-2 gap-x-6 gap-y-2.5">
-                      {stats.map((s) => (
-                        <div key={s.label} className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            {s.dot && (
-                              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: s.dot }} />
-                            )}
-                            <span className="text-xs text-gray-500 truncate">{s.label}</span>
-                          </div>
-                          <span className={`text-sm font-semibold ${s.color} flex-shrink-0`}>{s.value}</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {tiles.map((tile) => (
+                      <div
+                        key={tile.label}
+                        className="border border-gray-200 rounded-lg p-4 flex flex-col bg-white dark:bg-card dark:border-card-border"
+                      >
+                        <div className="flex items-center gap-1.5 mb-4">
+                          <span className="text-sm text-gray-600 dark:text-muted-foreground leading-tight">{tile.label}</span>
+                          <Info className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                         </div>
-                      ))}
-                    </div>
+                        <div className={`text-3xl font-bold text-gray-900 dark:text-foreground mb-1 ${tile.valueColor || ''}`}>
+                          {tile.value}
+                        </div>
+                        <div className="text-xs text-gray-400 dark:text-muted-foreground mt-auto pt-2">{tile.sub}</div>
+                      </div>
+                    ))}
                   </div>
                 );
               })()}
