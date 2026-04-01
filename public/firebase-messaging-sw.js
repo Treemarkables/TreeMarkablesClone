@@ -108,12 +108,13 @@ self.addEventListener('notificationclick', (event) => {
   let urlToOpen = '/dispatch'; // Default
   
   if (event.notification.data) {
-    const { type, jobNumber, invoiceNumber } = event.notification.data;
+    const { type, jobNumber, jobId, invoiceNumber } = event.notification.data;
     
     switch (type) {
       case 'job_assignment':
       case 'schedule_change':
-        urlToOpen = '/dispatch';
+        // Navigate directly to the specific job if we have its ID
+        urlToOpen = jobId ? `/dispatch?job=${jobId}` : '/dispatch';
         break;
       case 'new_lead':
         urlToOpen = '/conversations';
