@@ -344,10 +344,15 @@ function startNotificationQueueWorker() {
         CREATE TABLE IF NOT EXISTS assistant_messages (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           session_id VARCHAR NOT NULL,
+          employee_id VARCHAR NOT NULL DEFAULT '',
           role TEXT NOT NULL,
           content TEXT NOT NULL,
           created_at TIMESTAMP NOT NULL DEFAULT NOW()
         )
+      `);
+      // Backfill: add employee_id column if table was created without it
+      await pool.query(`
+        ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS employee_id VARCHAR NOT NULL DEFAULT ''
       `);
       log("✅ Schema migration: assistant_messages ready", "startup");
     } catch (migErr) {

@@ -248,6 +248,7 @@ export async function runAssistantChat(
   userMessage: string,
   history: ChatMessage[],
   sessionId: string,
+  employeeId: string,
 ): Promise<string> {
   const nowNZ = new Intl.DateTimeFormat('en-NZ', {
     timeZone: 'Pacific/Auckland',
@@ -301,8 +302,8 @@ export async function runAssistantChat(
     const assistantReply = choice.message.content || 'Sorry, I could not generate a response.';
 
     await Promise.all([
-      storage.createAssistantMessage({ sessionId, role: 'user', content: userMessage }),
-      storage.createAssistantMessage({ sessionId, role: 'assistant', content: assistantReply }),
+      storage.createAssistantMessage({ sessionId, employeeId, role: 'user', content: userMessage }),
+      storage.createAssistantMessage({ sessionId, employeeId, role: 'assistant', content: assistantReply }),
     ]);
 
     return assistantReply;
