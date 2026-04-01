@@ -55,7 +55,6 @@ import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
 import SmsTemplates from "@/pages/SmsTemplates";
 import JHAAssessment from "@/pages/JHAAssessment";
 import JHAHistory from "@/pages/JHAHistory";
-import { GlobalJobCard } from "@/components/GlobalJobCard";
 import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
 import JobTemplateManagement from "@/components/JobTemplateManagement";
 import ProposalViewer from "@/pages/ProposalViewer";
@@ -151,11 +150,10 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
-  const [showGlobalJobCard, setShowGlobalJobCard] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [dispatchDate, setDispatchDate] = useState(new Date());
   const { setOpen } = useSidebar();
   
@@ -430,7 +428,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {/* Global New Job Button */}
               <Button 
                 size="sm" 
-                onClick={() => setShowGlobalJobCard(true)}
+                onClick={() => {
+                  if (location === '/dispatch') {
+                    // Already on dispatch — fire a custom event so DispatchBoard opens create flow immediately
+                    window.dispatchEvent(new CustomEvent('dispatch-new-job'));
+                  } else {
+                    setLocation('/dispatch?newJob=true');
+                  }
+                }}
                 data-testid="global-new-job-btn"
                 className="bg-amber-500 hover:bg-amber-600 text-white"
               >
@@ -446,19 +451,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </main>
         </div>
         
-        {/* Global Job Card */}
-        <GlobalJobCard 
-          isOpen={showGlobalJobCard}
-          mode="create"
-          onClose={() => setShowGlobalJobCard(false)}
-          onJobCreated={(job) => {
-            toast({
-              title: "Job Created",
-              description: `${job.title} has been created successfully.`,
-            });
-            setShowGlobalJobCard(false);
-          }}
-        />
       </div>
   );
 }
