@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar as CalendarIcon, ArrowLeft, TrendingUp } from "lucide-react";
+import { Calendar as CalendarIcon, ArrowLeft, TrendingUp, Percent } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -17,6 +17,7 @@ export default function SettingsPreferences() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [metricsStartDate, setMetricsStartDate] = useState<Date | undefined>(undefined);
+  const [defaultGrossMarginPct, setDefaultGrossMarginPct] = useState<string>("");
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -28,6 +29,8 @@ export default function SettingsPreferences() {
     if (settings?.data?.metricsStartDate) {
       setMetricsStartDate(new Date(settings.data.metricsStartDate));
     }
+    const pct = parseFloat(settings?.data?.defaultGrossMarginPct || '0') || 0;
+    setDefaultGrossMarginPct(pct > 0 ? String(pct) : "");
   }, [settings]);
 
   // Mutation to update settings
@@ -40,6 +43,7 @@ export default function SettingsPreferences() {
       queryClient.invalidateQueries({ queryKey: ['/api/business-settings'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
       queryClient.invalidateQueries({ queryKey: ['/api/overview'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/analytics/lead-source'] });
       toast({
         title: "Settings Updated",
         description: "Your preferences have been saved successfully.",
@@ -55,8 +59,10 @@ export default function SettingsPreferences() {
   });
 
   const handleSave = () => {
+    const marginValue = parseFloat(defaultGrossMarginPct) || 0;
     updateSettingsMutation.mutate({
       metricsStartDate: metricsStartDate ? metricsStartDate.toISOString() : null,
+      defaultGrossMarginPct: marginValue >= 0 && marginValue <= 100 ? marginValue : 0,
     });
   };
 
@@ -67,6 +73,9 @@ export default function SettingsPreferences() {
   const handleSetToday = () => {
     setMetricsStartDate(new Date());
   };
+
+  const marginNum = parseFloat(defaultGrossMarginPct) || 0;
+  const marginValid = marginNum >= 0 && marginNum <= 100;
 
   return (
     <div className="flex flex-col h-full p-6 space-y-6">
@@ -173,10 +182,47 @@ export default function SettingsPreferences() {
               </div>
             )}
 
+            {/* Default Gross Margin */}
+            <div className="space-y-2 pt-2 border-t">
+              <Label htmlFor="default-gross-margin" className="text-base font-medium flex items-center gap-2">
+                <Percent className="w-4 h-4" />
+                Default Gross Margin
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Used as a fallback gross margin in the Lead Source analytics when a job has no individual cost data entered.
+                Set to your typical gross margin (e.g. 40 for 40%). Leave at 0 to show "—" for jobs without cost data.
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <div className="relative w-40">
+                  <Input
+                    id="default-gross-margin"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.5"
+                    value={defaultGrossMarginPct}
+                    onChange={(e) => setDefaultGrossMarginPct(e.target.value)}
+                    placeholder="0"
+                    className={cn(!marginValid && defaultGrossMarginPct !== "" && "border-destructive")}
+                    data-testid="input-default-gross-margin"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+                </div>
+                {!marginValid && defaultGrossMarginPct !== "" && (
+                  <p className="text-sm text-destructive">Enter a value between 0 and 100</p>
+                )}
+              </div>
+              {marginNum > 0 && marginValid && (
+                <p className="text-sm text-muted-foreground mt-1">
+                  Jobs without specific cost data will show approximately <strong>{marginNum}%</strong> gross margin in analytics.
+                </p>
+              )}
+            </div>
+
             <div className="flex gap-3 pt-4">
               <Button
                 onClick={handleSave}
-                disabled={updateSettingsMutation.isPending || isLoading}
+                disabled={updateSettingsMutation.isPending || isLoading || (!marginValid && defaultGrossMarginPct !== "")}
                 data-testid="button-save-preferences"
               >
                 {updateSettingsMutation.isPending ? "Saving..." : "Save Changes"}
