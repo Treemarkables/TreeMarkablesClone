@@ -388,6 +388,7 @@ export function GlobalJobCard({
   const lastLoadedJobIdRef = useRef<string | null>(null); // Track which job was loaded to prevent isDirty blocking initial load
   const originalLoadedDataRef = useRef<Record<string, any>>({}); // Store original loaded values to detect real changes on manual save
   const currentJobIdRef = useRef<string | null>(null); // For clipboard paste handler
+  const replaceLineItemsRef = useRef<typeof replaceLineItems | null>(null); // Stable ref to avoid dep-array re-fires
   
   // Description textarea auto-resize ref (for the inline preview div that opens the popup)
   const descriptionTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -925,6 +926,8 @@ export function GlobalJobCard({
     control: form.control,
     name: "lineItems"
   });
+  // Keep a stable ref so the form-reset effect doesn't re-fire every render
+  replaceLineItemsRef.current = replaceLineItems;
 
   // Watch customerId from form for finding selected customer
   const formCustomerId = form.watch('customerId');
@@ -1024,7 +1027,7 @@ export function GlobalJobCard({
       
       // Reset form with appropriate data
       form.reset(resetData);
-      replaceLineItems([]); // Clear line items
+      replaceLineItemsRef.current?.([]); // Clear line items
       
       // Set customer search value if we have initial data
       if (initialData?.customerName) {
@@ -1039,9 +1042,11 @@ export function GlobalJobCard({
       // Check if this is a NEW job we haven't loaded yet (first time seeing this job)
       const isNewJobLoad = lastLoadedJobIdRef.current !== editingJob.id;
       
-      // GUARD: Don't reset form if user has made changes (prevents data loss on background refetch)
-      // BUT: Always allow reset if this is a different job than what we last loaded
-      if (form.formState.isDirty && !isNewJobLoad) {
+      // GUARD: Only reset the form when opening a *different* job.
+      // Once a job is loaded, never overwrite the form — auto-save keeps the server in sync.
+      // isDirty-based guards are unreliable because auto-save clears isDirty after every save,
+      // making the form vulnerable to spurious resets triggered by replaceLineItems ref changes.
+      if (!isNewJobLoad) {
         return;
       }
       
@@ -1098,20 +1103,8 @@ export function GlobalJobCard({
       
       // Fix: Explicitly sync useFieldArray with line items after form reset
       if (editingJob.lineItems) {
-        // Use replace to atomically set line items from database
-        replaceLineItems(editingJob.lineItems);
-      }
-      
-      // Set selected customer name for the search/create combobox
-      if (editingJobCustomer?.name) {
-        setSelectedCustomerName(editingJobCustomer.name);
-      } else if (editingJob.customerId) {
-        // Customer might not be in cache yet (e.g. just created from lead)
-        // Use job contact fields as fallback for display
-        const fallbackName = [editingJob.jobContactFirstName, editingJob.jobContactLastName].filter(Boolean).join(' ');
-        if (fallbackName) {
-          setSelectedCustomerName(fallbackName);
-        }
+        // Use ref to avoid adding replaceLineItems to the dep array (it changes every render)
+        replaceLineItemsRef.current?.(editingJob.lineItems);
       }
       
       // Reset loading flag after a delay to ensure all form updates are done
@@ -1139,9 +1132,27 @@ export function GlobalJobCard({
         }
       }, 500);
     }
-  // Use editingJobCustomer?.id instead of the full object to prevent form reset on customer data refetch
-  // The actual customer data is still accessible via the editingJobCustomer variable above
-  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, editingJobCustomer?.id, customersLoading, form, replaceLineItems, initialData]);
+  // Deps: editingJobCustomer?.id removed — customer name sync is handled by a separate effect below.
+  // replaceLineItems removed — called via replaceLineItemsRef.current to avoid firing on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, mode, jobId, createdJobId, editingJob?.id, customersLoading, initialData]);
+
+  // Separate lightweight effect: keep selectedCustomerName in sync whenever the customer data
+  // changes (e.g. first load after customers query resolves, or switching between jobs).
+  // This is intentionally kept separate from the form-reset effect to avoid coupling.
+  useEffect(() => {
+    if (!editingJob) return;
+    if (editingJobCustomer?.name) {
+      setSelectedCustomerName(editingJobCustomer.name);
+    } else if (editingJob.customerId && !customersLoading) {
+      // Customer ID is set but not yet in the cache — use job contact fields as display fallback
+      const fallback = [editingJob.jobContactFirstName, editingJob.jobContactLastName]
+        .filter(Boolean)
+        .join(' ');
+      if (fallback) setSelectedCustomerName(fallback);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingJob?.customerId, editingJobCustomer?.name, customersLoading]);
 
   // Keep billing address in sync with job address when "same as job address" is enabled
   useEffect(() => {
