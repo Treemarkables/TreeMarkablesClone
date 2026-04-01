@@ -1130,10 +1130,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const filtered = jobs
       .filter(job => {
-        // When searching, bypass the tab filter and show all non-archived active jobs
-        // so the user can find a job regardless of which status tab is selected
+        // When searching, show only active jobs — unsuccessful/completed/invoiced/archived
+        // are excluded from quick search and only appear in deep search results
         if (isSearching) {
-          return job.status !== 'archived';
+          return job.status !== 'unsuccessful' &&
+                 job.status !== 'completed' &&
+                 job.status !== 'invoiced' &&
+                 job.status !== 'archived';
         }
         // When a specific status filter is active, show only matching jobs (no exclusions)
         if (jobFilter === 'lead') return job.status === 'lead';
@@ -1205,17 +1208,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     const sorted = uniqueJobs
       .sort((a, b) => {
-        // When searching, sort by: 1) active status tier, 2) relevance, 3) time
+        // When searching, rank by relevance (quick search only contains active jobs)
         if (searchQuery.trim()) {
-          // Active statuses get tier 1 (highest), terminal/completed get tier 0
-          const statusTier = (job: JobAssignment) => {
-            const activeStatuses = ['lead', 'quote', 'work_order', 'scheduled'];
-            return activeStatuses.includes(job.status as string) ? 1 : 0;
-          };
-          const tierDiff = statusTier(b) - statusTier(a);
-          if (tierDiff !== 0) return tierDiff;
-
-          // Within the same tier, rank by match relevance
           const query = searchQuery.toLowerCase().trim();
           const scoreJob = (job: JobAssignment) => {
             const name = job.customerName?.toLowerCase() || '';
