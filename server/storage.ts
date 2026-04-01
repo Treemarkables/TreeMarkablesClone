@@ -937,8 +937,8 @@ export interface IStorage {
 
   // AI Assistant Messages
   createAssistantMessage(message: schema.InsertAssistantMessage): Promise<schema.AssistantMessage>;
-  getAssistantMessages(sessionId: string, limit?: number): Promise<schema.AssistantMessage[]>;
-  deleteAssistantSession(sessionId: string): Promise<void>;
+  getAssistantMessages(sessionId: string, employeeId: string, limit?: number): Promise<schema.AssistantMessage[]>;
+  deleteAssistantSession(sessionId: string, employeeId: string): Promise<void>;
 }
 
 // Database Storage Implementation
@@ -3595,7 +3595,10 @@ class DatabaseStorage implements IStorage {
       jobs.filter(j => j.status === 'completed').map(j => j.id)
     );
     
-    const alwaysShowTypes = new Set(['email_reply', 'sms_reply', 'payment_received', 'invoice_paid']);
+    const alwaysShowTypes = new Set([
+      'email_reply', 'sms_reply', 'payment_received', 'invoice_paid',
+      'reminder_uninvoiced', 'reminder_no_crew', 'reminder_stale_quote', 'reminder_stale_lead',
+    ]);
     
     return notifications.filter(n => 
       !n.jobId || 
@@ -6209,16 +6212,22 @@ class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getAssistantMessages(sessionId: string, limit = 50): Promise<schema.AssistantMessage[]> {
+  async getAssistantMessages(sessionId: string, employeeId: string, limit = 50): Promise<schema.AssistantMessage[]> {
     return await db.select()
       .from(schema.assistantMessages)
-      .where(eq(schema.assistantMessages.sessionId, sessionId))
+      .where(and(
+        eq(schema.assistantMessages.sessionId, sessionId),
+        eq(schema.assistantMessages.employeeId, employeeId),
+      ))
       .orderBy(asc(schema.assistantMessages.createdAt))
       .limit(limit);
   }
 
-  async deleteAssistantSession(sessionId: string): Promise<void> {
-    await db.delete(schema.assistantMessages).where(eq(schema.assistantMessages.sessionId, sessionId));
+  async deleteAssistantSession(sessionId: string, employeeId: string): Promise<void> {
+    await db.delete(schema.assistantMessages).where(and(
+      eq(schema.assistantMessages.sessionId, sessionId),
+      eq(schema.assistantMessages.employeeId, employeeId),
+    ));
   }
 }
 

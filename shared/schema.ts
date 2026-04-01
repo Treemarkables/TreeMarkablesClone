@@ -3367,6 +3367,7 @@ export type InsertDailyJobNote = z.infer<typeof insertDailyJobNoteSchema>;
 export const assistantMessages = pgTable("assistant_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   sessionId: varchar("session_id").notNull(),
+  employeeId: varchar("employee_id").notNull(), // owner — enforced on read/delete
   role: text("role").notNull(), // 'user' | 'assistant'
   content: text("content").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -20572,7 +20572,7 @@ If you cannot find a value, use null. Do not guess.`
       if (!sessionId || typeof sessionId !== 'string') {
         return res.status(400).json({ success: false, message: 'sessionId is required' });
       }
-      const reply = await runAssistantChat(message, history, sessionId);
+      const reply = await runAssistantChat(message, history, sessionId, req.session.employeeId);
       return res.json({ success: true, data: { reply } });
     } catch (error) {
       console.error('[AI Assistant] Chat error:', error);
@@ -20583,7 +20583,7 @@ If you cannot find a value, use null. Do not guess.`
   app.get('/api/assistant/history/:sessionId', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     try {
-      const messages = await storage.getAssistantMessages(req.params.sessionId);
+      const messages = await storage.getAssistantMessages(req.params.sessionId, req.session.employeeId);
       return res.json({ success: true, data: messages });
     } catch (error) {
       return res.status(500).json({ success: false, message: 'Failed to fetch history' });
@@ -20593,7 +20593,7 @@ If you cannot find a value, use null. Do not guess.`
   app.delete('/api/assistant/history/:sessionId', async (req: Request, res: Response) => {
     if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
     try {
-      await storage.deleteAssistantSession(req.params.sessionId);
+      await storage.deleteAssistantSession(req.params.sessionId, req.session.employeeId);
       return res.json({ success: true });
     } catch (error) {
       return res.status(500).json({ success: false, message: 'Failed to clear history' });
