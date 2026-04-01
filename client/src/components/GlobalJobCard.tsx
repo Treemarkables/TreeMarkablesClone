@@ -1291,6 +1291,24 @@ export function GlobalJobCard({
     };
   }, [form, mode, editingJob?.id, queryClient]);
 
+  // Immediately persist a customer change when the user explicitly picks one.
+  // customerId is excluded from the debounced auto-save watcher (to prevent
+  // accidental clears during form loading), so we save it directly here.
+  const saveCustomerImmediately = async (customerId: string, customerName: string) => {
+    if (mode !== 'edit' || !editingJob?.id) return;
+    try {
+      setIsAutoSaving(true);
+      await apiRequest('PUT', `/api/jobs/${editingJob.id}`, { customerId });
+      setLastAutoSaveTime(new Date());
+      console.log(`✅ Customer saved immediately: ${customerName} (${customerId})`);
+    } catch (err) {
+      console.error('Failed to save customer change:', err);
+      toast({ title: 'Could not save customer change', description: 'Please hit Save manually.', variant: 'destructive' });
+    } finally {
+      setIsAutoSaving(false);
+    }
+  };
+
   const formData = form.watch();
 
   // Job create/update mutations
@@ -3644,6 +3662,7 @@ The Treemarkables Team`;
                                                     if (customer.address && !form.getValues('address')) {
                                                       form.setValue('address', customer.address);
                                                     }
+                                                    saveCustomerImmediately(customer.id, customer.name);
                                                   }}
                                                 >
                                                   <Check
@@ -3775,6 +3794,7 @@ The Treemarkables Team`;
                                                     }
                                                   }
                                                 }
+                                                saveCustomerImmediately(customer.id, customer.name);
                                               }}
                                             >
                                               <Check
@@ -4028,6 +4048,7 @@ The Treemarkables Team`;
                                                 }
                                               }
                                             }
+                                            saveCustomerImmediately(customer.id, customer.name);
                                           }}
                                         >
                                           <Check
@@ -4231,6 +4252,7 @@ The Treemarkables Team`;
                                                       console.log('Could not check for previous jobs:', error);
                                                     }
                                                   }
+                                                  saveCustomerImmediately(customer.id, customer.name);
                                                 }}
                                               >
                                                 <Check
@@ -4306,6 +4328,7 @@ The Treemarkables Team`;
                                                   }
                                                 }
                                                 setCustomerSearchOpen(false);
+                                                saveCustomerImmediately(customer.id, customer.name);
                                               }}
                                             >
                                               <Check
