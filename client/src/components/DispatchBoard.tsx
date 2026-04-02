@@ -45,7 +45,8 @@ import {
   Loader2,
   Inbox,
   ChevronDown,
-  UserPlus
+  UserPlus,
+  Bell
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { format, addDays, subDays, startOfDay, addHours, isSameDay, parseISO, isWithinInterval, addMinutes } from 'date-fns';
@@ -133,6 +134,7 @@ interface JobAssignment {
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
+  etaNotificationRequested?: boolean; // Whether staff need to notify this customer of arrival time
 }
 
 type AssignmentMode = 'teams' | 'individual';
@@ -855,6 +857,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
+          etaNotificationRequested: apiJob.etaNotificationRequested || false,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -922,6 +925,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
+          etaNotificationRequested: apiJob.etaNotificationRequested || false,
           totalAmount: apiJob.subtotal && Number(apiJob.subtotal) > 0
             ? apiJob.subtotal
             : apiJob.totalIncludingGst && Number(apiJob.totalIncludingGst) > 0
@@ -2011,6 +2015,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Badge>
                           </div>
                         )}
+
+                        {/* Row 2d: ETA notification requested badge */}
+                        {job.etaNotificationRequested && (
+                          <div className="mb-1">
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              <Bell className="h-3 w-3 mr-1" />
+                              Notify ETA
+                            </Badge>
+                          </div>
+                        )}
                         
                         {/* Row 3: Multi-day badge or description */}
                         {job.scheduledEndDate && (
@@ -2396,6 +2410,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <Badge className="bg-green-100 text-green-700 border-0 text-xs">
                               <Check className="h-3 w-3 mr-1" />
                               Confirmed
+                            </Badge>
+                          )}
+                          {job.etaNotificationRequested && (
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              <Bell className="h-3 w-3 mr-1" />
+                              Notify ETA
                             </Badge>
                           )}
                           <Badge className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}>

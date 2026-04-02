@@ -475,6 +475,7 @@ export const jobs = pgTable("jobs", {
 
   // Customer confirmation
   customerConfirmed: boolean("customer_confirmed").default(false),
+  etaNotificationRequested: boolean("eta_notification_requested").default(false),
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
