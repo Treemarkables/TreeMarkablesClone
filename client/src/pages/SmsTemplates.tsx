@@ -58,7 +58,7 @@ const defaultFormData: TemplateFormData = {
   message: '',
   variables: [],
   description: '',
-  maxLength: 306,
+  maxLength: 459,
   isActive: true,
   isDefault: false,
 };
