@@ -957,18 +957,28 @@ export default function MetricsDashboard() {
             </CardHeader>
             <CardContent className="pt-0">
               {(() => {
-                const totalRevenue = dashboardStats?.totalRevenue || 0;
-                const netProfit = xeroPL?.netProfit || totalRevenue * 0.15;
-                const labour = totalRevenue * 0.40;
+                const appRevenue = dashboardStats?.totalRevenue || 0;
+                const xeroRevenue = xeroPL?.revenue || 0;
+                // When Xero is connected and has data, use it as the base for financial estimates
+                // so that Net Profit %, Labour, and Revenue all come from the same source.
+                const financialBase = xeroRevenue > 0 ? xeroRevenue : appRevenue;
+                const hasXero = xeroRevenue > 0;
+
+                const netProfit = xeroPL?.netProfit !== undefined ? xeroPL.netProfit : financialBase * 0.15;
+                // Use Xero's own calculated margin % when available; otherwise derive it
+                const netProfitPct = xeroPL?.grossMargin !== undefined && hasXero
+                  ? xeroPL.grossMargin
+                  : (financialBase > 0 ? Math.round((netProfit / financialBase) * 100) : 0);
+                const labour = financialBase * 0.40;
+
                 const jobsWonPct = quoteAnalytics?.totalQuotes
                   ? Math.round((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100)
                   : 0;
 
-
                 const tiles = [
                   {
                     label: 'Revenue',
-                    value: formatCurrency(totalRevenue).replace('NZ$', '$'),
+                    value: formatCurrency(appRevenue).replace('NZ$', '$'),
                     sub: `${revenueStats?.jobsWithInvoices || 0} invoiced jobs`,
                   },
                   {
@@ -987,15 +997,15 @@ export default function MetricsDashboard() {
                     sub: `${quoteAnalytics?.acceptedQuotes || 0} of ${quoteAnalytics?.totalQuotes || 0} quoted`,
                   },
                   {
-                    label: 'Net Profit (est.)',
+                    label: `Net Profit${hasXero ? '' : ' (est.)'}`,
                     value: (netProfit < 0 ? '-' : '') + formatCurrency(Math.abs(netProfit)).replace('NZ$', '$'),
-                    sub: `${totalRevenue > 0 ? ((netProfit / totalRevenue) * 100).toFixed(0) : 0}% of revenue`,
+                    sub: `${netProfitPct}% margin${hasXero ? ' · Xero' : ' (est.)'}`,
                     valueColor: netProfit >= 0 ? '' : 'text-red-600',
                   },
                   {
                     label: 'Labour (est.)',
                     value: formatCurrency(labour).replace('NZ$', '$'),
-                    sub: '~40% of revenue',
+                    sub: `~40% of ${hasXero ? 'Xero revenue' : 'revenue'}`,
                   },
                   {
                     label: 'Quotes Sent',
