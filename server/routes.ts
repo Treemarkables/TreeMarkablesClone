@@ -4853,7 +4853,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Generate invoice number using job number
       const invoiceNumber = job?.jobNumber ? String(job.jobNumber) : `INV-${Date.now().toString().slice(-6)}`;
 
-      // Calculate due date - use custom date if provided, otherwise default to 30 days
+      // Calculate due date - use custom date if provided, otherwise default to 7 days
       const issueDate = new Date();
       let dueDate: Date;
       if (customData.dueDate) {
@@ -5549,7 +5549,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
           <!-- Footer -->
           <div style="text-align: center; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
-            Our terms are strictly COD or 14 days
+            Payment due within 7 days · Due: ${invoiceDetails.dueDate ? new Date(invoiceDetails.dueDate).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })}
           </div>
         </div>
         `;

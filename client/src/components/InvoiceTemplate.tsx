@@ -114,7 +114,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
   // Get invoice dates with fallbacks
   const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
-  const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : addDays(issueDate, 14);
+  const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : addDays(issueDate, 7);
 
   return (
     <div ref={ref} className={`w-full max-w-full sm:max-w-4xl mx-auto bg-white ${className}`}>
@@ -291,6 +291,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
             <h3 className="text-xs font-semibold text-black mb-2">Payment Information</h3>
             <div className="text-xs text-gray-600 space-y-1">
+              <p><span className="font-medium text-black">Due Date:</span> {format(dueDate, 'dd MMM yyyy')}</p>
               <p><span className="font-medium text-black">Bank:</span> ANZ</p>
               <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>
               <p><span className="font-medium text-black">Account Name:</span> Treemarkables LTD</p>
@@ -303,7 +304,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              GST Number: 131-047-592
+              GST Number: 131-047-592 &nbsp;·&nbsp; Payment terms: 7 days
             </p>
           </div>
         </CardContent>
