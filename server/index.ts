@@ -339,6 +339,12 @@ function startNotificationQueueWorker() {
       `);
       log("✅ Schema migration: jobs.customer_confirmed ready", "startup");
 
+      // Add eta_notification_requested column to jobs table if it doesn't exist
+      await pool.query(`
+        ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eta_notification_requested BOOLEAN NOT NULL DEFAULT false
+      `);
+      log("✅ Schema migration: jobs.eta_notification_requested ready", "startup");
+
       // Create assistant_messages table for AI chat history
       await pool.query(`
         CREATE TABLE IF NOT EXISTS assistant_messages (

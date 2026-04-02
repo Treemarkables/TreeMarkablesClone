@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import { format } from "date-fns";
-import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw, Crown, Lock } from "lucide-react";
+import { X, Plus, Mail, MessageSquare, Phone, Calendar, FileText, Presentation, Check, Trash2, User, Users, Building2, Building, DollarSign, ChevronDown, Receipt, Send, CreditCard, CheckCircle, Settings, Zap, Percent, Clock, MapPin, Calculator, Target, MoreHorizontal, UserCircle, Edit3, Image as ImageIcon, Package, Search, Menu, Camera, AlertCircle, ChevronsUpDown, Copy, Download, Save, Printer, Archive, Mic, ArrowLeft, Loader2, TreePine, Scissors, Axe, Sprout, List, Pencil, Star, RotateCcw, Crown, Lock, Bell } from "lucide-react";
 import { MdEmail, MdSms, MdPhone, MdCalendarToday, MdDescription, MdSend, MdAttachMoney, MdAccessTime, MdCameraAlt, MdMoreHoriz } from "react-icons/md";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
@@ -84,6 +84,7 @@ const globalJobCardSchema = insertJobSchema.extend({
   sameAsJobAddress: z.boolean().optional(),
   taxMode: z.string().optional(),
   customerConfirmed: z.boolean().optional(),
+  etaNotificationRequested: z.boolean().optional(),
   
 }).refine((data) => {
   // Check if we have a valid customer identifier
@@ -227,6 +228,7 @@ export function GlobalJobCard({
       includeDescriptionInQuotesProposals: true,
       internalNotes: "",
       customerConfirmed: false,
+      etaNotificationRequested: false,
     },
   });
 
@@ -1096,6 +1098,7 @@ export function GlobalJobCard({
         estimatedManHours: editingJob.estimatedManHours || '',
         internalNotes: (editingJob as any).internalNotes || '',
         customerConfirmed: (editingJob as any).customerConfirmed ?? false,
+        etaNotificationRequested: (editingJob as any).etaNotificationRequested ?? false,
       };
       form.reset(resetData);
       setFormLoadedJobId(editingJob.id);
@@ -1193,7 +1196,7 @@ export function GlobalJobCard({
     'billingAddress', 'billingNameOverride', 'invoiceDescription', 'billingContactPhone',
     'billingContactMobile', 'billingContactEmail', 'jobContactFirstNameForInvoice', 'jobContactLastNameForInvoice',
     'purchaseOrderNumber', 'sameAsJobAddress', 'quotingMethod', 'unsuccessfulReason',
-    'categoryId', 'crewMembers', 'equipment', 'internalNotes', 'customerConfirmed'
+    'categoryId', 'crewMembers', 'equipment', 'internalNotes', 'customerConfirmed', 'etaNotificationRequested'
   ]));
 
   const changedFieldsRef = useRef<Set<string>>(new Set());
@@ -3583,6 +3586,16 @@ The Treemarkables Team`;
                   <div className={`flex-1 bg-white ${sidebarTab !== 'diary' ? 'sm:border-r border-gray-300' : ''} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === 'diary' ? 'sm:rounded-lg' : 'sm:rounded-l-lg'} min-w-0`}>
                   {sidebarTab === 'details' && (
                     <div className="space-y-3 md:space-y-4">
+                      {/* ETA Notification Banner */}
+                      {mode === 'edit' && form.watch('etaNotificationRequested') && (
+                        <div className="flex items-start gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950">
+                          <Bell className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                            This customer wants to know when the crew is on the way
+                          </p>
+                        </div>
+                      )}
+
                       {/* ServiceM8-Style Customer Header Card */}
                       {mode === 'edit' && selectedCustomerName && (
                         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:hidden">
@@ -4906,6 +4919,39 @@ The Treemarkables Team`;
                                     <label htmlFor="customer-confirmed" className="text-sm font-medium text-green-800 dark:text-green-200 leading-none cursor-pointer select-none">
                                       Customer confirmed this booking
                                     </label>
+                                  </div>
+                                </FormControl>
+                              </FormItem>
+                            )}
+                          />
+                        )}
+
+                        {/* ETA Notification Requested Toggle */}
+                        {mode === 'edit' && (
+                          <FormField
+                            control={form.control}
+                            name="etaNotificationRequested"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormControl>
+                                  <div
+                                    className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer select-none transition-colors ${
+                                      field.value
+                                        ? 'border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950'
+                                        : 'border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900'
+                                    }`}
+                                    onClick={() => field.onChange(!field.value)}
+                                  >
+                                    <Bell className={`h-4 w-4 flex-shrink-0 ${field.value ? 'text-amber-600' : 'text-gray-400'}`} />
+                                    <span className={`text-sm font-medium leading-none ${field.value ? 'text-amber-800 dark:text-amber-200' : 'text-gray-600 dark:text-gray-400'}`}>
+                                      {field.value ? 'Customer wants ETA notification' : 'Notify customer of arrival time'}
+                                    </span>
+                                    <Checkbox
+                                      checked={!!field.value}
+                                      onCheckedChange={(checked) => field.onChange(checked === true)}
+                                      className="ml-auto"
+                                      data-testid="checkbox-eta-notification"
+                                    />
                                   </div>
                                 </FormControl>
                               </FormItem>
