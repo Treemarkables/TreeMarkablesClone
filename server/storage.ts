@@ -2925,31 +2925,44 @@ class DatabaseStorage implements IStorage {
 
   async getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<any[]> {
     try {
-      // Get ALL jobs (we'll filter by completedDate for revenue calculations)
-      const jobs = await db
-        .select()
-        .from(schema.jobs);
-
       // Fetch business settings for default gross margin fallback
       const [bizSettings] = await db.select().from(schema.businessSettings).limit(1);
       const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
 
-      // Build invoice date conditions - filter invoices by issue date for revenue
-      const invoiceConditions = [sql`${schema.invoices.status} != 'cancelled'`];
+      // Filter jobs by SCHEDULED DATE (when the work was done), not invoice date.
+      // This ensures "Last 4 Weeks" means jobs worked on in that window, not just invoiced.
+      const jobConditions: any[] = [sql`${schema.jobs.status} != 'archived'`];
       if (fromDate) {
-        invoiceConditions.push(sql`${schema.invoices.issueDate} >= ${fromDate}`);
+        jobConditions.push(
+          sql`COALESCE(${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) >= ${fromDate}`
+        );
       }
       if (toDate) {
-        invoiceConditions.push(sql`${schema.invoices.issueDate} <= ${toDate}`);
+        jobConditions.push(
+          sql`COALESCE(${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) <= ${toDate}`
+        );
       }
 
-      // Get invoices within the date range to calculate revenue
-      const allInvoices = await db
+      const jobs = await db
         .select()
-        .from(schema.invoices)
-        .where(and(...invoiceConditions));
-      
-      // Create a map of job IDs to invoice amounts (only invoices in date range)
+        .from(schema.jobs)
+        .where(and(...jobConditions));
+
+      // Fetch ALL invoices for these qualifying jobs (not date-filtered —
+      // we want the real revenue for jobs worked on in the period).
+      const qualifyingJobIds = jobs.map(j => j.id);
+      let allInvoices: any[] = [];
+      if (qualifyingJobIds.length > 0) {
+        allInvoices = await db
+          .select()
+          .from(schema.invoices)
+          .where(and(
+            sql`${schema.invoices.status} != 'cancelled'`,
+            inArray(schema.invoices.jobId, qualifyingJobIds)
+          ));
+      }
+
+      // Map job IDs → total invoiced amount
       const jobInvoiceMap = new Map<string, number>();
       for (const invoice of allInvoices) {
         if (invoice.jobId) {
@@ -2959,19 +2972,14 @@ class DatabaseStorage implements IStorage {
         }
       }
 
-      // Get proposals for conversion rate calculation
-      const proposalConditions = [];
-      if (fromDate) {
-        proposalConditions.push(sql`${schema.proposals.createdAt} >= ${fromDate}`);
+      // Fetch ALL proposals for these qualifying jobs
+      let proposals: any[] = [];
+      if (qualifyingJobIds.length > 0) {
+        proposals = await db
+          .select()
+          .from(schema.proposals)
+          .where(inArray(schema.proposals.jobId, qualifyingJobIds));
       }
-      if (toDate) {
-        proposalConditions.push(sql`${schema.proposals.createdAt} <= ${toDate}`);
-      }
-      
-      const proposals = await db
-        .select()
-        .from(schema.proposals)
-        .where(proposalConditions.length > 0 ? and(...proposalConditions) : undefined);
 
       // Create a map of job IDs that have proposals in the date range
       const jobsWithProposals = new Set<string>();
@@ -3005,6 +3013,9 @@ class DatabaseStorage implements IStorage {
         totalProfit: number;
         jobIds: Set<string>;
         quotedJobIds: Set<string>;
+        jobsWithCostData: number;
+        revenueWithCostData: number;
+        profitWithCostData: number;
       }>();
 
       // Initialize all possible lead sources
@@ -3026,17 +3037,15 @@ class DatabaseStorage implements IStorage {
         });
       });
 
-      // Process jobs - count quotes and invoices separately
+      // Process jobs — all returned jobs fall within the date window (pre-filtered by scheduledDate).
       jobs.forEach(job => {
-        // Skip archived jobs
-        if (job.status === 'archived') return;
-        
         const source = job.leadSource || 'other';
         const existing = sourceMap.get(source) || {
           count: 0,
           quotedCount: 0,
           wonCount: 0,
           totalRevenue: 0,
+          totalQuotedValue: 0,
           totalCosts: 0,
           totalProfit: 0,
           jobIds: new Set(),
@@ -3046,88 +3055,71 @@ class DatabaseStorage implements IStorage {
           profitWithCostData: 0
         };
 
-        // Get revenue from invoice amount (only invoices within date range are in the map)
-        const invoiceRevenue = jobInvoiceMap.get(job.id) || 0;
-        const hasProposalInPeriod = jobsWithProposals.has(job.id);
-        
-        // Count jobs with proposals sent in the date range as "quoted"
-        if (hasProposalInPeriod) {
-          existing.quotedJobIds.add(job.id);
-          // Add the proposal amount to quoted value
-          const proposalAmount = jobProposalAmountMap.get(job.id) || 0;
-          existing.totalQuotedValue += proposalAmount;
-        }
-        
-        // Count jobs with invoices in the date range as "won" with revenue
-        if (invoiceRevenue > 0) {
-          existing.jobIds.add(job.id);
-          
-          // Also count as quoted if not already counted via proposal
-          if (!hasProposalInPeriod) {
-            existing.quotedJobIds.add(job.id);
-          }
-          
-          // Count as won if completed with invoice revenue
-          if (job.status === 'completed') {
-            existing.wonCount++;
-            existing.totalRevenue += invoiceRevenue;
+        // Every job in this period is counted in the "jobs" column
+        existing.jobIds.add(job.id);
 
-            // Calculate costs and profit — priority order:
-            // 1. Line item totalCost fields (most accurate — set during job quoting)
-            // 2. Manual cost fields (laborCosts, materialsCosts, etc.)
-            // 3. Stored grossMargin percentage from the Gross Margin Calculator
-            
-            // Priority 1: sum costs from job line items
-            let lineItemCosts = 0;
-            const lineItems = (job.lineItems as any[]) || [];
-            for (const item of lineItems) {
-              const itemCost = parseFloat(item.totalCost?.toString() || item.costExGst?.toString() || '0') || 0;
-              if (itemCost > 0) {
-                lineItemCosts += itemCost;
-              } else if (item.unitCost && item.quantity) {
-                // Fall back to unitCost * quantity if totalCost missing
-                lineItemCosts += (parseFloat(item.unitCost.toString()) || 0) * (parseFloat(item.quantity.toString()) || 1);
-              }
+        const invoiceRevenue = jobInvoiceMap.get(job.id) || 0;
+        const hasProposal = jobsWithProposals.has(job.id);
+
+        // Count as quoted if a proposal exists OR if status is quote/scheduled/in_progress/completed
+        if (hasProposal || ['quote', 'scheduled', 'in_progress', 'completed'].includes(job.status || '')) {
+          existing.quotedJobIds.add(job.id);
+          const proposalAmount = jobProposalAmountMap.get(job.id) || 0;
+          if (proposalAmount > 0) {
+            existing.totalQuotedValue += proposalAmount;
+          }
+        }
+
+        // Count completed jobs as "won"
+        if (job.status === 'completed') {
+          existing.wonCount++;
+          existing.totalRevenue += invoiceRevenue;
+
+          // Cost priority order:
+          // 1. Line item totalCost fields (most accurate — set during quoting)
+          // 2. Manual cost fields (laborCosts, materialsCosts, etc.)
+          // 3. Stored grossMargin % on the job
+          // 4. Business-wide default gross margin
+
+          // Priority 1: line item costs
+          let lineItemCosts = 0;
+          const lineItems = (job.lineItems as any[]) || [];
+          for (const item of lineItems) {
+            const itemCost = parseFloat(item.totalCost?.toString() || item.costExGst?.toString() || '0') || 0;
+            if (itemCost > 0) {
+              lineItemCosts += itemCost;
+            } else if (item.unitCost && item.quantity) {
+              lineItemCosts += (parseFloat(item.unitCost.toString()) || 0) * (parseFloat(item.quantity.toString()) || 1);
             }
-            
-            // Priority 2: manual cost fields
-            const laborCosts = parseFloat(job.laborCosts || '0') || 0;
-            const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
-            const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
-            const otherCosts = parseFloat(job.otherCosts || '0') || 0;
-            const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
-            const manualCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
-            
-            // Use line item costs if available, otherwise manual costs
-            const totalCosts = lineItemCosts > 0 ? lineItemCosts : manualCosts;
-            
-            existing.totalCosts += totalCosts;
-            existing.totalProfit += (invoiceRevenue - totalCosts);
-            
-            if (totalCosts > 0) {
+          }
+
+          // Priority 2: manual cost fields
+          const laborCosts = parseFloat(job.laborCosts || '0') || 0;
+          const calculatedLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
+          const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
+          const otherCosts = parseFloat(job.otherCosts || '0') || 0;
+          const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
+          const manualCosts = laborCosts + calculatedLabor + materialsCosts + otherCosts + costOfGoods;
+
+          const totalCosts = lineItemCosts > 0 ? lineItemCosts : manualCosts;
+
+          existing.totalCosts += totalCosts;
+          existing.totalProfit += (invoiceRevenue - totalCosts);
+
+          if (totalCosts > 0) {
+            existing.jobsWithCostData++;
+            existing.revenueWithCostData += invoiceRevenue;
+            existing.profitWithCostData += (invoiceRevenue - totalCosts);
+          } else {
+            // Priority 3: stored grossMargin % on the job; Priority 4: business default
+            const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
+            const effectiveMarginPct = storedMarginPct > 0 ? storedMarginPct : defaultMarginPct;
+            if (effectiveMarginPct > 0 && invoiceRevenue > 0) {
+              const impliedProfit = invoiceRevenue * (effectiveMarginPct / 100);
               existing.jobsWithCostData++;
               existing.revenueWithCostData += invoiceRevenue;
-              existing.profitWithCostData += (invoiceRevenue - totalCosts);
-            } else {
-              // Priority 3: fall back to the stored grossMargin percentage on the job
-              const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
-              // Priority 4: use business-wide default gross margin if configured
-              const effectiveMarginPct = storedMarginPct > 0 ? storedMarginPct : defaultMarginPct;
-              if (effectiveMarginPct > 0) {
-                const impliedProfit = invoiceRevenue * (effectiveMarginPct / 100);
-                existing.jobsWithCostData++;
-                existing.revenueWithCostData += invoiceRevenue;
-                existing.profitWithCostData += impliedProfit;
-              }
+              existing.profitWithCostData += impliedProfit;
             }
-          }
-        } else if (!fromDate && !toDate) {
-          // No date filter - count all non-archived jobs
-          existing.jobIds.add(job.id);
-          
-          // Count quoted jobs (jobs with quotes/proposals)
-          if (job.status === 'quote' || job.status === 'scheduled' || job.status === 'in_progress' || job.status === 'completed') {
-            existing.quotedJobIds.add(job.id);
           }
         }
 
