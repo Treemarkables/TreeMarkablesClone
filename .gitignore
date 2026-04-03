@@ -10,3 +10,4 @@ uploads
 attached_assets/*.png
 attached_assets/Screenshot*
 attached_assets/IMG_*
+.claude-user
