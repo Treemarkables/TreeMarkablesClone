@@ -8192,21 +8192,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       let toDateObj: Date | undefined;
       
       if (fromDate && typeof fromDate === 'string') {
-        fromDateObj = new Date(fromDate);
+        fromDateObj = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
         }
       }
-      
+
       if (toDate && typeof toDate === 'string') {
-        toDateObj = new Date(toDate);
+        toDateObj = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
-        // Set to end of day to include all activity that day
-        toDateObj.setHours(23, 59, 59, 999);
       }
-      
+
       const sourceAnalysis = await storage.getLeadSourceAnalysis(fromDateObj, toDateObj);
       res.json({ success: true, data: sourceAnalysis });
     } catch (error) {
@@ -8928,19 +8926,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   app.get('/api/export/lead-sources', async (req: Request, res: Response) => {
     try {
       const { fromDate, toDate } = req.query;
-      
+
       let fromDateObj: Date | undefined;
       let toDateObj: Date | undefined;
-      
+
       if (fromDate && typeof fromDate === 'string') {
-        fromDateObj = new Date(fromDate);
+        fromDateObj = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
         if (isNaN(fromDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
         }
       }
-      
+
       if (toDate && typeof toDate === 'string') {
-        toDateObj = new Date(toDate);
+        toDateObj = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
         if (isNaN(toDateObj.getTime())) {
           return res.status(400).json({ success: false, message: 'Invalid toDate format' });
         }
