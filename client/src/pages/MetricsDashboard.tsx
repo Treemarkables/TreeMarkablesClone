@@ -265,10 +265,16 @@ export default function MetricsDashboard() {
   const [revenueBreakdownOpen, setRevenueBreakdownOpen] = useState(false);
   const [quoteBreakdownOpen, setQuoteBreakdownOpen] = useState(false);
   const [avgJobValueBreakdownOpen, setAvgJobValueBreakdownOpen] = useState(false);
-  
+
   // Drill-down modal state for Jobs Completed and Accepted Quotes
   const [jobsCompletedDrilldownOpen, setJobsCompletedDrilldownOpen] = useState(false);
   const [acceptedQuotesDrilldownOpen, setAcceptedQuotesDrilldownOpen] = useState(false);
+
+  // Inline expansion panel for Business Health tiles
+  const [activeDrilldown, setActiveDrilldown] = useState<'revenue' | 'jobs' | 'winrate' | 'quotes' | null>(null);
+  const toggleDrilldown = (key: 'revenue' | 'jobs' | 'winrate' | 'quotes') => {
+    setActiveDrilldown(prev => (prev === key ? null : key));
+  };
   
   const { toast } = useToast();
 
@@ -450,7 +456,7 @@ export default function MetricsDashboard() {
 
   // Revenue breakdown query - fetches list of jobs that make up the revenue
   const { data: revenueBreakdown, isLoading: breakdownLoading } = useQuery<{
-    breakdown: { jobNumber: string; jobId: string; customerName: string; title: string; completedDate: string; invoiceAmount: number }[];
+    breakdown: { jobNumber: string; jobId: string; customerName: string; title: string; completedDate: string; invoiceDate?: string; amount: number; invoiceAmount?: number }[];
     total: number;
   }>({
     queryKey: ['/api/revenue-breakdown', dateRange?.from, dateRange?.to],
@@ -460,7 +466,32 @@ export default function MetricsDashboard() {
       if (dateRange?.to) params.append('to', dateRange.to);
       return fetch(`/api/revenue-breakdown?${params}`).then(res => res.json()).then(res => res.data);
     },
-    enabled: revenueBreakdownOpen || jobsCompletedDrilldownOpen
+    enabled: revenueBreakdownOpen || jobsCompletedDrilldownOpen || activeDrilldown === 'revenue' || activeDrilldown === 'jobs'
+  });
+
+  // Quote breakdown query - individual won/lost/pending quotes for CEO dashboard drill-down
+  interface QuoteBreakdownItem {
+    jobId: string;
+    jobNumber: string;
+    title: string;
+    customerName: string;
+    quoteSentDate: string | null;
+    value: number;
+    outcome: 'won' | 'lost' | 'pending';
+  }
+  const { data: quoteBreakdownData, isLoading: quoteBreakdownLoading } = useQuery<{
+    won: QuoteBreakdownItem[];
+    lost: QuoteBreakdownItem[];
+    pending: QuoteBreakdownItem[];
+  }>({
+    queryKey: ['/api/quote-breakdown', dateRange?.from, dateRange?.to],
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append('fromDate', dateRange.from);
+      if (dateRange?.to) params.append('toDate', dateRange.to);
+      return fetch(`/api/quote-breakdown?${params}`).then(res => res.json()).then(res => res.data);
+    },
+    enabled: activeDrilldown === 'winrate' || activeDrilldown === 'quotes'
   });
 
   // Accepted quotes query - fetches list of accepted proposals for drilldown
@@ -918,6 +949,23 @@ export default function MetricsDashboard() {
             </Button>
           </div>
 
+          {/* Active date range label */}
+          {dateRange && (
+            <div className="text-xs text-gray-500 dark:text-muted-foreground flex items-center gap-1.5 -mt-1">
+              <Calendar className="h-3 w-3 flex-shrink-0" />
+              <span>
+                {(() => {
+                  const nzOpts = { timeZone: 'Pacific/Auckland' } as const;
+                  const fmt = (d: string, extra?: Intl.DateTimeFormatOptions) =>
+                    new Date(d + 'T12:00:00Z').toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric', ...nzOpts, ...extra });
+                  return dateRange.from === dateRange.to
+                    ? fmt(dateRange.from, { weekday: 'short' })
+                    : `${fmt(dateRange.from)} — ${fmt(dateRange.to)}`;
+                })()}
+              </span>
+            </div>
+          )}
+
           {dateRangePreset === "custom" && (
             <Card className="mb-4">
               <CardContent className="pt-4 pb-4">
@@ -975,16 +1023,18 @@ export default function MetricsDashboard() {
                   ? Math.round((quoteAnalytics.acceptedQuotes / quoteAnalytics.totalQuotes) * 100)
                   : 0;
 
-                const tiles = [
+                const tiles: { label: string; value: string; sub: string; valueColor?: string; drilldownKey?: 'revenue' | 'jobs' | 'winrate' | 'quotes' }[] = [
                   {
                     label: 'Revenue',
                     value: formatCurrency(appRevenue).replace('NZ$', '$'),
                     sub: `${revenueStats?.jobsWithInvoices || 0} invoiced jobs`,
+                    drilldownKey: 'revenue',
                   },
                   {
                     label: 'Jobs Completed',
                     value: String(revenueStats?.jobsWithInvoices || 0),
                     sub: 'Jobs with invoices',
+                    drilldownKey: 'jobs',
                   },
                   {
                     label: 'Average Job Value',
@@ -995,6 +1045,7 @@ export default function MetricsDashboard() {
                     label: 'Quote Win Rate',
                     value: `${jobsWonPct}%`,
                     sub: `${quoteAnalytics?.acceptedQuotes || 0} of ${quoteAnalytics?.totalQuotes || 0} quoted`,
+                    drilldownKey: 'winrate',
                   },
                   {
                     label: `Net Profit${hasXero ? '' : ' (est.)'}`,
@@ -1011,6 +1062,7 @@ export default function MetricsDashboard() {
                     label: 'Quotes Sent',
                     value: String(quoteAnalytics?.totalQuotes || 0),
                     sub: `${quoteAnalytics?.pendingQuotes || 0} still pending`,
+                    drilldownKey: 'quotes',
                   },
                   {
                     label: 'New Leads',
@@ -1020,23 +1072,351 @@ export default function MetricsDashboard() {
                 ];
 
                 return (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    {tiles.map((tile) => (
-                      <div
-                        key={tile.label}
-                        className="border border-gray-200 rounded-lg p-4 flex flex-col bg-white dark:bg-card dark:border-card-border"
-                      >
-                        <div className="flex items-center gap-1.5 mb-4">
-                          <span className="text-sm text-gray-600 dark:text-muted-foreground leading-tight">{tile.label}</span>
-                          <Info className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      {tiles.map((tile) => {
+                        const isClickable = !!tile.drilldownKey;
+                        const isActive = activeDrilldown === tile.drilldownKey;
+                        return (
+                          <div
+                            key={tile.label}
+                            onClick={isClickable ? () => toggleDrilldown(tile.drilldownKey!) : undefined}
+                            className={[
+                              'border rounded-lg p-4 flex flex-col bg-white dark:bg-card',
+                              isClickable
+                                ? 'cursor-pointer transition-colors'
+                                : 'dark:border-card-border border-gray-200',
+                              isActive
+                                ? 'border-blue-400 bg-blue-50/40 dark:bg-blue-950/20'
+                                : isClickable
+                                  ? 'border-gray-200 dark:border-card-border hover:border-blue-300 hover:bg-blue-50/20'
+                                  : '',
+                            ].join(' ')}
+                          >
+                            <div className="flex items-center gap-1.5 mb-4">
+                              <span className="text-sm text-gray-600 dark:text-muted-foreground leading-tight">{tile.label}</span>
+                              <Info className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
+                            </div>
+                            <div className={`text-3xl font-bold text-gray-900 dark:text-foreground mb-1 ${tile.valueColor || ''}`}>
+                              {tile.value}
+                            </div>
+                            <div className="text-xs text-gray-400 dark:text-muted-foreground mt-auto pt-2">{tile.sub}</div>
+                            {isClickable && (
+                              <div className="flex items-center gap-0.5 mt-1.5">
+                                <span className="text-xs text-blue-500 dark:text-blue-400">View breakdown</span>
+                                {isActive
+                                  ? <ChevronUp className="h-3 w-3 text-blue-500 dark:text-blue-400" />
+                                  : <ChevronDown className="h-3 w-3 text-blue-500 dark:text-blue-400" />}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Inline expansion panel */}
+                    {activeDrilldown && (
+                      <div className="mt-4 border border-gray-200 dark:border-card-border rounded-lg bg-white dark:bg-card overflow-hidden">
+                        {/* Panel header */}
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-card-border bg-gray-50 dark:bg-muted/30">
+                          <span className="text-sm font-semibold text-gray-700 dark:text-foreground">
+                            {activeDrilldown === 'revenue' && 'Revenue Breakdown — Invoiced Jobs'}
+                            {activeDrilldown === 'jobs' && 'Jobs Completed'}
+                            {activeDrilldown === 'winrate' && 'Quote Win Rate Breakdown'}
+                            {activeDrilldown === 'quotes' && 'All Quotes Sent'}
+                          </span>
+                          <button
+                            onClick={() => setActiveDrilldown(null)}
+                            className="text-gray-400 hover:text-gray-600 dark:hover:text-foreground text-lg leading-none px-1"
+                            aria-label="Close"
+                          >
+                            ×
+                          </button>
                         </div>
-                        <div className={`text-3xl font-bold text-gray-900 dark:text-foreground mb-1 ${tile.valueColor || ''}`}>
-                          {tile.value}
-                        </div>
-                        <div className="text-xs text-gray-400 dark:text-muted-foreground mt-auto pt-2">{tile.sub}</div>
+
+                        {/* Revenue panel */}
+                        {activeDrilldown === 'revenue' && (
+                          <div className="p-4">
+                            {breakdownLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-gray-100 dark:border-card-border text-left">
+                                      <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground">Job Name</th>
+                                      <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground">Client</th>
+                                      <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground hidden sm:table-cell">Invoice Date</th>
+                                      <th className="pb-2 font-medium text-gray-500 dark:text-muted-foreground text-right">Invoice Amount</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(revenueBreakdown?.breakdown || []).map((job) => (
+                                      <tr key={job.jobId} className="border-b border-gray-50 dark:border-card-border/50 hover:bg-gray-50 dark:hover:bg-muted/20">
+                                        <td className="py-2 pr-4 font-medium">
+                                          {job.title || `Job #${job.jobNumber}`}
+                                        </td>
+                                        <td className="py-2 pr-4 text-gray-600 dark:text-muted-foreground">{job.customerName}</td>
+                                        <td className="py-2 pr-4 text-gray-500 dark:text-muted-foreground hidden sm:table-cell">
+                                          {job.invoiceDate ? new Date(job.invoiceDate).toLocaleDateString('en-NZ') : '-'}
+                                        </td>
+                                        <td className="py-2 font-semibold text-green-600 text-right">
+                                          {formatCurrency(job.amount || job.invoiceAmount || 0).replace('NZ$', '$')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {(!revenueBreakdown?.breakdown || revenueBreakdown.breakdown.length === 0) && (
+                                      <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">No invoiced jobs in this period</td></tr>
+                                    )}
+                                  </tbody>
+                                  {revenueBreakdown && revenueBreakdown.breakdown.length > 0 && (
+                                    <tfoot>
+                                      <tr className="border-t-2 border-gray-200 dark:border-card-border font-semibold">
+                                        <td colSpan={3} className="pt-2 pr-4">Total ({revenueBreakdown.breakdown.length} jobs)</td>
+                                        <td className="pt-2 text-right text-green-600">
+                                          {formatCurrency(revenueBreakdown.total || 0).replace('NZ$', '$')}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  )}
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Jobs Completed panel */}
+                        {activeDrilldown === 'jobs' && (
+                          <div className="p-4">
+                            {breakdownLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="border-b border-gray-100 dark:border-card-border text-left">
+                                      <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground">Job Name</th>
+                                      <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground">Client</th>
+                                      <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground hidden sm:table-cell">Completed Date</th>
+                                      <th className="pb-2 font-medium text-gray-500 dark:text-muted-foreground text-right">Invoice Value</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {(revenueBreakdown?.breakdown || []).map((job) => (
+                                      <tr key={job.jobId} className="border-b border-gray-50 dark:border-card-border/50 hover:bg-gray-50 dark:hover:bg-muted/20">
+                                        <td className="py-2 pr-4 font-medium">
+                                          {job.title || `Job #${job.jobNumber}`}
+                                        </td>
+                                        <td className="py-2 pr-4 text-gray-600 dark:text-muted-foreground">{job.customerName}</td>
+                                        <td className="py-2 pr-4 text-gray-500 dark:text-muted-foreground hidden sm:table-cell">
+                                          {job.completedDate ? new Date(job.completedDate).toLocaleDateString('en-NZ') : '-'}
+                                        </td>
+                                        <td className="py-2 font-semibold text-blue-600 text-right">
+                                          {formatCurrency(job.amount || job.invoiceAmount || 0).replace('NZ$', '$')}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                    {(!revenueBreakdown?.breakdown || revenueBreakdown.breakdown.length === 0) && (
+                                      <tr><td colSpan={4} className="py-6 text-center text-muted-foreground">No completed jobs in this period</td></tr>
+                                    )}
+                                  </tbody>
+                                  {revenueBreakdown && revenueBreakdown.breakdown.length > 0 && (
+                                    <tfoot>
+                                      <tr className="border-t-2 border-gray-200 dark:border-card-border font-semibold">
+                                        <td colSpan={3} className="pt-2 pr-4">Total ({revenueBreakdown.breakdown.length} jobs)</td>
+                                        <td className="pt-2 text-right text-blue-600">
+                                          {formatCurrency(revenueBreakdown.total || 0).replace('NZ$', '$')}
+                                        </td>
+                                      </tr>
+                                    </tfoot>
+                                  )}
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Quote Win Rate panel — Won vs Lost side by side */}
+                        {activeDrilldown === 'winrate' && (
+                          <div className="p-4">
+                            {quoteBreakdownLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : (
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* Won column */}
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="inline-block w-2 h-2 rounded-full bg-green-500" />
+                                    <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                                      Won ({quoteBreakdownData?.won?.length || 0})
+                                    </span>
+                                    <span className="ml-auto text-xs text-green-600 dark:text-green-500 font-medium">
+                                      {formatCurrency((quoteBreakdownData?.won || []).reduce((s, q) => s + q.value, 0)).replace('NZ$', '$')}
+                                    </span>
+                                  </div>
+                                  <div className="border border-green-100 dark:border-green-900 rounded-lg overflow-hidden">
+                                    <table className="w-full text-sm">
+                                      <thead className="bg-green-50 dark:bg-green-950/40">
+                                        <tr>
+                                          <th className="text-left py-2 px-3 font-medium text-green-700 dark:text-green-400">Quote</th>
+                                          <th className="text-left py-2 px-3 font-medium text-green-700 dark:text-green-400 hidden sm:table-cell">Client</th>
+                                          <th className="text-right py-2 px-3 font-medium text-green-700 dark:text-green-400">Value</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(quoteBreakdownData?.won || []).map((q) => (
+                                          <tr key={q.jobId} className="border-t border-green-50 dark:border-green-900/40 hover:bg-green-50/50 dark:hover:bg-green-950/20">
+                                            <td className="py-2 px-3 font-medium text-gray-800 dark:text-foreground">
+                                              {q.title !== '(No title)' ? q.title : `Job #${q.jobNumber}`}
+                                            </td>
+                                            <td className="py-2 px-3 text-gray-500 dark:text-muted-foreground hidden sm:table-cell">{q.customerName}</td>
+                                            <td className="py-2 px-3 text-right text-green-600 font-semibold">
+                                              {q.value > 0 ? formatCurrency(q.value).replace('NZ$', '$') : '—'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                        {(!quoteBreakdownData?.won || quoteBreakdownData.won.length === 0) && (
+                                          <tr><td colSpan={3} className="py-4 text-center text-muted-foreground text-xs">No won quotes</td></tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                                {/* Lost column */}
+                                <div>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                                    <span className="text-sm font-semibold text-red-600 dark:text-red-400">
+                                      Lost ({quoteBreakdownData?.lost?.length || 0})
+                                    </span>
+                                    <span className="ml-auto text-xs text-red-500 dark:text-red-400 font-medium">
+                                      {formatCurrency((quoteBreakdownData?.lost || []).reduce((s, q) => s + q.value, 0)).replace('NZ$', '$')}
+                                    </span>
+                                  </div>
+                                  <div className="border border-red-100 dark:border-red-900 rounded-lg overflow-hidden">
+                                    <table className="w-full text-sm">
+                                      <thead className="bg-red-50 dark:bg-red-950/40">
+                                        <tr>
+                                          <th className="text-left py-2 px-3 font-medium text-red-600 dark:text-red-400">Quote</th>
+                                          <th className="text-left py-2 px-3 font-medium text-red-600 dark:text-red-400 hidden sm:table-cell">Client</th>
+                                          <th className="text-right py-2 px-3 font-medium text-red-600 dark:text-red-400">Value</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(quoteBreakdownData?.lost || []).map((q) => (
+                                          <tr key={q.jobId} className="border-t border-red-50 dark:border-red-900/40 hover:bg-red-50/50 dark:hover:bg-red-950/20">
+                                            <td className="py-2 px-3 font-medium text-gray-800 dark:text-foreground">
+                                              {q.title !== '(No title)' ? q.title : `Job #${q.jobNumber}`}
+                                            </td>
+                                            <td className="py-2 px-3 text-gray-500 dark:text-muted-foreground hidden sm:table-cell">{q.customerName}</td>
+                                            <td className="py-2 px-3 text-right text-red-500 font-semibold">
+                                              {q.value > 0 ? formatCurrency(q.value).replace('NZ$', '$') : '—'}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                        {(!quoteBreakdownData?.lost || quoteBreakdownData.lost.length === 0) && (
+                                          <tr><td colSpan={3} className="py-4 text-center text-muted-foreground text-xs">No lost quotes</td></tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Quotes Sent panel — all quotes with status */}
+                        {activeDrilldown === 'quotes' && (
+                          <div className="p-4">
+                            {quoteBreakdownLoading ? (
+                              <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                              </div>
+                            ) : (() => {
+                              const allQuotes = [
+                                ...(quoteBreakdownData?.won || []),
+                                ...(quoteBreakdownData?.lost || []),
+                                ...(quoteBreakdownData?.pending || []),
+                              ].sort((a, b) => new Date(b.quoteSentDate || 0).getTime() - new Date(a.quoteSentDate || 0).getTime());
+                              return (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead>
+                                      <tr className="border-b border-gray-100 dark:border-card-border text-left">
+                                        <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground">Quote Name</th>
+                                        <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground hidden sm:table-cell">Client</th>
+                                        <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground hidden md:table-cell">Date Sent</th>
+                                        <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground text-right">Value</th>
+                                        <th className="pb-2 font-medium text-gray-500 dark:text-muted-foreground text-center">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {allQuotes.map((q) => (
+                                        <tr
+                                          key={q.jobId}
+                                          className={[
+                                            'border-b',
+                                            q.outcome === 'won'
+                                              ? 'bg-green-50/40 dark:bg-green-950/10 border-green-50 dark:border-green-900/30'
+                                              : q.outcome === 'lost'
+                                                ? 'bg-red-50/30 dark:bg-red-950/10 border-red-50 dark:border-red-900/30 text-gray-400 dark:text-muted-foreground/60'
+                                                : 'bg-amber-50/40 dark:bg-amber-950/10 border-amber-50 dark:border-amber-900/30',
+                                          ].join(' ')}
+                                        >
+                                          <td className="py-2 pr-4 font-medium">
+                                            {q.title !== '(No title)' ? q.title : `Job #${q.jobNumber}`}
+                                          </td>
+                                          <td className="py-2 pr-4 hidden sm:table-cell">{q.customerName}</td>
+                                          <td className="py-2 pr-4 hidden md:table-cell">
+                                            {q.quoteSentDate ? new Date(q.quoteSentDate).toLocaleDateString('en-NZ') : '-'}
+                                          </td>
+                                          <td className="py-2 pr-4 text-right font-semibold">
+                                            {q.value > 0 ? formatCurrency(q.value).replace('NZ$', '$') : '—'}
+                                          </td>
+                                          <td className="py-2 text-center">
+                                            {q.outcome === 'won' && (
+                                              <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400">Won</span>
+                                            )}
+                                            {q.outcome === 'lost' && (
+                                              <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-red-100 text-red-600 dark:bg-red-900/40 dark:text-red-400">Lost</span>
+                                            )}
+                                            {q.outcome === 'pending' && (
+                                              <span className="inline-block px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">Pending</span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      {allQuotes.length === 0 && (
+                                        <tr><td colSpan={5} className="py-6 text-center text-muted-foreground">No quotes sent in this period</td></tr>
+                                      )}
+                                    </tbody>
+                                    {allQuotes.length > 0 && (
+                                      <tfoot>
+                                        <tr className="border-t-2 border-gray-200 dark:border-card-border font-semibold text-sm">
+                                          <td colSpan={3} className="pt-2 pr-4">Total ({allQuotes.length} quotes)</td>
+                                          <td className="pt-2 pr-4 text-right">
+                                            {formatCurrency(allQuotes.reduce((s, q) => s + q.value, 0)).replace('NZ$', '$')}
+                                          </td>
+                                          <td />
+                                        </tr>
+                                      </tfoot>
+                                    )}
+                                  </table>
+                                </div>
+                              );
+                            })()}
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    )}
+                  </>
                 );
               })()}
             </CardContent>
@@ -1293,8 +1673,8 @@ export default function MetricsDashboard() {
                             })()}
                           </td>
                           <td className="text-right py-3 px-4">
-                            {source.averageProfitMargin > 0 ? (
-                              <span className={source.averageProfitMargin > 40 ? 'text-green-600 font-semibold' : source.averageProfitMargin > 20 ? 'text-yellow-600' : 'text-orange-600'}>
+                            {(source.averageProfitMargin !== 0 && isFinite(source.averageProfitMargin)) ? (
+                              <span className={source.averageProfitMargin > 40 ? 'text-green-600 font-semibold' : source.averageProfitMargin > 20 ? 'text-yellow-600' : source.averageProfitMargin > 0 ? 'text-orange-600' : 'text-red-600 font-semibold'}>
                                 {source.averageProfitMargin.toFixed(1)}%
                               </span>
                             ) : source.wonCount > 0 ? (

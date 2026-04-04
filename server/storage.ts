@@ -3106,18 +3106,26 @@ class DatabaseStorage implements IStorage {
           existing.totalCosts += totalCosts;
           existing.totalProfit += (invoiceRevenue - totalCosts);
 
+          // Use invoice revenue for margin; fall back to job.totalAmount if not yet invoiced
+          const revenueForMargin = invoiceRevenue > 0
+            ? invoiceRevenue
+            : parseFloat(job.totalAmount?.toString() || '0') || 0;
+
           if (totalCosts > 0) {
-            existing.jobsWithCostData++;
-            existing.revenueWithCostData += invoiceRevenue;
-            existing.profitWithCostData += (invoiceRevenue - totalCosts);
+            if (revenueForMargin > 0) {
+              existing.jobsWithCostData++;
+              existing.revenueWithCostData += revenueForMargin;
+              existing.profitWithCostData += (revenueForMargin - totalCosts);
+            }
+            // If no revenue at all, skip this job from margin calc (can't calculate a %)
           } else {
             // Priority 3: stored grossMargin % on the job; Priority 4: business default
             const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
             const effectiveMarginPct = storedMarginPct > 0 ? storedMarginPct : defaultMarginPct;
-            if (effectiveMarginPct > 0 && invoiceRevenue > 0) {
-              const impliedProfit = invoiceRevenue * (effectiveMarginPct / 100);
+            if (effectiveMarginPct > 0 && revenueForMargin > 0) {
+              const impliedProfit = revenueForMargin * (effectiveMarginPct / 100);
               existing.jobsWithCostData++;
-              existing.revenueWithCostData += invoiceRevenue;
+              existing.revenueWithCostData += revenueForMargin;
               existing.profitWithCostData += impliedProfit;
             }
           }
