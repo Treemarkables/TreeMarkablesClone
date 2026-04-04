@@ -7838,21 +7838,23 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Create customer map
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
       
-      // Create invoice amount map
+      // Build invoice maps across ALL non-cancelled invoices (no date filter here).
+      // Date filtering is applied to the JOB's completedDate below, matching how
+      // the Revenue card calculates its total via getDashboardStats/getRevenueStats.
       const jobInvoiceMap = new Map<string, number>();
+      const jobInvoiceDateMap = new Map<string, string>(); // jobId -> latest invoice issue date
       for (const invoice of allInvoices) {
         if (invoice.status !== 'cancelled' && invoice.jobId) {
-          // Check if invoice is in date range
-          if (fromDate || toDate) {
-            const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : null;
-            if (issueDate) {
-              if (fromDate && issueDate < fromDate) continue;
-              if (toDate && issueDate > toDate) continue;
-            }
-          }
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
           const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+          if (invoice.issueDate) {
+            const dateStr = invoice.issueDate.toString();
+            const existing = jobInvoiceDateMap.get(invoice.jobId);
+            if (!existing || dateStr > existing) {
+              jobInvoiceDateMap.set(invoice.jobId, dateStr);
+            }
+          }
         }
       }
       
@@ -7914,9 +7916,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           .filter(j => j.amount > 0)
           .sort((a, b) => b.amount - a.amount);
       } else {
-        // Show completed jobs with invoices
+        // Show completed jobs with invoices, filtered by job.completedDate to match
+        // the Revenue card figure (which uses getDashboardStats / getRevenueStats).
         breakdown = filteredJobs
-          .filter(job => job.status === 'completed')
+          .filter(job => {
+            if (job.status !== 'completed') return false;
+            if (!fromDate && !toDate) return true;
+            const completedDate = job.completedDate ? new Date(job.completedDate) : null;
+            if (!completedDate) return false;
+            if (fromDate && completedDate < fromDate) return false;
+            if (toDate && completedDate > toDate) return false;
+            return true;
+          })
           .map(job => {
             const invoiceAmount = jobInvoiceMap.get(job.id) || 0;
             const customer = customerMap.get(job.customerId || '');
@@ -7928,6 +7939,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
               leadSource: job.leadSource || 'other',
               status: job.status,
               completedDate: job.completedDate,
+              invoiceDate: jobInvoiceDateMap.get(job.id) || null,
               amount: invoiceAmount,
               amountType: 'invoiced'
             };
@@ -7972,6 +7984,103 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     } catch (error) {
       console.error('Error fetching quote analytics:', error);
       res.status(500).json({ success: false, message: 'Error fetching quote analytics' });
+    }
+  });
+
+  // Quote breakdown — individual won/lost/pending quotes for CEO dashboard drill-down
+  app.get('/api/quote-breakdown', async (req: Request, res: Response) => {
+    try {
+      const { fromDate, toDate } = req.query;
+
+      let fromDateObj: Date | undefined;
+      let toDateObj: Date | undefined;
+
+      if (fromDate && typeof fromDate === 'string') {
+        fromDateObj = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
+        if (isNaN(fromDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+      }
+      if (toDate && typeof toDate === 'string') {
+        toDateObj = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
+        if (isNaN(toDateObj.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+      }
+
+      const jobsResult = await storage.getAllJobs({ limit: 10000 });
+      const allJobs = jobsResult.jobs;
+      const allCustomers = await storage.getAllCustomers();
+      const allProposals = await storage.getAllProposals();
+
+      const customerMap = new Map(allCustomers.map(c => [c.id, c]));
+
+      // Build a map of jobId -> { sentDate, value } from sent proposals
+      const sentProposalsByJobId = new Map<string, { sentDate: Date; value: number }>();
+      for (const p of allProposals) {
+        if (p.jobId && (p.status === 'sent' || p.status === 'accepted' || p.status === 'viewed' || p.sentDate)) {
+          const sentDate = p.sentDate ? new Date(p.sentDate) : null;
+          if (sentDate) {
+            const value = parseFloat((p.totalAmount || '0').toString());
+            const existing = sentProposalsByJobId.get(p.jobId);
+            if (!existing || sentDate < existing.sentDate) {
+              sentProposalsByJobId.set(p.jobId, { sentDate, value });
+            }
+          }
+        }
+      }
+
+      const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+      const rejectedStatuses = ['unsuccessful'];
+      const pendingStatuses = ['quote'];
+
+      const inDateRange = (jobId: string) => {
+        if (!fromDateObj && !toDateObj) return true;
+        const entry = sentProposalsByJobId.get(jobId);
+        if (!entry) return false;
+        if (fromDateObj && entry.sentDate < fromDateObj) return false;
+        if (toDateObj && entry.sentDate > toDateObj) return false;
+        return true;
+      };
+
+      const toRow = (job: any, outcome: 'won' | 'lost' | 'pending') => {
+        const customer = customerMap.get(job.customerId || '') as any;
+        const entry = sentProposalsByJobId.get(job.id);
+        return {
+          jobId: job.id,
+          jobNumber: job.jobNumber || '',
+          title: job.title || '(No title)',
+          customerName: customer?.name || 'Unknown',
+          quoteSentDate: entry?.sentDate?.toISOString() || null,
+          value: entry?.value || 0,
+          outcome,
+        };
+      };
+
+      const activeJobs = allJobs.filter((j: any) => j.status !== 'archived' && j.status !== 'lead');
+
+      const sortByDate = (a: any, b: any) =>
+        new Date(b.quoteSentDate || 0).getTime() - new Date(a.quoteSentDate || 0).getTime();
+
+      const won = activeJobs
+        .filter((j: any) => acceptedStatuses.includes(j.status || '') && sentProposalsByJobId.has(j.id) && inDateRange(j.id))
+        .map((j: any) => toRow(j, 'won'))
+        .sort(sortByDate);
+
+      const lost = activeJobs
+        .filter((j: any) => rejectedStatuses.includes(j.status || '') && sentProposalsByJobId.has(j.id) && inDateRange(j.id))
+        .map((j: any) => toRow(j, 'lost'))
+        .sort(sortByDate);
+
+      const pending = activeJobs
+        .filter((j: any) => pendingStatuses.includes(j.status || '') && sentProposalsByJobId.has(j.id) && inDateRange(j.id))
+        .map((j: any) => toRow(j, 'pending'))
+        .sort(sortByDate);
+
+      res.json({ success: true, data: { won, lost, pending } });
+    } catch (error) {
+      console.error('Error fetching quote breakdown:', error);
+      res.status(500).json({ success: false, message: 'Error fetching quote breakdown' });
     }
   });
 
