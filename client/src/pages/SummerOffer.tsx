@@ -149,6 +149,7 @@ export default function SummerOffer() {
             </Button>
             <Button size="lg" className="text-lg px-8 py-6 bg-white text-black border-2 border-white hover:bg-gray-100" data-testid="button-secondary-cta" onClick={(e) => {
               e.preventDefault();
+              if ((window as any).gtag) (window as any).gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' });
               if ((window as any).gtag_report_conversion) {
                 (window as any).gtag_report_conversion('tel:0272166882');
               } else {
@@ -350,6 +351,7 @@ export default function SummerOffer() {
               </Button>
               <Button variant="outline" size="lg" className="text-lg px-8 py-6" data-testid="button-team-call" onClick={(e) => {
                 e.preventDefault();
+                if ((window as any).gtag) (window as any).gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' });
                 if ((window as any).gtag_report_conversion) {
                   (window as any).gtag_report_conversion('tel:0272166882');
                 } else {
@@ -433,6 +435,7 @@ export default function SummerOffer() {
             </Button>
             <Button variant="outline" size="lg" className="text-lg px-8 py-6" data-testid="button-final-call" onClick={(e) => {
               e.preventDefault();
+              if ((window as any).gtag) (window as any).gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' });
               if ((window as any).gtag_report_conversion) {
                 (window as any).gtag_report_conversion('tel:0272166882');
               } else {

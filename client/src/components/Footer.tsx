@@ -14,10 +14,12 @@ export default function Footer() {
   
   const handleFooterPhoneClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (window.gtag) {
+      window.gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' });
+    }
     if (window.gtag_report_conversion) {
       window.gtag_report_conversion('tel:0272166882');
     } else {
-      // Fallback if conversion tracking not available
       window.location.href = 'tel:0272166882';
     }
   };

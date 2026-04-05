@@ -197,6 +197,11 @@ export default function ContactSection() {
             'gclid': leadSource.gclid
           };
 
+          window.gtag('event', 'generate_lead', {
+            event_category: 'Contact',
+            event_label: 'Contact Form',
+          });
+
           window.gtag('event', 'form_submit', gaEventParams);
           
           // Track as conversion with enhanced data

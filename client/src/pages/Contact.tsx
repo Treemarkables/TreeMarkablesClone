@@ -15,6 +15,12 @@ import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 
+declare global {
+  interface Window {
+    gtag?: (...args: any[]) => void;
+  }
+}
+
 const contactFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),
   email: z.string().email("Please enter a valid email address").max(255),
@@ -72,6 +78,12 @@ export default function Contact() {
       return await response.json();
     },
     onSuccess: (response) => {
+      if (window.gtag) {
+        window.gtag('event', 'generate_lead', {
+          event_category: 'Contact',
+          event_label: 'Contact Form',
+        });
+      }
       toast({
         title: "Enquiry Submitted!",
         description: "Thank you for your enquiry. We'll get back to you within 24 hours.",
@@ -138,7 +150,12 @@ export default function Contact() {
                       </div>
                       <div>
                         <p className="font-medium text-foreground">Phone</p>
-                        <a href="tel:027-216-6882" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-phone">
+                        <a
+                          href="tel:027-216-6882"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          data-testid="link-phone"
+                          onClick={() => { if (window.gtag) window.gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' }); }}
+                        >
                           027-216-6882
                         </a>
                       </div>

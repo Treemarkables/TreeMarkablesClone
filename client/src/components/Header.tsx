@@ -32,10 +32,12 @@ export default function Header() {
   
   const handlePhoneClick = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (window.gtag) {
+      window.gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' });
+    }
     if (window.gtag_report_conversion) {
       window.gtag_report_conversion('tel:0272166882');
     }
-    // Small delay to allow analytics event to fire, then navigate
     setTimeout(() => {
       window.location.href = 'tel:0272166882';
     }, 100);
