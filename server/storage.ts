@@ -2958,8 +2958,98 @@ class DatabaseStorage implements IStorage {
         .where(and(...jobConditions));
 
       const completedJobsInRange = jobs.filter(j => j.status === 'completed');
-      console.log(`[LeadSource] date range ${fromDate?.toISOString() ?? 'none'} → ${toDate?.toISOString() ?? 'none'}: ${jobs.length} total jobs, ${completedJobsInRange.length} completed`);
-      completedJobsInRange.forEach(j => console.log(`  job ${j.jobNumber} completedDate=${j.completedDate} scheduledDate=${j.scheduledDate} createdAt=${j.createdAt} totalAmount=${j.totalAmount}`));
+
+      // ── All-time margin pass ──────────────────────────────────────────────
+      // Gross margin is a historical benchmark: fetch ALL completed jobs (no date
+      // filter) so that the margin column is always populated regardless of which
+      // date window the user is viewing. Counts/revenue still use the date window.
+      const allCompletedJobs = await db
+        .select()
+        .from(schema.jobs)
+        .where(and(
+          sql`${schema.jobs.status} = 'completed'`,
+          sql`${schema.jobs.status} != 'archived'`
+        ));
+
+      // Build invoice map for all completed jobs
+      const allCompletedIds = allCompletedJobs.map(j => j.id);
+      let allTimeInvoices: any[] = [];
+      if (allCompletedIds.length > 0) {
+        allTimeInvoices = await db
+          .select()
+          .from(schema.invoices)
+          .where(and(
+            sql`${schema.invoices.status} != 'cancelled'`,
+            inArray(schema.invoices.jobId, allCompletedIds)
+          ));
+      }
+      const allTimeInvoiceMap = new Map<string, number>();
+      for (const inv of allTimeInvoices) {
+        if (inv.jobId) {
+          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + (parseFloat(inv.amount?.toString() || '0')));
+        }
+      }
+
+      // Fetch proposal amounts for all completed jobs (for revenue fallback)
+      let allTimeProposals: any[] = [];
+      if (allCompletedIds.length > 0) {
+        allTimeProposals = await db
+          .select()
+          .from(schema.proposals)
+          .where(inArray(schema.proposals.jobId, allCompletedIds));
+      }
+      const allTimeProposalMap = new Map<string, number>();
+      for (const p of allTimeProposals) {
+        if (p.jobId && p.totalAmount) {
+          const amt = parseFloat(p.totalAmount?.toString() || '0');
+          if (amt > (allTimeProposalMap.get(p.jobId) || 0)) allTimeProposalMap.set(p.jobId, amt);
+        }
+      }
+
+      // Build all-time margin totals per lead source
+      type MarginAccum = { revenueWithCostData: number; profitWithCostData: number };
+      const allTimeMarginMap = new Map<string, MarginAccum>();
+      for (const job of allCompletedJobs) {
+        const source = job.leadSource || 'other';
+        if (!allTimeMarginMap.has(source)) allTimeMarginMap.set(source, { revenueWithCostData: 0, profitWithCostData: 0 });
+        const acc = allTimeMarginMap.get(source)!;
+
+        const invoiceRev = allTimeInvoiceMap.get(job.id) || 0;
+        const revenueForMargin =
+          invoiceRev > 0 ? invoiceRev
+          : parseFloat(job.totalAmount?.toString() || '0') || 0
+          || (allTimeProposalMap.get(job.id) || 0);
+
+        if (revenueForMargin <= 0) continue;
+
+        const lineItems = (job.lineItems as any[]) || [];
+        let lineItemCosts = 0;
+        for (const item of lineItems) {
+          const c = parseFloat(item.totalCost?.toString() || item.costExGst?.toString() || '0') || 0;
+          if (c > 0) lineItemCosts += c;
+          else if (item.unitCost && item.quantity) lineItemCosts += (parseFloat(item.unitCost.toString()) || 0) * (parseFloat(item.quantity.toString()) || 1);
+        }
+        const laborCosts = parseFloat(job.laborCosts || '0') || 0;
+        const calcLabor = parseFloat(job.calculatedLaborCost?.toString() || '0');
+        const materialsCosts = parseFloat(job.materialsCosts || '0') || 0;
+        const otherCosts = parseFloat(job.otherCosts || '0') || 0;
+        const costOfGoods = parseFloat(job.costOfGoods || '0') || 0;
+        const manualCosts = laborCosts + calcLabor + materialsCosts + otherCosts + costOfGoods;
+        const totalCosts = lineItemCosts > 0 ? lineItemCosts : manualCosts;
+
+        const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
+        if (storedMarginPct > 0) {
+          acc.revenueWithCostData += revenueForMargin;
+          acc.profitWithCostData += revenueForMargin * (storedMarginPct / 100);
+        } else if (totalCosts > 0) {
+          acc.revenueWithCostData += revenueForMargin;
+          acc.profitWithCostData += (revenueForMargin - totalCosts);
+        } else if (defaultMarginPct > 0) {
+          acc.revenueWithCostData += revenueForMargin;
+          acc.profitWithCostData += revenueForMargin * (defaultMarginPct / 100);
+        }
+      }
+      // ─────────────────────────────────────────────────────────────────────
 
       // Fetch ALL invoices for these qualifying jobs (not date-filtered —
       // we want the real revenue for jobs worked on in the period).
@@ -3180,10 +3270,20 @@ class DatabaseStorage implements IStorage {
         // Average values
         const averageValue = wonCount > 0 ? totalRevenue / wonCount : 0;
         const averageQuoteValue = quotedCount > 0 ? totalQuotedValue / quotedCount : 0;
-        // Only calculate margin from jobs with actual cost data (excludes jobs with $0 costs)
+        // Gross margin: prefer period-specific cost data when available, then fall back
+        // to all-time historical margin for this lead source. This ensures the margin
+        // column always shows even when viewing a narrow date window with no cost data.
         const revenueWithCostData = data.revenueWithCostData || 0;
         const profitWithCostData = data.profitWithCostData || 0;
-        const averageProfitMargin = revenueWithCostData > 0 ? (profitWithCostData / revenueWithCostData) * 100 : 0;
+        let averageProfitMargin = 0;
+        if (revenueWithCostData > 0) {
+          averageProfitMargin = (profitWithCostData / revenueWithCostData) * 100;
+        } else {
+          const allTimeAcc = allTimeMarginMap.get(source);
+          if (allTimeAcc && allTimeAcc.revenueWithCostData > 0) {
+            averageProfitMargin = (allTimeAcc.profitWithCostData / allTimeAcc.revenueWithCostData) * 100;
+          }
+        }
 
         // ROI calculation (assuming some marketing cost - this can be made configurable)
         const estimatedMarketingCost = count * 10; // $10 per lead as placeholder
