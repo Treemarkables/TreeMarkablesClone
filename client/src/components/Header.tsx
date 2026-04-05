@@ -136,7 +136,7 @@ export default function Header() {
 
             {/* Email Button - Rounded Green */}
             <a 
-              href="mailto:quotes@treemarkables.nz" 
+              href="/contact" 
               onClick={handleEmailClick}
               className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-[#39FF14] hover:bg-[#32CD32] rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
@@ -222,13 +222,13 @@ export default function Header() {
                 </a>
                 
                 <a 
-                  href="mailto:quotes@treemarkables.nz" 
+                  href="/contact" 
                   className="flex items-center justify-center space-x-3 text-base text-black bg-[#39FF14] px-4 py-4 rounded-full border-2 border-[#32CD32] hover:bg-[#32CD32] hover:border-[#2EB82E] transition-all duration-200 font-bold shadow-md tracking-tight"
                   data-testid="link-email-mobile"
                   onClick={closeMenu}
                 >
                   <Mail className="h-5 w-5" />
-                  <span className="font-mono text-sm">quotes@treemarkables.nz</span>
+                  <span className="font-mono text-sm">Get a Quote</span>
                 </a>
               </div>
             </div>
