@@ -434,7 +434,7 @@ export default function MetricsDashboard() {
   });
 
   // Data queries with date filtering
-  const { data: dashboardStats, isLoading: statsLoading } = useQuery<DashboardStats>({
+  const { data: dashboardStats, isLoading: statsLoading, isFetching: statsFetching } = useQuery<DashboardStats>({
     queryKey: ['/api/dashboard-stats', dateRange?.from, dateRange?.to],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -444,7 +444,7 @@ export default function MetricsDashboard() {
     }
   });
 
-  const { data: revenueStats, isLoading: revenueLoading } = useQuery<RevenueStats>({
+  const { data: revenueStats, isLoading: revenueLoading, isFetching: revenueFetching } = useQuery<RevenueStats>({
     queryKey: ['/api/revenue-stats', dateRange?.from, dateRange?.to],
     queryFn: () => {
       const params = new URLSearchParams();
@@ -854,7 +854,13 @@ export default function MetricsDashboard() {
   const staleQuotesCount = quoteAnalytics?.pendingQuotes || 0;
   const estimatedStaleValue = staleQuotesCount * (revenueStats?.averageJobValue || 0);
 
-  if (statsLoading || revenueLoading || quotesLoading) {
+  // Only show full-page spinner on the very first load (no data yet at all).
+  // When switching date ranges, keep existing data visible while new data fetches.
+  const hasInitialData = dashboardStats !== undefined || revenueStats !== undefined || quoteAnalytics !== undefined;
+
+  // Show a subtle inline indicator when re-fetching after a date range change
+  const isRefreshing = (statsFetching || revenueFetching) && hasInitialData;
+  if (!hasInitialData && (statsLoading || revenueLoading || quotesLoading)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500"></div>
@@ -963,6 +969,9 @@ export default function MetricsDashboard() {
                     : `${fmt(dateRange.from)} — ${fmt(dateRange.to)}`;
                 })()}
               </span>
+              {isRefreshing && (
+                <div className="h-3 w-3 animate-spin rounded-full border border-gray-400 border-t-transparent flex-shrink-0" />
+              )}
             </div>
           )}
 

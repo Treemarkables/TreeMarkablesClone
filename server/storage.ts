@@ -2619,14 +2619,18 @@ class DatabaseStorage implements IStorage {
     const allInvoices = await this.getAllInvoices();
     const completedJobs = allJobs.filter(job => job.status === 'completed');
     
-    // Filter by date range if provided
+    // Filter by date range if provided.
+    // Use COALESCE(completedDate, scheduledDate, createdAt) so that completed jobs without
+    // a completedDate stamp are still included when their scheduledDate/createdAt falls in range.
     let filteredJobs = completedJobs;
     if (fromDate || toDate) {
       filteredJobs = completedJobs.filter(job => {
-        if (!job.completedDate) return false;
-        const completedDate = new Date(job.completedDate);
-        if (fromDate && completedDate < fromDate) return false;
-        if (toDate && completedDate > toDate) return false;
+        const jobDate = job.completedDate ? new Date(job.completedDate) :
+                        job.scheduledDate ? new Date(job.scheduledDate) :
+                        job.createdAt    ? new Date(job.createdAt)    : null;
+        if (!jobDate) return false;
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
         return true;
       });
     }
@@ -2929,24 +2933,33 @@ class DatabaseStorage implements IStorage {
       const [bizSettings] = await db.select().from(schema.businessSettings).limit(1);
       const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
 
-      // Filter jobs by SCHEDULED DATE (when the work was done), not invoice date.
-      // This ensures "Last 4 Weeks" means jobs worked on in that window, not just invoiced.
+      // Date filtering strategy:
+      // - If a job has completedDate set, filter by that (most accurate)
+      // - For completed jobs without completedDate: use updatedAt as proxy (updateJob always stamps it)
+      // - For other jobs without completedDate: fall back to scheduledDate then createdAt
       const jobConditions: any[] = [sql`${schema.jobs.status} != 'archived'`];
-      if (fromDate) {
-        jobConditions.push(
-          sql`COALESCE(${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) >= ${fromDate}`
-        );
-      }
-      if (toDate) {
-        jobConditions.push(
-          sql`COALESCE(${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) <= ${toDate}`
-        );
+      if (fromDate && toDate) {
+        jobConditions.push(sql`(
+          (${schema.jobs.completedDate} IS NOT NULL AND ${schema.jobs.completedDate} >= ${fromDate} AND ${schema.jobs.completedDate} <= ${toDate})
+          OR
+          (${schema.jobs.completedDate} IS NULL AND ${schema.jobs.status} = 'completed' AND ${schema.jobs.updatedAt} >= ${fromDate} AND ${schema.jobs.updatedAt} <= ${toDate})
+          OR
+          (${schema.jobs.completedDate} IS NULL AND COALESCE(${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) >= ${fromDate} AND COALESCE(${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) <= ${toDate})
+        )`);
+      } else if (fromDate) {
+        jobConditions.push(sql`COALESCE(${schema.jobs.completedDate}, ${schema.jobs.updatedAt}, ${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) >= ${fromDate}`);
+      } else if (toDate) {
+        jobConditions.push(sql`COALESCE(${schema.jobs.completedDate}, ${schema.jobs.updatedAt}, ${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) <= ${toDate}`);
       }
 
       const jobs = await db
         .select()
         .from(schema.jobs)
         .where(and(...jobConditions));
+
+      const completedJobsInRange = jobs.filter(j => j.status === 'completed');
+      console.log(`[LeadSource] date range ${fromDate?.toISOString() ?? 'none'} → ${toDate?.toISOString() ?? 'none'}: ${jobs.length} total jobs, ${completedJobsInRange.length} completed`);
+      completedJobsInRange.forEach(j => console.log(`  job ${j.jobNumber} completedDate=${j.completedDate} scheduledDate=${j.scheduledDate} createdAt=${j.createdAt} totalAmount=${j.totalAmount}`));
 
       // Fetch ALL invoices for these qualifying jobs (not date-filtered —
       // we want the real revenue for jobs worked on in the period).
@@ -3106,24 +3119,32 @@ class DatabaseStorage implements IStorage {
           existing.totalCosts += totalCosts;
           existing.totalProfit += (invoiceRevenue - totalCosts);
 
-          // Use invoice revenue for margin; fall back to job.totalAmount if not yet invoiced
-          const revenueForMargin = invoiceRevenue > 0
-            ? invoiceRevenue
-            : parseFloat(job.totalAmount?.toString() || '0') || 0;
+          // Revenue fallback chain for margin calculation:
+          // 1. Invoice amount (most accurate — what was actually billed)
+          // 2. job.totalAmount (synced from invoice when created)
+          // 3. Highest proposal amount (quote value — useful for recently completed jobs not yet invoiced)
+          const revenueForMargin =
+            invoiceRevenue > 0 ? invoiceRevenue
+            : parseFloat(job.totalAmount?.toString() || '0') || 0
+            || (jobProposalAmountMap.get(job.id) || 0);
 
-          if (totalCosts > 0) {
-            if (revenueForMargin > 0) {
+          if (revenueForMargin > 0) {
+            // Margin priority:
+            // 1. Stored grossMargin % on the job (entered under Profit in the job card) — most explicit
+            // 2. Calculated from line item or manual cost fields
+            // 3. Business-wide default gross margin %
+            const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
+            if (storedMarginPct > 0) {
+              const impliedProfit = revenueForMargin * (storedMarginPct / 100);
+              existing.jobsWithCostData++;
+              existing.revenueWithCostData += revenueForMargin;
+              existing.profitWithCostData += impliedProfit;
+            } else if (totalCosts > 0) {
               existing.jobsWithCostData++;
               existing.revenueWithCostData += revenueForMargin;
               existing.profitWithCostData += (revenueForMargin - totalCosts);
-            }
-            // If no revenue at all, skip this job from margin calc (can't calculate a %)
-          } else {
-            // Priority 3: stored grossMargin % on the job; Priority 4: business default
-            const storedMarginPct = parseFloat(job.grossMargin?.toString() || '0') || 0;
-            const effectiveMarginPct = storedMarginPct > 0 ? storedMarginPct : defaultMarginPct;
-            if (effectiveMarginPct > 0 && revenueForMargin > 0) {
-              const impliedProfit = revenueForMargin * (effectiveMarginPct / 100);
+            } else if (defaultMarginPct > 0) {
+              const impliedProfit = revenueForMargin * (defaultMarginPct / 100);
               existing.jobsWithCostData++;
               existing.revenueWithCostData += revenueForMargin;
               existing.profitWithCostData += impliedProfit;

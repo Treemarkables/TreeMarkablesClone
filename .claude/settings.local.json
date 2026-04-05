@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx tsc:*)"
+      "Bash(npx tsc:*)",
+      "Bash(node -e ':*)",
+      "Bash(ls *.env)",
+      "Bash(ls .env*)",
+      "Bash(ls /home/runner/workspace/server/db*)"
     ]
   }
 }
