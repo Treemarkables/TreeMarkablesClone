@@ -95,6 +95,9 @@ export default function TreePruning() {
   };
 
   const handleCallNow = () => {
+    if ((window as any).gtag) {
+      (window as any).gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' });
+    }
     if ((window as any).gtag_report_conversion) {
       (window as any).gtag_report_conversion('tel:0272166882');
     }
