@@ -2979,12 +2979,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             processedBody.address = existingCustomer.address;
             console.log('✅ Auto-filled job address from customer:', existingCustomer.address);
           }
-          // Auto-set lead source to "repeat" for existing customers
-          if (!processedBody.leadSource) {
+          // GDC always gets council lead source, regardless of what was submitted
+          if (existingCustomer.name && existingCustomer.name.toLowerCase().includes('gisborne district council')) {
+            processedBody.leadSource = 'council';
+            console.log('✅ Auto-set lead source to "council" for Gisborne District Council job');
+          } else if (!processedBody.leadSource) {
+            // Auto-set lead source to "repeat" for other existing customers
             processedBody.leadSource = 'repeat';
             console.log('✅ Auto-set lead source to "repeat" for existing customer');
           }
         }
+      }
+
+      // Also handle new-customer case: if the new customer name is GDC, force council
+      if (processedBody.isNewCustomer && processedBody.newCustomerName &&
+          processedBody.newCustomerName.toLowerCase().includes('gisborne district council')) {
+        processedBody.leadSource = 'council';
+        console.log('✅ Auto-set lead source to "council" for new Gisborne District Council customer');
       }
 
       const validation = insertJobSchema.safeParse(processedBody);
@@ -3686,6 +3697,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Convert empty string customerId to null (fixes foreign key constraint error)
       if (processedBody.customerId === '') {
         processedBody.customerId = null;
+      }
+
+      // GDC auto-classification: look up the resolved customerId and force council lead source
+      {
+        const resolvedCustomerId = processedBody.customerId ||
+          (await storage.getJob(req.params.id).catch(() => null))?.customerId;
+        if (resolvedCustomerId) {
+          const cust = await storage.getCustomer(resolvedCustomerId).catch(() => null);
+          if (cust?.name?.toLowerCase().includes('gisborne district council')) {
+            processedBody.leadSource = 'council';
+          }
+        }
+        // Also handle new-customer-by-name case in PUT
+        if (processedBody.isNewCustomer && processedBody.newCustomerName &&
+            processedBody.newCustomerName.toLowerCase().includes('gisborne district council')) {
+          processedBody.leadSource = 'council';
+        }
       }
 
       const validation = insertJobSchema.partial().safeParse(processedBody);
