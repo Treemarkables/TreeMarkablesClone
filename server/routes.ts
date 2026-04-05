@@ -3757,6 +3757,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      // Auto-set completedDate when status changes to 'completed' (if not already provided by client)
+      if (validation.data.status === 'completed' && oldJob?.status !== 'completed') {
+        if (!(validation.data as any).completedDate) {
+          (validation.data as any).completedDate = new Date();
+          console.log(`✅ Auto-setting completedDate for job ${req.params.id} (status → completed)`);
+        }
+      }
+
       // Set unsuccessfulDate when status changes to 'unsuccessful'
       if (validation.data.status === 'unsuccessful' && oldJob?.status !== 'unsuccessful') {
         (validation.data as any).unsuccessfulDate = new Date();
@@ -4024,10 +4032,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       
       const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid update data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
       }
 
@@ -4038,6 +4046,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const updateData = { ...validation.data };
       if (updateData.customerId === '') {
         updateData.customerId = null;
+      }
+
+      // Auto-set completedDate when status changes to 'completed' (if not already provided)
+      if (updateData.status === 'completed' && oldJob?.status !== 'completed') {
+        if (!updateData.completedDate) {
+          updateData.completedDate = new Date();
+          console.log(`✅ Auto-setting completedDate for job ${req.params.id} (PATCH status → completed)`);
+        }
       }
 
       const job = await storage.updateJob(req.params.id, updateData);
