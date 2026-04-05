@@ -43,24 +43,14 @@ export default function Header() {
     }, 100);
   };
   
-  const handleEmailClick = (e: React.MouseEvent) => {
-    // Prevent immediate navigation
-    e.preventDefault();
-    
+  const handleEmailClick = () => {
     if (window.gtag) {
       window.gtag('event', 'click', {
-        'event_category': 'Lead Generation', 
+        'event_category': 'Lead Generation',
         'event_label': 'Email Click - Header',
         'value': 1
       });
-      
-      console.log('Google Analytics: Header email click tracked');
     }
-    
-    // Small delay to allow analytics event to fire, then navigate
-    setTimeout(() => {
-      window.location.href = 'mailto:quotes@treemarkables.nz';
-    }, 100);
   };
 
   const mainNavLinks = [

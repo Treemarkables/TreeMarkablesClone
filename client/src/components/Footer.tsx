@@ -24,24 +24,14 @@ export default function Footer() {
     }
   };
   
-  const handleFooterEmailClick = (e: React.MouseEvent) => {
-    // Prevent immediate navigation
-    e.preventDefault();
-    
+  const handleFooterEmailClick = () => {
     if (window.gtag) {
       window.gtag('event', 'click', {
         'event_category': 'Lead Generation',
         'event_label': 'Email Click - Footer',
         'value': 1
       });
-      
-      console.log('Google Analytics: Footer email click tracked');
     }
-    
-    // Small delay to allow analytics event to fire, then navigate
-    setTimeout(() => {
-      window.location.href = 'mailto:quotes@treemarkables.nz';
-    }, 100);
   };
 
   return (
