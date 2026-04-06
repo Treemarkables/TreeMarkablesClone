@@ -664,28 +664,37 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         
         console.log('🔔 Job search result:', { found: !!job, jobId });
         
-        if (job) {
+        const openJob = (jobData: any) => {
           // Guard: Don't re-open if we're already editing this job
           if (showGlobalJobCard && jobToEdit?.id === jobId) {
-            console.log('🔔 Job already open, skipping re-open:', jobId);
-            // Still clear the URL param to keep the URL clean
             window.history.replaceState({}, '', '/dispatch');
             return;
           }
-          
-          // Clear the URL parameter only after we've confirmed the job exists
           window.history.replaceState({}, '', '/dispatch');
-          
-          // Open the job card
           setShowGlobalJobCard(true);
           setGlobalJobCardMode('edit');
-          setJobToEdit(job as JobAssignment);
-          
-          console.log('✅ Job card opened');
+          setJobToEdit(jobData as JobAssignment);
+        };
+
+        if (job) {
+          openJob(job);
         } else {
-          console.warn('⚠️ Job not found in loaded data:', jobId);
-          // Clear URL param so we don't keep retrying on every re-render
+          // Job not in current page — fetch it directly by ID
+          console.log('🔔 Job not in cache, fetching directly:', jobId);
           window.history.replaceState({}, '', '/dispatch');
+          fetch(`/api/jobs/${jobId}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => {
+              const fetched = data?.data ?? data;
+              if (fetched?.id) {
+                openJob(fetched);
+              } else {
+                toast({ title: 'Job not found', description: 'Could not open the job from this notification.', variant: 'destructive' });
+              }
+            })
+            .catch(() => {
+              toast({ title: 'Job not found', description: 'Could not open the job from this notification.', variant: 'destructive' });
+            });
         }
       }
     };
