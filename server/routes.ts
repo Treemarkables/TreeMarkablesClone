@@ -3991,26 +3991,51 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           .catch(error => console.error('Error triggering job status change notification:', error));
       }
 
-      // Send push notifications if scheduled date changed
+      // Send push notifications and shift staff assignments if scheduled date changed
       if (validation.data.scheduledDate && oldJob?.scheduledDate) {
         const oldDate = new Date(oldJob.scheduledDate).getTime();
         const newDate = new Date(validation.data.scheduledDate).getTime();
+        const deltaMs = newDate - oldDate;
         
-        if (oldDate !== newDate && job.assignedTeam && job.assignedTeam.length > 0) {
-          // Notify all assigned team members about schedule change
-          const newDateStr = new Date(validation.data.scheduledDate).toLocaleDateString('en-NZ', {
-            weekday: 'long',
-            month: 'short',
-            day: 'numeric'
-          });
-          
-          for (const employeeId of job.assignedTeam) {
-            await notificationHelper.notifyScheduleChange(
-              employeeId,
-              job.jobNumber || '',
-              newDateStr,
-              job.id
-            );
+        if (oldDate !== newDate) {
+          // Shift all existing staff assignments by the same delta so diary stays in sync
+          try {
+            const existingAssignments = await storage.getJobStaffAssignmentsByJob(req.params.id);
+            for (const assignment of existingAssignments) {
+              if (assignment.startTime) {
+                const newStartTime = new Date(new Date(assignment.startTime).getTime() + deltaMs);
+                const newEndTime = assignment.endTime
+                  ? new Date(new Date(assignment.endTime).getTime() + deltaMs)
+                  : null;
+                await storage.updateJobStaffAssignment(assignment.id, {
+                  startTime: newStartTime,
+                  ...(newEndTime ? { endTime: newEndTime } : {})
+                });
+              }
+            }
+            if (existingAssignments.length > 0) {
+              console.log(`📅 Shifted ${existingAssignments.length} staff assignment(s) by ${Math.round(deltaMs / 86400000)} day(s) for job ${req.params.id}`);
+            }
+          } catch (shiftError) {
+            console.error('Error shifting staff assignments on reschedule:', shiftError);
+            // Non-fatal — don't fail the job update
+          }
+
+          // Notify all assigned team members about the schedule change
+          if (job.assignedTeam && job.assignedTeam.length > 0) {
+            const newDateStr = new Date(validation.data.scheduledDate).toLocaleDateString('en-NZ', {
+              weekday: 'long',
+              month: 'short',
+              day: 'numeric'
+            });
+            for (const employeeId of job.assignedTeam) {
+              await notificationHelper.notifyScheduleChange(
+                employeeId,
+                job.jobNumber || '',
+                newDateStr,
+                job.id
+              );
+            }
           }
         }
       }
