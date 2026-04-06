@@ -17,6 +17,7 @@ interface EmailParams {
     filename: string;
     type: string;
     disposition?: string; // Optional for backward compatibility
+    content_id?: string;  // CID for inline image embedding (e.g. "photo-0")
   }>;
 }
 
@@ -100,8 +101,9 @@ class EmailService {
       // Note: Image attachments may display inline depending on email client behavior
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
-        content: Buffer.from(att.content, 'base64'), // Convert base64 string to Buffer for Resend
-        contentType: att.type // Pass MIME type (e.g., 'image/jpeg', 'application/pdf')
+        content: Buffer.from(att.content, 'base64'),
+        contentType: att.type,
+        ...(att.content_id ? { content_id: att.content_id } : {})
       }));
 
       // Build email payload for Resend
