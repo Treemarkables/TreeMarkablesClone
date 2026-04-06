@@ -5658,47 +5658,65 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
       
-      // Embed photos as linked images in email HTML (thumbnails that link to full-size)
+      // Embed photos as true inline CID attachments — no external URL dependency.
+      // Photos are fetched from object storage server-side and embedded directly in the
+      // email body, so they display in every email client regardless of auth or server state.
       let photoGalleryHtml = '';
       let embeddedPhotoCount = 0;
+
       if (selectedPhotos && selectedPhotos.length > 0) {
-        // Get the app's public base URL for photo links
-        const baseUrl = process.env.REPLIT_DEV_DOMAIN 
-          ? `https://${process.env.REPLIT_DEV_DOMAIN}`
-          : process.env.REPL_SLUG && process.env.REPL_OWNER
-            ? `https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co`
-            : 'https://treemarkables.replit.app'; // Fallback to production URL
-        
-        console.log(`📸 Embedding ${selectedPhotos.length} photo(s) with base URL: ${baseUrl}`);
-        
-        // Build photo gallery HTML with thumbnails linking to full-size
-        const photoLinks: string[] = [];
-        for (const photoUrl of selectedPhotos) {
-          if (photoUrl.startsWith('/objects/photos/')) {
-            const fileName = path.basename(photoUrl);
-            // Generate thumbnail filename (thumb_xxx.webp)
-            const thumbnailFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png)$/i, '.webp')}`;
-            const thumbnailUrl = `${baseUrl}/objects/photos/${thumbnailFileName}`;
-            const fullSizeUrl = `${baseUrl}${photoUrl}`;
-            
-            photoLinks.push(`
-              <a href="${fullSizeUrl}" target="_blank" style="display: inline-block; margin: 5px;">
-                <img src="${thumbnailUrl}" alt="Photo" style="max-width: 150px; max-height: 150px; border-radius: 8px; border: 1px solid #ddd;" />
-              </a>
+        const photoStorage = new PhotoStorageService();
+        const photoHtmlParts: string[] = [];
+
+        console.log(`📸 Embedding ${selectedPhotos.length} photo(s) as inline CID attachments...`);
+
+        for (let i = 0; i < selectedPhotos.length; i++) {
+          const photoUrl = selectedPhotos[i];
+          if (!photoUrl.startsWith('/objects/photos/')) continue;
+
+          const fileName = path.basename(photoUrl);
+          const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
+          const thumbPath = `/objects/photos/${thumbFileName}`;
+          const cid = `job-photo-${i}`;
+
+          // Try thumbnail first (small, fast); fall back to original if thumbnail missing
+          let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
+          if (!photoData) {
+            photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+          }
+
+          if (photoData && photoData.buffer) {
+            // Attach as inline CID image — email client renders it directly in the body
+            emailAttachments.push({
+              content: photoData.buffer.toString('base64'),
+              filename: thumbFileName,
+              type: photoData.contentType || 'image/jpeg',
+              content_id: cid
+            });
+            photoHtmlParts.push(`
+              <div style="display: inline-block; margin: 5px; vertical-align: top;">
+                <img src="cid:${cid}" alt="Job Photo ${i + 1}"
+                  style="max-width: 200px; max-height: 200px; border-radius: 8px;
+                         border: 1px solid #ddd; display: block;" />
+              </div>
             `);
             embeddedPhotoCount++;
-            console.log(`📷 Embedded photo: thumbnail=${thumbnailFileName}, fullSize=${fileName}`);
+            console.log(`📷 Photo ${i + 1} embedded as CID "${cid}" (${Math.round(photoData.buffer.length / 1024)}KB, ${photoData.contentType})`);
+          } else {
+            console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
           }
         }
-        
-        if (photoLinks.length > 0) {
+
+        if (photoHtmlParts.length > 0) {
           photoGalleryHtml = `
-            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9; border-radius: 8px;">
-              <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">Photos:</p>
-              <div style="display: flex; flex-wrap: wrap; gap: 5px;">
-                ${photoLinks.join('')}
+            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
+                        border-radius: 8px; font-family: Arial, sans-serif;">
+              <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">
+                Photos (${embeddedPhotoCount}):
+              </p>
+              <div>
+                ${photoHtmlParts.join('')}
               </div>
-              <p style="margin: 10px 0 0 0; font-size: 12px; color: #666;">Click on a photo to view full size</p>
             </div>
           `;
         }
