@@ -1,7 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   format, addDays, subDays, startOfDay, addWeeks, subWeeks,
   addMonths, subMonths, eachDayOfInterval, startOfWeek, endOfWeek,
@@ -62,13 +62,15 @@ type ViewMode = 'day' | 'week' | '2weeks' | '4weeks' | 'month';
 interface CalendarGridProps {
   selectedDate?: Date;
   onDateChange?: (date: Date) => void;
+  onJobDrop?: (jobId: string, date: Date, hour: number) => void;
 }
 
-export function CalendarGrid({ selectedDate: externalDate, onDateChange }: CalendarGridProps = {}) {
+export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDrop }: CalendarGridProps = {}) {
   const [internalDate, setInternalDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>('day');
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
+  const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
 
   const currentDate = externalDate || internalDate;
   const setCurrentDate = (date: Date) => {
@@ -483,8 +485,27 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
                 {viewMode === 'day'
                   ? timeSlots.map(slot => {
                       const items = getItemsForHour(employee.id, currentDate, slot.hour);
+                      const slotKey = `${employee.id}-${slot.hour}`;
+                      const isOver = dragOverSlot === slotKey;
                       return (
-                        <div key={slot.hour} className="w-[110px] flex-shrink-0 border-r p-1 min-h-[80px]" data-testid={`slot-${employee.id}-${slot.hour}`}>
+                        <div
+                          key={slot.hour}
+                          className={`w-[110px] flex-shrink-0 border-r p-1 min-h-[80px] transition-colors duration-100 ${isOver ? 'bg-blue-50 border-blue-300 border-2' : ''}`}
+                          data-testid={`slot-${employee.id}-${slot.hour}`}
+                          onDragOver={onJobDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverSlot(slotKey); } : undefined}
+                          onDragLeave={onJobDrop ? () => setDragOverSlot(null) : undefined}
+                          onDrop={onJobDrop ? (e) => {
+                            e.preventDefault();
+                            setDragOverSlot(null);
+                            const jobId = e.dataTransfer.getData('jobId');
+                            if (jobId) onJobDrop(jobId, currentDate, slot.hour);
+                          } : undefined}
+                        >
+                          {isOver && (
+                            <div className="text-[10px] text-blue-500 font-medium text-center py-1 opacity-80">
+                              Drop to schedule {slot.label}
+                            </div>
+                          )}
                           {items.map(job => (
                             <div
                               key={job.id}
@@ -505,8 +526,27 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange }: Calen
                     })
                   : dateRange.map(date => {
                       const items = getItemsForDate(employee.id, date);
+                      const slotKey = `${employee.id}-${format(date, 'yyyy-MM-dd')}`;
+                      const isOver = dragOverSlot === slotKey;
                       return (
-                        <div key={date.toISOString()} className="w-36 flex-shrink-0 border-r p-1 min-h-[80px]" data-testid={`slot-${employee.id}-${format(date, 'yyyy-MM-dd')}`}>
+                        <div
+                          key={date.toISOString()}
+                          className={`w-36 flex-shrink-0 border-r p-1 min-h-[80px] transition-colors duration-100 ${isOver ? 'bg-blue-50 border-blue-300 border-2' : ''}`}
+                          data-testid={`slot-${employee.id}-${format(date, 'yyyy-MM-dd')}`}
+                          onDragOver={onJobDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverSlot(slotKey); } : undefined}
+                          onDragLeave={onJobDrop ? () => setDragOverSlot(null) : undefined}
+                          onDrop={onJobDrop ? (e) => {
+                            e.preventDefault();
+                            setDragOverSlot(null);
+                            const jobId = e.dataTransfer.getData('jobId');
+                            if (jobId) onJobDrop(jobId, date, 8);
+                          } : undefined}
+                        >
+                          {isOver && (
+                            <div className="text-[10px] text-blue-500 font-medium text-center py-1 opacity-80">
+                              Drop to schedule
+                            </div>
+                          )}
                           {items.map(job => (
                             <div
                               key={job.id}

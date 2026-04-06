@@ -1481,6 +1481,47 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     setSelectedJob(null); // Close the job details dialog
   };
 
+  // Called when a job is dragged from the right panel and dropped onto a calendar slot.
+  // Schedules the job directly at the dropped time — no staff assignment required.
+  const handleCalendarJobDrop = (jobId: string, date: Date, hour: number) => {
+    const job = jobsData?.data?.find((j: any) => j.id === jobId);
+    if (!job) {
+      toast({ title: 'Job not found', variant: 'destructive' });
+      return;
+    }
+
+    const nzDateStr = date.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+    const endHour = Math.min(hour + 2, 18);
+    const startTimeStr = `${String(hour).padStart(2, '0')}:00`;
+    const endTimeStr = `${String(endHour).padStart(2, '0')}:00`;
+
+    const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
+
+    const updates: any = {
+      scheduledDate: startDateTime.toISOString(),
+      estimatedDuration: 2,
+    };
+
+    // Only advance status if not already scheduled/complete/archived
+    if (job.status !== 'scheduled' && job.status !== 'completed' && job.status !== 'invoiced' && job.status !== 'archived') {
+      updates.status = 'scheduled';
+    }
+
+    updateJobMutation.mutate({ id: jobId, updates }, {
+      onSuccess: () => {
+        toast({
+          title: 'Job Scheduled',
+          description: `${job.customerName} scheduled for ${startTimeStr} – ${endTimeStr}`,
+        });
+        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      },
+      onError: () => {
+        toast({ title: 'Scheduling Failed', description: 'Could not schedule the job. Please try again.', variant: 'destructive' });
+      }
+    });
+  };
+
   const handleCreateJob = () => {
     setJobToEdit(null);
     setInitialJobData(null);
@@ -1498,10 +1539,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const saveSchedule = () => {
-    if (!jobToSchedule || !schedulingData.date || !schedulingData.startTime || !schedulingData.endTime || !schedulingData.assignedTo) {
+    if (!jobToSchedule || !schedulingData.date || !schedulingData.startTime || !schedulingData.endTime) {
       toast({
         title: "Missing Information",
-        description: "Please fill in all required scheduling fields.",
+        description: "Please fill in the date and time fields.",
         variant: "destructive"
       });
       return;
@@ -1561,16 +1602,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updates.status = 'scheduled';
     }
 
-    // Handle assignment based on mode (aligned with schema)
-    if (assignmentMode === 'teams') {
-      // assignedTeam is an array of team member IDs
-      const team = mockTeams.find(t => t.id === schedulingData.assignedTo);
-      if (team) {
-        updates.assignedTeam = getTeamMembers(team.id).map(member => member.id);
+    // Handle assignment based on mode (only if staff/team was actually selected)
+    if (schedulingData.assignedTo) {
+      if (assignmentMode === 'teams') {
+        const team = mockTeams.find(t => t.id === schedulingData.assignedTo);
+        if (team) {
+          updates.assignedTeam = getTeamMembers(team.id).map(member => member.id);
+        }
+      } else {
+        updates.assignedTeam = [schedulingData.assignedTo];
       }
-    } else {
-      // Individual staff assignment - use assignedTeam with single member
-      updates.assignedTeam = [schedulingData.assignedTo];
     }
 
     // Persist the changes to backend
@@ -1787,6 +1828,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   <CalendarGrid 
                     selectedDate={selectedDate}
                     onDateChange={setSelectedDate}
+                    onJobDrop={handleCalendarJobDrop}
                   />
                 </Card>
               </div>
@@ -1950,10 +1992,28 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   <div
                     key={job.id}
                     className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
-                    onClick={() => handleEditJob(job)}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('jobId', job.id);
+                      e.dataTransfer.effectAllowed = 'move';
+                      // Prevent click from firing after drag
+                      e.currentTarget.dataset.dragging = 'true';
+                    }}
+                    onDragEnd={(e) => {
+                      delete e.currentTarget.dataset.dragging;
+                    }}
+                    onClick={(e) => {
+                      // Don't open job card if user just dragged
+                      if ((e.currentTarget as HTMLElement).dataset.dragging) return;
+                      handleEditJob(job);
+                    }}
                     data-testid={`desktop-job-card-${job.id}`}
                   >
                     <div className="flex items-start gap-3 p-4">
+                      {/* Drag handle indicator */}
+                      <div className="flex-shrink-0 flex items-center self-stretch opacity-30 hover:opacity-60 cursor-grab active:cursor-grabbing">
+                        <GripVertical className="h-4 w-4" />
+                      </div>
                       {/* Customer Avatar - Large Circle */}
                       <div className="relative flex-shrink-0">
                         <CustomerAvatar
