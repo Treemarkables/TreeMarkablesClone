@@ -437,7 +437,10 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
       )}
 
       {/* Grid */}
-      <div className="flex-1 overflow-auto">
+      <div
+        className="flex-1 overflow-auto"
+        onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
+      >
         <div className="flex flex-col min-w-max h-full">
           {/* Header row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
@@ -469,9 +472,9 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
           </div>
 
           {/* Staff rows */}
-          <div className="flex-1 flex flex-col">
+          <div className="flex-1 flex flex-col" onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}>
             {employees.map(employee => (
-              <div key={employee.id} className="flex min-h-[80px] border-b hover:bg-gray-50/50" data-testid={`staff-row-${employee.id}`}>
+              <div key={employee.id} className="flex min-h-[80px] border-b hover:bg-gray-50/50" data-testid={`staff-row-${employee.id}`} onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}>
                 {/* Name column */}
                 <div className="w-28 flex-shrink-0 border-r p-2 flex items-center gap-2 sticky left-0 bg-white z-10">
                   <Avatar className="h-6 w-6 flex-shrink-0">
