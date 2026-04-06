@@ -1163,24 +1163,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const filtered = jobs
       .filter(job => {
-        // When searching, show only active jobs — unsuccessful/completed/invoiced/archived
-        // are excluded from quick search and only appear in deep search results
-        if (isSearching) {
-          return job.status !== 'unsuccessful' &&
-                 job.status !== 'completed' &&
-                 job.status !== 'invoiced' &&
-                 job.status !== 'archived';
-        }
-        // Queued jobs belong exclusively to the Queue tab — exclude them from all other filters
+        // Always exclude terminal statuses from quick search
+        if (job.status === 'unsuccessful' || job.status === 'archived') return false;
+
+        // Queued jobs belong exclusively to the Queue tab
         if (jobFilter === 'queue') return job.inQueue === true;
         if (job.inQueue) return false;
-        // When a specific status filter is active, show only matching jobs (no exclusions)
+
+        // When a specific tab is selected, always scope to that tab (even while searching)
         if (jobFilter === 'lead') return job.status === 'lead';
         if (jobFilter === 'quote') return job.status === 'quote';
         if (jobFilter === 'work_order') return job.status === 'work_order';
         if (jobFilter === 'scheduled') return job.status === 'scheduled';
         if (jobFilter === 'completed') return job.status === 'completed';
-        // Default 'all': only show the three most actionable statuses
+
+        // 'all' tab while searching: show all non-terminal active statuses
+        if (isSearching) {
+          return job.status !== 'completed' && job.status !== 'invoiced';
+        }
+
+        // 'all' tab, no search: only the three most actionable statuses
         return job.status === 'lead' || job.status === 'quote' || job.status === 'work_order';
       })
       .filter(job => {
@@ -1850,8 +1852,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <ResizablePanel defaultSize={showGlobalJobCard ? 50 : 100} minSize={30}>
             <div className="flex gap-4 h-full pr-2">
               {/* Calendar Grid */}
-              <div className="w-[60%] h-full" data-testid="calendar-grid-container">
-                <Card className="h-full overflow-hidden">
+              <div className="w-[60%] h-full" data-testid="calendar-grid-container" onDragOver={(e) => e.preventDefault()}>
+                <Card className="h-full overflow-hidden" onDragOver={(e) => e.preventDefault()}>
                   <CalendarGrid 
                     selectedDate={selectedDate}
                     onDateChange={setSelectedDate}

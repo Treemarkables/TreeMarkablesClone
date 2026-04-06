@@ -375,7 +375,10 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="w-full h-full flex flex-col">
+    <div
+      className="w-full h-full flex flex-col"
+      onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
+    >
       {/* Navigation Header */}
       <div className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0 flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={goToToday} data-testid="button-today">
