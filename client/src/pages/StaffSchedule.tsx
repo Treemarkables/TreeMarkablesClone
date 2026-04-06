@@ -142,6 +142,8 @@ export default function StaffSchedule() {
       .map((assignment: any) => {
         const job = jobMap.get(assignment.jobId);
         if (!job) return null;
+        // Hide archived or unsuccessful jobs from the schedule
+        if (job.status === 'archived' || job.status === 'unsuccessful') return null;
         return { ...job, _assignmentStartTime: assignment.startTime };
       })
       .filter((job): job is Job & { _assignmentStartTime: string } => job !== null)

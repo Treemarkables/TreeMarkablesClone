@@ -117,7 +117,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
     const map = new Map<string, { assignment: StaffAssignment; job: Job }[]>();
     allAssignments.forEach(a => {
       const job = jobMap.get(a.jobId);
-      if (!job || job.status === 'archived') return;
+      if (!job || job.status === 'archived' || job.status === 'unsuccessful') return;
       // getNZDateString converts UTC → NZ date (e.g. "2026-03-16T19:00Z" → "2026-03-17")
       const nzDateStr = getNZDateString(a.startTime);
       const key = `${a.employeeId}__${nzDateStr}`;
@@ -134,7 +134,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
     const map = new Map<string, { assignment: StaffAssignment; job: Job }[]>();
     allAssignments.forEach(a => {
       const job = jobMap.get(a.jobId);
-      if (!job || job.status === 'archived' || !job.scheduledDate || !job.scheduledEndDate) return;
+      if (!job || job.status === 'archived' || job.status === 'unsuccessful' || !job.scheduledDate || !job.scheduledEndDate) return;
       const startNZ = getNZDateString(new Date(job.scheduledDate));
       const endNZ   = getNZDateString(new Date(job.scheduledEndDate));
       if (startNZ >= endNZ) return; // single-day or bad data — skip
@@ -241,7 +241,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
 
     // Fallback: jobs with job.assignedTo (no assignment record at all)
     return allJobs.filter(job => {
-      if (job.status === 'archived') return false;
+      if (job.status === 'archived' || job.status === 'unsuccessful') return false;
       if (!job.scheduledDate) return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
       if (!isSameDayNZ(job.scheduledDate, date)) return false;
@@ -270,7 +270,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
 
     // Fallback: jobs with job.assignedTo (no assignment record at all)
     return allJobs.filter(job => {
-      if (job.status === 'archived') return false;
+      if (job.status === 'archived' || job.status === 'unsuccessful') return false;
       if (!job.assignedTo?.includes(employeeId)) return false;
       if (!job.scheduledDate) return false;
       return job.scheduledEndDate
@@ -294,7 +294,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
     }
     // Fallback: jobs with scheduledDate (no assignment record)
     allJobs.forEach(job => {
-      if (seen.has(job.id) || job.status === 'archived' || !job.scheduledDate) return;
+      if (seen.has(job.id) || job.status === 'archived' || job.status === 'unsuccessful' || !job.scheduledDate) return;
       const spans = job.scheduledEndDate
         ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
         : isSameDayNZ(job.scheduledDate, date);
