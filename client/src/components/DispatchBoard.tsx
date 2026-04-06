@@ -1162,9 +1162,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                  job.status !== 'invoiced' &&
                  job.status !== 'archived';
         }
+        // Queued jobs belong exclusively to the Queue tab — exclude them from all other filters
+        if (jobFilter === 'queue') return job.inQueue === true;
+        if (job.inQueue) return false;
         // When a specific status filter is active, show only matching jobs (no exclusions)
         if (jobFilter === 'lead') return job.status === 'lead';
-        if (jobFilter === 'queue') return job.inQueue === true;
         if (jobFilter === 'quote') return job.status === 'quote';
         if (jobFilter === 'work_order') return job.status === 'work_order';
         if (jobFilter === 'scheduled') return job.status === 'scheduled';
