@@ -1353,6 +1353,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     },
   });
 
+  const archiveJobQuickMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest('PUT', `/api/jobs/${id}`, { status: 'archived' });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      toast({ title: 'Job Archived', description: 'Job removed from board and staff schedule.' });
+    },
+    onError: () => {
+      toast({ title: 'Error', description: 'Could not archive job', variant: 'destructive' });
+    },
+  });
+
   const confirmJobMutation = useMutation({
     mutationFn: async ({ id, customerConfirmed }: { id: string; customerConfirmed: boolean }) => {
       const response = await apiRequest('PUT', `/api/jobs/${id}`, { customerConfirmed });
@@ -2155,6 +2171,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         >
                           <Check className={`h-4 w-4 ${job.customerConfirmed ? 'text-green-600' : 'text-gray-400'}`} />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Archive job (remove from board)"
+                          className="h-10 w-10 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-300"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm('Archive this job? It will be removed from the board and staff schedule.')) {
+                              archiveJobQuickMutation.mutate(job.id);
+                            }
+                          }}
+                        >
+                          <X className="h-4 w-4 text-gray-400 hover:text-red-500" />
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -2584,6 +2614,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             }}
                           >
                             <Check className={`h-4 w-4 ${job.customerConfirmed ? 'text-green-600' : 'text-gray-500'}`} />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="outline"
+                            title="Archive job (remove from board)"
+                            className="rounded-lg hover:border-red-300 hover:bg-red-50"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Archive this job? It will be removed from the board and staff schedule.')) {
+                                archiveJobQuickMutation.mutate(job.id);
+                              }
+                            }}
+                          >
+                            <X className="h-4 w-4 text-gray-500" />
                           </Button>
                         </div>
                       </div>
