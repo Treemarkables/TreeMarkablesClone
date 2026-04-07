@@ -3,7 +3,7 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AIAssistantChat } from "@/components/AIAssistantChat";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -156,12 +156,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [dispatchDate, setDispatchDate] = useState(new Date());
-  const { setOpen } = useSidebar();
-  
-  // Sync sidebar state with viewport changes
-  useEffect(() => {
-    setOpen(!isMobile);
-  }, [isMobile, setOpen]);
   
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
