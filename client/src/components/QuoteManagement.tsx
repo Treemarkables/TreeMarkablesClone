@@ -1,40 +1,70 @@
-import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Calendar } from '@/components/ui/calendar';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { format } from 'date-fns';
-import { 
-  Plus, 
-  Edit, 
-  Eye, 
-  Send, 
-  Check, 
-  X, 
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { format } from "date-fns";
+import {
+  Plus,
+  Edit,
+  Eye,
+  Send,
+  Check,
+  X,
   Calendar as CalendarIcon,
   DollarSign,
   FileText,
   Trash2,
   Download,
-  MoreHorizontal
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import type { Quote, DocumentTemplate, Customer } from '@shared/schema';
-import { ProposalGeneration } from '@/components/ProposalGeneration';
-import { QuoteTemplate } from '@/components/QuoteTemplate';
+  MoreHorizontal,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import type { Quote, DocumentTemplate, Customer } from "@shared/schema";
+import { ProposalGeneration } from "@/components/ProposalGeneration";
+import { QuoteTemplate } from "@/components/QuoteTemplate";
 
 // Line item structure for quotes
 interface LineItem {
@@ -49,18 +79,29 @@ interface LineItem {
 const quoteFormSchema = z.object({
   leadId: z.string().optional(),
   customerId: z.string().optional(),
-  description: z.string().min(1, 'Description is required'),
-  amount: z.string().min(1, 'Amount is required'),
+  description: z.string().min(1, "Description is required"),
+  amount: z.string().min(1, "Amount is required"),
   validUntil: z.date().optional(),
-  status: z.enum(['draft', 'sent', 'viewed', 'accepted', 'rejected', 'expired']),
-  presentationMethod: z.enum(['on-site', 'sent-later', 'phone']).optional(),
+  status: z.enum([
+    "draft",
+    "sent",
+    "viewed",
+    "accepted",
+    "rejected",
+    "expired",
+  ]),
+  presentationMethod: z.enum(["on-site", "sent-later", "phone"]).optional(),
   terms: z.string().optional(),
-  lineItems: z.array(z.object({
-    description: z.string(),
-    quantity: z.number(),
-    unitPrice: z.number(),
-    total: z.number()
-  })).optional()
+  lineItems: z
+    .array(
+      z.object({
+        description: z.string(),
+        quantity: z.number(),
+        unitPrice: z.number(),
+        total: z.number(),
+      }),
+    )
+    .optional(),
 });
 
 type QuoteFormData = z.infer<typeof quoteFormSchema>;
@@ -69,7 +110,9 @@ interface QuoteManagementProps {
   compact?: boolean;
 }
 
-export default function QuoteManagement({ compact = false }: QuoteManagementProps) {
+export default function QuoteManagement({
+  compact = false,
+}: QuoteManagementProps) {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingQuote, setEditingQuote] = useState<Quote | null>(null);
   const [previewingQuote, setPreviewingQuote] = useState<Quote | null>(null);
@@ -78,159 +121,174 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
 
   // Fetch quotes
   const { data: quotes, isLoading } = useQuery({
-    queryKey: ['/api/quotes'],
+    queryKey: ["/api/quotes"],
     queryFn: async () => {
-      const response = await fetch('/api/quotes');
+      const response = await fetch("/api/quotes");
       const result = await response.json();
       return result.data as Quote[];
-    }
+    },
   });
 
   // Fetch leads and customers for quote creation
   const { data: leads } = useQuery({
-    queryKey: ['/api/leads'],
+    queryKey: ["/api/leads"],
     queryFn: async () => {
-      const response = await fetch('/api/leads');
+      const response = await fetch("/api/leads");
       const result = await response.json();
       return Array.isArray(result.data) ? result.data : [];
-    }
+    },
   });
 
   const { data: customers } = useQuery({
-    queryKey: ['/api/customers'],
+    queryKey: ["/api/customers"],
     queryFn: async () => {
-      const response = await fetch('/api/customers');
+      const response = await fetch("/api/customers");
       const result = await response.json();
       return Array.isArray(result.data) ? result.data : [];
-    }
+    },
   });
 
   // Fetch quote templates
   const { data: templates } = useQuery({
-    queryKey: ['/api/templates'],
+    queryKey: ["/api/templates"],
     queryFn: async () => {
-      const response = await fetch('/api/templates?type=quote');
+      const response = await fetch("/api/templates?type=quote");
       const result = await response.json();
       return Array.isArray(result.data) ? result.data : [];
-    }
+    },
   });
 
   // Get default quote template or first available template
-  const defaultTemplate = templates?.find((t: DocumentTemplate) => t.isDefault && t.type === 'quote') || templates?.[0];
+  const defaultTemplate =
+    templates?.find(
+      (t: DocumentTemplate) => t.isDefault && t.type === "quote",
+    ) || templates?.[0];
 
   // Create quote mutation
   const createQuoteMutation = useMutation({
     mutationFn: async (data: QuoteFormData) => {
       // Calculate amount from line items if not provided or if line items exist
-      const calculatedAmount = lineItems.length > 0 ? calculateTotal() : parseFloat(data.amount || '0');
-      
+      const calculatedAmount =
+        lineItems.length > 0
+          ? calculateTotal()
+          : parseFloat(data.amount || "0");
+
       const quoteData = {
         ...data,
         quoteNumber: `Q-${Date.now()}`,
         amount: calculatedAmount.toString(),
-        lineItems: lineItems.length > 0 ? lineItems : undefined
+        lineItems: lineItems.length > 0 ? lineItems : undefined,
       };
-      
-      const response = await fetch('/api/quotes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(quoteData)
+
+      const response = await fetch("/api/quotes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(quoteData),
       });
-      
+
       const result = await response.json();
-      
+
       if (!response.ok) {
-        throw new Error(result.message || 'Failed to create quote');
+        throw new Error(result.message || "Failed to create quote");
       }
-      
+
       return result;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       setIsCreateDialogOpen(false);
       resetForm();
     },
     onError: (error: any) => {
-      console.error('Quote creation error:', error);
+      console.error("Quote creation error:", error);
       toast({
-        title: 'Error',
-        description: error.message || 'Failed to create quote',
-        variant: 'destructive'
+        title: "Error",
+        description: error.message || "Failed to create quote",
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Update quote mutation
   const updateQuoteMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<QuoteFormData> }) => {
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<QuoteFormData>;
+    }) => {
       const response = await fetch(`/api/quotes/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...data,
-          amount: data.amount ? parseFloat(data.amount) : undefined
-        })
+          amount: data.amount ? parseFloat(data.amount) : undefined,
+        }),
       });
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
       setEditingQuote(null);
-    }
+    },
   });
 
-  // Convert to job mutation  
+  // Convert to job mutation
   const convertToJobMutation = useMutation({
     mutationFn: async (quoteId: string) => {
       const response = await fetch(`/api/quotes/${quoteId}/convert-to-job`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
       });
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    }
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
   });
 
   // Accept quote mutation - converts to work order
   const acceptQuoteMutation = useMutation({
     mutationFn: async (quoteId: string) => {
-      console.log('Accepting quote:', quoteId);
-      const response = await apiRequest('POST', `/api/quotes/${quoteId}/accept`);
+      console.log("Accepting quote:", quoteId);
+      const response = await apiRequest(
+        "POST",
+        `/api/quotes/${quoteId}/accept`,
+      );
       return response;
     },
     onSuccess: (response: any) => {
-      console.log('Quote accepted successfully:', response);
-      
+      console.log("Quote accepted successfully:", response);
+
       // Invalidate queries to refresh data
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      
+      queryClient.invalidateQueries({ queryKey: ["/api/quotes"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+
       // Close the preview modal
       setPreviewingQuote(null);
     },
     onError: (error: any) => {
-      console.error('Quote acceptance error:', error);
+      console.error("Quote acceptance error:", error);
       toast({
         title: "Acceptance Failed",
         description: error.message || "Failed to accept quote",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Form setup
   const form = useForm<QuoteFormData>({
     resolver: zodResolver(quoteFormSchema),
     defaultValues: {
-      status: 'draft',
-      description: '',
-      amount: '',
-      terms: ''
-    }
+      status: "draft",
+      description: "",
+      amount: "",
+      terms: "",
+    },
   });
 
   const resetForm = () => {
@@ -241,30 +299,36 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
   const addLineItem = () => {
     const newItem: LineItem = {
       id: Math.random().toString(36).substr(2, 9),
-      description: '',
+      description: "",
       quantity: 1,
       unitPrice: 0,
-      total: 0
+      total: 0,
     };
     setLineItems([...lineItems, newItem]);
   };
 
-  const updateLineItem = (id: string, field: keyof LineItem, value: string | number) => {
-    setLineItems(prev => prev.map(item => {
-      if (item.id === id) {
-        const updated = { ...item, [field]: value };
-        // Auto-calculate total
-        if (field === 'quantity' || field === 'unitPrice') {
-          updated.total = updated.quantity * updated.unitPrice;
+  const updateLineItem = (
+    id: string,
+    field: keyof LineItem,
+    value: string | number,
+  ) => {
+    setLineItems((prev) =>
+      prev.map((item) => {
+        if (item.id === id) {
+          const updated = { ...item, [field]: value };
+          // Auto-calculate total
+          if (field === "quantity" || field === "unitPrice") {
+            updated.total = updated.quantity * updated.unitPrice;
+          }
+          return updated;
         }
-        return updated;
-      }
-      return item;
-    }));
+        return item;
+      }),
+    );
   };
 
   const removeLineItem = (id: string) => {
-    setLineItems(prev => prev.filter(item => item.id !== id));
+    setLineItems((prev) => prev.filter((item) => item.id !== id));
   };
 
   const calculateTotal = () => {
@@ -273,15 +337,24 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
 
   const getStatusBadge = (status: string) => {
     const statusConfig = {
-      draft: { variant: 'outline' as const, label: 'Draft', className: '' },
-      sent: { variant: 'default' as const, label: 'Sent', className: '' },
-      viewed: { variant: 'secondary' as const, label: 'Viewed', className: '' },
-      accepted: { variant: 'default' as const, label: 'Accepted', className: 'bg-green-500' },
-      rejected: { variant: 'destructive' as const, label: 'Rejected', className: '' },
-      expired: { variant: 'outline' as const, label: 'Expired', className: '' }
+      draft: { variant: "outline" as const, label: "Draft", className: "" },
+      sent: { variant: "default" as const, label: "Sent", className: "" },
+      viewed: { variant: "secondary" as const, label: "Viewed", className: "" },
+      accepted: {
+        variant: "default" as const,
+        label: "Accepted",
+        className: "bg-green-500",
+      },
+      rejected: {
+        variant: "destructive" as const,
+        label: "Rejected",
+        className: "",
+      },
+      expired: { variant: "outline" as const, label: "Expired", className: "" },
     };
-    
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
+
+    const config =
+      statusConfig[status as keyof typeof statusConfig] || statusConfig.draft;
     return (
       <Badge variant={config.variant} className={config.className}>
         {config.label}
@@ -316,9 +389,11 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Quote Management</h2>
-          <p className="text-muted-foreground">Create and manage customer quotes</p>
+          <p className="text-muted-foreground">
+            Create and manage customer quotes
+          </p>
         </div>
-        
+
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-create-quote">
@@ -328,11 +403,16 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
           </DialogTrigger>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingQuote ? 'Edit Quote' : 'Create New Quote'}</DialogTitle>
+              <DialogTitle>
+                {editingQuote ? "Edit Quote" : "Create New Quote"}
+              </DialogTitle>
             </DialogHeader>
-            
+
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form
+                onSubmit={form.handleSubmit(onSubmit)}
+                className="space-y-6"
+              >
                 <div className="grid grid-cols-2 gap-4">
                   <FormField
                     control={form.control}
@@ -340,18 +420,23 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Lead</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-lead">
                               <SelectValue placeholder="Select lead" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            {Array.isArray(leads) && leads.length > 0 ? leads.map((lead: any) => (
-                              <SelectItem key={lead.id} value={lead.id}>
-                                {lead.name}
-                              </SelectItem>
-                            )) : (
+                            {Array.isArray(leads) && leads.length > 0 ? (
+                              leads.map((lead: any) => (
+                                <SelectItem key={lead.id} value={lead.id}>
+                                  {lead.name}
+                                </SelectItem>
+                              ))
+                            ) : (
                               <SelectItem value="no-leads" disabled>
                                 No leads available
                               </SelectItem>
@@ -369,7 +454,10 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-status">
                               <SelectValue />
@@ -395,16 +483,25 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Presentation Method</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value || ''}>
+                        <Select
+                          onValueChange={field.onChange}
+                          value={field.value || ""}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-presentation-method">
                               <SelectValue placeholder="How was this quote presented?" />
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="on-site">On-Site (presented in person)</SelectItem>
-                            <SelectItem value="sent-later">Sent Later (email/text)</SelectItem>
-                            <SelectItem value="phone">Over the Phone</SelectItem>
+                            <SelectItem value="on-site">
+                              On-Site (presented in person)
+                            </SelectItem>
+                            <SelectItem value="sent-later">
+                              Sent Later (email/text)
+                            </SelectItem>
+                            <SelectItem value="phone">
+                              Over the Phone
+                            </SelectItem>
                           </SelectContent>
                         </Select>
                         <FormMessage />
@@ -420,8 +517,8 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                     <FormItem>
                       <FormLabel>Description</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Quote description..." 
+                        <Textarea
+                          placeholder="Quote description..."
                           {...field}
                           data-testid="input-description"
                         />
@@ -435,9 +532,9 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-base font-medium">Line Items</Label>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       size="sm"
                       onClick={addLineItem}
                       data-testid="button-add-line-item"
@@ -465,7 +562,13 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                               <TableCell>
                                 <Input
                                   value={item.description}
-                                  onChange={(e) => updateLineItem(item.id, 'description', e.target.value)}
+                                  onChange={(e) =>
+                                    updateLineItem(
+                                      item.id,
+                                      "description",
+                                      e.target.value,
+                                    )
+                                  }
                                   placeholder="Item description"
                                   data-testid={`input-line-item-description-${item.id}`}
                                 />
@@ -474,7 +577,13 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                                 <Input
                                   type="number"
                                   value={item.quantity}
-                                  onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    updateLineItem(
+                                      item.id,
+                                      "quantity",
+                                      parseFloat(e.target.value) || 0,
+                                    )
+                                  }
                                   data-testid={`input-line-item-quantity-${item.id}`}
                                 />
                               </TableCell>
@@ -483,12 +592,21 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                                   type="number"
                                   step="0.01"
                                   value={item.unitPrice}
-                                  onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                                  onChange={(e) =>
+                                    updateLineItem(
+                                      item.id,
+                                      "unitPrice",
+                                      parseFloat(e.target.value) || 0,
+                                    )
+                                  }
                                   data-testid={`input-line-item-price-${item.id}`}
                                 />
                               </TableCell>
                               <TableCell>
-                                <div className="font-medium" data-testid={`text-line-item-total-${item.id}`}>
+                                <div
+                                  className="font-medium"
+                                  data-testid={`text-line-item-total-${item.id}`}
+                                >
                                   ${item.total.toFixed(2)}
                                 </div>
                               </TableCell>
@@ -507,12 +625,15 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                           ))}
                         </TableBody>
                       </Table>
-                      
+
                       {lineItems.length > 0 && (
                         <div className="p-4 border-t bg-muted/50">
                           <div className="flex justify-between items-center">
                             <span className="font-medium">Total:</span>
-                            <span className="text-lg font-bold" data-testid="text-quote-total">
+                            <span
+                              className="text-lg font-bold"
+                              data-testid="text-quote-total"
+                            >
                               ${calculateTotal().toFixed(2)}
                             </span>
                           </div>
@@ -530,10 +651,10 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                       <FormItem>
                         <FormLabel>Amount</FormLabel>
                         <FormControl>
-                          <Input 
-                            type="number" 
-                            step="0.01" 
-                            placeholder="0.00" 
+                          <Input
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
                             {...field}
                             data-testid="input-amount"
                           />
@@ -551,8 +672,8 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                     <FormItem>
                       <FormLabel>Terms & Conditions</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          placeholder="Terms and conditions..." 
+                        <Textarea
+                          placeholder="Terms and conditions..."
                           {...field}
                           data-testid="input-terms"
                         />
@@ -563,9 +684,9 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                 />
 
                 <div className="flex justify-end space-x-2">
-                  <Button 
-                    type="button" 
-                    variant="outline" 
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => {
                       setIsCreateDialogOpen(false);
                       setEditingQuote(null);
@@ -574,12 +695,15 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                   >
                     Cancel
                   </Button>
-                  <Button 
+                  <Button
                     type="submit"
-                    disabled={createQuoteMutation.isPending || updateQuoteMutation.isPending}
+                    disabled={
+                      createQuoteMutation.isPending ||
+                      updateQuoteMutation.isPending
+                    }
                     data-testid="button-save-quote"
                   >
-                    {editingQuote ? 'Update Quote' : 'Create Quote'}
+                    {editingQuote ? "Update Quote" : "Create Quote"}
                   </Button>
                 </div>
               </form>
@@ -597,38 +721,46 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
           {quotes && quotes.length > 0 ? (
             <div className="space-y-4">
               {quotes.map((quote) => (
-                <div 
-                  key={quote.id} 
+                <div
+                  key={quote.id}
                   className="flex items-center justify-between p-4 border rounded-lg hover-elevate"
                   data-testid={`quote-card-${quote.id}`}
                 >
                   <div className="flex-1">
                     <div className="flex items-center space-x-3">
-                      <h4 className="font-medium" data-testid={`quote-number-${quote.id}`}>
+                      <h4
+                        className="font-medium"
+                        data-testid={`quote-number-${quote.id}`}
+                      >
                         {quote.quoteNumber}
                       </h4>
                       {getStatusBadge(quote.status)}
                     </div>
-                    <p className="text-sm text-muted-foreground mt-1" data-testid={`quote-description-${quote.id}`}>
+                    <p
+                      className="text-sm text-muted-foreground mt-1"
+                      data-testid={`quote-description-${quote.id}`}
+                    >
                       {quote.description}
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Created: {new Date(quote.createdAt).toLocaleDateString()}
                     </p>
                   </div>
-                  
+
                   <div className="text-right space-y-2">
-                    <div className="text-xl font-bold" data-testid={`quote-amount-${quote.id}`}>
+                    <div
+                      className="text-xl font-bold"
+                      data-testid={`quote-amount-${quote.id}`}
+                    >
                       ${parseFloat(quote.amount).toLocaleString()}
                     </div>
                     <div className="space-x-2">
-                      <ProposalGeneration 
+                      <ProposalGeneration
                         quoteId={quote.id}
                         customerId={quote.customerId || undefined}
-                        onProposalCreated={(proposal) => {
-                        }}
+                        onProposalCreated={(proposal) => {}}
                       />
-                      {quote.status === 'accepted' && (
+                      {quote.status === "accepted" && (
                         <Button
                           size="sm"
                           variant="default"
@@ -658,7 +790,7 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                             description: quote.description,
                             amount: quote.amount,
                             status: quote.status as any,
-                            terms: quote.terms || ''
+                            terms: quote.terms || "",
                           });
                         }}
                         data-testid={`button-edit-quote-${quote.id}`}
@@ -682,16 +814,31 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
 
       {/* Quote Preview Dialog */}
       {previewingQuote && defaultTemplate && (
-        <Dialog open={!!previewingQuote} onOpenChange={() => setPreviewingQuote(null)}>
+        <Dialog
+          open={!!previewingQuote}
+          onOpenChange={() => setPreviewingQuote(null)}
+        >
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Quote Preview - #{previewingQuote.quoteNumber}</DialogTitle>
+              <DialogTitle>
+                Quote Preview - #{previewingQuote.quoteNumber}
+              </DialogTitle>
             </DialogHeader>
             <QuoteTemplate
               template={defaultTemplate}
               quote={previewingQuote}
-              customer={Array.isArray(customers) ? customers.find((c: Customer) => c.id === previewingQuote.customerId) : undefined}
-              lineItems={previewingQuote.lineItems ? JSON.parse(JSON.stringify(previewingQuote.lineItems)) : []}
+              customer={
+                Array.isArray(customers)
+                  ? customers.find(
+                      (c: Customer) => c.id === previewingQuote.customerId,
+                    )
+                  : undefined
+              }
+              lineItems={
+                previewingQuote.lineItems
+                  ? JSON.parse(JSON.stringify(previewingQuote.lineItems))
+                  : []
+              }
               showActions={true}
               onAccept={() => acceptQuoteMutation.mutate(previewingQuote.id)}
               isAccepting={acceptQuoteMutation.isPending}
@@ -704,11 +851,11 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
               onDownload={() => {
                 toast({
                   title: "PDF Generation",
-                  description: "PDF generation functionality will be implemented next.",
+                  description:
+                    "PDF generation functionality will be implemented next.",
                 });
               }}
-              onCopy={() => {
-              }}
+              onCopy={() => {}}
             />
           </DialogContent>
         </Dialog>

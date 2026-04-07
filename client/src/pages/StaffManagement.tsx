@@ -1,28 +1,47 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-import { 
-  Users, 
-  Plus, 
-  Search, 
-  MoreVertical, 
-  Edit, 
-  Trash2, 
-  Phone, 
-  Mail, 
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  Users,
+  Plus,
+  Search,
+  MoreVertical,
+  Edit,
+  Trash2,
+  Phone,
+  Mail,
   Calendar,
   Award,
   DollarSign,
@@ -31,57 +50,60 @@ import {
   UserX,
   Settings,
   ChevronLeft,
-  Lock
-} from 'lucide-react';
-import { Link } from 'wouter';
-import { useAuth } from '@/contexts/AuthContext';
+  Lock,
+} from "lucide-react";
+import { Link } from "wouter";
+import { useAuth } from "@/contexts/AuthContext";
 
 // Staff role options
 const STAFF_ROLES = [
-  { value: 'admin', label: 'Admin', color: 'bg-gradient-to-r from-purple-500 to-pink-500' },
-  { value: 'crew', label: 'Crew', color: 'bg-gradient-to-r from-green-500 to-emerald-500' }
+  {
+    value: "admin",
+    label: "Admin",
+    color: "bg-gradient-to-r from-purple-500 to-pink-500",
+  },
+  {
+    value: "crew",
+    label: "Crew",
+    color: "bg-gradient-to-r from-green-500 to-emerald-500",
+  },
 ];
 
 const POSITIONS = [
-  'Arborist',
-  'Ground Crew',
-  'Foreman',
-  'Driver',
-  'Climber',
-  'Equipment Operator',
-  'Safety Officer',
-  'Apprentice'
+  "Arborist",
+  "Ground Crew",
+  "Foreman",
+  "Driver",
+  "Climber",
+  "Equipment Operator",
+  "Safety Officer",
+  "Apprentice",
 ];
 
-const SKILL_LEVELS = [
-  'Beginner',
-  'Intermediate', 
-  'Advanced',
-  'Expert'
-];
+const SKILL_LEVELS = ["Beginner", "Intermediate", "Advanced", "Expert"];
 
 const COMMON_CERTIFICATIONS = [
-  'ISA Certified Arborist',
-  'CTSP (Tree Safety Professional)',
-  'Chainsaw Operation',
-  'Aerial Lift Operation',
-  'First Aid & CPR',
-  'Crane Operation',
-  'OSHA 10',
-  'Commercial Driver License'
+  "ISA Certified Arborist",
+  "CTSP (Tree Safety Professional)",
+  "Chainsaw Operation",
+  "Aerial Lift Operation",
+  "First Aid & CPR",
+  "Crane Operation",
+  "OSHA 10",
+  "Commercial Driver License",
 ];
 
 const COMMON_SKILLS = [
-  'Tree Climbing',
-  'Chainsaw Operation', 
-  'Bucket Truck Operation',
-  'Stump Grinding',
-  'Tree Identification',
-  'Rigging & Removal',
-  'Pruning Techniques',
-  'Emergency Response',
-  'Customer Service',
-  'Equipment Maintenance'
+  "Tree Climbing",
+  "Chainsaw Operation",
+  "Bucket Truck Operation",
+  "Stump Grinding",
+  "Tree Identification",
+  "Rigging & Removal",
+  "Pruning Techniques",
+  "Emergency Response",
+  "Customer Service",
+  "Equipment Maintenance",
 ];
 
 // Form schema for staff
@@ -91,9 +113,11 @@ const staffFormSchema = z.object({
   email: z.string().email("Invalid email address").optional().or(z.literal("")),
   phone: z.string().optional(),
   position: z.string().min(1, "Position is required"),
-  role: z.enum(['admin', 'crew']),
-  status: z.enum(['active', 'inactive', 'on_leave']).default('active'),
-  skillLevel: z.enum(['beginner', 'intermediate', 'advanced', 'expert']).default('beginner'),
+  role: z.enum(["admin", "crew"]),
+  status: z.enum(["active", "inactive", "on_leave"]).default("active"),
+  skillLevel: z
+    .enum(["beginner", "intermediate", "advanced", "expert"])
+    .default("beginner"),
   hourlyRate: z.string().optional(),
   chargeOutRate: z.string().optional(),
   emergencyContact: z.string().optional(),
@@ -101,7 +125,7 @@ const staffFormSchema = z.object({
   notes: z.string().optional(),
   hireDate: z.string().optional(),
   certifications: z.array(z.string()).default([]),
-  skills: z.array(z.string()).default([])
+  skills: z.array(z.string()).default([]),
 });
 
 type StaffFormData = z.infer<typeof staffFormSchema>;
@@ -113,9 +137,9 @@ interface StaffMember {
   email?: string;
   phone?: string;
   position: string;
-  role: 'admin' | 'crew';
-  status: 'active' | 'inactive' | 'on_leave';
-  skillLevel: 'beginner' | 'intermediate' | 'advanced' | 'expert';
+  role: "admin" | "crew";
+  status: "active" | "inactive" | "on_leave";
+  skillLevel: "beginner" | "intermediate" | "advanced" | "expert";
   hourlyRate?: string;
   chargeOutRate?: string;
   certifications: string[];
@@ -129,15 +153,15 @@ interface StaffMember {
   updatedAt: string;
 }
 
-function StaffFormDialog({ 
-  staff, 
-  isOpen, 
-  onClose, 
-  onSubmit 
-}: { 
-  staff?: StaffMember; 
-  isOpen: boolean; 
-  onClose: () => void; 
+function StaffFormDialog({
+  staff,
+  isOpen,
+  onClose,
+  onSubmit,
+}: {
+  staff?: StaffMember;
+  isOpen: boolean;
+  onClose: () => void;
   onSubmit: (data: StaffFormData) => void;
 }) {
   const form = useForm<StaffFormData>({
@@ -158,8 +182,8 @@ function StaffFormDialog({
       notes: "",
       hireDate: "",
       certifications: [],
-      skills: []
-    }
+      skills: [],
+    },
   });
 
   // Reset form when staff data changes or dialog opens
@@ -182,7 +206,7 @@ function StaffFormDialog({
           notes: staff.notes || "",
           hireDate: staff.hireDate || "",
           certifications: staff.certifications || [],
-          skills: staff.skills || []
+          skills: staff.skills || [],
         });
       } else {
         form.reset({
@@ -201,7 +225,7 @@ function StaffFormDialog({
           notes: "",
           hireDate: "",
           certifications: [],
-          skills: []
+          skills: [],
         });
       }
     }
@@ -213,27 +237,33 @@ function StaffFormDialog({
   };
 
   const addCertification = (cert: string) => {
-    const current = form.getValues('certifications');
+    const current = form.getValues("certifications");
     if (!current.includes(cert)) {
-      form.setValue('certifications', [...current, cert]);
+      form.setValue("certifications", [...current, cert]);
     }
   };
 
   const removeCertification = (cert: string) => {
-    const current = form.getValues('certifications');
-    form.setValue('certifications', current.filter(c => c !== cert));
+    const current = form.getValues("certifications");
+    form.setValue(
+      "certifications",
+      current.filter((c) => c !== cert),
+    );
   };
 
   const addSkill = (skill: string) => {
-    const current = form.getValues('skills');
+    const current = form.getValues("skills");
     if (!current.includes(skill)) {
-      form.setValue('skills', [...current, skill]);
+      form.setValue("skills", [...current, skill]);
     }
   };
 
   const removeSkill = (skill: string) => {
-    const current = form.getValues('skills');
-    form.setValue('skills', current.filter(s => s !== skill));
+    const current = form.getValues("skills");
+    form.setValue(
+      "skills",
+      current.filter((s) => s !== skill),
+    );
   };
 
   return (
@@ -243,13 +273,16 @@ function StaffFormDialog({
           <div className="flex items-center gap-2">
             <Users className="w-5 h-5" />
             <DialogTitle className="text-white">
-              {staff ? 'Edit Staff Member' : 'Add New Staff Member'}
+              {staff ? "Edit Staff Member" : "Add New Staff Member"}
             </DialogTitle>
           </div>
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-6"
+          >
             {/* Basic Information */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -288,7 +321,11 @@ function StaffFormDialog({
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input type="email" {...field} data-testid="input-email" />
+                      <Input
+                        type="email"
+                        {...field}
+                        data-testid="input-email"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -317,14 +354,17 @@ function StaffFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Role *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-role">
                           <SelectValue placeholder="Select role" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {STAFF_ROLES.map(role => (
+                        {STAFF_ROLES.map((role) => (
                           <SelectItem key={role.value} value={role.value}>
                             {role.label}
                           </SelectItem>
@@ -341,15 +381,21 @@ function StaffFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Position *</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-position">
                           <SelectValue placeholder="Select position" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {POSITIONS.map(position => (
-                          <SelectItem key={position} value={position.toLowerCase().replace(/\s+/g, '_')}>
+                        {POSITIONS.map((position) => (
+                          <SelectItem
+                            key={position}
+                            value={position.toLowerCase().replace(/\s+/g, "_")}
+                          >
                             {position}
                           </SelectItem>
                         ))}
@@ -365,14 +411,17 @@ function StaffFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Skill Level</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-skill-level">
                           <SelectValue placeholder="Select skill level" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {SKILL_LEVELS.map(level => (
+                        {SKILL_LEVELS.map((level) => (
                           <SelectItem key={level} value={level.toLowerCase()}>
                             {level}
                           </SelectItem>
@@ -393,7 +442,10 @@ function StaffFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Status</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select
+                      onValueChange={field.onChange}
+                      defaultValue={field.value}
+                    >
                       <FormControl>
                         <SelectTrigger data-testid="select-status">
                           <SelectValue placeholder="Select status" />
@@ -416,7 +468,13 @@ function StaffFormDialog({
                   <FormItem>
                     <FormLabel>Cost Rate (NZD/hr)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="Internal cost rate" {...field} data-testid="input-hourly-rate" />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Internal cost rate"
+                        {...field}
+                        data-testid="input-hourly-rate"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -429,7 +487,13 @@ function StaffFormDialog({
                   <FormItem>
                     <FormLabel>Charge-out Rate (NZD/hr)</FormLabel>
                     <FormControl>
-                      <Input type="number" step="0.01" placeholder="Customer billing rate" {...field} data-testid="input-charge-out-rate" />
+                      <Input
+                        type="number"
+                        step="0.01"
+                        placeholder="Customer billing rate"
+                        {...field}
+                        data-testid="input-charge-out-rate"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -442,7 +506,11 @@ function StaffFormDialog({
                   <FormItem>
                     <FormLabel>Hire Date</FormLabel>
                     <FormControl>
-                      <Input type="date" {...field} data-testid="input-hire-date" />
+                      <Input
+                        type="date"
+                        {...field}
+                        data-testid="input-hire-date"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -484,13 +552,13 @@ function StaffFormDialog({
             <div className="space-y-2">
               <FormLabel>Certifications</FormLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {form.watch('certifications').map(cert => (
-                  <Badge 
-                    key={cert} 
-                    variant="secondary" 
+                {form.watch("certifications").map((cert) => (
+                  <Badge
+                    key={cert}
+                    variant="secondary"
                     className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
                     onClick={() => removeCertification(cert)}
-                    data-testid={`badge-cert-${cert.replace(/\s+/g, '-').toLowerCase()}`}
+                    data-testid={`badge-cert-${cert.replace(/\s+/g, "-").toLowerCase()}`}
                   >
                     {cert} ×
                   </Badge>
@@ -501,9 +569,9 @@ function StaffFormDialog({
                   <SelectValue placeholder="Add certification..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMON_CERTIFICATIONS
-                    .filter(cert => !form.watch('certifications').includes(cert))
-                    .map(cert => (
+                  {COMMON_CERTIFICATIONS.filter(
+                    (cert) => !form.watch("certifications").includes(cert),
+                  ).map((cert) => (
                     <SelectItem key={cert} value={cert}>
                       {cert}
                     </SelectItem>
@@ -516,13 +584,13 @@ function StaffFormDialog({
             <div className="space-y-2">
               <FormLabel>Skills</FormLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {form.watch('skills').map(skill => (
-                  <Badge 
-                    key={skill} 
-                    variant="outline" 
+                {form.watch("skills").map((skill) => (
+                  <Badge
+                    key={skill}
+                    variant="outline"
                     className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
                     onClick={() => removeSkill(skill)}
-                    data-testid={`badge-skill-${skill.replace(/\s+/g, '-').toLowerCase()}`}
+                    data-testid={`badge-skill-${skill.replace(/\s+/g, "-").toLowerCase()}`}
                   >
                     {skill} ×
                   </Badge>
@@ -533,9 +601,9 @@ function StaffFormDialog({
                   <SelectValue placeholder="Add skill..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {COMMON_SKILLS
-                    .filter(skill => !form.watch('skills').includes(skill))
-                    .map(skill => (
+                  {COMMON_SKILLS.filter(
+                    (skill) => !form.watch("skills").includes(skill),
+                  ).map((skill) => (
                     <SelectItem key={skill} value={skill}>
                       {skill}
                     </SelectItem>
@@ -552,8 +620,8 @@ function StaffFormDialog({
                 <FormItem>
                   <FormLabel>Notes</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      {...field} 
+                    <Textarea
+                      {...field}
                       placeholder="Additional notes about this staff member..."
                       data-testid="textarea-notes"
                     />
@@ -565,20 +633,20 @@ function StaffFormDialog({
 
             {/* Submit Button */}
             <div className="flex justify-end gap-2 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={onClose}
                 data-testid="button-cancel"
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
                 className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
                 data-testid="button-save-staff"
               >
-                {staff ? 'Update Staff Member' : 'Add Staff Member'}
+                {staff ? "Update Staff Member" : "Add Staff Member"}
               </Button>
             </div>
           </form>
@@ -588,24 +656,28 @@ function StaffFormDialog({
   );
 }
 
-function SetPasswordDialog({ 
-  staff, 
-  isOpen, 
-  onClose, 
-  onSubmit 
-}: { 
-  staff: StaffMember | null; 
-  isOpen: boolean; 
-  onClose: () => void; 
+function SetPasswordDialog({
+  staff,
+  isOpen,
+  onClose,
+  onSubmit,
+}: {
+  staff: StaffMember | null;
+  isOpen: boolean;
+  onClose: () => void;
   onSubmit: (staffId: string, password: string) => void;
 }) {
-  const passwordSchema = z.object({
-    password: z.string().min(8, "Password must be at least 8 characters"),
-    confirmPassword: z.string().min(8, "Password must be at least 8 characters")
-  }).refine((data) => data.password === data.confirmPassword, {
-    message: "Passwords do not match",
-    path: ["confirmPassword"]
-  });
+  const passwordSchema = z
+    .object({
+      password: z.string().min(8, "Password must be at least 8 characters"),
+      confirmPassword: z
+        .string()
+        .min(8, "Password must be at least 8 characters"),
+    })
+    .refine((data) => data.password === data.confirmPassword, {
+      message: "Passwords do not match",
+      path: ["confirmPassword"],
+    });
 
   type PasswordFormData = z.infer<typeof passwordSchema>;
 
@@ -613,8 +685,8 @@ function SetPasswordDialog({
     resolver: zodResolver(passwordSchema),
     defaultValues: {
       password: "",
-      confirmPassword: ""
-    }
+      confirmPassword: "",
+    },
   });
 
   const handleSubmit = (data: PasswordFormData) => {
@@ -637,7 +709,10 @@ function SetPasswordDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+          <form
+            onSubmit={form.handleSubmit(handleSubmit)}
+            className="space-y-4"
+          >
             <FormField
               control={form.control}
               name="password"
@@ -645,9 +720,9 @@ function SetPasswordDialog({
                 <FormItem>
                   <FormLabel>New Password *</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="password" 
-                      {...field} 
+                    <Input
+                      type="password"
+                      {...field}
                       placeholder="Enter new password (min 8 characters)"
                       data-testid="input-password"
                     />
@@ -664,9 +739,9 @@ function SetPasswordDialog({
                 <FormItem>
                   <FormLabel>Confirm Password *</FormLabel>
                   <FormControl>
-                    <Input 
-                      type="password" 
-                      {...field} 
+                    <Input
+                      type="password"
+                      {...field}
                       placeholder="Confirm new password"
                       data-testid="input-confirm-password"
                     />
@@ -677,15 +752,15 @@ function SetPasswordDialog({
             />
 
             <div className="flex justify-end gap-2 pt-4">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={onClose}
                 data-testid="button-cancel-password"
               >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 type="submit"
                 className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
                 data-testid="button-save-password"
@@ -700,44 +775,58 @@ function SetPasswordDialog({
   );
 }
 
-function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: { 
-  staff: StaffMember; 
+function StaffCard({
+  staff,
+  onEdit,
+  onDelete,
+  onSetPassword,
+  isAdmin,
+}: {
+  staff: StaffMember;
   onEdit: (staff: StaffMember) => void;
   onDelete: (staff: StaffMember) => void;
   onSetPassword: (staff: StaffMember) => void;
   isAdmin: boolean;
 }) {
-  const roleConfig = STAFF_ROLES.find(r => r.value === staff.role);
+  const roleConfig = STAFF_ROLES.find((r) => r.value === staff.role);
   const initials = `${staff.firstName[0]}${staff.lastName[0]}`.toUpperCase();
-  
+
   return (
-    <Card className="hover:shadow-md transition-shadow" data-testid={`card-staff-${staff.id}`}>
+    <Card
+      className="hover:shadow-md transition-shadow"
+      data-testid={`card-staff-${staff.id}`}
+    >
       <CardContent className="p-4">
         <div className="flex items-start justify-between mb-3">
           <div className="flex items-center gap-3">
             <Avatar>
-              <AvatarFallback className={`text-white ${roleConfig?.color || 'bg-gray-500'}`}>
+              <AvatarFallback
+                className={`text-white ${roleConfig?.color || "bg-gray-500"}`}
+              >
                 {initials}
               </AvatarFallback>
             </Avatar>
             <div>
-              <h3 className="font-semibold text-lg" data-testid={`text-staff-name-${staff.id}`}>
+              <h3
+                className="font-semibold text-lg"
+                data-testid={`text-staff-name-${staff.id}`}
+              >
                 {staff.firstName} {staff.lastName}
               </h3>
               <p className="text-sm text-muted-foreground capitalize">
-                {staff.position.replace(/_/g, ' ')}
+                {staff.position.replace(/_/g, " ")}
               </p>
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2">
-            <Badge 
-              className={`text-white ${roleConfig?.color || 'bg-gray-500'}`}
+            <Badge
+              className={`text-white ${roleConfig?.color || "bg-gray-500"}`}
               data-testid={`badge-role-${staff.id}`}
             >
               {roleConfig?.label || staff.role}
             </Badge>
-            
+
             <div className="flex items-center gap-1">
               <Button
                 variant="ghost"
@@ -789,7 +878,9 @@ function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: {
                 <span className="text-sm">Cost: ${staff.hourlyRate}/hr</span>
               )}
               {staff.chargeOutRate && (
-                <span className="text-sm text-primary">Charge: ${staff.chargeOutRate}/hr</span>
+                <span className="text-sm text-primary">
+                  Charge: ${staff.chargeOutRate}/hr
+                </span>
               )}
             </div>
           )}
@@ -801,9 +892,11 @@ function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: {
 
         {staff.certifications.length > 0 && (
           <div className="mt-3">
-            <p className="text-xs text-muted-foreground mb-1">Certifications:</p>
+            <p className="text-xs text-muted-foreground mb-1">
+              Certifications:
+            </p>
             <div className="flex flex-wrap gap-1">
-              {staff.certifications.slice(0, 3).map(cert => (
+              {staff.certifications.slice(0, 3).map((cert) => (
                 <Badge key={cert} variant="outline" className="text-xs">
                   {cert}
                 </Badge>
@@ -819,22 +912,20 @@ function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: {
 
         <div className="mt-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {staff.status === 'active' ? (
+            {staff.status === "active" ? (
               <UserCheck className="w-4 h-4 text-green-500" />
             ) : (
               <UserX className="w-4 h-4 text-red-500" />
             )}
             <span className="text-sm capitalize text-muted-foreground">
-              {(staff.status || 'active').replace('_', ' ')}
+              {(staff.status || "active").replace("_", " ")}
             </span>
           </div>
-          
+
           {staff.hireDate && (
             <div className="flex items-center gap-1 text-xs text-muted-foreground">
               <Calendar className="w-3 h-3" />
-              <span>
-                Hired {new Date(staff.hireDate).toLocaleDateString()}
-              </span>
+              <span>Hired {new Date(staff.hireDate).toLocaleDateString()}</span>
             </div>
           )}
         </div>
@@ -844,35 +935,39 @@ function StaffCard({ staff, onEdit, onDelete, onSetPassword, isAdmin }: {
 }
 
 export default function StaffManagement() {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [passwordStaff, setPasswordStaff] = useState<StaffMember | null>(null);
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isAdmin } = useAuth();
 
   // Fetch staff data
-  const { data: staffData, isLoading } = useQuery<{ success: boolean; data: StaffMember[] }>({
-    queryKey: ['/api/employees'],
+  const { data: staffData, isLoading } = useQuery<{
+    success: boolean;
+    data: StaffMember[];
+  }>({
+    queryKey: ["/api/employees"],
   });
 
   const staff = staffData?.data || [];
 
   // Filter and sort staff based on search and filters
   const filteredStaff = staff
-    .filter(member => {
-      const matchesSearch = 
+    .filter((member) => {
+      const matchesSearch =
         member.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.position.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesRole = roleFilter === 'all' || member.role === roleFilter;
-      const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
+      const matchesRole = roleFilter === "all" || member.role === roleFilter;
+      const matchesStatus =
+        statusFilter === "all" || member.status === statusFilter;
 
       return matchesSearch && matchesRole && matchesStatus;
     })
@@ -886,20 +981,20 @@ export default function StaffManagement() {
   // Create staff mutation
   const createStaffMutation = useMutation({
     mutationFn: async (data: StaffFormData) => {
-      return apiRequest('POST', '/api/employees', data);
+      return apiRequest("POST", "/api/employees", data);
     },
     onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       setIsAddDialogOpen(false);
-      
+
       // Clear filters to ensure the new staff member is visible
-      setSearchTerm('');
-      setRoleFilter('all');
-      setStatusFilter('all');
-      
+      setSearchTerm("");
+      setRoleFilter("all");
+      setStatusFilter("all");
+
       // Scroll to top to show the new staff member (sorted newest first)
       setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }, 100);
     },
     onError: (error: any) => {
@@ -915,10 +1010,10 @@ export default function StaffManagement() {
   const updateStaffMutation = useMutation({
     mutationFn: async (data: StaffFormData & { id: string }) => {
       const { id, ...updateData } = data;
-      return apiRequest('PUT', `/api/employees/${id}`, updateData);
+      return apiRequest("PUT", `/api/employees/${id}`, updateData);
     },
     onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
       setEditingStaff(null);
     },
     onError: (error: any) => {
@@ -933,10 +1028,10 @@ export default function StaffManagement() {
   // Delete staff mutation
   const deleteStaffMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/employees/${id}`);
+      return apiRequest("DELETE", `/api/employees/${id}`);
     },
     onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
     },
     onError: (error: any) => {
       toast({
@@ -949,11 +1044,19 @@ export default function StaffManagement() {
 
   // Set password mutation
   const setPasswordMutation = useMutation({
-    mutationFn: async ({ staffId, password }: { staffId: string; password: string }) => {
-      return apiRequest('PATCH', `/api/employees/${staffId}/password`, { password });
+    mutationFn: async ({
+      staffId,
+      password,
+    }: {
+      staffId: string;
+      password: string;
+    }) => {
+      return apiRequest("PATCH", `/api/employees/${staffId}/password`, {
+        password,
+      });
     },
     onSuccess: () => {
-            setPasswordStaff(null);
+      setPasswordStaff(null);
     },
     onError: (error: any) => {
       toast({
@@ -972,14 +1075,18 @@ export default function StaffManagement() {
     if (editingStaff) {
       const apiData = {
         ...data,
-        id: editingStaff.id
+        id: editingStaff.id,
       };
       updateStaffMutation.mutate(apiData);
     }
   };
 
   const handleDeleteStaff = (staff: StaffMember) => {
-    if (confirm(`Are you sure you want to delete ${staff.firstName} ${staff.lastName}?`)) {
+    if (
+      confirm(
+        `Are you sure you want to delete ${staff.firstName} ${staff.lastName}?`,
+      )
+    ) {
       deleteStaffMutation.mutate(staff.id);
     }
   };
@@ -990,10 +1097,10 @@ export default function StaffManagement() {
 
   // Calculate stats
   const totalStaff = staff.length;
-  const activeStaff = staff.filter(s => s.status === 'active').length;
-  const roleStats = STAFF_ROLES.map(role => ({
+  const activeStaff = staff.filter((s) => s.status === "active").length;
+  const roleStats = STAFF_ROLES.map((role) => ({
     ...role,
-    count: staff.filter(s => s.role === role.value).length
+    count: staff.filter((s) => s.role === role.value).length,
   }));
 
   return (
@@ -1004,7 +1111,11 @@ export default function StaffManagement() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-4">
               <Link href="/settings">
-                <Button variant="ghost" size="sm" data-testid="button-back-to-settings">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid="button-back-to-settings"
+                >
                   <ChevronLeft className="w-4 h-4 mr-2" />
                   Settings
                 </Button>
@@ -1017,8 +1128,8 @@ export default function StaffManagement() {
                 </h1>
               </div>
             </div>
-            
-            <Button 
+
+            <Button
               onClick={() => setIsAddDialogOpen(true)}
               className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
               data-testid="button-add-staff"
@@ -1037,8 +1148,13 @@ export default function StaffManagement() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Staff</p>
-                  <p className="text-3xl font-bold text-gray-900 dark:text-white" data-testid="stat-total-staff">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Total Staff
+                  </p>
+                  <p
+                    className="text-3xl font-bold text-gray-900 dark:text-white"
+                    data-testid="stat-total-staff"
+                  >
                     {totalStaff}
                   </p>
                 </div>
@@ -1051,8 +1167,13 @@ export default function StaffManagement() {
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Staff</p>
-                  <p className="text-3xl font-bold text-green-600 dark:text-green-400" data-testid="stat-active-staff">
+                  <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                    Active Staff
+                  </p>
+                  <p
+                    className="text-3xl font-bold text-green-600 dark:text-green-400"
+                    data-testid="stat-active-staff"
+                  >
                     {activeStaff}
                   </p>
                 </div>
@@ -1061,18 +1182,27 @@ export default function StaffManagement() {
             </CardContent>
           </Card>
 
-          {roleStats.map(role => (
+          {roleStats.map((role) => (
             <Card key={role.value}>
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{role.label}</p>
-                    <p className={`text-3xl font-bold`} data-testid={`stat-${role.value}`}>
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      {role.label}
+                    </p>
+                    <p
+                      className={`text-3xl font-bold`}
+                      data-testid={`stat-${role.value}`}
+                    >
                       {role.count}
                     </p>
                   </div>
-                  <div className={`w-8 h-8 rounded-full ${role.color} flex items-center justify-center`}>
-                    <span className="text-white font-bold text-sm">{role.count}</span>
+                  <div
+                    className={`w-8 h-8 rounded-full ${role.color} flex items-center justify-center`}
+                  >
+                    <span className="text-white font-bold text-sm">
+                      {role.count}
+                    </span>
                   </div>
                 </div>
               </CardContent>
@@ -1096,14 +1226,17 @@ export default function StaffManagement() {
                   />
                 </div>
               </div>
-              
+
               <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-full md:w-[180px]" data-testid="select-filter-role">
+                <SelectTrigger
+                  className="w-full md:w-[180px]"
+                  data-testid="select-filter-role"
+                >
                   <SelectValue placeholder="Filter by role" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Roles</SelectItem>
-                  {STAFF_ROLES.map(role => (
+                  {STAFF_ROLES.map((role) => (
                     <SelectItem key={role.value} value={role.value}>
                       {role.label}
                     </SelectItem>
@@ -1112,7 +1245,10 @@ export default function StaffManagement() {
               </Select>
 
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-[180px]" data-testid="select-filter-status">
+                <SelectTrigger
+                  className="w-full md:w-[180px]"
+                  data-testid="select-filter-status"
+                >
                   <SelectValue placeholder="Filter by status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1136,7 +1272,7 @@ export default function StaffManagement() {
           </div>
         ) : filteredStaff.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredStaff.map(staffMember => (
+            {filteredStaff.map((staffMember) => (
               <StaffCard
                 key={staffMember.id}
                 staff={staffMember}
@@ -1155,21 +1291,22 @@ export default function StaffManagement() {
                 No staff members found
               </h3>
               <p className="text-gray-500 mb-4">
-                {searchTerm || roleFilter !== 'all' || statusFilter !== 'all' 
-                  ? 'Try adjusting your search or filters'
-                  : 'Get started by adding your first staff member'
-                }
+                {searchTerm || roleFilter !== "all" || statusFilter !== "all"
+                  ? "Try adjusting your search or filters"
+                  : "Get started by adding your first staff member"}
               </p>
-              {!searchTerm && roleFilter === 'all' && statusFilter === 'all' && (
-                <Button 
-                  onClick={() => setIsAddDialogOpen(true)}
-                  className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
-                  data-testid="button-add-first-staff"
-                >
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add First Staff Member
-                </Button>
-              )}
+              {!searchTerm &&
+                roleFilter === "all" &&
+                statusFilter === "all" && (
+                  <Button
+                    onClick={() => setIsAddDialogOpen(true)}
+                    className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600"
+                    data-testid="button-add-first-staff"
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add First Staff Member
+                  </Button>
+                )}
             </CardContent>
           </Card>
         )}

@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Camera, Upload, X } from "lucide-react";
@@ -15,7 +21,12 @@ interface PhotoCaptureModalProps {
   onPendingPhotos?: (files: File[], previewUrls: string[]) => void;
 }
 
-export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: PhotoCaptureModalProps) {
+export function PhotoCaptureModal({
+  isOpen,
+  onClose,
+  jobId,
+  onPendingPhotos,
+}: PhotoCaptureModalProps) {
   const isPendingMode = !jobId && !!onPendingPhotos;
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
@@ -27,29 +38,37 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
   const uploadPhotoMutation = useMutation({
     mutationFn: async (files: File[]) => {
       const results = [];
-      
+
       for (const file of files) {
         // Compress image before upload for 5-10x faster uploads
         let fileToUpload = file;
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith("image/")) {
           try {
             fileToUpload = await compressImage(file);
-            console.log('📸 Compressed:', file.name, 'from', (file.size / 1024).toFixed(0), 'KB to', (fileToUpload.size / 1024).toFixed(0), 'KB');
+            console.log(
+              "📸 Compressed:",
+              file.name,
+              "from",
+              (file.size / 1024).toFixed(0),
+              "KB to",
+              (fileToUpload.size / 1024).toFixed(0),
+              "KB",
+            );
           } catch (error) {
-            console.warn('📸 Compression failed, using original:', error);
+            console.warn("📸 Compression failed, using original:", error);
           }
         }
 
         const formData = new FormData();
-        formData.append('photo', fileToUpload);
-        formData.append('authorName', 'User');
-        formData.append('description', 'Photo added');
+        formData.append("photo", fileToUpload);
+        formData.append("authorName", "User");
+        formData.append("description", "Photo added");
 
         // CRITICAL: Add timestamp to bypass ALL caching layers (service worker, browser, iOS)
         const timestamp = Date.now();
         const url = `/api/jobs/${jobId}/photos?_bypass=${timestamp}`;
-        
-        console.log('📸 Uploading photo with cache bypass:', url);
+
+        console.log("📸 Uploading photo with cache bypass:", url);
 
         // Use AbortController with timeout to prevent hung uploads
         const controller = new AbortController();
@@ -57,52 +76,57 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
 
         try {
           const response = await fetch(url, {
-            method: 'POST',
+            method: "POST",
             body: formData,
             signal: controller.signal,
-            credentials: 'include',
-            cache: 'no-store',
+            credentials: "include",
+            cache: "no-store",
             headers: {
-              'Cache-Control': 'no-cache, no-store, must-revalidate',
-              'Pragma': 'no-cache',
+              "Cache-Control": "no-cache, no-store, must-revalidate",
+              Pragma: "no-cache",
             },
           });
           clearTimeout(timeoutId);
 
-          console.log('📸 Upload response status:', response.status);
+          console.log("📸 Upload response status:", response.status);
 
           if (!response.ok) {
             const error = await response.json();
-            console.error('📸 Upload failed:', error);
-            throw new Error(error.message || 'Failed to upload photo');
+            console.error("📸 Upload failed:", error);
+            throw new Error(error.message || "Failed to upload photo");
           }
 
           const result = await response.json();
-          console.log('📸 Upload success:', result);
+          console.log("📸 Upload success:", result);
           results.push(result);
         } catch (err: any) {
           clearTimeout(timeoutId);
-          if (err.name === 'AbortError') {
-            throw new Error('Upload timed out. Please check your connection and try again.');
+          if (err.name === "AbortError") {
+            throw new Error(
+              "Upload timed out. Please check your connection and try again.",
+            );
           }
           throw err;
         }
       }
-      
+
       return results;
     },
     onSuccess: (data) => {
       // Invalidate ALL diary queries for this job (including all filter types)
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary-timeline'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+
       // Reset and close
       handleClose();
     },
     onError: (error: Error) => {
       toast({
         title: "Upload Failed",
-        description: error.message || "Failed to upload photo. Please try again.",
+        description:
+          error.message || "Failed to upload photo. Please try again.",
         variant: "destructive",
       });
     },
@@ -138,10 +162,10 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
     setSelectedFiles(validFiles);
 
     // Create previews for all valid files
-    validFiles.forEach(file => {
+    validFiles.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setPreviewUrls(prev => [...prev, reader.result as string]);
+        setPreviewUrls((prev) => [...prev, reader.result as string]);
       };
       reader.readAsDataURL(file);
     });
@@ -149,14 +173,14 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
 
   const handleUpload = () => {
     if (selectedFiles.length === 0) return;
-    
+
     // If in pending mode (no jobId), pass files back to parent instead of uploading
     if (isPendingMode && onPendingPhotos) {
       onPendingPhotos(selectedFiles, previewUrls);
-            handleClose();
+      handleClose();
       return;
     }
-    
+
     uploadPhotoMutation.mutate(selectedFiles);
   };
 
@@ -167,8 +191,8 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
   };
 
   const removePhoto = (index: number) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
+    setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
+    setPreviewUrls((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -186,7 +210,8 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
           {previewUrls.length > 0 ? (
             <div className="space-y-3">
               <div className="text-sm font-medium text-gray-700">
-                {previewUrls.length} photo{previewUrls.length > 1 ? 's' : ''} selected
+                {previewUrls.length} photo{previewUrls.length > 1 ? "s" : ""}{" "}
+                selected
               </div>
               <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto">
                 {previewUrls.map((url, index) => (
@@ -228,7 +253,9 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
                   className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                 >
                   <Camera className="w-8 h-8" />
-                  <span className="text-base font-medium">{isMobile ? "Take Photo" : "Select File"}</span>
+                  <span className="text-base font-medium">
+                    {isMobile ? "Take Photo" : "Select File"}
+                  </span>
                 </label>
               </div>
 
@@ -248,7 +275,9 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
                   className="w-full h-20 flex flex-col gap-2 items-center justify-center border-2 border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
                 >
                   <Upload className="w-8 h-8" />
-                  <span className="text-base font-medium">Choose Multiple Files</span>
+                  <span className="text-base font-medium">
+                    Choose Multiple Files
+                  </span>
                 </label>
               </div>
             </div>
@@ -269,7 +298,11 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
                 disabled={uploadPhotoMutation.isPending}
                 data-testid="button-upload-photo"
               >
-                {uploadPhotoMutation.isPending ? "Uploading..." : isPendingMode ? "Queue Photo" : "Upload Photo"}
+                {uploadPhotoMutation.isPending
+                  ? "Uploading..."
+                  : isPendingMode
+                    ? "Queue Photo"
+                    : "Upload Photo"}
               </Button>
             </div>
           )}

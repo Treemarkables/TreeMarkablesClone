@@ -1,27 +1,40 @@
 import { useState, useRef } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { 
-  Upload, 
-  FileText, 
-  CheckCircle, 
-  AlertCircle, 
-  X, 
+import {
+  Upload,
+  FileText,
+  CheckCircle,
+  AlertCircle,
+  X,
   Download,
   Briefcase,
   ArrowRight,
   Loader2,
   Eye,
-  Save
+  Save,
 } from "lucide-react";
 import Papa from "papaparse";
 
@@ -44,14 +57,18 @@ interface ParsedCSV {
 }
 
 export function JobCSVUpload() {
-  const [uploadStep, setUploadStep] = useState<'upload' | 'parsing' | 'preview' | 'importing' | 'complete'>('upload');
+  const [uploadStep, setUploadStep] = useState<
+    "upload" | "parsing" | "preview" | "importing" | "complete"
+  >("upload");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedCSV, setParsedCSV] = useState<ParsedCSV | null>(null);
-  const [importResult, setImportResult] = useState<JobImportResult | null>(null);
+  const [importResult, setImportResult] = useState<JobImportResult | null>(
+    null,
+  );
   const [isDragOver, setIsDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -59,49 +76,48 @@ export function JobCSVUpload() {
   const importJobsMutation = useMutation({
     mutationFn: async (file: File): Promise<JobImportResult> => {
       const formData = new FormData();
-      formData.append('csvFile', file);
-      
-      const response = await fetch('/api/jobs/import-csv', {
-        method: 'POST',
+      formData.append("csvFile", file);
+
+      const response = await fetch("/api/jobs/import-csv", {
+        method: "POST",
         body: formData,
-        credentials: 'include'
+        credentials: "include",
       });
-      
+
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`${response.status}: ${text}`);
       }
-      
+
       const { data } = await response.json();
       return data;
     },
     onSuccess: (result: JobImportResult) => {
       setImportResult(result);
-      setUploadStep('complete');
-      
+      setUploadStep("complete");
+
       // Invalidate jobs cache to refresh the UI
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
     },
     onError: (error: any) => {
       toast({
         title: "Import Failed",
         description: error.message || "Failed to import jobs",
-        variant: "destructive"
+        variant: "destructive",
       });
-      setUploadStep('upload');
-    }
+      setUploadStep("upload");
+    },
   });
 
   const handleFileSelect = (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    
+
     const file = files[0];
-    if (!file.name.toLowerCase().endsWith('.csv')) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
       toast({
         title: "Invalid File Type",
         description: "Please select a CSV file",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -111,7 +127,7 @@ export function JobCSVUpload() {
   };
 
   const parseCSVFile = (file: File) => {
-    setUploadStep('parsing');
+    setUploadStep("parsing");
     setUploadProgress(0);
 
     Papa.parse(file, {
@@ -120,29 +136,29 @@ export function JobCSVUpload() {
       transformHeader: (header) => header.trim(),
       complete: (results) => {
         setParsedCSV(results);
-        setUploadStep('preview');
+        setUploadStep("preview");
         setUploadProgress(100);
       },
       error: (error) => {
         toast({
           title: "Parse Error",
           description: error.message,
-          variant: "destructive"
+          variant: "destructive",
         });
-        setUploadStep('upload');
-      }
+        setUploadStep("upload");
+      },
     });
   };
 
   const startImport = () => {
     if (!selectedFile) return;
-    
-    setUploadStep('importing');
+
+    setUploadStep("importing");
     setUploadProgress(0);
-    
+
     // Simulate progress during import
     const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
+      setUploadProgress((prev) => {
         if (prev >= 90) {
           clearInterval(progressInterval);
           return 90;
@@ -155,13 +171,13 @@ export function JobCSVUpload() {
   };
 
   const resetUpload = () => {
-    setUploadStep('upload');
+    setUploadStep("upload");
     setUploadProgress(0);
     setSelectedFile(null);
     setParsedCSV(null);
     setImportResult(null);
     if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      fileInputRef.current.value = "";
     }
   };
 
@@ -171,14 +187,14 @@ export function JobCSVUpload() {
     handleFileSelect(e.dataTransfer.files);
   };
 
-  if (uploadStep === 'upload') {
+  if (uploadStep === "upload") {
     return (
       <div className="space-y-6">
         <div
           className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            isDragOver 
-              ? 'border-blue-400 bg-blue-50' 
-              : 'border-gray-300 hover:border-gray-400'
+            isDragOver
+              ? "border-blue-400 bg-blue-50"
+              : "border-gray-300 hover:border-gray-400"
           }`}
           onDragOver={(e) => {
             e.preventDefault();
@@ -195,7 +211,7 @@ export function JobCSVUpload() {
             </p>
           </div>
           <div className="mt-6">
-            <Button 
+            <Button
               onClick={() => fileInputRef.current?.click()}
               data-testid="button-upload-jobs-csv"
             >
@@ -215,15 +231,16 @@ export function JobCSVUpload() {
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            <strong>Important:</strong> Import customers first to ensure proper job-to-customer relationships. 
-            Your CSV should include job numbers, descriptions, customer information, and dates in standard formats.
+            <strong>Important:</strong> Import customers first to ensure proper
+            job-to-customer relationships. Your CSV should include job numbers,
+            descriptions, customer information, and dates in standard formats.
           </AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  if (uploadStep === 'parsing') {
+  if (uploadStep === "parsing") {
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -236,7 +253,7 @@ export function JobCSVUpload() {
     );
   }
 
-  if (uploadStep === 'preview' && parsedCSV) {
+  if (uploadStep === "preview" && parsedCSV) {
     return (
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -262,7 +279,8 @@ export function JobCSVUpload() {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              Found {parsedCSV.errors.length} parsing errors. Import may still proceed but some rows might be skipped.
+              Found {parsedCSV.errors.length} parsing errors. Import may still
+              proceed but some rows might be skipped.
             </AlertDescription>
           </Alert>
         )}
@@ -270,16 +288,14 @@ export function JobCSVUpload() {
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Data Preview</CardTitle>
-            <CardDescription>
-              First 5 rows from your CSV file
-            </CardDescription>
+            <CardDescription>First 5 rows from your CSV file</CardDescription>
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-64 w-full">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    {parsedCSV.meta.fields?.slice(0, 6).map(field => (
+                    {parsedCSV.meta.fields?.slice(0, 6).map((field) => (
                       <TableHead key={field} className="whitespace-nowrap">
                         {field}
                       </TableHead>
@@ -289,10 +305,10 @@ export function JobCSVUpload() {
                 <TableBody>
                   {parsedCSV.data.slice(0, 5).map((row, index) => (
                     <TableRow key={index}>
-                      {parsedCSV.meta.fields?.slice(0, 6).map(field => (
+                      {parsedCSV.meta.fields?.slice(0, 6).map((field) => (
                         <TableCell key={field} className="whitespace-nowrap">
-                          {String(row[field] || '').substring(0, 50)}
-                          {String(row[field] || '').length > 50 && '...'}
+                          {String(row[field] || "").substring(0, 50)}
+                          {String(row[field] || "").length > 50 && "..."}
                         </TableCell>
                       ))}
                     </TableRow>
@@ -306,7 +322,7 @@ export function JobCSVUpload() {
     );
   }
 
-  if (uploadStep === 'importing') {
+  if (uploadStep === "importing") {
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -321,7 +337,7 @@ export function JobCSVUpload() {
     );
   }
 
-  if (uploadStep === 'complete' && importResult) {
+  if (uploadStep === "complete" && importResult) {
     return (
       <div className="space-y-6">
         <div className="text-center">
@@ -374,11 +390,15 @@ export function JobCSVUpload() {
               <strong>Import Errors:</strong>
               <ul className="mt-2 list-disc list-inside">
                 {importResult.errors.slice(0, 5).map((error, index) => (
-                  <li key={index} className="text-sm">{error}</li>
+                  <li key={index} className="text-sm">
+                    {error}
+                  </li>
                 ))}
               </ul>
               {importResult.errors.length > 5 && (
-                <p className="text-sm mt-1">...and {importResult.errors.length - 5} more errors</p>
+                <p className="text-sm mt-1">
+                  ...and {importResult.errors.length - 5} more errors
+                </p>
               )}
             </AlertDescription>
           </Alert>
@@ -389,7 +409,7 @@ export function JobCSVUpload() {
             <Upload className="h-4 w-4 mr-2" />
             Import More Jobs
           </Button>
-          <Button onClick={() => window.location.href = '/job-dashboard'}>
+          <Button onClick={() => (window.location.href = "/job-dashboard")}>
             <Eye className="h-4 w-4 mr-2" />
             View Jobs
           </Button>

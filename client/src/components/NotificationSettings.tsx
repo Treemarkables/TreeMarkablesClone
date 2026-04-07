@@ -4,11 +4,22 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Bell, BellOff, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { requestNotificationPermission, isNotificationSupported as checkNotificationSupport, isActualSafari, isRunningAsStandalone } from "@/lib/firebase";
+import {
+  requestNotificationPermission,
+  isNotificationSupported as checkNotificationSupport,
+  isActualSafari,
+  isRunningAsStandalone,
+} from "@/lib/firebase";
 
 interface NotificationPreferences {
   id: string;
@@ -24,13 +35,14 @@ interface NotificationPreferences {
 export function NotificationSettings() {
   const { toast } = useToast();
   const [notificationsSupported, setNotificationsSupported] = useState(true);
-  const [permissionState, setPermissionState] = useState<NotificationPermission>("default");
+  const [permissionState, setPermissionState] =
+    useState<NotificationPermission>("default");
 
   useEffect(() => {
     // Check if notifications are supported (includes Safari detection)
     const supported = checkNotificationSupport();
     setNotificationsSupported(supported);
-    
+
     if (supported && "Notification" in window) {
       setPermissionState(Notification.permission);
     }
@@ -50,8 +62,10 @@ export function NotificationSettings() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications/preferences"] });
-          },
+      queryClient.invalidateQueries({
+        queryKey: ["/api/notifications/preferences"],
+      });
+    },
     onError: () => {
       toast({
         title: "Error",
@@ -70,7 +84,7 @@ export function NotificationSettings() {
     },
     onSuccess: (data: any) => {
       if (data.success) {
-              } else {
+      } else {
         toast({
           title: "No devices found",
           description: data.message,
@@ -92,11 +106,12 @@ export function NotificationSettings() {
     try {
       // Request permission and get FCM token
       const token = await requestNotificationPermission();
-      
+
       if (!token) {
         toast({
           title: "Permission denied",
-          description: "You need to allow notifications in your browser settings.",
+          description:
+            "You need to allow notifications in your browser settings.",
           variant: "destructive",
         });
         return;
@@ -116,11 +131,12 @@ export function NotificationSettings() {
         });
 
         setPermissionState("granted");
-              } catch (error) {
+      } catch (error) {
         console.error("Error registering token:", error);
         toast({
           title: "Setup incomplete",
-          description: "Firebase credentials are not configured yet. Please contact your administrator.",
+          description:
+            "Firebase credentials are not configured yet. Please contact your administrator.",
           variant: "destructive",
         });
       }
@@ -142,7 +158,11 @@ export function NotificationSettings() {
   };
 
   if (isLoading) {
-    return <div className="text-muted-foreground">Loading notification settings...</div>;
+    return (
+      <div className="text-muted-foreground">
+        Loading notification settings...
+      </div>
+    );
   }
 
   if (!notificationsSupported) {
@@ -155,21 +175,31 @@ export function NotificationSettings() {
         <Alert>
           <Bell className="h-4 w-4" />
           <AlertDescription className="space-y-3">
-            <p className="font-semibold">One more step to enable push notifications</p>
+            <p className="font-semibold">
+              One more step to enable push notifications
+            </p>
             <p className="text-sm">
-              Your iPhone supports push notifications for this app, but you need to install it to your home screen first.
+              Your iPhone supports push notifications for this app, but you need
+              to install it to your home screen first.
             </p>
             <div className="bg-muted/50 p-3 rounded-md space-y-2">
               <p className="text-sm font-medium">How to install:</p>
               <ol className="text-sm list-decimal list-inside space-y-1 ml-2">
-                <li>Tap the <strong>Share</strong> button at the bottom of Safari</li>
-                <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
-                <li>Tap <strong>Add</strong> in the top right</li>
+                <li>
+                  Tap the <strong>Share</strong> button at the bottom of Safari
+                </li>
+                <li>
+                  Scroll down and tap <strong>Add to Home Screen</strong>
+                </li>
+                <li>
+                  Tap <strong>Add</strong> in the top right
+                </li>
                 <li>Open the app from your home screen and come back here</li>
               </ol>
             </div>
             <p className="text-sm text-muted-foreground">
-              Requires iOS 16.4 or later. Once installed, push notifications work just like a native app.
+              Requires iOS 16.4 or later. Once installed, push notifications
+              work just like a native app.
             </p>
           </AlertDescription>
         </Alert>
@@ -181,12 +211,16 @@ export function NotificationSettings() {
       <Alert>
         <BellOff className="h-4 w-4" />
         <AlertDescription className="space-y-3">
-          <p className="font-semibold">Push notifications not available in this browser</p>
+          <p className="font-semibold">
+            Push notifications not available in this browser
+          </p>
           <p className="text-sm">
-            For push notifications, please use Chrome, Firefox, or Brave — or open this app in Safari on iOS and add it to your home screen.
+            For push notifications, please use Chrome, Firefox, or Brave — or
+            open this app in Safari on iOS and add it to your home screen.
           </p>
           <p className="text-sm text-muted-foreground">
-            The notification system is fully configured and works great on desktop browsers and installed iOS PWAs.
+            The notification system is fully configured and works great on
+            desktop browsers and installed iOS PWAs.
           </p>
         </AlertDescription>
       </Alert>
@@ -202,7 +236,8 @@ export function NotificationSettings() {
             Push Notifications
           </CardTitle>
           <CardDescription>
-            Receive real-time alerts for important updates, even when the app is closed
+            Receive real-time alerts for important updates, even when the app is
+            closed
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -210,8 +245,8 @@ export function NotificationSettings() {
             <Alert>
               <AlertDescription className="flex items-center justify-between">
                 <span>Enable push notifications to stay updated</span>
-                <Button 
-                  onClick={handleEnableNotifications} 
+                <Button
+                  onClick={handleEnableNotifications}
                   size="sm"
                   data-testid="button-enable-notifications"
                 >
@@ -225,14 +260,29 @@ export function NotificationSettings() {
           {permissionState === "denied" && (
             <Alert variant="destructive">
               <AlertDescription className="space-y-2">
-                <p className="font-semibold">Notifications are blocked by your browser</p>
-                <p className="text-sm">To enable notifications, try one of these options:</p>
+                <p className="font-semibold">
+                  Notifications are blocked by your browser
+                </p>
+                <p className="text-sm">
+                  To enable notifications, try one of these options:
+                </p>
                 <ul className="text-sm list-disc list-inside space-y-1 ml-2">
-                  <li>Open this app in an <strong>Incognito/Private window</strong> and click Enable</li>
-                  <li>Open this app on your <strong>mobile device</strong></li>
-                  <li>Use a <strong>different browser</strong> (Chrome, Firefox, or Brave)</li>
+                  <li>
+                    Open this app in an{" "}
+                    <strong>Incognito/Private window</strong> and click Enable
+                  </li>
+                  <li>
+                    Open this app on your <strong>mobile device</strong>
+                  </li>
+                  <li>
+                    Use a <strong>different browser</strong> (Chrome, Firefox,
+                    or Brave)
+                  </li>
                 </ul>
-                <p className="text-sm mt-2">The notification system is fully set up and ready - it's just waiting for browser permission!</p>
+                <p className="text-sm mt-2">
+                  The notification system is fully set up and ready - it's just
+                  waiting for browser permission!
+                </p>
               </AlertDescription>
             </Alert>
           )}
@@ -265,7 +315,9 @@ export function NotificationSettings() {
                 </div>
                 <Switch
                   checked={preferences.enableJobAssignments}
-                  onCheckedChange={() => handleTogglePreference("enableJobAssignments")}
+                  onCheckedChange={() =>
+                    handleTogglePreference("enableJobAssignments")
+                  }
                   data-testid="switch-job-assignments"
                 />
               </div>
@@ -279,7 +331,9 @@ export function NotificationSettings() {
                 </div>
                 <Switch
                   checked={preferences.enableScheduleChanges}
-                  onCheckedChange={() => handleTogglePreference("enableScheduleChanges")}
+                  onCheckedChange={() =>
+                    handleTogglePreference("enableScheduleChanges")
+                  }
                   data-testid="switch-schedule-changes"
                 />
               </div>
@@ -293,7 +347,9 @@ export function NotificationSettings() {
                 </div>
                 <Switch
                   checked={preferences.enableNewLeads}
-                  onCheckedChange={() => handleTogglePreference("enableNewLeads")}
+                  onCheckedChange={() =>
+                    handleTogglePreference("enableNewLeads")
+                  }
                   data-testid="switch-new-leads"
                 />
               </div>
@@ -307,7 +363,9 @@ export function NotificationSettings() {
                 </div>
                 <Switch
                   checked={preferences.enableInvoicePayments}
-                  onCheckedChange={() => handleTogglePreference("enableInvoicePayments")}
+                  onCheckedChange={() =>
+                    handleTogglePreference("enableInvoicePayments")
+                  }
                   data-testid="switch-invoice-payments"
                 />
               </div>
@@ -321,7 +379,9 @@ export function NotificationSettings() {
                 </div>
                 <Switch
                   checked={preferences.enableQuoteAcceptance}
-                  onCheckedChange={() => handleTogglePreference("enableQuoteAcceptance")}
+                  onCheckedChange={() =>
+                    handleTogglePreference("enableQuoteAcceptance")
+                  }
                   data-testid="switch-quote-acceptance"
                 />
               </div>
@@ -335,7 +395,9 @@ export function NotificationSettings() {
                 </div>
                 <Switch
                   checked={preferences.enableSystemAlerts}
-                  onCheckedChange={() => handleTogglePreference("enableSystemAlerts")}
+                  onCheckedChange={() =>
+                    handleTogglePreference("enableSystemAlerts")
+                  }
                   data-testid="switch-system-alerts"
                 />
               </div>
@@ -356,7 +418,9 @@ export function NotificationSettings() {
                 variant="outline"
                 data-testid="button-test-notification"
               >
-                {testNotificationMutation.isPending ? "Sending..." : "Send Test Notification"}
+                {testNotificationMutation.isPending
+                  ? "Sending..."
+                  : "Send Test Notification"}
               </Button>
             </CardContent>
           </Card>

@@ -7,8 +7,27 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Code, Database, Webhook, Key, Activity, Settings, Copy, ExternalLink, Plus, Eye, EyeOff, Upload } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Code,
+  Database,
+  Webhook,
+  Key,
+  Activity,
+  Settings,
+  Copy,
+  ExternalLink,
+  Plus,
+  Eye,
+  EyeOff,
+  Upload,
+} from "lucide-react";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -20,24 +39,24 @@ const mockApiKeys = [
     key: "tmk_prod_1234567890abcdef",
     permissions: ["read", "write"],
     lastUsed: "2024-09-23",
-    status: "active"
+    status: "active",
   },
   {
-    id: "2", 
+    id: "2",
     name: "Analytics Integration",
     key: "tmk_test_abcdef1234567890",
     permissions: ["read"],
     lastUsed: "2024-09-20",
-    status: "active"
+    status: "active",
   },
   {
     id: "3",
-    name: "Mobile App Key", 
+    name: "Mobile App Key",
     key: "tmk_test_9876543210fedcba",
     permissions: ["read", "write"],
     lastUsed: "Never",
-    status: "inactive"
-  }
+    status: "inactive",
+  },
 ];
 
 const mockWebhooks = [
@@ -47,16 +66,16 @@ const mockWebhooks = [
     url: "https://your-app.com/webhooks/jobs",
     events: ["job.created", "job.completed"],
     status: "active",
-    lastDelivery: "2024-09-23"
+    lastDelivery: "2024-09-23",
   },
   {
     id: "2",
-    name: "Invoice Notifications", 
+    name: "Invoice Notifications",
     url: "https://accounting-system.com/webhooks/invoices",
     events: ["invoice.created", "invoice.paid"],
     status: "active",
-    lastDelivery: "2024-09-22"
-  }
+    lastDelivery: "2024-09-22",
+  },
 ];
 
 export default function Developer() {
@@ -65,22 +84,26 @@ export default function Developer() {
   const { toast } = useToast();
 
   const toggleApiKeyVisibility = (keyId: string) => {
-    setShowApiKeys(prev => ({
+    setShowApiKeys((prev) => ({
       ...prev,
-      [keyId]: !prev[keyId]
+      [keyId]: !prev[keyId],
     }));
   };
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-      };
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'inactive': return 'bg-gray-100 text-gray-800';
-      case 'error': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case "active":
+        return "bg-green-100 text-green-800";
+      case "inactive":
+        return "bg-gray-100 text-gray-800";
+      case "error":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
@@ -90,7 +113,9 @@ export default function Developer() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Developer</h1>
-          <p className="text-gray-600">API access, webhooks, and integrations</p>
+          <p className="text-gray-600">
+            API access, webhooks, and integrations
+          </p>
         </div>
       </div>
 
@@ -126,8 +151,12 @@ export default function Developer() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Active API Keys</p>
-                    <p className="text-2xl font-bold">{mockApiKeys.filter(k => k.status === 'active').length}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Active API Keys
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {mockApiKeys.filter((k) => k.status === "active").length}
+                    </p>
                   </div>
                   <Key className="w-8 h-8 text-blue-600" />
                 </div>
@@ -138,8 +167,12 @@ export default function Developer() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">Active Webhooks</p>
-                    <p className="text-2xl font-bold">{mockWebhooks.filter(w => w.status === 'active').length}</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      Active Webhooks
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {mockWebhooks.filter((w) => w.status === "active").length}
+                    </p>
                   </div>
                   <Webhook className="w-8 h-8 text-green-600" />
                 </div>
@@ -150,7 +183,9 @@ export default function Developer() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600">API Calls Today</p>
+                    <p className="text-sm font-medium text-gray-600">
+                      API Calls Today
+                    </p>
                     <p className="text-2xl font-bold">1,234</p>
                   </div>
                   <Activity className="w-8 h-8 text-amber-600" />
@@ -165,31 +200,41 @@ export default function Developer() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">Getting Started with the Treemarkables API</h3>
+                <h3 className="font-semibold mb-2">
+                  Getting Started with the Treemarkables API
+                </h3>
                 <p className="text-gray-600 mb-4">
-                  Our API allows you to integrate Treemarkables with your existing systems. 
-                  You can manage jobs, customers, quotes, and more programmatically.
+                  Our API allows you to integrate Treemarkables with your
+                  existing systems. You can manage jobs, customers, quotes, and
+                  more programmatically.
                 </p>
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <code className="text-sm">
-                    curl -H "Authorization: Bearer YOUR_API_KEY" \\<br/>
-                    &nbsp;&nbsp;&nbsp;&nbsp; https://api.treemarkables.nz/v1/jobs
+                    curl -H "Authorization: Bearer YOUR_API_KEY" \\
+                    <br />
+                    &nbsp;&nbsp;&nbsp;&nbsp;
+                    https://api.treemarkables.nz/v1/jobs
                   </code>
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div>
                 <h3 className="font-semibold mb-2">Base URL</h3>
                 <div className="flex items-center gap-2">
                   <code className="bg-gray-100 px-2 py-1 rounded text-sm">
                     https://api.treemarkables.nz/v1
                   </code>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     size="sm"
-                    onClick={() => copyToClipboard("https://api.treemarkables.nz/v1", "Base URL")}
+                    onClick={() =>
+                      copyToClipboard(
+                        "https://api.treemarkables.nz/v1",
+                        "Base URL",
+                      )
+                    }
                   >
                     <Copy className="w-4 h-4" />
                   </Button>
@@ -214,53 +259,74 @@ export default function Developer() {
             <CardContent>
               <div className="space-y-4">
                 {mockApiKeys.map((apiKey) => (
-                  <Card key={apiKey.id} className="p-4" data-testid={`card-api-key-${apiKey.id}`}>
+                  <Card
+                    key={apiKey.id}
+                    className="p-4"
+                    data-testid={`card-api-key-${apiKey.id}`}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold" data-testid={`text-api-key-name-${apiKey.id}`}>
+                          <h3
+                            className="font-semibold"
+                            data-testid={`text-api-key-name-${apiKey.id}`}
+                          >
                             {apiKey.name}
                           </h3>
                           <Badge className={getStatusColor(apiKey.status)}>
                             {apiKey.status}
                           </Badge>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <code className="bg-gray-100 px-2 py-1 rounded text-sm font-mono">
-                            {showApiKeys[apiKey.id] ? apiKey.key : '•'.repeat(24)}
+                            {showApiKeys[apiKey.id]
+                              ? apiKey.key
+                              : "•".repeat(24)}
                           </code>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
                             onClick={() => toggleApiKeyVisibility(apiKey.id)}
                             data-testid={`button-toggle-visibility-${apiKey.id}`}
                           >
-                            {showApiKeys[apiKey.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                            {showApiKeys[apiKey.id] ? (
+                              <EyeOff className="w-4 h-4" />
+                            ) : (
+                              <Eye className="w-4 h-4" />
+                            )}
                           </Button>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
-                            onClick={() => copyToClipboard(apiKey.key, "API Key")}
+                            onClick={() =>
+                              copyToClipboard(apiKey.key, "API Key")
+                            }
                             data-testid={`button-copy-${apiKey.id}`}
                           >
                             <Copy className="w-4 h-4" />
                           </Button>
                         </div>
-                        
+
                         <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <span>Permissions: {apiKey.permissions.join(', ')}</span>
+                          <span>
+                            Permissions: {apiKey.permissions.join(", ")}
+                          </span>
                           <span>Last used: {apiKey.lastUsed}</span>
                         </div>
                       </div>
-                      
+
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" data-testid={`button-edit-api-key-${apiKey.id}`}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`button-edit-api-key-${apiKey.id}`}
+                        >
                           Edit
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="text-red-600 hover:text-red-700"
                           data-testid={`button-delete-api-key-${apiKey.id}`}
                         >
@@ -290,47 +356,64 @@ export default function Developer() {
             <CardContent>
               <div className="space-y-4">
                 {mockWebhooks.map((webhook) => (
-                  <Card key={webhook.id} className="p-4" data-testid={`card-webhook-${webhook.id}`}>
+                  <Card
+                    key={webhook.id}
+                    className="p-4"
+                    data-testid={`card-webhook-${webhook.id}`}
+                  >
                     <div className="flex items-center justify-between">
                       <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-semibold" data-testid={`text-webhook-name-${webhook.id}`}>
+                          <h3
+                            className="font-semibold"
+                            data-testid={`text-webhook-name-${webhook.id}`}
+                          >
                             {webhook.name}
                           </h3>
                           <Badge className={getStatusColor(webhook.status)}>
                             {webhook.status}
                           </Badge>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <code className="bg-gray-100 px-2 py-1 rounded text-sm">
                             {webhook.url}
                           </code>
-                          <Button 
-                            variant="ghost" 
+                          <Button
+                            variant="ghost"
                             size="sm"
-                            onClick={() => copyToClipboard(webhook.url, "Webhook URL")}
+                            onClick={() =>
+                              copyToClipboard(webhook.url, "Webhook URL")
+                            }
                           >
                             <Copy className="w-4 h-4" />
                           </Button>
                         </div>
-                        
+
                         <div className="flex items-center gap-4 text-sm text-gray-600">
-                          <span>Events: {webhook.events.join(', ')}</span>
+                          <span>Events: {webhook.events.join(", ")}</span>
                           <span>Last delivery: {webhook.lastDelivery}</span>
                         </div>
                       </div>
-                      
+
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" data-testid={`button-test-webhook-${webhook.id}`}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`button-test-webhook-${webhook.id}`}
+                        >
                           Test
                         </Button>
-                        <Button variant="outline" size="sm" data-testid={`button-edit-webhook-${webhook.id}`}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          data-testid={`button-edit-webhook-${webhook.id}`}
+                        >
                           Edit
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
+                        <Button
+                          variant="outline"
+                          size="sm"
                           className="text-red-600 hover:text-red-700"
                           data-testid={`button-delete-webhook-${webhook.id}`}
                         >
@@ -360,9 +443,11 @@ export default function Developer() {
                       <code className="font-mono text-sm">GET /jobs</code>
                       <Badge variant="outline">Read</Badge>
                     </div>
-                    <p className="text-sm text-gray-600">Retrieve a list of all jobs</p>
+                    <p className="text-sm text-gray-600">
+                      Retrieve a list of all jobs
+                    </p>
                   </div>
-                  
+
                   <div className="border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <code className="font-mono text-sm">POST /jobs</code>
@@ -370,15 +455,17 @@ export default function Developer() {
                     </div>
                     <p className="text-sm text-gray-600">Create a new job</p>
                   </div>
-                  
+
                   <div className="border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <code className="font-mono text-sm">GET /customers</code>
                       <Badge variant="outline">Read</Badge>
                     </div>
-                    <p className="text-sm text-gray-600">Retrieve a list of all customers</p>
+                    <p className="text-sm text-gray-600">
+                      Retrieve a list of all customers
+                    </p>
                   </div>
-                  
+
                   <div className="border rounded-lg p-3">
                     <div className="flex items-center justify-between mb-2">
                       <code className="font-mono text-sm">POST /quotes</code>
@@ -388,9 +475,9 @@ export default function Developer() {
                   </div>
                 </div>
               </div>
-              
+
               <Separator />
-              
+
               <div>
                 <h3 className="font-semibold mb-2">External Documentation</h3>
                 <Button variant="outline" className="w-full justify-between">
@@ -410,7 +497,8 @@ export default function Developer() {
             </CardHeader>
             <CardContent>
               <div className="text-center py-8 text-muted-foreground">
-                CSV Import functionality removed - ServiceM8 integration discontinued
+                CSV Import functionality removed - ServiceM8 integration
+                discontinued
               </div>
             </CardContent>
           </Card>

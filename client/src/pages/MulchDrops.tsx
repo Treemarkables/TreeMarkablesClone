@@ -78,10 +78,27 @@ const dropFormSchema = z.object({
 type DropForm = z.infer<typeof dropFormSchema>;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
-const STATUS_CONFIG: Record<Status, { label: string; icon: typeof Clock; class: string }> = {
-  pending: { label: "Pending", icon: Clock, class: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
-  delivered: { label: "Delivered", icon: CheckCircle2, class: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" },
-  cancelled: { label: "Cancelled", icon: XCircle, class: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
+const STATUS_CONFIG: Record<
+  Status,
+  { label: string; icon: typeof Clock; class: string }
+> = {
+  pending: {
+    label: "Pending",
+    icon: Clock,
+    class:
+      "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  },
+  delivered: {
+    label: "Delivered",
+    icon: CheckCircle2,
+    class:
+      "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+  },
+  cancelled: {
+    label: "Cancelled",
+    icon: XCircle,
+    class: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+  },
 };
 
 const NEXT_STATUS: Record<Status, Status> = {
@@ -94,7 +111,9 @@ function StatusBadge({ status }: { status: Status }) {
   const cfg = STATUS_CONFIG[status];
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${cfg.class}`}>
+    <span
+      className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium ${cfg.class}`}
+    >
       <Icon className="h-3 w-3" />
       {cfg.label}
     </span>
@@ -140,7 +159,9 @@ function DropCard({
             {drop.phone && (
               <div className="flex items-center gap-1 text-sm text-muted-foreground mt-0.5">
                 <Phone className="h-3 w-3 shrink-0" />
-                <a href={`tel:${drop.phone}`} className="hover:underline">{drop.phone}</a>
+                <a href={`tel:${drop.phone}`} className="hover:underline">
+                  {drop.phone}
+                </a>
               </div>
             )}
           </div>
@@ -176,8 +197,15 @@ function DropCard({
         {photos.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
             {photos.slice(0, 3).map((url, i) => (
-              <div key={i} className="relative h-16 w-16 rounded-md overflow-hidden border group">
-                <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+              <div
+                key={i}
+                className="relative h-16 w-16 rounded-md overflow-hidden border group"
+              >
+                <img
+                  src={url}
+                  alt={`Photo ${i + 1}`}
+                  className="h-full w-full object-cover"
+                />
                 <button
                   onClick={() => onPhotoDelete(drop.id, url)}
                   className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -201,8 +229,15 @@ function DropCard({
         {expanded && photos.length > 3 && (
           <div className="flex gap-1.5 flex-wrap">
             {photos.map((url, i) => (
-              <div key={i} className="relative h-20 w-20 rounded-md overflow-hidden border group">
-                <img src={url} alt={`Photo ${i + 1}`} className="h-full w-full object-cover" />
+              <div
+                key={i}
+                className="relative h-20 w-20 rounded-md overflow-hidden border group"
+              >
+                <img
+                  src={url}
+                  alt={`Photo ${i + 1}`}
+                  className="h-full w-full object-cover"
+                />
                 <button
                   onClick={() => onPhotoDelete(drop.id, url)}
                   className="absolute top-0.5 right-0.5 bg-black/60 rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -216,7 +251,9 @@ function DropCard({
 
         {/* Notes */}
         {drop.notes && (
-          <p className="text-xs text-muted-foreground bg-muted/40 rounded-md px-2 py-1.5">{drop.notes}</p>
+          <p className="text-xs text-muted-foreground bg-muted/40 rounded-md px-2 py-1.5">
+            {drop.notes}
+          </p>
         )}
 
         {/* Actions row */}
@@ -242,7 +279,12 @@ function DropCard({
             >
               <Camera className="h-4 w-4" />
             </Button>
-            <Button size="icon" variant="ghost" onClick={() => onEdit(drop)} title="Edit">
+            <Button
+              size="icon"
+              variant="ghost"
+              onClick={() => onEdit(drop)}
+              title="Edit"
+            >
               <Pencil className="h-4 w-4" />
             </Button>
             <Button
@@ -256,8 +298,23 @@ function DropCard({
             </Button>
           </div>
           {photos.length > 3 && (
-            <Button size="sm" variant="ghost" onClick={() => setExpanded(!expanded)} className="text-xs gap-1">
-              {expanded ? <><ChevronUp className="h-3 w-3" />Less</> : <><ChevronDown className="h-3 w-3" />All photos ({photos.length})</>}
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setExpanded(!expanded)}
+              className="text-xs gap-1"
+            >
+              {expanded ? (
+                <>
+                  <ChevronUp className="h-3 w-3" />
+                  Less
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="h-3 w-3" />
+                  All photos ({photos.length})
+                </>
+              )}
             </Button>
           )}
         </div>
@@ -282,15 +339,22 @@ export default function MulchDrops() {
   const screenshotInputRef = useRef<HTMLInputElement>(null);
 
   // ─── Data ───────────────────────────────────────────────────────────────────
-  const { data: dropsRes, isLoading } = useQuery<{ success: boolean; data: MulchDrop[] }>({
+  const { data: dropsRes, isLoading } = useQuery<{
+    success: boolean;
+    data: MulchDrop[];
+  }>({
     queryKey: ["/api/mulch-drops"],
   });
   const drops = dropsRes?.data ?? [];
-  const filtered = statusFilter === "all" ? drops : drops.filter((d) => d.status === statusFilter);
+  const filtered =
+    statusFilter === "all"
+      ? drops
+      : drops.filter((d) => d.status === statusFilter);
 
   // ─── Mutations ───────────────────────────────────────────────────────────────
   const createMutation = useMutation({
-    mutationFn: (data: DropForm) => apiRequest("POST", "/api/mulch-drops", data),
+    mutationFn: (data: DropForm) =>
+      apiRequest("POST", "/api/mulch-drops", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] });
       setAddOpen(false);
@@ -321,19 +385,27 @@ export default function MulchDrops() {
     mutationFn: async ({ id, file }: { id: string; file: File }) => {
       const fd = new FormData();
       fd.append("photo", file);
-      const res = await fetch(`/api/mulch-drops/${id}/photos`, { method: "POST", body: fd, credentials: "include" });
+      const res = await fetch(`/api/mulch-drops/${id}/photos`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
       if (!res.ok) throw new Error("Upload failed");
       return res.json();
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] }),
-    onError: () => toast({ title: "Photo upload failed", variant: "destructive" }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] }),
+    onError: () =>
+      toast({ title: "Photo upload failed", variant: "destructive" }),
   });
 
   const deletePhotoMutation = useMutation({
     mutationFn: ({ id, photoUrl }: { id: string; photoUrl: string }) =>
       apiRequest("DELETE", `/api/mulch-drops/${id}/photos`, { photoUrl }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] }),
-    onError: () => toast({ title: "Failed to remove photo", variant: "destructive" }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] }),
+    onError: () =>
+      toast({ title: "Failed to remove photo", variant: "destructive" }),
   });
 
   // ─── Status toggle ──────────────────────────────────────────────────────────
@@ -366,8 +438,19 @@ export default function MulchDrops() {
       });
       setAddOpen(true);
     } catch {
-      toast({ title: "Could not read screenshot — please fill in manually", variant: "destructive" });
-      addForm.reset({ name: "", phone: "", address: "", dropNotes: "", notes: "", status: "pending", source: "manual" });
+      toast({
+        title: "Could not read screenshot — please fill in manually",
+        variant: "destructive",
+      });
+      addForm.reset({
+        name: "",
+        phone: "",
+        address: "",
+        dropNotes: "",
+        notes: "",
+        status: "pending",
+        source: "manual",
+      });
       setAddOpen(true);
     } finally {
       setScreenshotLoading(false);
@@ -379,10 +462,13 @@ export default function MulchDrops() {
     if (!fbText.trim()) return;
     setFbLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/ai/extract-facebook-message", { messageText: fbText });
+      const res = await apiRequest("POST", "/api/ai/extract-facebook-message", {
+        messageText: fbText,
+      });
       const result = await res.json();
       if (!result.success) throw new Error();
-      const { firstName, lastName, phone, address, description } = result.data ?? {};
+      const { firstName, lastName, phone, address, description } =
+        result.data ?? {};
       const name = [firstName, lastName].filter(Boolean).join(" ") || "";
       addForm.reset({
         name,
@@ -397,7 +483,10 @@ export default function MulchDrops() {
       setFbText("");
       setAddOpen(true);
     } catch {
-      toast({ title: "Could not extract details — please fill in manually", variant: "destructive" });
+      toast({
+        title: "Could not extract details — please fill in manually",
+        variant: "destructive",
+      });
     } finally {
       setFbLoading(false);
     }
@@ -406,7 +495,15 @@ export default function MulchDrops() {
   // ─── Add form ────────────────────────────────────────────────────────────────
   const addForm = useForm<DropForm>({
     resolver: zodResolver(dropFormSchema),
-    defaultValues: { name: "", phone: "", address: "", dropNotes: "", notes: "", status: "pending", source: "manual" },
+    defaultValues: {
+      name: "",
+      phone: "",
+      address: "",
+      dropNotes: "",
+      notes: "",
+      status: "pending",
+      source: "manual",
+    },
   });
 
   const handleAddSubmit = (data: DropForm) => createMutation.mutate(data);
@@ -414,7 +511,15 @@ export default function MulchDrops() {
   // ─── Edit form ────────────────────────────────────────────────────────────────
   const editForm = useForm<DropForm>({
     resolver: zodResolver(dropFormSchema),
-    defaultValues: { name: "", phone: "", address: "", dropNotes: "", notes: "", status: "pending", source: "manual" },
+    defaultValues: {
+      name: "",
+      phone: "",
+      address: "",
+      dropNotes: "",
+      notes: "",
+      status: "pending",
+      source: "manual",
+    },
   });
 
   const openEdit = (drop: MulchDrop) => {
@@ -450,7 +555,9 @@ export default function MulchDrops() {
       <div className="flex items-center justify-between gap-2 px-4 py-3 border-b bg-background flex-wrap">
         <div>
           <h1 className="text-lg font-semibold">Mulch Drops</h1>
-          <p className="text-xs text-muted-foreground">{drops.length} total orders</p>
+          <p className="text-xs text-muted-foreground">
+            {drops.length} total orders
+          </p>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           <input
@@ -491,7 +598,15 @@ export default function MulchDrops() {
             size="sm"
             className="gap-1.5"
             onClick={() => {
-              addForm.reset({ name: "", phone: "", address: "", dropNotes: "", notes: "", status: "pending", source: "manual" });
+              addForm.reset({
+                name: "",
+                phone: "",
+                address: "",
+                dropNotes: "",
+                notes: "",
+                status: "pending",
+                source: "manual",
+              });
               setAddOpen(true);
             }}
           >
@@ -514,9 +629,7 @@ export default function MulchDrops() {
             }`}
           >
             {s.charAt(0).toUpperCase() + s.slice(1)}
-            <span className="ml-1.5 text-xs tabular-nums">
-              {counts[s]}
-            </span>
+            <span className="ml-1.5 text-xs tabular-nums">{counts[s]}</span>
           </button>
         ))}
       </div>
@@ -541,8 +654,12 @@ export default function MulchDrops() {
                 onEdit={openEdit}
                 onDelete={(id) => setDeleteId(id)}
                 onStatusToggle={handleStatusToggle}
-                onPhotoUpload={(id, file) => uploadPhotoMutation.mutate({ id, file })}
-                onPhotoDelete={(id, photoUrl) => deletePhotoMutation.mutate({ id, photoUrl })}
+                onPhotoUpload={(id, file) =>
+                  uploadPhotoMutation.mutate({ id, file })
+                }
+                onPhotoDelete={(id, photoUrl) =>
+                  deletePhotoMutation.mutate({ id, photoUrl })
+                }
               />
             ))}
           </div>
@@ -556,62 +673,130 @@ export default function MulchDrops() {
             <DialogTitle>New Mulch Drop</DialogTitle>
           </DialogHeader>
           <Form {...addForm}>
-            <form onSubmit={addForm.handleSubmit(handleAddSubmit)} className="space-y-3">
-              <FormField control={addForm.control} name="name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer Name</FormLabel>
-                  <FormControl><Input placeholder="Jane Smith" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={addForm.control} name="phone" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                  <FormControl><Input placeholder="021 000 0000" type="tel" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={addForm.control} name="address" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Delivery Address <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                  <FormControl><Input placeholder="123 Example St, Auckland" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={addForm.control} name="dropNotes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Drop Location Notes</FormLabel>
-                  <FormControl><Textarea placeholder="E.g. leave at the back gate, beside the fence..." rows={2} {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={addForm.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Internal Notes</FormLabel>
-                  <FormControl><Textarea placeholder="Any extra notes..." rows={2} {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={addForm.control} name="status" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+            <form
+              onSubmit={addForm.handleSubmit(handleAddSubmit)}
+              className="space-y-3"
+            >
+              <FormField
+                control={addForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Customer Name</FormLabel>
                     <FormControl>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <Input placeholder="Jane Smith" {...field} />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="delivered">Delivered</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Phone{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (optional)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input placeholder="021 000 0000" type="tel" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Delivery Address{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (optional)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="123 Example St, Auckland"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addForm.control}
+                name="dropNotes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Drop Location Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="E.g. leave at the back gate, beside the fence..."
+                        rows={2}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Internal Notes</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Any extra notes..."
+                        rows={2}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={addForm.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="delivered">Delivered</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setAddOpen(false)}
+                >
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={createMutation.isPending}>
-                  {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                  {createMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
                   Create
                 </Button>
               </DialogFooter>
@@ -621,68 +806,130 @@ export default function MulchDrops() {
       </Dialog>
 
       {/* ── Edit Dialog ── */}
-      <Dialog open={!!editDrop} onOpenChange={(o) => { if (!o) setEditDrop(null); }}>
+      <Dialog
+        open={!!editDrop}
+        onOpenChange={(o) => {
+          if (!o) setEditDrop(null);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Edit Mulch Drop</DialogTitle>
           </DialogHeader>
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleEditSubmit)} className="space-y-3">
-              <FormField control={editForm.control} name="name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Customer Name</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={editForm.control} name="phone" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Phone <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                  <FormControl><Input type="tel" {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={editForm.control} name="address" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Delivery Address <span className="text-muted-foreground font-normal">(optional)</span></FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={editForm.control} name="dropNotes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Drop Location Notes</FormLabel>
-                  <FormControl><Textarea rows={2} {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={editForm.control} name="notes" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Internal Notes</FormLabel>
-                  <FormControl><Textarea rows={2} {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              <FormField control={editForm.control} name="status" render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+            <form
+              onSubmit={editForm.handleSubmit(handleEditSubmit)}
+              className="space-y-3"
+            >
+              <FormField
+                control={editForm.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Customer Name</FormLabel>
                     <FormControl>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <Input {...field} />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value="pending">Pending</SelectItem>
-                      <SelectItem value="delivered">Delivered</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )} />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="phone"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Phone{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (optional)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input type="tel" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="address"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>
+                      Delivery Address{" "}
+                      <span className="text-muted-foreground font-normal">
+                        (optional)
+                      </span>
+                    </FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="dropNotes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Drop Location Notes</FormLabel>
+                    <FormControl>
+                      <Textarea rows={2} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="notes"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Internal Notes</FormLabel>
+                    <FormControl>
+                      <Textarea rows={2} {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={editForm.control}
+                name="status"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Status</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="delivered">Delivered</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setEditDrop(null)}>Cancel</Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditDrop(null)}
+                >
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={updateMutation.isPending}>
-                  {updateMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+                  {updateMutation.isPending && (
+                    <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  )}
                   Save
                 </Button>
               </DialogFooter>
@@ -692,11 +939,18 @@ export default function MulchDrops() {
       </Dialog>
 
       {/* ── Delete Confirm ── */}
-      <AlertDialog open={!!deleteId} onOpenChange={(o) => { if (!o) setDeleteId(null); }}>
+      <AlertDialog
+        open={!!deleteId}
+        onOpenChange={(o) => {
+          if (!o) setDeleteId(null);
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Mulch Drop?</AlertDialogTitle>
-            <AlertDialogDescription>This action cannot be undone.</AlertDialogDescription>
+            <AlertDialogDescription>
+              This action cannot be undone.
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -705,7 +959,9 @@ export default function MulchDrops() {
               onClick={() => deleteId && deleteMutation.mutate(deleteId)}
               disabled={deleteMutation.isPending}
             >
-              {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              {deleteMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              )}
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -723,7 +979,8 @@ export default function MulchDrops() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Paste the Facebook message conversation below. AI will extract the customer's details to pre-fill the form.
+              Paste the Facebook message conversation below. AI will extract the
+              customer's details to pre-fill the form.
             </p>
             <Textarea
               value={fbText}
@@ -733,9 +990,25 @@ export default function MulchDrops() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setFbOpen(false); setFbText(""); }}>Cancel</Button>
-            <Button onClick={handleFbExtract} disabled={!fbText.trim() || fbLoading} className="gap-1.5">
-              {fbLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <SiFacebook className="h-4 w-4" />}
+            <Button
+              variant="outline"
+              onClick={() => {
+                setFbOpen(false);
+                setFbText("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleFbExtract}
+              disabled={!fbText.trim() || fbLoading}
+              className="gap-1.5"
+            >
+              {fbLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <SiFacebook className="h-4 w-4" />
+              )}
               Extract Details
             </Button>
           </DialogFooter>

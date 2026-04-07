@@ -3,13 +3,54 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Package, Plus, Search, Filter, ArrowUpDown, DollarSign, Truck, TreePine, Scissors, Wrench, Edit, Trash2, Upload, Download } from "lucide-react";
+import {
+  Package,
+  Plus,
+  Search,
+  Filter,
+  ArrowUpDown,
+  DollarSign,
+  Truck,
+  TreePine,
+  Scissors,
+  Wrench,
+  Edit,
+  Trash2,
+  Upload,
+  Download,
+} from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -33,7 +74,9 @@ const materialSchema = z.object({
 const serviceSchema = z.object({
   name: z.string().min(1, "Service name is required"),
   category: z.string().min(1, "Category is required"),
-  basePrice: z.coerce.number().nonnegative("Base price must be a non-negative number"),
+  basePrice: z.coerce
+    .number()
+    .nonnegative("Base price must be a non-negative number"),
   unit: z.string().min(1, "Unit is required"),
   description: z.string().optional(),
 });
@@ -47,92 +90,92 @@ const mockMaterials = [
     id: "1",
     itemNumber: "VIP",
     name: "10% discount with VIP membership",
-    price: 0.00,
+    price: 0.0,
     priceIncludesTax: false,
     taxRate: "No GST",
-    category: "Discount"
+    category: "Discount",
   },
   {
-    id: "2", 
+    id: "2",
     itemNumber: "Admin Time",
     name: "Admin Time",
-    price: 0.00,
+    price: 0.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Labour"
+    category: "Labour",
   },
   {
     id: "3",
     itemNumber: "41",
     name: "Bandit chipper hire",
-    price: 500.00,
+    price: 500.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Equipment"
+    category: "Equipment",
   },
   {
     id: "4",
     itemNumber: "17",
     name: "Bucket truck",
-    price: 80.00,
+    price: 80.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Equipment"
+    category: "Equipment",
   },
   {
     id: "5",
     itemNumber: "11",
     name: "Call out",
-    price: 100.00,
+    price: 100.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Service"
+    category: "Service",
   },
   {
     id: "6",
     itemNumber: "29 labour",
     name: "Dan labour",
-    price: 0.00,
+    price: 0.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Labour"
+    category: "Labour",
   },
   {
     id: "7",
     itemNumber: "SERVICEM8-36",
     name: "Day 1",
-    price: 0.00,
+    price: 0.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Service"
+    category: "Service",
   },
   {
     id: "8",
     itemNumber: "SERVICEM8-54",
     name: "Day 1",
-    price: 0.00,
+    price: 0.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Service"
+    category: "Service",
   },
   {
     id: "9",
     itemNumber: "67",
     name: "Digger and truck",
-    price: 890.00,
+    price: 890.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Equipment"
+    category: "Equipment",
   },
   {
     id: "10",
     itemNumber: "39",
     name: "Disposal",
-    price: 250.00,
+    price: 250.0,
     priceIncludesTax: false,
     taxRate: "15% GST on Income",
-    category: "Service"
-  }
+    category: "Service",
+  },
 ];
 
 const mockServices = [
@@ -140,42 +183,42 @@ const mockServices = [
     id: "1",
     name: "Tree Removal - Small (under 5m)",
     category: "Tree Services",
-    basePrice: 250.00,
+    basePrice: 250.0,
     unit: "per tree",
-    description: "Complete removal including stump grinding"
+    description: "Complete removal including stump grinding",
   },
   {
     id: "2",
-    name: "Tree Removal - Medium (5-10m)", 
+    name: "Tree Removal - Medium (5-10m)",
     category: "Tree Services",
-    basePrice: 650.00,
+    basePrice: 650.0,
     unit: "per tree",
-    description: "Complete removal including stump grinding"
+    description: "Complete removal including stump grinding",
   },
   {
     id: "3",
     name: "Tree Removal - Large (10m+)",
-    category: "Tree Services", 
-    basePrice: 1250.00,
+    category: "Tree Services",
+    basePrice: 1250.0,
     unit: "per tree",
-    description: "Complex removal with crane assistance if needed"
+    description: "Complex removal with crane assistance if needed",
   },
   {
     id: "4",
     name: "Hedge Trimming",
     category: "Maintenance",
-    basePrice: 85.00,
+    basePrice: 85.0,
     unit: "per hour",
-    description: "Professional hedge shaping and maintenance"
+    description: "Professional hedge shaping and maintenance",
   },
   {
     id: "5",
     name: "Stump Grinding",
     category: "Tree Services",
-    basePrice: 180.00,
+    basePrice: 180.0,
     unit: "per stump",
-    description: "Complete stump removal and cleanup"
-  }
+    description: "Complete stump removal and cleanup",
+  },
 ];
 
 export default function MaterialsServices() {
@@ -193,22 +236,22 @@ export default function MaterialsServices() {
 
   // Fetch materials and services using TanStack Query
   const { data: materials = [], isLoading: materialsLoading } = useQuery({
-    queryKey: ['/api/materials'],
-    select: (response: any) => response.data || []
+    queryKey: ["/api/materials"],
+    select: (response: any) => response.data || [],
   });
 
   const { data: services = [], isLoading: servicesLoading } = useQuery({
-    queryKey: ['/api/services'], 
-    select: (response: any) => response.data || []
+    queryKey: ["/api/services"],
+    select: (response: any) => response.data || [],
   });
 
   // Materials mutations
   const createMaterialMutation = useMutation({
     mutationFn: async (data: MaterialFormData) => {
-      return apiRequest('POST', '/api/materials', data);
+      return apiRequest("POST", "/api/materials", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
       setShowAddMaterialDialog(false);
       materialForm.reset();
     },
@@ -218,15 +261,21 @@ export default function MaterialsServices() {
         description: "Failed to add material. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const updateMaterialMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<MaterialFormData> }) => {
-      return apiRequest('PUT', `/api/materials/${id}`, data);
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<MaterialFormData>;
+    }) => {
+      return apiRequest("PUT", `/api/materials/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
       setShowEditMaterialDialog(false);
       setEditingMaterial(null);
     },
@@ -236,15 +285,15 @@ export default function MaterialsServices() {
         description: "Failed to update material. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const deleteMaterialMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/materials/${id}`);
+      return apiRequest("DELETE", `/api/materials/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/materials"] });
     },
     onError: () => {
       toast({
@@ -252,16 +301,16 @@ export default function MaterialsServices() {
         description: "Failed to delete material. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   // Services mutations
   const createServiceMutation = useMutation({
     mutationFn: async (data: ServiceFormData) => {
-      return apiRequest('POST', '/api/services', data);
+      return apiRequest("POST", "/api/services", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/services"] });
       setShowAddServiceDialog(false);
       serviceForm.reset();
     },
@@ -271,15 +320,21 @@ export default function MaterialsServices() {
         description: "Failed to add service. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const updateServiceMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: Partial<ServiceFormData> }) => {
-      return apiRequest('PUT', `/api/services/${id}`, data);
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<ServiceFormData>;
+    }) => {
+      return apiRequest("PUT", `/api/services/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/services"] });
       setShowEditServiceDialog(false);
       setEditingService(null);
     },
@@ -289,15 +344,15 @@ export default function MaterialsServices() {
         description: "Failed to update service. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const deleteServiceMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/services/${id}`);
+      return apiRequest("DELETE", `/api/services/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/services'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/services"] });
     },
     onError: () => {
       toast({
@@ -305,7 +360,7 @@ export default function MaterialsServices() {
         description: "Failed to delete service. Please try again.",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const materialForm = useForm<MaterialFormData>({
@@ -385,19 +440,21 @@ export default function MaterialsServices() {
   };
 
   const filteredMaterials = materials
-    .filter(item => {
-      const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                           item.itemNumber.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+    .filter((item) => {
+      const matchesSearch =
+        item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        item.itemNumber.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        categoryFilter === "all" || item.category === categoryFilter;
       return matchesSearch && matchesCategory;
     })
     .sort((a, b) => {
       switch (sortBy) {
-        case 'name':
+        case "name":
           return a.name.localeCompare(b.name);
-        case 'price':
+        case "price":
           return b.price - a.price;
-        case 'itemNumber':
+        case "itemNumber":
           return a.itemNumber.localeCompare(b.itemNumber);
         default:
           return 0;
@@ -405,16 +462,19 @@ export default function MaterialsServices() {
     });
 
   const filteredServices = services
-    .filter(service => {
-      const matchesSearch = service.name.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = categoryFilter === 'all' || service.category === categoryFilter;
+    .filter((service) => {
+      const matchesSearch = service.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase());
+      const matchesCategory =
+        categoryFilter === "all" || service.category === categoryFilter;
       return matchesSearch && matchesCategory;
     })
     .sort((a, b) => {
       switch (sortBy) {
-        case 'name':
+        case "name":
           return a.name.localeCompare(b.name);
-        case 'price':
+        case "price":
           return b.basePrice - a.basePrice;
         default:
           return 0;
@@ -423,20 +483,29 @@ export default function MaterialsServices() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'available': return 'bg-green-100 text-green-800';
-      case 'low': return 'bg-yellow-100 text-yellow-800';
-      case 'out-of-stock': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
+      case "available":
+        return "bg-green-100 text-green-800";
+      case "low":
+        return "bg-yellow-100 text-yellow-800";
+      case "out-of-stock":
+        return "bg-red-100 text-red-800";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
   const getCategoryIcon = (category: string) => {
     switch (category) {
-      case 'Equipment': return <Wrench className="w-5 h-5" />;
-      case 'Materials': return <Package className="w-5 h-5" />;
-      case 'Tree Services': return <TreePine className="w-5 h-5" />;
-      case 'Maintenance': return <Scissors className="w-5 h-5" />;
-      default: return <Package className="w-5 h-5" />;
+      case "Equipment":
+        return <Wrench className="w-5 h-5" />;
+      case "Materials":
+        return <Package className="w-5 h-5" />;
+      case "Tree Services":
+        return <TreePine className="w-5 h-5" />;
+      case "Maintenance":
+        return <Scissors className="w-5 h-5" />;
+      default:
+        return <Package className="w-5 h-5" />;
     }
   };
 
@@ -445,12 +514,17 @@ export default function MaterialsServices() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Materials & Services</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Materials & Services
+          </h1>
           <p className="text-gray-600">Import & manage items you sell</p>
         </div>
         <div className="flex gap-2">
           {activeTab === "materials" ? (
-            <Dialog open={showAddMaterialDialog} onOpenChange={setShowAddMaterialDialog}>
+            <Dialog
+              open={showAddMaterialDialog}
+              onOpenChange={setShowAddMaterialDialog}
+            >
               <DialogTrigger asChild>
                 <Button data-testid="button-add-material">
                   <Plus className="w-4 h-4 mr-2" />
@@ -458,142 +532,185 @@ export default function MaterialsServices() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Add New Material</DialogTitle>
-              </DialogHeader>
-              <Form {...materialForm}>
-                <form onSubmit={materialForm.handleSubmit(onAddMaterial, (errors) => {
-                  console.error("Form validation errors:", errors);
-                  toast({
-                    title: "Validation Error",
-                    description: "Please check all required fields and try again.",
-                    variant: "destructive",
-                  });
-                })} className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
+                <DialogHeader>
+                  <DialogTitle>Add New Material</DialogTitle>
+                </DialogHeader>
+                <Form {...materialForm}>
+                  <form
+                    onSubmit={materialForm.handleSubmit(
+                      onAddMaterial,
+                      (errors) => {
+                        console.error("Form validation errors:", errors);
+                        toast({
+                          title: "Validation Error",
+                          description:
+                            "Please check all required fields and try again.",
+                          variant: "destructive",
+                        });
+                      },
+                    )}
+                    className="space-y-6"
+                  >
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={materialForm.control}
+                        name="itemNumber"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Item Number</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g., 41"
+                                {...field}
+                                data-testid="input-item-number"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={materialForm.control}
+                        name="category"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Category</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger data-testid="select-material-category">
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Equipment">
+                                  Equipment
+                                </SelectItem>
+                                <SelectItem value="Labour">Labour</SelectItem>
+                                <SelectItem value="Service">Service</SelectItem>
+                                <SelectItem value="Materials">
+                                  Materials
+                                </SelectItem>
+                                <SelectItem value="Discount">
+                                  Discount
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     <FormField
                       control={materialForm.control}
-                      name="itemNumber"
+                      name="name"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Item Number</FormLabel>
+                          <FormLabel>Name</FormLabel>
                           <FormControl>
-                            <Input placeholder="e.g., 41" {...field} data-testid="input-item-number" />
+                            <Input
+                              placeholder="e.g., Bandit chipper hire"
+                              {...field}
+                              data-testid="input-material-name"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={materialForm.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={materialForm.control}
+                        name="price"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Price</FormLabel>
                             <FormControl>
-                              <SelectTrigger data-testid="select-material-category">
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                                data-testid="input-material-price"
+                              />
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Equipment">Equipment</SelectItem>
-                              <SelectItem value="Labour">Labour</SelectItem>
-                              <SelectItem value="Service">Service</SelectItem>
-                              <SelectItem value="Materials">Materials</SelectItem>
-                              <SelectItem value="Discount">Discount</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <FormField
-                    control={materialForm.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Name</FormLabel>
-                        <FormControl>
-                          <Input placeholder="e.g., Bandit chipper hire" {...field} data-testid="input-material-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="grid grid-cols-2 gap-4">
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={materialForm.control}
+                        name="taxRate"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Tax Rate</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger data-testid="select-tax-rate">
+                                  <SelectValue placeholder="Select tax rate" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="15% GST on Income">
+                                  15% GST on Income
+                                </SelectItem>
+                                <SelectItem value="No GST">No GST</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     <FormField
                       control={materialForm.control}
-                      name="price"
+                      name="priceIncludesTax"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Price</FormLabel>
+                        <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                           <FormControl>
-                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-material-price" />
+                            <Checkbox
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                              data-testid="checkbox-price-includes-tax"
+                            />
                           </FormControl>
-                          <FormMessage />
+                          <div className="space-y-1 leading-none">
+                            <FormLabel>Price includes taxes</FormLabel>
+                          </div>
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={materialForm.control}
-                      name="taxRate"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Tax Rate</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-tax-rate">
-                                <SelectValue placeholder="Select tax rate" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="15% GST on Income">15% GST on Income</SelectItem>
-                              <SelectItem value="No GST">No GST</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <FormField
-                    control={materialForm.control}
-                    name="priceIncludesTax"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
-                        <FormControl>
-                          <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                            data-testid="checkbox-price-includes-tax"
-                          />
-                        </FormControl>
-                        <div className="space-y-1 leading-none">
-                          <FormLabel>Price includes taxes</FormLabel>
-                        </div>
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setShowAddMaterialDialog(false)} data-testid="button-cancel-material">
-                      Cancel
-                    </Button>
-                    <Button type="submit" data-testid="button-save-material">
-                      Add Material
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowAddMaterialDialog(false)}
+                        data-testid="button-cancel-material"
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" data-testid="button-save-material">
+                        Add Material
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
           ) : (
-            <Dialog open={showAddServiceDialog} onOpenChange={setShowAddServiceDialog}>
+            <Dialog
+              open={showAddServiceDialog}
+              onOpenChange={setShowAddServiceDialog}
+            >
               <DialogTrigger asChild>
                 <Button data-testid="button-add-service">
                   <Plus className="w-4 h-4 mr-2" />
@@ -601,112 +718,149 @@ export default function MaterialsServices() {
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px]">
-              <DialogHeader>
-                <DialogTitle>Add New Service</DialogTitle>
-              </DialogHeader>
-              <Form {...serviceForm}>
-                <form onSubmit={serviceForm.handleSubmit(onAddService)} className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormField
-                      control={serviceForm.control}
-                      name="name"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Service Name</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., Tree Removal" {...field} data-testid="input-service-name" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={serviceForm.control}
-                      name="category"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Category</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
+                <DialogHeader>
+                  <DialogTitle>Add New Service</DialogTitle>
+                </DialogHeader>
+                <Form {...serviceForm}>
+                  <form
+                    onSubmit={serviceForm.handleSubmit(onAddService)}
+                    className="space-y-6"
+                  >
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={serviceForm.control}
+                        name="name"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Service Name</FormLabel>
                             <FormControl>
-                              <SelectTrigger data-testid="select-service-category">
-                                <SelectValue placeholder="Select category" />
-                              </SelectTrigger>
+                              <Input
+                                placeholder="e.g., Tree Removal"
+                                {...field}
+                                data-testid="input-service-name"
+                              />
                             </FormControl>
-                            <SelectContent>
-                              <SelectItem value="Tree Services">Tree Services</SelectItem>
-                              <SelectItem value="Maintenance">Maintenance</SelectItem>
-                              <SelectItem value="Emergency">Emergency</SelectItem>
-                              <SelectItem value="Consultation">Consultation</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={serviceForm.control}
+                        name="category"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Category</FormLabel>
+                            <Select
+                              onValueChange={field.onChange}
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger data-testid="select-service-category">
+                                  <SelectValue placeholder="Select category" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="Tree Services">
+                                  Tree Services
+                                </SelectItem>
+                                <SelectItem value="Maintenance">
+                                  Maintenance
+                                </SelectItem>
+                                <SelectItem value="Emergency">
+                                  Emergency
+                                </SelectItem>
+                                <SelectItem value="Consultation">
+                                  Consultation
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={serviceForm.control}
+                        name="basePrice"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Base Price</FormLabel>
+                            <FormControl>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                placeholder="0.00"
+                                {...field}
+                                data-testid="input-service-price"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={serviceForm.control}
+                        name="unit"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Unit</FormLabel>
+                            <FormControl>
+                              <Input
+                                placeholder="e.g., per tree, per hour"
+                                {...field}
+                                data-testid="input-service-unit"
+                              />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+
                     <FormField
                       control={serviceForm.control}
-                      name="basePrice"
+                      name="description"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Base Price</FormLabel>
+                          <FormLabel>Description (Optional)</FormLabel>
                           <FormControl>
-                            <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-service-price" />
+                            <Textarea
+                              placeholder="Service description..."
+                              {...field}
+                              data-testid="textarea-service-description"
+                            />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
-                    <FormField
-                      control={serviceForm.control}
-                      name="unit"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Unit</FormLabel>
-                          <FormControl>
-                            <Input placeholder="e.g., per tree, per hour" {...field} data-testid="input-service-unit" />
-                          </FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
-                  
-                  <FormField
-                    control={serviceForm.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description (Optional)</FormLabel>
-                        <FormControl>
-                          <Textarea placeholder="Service description..." {...field} data-testid="textarea-service-description" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  
-                  <div className="flex justify-end space-x-2">
-                    <Button type="button" variant="outline" onClick={() => setShowAddServiceDialog(false)} data-testid="button-cancel-service">
-                      Cancel
-                    </Button>
-                    <Button type="submit" data-testid="button-save-service">
-                      Add Service
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
+
+                    <div className="flex justify-end space-x-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setShowAddServiceDialog(false)}
+                        data-testid="button-cancel-service"
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" data-testid="button-save-service">
+                        Add Service
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
           )}
-          
+
           <Button variant="outline" data-testid="button-bulk-import">
             <Upload className="w-4 h-4 mr-2" />
             Bulk Import
           </Button>
-          
+
           <Button variant="outline" data-testid="button-export-items">
             <Download className="w-4 h-4 mr-2" />
             Export Items
@@ -715,13 +869,19 @@ export default function MaterialsServices() {
       </div>
 
       {/* Edit Material Dialog */}
-      <Dialog open={showEditMaterialDialog} onOpenChange={setShowEditMaterialDialog}>
+      <Dialog
+        open={showEditMaterialDialog}
+        onOpenChange={setShowEditMaterialDialog}
+      >
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Edit Material</DialogTitle>
           </DialogHeader>
           <Form {...materialForm}>
-            <form onSubmit={materialForm.handleSubmit(onEditMaterial)} className="space-y-6">
+            <form
+              onSubmit={materialForm.handleSubmit(onEditMaterial)}
+              className="space-y-6"
+            >
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={materialForm.control}
@@ -730,7 +890,11 @@ export default function MaterialsServices() {
                     <FormItem>
                       <FormLabel>Item Number</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., 41" {...field} data-testid="input-edit-item-number" />
+                        <Input
+                          placeholder="e.g., 41"
+                          {...field}
+                          data-testid="input-edit-item-number"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -742,7 +906,10 @@ export default function MaterialsServices() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-edit-material-category">
                             <SelectValue placeholder="Select category" />
@@ -761,7 +928,7 @@ export default function MaterialsServices() {
                   )}
                 />
               </div>
-              
+
               <FormField
                 control={materialForm.control}
                 name="name"
@@ -769,13 +936,17 @@ export default function MaterialsServices() {
                   <FormItem>
                     <FormLabel>Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Material name" {...field} data-testid="input-edit-material-name" />
+                      <Input
+                        placeholder="Material name"
+                        {...field}
+                        data-testid="input-edit-material-name"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={materialForm.control}
@@ -784,7 +955,13 @@ export default function MaterialsServices() {
                     <FormItem>
                       <FormLabel>Price</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-edit-material-price" />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          {...field}
+                          data-testid="input-edit-material-price"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -796,14 +973,19 @@ export default function MaterialsServices() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Tax Rate</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-edit-tax-rate">
                             <SelectValue placeholder="Select tax rate" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="15% GST on Income">15% GST on Income</SelectItem>
+                          <SelectItem value="15% GST on Income">
+                            15% GST on Income
+                          </SelectItem>
                           <SelectItem value="No GST">No GST</SelectItem>
                           <SelectItem value="10% GST">10% GST</SelectItem>
                         </SelectContent>
@@ -813,7 +995,7 @@ export default function MaterialsServices() {
                   )}
                 />
               </div>
-              
+
               <FormField
                 control={materialForm.control}
                 name="priceIncludesTax"
@@ -832,9 +1014,14 @@ export default function MaterialsServices() {
                   </FormItem>
                 )}
               />
-              
+
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowEditMaterialDialog(false)} data-testid="button-cancel-edit-material">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEditMaterialDialog(false)}
+                  data-testid="button-cancel-edit-material"
+                >
                   Cancel
                 </Button>
                 <Button type="submit" data-testid="button-save-edit-material">
@@ -847,13 +1034,19 @@ export default function MaterialsServices() {
       </Dialog>
 
       {/* Edit Service Dialog */}
-      <Dialog open={showEditServiceDialog} onOpenChange={setShowEditServiceDialog}>
+      <Dialog
+        open={showEditServiceDialog}
+        onOpenChange={setShowEditServiceDialog}
+      >
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Edit Service</DialogTitle>
           </DialogHeader>
           <Form {...serviceForm}>
-            <form onSubmit={serviceForm.handleSubmit(onEditService)} className="space-y-6">
+            <form
+              onSubmit={serviceForm.handleSubmit(onEditService)}
+              className="space-y-6"
+            >
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={serviceForm.control}
@@ -862,7 +1055,11 @@ export default function MaterialsServices() {
                     <FormItem>
                       <FormLabel>Service Name</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., Tree Removal" {...field} data-testid="input-edit-service-name" />
+                        <Input
+                          placeholder="e.g., Tree Removal"
+                          {...field}
+                          data-testid="input-edit-service-name"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -874,17 +1071,26 @@ export default function MaterialsServices() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select
+                        onValueChange={field.onChange}
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-edit-service-category">
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          <SelectItem value="Tree Services">Tree Services</SelectItem>
-                          <SelectItem value="Maintenance">Maintenance</SelectItem>
+                          <SelectItem value="Tree Services">
+                            Tree Services
+                          </SelectItem>
+                          <SelectItem value="Maintenance">
+                            Maintenance
+                          </SelectItem>
                           <SelectItem value="Emergency">Emergency</SelectItem>
-                          <SelectItem value="Consultation">Consultation</SelectItem>
+                          <SelectItem value="Consultation">
+                            Consultation
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -892,7 +1098,7 @@ export default function MaterialsServices() {
                   )}
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <FormField
                   control={serviceForm.control}
@@ -901,7 +1107,13 @@ export default function MaterialsServices() {
                     <FormItem>
                       <FormLabel>Base Price</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" placeholder="0.00" {...field} data-testid="input-edit-service-price" />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          {...field}
+                          data-testid="input-edit-service-price"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -914,14 +1126,18 @@ export default function MaterialsServices() {
                     <FormItem>
                       <FormLabel>Unit</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g., per tree, per hour" {...field} data-testid="input-edit-service-unit" />
+                        <Input
+                          placeholder="e.g., per tree, per hour"
+                          {...field}
+                          data-testid="input-edit-service-unit"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              
+
               <FormField
                 control={serviceForm.control}
                 name="description"
@@ -929,15 +1145,24 @@ export default function MaterialsServices() {
                   <FormItem>
                     <FormLabel>Description (Optional)</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Service description..." {...field} data-testid="textarea-edit-service-description" />
+                      <Textarea
+                        placeholder="Service description..."
+                        {...field}
+                        data-testid="textarea-edit-service-description"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setShowEditServiceDialog(false)} data-testid="button-cancel-edit-service">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEditServiceDialog(false)}
+                  data-testid="button-cancel-edit-service"
+                >
                   Cancel
                 </Button>
                 <Button type="submit" data-testid="button-save-edit-service">
@@ -955,7 +1180,9 @@ export default function MaterialsServices() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Materials</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Materials
+                </p>
                 <p className="text-2xl font-bold">{materials.length}</p>
               </div>
               <Package className="w-8 h-8 text-blue-600" />
@@ -967,7 +1194,9 @@ export default function MaterialsServices() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Services</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Total Services
+                </p>
                 <p className="text-2xl font-bold">{services.length}</p>
               </div>
               <TreePine className="w-8 h-8 text-green-600" />
@@ -979,8 +1208,12 @@ export default function MaterialsServices() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Equipment Items</p>
-                <p className="text-2xl font-bold">{materials.filter(m => m.category === 'Equipment').length}</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Equipment Items
+                </p>
+                <p className="text-2xl font-bold">
+                  {materials.filter((m) => m.category === "Equipment").length}
+                </p>
               </div>
               <Truck className="w-8 h-8 text-yellow-600" />
             </div>
@@ -991,9 +1224,17 @@ export default function MaterialsServices() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Avg Material Price</p>
+                <p className="text-sm font-medium text-gray-600">
+                  Avg Material Price
+                </p>
                 <p className="text-2xl font-bold">
-                  ${Math.round(materials.filter(m => m.price > 0).reduce((sum, m) => sum + m.price, 0) / Math.max(materials.filter(m => m.price > 0).length, 1))}
+                  $
+                  {Math.round(
+                    materials
+                      .filter((m) => m.price > 0)
+                      .reduce((sum, m) => sum + m.price, 0) /
+                      Math.max(materials.filter((m) => m.price > 0).length, 1),
+                  )}
                 </p>
               </div>
               <DollarSign className="w-8 h-8 text-amber-600" />
@@ -1016,7 +1257,10 @@ export default function MaterialsServices() {
         </div>
 
         <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-          <SelectTrigger className="w-full sm:w-48" data-testid="select-category-filter">
+          <SelectTrigger
+            className="w-full sm:w-48"
+            data-testid="select-category-filter"
+          >
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue placeholder="Filter by category" />
           </SelectTrigger>
@@ -1069,58 +1313,73 @@ export default function MaterialsServices() {
                     <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
-              <TableBody>
-                {filteredMaterials.map((material) => (
-                  <TableRow key={material.id} data-testid={`row-material-${material.id}`}>
-                    <TableCell>
-                      <Checkbox data-testid={`checkbox-select-${material.id}`} />
-                    </TableCell>
-                    <TableCell className="font-medium" data-testid={`text-item-number-${material.id}`}>
-                      {material.itemNumber}
-                    </TableCell>
-                    <TableCell data-testid={`text-material-name-${material.id}`}>
-                      {material.name}
-                    </TableCell>
-                    <TableCell data-testid={`text-price-${material.id}`}>
-                      ${parseFloat(material.price || 0).toFixed(2)}
-                    </TableCell>
-                    <TableCell data-testid={`text-price-includes-tax-${material.id}`}>
-                      {material.priceIncludesTax ? "Yes" : "No"}
-                    </TableCell>
-                    <TableCell data-testid={`text-tax-rate-${material.id}`}>
-                      {material.taxRate}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleEditMaterial(material)}
-                          data-testid={`button-edit-${material.id}`}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => handleRemoveMaterial(material.id)}
-                          data-testid={`button-remove-${material.id}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredMaterials.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No materials found matching your search criteria.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                <TableBody>
+                  {filteredMaterials.map((material) => (
+                    <TableRow
+                      key={material.id}
+                      data-testid={`row-material-${material.id}`}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          data-testid={`checkbox-select-${material.id}`}
+                        />
+                      </TableCell>
+                      <TableCell
+                        className="font-medium"
+                        data-testid={`text-item-number-${material.id}`}
+                      >
+                        {material.itemNumber}
+                      </TableCell>
+                      <TableCell
+                        data-testid={`text-material-name-${material.id}`}
+                      >
+                        {material.name}
+                      </TableCell>
+                      <TableCell data-testid={`text-price-${material.id}`}>
+                        ${parseFloat(material.price || 0).toFixed(2)}
+                      </TableCell>
+                      <TableCell
+                        data-testid={`text-price-includes-tax-${material.id}`}
+                      >
+                        {material.priceIncludesTax ? "Yes" : "No"}
+                      </TableCell>
+                      <TableCell data-testid={`text-tax-rate-${material.id}`}>
+                        {material.taxRate}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleEditMaterial(material)}
+                            data-testid={`button-edit-${material.id}`}
+                          >
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleRemoveMaterial(material.id)}
+                            data-testid={`button-remove-${material.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredMaterials.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        No materials found matching your search criteria.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
           </div>
         </TabsContent>
@@ -1128,23 +1387,30 @@ export default function MaterialsServices() {
         <TabsContent value="services" className="flex-1 overflow-auto mt-6">
           <div className="grid gap-4">
             {filteredServices.map((service) => (
-              <Card key={service.id} className="hover-elevate" data-testid={`card-service-${service.id}`}>
+              <Card
+                key={service.id}
+                className="hover-elevate"
+                data-testid={`card-service-${service.id}`}
+              >
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="p-2 bg-gray-100 rounded-lg">
                         {getCategoryIcon(service.category)}
                       </div>
-                      
+
                       <div className="space-y-1">
-                        <h3 className="text-lg font-semibold text-gray-900" data-testid={`text-service-name-${service.id}`}>
+                        <h3
+                          className="text-lg font-semibold text-gray-900"
+                          data-testid={`text-service-name-${service.id}`}
+                        >
                           {service.name}
                         </h3>
-                        
+
                         <p className="text-sm text-gray-600">
                           {service.description}
                         </p>
-                        
+
                         <div className="flex items-center gap-4 text-sm text-gray-600">
                           <span>Category: {service.category}</span>
                           <span className="font-medium text-green-600">
@@ -1153,20 +1419,20 @@ export default function MaterialsServices() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleEditService(service)}
                         data-testid={`button-edit-service-${service.id}`}
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={() => handleRemoveService(service.id)}
                         data-testid={`button-remove-service-${service.id}`}
                       >

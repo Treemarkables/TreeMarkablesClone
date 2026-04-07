@@ -1,22 +1,28 @@
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { 
-  Bell, 
-  Mail, 
-  MessageSquare, 
-  Camera, 
-  StickyNote, 
-  FileText, 
+import { useState, useEffect } from "react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import {
+  Bell,
+  Mail,
+  MessageSquare,
+  Camera,
+  StickyNote,
+  FileText,
   CheckCircle,
   BellRing,
-  Settings
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { notificationService } from '@/lib/notificationService';
+  Settings,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { notificationService } from "@/lib/notificationService";
 
 interface NotificationPreferences {
   browserNotifications: boolean;
@@ -48,14 +54,14 @@ export default function NotificationPreferences() {
 
   // Load preferences from localStorage
   const loadPreferences = () => {
-    const stored = localStorage.getItem('notificationPreferences');
-    
+    const stored = localStorage.getItem("notificationPreferences");
+
     // Get browser permission status
     const permission = notificationService.getPermissionStatus();
-    
+
     // Default browserNotifications based on permission status (matches NotificationBell logic)
-    const defaultBrowserNotifications = permission === 'granted';
-    
+    const defaultBrowserNotifications = permission === "granted";
+
     // Default preferences
     const defaultPreferences: NotificationPreferences = {
       browserNotifications: defaultBrowserNotifications,
@@ -69,9 +75,9 @@ export default function NotificationPreferences() {
       quoteActivity: true,
       jobStatusChanges: true,
     };
-    
+
     let parsedPreferences = defaultPreferences;
-    
+
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -81,15 +87,18 @@ export default function NotificationPreferences() {
           ...parsed,
         };
       } catch (error) {
-        console.error('Error loading notification preferences:', error);
+        console.error("Error loading notification preferences:", error);
       }
     }
-    
+
     // Final browser notification state based on permission
-    const browserEnabled = permission === 'denied' 
-      ? false 
-      : (permission === 'granted' ? (parsedPreferences.browserNotifications ?? true) : false);
-    
+    const browserEnabled =
+      permission === "denied"
+        ? false
+        : permission === "granted"
+          ? (parsedPreferences.browserNotifications ?? true)
+          : false;
+
     setPreferences({
       ...parsedPreferences,
       browserNotifications: browserEnabled,
@@ -105,42 +114,50 @@ export default function NotificationPreferences() {
     const handlePreferenceChange = () => {
       loadPreferences();
     };
-    
+
     // Same-tab changes
-    window.addEventListener('notificationPreferencesChanged', handlePreferenceChange);
+    window.addEventListener(
+      "notificationPreferencesChanged",
+      handlePreferenceChange,
+    );
     // Cross-tab changes
-    window.addEventListener('storage', handlePreferenceChange);
-    
+    window.addEventListener("storage", handlePreferenceChange);
+
     return () => {
-      window.removeEventListener('notificationPreferencesChanged', handlePreferenceChange);
-      window.removeEventListener('storage', handlePreferenceChange);
+      window.removeEventListener(
+        "notificationPreferencesChanged",
+        handlePreferenceChange,
+      );
+      window.removeEventListener("storage", handlePreferenceChange);
     };
   }, []);
 
   const handleToggle = (key: keyof NotificationPreferences) => {
-    setPreferences(prev => {
+    setPreferences((prev) => {
       const updated = { ...prev, [key]: !prev[key] };
-      localStorage.setItem('notificationPreferences', JSON.stringify(updated));
-      
+      localStorage.setItem("notificationPreferences", JSON.stringify(updated));
+
       // Notify other components in same tab
-      window.dispatchEvent(new Event('notificationPreferencesChanged'));
-      
+      window.dispatchEvent(new Event("notificationPreferencesChanged"));
+
       return updated;
     });
-
   };
 
   const handleEnableBrowserNotifications = async () => {
     const granted = await notificationService.requestPermission();
-    
+
     if (granted) {
-      setPreferences(prev => {
+      setPreferences((prev) => {
         const updated = { ...prev, browserNotifications: true };
-        localStorage.setItem('notificationPreferences', JSON.stringify(updated));
-        
+        localStorage.setItem(
+          "notificationPreferences",
+          JSON.stringify(updated),
+        );
+
         // Notify other components in same tab
-        window.dispatchEvent(new Event('notificationPreferencesChanged'));
-        
+        window.dispatchEvent(new Event("notificationPreferencesChanged"));
+
         return updated;
       });
     } else {
@@ -186,19 +203,18 @@ export default function NotificationPreferences() {
                   Enable desktop notifications
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {permissionStatus === 'granted' 
-                    ? 'Browser notifications are enabled'
-                    : permissionStatus === 'denied'
-                    ? 'Browser notifications are blocked. Please enable them in your browser settings.'
-                    : 'Click to enable browser notifications'
-                  }
+                  {permissionStatus === "granted"
+                    ? "Browser notifications are enabled"
+                    : permissionStatus === "denied"
+                      ? "Browser notifications are blocked. Please enable them in your browser settings."
+                      : "Click to enable browser notifications"}
                 </p>
               </div>
-              {permissionStatus === 'granted' ? (
+              {permissionStatus === "granted" ? (
                 <Switch
                   id="browser-notifications"
                   checked={preferences.browserNotifications}
-                  onCheckedChange={() => handleToggle('browserNotifications')}
+                  onCheckedChange={() => handleToggle("browserNotifications")}
                   data-testid="switch-browser-notifications"
                 />
               ) : (
@@ -248,7 +264,7 @@ export default function NotificationPreferences() {
               <Switch
                 id="email-activity"
                 checked={preferences.emailActivity}
-                onCheckedChange={() => handleToggle('emailActivity')}
+                onCheckedChange={() => handleToggle("emailActivity")}
                 data-testid="switch-email-activity"
               />
             </div>
@@ -270,7 +286,7 @@ export default function NotificationPreferences() {
               <Switch
                 id="sms-activity"
                 checked={preferences.smsActivity}
-                onCheckedChange={() => handleToggle('smsActivity')}
+                onCheckedChange={() => handleToggle("smsActivity")}
                 data-testid="switch-sms-activity"
               />
             </div>
@@ -292,7 +308,7 @@ export default function NotificationPreferences() {
               <Switch
                 id="proposal-activity"
                 checked={preferences.proposalActivity}
-                onCheckedChange={() => handleToggle('proposalActivity')}
+                onCheckedChange={() => handleToggle("proposalActivity")}
                 data-testid="switch-proposal-activity"
               />
             </div>
@@ -314,7 +330,7 @@ export default function NotificationPreferences() {
               <Switch
                 id="photo-activity"
                 checked={preferences.photoActivity}
-                onCheckedChange={() => handleToggle('photoActivity')}
+                onCheckedChange={() => handleToggle("photoActivity")}
                 data-testid="switch-photo-activity"
               />
             </div>
@@ -336,7 +352,7 @@ export default function NotificationPreferences() {
               <Switch
                 id="note-activity"
                 checked={preferences.noteActivity}
-                onCheckedChange={() => handleToggle('noteActivity')}
+                onCheckedChange={() => handleToggle("noteActivity")}
                 data-testid="switch-note-activity"
               />
             </div>
@@ -369,14 +385,15 @@ export default function NotificationPreferences() {
                     Quote activity
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Notify about quote acceptance, expiration, and status changes
+                    Notify about quote acceptance, expiration, and status
+                    changes
                   </p>
                 </div>
               </div>
               <Switch
                 id="quote-activity"
                 checked={preferences.quoteActivity}
-                onCheckedChange={() => handleToggle('quoteActivity')}
+                onCheckedChange={() => handleToggle("quoteActivity")}
                 data-testid="switch-quote-activity"
               />
             </div>
@@ -398,7 +415,7 @@ export default function NotificationPreferences() {
               <Switch
                 id="job-status"
                 checked={preferences.jobStatusChanges}
-                onCheckedChange={() => handleToggle('jobStatusChanges')}
+                onCheckedChange={() => handleToggle("jobStatusChanges")}
                 data-testid="switch-job-status"
               />
             </div>
@@ -409,9 +426,10 @@ export default function NotificationPreferences() {
       {/* Help Text */}
       <div className="bg-muted/50 rounded-lg p-4">
         <p className="text-sm text-muted-foreground">
-          <strong>Note:</strong> Browser notifications require permission from your browser. 
-          You can change notification settings at any time. If you've blocked notifications, 
-          you'll need to enable them in your browser settings.
+          <strong>Note:</strong> Browser notifications require permission from
+          your browser. You can change notification settings at any time. If
+          you've blocked notifications, you'll need to enable them in your
+          browser settings.
         </p>
       </div>
     </div>

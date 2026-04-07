@@ -15,46 +15,53 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  
+
   const handleBackClick = () => {
     // Check if there's a page to go back to in the history
     if (window.history.length > 1) {
       window.history.back();
     } else {
       // Fallback to dispatch board if no history
-      setLocation('/dispatch');
+      setLocation("/dispatch");
     }
   };
-  
+
   // First try to fetch quote directly by ID
-  const { data: quoteResponse, isLoading: quoteLoading, error: quoteError } = useQuery({
+  const {
+    data: quoteResponse,
+    isLoading: quoteLoading,
+    error: quoteError,
+  } = useQuery({
     queryKey: ["/api/quotes", quoteId],
     enabled: !!quoteId,
   });
 
   // If direct fetch fails (404), try to find quote by job ID
-  const { data: quotesByJobResponse, isLoading: quotesByJobLoading } = useQuery({
-    queryKey: ["/api/quotes", { jobId: quoteId }],
-    queryFn: async () => {
-      try {
-        const response = await fetch(`/api/quotes?jobId=${quoteId}`);
-        if (!response.ok) {
+  const { data: quotesByJobResponse, isLoading: quotesByJobLoading } = useQuery(
+    {
+      queryKey: ["/api/quotes", { jobId: quoteId }],
+      queryFn: async () => {
+        try {
+          const response = await fetch(`/api/quotes?jobId=${quoteId}`);
+          if (!response.ok) {
+            return { success: false, data: [], count: 0 };
+          }
+          return response.json();
+        } catch (error) {
+          console.error("Error fetching quotes by job ID:", error);
           return { success: false, data: [], count: 0 };
         }
-        return response.json();
-      } catch (error) {
-        console.error('Error fetching quotes by job ID:', error);
-        return { success: false, data: [], count: 0 };
-      }
+      },
+      enabled: !!quoteId && !quoteLoading && !quoteResponse?.success,
     },
-    enabled: !!quoteId && !quoteLoading && !quoteResponse?.success,
-  });
+  );
 
   // Use either direct quote or first quote found by job ID
-  const actualQuoteResponse = quoteResponse?.success ? quoteResponse : 
-    (quotesByJobResponse?.success && quotesByJobResponse.data.length > 0) ? 
-      { success: true, data: quotesByJobResponse.data[0] } : 
-      quoteResponse;
+  const actualQuoteResponse = quoteResponse?.success
+    ? quoteResponse
+    : quotesByJobResponse?.success && quotesByJobResponse.data.length > 0
+      ? { success: true, data: quotesByJobResponse.data[0] }
+      : quoteResponse;
 
   const actualLoading = quoteLoading || quotesByJobLoading;
 
@@ -73,21 +80,25 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   // Accept quote mutation
   const acceptQuoteMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('POST', `/api/quotes/${quoteId}/accept`);
+      const response = await apiRequest(
+        "POST",
+        `/api/quotes/${quoteId}/accept`,
+      );
       return response;
     },
     onSuccess: (response: any) => {
-            // Refresh quote data to show updated status
+      // Refresh quote data to show updated status
       queryClient.invalidateQueries({ queryKey: ["/api/quotes", quoteId] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to accept quote. Please try again.",
-        variant: "destructive"
+        description:
+          error.message || "Failed to accept quote. Please try again.",
+        variant: "destructive",
       });
-    }
+    },
   });
 
   const handleAcceptQuote = () => {
@@ -110,11 +121,18 @@ export default function QuoteViewer({}: QuoteViewerProps) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
-            <h1 className="text-xl font-semibold text-gray-900 mb-2">Quote Not Found</h1>
+            <h1 className="text-xl font-semibold text-gray-900 mb-2">
+              Quote Not Found
+            </h1>
             <p className="text-gray-600 mb-4">
-              The quote you're looking for doesn't exist or may have been removed.
+              The quote you're looking for doesn't exist or may have been
+              removed.
             </p>
-            <Button variant="outline" onClick={handleBackClick} data-testid="button-back-not-found">
+            <Button
+              variant="outline"
+              onClick={handleBackClick}
+              data-testid="button-back-not-found"
+            >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Go Back
             </Button>
@@ -129,9 +147,9 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const job = jobResponse?.data;
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NZ', {
-      style: 'currency',
-      currency: 'NZD'
+    return new Intl.NumberFormat("en-NZ", {
+      style: "currency",
+      currency: "NZD",
     }).format(amount);
   };
 
@@ -139,13 +157,17 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const gstRate = 0.15; // 15% GST for New Zealand
   let subtotal = 0;
   let totalAmount = 0;
-  
-  if (job?.lineItems && Array.isArray(job.lineItems) && job.lineItems.length > 0) {
+
+  if (
+    job?.lineItems &&
+    Array.isArray(job.lineItems) &&
+    job.lineItems.length > 0
+  ) {
     // Calculate from job line items
     job.lineItems.forEach((item: any) => {
       const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
       const isInclusive = item.priceIncludesTax || false;
-      
+
       if (isInclusive) {
         // Price includes GST - extract the ex-GST amount
         const exGst = itemTotal / (1 + gstRate);
@@ -157,12 +179,16 @@ export default function QuoteViewer({}: QuoteViewerProps) {
         totalAmount += itemTotal * (1 + gstRate);
       }
     });
-  } else if (quote.lineItems && Array.isArray(quote.lineItems) && quote.lineItems.length > 0) {
+  } else if (
+    quote.lineItems &&
+    Array.isArray(quote.lineItems) &&
+    quote.lineItems.length > 0
+  ) {
     // Fallback to quote line items
     quote.lineItems.forEach((item: any) => {
       const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
       const isInclusive = item.priceIncludesTax || false;
-      
+
       if (isInclusive) {
         const exGst = itemTotal / (1 + gstRate);
         subtotal += exGst;
@@ -174,30 +200,44 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     });
   } else {
     // Fallback to quote amount field
-    const quoteAmount = typeof quote.amount === 'string' ? parseFloat(quote.amount) : (quote.amount || 0);
+    const quoteAmount =
+      typeof quote.amount === "string"
+        ? parseFloat(quote.amount)
+        : quote.amount || 0;
     totalAmount = quoteAmount;
     subtotal = totalAmount / (1 + gstRate);
   }
-  
+
   const gstAmount = totalAmount - subtotal;
 
   const isExpired = quote.validUntil && new Date(quote.validUntil) < new Date();
-  const isAccepted = quote.status === 'accepted';
+  const isAccepted = quote.status === "accepted";
 
   return (
     <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
       {/* Header with safe area padding for mobile notch/Dynamic Island */}
-      <div className="bg-white border-b border-gray-200 w-full" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))', paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))' }}>
+      <div
+        className="bg-white border-b border-gray-200 w-full"
+        style={{
+          paddingTop: "max(0.75rem, env(safe-area-inset-top))",
+          paddingLeft: "max(0.5rem, env(safe-area-inset-left))",
+          paddingRight: "max(0.5rem, env(safe-area-inset-right))",
+        }}
+      >
         <div className="max-w-4xl mx-auto w-full px-2 sm:px-4 pb-3 sm:pb-4">
           {/* Logo */}
           <div className="flex justify-center mb-3 sm:mb-4">
-            <img src={logoUrl} alt="Treemarkables" className="h-12 sm:h-16 object-contain" />
+            <img
+              src={logoUrl}
+              alt="Treemarkables"
+              className="h-12 sm:h-16 object-contain"
+            />
           </div>
-          
+
           <div className="flex flex-col gap-3 sm:flex-row items-start sm:items-center justify-between">
             <div className="flex items-center gap-3">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={handleBackClick}
                 data-testid="button-back"
@@ -210,209 +250,287 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                   Quote #{quote.quoteNumber || quote.id}
                 </h1>
                 <p className="text-xs text-gray-600">
-                  {customer?.name || 'Customer'} - {new Date(quote.createdAt).toLocaleDateString()}
+                  {customer?.name || "Customer"} -{" "}
+                  {new Date(quote.createdAt).toLocaleDateString()}
                 </p>
               </div>
             </div>
-          
-          <div className="flex gap-2">
-            {!isAccepted && !isExpired && (
-              <Button 
-                onClick={handleAcceptQuote}
-                disabled={acceptQuoteMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white"
-                data-testid="button-accept-quote"
-              >
-                {acceptQuoteMutation.isPending ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                    Accepting...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Accept Quote
-                  </>
-                )}
+
+            <div className="flex gap-2">
+              {!isAccepted && !isExpired && (
+                <Button
+                  onClick={handleAcceptQuote}
+                  disabled={acceptQuoteMutation.isPending}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                  data-testid="button-accept-quote"
+                >
+                  {acceptQuoteMutation.isPending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                      Accepting...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4 mr-2" />
+                      Accept Quote
+                    </>
+                  )}
+                </Button>
+              )}
+              <Button variant="outline" size="sm">
+                <Mail className="w-4 h-4 mr-2" />
+                Email
               </Button>
-            )}
-            <Button variant="outline" size="sm">
-              <Mail className="w-4 h-4 mr-2" />
-              Email
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download className="w-4 h-4 mr-2" />
-              Download PDF
-            </Button>
-          </div>
+              <Button variant="outline" size="sm">
+                <Download className="w-4 h-4 mr-2" />
+                Download PDF
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Quote Content with safe area padding */}
-      <div className="max-w-4xl mx-auto py-4 sm:py-6 w-full" style={{ paddingLeft: 'max(0.5rem, env(safe-area-inset-left))', paddingRight: 'max(0.5rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+      <div
+        className="max-w-4xl mx-auto py-4 sm:py-6 w-full"
+        style={{
+          paddingLeft: "max(0.5rem, env(safe-area-inset-left))",
+          paddingRight: "max(0.5rem, env(safe-area-inset-right))",
+          paddingBottom: "max(1rem, env(safe-area-inset-bottom))",
+        }}
+      >
         <div className="px-2 sm:px-4">
           <Card className="bg-white shadow-sm w-full">
-          <CardContent className="p-4 sm:p-6">
-            {/* Company Header */}
-            <div className="text-center mb-3">
-              <h1 className="text-base font-bold text-orange-600 mb-0.5">Treemarkables</h1>
-              <p className="text-xs text-gray-600">Professional Tree Care Services</p>
-              <p className="text-[10px] text-gray-500">Gisborne, New Zealand | Phone: +64 6 867 1234 | Email: info@treemarkables.co.nz</p>
-            </div>
-
-            {/* Status Banner */}
-            {isAccepted && (
-              <div className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
-                <div className="flex items-center text-sm">
-                  <Check className="w-4 h-4 text-green-600 mr-2" />
-                  <span className="text-green-800 font-medium">Quote Accepted</span>
-                  <span className="text-green-600 ml-2">- We'll be in touch to schedule the work!</span>
-                </div>
-              </div>
-            )}
-
-            {isExpired && !isAccepted && (
-              <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
-                <div className="flex items-center text-sm">
-                  <Clock className="w-4 h-4 text-red-600 mr-2" />
-                  <span className="text-red-800 font-medium">Quote Expired</span>
-                  <span className="text-red-600 ml-2">- Please contact us for an updated quote</span>
-                </div>
-              </div>
-            )}
-
-            {/* Quote Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-3">Quote Details</h3>
-                <div className="space-y-1.5 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Quote Number:</span>
-                    <span className="font-medium">{quote.quoteNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Date:</span>
-                    <span className="font-medium">{new Date(quote.createdAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Valid Until:</span>
-                    <span className="font-medium">
-                      {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Status:</span>
-                    <span className={`font-medium ${isAccepted ? 'text-green-600' : isExpired ? 'text-red-600' : 'text-orange-600'}`}>
-                      {isAccepted ? 'Accepted' : isExpired ? 'Expired' : 'Pending'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-3">Customer Details</h3>
-                <div className="space-y-1.5 text-sm">
-                  <div>
-                    <span className="text-gray-600">Name:</span>
-                    <span className="font-medium ml-2">{customer?.name || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Email:</span>
-                    <span className="font-medium ml-2">{customer?.email || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Phone:</span>
-                    <span className="font-medium ml-2">{customer?.phone || 'N/A'}</span>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Address:</span>
-                    <span className="font-medium ml-2">{job?.address || customer?.address || 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Job Description */}
-            {job?.description && (
-              <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900 mb-3">Service Description</h3>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-sm text-gray-700 whitespace-pre-wrap">{job.description}</p>
-                </div>
-              </div>
-            )}
-
-            {/* Line Items */}
-            {((job?.lineItems && job.lineItems.length > 0) || (quote.lineItems && quote.lineItems.length > 0)) && (
-              <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900 mb-3">Services</h3>
-                <div className="w-full overflow-x-auto">
-                  <table className="w-full border-collapse border border-gray-300 text-sm">
-                    <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border border-gray-300 px-3 py-1.5 text-left">Description</th>
-                        <th className="border border-gray-300 px-3 py-1.5 text-center">Quantity</th>
-                        <th className="border border-gray-300 px-3 py-1.5 text-right">Unit Price</th>
-                        <th className="border border-gray-300 px-3 py-1.5 text-right">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(job?.lineItems || quote.lineItems || []).map((item: any, index: number) => {
-                        const itemTotal = (item.quantity || 1) * (item.unitPrice || 0);
-                        return (
-                          <tr key={index}>
-                            <td className="border border-gray-300 px-3 py-1.5">{item.description}</td>
-                            <td className="border border-gray-300 px-3 py-1.5 text-center">{item.quantity}</td>
-                            <td className="border border-gray-300 px-3 py-1.5 text-right">{formatCurrency(item.unitPrice)}</td>
-                            <td className="border border-gray-300 px-3 py-1.5 text-right">{formatCurrency(itemTotal)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Totals */}
-            <div className="flex justify-end mb-6">
-              <div className="w-full max-w-sm space-y-2 text-sm">
-                <div className="flex justify-between text-gray-700">
-                  <span>Subtotal (excl GST):</span>
-                  <span>{formatCurrency(subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-gray-700">
-                  <span>GST (15%):</span>
-                  <span>{formatCurrency(gstAmount)}</span>
-                </div>
-                <div className="border-t pt-2">
-                  <div className="flex justify-between text-lg font-bold text-gray-900">
-                    <span>Total (inc GST):</span>
-                    <span>{formatCurrency(totalAmount)}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Terms */}
-            <div className="border-t pt-4">
-              <h3 className="text-base font-semibold text-gray-900 mb-3">Terms & Conditions</h3>
-              <div className="bg-gray-50 rounded-lg p-3">
-                <p className="text-gray-700 text-xs">
-                  {quote.terms || 'Quote valid for 30 days from the date above. GST included. Payment due within 7 days of work completion.'}
+            <CardContent className="p-4 sm:p-6">
+              {/* Company Header */}
+              <div className="text-center mb-3">
+                <h1 className="text-base font-bold text-orange-600 mb-0.5">
+                  Treemarkables
+                </h1>
+                <p className="text-xs text-gray-600">
+                  Professional Tree Care Services
+                </p>
+                <p className="text-[10px] text-gray-500">
+                  Gisborne, New Zealand | Phone: +64 6 867 1234 | Email:
+                  info@treemarkables.co.nz
                 </p>
               </div>
-            </div>
 
-            {/* Footer */}
-            <div className="text-center text-xs text-gray-600 mt-6 pt-4 border-t">
-              <p>Thank you for considering Treemarkables!</p>
-              <p className="mt-1">
-                Valid until {quote.validUntil ? new Date(quote.validUntil).toLocaleDateString() : '30 days from quote date'}.
-              </p>
-            </div>
-          </CardContent>
+              {/* Status Banner */}
+              {isAccepted && (
+                <div className="bg-green-100 border border-green-300 rounded-lg p-3 mb-4">
+                  <div className="flex items-center text-sm">
+                    <Check className="w-4 h-4 text-green-600 mr-2" />
+                    <span className="text-green-800 font-medium">
+                      Quote Accepted
+                    </span>
+                    <span className="text-green-600 ml-2">
+                      - We'll be in touch to schedule the work!
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {isExpired && !isAccepted && (
+                <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-4">
+                  <div className="flex items-center text-sm">
+                    <Clock className="w-4 h-4 text-red-600 mr-2" />
+                    <span className="text-red-800 font-medium">
+                      Quote Expired
+                    </span>
+                    <span className="text-red-600 ml-2">
+                      - Please contact us for an updated quote
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Quote Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">
+                    Quote Details
+                  </h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Quote Number:</span>
+                      <span className="font-medium">{quote.quoteNumber}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Date:</span>
+                      <span className="font-medium">
+                        {new Date(quote.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Valid Until:</span>
+                      <span className="font-medium">
+                        {quote.validUntil
+                          ? new Date(quote.validUntil).toLocaleDateString()
+                          : "N/A"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Status:</span>
+                      <span
+                        className={`font-medium ${isAccepted ? "text-green-600" : isExpired ? "text-red-600" : "text-orange-600"}`}
+                      >
+                        {isAccepted
+                          ? "Accepted"
+                          : isExpired
+                            ? "Expired"
+                            : "Pending"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">
+                    Customer Details
+                  </h3>
+                  <div className="space-y-1.5 text-sm">
+                    <div>
+                      <span className="text-gray-600">Name:</span>
+                      <span className="font-medium ml-2">
+                        {customer?.name || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Email:</span>
+                      <span className="font-medium ml-2">
+                        {customer?.email || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Phone:</span>
+                      <span className="font-medium ml-2">
+                        {customer?.phone || "N/A"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Address:</span>
+                      <span className="font-medium ml-2">
+                        {job?.address || customer?.address || "N/A"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Job Description */}
+              {job?.description && (
+                <div className="mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">
+                    Service Description
+                  </h3>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {job.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Line Items */}
+              {((job?.lineItems && job.lineItems.length > 0) ||
+                (quote.lineItems && quote.lineItems.length > 0)) && (
+                <div className="mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">
+                    Services
+                  </h3>
+                  <div className="w-full overflow-x-auto">
+                    <table className="w-full border-collapse border border-gray-300 text-sm">
+                      <thead>
+                        <tr className="bg-gray-50">
+                          <th className="border border-gray-300 px-3 py-1.5 text-left">
+                            Description
+                          </th>
+                          <th className="border border-gray-300 px-3 py-1.5 text-center">
+                            Quantity
+                          </th>
+                          <th className="border border-gray-300 px-3 py-1.5 text-right">
+                            Unit Price
+                          </th>
+                          <th className="border border-gray-300 px-3 py-1.5 text-right">
+                            Total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(job?.lineItems || quote.lineItems || []).map(
+                          (item: any, index: number) => {
+                            const itemTotal =
+                              (item.quantity || 1) * (item.unitPrice || 0);
+                            return (
+                              <tr key={index}>
+                                <td className="border border-gray-300 px-3 py-1.5">
+                                  {item.description}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-1.5 text-center">
+                                  {item.quantity}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-1.5 text-right">
+                                  {formatCurrency(item.unitPrice)}
+                                </td>
+                                <td className="border border-gray-300 px-3 py-1.5 text-right">
+                                  {formatCurrency(itemTotal)}
+                                </td>
+                              </tr>
+                            );
+                          },
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Totals */}
+              <div className="flex justify-end mb-6">
+                <div className="w-full max-w-sm space-y-2 text-sm">
+                  <div className="flex justify-between text-gray-700">
+                    <span>Subtotal (excl GST):</span>
+                    <span>{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-700">
+                    <span>GST (15%):</span>
+                    <span>{formatCurrency(gstAmount)}</span>
+                  </div>
+                  <div className="border-t pt-2">
+                    <div className="flex justify-between text-lg font-bold text-gray-900">
+                      <span>Total (inc GST):</span>
+                      <span>{formatCurrency(totalAmount)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Terms */}
+              <div className="border-t pt-4">
+                <h3 className="text-base font-semibold text-gray-900 mb-3">
+                  Terms & Conditions
+                </h3>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-gray-700 text-xs">
+                    {quote.terms ||
+                      "Quote valid for 30 days from the date above. GST included. Payment due within 7 days of work completion."}
+                  </p>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="text-center text-xs text-gray-600 mt-6 pt-4 border-t">
+                <p>Thank you for considering Treemarkables!</p>
+                <p className="mt-1">
+                  Valid until{" "}
+                  {quote.validUntil
+                    ? new Date(quote.validUntil).toLocaleDateString()
+                    : "30 days from quote date"}
+                  .
+                </p>
+              </div>
+            </CardContent>
           </Card>
         </div>
       </div>

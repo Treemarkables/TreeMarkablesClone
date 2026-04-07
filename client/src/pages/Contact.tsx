@@ -2,11 +2,30 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useMutation } from "@tanstack/react-query";
@@ -26,12 +45,27 @@ const contactFormSchema = z.object({
   email: z.string().email("Please enter a valid email address").max(255),
   phone: z.string().min(1, "Phone number is required").max(50),
   address: z.string().max(500, "Address is too long").optional(),
-  serviceType: z.enum(["tree_removal", "pruning", "hedge_trimming", "stump_grinding", "emergency", "other"], {
-    required_error: "Please select a service type",
-  }),
+  serviceType: z.enum(
+    [
+      "tree_removal",
+      "pruning",
+      "hedge_trimming",
+      "stump_grinding",
+      "emergency",
+      "other",
+    ],
+    {
+      required_error: "Please select a service type",
+    },
+  ),
   propertyType: z.enum(["residential", "commercial", "council"]).optional(),
-  urgency: z.enum(["immediate", "within_week", "within_month", "planning"]).optional(),
-  message: z.string().min(1, "Message is required").max(5000, "Message is too long"),
+  urgency: z
+    .enum(["immediate", "within_week", "within_month", "planning"])
+    .optional(),
+  message: z
+    .string()
+    .min(1, "Message is required")
+    .max(5000, "Message is too long"),
 });
 
 type ContactFormData = z.infer<typeof contactFormSchema>;
@@ -79,9 +113,9 @@ export default function Contact() {
     },
     onSuccess: (response) => {
       if (window.gtag) {
-        window.gtag('event', 'generate_lead', {
-          event_category: 'Contact',
-          event_label: 'Contact Form',
+        window.gtag("event", "generate_lead", {
+          event_category: "Contact",
+          event_label: "Contact Form",
         });
       }
       form.reset();
@@ -89,7 +123,9 @@ export default function Contact() {
     onError: (error: Error) => {
       toast({
         title: "Submission Failed",
-        description: error.message || "There was an error submitting your enquiry. Please try again or call us directly.",
+        description:
+          error.message ||
+          "There was an error submitting your enquiry. Please try again or call us directly.",
         variant: "destructive",
       });
     },
@@ -101,13 +137,13 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <SEO 
+      <SEO
         title="Contact Us – Get a Free Quote | Treemarkables"
         description="Contact Treemarkables for professional tree removal, pruning, stump grinding and hedge trimming services in Gisborne. Get a free quote within 24 hours."
         keywords="tree service quote Gisborne, contact arborist, tree removal enquiry, Gisborne tree service contact"
       />
       <Header />
-      
+
       <main className="flex-1">
         {/* Hero Section */}
         <section className="py-12 bg-gradient-to-br from-primary/10 to-primary/5">
@@ -122,7 +158,8 @@ export default function Contact() {
                 Get in Touch
               </h1>
               <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-                Ready to transform your outdoor space? Contact our qualified arborists for a free, no-obligation quote
+                Ready to transform your outdoor space? Contact our qualified
+                arborists for a free, no-obligation quote
               </p>
             </div>
           </div>
@@ -136,8 +173,12 @@ export default function Contact() {
               <div className="lg:col-span-1 space-y-6">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-xl">Contact Information</CardTitle>
-                    <CardDescription>Get in touch with our team</CardDescription>
+                    <CardTitle className="text-xl">
+                      Contact Information
+                    </CardTitle>
+                    <CardDescription>
+                      Get in touch with our team
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="flex items-start gap-3">
@@ -150,7 +191,13 @@ export default function Contact() {
                           href="tel:027-216-6882"
                           className="text-muted-foreground hover:text-primary transition-colors"
                           data-testid="link-phone"
-                          onClick={() => { if (window.gtag) window.gtag('event', 'phone_call_click', { event_category: 'Contact', event_label: 'Phone Number Click' }); }}
+                          onClick={() => {
+                            if (window.gtag)
+                              window.gtag("event", "phone_call_click", {
+                                event_category: "Contact",
+                                event_label: "Phone Number Click",
+                              });
+                          }}
                         >
                           027-216-6882
                         </a>
@@ -163,7 +210,11 @@ export default function Contact() {
                       </div>
                       <div>
                         <p className="font-medium text-foreground">Email</p>
-                        <a href="mailto:quotes@treemarkables.nz" className="text-muted-foreground hover:text-primary transition-colors" data-testid="link-email">
+                        <a
+                          href="mailto:quotes@treemarkables.nz"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          data-testid="link-email"
+                        >
                           quotes@treemarkables.nz
                         </a>
                       </div>
@@ -174,7 +225,9 @@ export default function Contact() {
                         <MapPin className="h-4 w-4 text-primary" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">Service Area</p>
+                        <p className="font-medium text-foreground">
+                          Service Area
+                        </p>
                         <p className="text-muted-foreground">
                           Gisborne, Wairoa & East Coast
                         </p>
@@ -190,23 +243,33 @@ export default function Contact() {
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      <p className="text-muted-foreground">Qualified & Experienced Arborists</p>
+                      <p className="text-muted-foreground">
+                        Qualified & Experienced Arborists
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      <p className="text-muted-foreground">Fully Insured & Certified</p>
+                      <p className="text-muted-foreground">
+                        Fully Insured & Certified
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      <p className="text-muted-foreground">Free Quote Within 24 Hours</p>
+                      <p className="text-muted-foreground">
+                        Free Quote Within 24 Hours
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      <p className="text-muted-foreground">Competitive Pricing</p>
+                      <p className="text-muted-foreground">
+                        Competitive Pricing
+                      </p>
                     </div>
                     <div className="flex items-center gap-2">
                       <div className="h-1.5 w-1.5 rounded-full bg-primary" />
-                      <p className="text-muted-foreground">Professional Equipment</p>
+                      <p className="text-muted-foreground">
+                        Professional Equipment
+                      </p>
                     </div>
                   </CardContent>
                 </Card>
@@ -216,14 +279,20 @@ export default function Contact() {
               <div className="lg:col-span-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle className="text-2xl">Send Us an Enquiry</CardTitle>
+                    <CardTitle className="text-2xl">
+                      Send Us an Enquiry
+                    </CardTitle>
                     <CardDescription>
-                      Fill out the form below and we'll respond within 24 hours with a free quote
+                      Fill out the form below and we'll respond within 24 hours
+                      with a free quote
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Form {...form}>
-                      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                      <form
+                        onSubmit={form.handleSubmit(onSubmit)}
+                        className="space-y-6"
+                      >
                         {/* Name Field */}
                         <FormField
                           control={form.control}
@@ -322,11 +391,13 @@ export default function Contact() {
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    {Object.entries(serviceTypeLabels).map(([value, label]) => (
-                                      <SelectItem key={value} value={value}>
-                                        {label}
-                                      </SelectItem>
-                                    ))}
+                                    {Object.entries(serviceTypeLabels).map(
+                                      ([value, label]) => (
+                                        <SelectItem key={value} value={value}>
+                                          {label}
+                                        </SelectItem>
+                                      ),
+                                    )}
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />
@@ -351,11 +422,13 @@ export default function Contact() {
                                     </SelectTrigger>
                                   </FormControl>
                                   <SelectContent>
-                                    {Object.entries(propertyTypeLabels).map(([value, label]) => (
-                                      <SelectItem key={value} value={value}>
-                                        {label}
-                                      </SelectItem>
-                                    ))}
+                                    {Object.entries(propertyTypeLabels).map(
+                                      ([value, label]) => (
+                                        <SelectItem key={value} value={value}>
+                                          {label}
+                                        </SelectItem>
+                                      ),
+                                    )}
                                   </SelectContent>
                                 </Select>
                                 <FormMessage />
@@ -381,11 +454,13 @@ export default function Contact() {
                                   </SelectTrigger>
                                 </FormControl>
                                 <SelectContent>
-                                  {Object.entries(urgencyLabels).map(([value, label]) => (
-                                    <SelectItem key={value} value={value}>
-                                      {label}
-                                    </SelectItem>
-                                  ))}
+                                  {Object.entries(urgencyLabels).map(
+                                    ([value, label]) => (
+                                      <SelectItem key={value} value={value}>
+                                        {label}
+                                      </SelectItem>
+                                    ),
+                                  )}
                                 </SelectContent>
                               </Select>
                               <FormMessage />
@@ -425,7 +500,9 @@ export default function Contact() {
                             data-testid="button-submit"
                             className="min-w-[140px]"
                           >
-                            {contactMutation.isPending ? "Submitting..." : "Send Enquiry"}
+                            {contactMutation.isPending
+                              ? "Submitting..."
+                              : "Send Enquiry"}
                           </Button>
                         </div>
                       </form>

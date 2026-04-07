@@ -1,29 +1,36 @@
-import { useEffect, useState, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card } from '@/components/ui/card';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import { MapPin, Plus, Trash2, Save, X, TreePine, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useEffect, useState, useRef } from "react";
+import {
+  MapContainer,
+  TileLayer,
+  Marker,
+  Popup,
+  useMapEvents,
+  useMap,
+} from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import { MapPin, Plus, Trash2, Save, X, TreePine, Loader2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 
 interface TreeMarker {
   id: string;
@@ -44,16 +51,16 @@ interface JobSiteMapProps {
 }
 
 const MARKER_TYPES = [
-  { value: 'tree', label: 'Tree', color: '#22c55e' },
-  { value: 'stump', label: 'Stump', color: '#854d0e' },
-  { value: 'hazard', label: 'Hazard', color: '#ef4444' },
-  { value: 'access', label: 'Access Point', color: '#3b82f6' },
-  { value: 'parking', label: 'Parking', color: '#8b5cf6' },
+  { value: "tree", label: "Tree", color: "#22c55e" },
+  { value: "stump", label: "Stump", color: "#854d0e" },
+  { value: "hazard", label: "Hazard", color: "#ef4444" },
+  { value: "access", label: "Access Point", color: "#3b82f6" },
+  { value: "parking", label: "Parking", color: "#8b5cf6" },
 ];
 
-function createTreeIcon(color: string = '#22c55e'): L.DivIcon {
+function createTreeIcon(color: string = "#22c55e"): L.DivIcon {
   return L.divIcon({
-    className: 'custom-tree-marker',
+    className: "custom-tree-marker",
     html: `<div style="
       background-color: ${color};
       width: 28px;
@@ -77,7 +84,13 @@ function createTreeIcon(color: string = '#22c55e'): L.DivIcon {
   });
 }
 
-function MapClickHandler({ onMapClick, isAddingMarker }: { onMapClick: (lat: number, lng: number) => void; isAddingMarker: boolean }) {
+function MapClickHandler({
+  onMapClick,
+  isAddingMarker,
+}: {
+  onMapClick: (lat: number, lng: number) => void;
+  isAddingMarker: boolean;
+}) {
   useMapEvents({
     click: (e) => {
       if (isAddingMarker) {
@@ -98,7 +111,7 @@ function GeocodedCenter({ address }: { address: string }) {
     const geocodeAddress = async () => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ', New Zealand')}`
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address + ", New Zealand")}`,
         );
         const data = await response.json();
         if (data && data.length > 0) {
@@ -107,7 +120,7 @@ function GeocodedCenter({ address }: { address: string }) {
           setGeocoded(true);
         }
       } catch (error) {
-        console.error('Geocoding failed:', error);
+        console.error("Geocoding failed:", error);
       }
     };
 
@@ -117,22 +130,30 @@ function GeocodedCenter({ address }: { address: string }) {
   return null;
 }
 
-export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSiteMapProps) {
+export function JobSiteMap({
+  jobId,
+  address,
+  defaultCenter,
+  className,
+}: JobSiteMapProps) {
   const { toast } = useToast();
   const [isAddingMarker, setIsAddingMarker] = useState(false);
   const [editingMarker, setEditingMarker] = useState<TreeMarker | null>(null);
-  const [newMarkerPosition, setNewMarkerPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const [newMarkerPosition, setNewMarkerPosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
   const [markerForm, setMarkerForm] = useState({
-    label: '',
-    notes: '',
-    markerType: 'tree',
-    color: '#22c55e',
+    label: "",
+    notes: "",
+    markerType: "tree",
+    color: "#22c55e",
   });
 
   const center = defaultCenter || [-38.6624, 178.0194];
 
   const { data: markers = [], isLoading } = useQuery<TreeMarker[]>({
-    queryKey: ['/api/jobs', jobId, 'tree-markers'],
+    queryKey: ["/api/jobs", jobId, "tree-markers"],
     queryFn: async () => {
       const res = await fetch(`/api/jobs/${jobId}/tree-markers`);
       const data = await res.json();
@@ -141,51 +162,90 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
   });
 
   const createMarkerMutation = useMutation({
-    mutationFn: async (marker: { latitude: number; longitude: number; label: string; notes: string; markerType: string; color: string }) => {
+    mutationFn: async (marker: {
+      latitude: number;
+      longitude: number;
+      label: string;
+      notes: string;
+      markerType: string;
+      color: string;
+    }) => {
       return apiRequest(`/api/jobs/${jobId}/tree-markers`, {
-        method: 'POST',
+        method: "POST",
         body: JSON.stringify(marker),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'tree-markers'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "tree-markers"],
+      });
       setNewMarkerPosition(null);
-      setMarkerForm({ label: '', notes: '', markerType: 'tree', color: '#22c55e' });
+      setMarkerForm({
+        label: "",
+        notes: "",
+        markerType: "tree",
+        color: "#22c55e",
+      });
       setIsAddingMarker(false);
-          },
+    },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to add marker', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: "Failed to add marker",
+        variant: "destructive",
+      });
     },
   });
 
   const updateMarkerMutation = useMutation({
-    mutationFn: async ({ id, ...updates }: { id: string; label?: string; notes?: string; markerType?: string; color?: string }) => {
+    mutationFn: async ({
+      id,
+      ...updates
+    }: {
+      id: string;
+      label?: string;
+      notes?: string;
+      markerType?: string;
+      color?: string;
+    }) => {
       return apiRequest(`/api/tree-markers/${id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: JSON.stringify(updates),
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'tree-markers'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "tree-markers"],
+      });
       setEditingMarker(null);
-          },
+    },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to update marker', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: "Failed to update marker",
+        variant: "destructive",
+      });
     },
   });
 
   const deleteMarkerMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest(`/api/tree-markers/${id}`, { method: 'DELETE' });
+      return apiRequest(`/api/tree-markers/${id}`, { method: "DELETE" });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'tree-markers'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "tree-markers"],
+      });
       setEditingMarker(null);
-          },
+    },
     onError: () => {
-      toast({ title: 'Error', description: 'Failed to delete marker', variant: 'destructive' });
+      toast({
+        title: "Error",
+        description: "Failed to delete marker",
+        variant: "destructive",
+      });
     },
   });
 
@@ -219,25 +279,27 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
   const openEditDialog = (marker: TreeMarker) => {
     setEditingMarker(marker);
     setMarkerForm({
-      label: marker.label || '',
-      notes: marker.notes || '',
-      markerType: marker.markerType || 'tree',
-      color: marker.color || '#22c55e',
+      label: marker.label || "",
+      notes: marker.notes || "",
+      markerType: marker.markerType || "tree",
+      color: marker.color || "#22c55e",
     });
   };
 
   const handleMarkerTypeChange = (value: string) => {
-    const type = MARKER_TYPES.find(t => t.value === value);
+    const type = MARKER_TYPES.find((t) => t.value === value);
     setMarkerForm({
       ...markerForm,
       markerType: value,
-      color: type?.color || '#22c55e',
+      color: type?.color || "#22c55e",
     });
   };
 
   if (isLoading) {
     return (
-      <div className={`flex items-center justify-center h-64 bg-gray-100 rounded-lg ${className}`}>
+      <div
+        className={`flex items-center justify-center h-64 bg-gray-100 rounded-lg ${className}`}
+      >
         <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
       </div>
     );
@@ -248,7 +310,7 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
       <div className="absolute top-2 right-2 z-[1000] flex gap-2">
         <Button
           size="sm"
-          variant={isAddingMarker ? 'default' : 'outline'}
+          variant={isAddingMarker ? "default" : "outline"}
           onClick={() => {
             setIsAddingMarker(!isAddingMarker);
             setNewMarkerPosition(null);
@@ -281,7 +343,7 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
       <MapContainer
         center={center}
         zoom={18}
-        style={{ height: '400px', width: '100%' }}
+        style={{ height: "400px", width: "100%" }}
         className="rounded-lg z-0"
       >
         <TileLayer
@@ -289,12 +351,18 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
           url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         />
         {address && <GeocodedCenter address={address} />}
-        <MapClickHandler onMapClick={handleMapClick} isAddingMarker={isAddingMarker} />
+        <MapClickHandler
+          onMapClick={handleMapClick}
+          isAddingMarker={isAddingMarker}
+        />
 
         {markers.map((marker) => (
           <Marker
             key={marker.id}
-            position={[parseFloat(marker.latitude), parseFloat(marker.longitude)]}
+            position={[
+              parseFloat(marker.latitude),
+              parseFloat(marker.longitude),
+            ]}
             icon={createTreeIcon(marker.color)}
             eventHandlers={{
               click: () => openEditDialog(marker),
@@ -302,9 +370,16 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
           >
             <Popup>
               <div className="min-w-[150px]">
-                <p className="font-medium">{marker.label || 'Unmarked tree'}</p>
-                {marker.notes && <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>}
-                <Button size="sm" variant="outline" className="mt-2 w-full" onClick={() => openEditDialog(marker)}>
+                <p className="font-medium">{marker.label || "Unmarked tree"}</p>
+                {marker.notes && (
+                  <p className="text-sm text-gray-600 mt-1">{marker.notes}</p>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mt-2 w-full"
+                  onClick={() => openEditDialog(marker)}
+                >
                   Edit
                 </Button>
               </div>
@@ -328,14 +403,20 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
               className="flex items-center gap-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded text-xs cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
               onClick={() => openEditDialog(marker)}
             >
-              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: marker.color }} />
-              <span>{marker.label || 'Unmarked'}</span>
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: marker.color }}
+              />
+              <span>{marker.label || "Unmarked"}</span>
             </div>
           ))}
         </div>
       )}
 
-      <Dialog open={!!newMarkerPosition} onOpenChange={() => setNewMarkerPosition(null)}>
+      <Dialog
+        open={!!newMarkerPosition}
+        onOpenChange={() => setNewMarkerPosition(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -346,7 +427,10 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
           <div className="space-y-4 py-4">
             <div>
               <Label>Type</Label>
-              <Select value={markerForm.markerType} onValueChange={handleMarkerTypeChange}>
+              <Select
+                value={markerForm.markerType}
+                onValueChange={handleMarkerTypeChange}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -354,7 +438,10 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
                   {MARKER_TYPES.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: type.color }}
+                        />
                         {type.label}
                       </div>
                     </SelectItem>
@@ -367,7 +454,9 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
               <Input
                 placeholder="e.g., Large oak - remove"
                 value={markerForm.label}
-                onChange={(e) => setMarkerForm({ ...markerForm, label: e.target.value })}
+                onChange={(e) =>
+                  setMarkerForm({ ...markerForm, label: e.target.value })
+                }
               />
             </div>
             <div>
@@ -375,21 +464,38 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
               <Input
                 placeholder="Additional notes..."
                 value={markerForm.notes}
-                onChange={(e) => setMarkerForm({ ...markerForm, notes: e.target.value })}
+                onChange={(e) =>
+                  setMarkerForm({ ...markerForm, notes: e.target.value })
+                }
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setNewMarkerPosition(null)}>Cancel</Button>
-            <Button onClick={handleSaveNewMarker} disabled={createMarkerMutation.isPending}>
-              {createMarkerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+            <Button
+              variant="outline"
+              onClick={() => setNewMarkerPosition(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSaveNewMarker}
+              disabled={createMarkerMutation.isPending}
+            >
+              {createMarkerMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-1" />
+              ) : (
+                <Save className="h-4 w-4 mr-1" />
+              )}
               Save Marker
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!editingMarker} onOpenChange={() => setEditingMarker(null)}>
+      <Dialog
+        open={!!editingMarker}
+        onOpenChange={() => setEditingMarker(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -400,7 +506,10 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
           <div className="space-y-4 py-4">
             <div>
               <Label>Type</Label>
-              <Select value={markerForm.markerType} onValueChange={handleMarkerTypeChange}>
+              <Select
+                value={markerForm.markerType}
+                onValueChange={handleMarkerTypeChange}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -408,7 +517,10 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
                   {MARKER_TYPES.map((type) => (
                     <SelectItem key={type.value} value={type.value}>
                       <div className="flex items-center gap-2">
-                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }} />
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: type.color }}
+                        />
                         {type.label}
                       </div>
                     </SelectItem>
@@ -421,7 +533,9 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
               <Input
                 placeholder="e.g., Large oak - remove"
                 value={markerForm.label}
-                onChange={(e) => setMarkerForm({ ...markerForm, label: e.target.value })}
+                onChange={(e) =>
+                  setMarkerForm({ ...markerForm, label: e.target.value })
+                }
               />
             </div>
             <div>
@@ -429,23 +543,36 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
               <Input
                 placeholder="Additional notes..."
                 value={markerForm.notes}
-                onChange={(e) => setMarkerForm({ ...markerForm, notes: e.target.value })}
+                onChange={(e) =>
+                  setMarkerForm({ ...markerForm, notes: e.target.value })
+                }
               />
             </div>
           </div>
           <DialogFooter className="flex justify-between">
             <Button
               variant="destructive"
-              onClick={() => editingMarker && deleteMarkerMutation.mutate(editingMarker.id)}
+              onClick={() =>
+                editingMarker && deleteMarkerMutation.mutate(editingMarker.id)
+              }
               disabled={deleteMarkerMutation.isPending}
             >
               <Trash2 className="h-4 w-4 mr-1" />
               Delete
             </Button>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setEditingMarker(null)}>Cancel</Button>
-              <Button onClick={handleUpdateMarker} disabled={updateMarkerMutation.isPending}>
-                {updateMarkerMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              <Button variant="outline" onClick={() => setEditingMarker(null)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateMarker}
+                disabled={updateMarkerMutation.isPending}
+              >
+                {updateMarkerMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Save className="h-4 w-4 mr-1" />
+                )}
                 Save
               </Button>
             </div>

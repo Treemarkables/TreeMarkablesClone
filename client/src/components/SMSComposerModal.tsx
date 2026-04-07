@@ -1,22 +1,50 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, MessageSquare, Smartphone, Send, Link, FileText } from "lucide-react";
+import {
+  X,
+  MessageSquare,
+  Smartphone,
+  Send,
+  Link,
+  FileText,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import { MicrophoneButton } from '@/components/MicrophoneButton';
+import { MicrophoneButton } from "@/components/MicrophoneButton";
 
 const smsFormSchema = z.object({
   phone: z.string().min(1, "Phone number is required"),
-  message: z.string().min(1, "Message is required").max(459, "SMS message must be 459 characters or less (3 SMS segments)"),
+  message: z
+    .string()
+    .min(1, "Message is required")
+    .max(459, "SMS message must be 459 characters or less (3 SMS segments)"),
 });
 
 type SMSFormData = z.infer<typeof smsFormSchema>;
@@ -34,7 +62,7 @@ export function SMSComposerModal({
   onClose,
   job,
   customer,
-  invoiceData
+  invoiceData,
 }: SMSComposerModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -43,7 +71,7 @@ export function SMSComposerModal({
 
   // Fetch SMS templates
   const { data: smsTemplatesData } = useQuery({
-    queryKey: ['/api/sms-templates'],
+    queryKey: ["/api/sms-templates"],
     enabled: isOpen,
   });
 
@@ -61,11 +89,16 @@ export function SMSComposerModal({
   useEffect(() => {
     if (isOpen) {
       // Get best available phone number - prefer mobile for SMS
-      const phone = job?.jobContactMobile || job?.jobContactPhone || job?.billingContactMobile || 
-                    customer?.mobile || customer?.phone || "";
+      const phone =
+        job?.jobContactMobile ||
+        job?.jobContactPhone ||
+        job?.billingContactMobile ||
+        customer?.mobile ||
+        customer?.phone ||
+        "";
       if (phone) {
         form.setValue("phone", phone);
-        console.log('📱 Auto-populated SMS phone number:', phone);
+        console.log("📱 Auto-populated SMS phone number:", phone);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -74,7 +107,7 @@ export function SMSComposerModal({
   // Only auto-generate message for invoice context
   useEffect(() => {
     if (isOpen && invoiceData && customer) {
-      const defaultMessage = `Hi ${customer.name || 'there'}, invoice ${invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')} for $${invoiceData.amount || '0.00'} ready. View: ${window.location.origin}/invoice/${invoiceData.id || 'preview'}`;
+      const defaultMessage = `Hi ${customer.name || "there"}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
       form.setValue("message", defaultMessage);
       setCharacterCount(defaultMessage.length);
     }
@@ -83,11 +116,16 @@ export function SMSComposerModal({
 
   // Helper function to fill in customer's saved phone number (prefer mobile for SMS)
   const useCustomerPhone = () => {
-    const phone = job?.jobContactMobile || job?.jobContactPhone || job?.billingContactMobile || 
-                  customer?.mobile || customer?.phone || "";
+    const phone =
+      job?.jobContactMobile ||
+      job?.jobContactPhone ||
+      job?.billingContactMobile ||
+      customer?.mobile ||
+      customer?.phone ||
+      "";
     if (phone) {
       form.setValue("phone", phone);
-          } else {
+    } else {
       toast({
         description: "No saved phone number found",
         variant: "destructive",
@@ -98,41 +136,53 @@ export function SMSComposerModal({
   // Handle template selection
   const handleTemplateSelect = (templateId: string) => {
     setSelectedTemplate(templateId);
-    
+
     // If "No Template" is selected (custom), clear the message
     if (templateId === "custom") {
       form.setValue("message", "");
       setCharacterCount(0);
       return;
     }
-    
+
     const template = smsTemplates.find((t: any) => t.id === templateId);
-    
+
     if (template) {
       let message = template.message || "";
-      
+
       // Get contact name - use job contact if available, otherwise customer
-      const contactName = job?.jobContactFirstName && job?.jobContactLastName 
-        ? `${job.jobContactFirstName} ${job.jobContactLastName}`
-        : customer?.name || "";
-      const firstName = job?.jobContactFirstName || customer?.name?.split(' ')[0] || "";
-      
+      const contactName =
+        job?.jobContactFirstName && job?.jobContactLastName
+          ? `${job.jobContactFirstName} ${job.jobContactLastName}`
+          : customer?.name || "";
+      const firstName =
+        job?.jobContactFirstName || customer?.name?.split(" ")[0] || "";
+
       // Replace placeholders with actual values (support both snake_case and camelCase formats)
       message = message.replace(/\{customer_name\}/gi, contactName);
       message = message.replace(/\{customerName\}/g, contactName);
       message = message.replace(/\{customer_first_name\}/gi, firstName);
       message = message.replace(/\{firstName\}/g, firstName);
       message = message.replace(/\{name\}/gi, contactName);
-      
+
       if (job) {
         message = message.replace(/\{job_number\}/gi, job.jobNumber || "");
         message = message.replace(/\{jobNumber\}/g, job.jobNumber || "");
         message = message.replace(/\{job_address\}/gi, job.address || "");
         message = message.replace(/\{address\}/g, job.address || "");
-        message = message.replace(/\{job_date\}/gi, job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : "");
-        message = message.replace(/\{scheduledDate\}/g, job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : "");
+        message = message.replace(
+          /\{job_date\}/gi,
+          job.scheduledDate
+            ? new Date(job.scheduledDate).toLocaleDateString()
+            : "",
+        );
+        message = message.replace(
+          /\{scheduledDate\}/g,
+          job.scheduledDate
+            ? new Date(job.scheduledDate).toLocaleDateString()
+            : "",
+        );
       }
-      
+
       form.setValue("message", message);
       setCharacterCount(message.length);
     }
@@ -146,16 +196,16 @@ export function SMSComposerModal({
 
   const sendSMSMutation = useMutation({
     mutationFn: async (data: SMSFormData) => {
-      return apiRequest('POST', '/api/sms/send', {
+      return apiRequest("POST", "/api/sms/send", {
         phone: data.phone,
         message: data.message,
         jobId: job?.id,
         customerId: customer?.id,
-        invoiceId: invoiceData?.id
+        invoiceId: invoiceData?.id,
       });
     },
     onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       onClose();
       form.reset();
     },
@@ -202,7 +252,10 @@ export function SMSComposerModal({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(handleSend)} className="space-y-4 p-6">
+          <form
+            onSubmit={form.handleSubmit(handleSend)}
+            className="space-y-4 p-6"
+          >
             {/* Phone Number Field */}
             <FormField
               control={form.control}
@@ -211,10 +264,16 @@ export function SMSComposerModal({
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel className="flex items-center gap-2">
-                      <Smartphone className="w-4 h-4" style={{color: 'hsl(var(--purple))'}} />
+                      <Smartphone
+                        className="w-4 h-4"
+                        style={{ color: "hsl(var(--purple))" }}
+                      />
                       Phone Number
                     </FormLabel>
-                    {(job?.jobContactPhone || job?.billingContactMobile || customer?.phone || customer?.mobile) && (
+                    {(job?.jobContactPhone ||
+                      job?.billingContactMobile ||
+                      customer?.phone ||
+                      customer?.mobile) && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -251,7 +310,9 @@ export function SMSComposerModal({
                     <SelectValue placeholder="Select a template..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="custom">No Template (Custom Message)</SelectItem>
+                    <SelectItem value="custom">
+                      No Template (Custom Message)
+                    </SelectItem>
                     {smsTemplates.map((template: any) => (
                       <SelectItem key={template.id} value={template.id}>
                         {template.name}
@@ -266,13 +327,24 @@ export function SMSComposerModal({
             {invoiceData && (
               <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-700">
                 <div className="flex items-center gap-2 mb-2">
-                  <FileText className="w-4 h-4" style={{color: 'hsl(var(--purple))'}} />
-                  <span className="font-medium text-sm">Invoice Attachment</span>
+                  <FileText
+                    className="w-4 h-4"
+                    style={{ color: "hsl(var(--purple))" }}
+                  />
+                  <span className="font-medium text-sm">
+                    Invoice Attachment
+                  </span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span>Invoice {invoiceData.invoiceNumber || '#' + (job?.jobNumber || '')}</span>
-                  <span className="font-semibold" style={{color: 'hsl(var(--purple))'}}>
-                    ${invoiceData.amount || '0.00'}
+                  <span>
+                    Invoice{" "}
+                    {invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")}
+                  </span>
+                  <span
+                    className="font-semibold"
+                    style={{ color: "hsl(var(--purple))" }}
+                  >
+                    ${invoiceData.amount || "0.00"}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
@@ -292,9 +364,11 @@ export function SMSComposerModal({
                     <FormLabel>Message</FormLabel>
                     <MicrophoneButton
                       onTranscript={(transcript) => {
-                        const currentValue = form.getValues('message');
-                        const newValue = currentValue ? `${currentValue} ${transcript}` : transcript;
-                        form.setValue('message', newValue);
+                        const currentValue = form.getValues("message");
+                        const newValue = currentValue
+                          ? `${currentValue} ${transcript}`
+                          : transcript;
+                        form.setValue("message", newValue);
                       }}
                       size="sm"
                       variant="ghost"
@@ -310,8 +384,19 @@ export function SMSComposerModal({
                   </FormControl>
                   <div className="flex justify-between items-center text-xs text-muted-foreground">
                     <FormMessage />
-                    <span className={characterCount > 459 ? "text-destructive" : characterCount > 160 ? "text-orange-500" : ""}>
-                      {characterCount}/459 characters{characterCount > 160 ? ` (${Math.ceil(characterCount / 153)} SMS segments)` : ""}
+                    <span
+                      className={
+                        characterCount > 459
+                          ? "text-destructive"
+                          : characterCount > 160
+                            ? "text-orange-500"
+                            : ""
+                      }
+                    >
+                      {characterCount}/459 characters
+                      {characterCount > 160
+                        ? ` (${Math.ceil(characterCount / 153)} SMS segments)`
+                        : ""}
                     </span>
                   </div>
                 </FormItem>

@@ -1,11 +1,11 @@
-import { useState, useRef } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { useToast } from '@/hooks/use-toast';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { compressImage } from '@/lib/imageCompression';
+import { useState, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { compressImage } from "@/lib/imageCompression";
 // Remove unused import - we'll use fetch directly for file uploads
 import {
   Upload,
@@ -16,12 +16,12 @@ import {
   Download,
   AlertCircle,
   CheckCircle2,
-  Loader2
-} from 'lucide-react';
+  Loader2,
+} from "lucide-react";
 
 interface PhotoUploadProps {
   jobId: string;
-  type: 'before' | 'after';
+  type: "before" | "after";
   existingPhotos?: string[];
   maxPhotos?: number;
   onPhotosChange?: (photos: string[]) => void;
@@ -39,18 +39,18 @@ interface DeleteResponse {
   deletedPhoto: string;
 }
 
-export default function PhotoUpload({ 
-  jobId, 
-  type, 
-  existingPhotos = [], 
+export default function PhotoUpload({
+  jobId,
+  type,
+  existingPhotos = [],
   maxPhotos = 10,
-  onPhotosChange 
+  onPhotosChange,
 }: PhotoUploadProps) {
   const [dragActive, setDragActive] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [previewPhotos, setPreviewPhotos] = useState<string[]>(existingPhotos);
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -59,93 +59,99 @@ export default function PhotoUpload({
   const uploadMutation = useMutation({
     mutationFn: async (files: FileList) => {
       const formData = new FormData();
-      formData.append('type', type);
-      
+      formData.append("type", type);
+
       // Compress each image before upload for faster uploads (5-10x improvement)
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
-        if (file.type.startsWith('image/')) {
+        if (file.type.startsWith("image/")) {
           try {
             const compressedFile = await compressImage(file);
-            formData.append('photos', compressedFile);
+            formData.append("photos", compressedFile);
           } catch (error) {
-            console.warn('Compression failed, using original:', error);
-            formData.append('photos', file);
+            console.warn("Compression failed, using original:", error);
+            formData.append("photos", file);
           }
         } else {
-          formData.append('photos', file);
+          formData.append("photos", file);
         }
       }
 
       const response = await fetch(`/api/jobs/${jobId}/photos`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
-        credentials: 'include',
+        credentials: "include",
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Upload failed');
+        throw new Error(error.message || "Upload failed");
       }
-      
+
       return response.json() as Promise<UploadResponse>;
     },
     onSuccess: (data: UploadResponse) => {
       // Ensure data.photos is an array and handle both string URLs and photo objects
       const photosArray = Array.isArray(data.photos) ? data.photos : [];
-      const photoUrls = photosArray.map(photo => 
-        typeof photo === 'string' ? photo : photo.url || photo.filename || ''
-      ).filter(Boolean);
-      
+      const photoUrls = photosArray
+        .map((photo) =>
+          typeof photo === "string" ? photo : photo.url || photo.filename || "",
+        )
+        .filter(Boolean);
+
       const newPhotos = [...previewPhotos, ...photoUrls];
       setPreviewPhotos(newPhotos);
       onPhotosChange?.(newPhotos);
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-          },
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
     onError: (error: any) => {
-      console.error('Upload error:', error);
+      console.error("Upload error:", error);
       toast({
         variant: "destructive",
         title: "Upload failed",
-        description: error.message || "Failed to upload photos. Please try again.",
+        description:
+          error.message || "Failed to upload photos. Please try again.",
       });
     },
     onSettled: () => {
       setUploading(false);
       setUploadProgress(0);
-    }
+    },
   });
 
-  // Photo delete mutation  
+  // Photo delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (photoUrl: string) => {
       const response = await fetch(`/api/jobs/${jobId}/photos`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ photoUrl, type }),
-        credentials: 'include',
+        credentials: "include",
       });
-      
+
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Delete failed');
+        throw new Error(error.message || "Delete failed");
       }
-      
+
       return response.json() as Promise<DeleteResponse>;
     },
     onSuccess: (data: DeleteResponse) => {
-      const newPhotos = previewPhotos.filter(photo => photo !== data.deletedPhoto);
+      const newPhotos = previewPhotos.filter(
+        (photo) => photo !== data.deletedPhoto,
+      );
       setPreviewPhotos(newPhotos);
       onPhotosChange?.(newPhotos);
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-          },
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
     onError: (error: any) => {
       toast({
         variant: "destructive",
         title: "Delete failed",
-        description: error.message || "Failed to delete photo. Please try again.",
+        description:
+          error.message || "Failed to delete photo. Please try again.",
       });
-    }
+    },
   });
 
   const handleDrag = (e: React.DragEvent) => {
@@ -186,8 +192,8 @@ export default function PhotoUpload({
     }
 
     // Validate file types
-    const validFiles = Array.from(files).filter(file => {
-      if (!file.type.startsWith('image/')) {
+    const validFiles = Array.from(files).filter((file) => {
+      if (!file.type.startsWith("image/")) {
         toast({
           variant: "destructive",
           title: "Invalid file type",
@@ -195,7 +201,7 @@ export default function PhotoUpload({
         });
         return false;
       }
-      
+
       // Check file size (5MB limit)
       if (file.size > 5 * 1024 * 1024) {
         toast({
@@ -205,7 +211,7 @@ export default function PhotoUpload({
         });
         return false;
       }
-      
+
       return true;
     });
 
@@ -213,14 +219,14 @@ export default function PhotoUpload({
 
     // Create FileList from valid files
     const dt = new DataTransfer();
-    validFiles.forEach(file => dt.items.add(file));
-    
+    validFiles.forEach((file) => dt.items.add(file));
+
     setUploading(true);
     setUploadProgress(10);
-    
+
     // Simulate upload progress
     const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
+      setUploadProgress((prev) => {
         if (prev >= 90) {
           clearInterval(progressInterval);
           return 90;
@@ -237,11 +243,11 @@ export default function PhotoUpload({
   };
 
   const openPhotoPreview = (photoUrl: string) => {
-    window.open(photoUrl, '_blank');
+    window.open(photoUrl, "_blank");
   };
 
   const deletePhoto = (photoUrl: string) => {
-    if (confirm('Are you sure you want to delete this photo?')) {
+    if (confirm("Are you sure you want to delete this photo?")) {
       deleteMutation.mutate(photoUrl);
     }
   };
@@ -252,10 +258,12 @@ export default function PhotoUpload({
     <div className="space-y-4">
       {/* Upload Area */}
       {canUploadMore && (
-        <Card className={`border-dashed transition-colors ${
-          dragActive ? 'border-orange-500 bg-orange-50' : 'border-gray-300'
-        }`}>
-          <CardContent 
+        <Card
+          className={`border-dashed transition-colors ${
+            dragActive ? "border-orange-500 bg-orange-50" : "border-gray-300"
+          }`}
+        >
+          <CardContent
             className="p-6"
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
@@ -270,12 +278,19 @@ export default function PhotoUpload({
                   <Upload className="h-6 w-6 text-gray-400" />
                 )}
               </div>
-              
+
               {uploading ? (
                 <div className="space-y-2">
-                  <p className="text-sm font-medium">Uploading {type} photos...</p>
-                  <Progress value={uploadProgress} className="w-full max-w-xs mx-auto" />
-                  <p className="text-xs text-gray-500">{uploadProgress}% complete</p>
+                  <p className="text-sm font-medium">
+                    Uploading {type} photos...
+                  </p>
+                  <Progress
+                    value={uploadProgress}
+                    className="w-full max-w-xs mx-auto"
+                  />
+                  <p className="text-xs text-gray-500">
+                    {uploadProgress}% complete
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -304,7 +319,9 @@ export default function PhotoUpload({
               </div>
 
               <div className="flex items-center justify-between text-xs text-gray-500">
-                <span>{previewPhotos.length} / {maxPhotos} photos</span>
+                <span>
+                  {previewPhotos.length} / {maxPhotos} photos
+                </span>
                 <Badge variant="secondary" className="text-xs">
                   {type} photos
                 </Badge>
@@ -342,7 +359,10 @@ export default function PhotoUpload({
 
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {previewPhotos.map((photoUrl, index) => (
-              <Card key={`${photoUrl}-${index}`} className="overflow-hidden group hover-elevate">
+              <Card
+                key={`${photoUrl}-${index}`}
+                className="overflow-hidden group hover-elevate"
+              >
                 <CardContent className="p-0 relative">
                   <img
                     src={photoUrl}
@@ -350,7 +370,7 @@ export default function PhotoUpload({
                     className="w-full h-24 sm:h-32 object-cover"
                     data-testid={`img-${type}-photo-${index}`}
                   />
-                  
+
                   {/* Photo overlay actions */}
                   <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
                     <div className="flex gap-1">

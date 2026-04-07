@@ -22,11 +22,11 @@ interface ContactFormData {
 
 export default function ContactSection() {
   const [formData, setFormData] = useState<ContactFormData>({
-    name: '',
-    email: '',
-    phone: '',
-    hearAbout: '',
-    message: ''
+    name: "",
+    email: "",
+    phone: "",
+    hearAbout: "",
+    message: "",
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
@@ -39,36 +39,41 @@ export default function ContactSection() {
   useEffect(() => {
     const captureLeadSource = () => {
       const urlParams = new URLSearchParams(window.location.search);
-      
+
       const currentSource: LeadSource = {
         pagePath: window.location.pathname,
         pageUrl: window.location.href,
         referrer: document.referrer || undefined,
-        utmSource: urlParams.get('utm_source') || undefined,
-        utmMedium: urlParams.get('utm_medium') || undefined,
-        utmCampaign: urlParams.get('utm_campaign') || undefined,
-        utmTerm: urlParams.get('utm_term') || undefined,
-        utmContent: urlParams.get('utm_content') || undefined,
-        gclid: urlParams.get('gclid') || undefined,
+        utmSource: urlParams.get("utm_source") || undefined,
+        utmMedium: urlParams.get("utm_medium") || undefined,
+        utmCampaign: urlParams.get("utm_campaign") || undefined,
+        utmTerm: urlParams.get("utm_term") || undefined,
+        utmContent: urlParams.get("utm_content") || undefined,
+        gclid: urlParams.get("gclid") || undefined,
       };
 
       // Try to get GA client ID if available
       if (window.gtag) {
         try {
-          window.gtag('get', 'G-VK3PPB6SFW', 'client_id', (clientId: string) => {
-            if (clientId) {
-              currentSource.gaClientId = clientId;
-            }
-          });
+          window.gtag(
+            "get",
+            "G-VK3PPB6SFW",
+            "client_id",
+            (clientId: string) => {
+              if (clientId) {
+                currentSource.gaClientId = clientId;
+              }
+            },
+          );
         } catch (error) {
-          console.log('Could not capture GA client ID:', error);
+          console.log("Could not capture GA client ID:", error);
         }
       }
 
       // Handle first-touch attribution
-      const firstTouchKey = 'tm_first_touch';
+      const firstTouchKey = "tm_first_touch";
       const existingFirstTouch = localStorage.getItem(firstTouchKey);
-      
+
       if (!existingFirstTouch) {
         // This is the first visit - store first-touch data
         const firstTouchData = {
@@ -78,10 +83,10 @@ export default function ContactSection() {
           utmSource: currentSource.utmSource,
           utmMedium: currentSource.utmMedium,
           utmCampaign: currentSource.utmCampaign,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
         localStorage.setItem(firstTouchKey, JSON.stringify(firstTouchData));
-        
+
         // Set first-touch fields to current values
         currentSource.firstTouchPagePath = currentSource.pagePath;
         currentSource.firstTouchPageUrl = currentSource.pageUrl;
@@ -100,7 +105,7 @@ export default function ContactSection() {
           currentSource.firstTouchUtmMedium = firstTouchData.utmMedium;
           currentSource.firstTouchUtmCampaign = firstTouchData.utmCampaign;
         } catch (error) {
-          console.log('Error parsing first-touch data:', error);
+          console.log("Error parsing first-touch data:", error);
         }
       }
 
@@ -110,29 +115,33 @@ export default function ContactSection() {
     captureLeadSource();
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >,
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const validateForm = (): string | null => {
     if (!formData.name.trim()) {
-      return 'Please enter your name';
+      return "Please enter your name";
     }
     if (!formData.email.trim()) {
-      return 'Please enter your email address';
+      return "Please enter your email address";
     }
     if (!formData.message.trim()) {
-      return 'Please enter a message';
+      return "Please enter a message";
     }
-    
+
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      return 'Please enter a valid email address';
+      return "Please enter a valid email address";
     }
 
     return null;
@@ -144,7 +153,7 @@ export default function ContactSection() {
 
   const handleQuoteRequest = async (e?: React.MouseEvent) => {
     e?.preventDefault();
-    
+
     // Validate form
     const validationError = validateForm();
     if (validationError) {
@@ -161,10 +170,10 @@ export default function ContactSection() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/contact', {
-        method: 'POST',
+      const response = await fetch("/api/contact", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: formData.name.trim(),
@@ -173,7 +182,7 @@ export default function ContactSection() {
           hearAbout: formData.hearAbout,
           message: formData.message.trim(),
           captchaToken: captchaToken,
-          leadSource: leadSource
+          leadSource: leadSource,
         }),
       });
 
@@ -183,51 +192,54 @@ export default function ContactSection() {
         // Track successful form submission in Google Analytics
         if (window.gtag && leadSource) {
           const gaEventParams = {
-            'event_category': 'Lead Generation',
-            'event_label': 'Contact Form',
-            'value': 1,
-            'page_location': leadSource.pageUrl,
-            'page_path': leadSource.pagePath,
-            'page_referrer': leadSource.referrer,
-            'utm_source': leadSource.utmSource,
-            'utm_medium': leadSource.utmMedium,
-            'utm_campaign': leadSource.utmCampaign,
-            'utm_term': leadSource.utmTerm,
-            'utm_content': leadSource.utmContent,
-            'gclid': leadSource.gclid
+            event_category: "Lead Generation",
+            event_label: "Contact Form",
+            value: 1,
+            page_location: leadSource.pageUrl,
+            page_path: leadSource.pagePath,
+            page_referrer: leadSource.referrer,
+            utm_source: leadSource.utmSource,
+            utm_medium: leadSource.utmMedium,
+            utm_campaign: leadSource.utmCampaign,
+            utm_term: leadSource.utmTerm,
+            utm_content: leadSource.utmContent,
+            gclid: leadSource.gclid,
           };
 
-          window.gtag('event', 'generate_lead', {
-            event_category: 'Contact',
-            event_label: 'Contact Form',
+          window.gtag("event", "generate_lead", {
+            event_category: "Contact",
+            event_label: "Contact Form",
           });
 
-          window.gtag('event', 'form_submit', gaEventParams);
-          
+          window.gtag("event", "form_submit", gaEventParams);
+
           // Track as conversion with enhanced data
-          window.gtag('event', 'conversion', {
-            'send_to': 'G-V7RHX2EL6B',
+          window.gtag("event", "conversion", {
+            send_to: "G-V7RHX2EL6B",
             ...gaEventParams,
-            'event_label': 'Quote Request'
+            event_label: "Quote Request",
           });
-          
-          console.log('Google Analytics: Enhanced form submission tracked with lead source:', leadSource.pagePath);
+
+          console.log(
+            "Google Analytics: Enhanced form submission tracked with lead source:",
+            leadSource.pagePath,
+          );
         }
-        
+
         // Show success state
         setIsSubmitted(true);
-        
+
         // Reset form and CAPTCHA
         setFormData({
-          name: '',
-          email: '',
-          phone: '',
-          hearAbout: '',
-          message: ''
+          name: "",
+          email: "",
+          phone: "",
+          hearAbout: "",
+          message: "",
         });
         setCaptchaToken(null);
         recaptchaRef.current?.reset();
-        
+
         // Hide success message after 10 seconds
         setTimeout(() => {
           setIsSubmitted(false);
@@ -235,15 +247,17 @@ export default function ContactSection() {
       } else {
         toast({
           title: "Error",
-          description: result.message || 'Failed to send your request. Please try again.',
+          description:
+            result.message || "Failed to send your request. Please try again.",
           variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Form submission error:', error);
+      console.error("Form submission error:", error);
       toast({
         title: "Error",
-        description: 'Sorry, there was an error sending your message. Please try again or call us directly.',
+        description:
+          "Sorry, there was an error sending your message. Please try again or call us directly.",
         variant: "destructive",
       });
     } finally {
@@ -259,7 +273,8 @@ export default function ContactSection() {
             Get in touch for a free quote
           </h2>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Ready to get started? Contact us today for a free consultation and quote
+            Ready to get started? Contact us today for a free consultation and
+            quote
           </p>
         </div>
 
@@ -267,10 +282,15 @@ export default function ContactSection() {
           {/* Quick Quote Form */}
           <Card>
             <CardContent className="p-8">
-              <h3 className="text-2xl font-semibold text-foreground mb-6">Request Free Quote</h3>
+              <h3 className="text-2xl font-semibold text-foreground mb-6">
+                Request Free Quote
+              </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     Name *
                   </label>
                   <input
@@ -286,7 +306,10 @@ export default function ContactSection() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="email"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     Email *
                   </label>
                   <input
@@ -302,7 +325,10 @@ export default function ContactSection() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="phone"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     Phone
                   </label>
                   <input
@@ -317,7 +343,10 @@ export default function ContactSection() {
                   />
                 </div>
                 <div>
-                  <label htmlFor="hearAbout" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="hearAbout"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     How did you hear about us?
                   </label>
                   <select
@@ -331,14 +360,19 @@ export default function ContactSection() {
                     <option value="">Please select...</option>
                     <option value="Google">Google</option>
                     <option value="Facebook">Facebook</option>
-                    <option value="Word of mouth/Referral">Word of mouth/Referral</option>
+                    <option value="Word of mouth/Referral">
+                      Word of mouth/Referral
+                    </option>
                     <option value="Previous customer">Previous customer</option>
                     <option value="Local advertising">Local advertising</option>
                     <option value="Other">Other</option>
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="message" className="block text-sm font-medium text-foreground mb-2">
+                  <label
+                    htmlFor="message"
+                    className="block text-sm font-medium text-foreground mb-2"
+                  >
                     Message *
                   </label>
                   <textarea
@@ -353,22 +387,34 @@ export default function ContactSection() {
                     required
                   />
                 </div>
-                
+
                 {/* Success message */}
                 {isSubmitted && (
-                  <div className="p-4 bg-green-100 border border-green-300 rounded-md text-green-800 text-center" data-testid="success-message" role="status">
-                    <div className="text-lg font-semibold mb-1">✅ Quote Request Sent!</div>
-                    <div className="text-sm">Thank you! We'll respond within 24 hours with your personalized quote.</div>
+                  <div
+                    className="p-4 bg-green-100 border border-green-300 rounded-md text-green-800 text-center"
+                    data-testid="success-message"
+                    role="status"
+                  >
+                    <div className="text-lg font-semibold mb-1">
+                      ✅ Quote Request Sent!
+                    </div>
+                    <div className="text-sm">
+                      Thank you! We'll respond within 24 hours with your
+                      personalized quote.
+                    </div>
                   </div>
                 )}
-                
+
                 {/* CAPTCHA disabled for now */}
                 {!isSubmitted && (
-                  <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm text-center" data-testid="captcha-disabled">
+                  <div
+                    className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm text-center"
+                    data-testid="captcha-disabled"
+                  >
                     ✅ Contact form ready - submit your quote request
                   </div>
                 )}
-                
+
                 <Button
                   size="lg"
                   className="w-full"
@@ -376,7 +422,7 @@ export default function ContactSection() {
                   disabled={isSubmitting}
                   data-testid="button-submit-quote"
                 >
-                  {isSubmitting ? 'Sending...' : 'Get Free Quote'}
+                  {isSubmitting ? "Sending..." : "Get Free Quote"}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   We'll respond within 24 hours with your personalized quote

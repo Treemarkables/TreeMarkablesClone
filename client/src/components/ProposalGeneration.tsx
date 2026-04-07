@@ -1,26 +1,52 @@
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { 
-  Plus, 
-  Edit, 
-  Eye, 
-  Send, 
-  Check, 
-  X, 
+import { useState, useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import {
+  Plus,
+  Edit,
+  Eye,
+  Send,
+  Check,
+  X,
   FileText,
   Trash2,
   Download,
@@ -31,14 +57,20 @@ import {
   Type,
   DollarSign,
   Package,
-  ShoppingCart
-} from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import type { Quote, JobTemplate, Proposal, ProposalSection, ProposalLineItem } from '@shared/schema';
+  ShoppingCart,
+} from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { queryClient, apiRequest } from "@/lib/queryClient";
+import type {
+  Quote,
+  JobTemplate,
+  Proposal,
+  ProposalSection,
+  ProposalLineItem,
+} from "@shared/schema";
 
 // Line item source types
-type LineItemSource = 'quote' | 'template' | 'fixed';
+type LineItemSource = "quote" | "template" | "fixed";
 
 interface LineItemFormData {
   sourceType: LineItemSource;
@@ -54,12 +86,12 @@ interface LineItemFormData {
 
 // Proposal generation form schema
 const proposalGenerationSchema = z.object({
-  quoteId: z.string().min(1, 'Quote is required'),
-  customerId: z.string().min(1, 'Customer is required'),
-  title: z.string().min(1, 'Title is required'),
+  quoteId: z.string().min(1, "Quote is required"),
+  customerId: z.string().min(1, "Customer is required"),
+  title: z.string().min(1, "Title is required"),
   introduction: z.string().optional(),
   conclusion: z.string().optional(),
-  deliveryMethod: z.enum(['email', 'sms', 'portal', 'print']).default('email'),
+  deliveryMethod: z.enum(["email", "sms", "portal", "print"]).default("email"),
   expiryDays: z.number().min(1).max(365).default(30),
 });
 
@@ -73,46 +105,53 @@ interface ProposalGenerationProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function ProposalGeneration({ 
-  quoteId, 
-  customerId, 
+export function ProposalGeneration({
+  quoteId,
+  customerId,
   onProposalCreated,
   open,
-  onOpenChange
+  onOpenChange,
 }: ProposalGenerationProps) {
   const { toast } = useToast();
   const [internalDialogOpen, setInternalDialogOpen] = useState(false);
-  
+
   // Use external control if provided, otherwise use internal state
   const isDialogOpen = open !== undefined ? open : internalDialogOpen;
   const setIsDialogOpen = onOpenChange || setInternalDialogOpen;
-  const [selectedLineItems, setSelectedLineItems] = useState<ProposalLineItem[]>([]);
-  const [proposalSections, setProposalSections] = useState<ProposalSection[]>([]);
-  const [activeTab, setActiveTab] = useState('basic');
+  const [selectedLineItems, setSelectedLineItems] = useState<
+    ProposalLineItem[]
+  >([]);
+  const [proposalSections, setProposalSections] = useState<ProposalSection[]>(
+    [],
+  );
+  const [activeTab, setActiveTab] = useState("basic");
 
   // Form setup
   const form = useForm<ProposalGenerationFormData>({
     resolver: zodResolver(proposalGenerationSchema),
     defaultValues: {
-      quoteId: quoteId || '',
-      customerId: customerId || '',
-      title: '',
-      introduction: '',
-      conclusion: '',
-      deliveryMethod: 'email',
+      quoteId: quoteId || "",
+      customerId: customerId || "",
+      title: "",
+      introduction: "",
+      conclusion: "",
+      deliveryMethod: "email",
       expiryDays: 30,
     },
   });
 
   // Fetch quote data for line item selection
   const { data: quote } = useQuery({
-    queryKey: ['/api/quotes', quoteId],
+    queryKey: ["/api/quotes", quoteId],
     enabled: !!quoteId,
   });
 
   // Fetch job templates for line item templates
-  const { data: jobTemplatesResponse } = useQuery<{ success: boolean; data: JobTemplate[] }>({
-    queryKey: ['/api/job-templates'],
+  const { data: jobTemplatesResponse } = useQuery<{
+    success: boolean;
+    data: JobTemplate[];
+  }>({
+    queryKey: ["/api/job-templates"],
   });
 
   const jobTemplates = jobTemplatesResponse?.data || [];
@@ -132,15 +171,19 @@ export function ProposalGeneration({
         conclusion: data.conclusion,
         deliveryMethod: data.deliveryMethod,
         expiryDate: expiryDate,
-        createdBy: 'current-user', // TODO: Get from auth context
+        createdBy: "current-user", // TODO: Get from auth context
       };
 
       // Create the proposal first
-      const proposalResponse = await apiRequest('POST', '/api/proposals', proposalData);
+      const proposalResponse = await apiRequest(
+        "POST",
+        "/api/proposals",
+        proposalData,
+      );
       const proposalResult = await proposalResponse.json();
-      
+
       if (!proposalResult.success) {
-        throw new Error('Failed to create proposal');
+        throw new Error("Failed to create proposal");
       }
 
       const proposalId = proposalResult.data.id;
@@ -154,15 +197,22 @@ export function ProposalGeneration({
           description: item.description,
           quantity: item.quantity.toString(),
           unitPrice: item.unitPrice.toString(),
-          totalPrice: (parseFloat(item.quantity.toString()) * parseFloat(item.unitPrice.toString())).toString(), // Compute server-side
+          totalPrice: (
+            parseFloat(item.quantity.toString()) *
+            parseFloat(item.unitPrice.toString())
+          ).toString(), // Compute server-side
           unit: item.unit,
           category: item.category,
           notes: item.notes,
           sortOrder: item.sortOrder,
           isOptional: item.isOptional,
         };
-        
-        const response = await apiRequest('POST', `/api/proposals/${proposalId}/lineitems`, lineItemData);
+
+        const response = await apiRequest(
+          "POST",
+          `/api/proposals/${proposalId}/lineitems`,
+          lineItemData,
+        );
         return response.json();
       });
 
@@ -172,9 +222,9 @@ export function ProposalGeneration({
     },
     onSuccess: (result) => {
       if (result.success) {
-        queryClient.invalidateQueries({ queryKey: ['/api/proposals'] });
+        queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
         onProposalCreated?.(result.data);
-        
+
         // Reset form state
         setSelectedLineItems([]);
         setProposalSections([]);
@@ -194,16 +244,16 @@ export function ProposalGeneration({
   const addQuoteLineItem = (quoteLineItem: any) => {
     const newItem: ProposalLineItem = {
       id: `temp-${Date.now()}`,
-      proposalId: '', // Will be set when proposal is created
-      sourceType: 'quote',
+      proposalId: "", // Will be set when proposal is created
+      sourceType: "quote",
       sourceId: quoteLineItem.id,
       description: quoteLineItem.description,
       quantity: quoteLineItem.quantity,
       unitPrice: quoteLineItem.unitPrice,
       totalPrice: quoteLineItem.total,
-      unit: 'each',
-      category: 'service',
-      notes: '',
+      unit: "each",
+      category: "service",
+      notes: "",
       sortOrder: selectedLineItems.length + 1,
       isOptional: false,
       createdAt: new Date(),
@@ -214,19 +264,19 @@ export function ProposalGeneration({
 
   // Add line item from template
   const addTemplateLineItem = (template: JobTemplate) => {
-    const unitPrice = parseFloat(template.basePrice || '0');
+    const unitPrice = parseFloat(template.basePrice || "0");
     const quantity = 1;
-    
+
     const newItem: ProposalLineItem = {
       id: `temp-${Date.now()}`,
-      proposalId: '',
-      sourceType: 'template',
+      proposalId: "",
+      sourceType: "template",
       sourceId: template.id,
       description: `${template.name} - ${template.description}`,
       quantity: quantity.toString(),
       unitPrice: unitPrice.toString(),
       totalPrice: (quantity * unitPrice).toString(),
-      unit: 'hours',
+      unit: "hours",
       category: template.category,
       notes: `Estimated duration: ${template.estimatedDuration} hours`,
       sortOrder: selectedLineItems.length + 1,
@@ -240,11 +290,11 @@ export function ProposalGeneration({
   // Add fixed/custom line item
   const addFixedLineItem = (itemData: LineItemFormData) => {
     const totalPrice = itemData.quantity * itemData.unitPrice;
-    
+
     const newItem: ProposalLineItem = {
       id: `temp-${Date.now()}`,
-      proposalId: '',
-      sourceType: 'fixed',
+      proposalId: "",
+      sourceType: "fixed",
       sourceId: null,
       description: itemData.description,
       quantity: itemData.quantity.toString(),
@@ -263,11 +313,16 @@ export function ProposalGeneration({
 
   // Remove line item
   const removeLineItem = (itemId: string) => {
-    setSelectedLineItems(selectedLineItems.filter(item => item.id !== itemId));
+    setSelectedLineItems(
+      selectedLineItems.filter((item) => item.id !== itemId),
+    );
   };
 
   // Calculate totals
-  const subtotal = selectedLineItems.reduce((sum, item) => sum + parseFloat(item.totalPrice || '0'), 0);
+  const subtotal = selectedLineItems.reduce(
+    (sum, item) => sum + parseFloat(item.totalPrice || "0"),
+    0,
+  );
   const tax = subtotal * 0.15; // 15% GST
   const total = subtotal + tax;
 
@@ -280,8 +335,8 @@ export function ProposalGeneration({
       {/* Only show trigger button when used in standalone mode */}
       {open === undefined && (
         <DialogTrigger asChild>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             className="gap-2"
             data-testid="button-generate-proposal"
           >
@@ -290,7 +345,7 @@ export function ProposalGeneration({
           </Button>
         </DialogTrigger>
       )}
-      
+
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Generate Professional Proposal</DialogTitle>
@@ -300,10 +355,24 @@ export function ProposalGeneration({
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="basic" data-testid="tab-proposal-basic">Basic Info</TabsTrigger>
-                <TabsTrigger value="lineitems" data-testid="tab-proposal-lineitems">Line Items</TabsTrigger>
-                <TabsTrigger value="sections" data-testid="tab-proposal-sections">Sections</TabsTrigger>
-                <TabsTrigger value="preview" data-testid="tab-proposal-preview">Preview</TabsTrigger>
+                <TabsTrigger value="basic" data-testid="tab-proposal-basic">
+                  Basic Info
+                </TabsTrigger>
+                <TabsTrigger
+                  value="lineitems"
+                  data-testid="tab-proposal-lineitems"
+                >
+                  Line Items
+                </TabsTrigger>
+                <TabsTrigger
+                  value="sections"
+                  data-testid="tab-proposal-sections"
+                >
+                  Sections
+                </TabsTrigger>
+                <TabsTrigger value="preview" data-testid="tab-proposal-preview">
+                  Preview
+                </TabsTrigger>
               </TabsList>
 
               {/* Basic Information Tab */}
@@ -316,10 +385,10 @@ export function ProposalGeneration({
                       <FormItem>
                         <FormLabel>Proposal Title</FormLabel>
                         <FormControl>
-                          <Input 
+                          <Input
                             placeholder="Professional Tree Services Proposal"
                             data-testid="input-proposal-title"
-                            {...field} 
+                            {...field}
                           />
                         </FormControl>
                         <FormMessage />
@@ -333,7 +402,10 @@ export function ProposalGeneration({
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Delivery Method</FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <Select
+                          onValueChange={field.onChange}
+                          defaultValue={field.value}
+                        >
                           <FormControl>
                             <SelectTrigger data-testid="select-delivery-method">
                               <SelectValue placeholder="Select delivery method" />
@@ -342,7 +414,9 @@ export function ProposalGeneration({
                           <SelectContent>
                             <SelectItem value="email">Email</SelectItem>
                             <SelectItem value="sms">SMS</SelectItem>
-                            <SelectItem value="portal">Customer Portal</SelectItem>
+                            <SelectItem value="portal">
+                              Customer Portal
+                            </SelectItem>
                             <SelectItem value="print">Print</SelectItem>
                           </SelectContent>
                         </Select>
@@ -359,10 +433,10 @@ export function ProposalGeneration({
                     <FormItem>
                       <FormLabel>Introduction</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="Thank you for considering our professional tree services..."
                           data-testid="textarea-proposal-introduction"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -377,10 +451,10 @@ export function ProposalGeneration({
                     <FormItem>
                       <FormLabel>Conclusion</FormLabel>
                       <FormControl>
-                        <Textarea 
+                        <Textarea
                           placeholder="We look forward to working with you..."
                           data-testid="textarea-proposal-conclusion"
-                          {...field} 
+                          {...field}
                         />
                       </FormControl>
                       <FormMessage />
@@ -401,20 +475,27 @@ export function ProposalGeneration({
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-2">
-                      {(quote as any)?.items?.map((item: any, index: number) => (
-                        <div 
-                          key={index} 
-                          className="p-3 border rounded-lg hover-elevate cursor-pointer"
-                          onClick={() => addQuoteLineItem(item)}
-                          data-testid={`quote-item-${index}`}
-                        >
-                          <div className="font-medium text-sm">{item.description}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {item.quantity} × ${item.unitPrice} = ${item.total}
+                      {(quote as any)?.items?.map(
+                        (item: any, index: number) => (
+                          <div
+                            key={index}
+                            className="p-3 border rounded-lg hover-elevate cursor-pointer"
+                            onClick={() => addQuoteLineItem(item)}
+                            data-testid={`quote-item-${index}`}
+                          >
+                            <div className="font-medium text-sm">
+                              {item.description}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {item.quantity} × ${item.unitPrice} = $
+                              {item.total}
+                            </div>
                           </div>
+                        ),
+                      ) || (
+                        <div className="text-sm text-muted-foreground">
+                          No quote items available
                         </div>
-                      )) || (
-                        <div className="text-sm text-muted-foreground">No quote items available</div>
                       )}
                     </CardContent>
                   </Card>
@@ -429,15 +510,18 @@ export function ProposalGeneration({
                     </CardHeader>
                     <CardContent className="space-y-2">
                       {jobTemplates.map((template) => (
-                        <div 
-                          key={template.id} 
+                        <div
+                          key={template.id}
                           className="p-3 border rounded-lg hover-elevate cursor-pointer"
                           onClick={() => addTemplateLineItem(template)}
                           data-testid={`template-item-${template.id}`}
                         >
-                          <div className="font-medium text-sm">{template.name}</div>
+                          <div className="font-medium text-sm">
+                            {template.name}
+                          </div>
                           <div className="text-xs text-muted-foreground">
-                            ${template.basePrice} • {template.estimatedDuration}h
+                            ${template.basePrice} • {template.estimatedDuration}
+                            h
                           </div>
                         </div>
                       ))}
@@ -480,16 +564,28 @@ export function ProposalGeneration({
                           <TableBody>
                             {selectedLineItems.map((item) => (
                               <TableRow key={item.id}>
-                                <TableCell className="font-medium">{item.description}</TableCell>
+                                <TableCell className="font-medium">
+                                  {item.description}
+                                </TableCell>
                                 <TableCell>{item.quantity}</TableCell>
-                                <TableCell>${parseFloat(item.unitPrice || '0').toFixed(2)}</TableCell>
-                                <TableCell>${parseFloat(item.totalPrice || '0').toFixed(2)}</TableCell>
                                 <TableCell>
-                                  <Badge variant="outline">{item.sourceType}</Badge>
+                                  $
+                                  {parseFloat(item.unitPrice || "0").toFixed(2)}
                                 </TableCell>
                                 <TableCell>
-                                  <Button 
-                                    variant="ghost" 
+                                  $
+                                  {parseFloat(item.totalPrice || "0").toFixed(
+                                    2,
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Badge variant="outline">
+                                    {item.sourceType}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
                                     size="sm"
                                     onClick={() => removeLineItem(item.id)}
                                     data-testid={`remove-item-${item.id}`}
@@ -519,7 +615,8 @@ export function ProposalGeneration({
                       </div>
                     ) : (
                       <div className="text-center text-muted-foreground py-8">
-                        No line items selected. Add items from the sections above.
+                        No line items selected. Add items from the sections
+                        above.
                       </div>
                     )}
                   </CardContent>
@@ -530,34 +627,40 @@ export function ProposalGeneration({
               <TabsContent value="sections" className="space-y-4">
                 <div className="text-center text-muted-foreground py-8">
                   Visual sections editor will be implemented in the next step.
-                  This will allow adding custom sections, images, and formatting.
+                  This will allow adding custom sections, images, and
+                  formatting.
                 </div>
               </TabsContent>
 
               {/* Preview Tab */}
               <TabsContent value="preview" className="space-y-4">
                 <div className="text-center text-muted-foreground py-8">
-                  Professional proposal preview will be shown here.
-                  This will display the formatted proposal as it will appear to customers.
+                  Professional proposal preview will be shown here. This will
+                  display the formatted proposal as it will appear to customers.
                 </div>
               </TabsContent>
             </Tabs>
 
             <div className="flex justify-between pt-6 border-t">
-              <Button 
-                type="button" 
-                variant="outline" 
+              <Button
+                type="button"
+                variant="outline"
                 onClick={() => setIsDialogOpen(false)}
                 data-testid="button-cancel-proposal"
               >
                 Cancel
               </Button>
-              <Button 
-                type="submit" 
-                disabled={createProposalMutation.isPending || selectedLineItems.length === 0}
+              <Button
+                type="submit"
+                disabled={
+                  createProposalMutation.isPending ||
+                  selectedLineItems.length === 0
+                }
                 data-testid="button-create-proposal"
               >
-                {createProposalMutation.isPending ? "Creating..." : "Create Proposal"}
+                {createProposalMutation.isPending
+                  ? "Creating..."
+                  : "Create Proposal"}
               </Button>
             </div>
           </form>
@@ -568,20 +671,24 @@ export function ProposalGeneration({
 }
 
 // Custom Line Item Form Component
-function CustomLineItemForm({ onAdd }: { onAdd: (item: LineItemFormData) => void }) {
-  const [description, setDescription] = useState('');
+function CustomLineItemForm({
+  onAdd,
+}: {
+  onAdd: (item: LineItemFormData) => void;
+}) {
+  const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [unitPrice, setUnitPrice] = useState(0);
-  const [unit, setUnit] = useState('each');
-  const [category, setCategory] = useState('');
-  const [notes, setNotes] = useState('');
+  const [unit, setUnit] = useState("each");
+  const [category, setCategory] = useState("");
+  const [notes, setNotes] = useState("");
   const [isOptional, setIsOptional] = useState(false);
 
   const handleAdd = () => {
     if (!description || quantity <= 0 || unitPrice <= 0) return;
 
     onAdd({
-      sourceType: 'fixed',
+      sourceType: "fixed",
       description,
       quantity,
       unitPrice,
@@ -592,12 +699,12 @@ function CustomLineItemForm({ onAdd }: { onAdd: (item: LineItemFormData) => void
     });
 
     // Reset form
-    setDescription('');
+    setDescription("");
     setQuantity(1);
     setUnitPrice(0);
-    setUnit('each');
-    setCategory('');
-    setNotes('');
+    setUnit("each");
+    setCategory("");
+    setNotes("");
     setIsOptional(false);
   };
 
@@ -609,7 +716,7 @@ function CustomLineItemForm({ onAdd }: { onAdd: (item: LineItemFormData) => void
         onChange={(e) => setDescription(e.target.value)}
         data-testid="input-custom-description"
       />
-      
+
       <div className="grid grid-cols-2 gap-2">
         <Input
           type="number"
@@ -640,7 +747,7 @@ function CustomLineItemForm({ onAdd }: { onAdd: (item: LineItemFormData) => void
         </SelectContent>
       </Select>
 
-      <Button 
+      <Button
         onClick={handleAdd}
         disabled={!description || quantity <= 0 || unitPrice <= 0}
         className="w-full"

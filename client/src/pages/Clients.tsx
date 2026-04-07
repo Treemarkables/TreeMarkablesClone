@@ -4,10 +4,34 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Mail, Phone, Calendar, DollarSign, Search, Filter, ArrowUpDown, Plus, Upload, Trash2, AlertTriangle, Edit, X, Archive, Eye, Crown } from "lucide-react";
+import {
+  Users,
+  Mail,
+  Phone,
+  Calendar,
+  DollarSign,
+  Search,
+  Filter,
+  ArrowUpDown,
+  Plus,
+  Upload,
+  Trash2,
+  AlertTriangle,
+  Edit,
+  X,
+  Archive,
+  Eye,
+  Crown,
+} from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -15,8 +39,20 @@ import { apiRequest } from "@/lib/queryClient";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -43,12 +79,18 @@ export default function Clients() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
   const [activeTab, setActiveTab] = useState("list");
-  const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<"all" | "active" | "historical" | "customers" | "potential_expenses" | "vip">("all");
+  const [selectedCustomers, setSelectedCustomers] = useState<Set<string>>(
+    new Set(),
+  );
+  const [filterType, setFilterType] = useState<
+    "all" | "active" | "historical" | "customers" | "potential_expenses" | "vip"
+  >("all");
   const [vipDiscountInput, setVipDiscountInput] = useState<string>("10");
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(
+    null,
+  );
   const [showCustomerModal, setShowCustomerModal] = useState(false);
 
   const { toast } = useToast();
@@ -56,14 +98,17 @@ export default function Clients() {
   const { isAdmin } = useAuth();
 
   // Fetch active customers
-  const { data: activeCustomersResponse, isLoading: activeLoading } = useQuery<ApiResponse<Customer>>({
-    queryKey: ['/api/customers'],
+  const { data: activeCustomersResponse, isLoading: activeLoading } = useQuery<
+    ApiResponse<Customer>
+  >({
+    queryKey: ["/api/customers"],
   });
 
   // Fetch historical customers
-  const { data: historicalCustomersResponse, isLoading: historicalLoading } = useQuery<ApiResponse<Customer>>({
-    queryKey: ['/api/customers/historical'],
-  });
+  const { data: historicalCustomersResponse, isLoading: historicalLoading } =
+    useQuery<ApiResponse<Customer>>({
+      queryKey: ["/api/customers/historical"],
+    });
 
   // Combine all customers
   const activeCustomers = activeCustomersResponse?.data || [];
@@ -75,16 +120,53 @@ export default function Clients() {
   const isPotentialExpenseCompany = (customer: Customer): boolean => {
     const name = customer.name.toLowerCase();
     const expenseKeywords = [
-      'equipment', 'supply', 'supplies', 'hardware', 'rental', 'hire', 'machinery',
-      'tools', 'parts', 'warehouse', 'wholesale', 'distribution', 'fuel', 'gas',
-      'materials', 'steel', 'timber', 'lumber', 'concrete', 'aggregate', 'transport',
-      'logistics', 'delivery', 'freight', 'haulage', 'maintenance', 'repair',
-      'service center', 'garage', 'workshop', 'automotive', 'spare parts',
-      'industrial', 'chemical', 'safety', 'ppe', 'protective', 'insurance',
-      'accountant', 'accounting', 'legal', 'solicitor', 'consultant', 'office supplies'
+      "equipment",
+      "supply",
+      "supplies",
+      "hardware",
+      "rental",
+      "hire",
+      "machinery",
+      "tools",
+      "parts",
+      "warehouse",
+      "wholesale",
+      "distribution",
+      "fuel",
+      "gas",
+      "materials",
+      "steel",
+      "timber",
+      "lumber",
+      "concrete",
+      "aggregate",
+      "transport",
+      "logistics",
+      "delivery",
+      "freight",
+      "haulage",
+      "maintenance",
+      "repair",
+      "service center",
+      "garage",
+      "workshop",
+      "automotive",
+      "spare parts",
+      "industrial",
+      "chemical",
+      "safety",
+      "ppe",
+      "protective",
+      "insurance",
+      "accountant",
+      "accounting",
+      "legal",
+      "solicitor",
+      "consultant",
+      "office supplies",
     ];
-    
-    return expenseKeywords.some(keyword => name.includes(keyword));
+
+    return expenseKeywords.some((keyword) => name.includes(keyword));
   };
 
   // Form for editing customer
@@ -102,73 +184,103 @@ export default function Clients() {
   // Bulk delete mutation
   const deleteCustomersMutation = useMutation({
     mutationFn: async (customerIds: string[]) => {
-      return await apiRequest('DELETE', '/api/customers/bulk-delete', { customerIds });
+      return await apiRequest("DELETE", "/api/customers/bulk-delete", {
+        customerIds,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/customers/historical"],
+      });
       setSelectedCustomers(new Set());
-          },
+    },
     onError: (error: any) => {
       toast({
         title: "Delete Failed",
         description: error.message || "Failed to delete customers",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Individual delete mutation
   const deleteCustomerMutation = useMutation({
     mutationFn: async (customerId: string) => {
-      return await apiRequest('DELETE', `/api/customers/${customerId}`);
+      return await apiRequest("DELETE", `/api/customers/${customerId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
-          },
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/customers/historical"],
+      });
+    },
     onError: (error: any) => {
       toast({
         title: "Delete Failed",
         description: error.message || "Failed to delete customer",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Edit customer mutation
   const editCustomerMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: z.infer<typeof editCustomerSchema> }) => {
-      return await apiRequest('PUT', `/api/customers/${id}`, data);
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: z.infer<typeof editCustomerSchema>;
+    }) => {
+      return await apiRequest("PUT", `/api/customers/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/customers/historical"],
+      });
       setShowEditDialog(false);
       setEditingCustomer(null);
       editForm.reset();
-          },
+    },
     onError: (error: any) => {
       toast({
         title: "Update Failed",
         description: error.message || "Failed to update customer",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // VIP update mutation
   const updateVipMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { isVipMember: boolean; vipMemberSince?: string | null; vipDiscountPercent?: string | null } }) => {
-      return await apiRequest('PUT', `/api/customers/${id}`, data);
+    mutationFn: async ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: {
+        isVipMember: boolean;
+        vipMemberSince?: string | null;
+        vipDiscountPercent?: string | null;
+      };
+    }) => {
+      return await apiRequest("PUT", `/api/customers/${id}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
-          },
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/customers/historical"],
+      });
+    },
     onError: (error: any) => {
-      toast({ title: "Update Failed", description: error.message || "Failed to update VIP status", variant: "destructive" });
-    }
+      toast({
+        title: "Update Failed",
+        description: error.message || "Failed to update VIP status",
+        variant: "destructive",
+      });
+    },
   });
 
   // Selection handlers
@@ -184,7 +296,7 @@ export default function Clients() {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedCustomers(new Set(filteredCustomers.map(c => c.id)));
+      setSelectedCustomers(new Set(filteredCustomers.map((c) => c.id)));
     } else {
       setSelectedCustomers(new Set());
     }
@@ -192,7 +304,11 @@ export default function Clients() {
 
   const handleBulkDelete = () => {
     if (selectedCustomers.size === 0) return;
-    if (confirm(`Are you sure you want to delete ${selectedCustomers.size} selected customers? This action cannot be undone.`)) {
+    if (
+      confirm(
+        `Are you sure you want to delete ${selectedCustomers.size} selected customers? This action cannot be undone.`,
+      )
+    ) {
       deleteCustomersMutation.mutate(Array.from(selectedCustomers));
     }
   };
@@ -211,7 +327,11 @@ export default function Clients() {
   };
 
   const handleDeleteCustomer = (customerId: string) => {
-    if (confirm("Are you sure you want to delete this customer? This action cannot be undone.")) {
+    if (
+      confirm(
+        "Are you sure you want to delete this customer? This action cannot be undone.",
+      )
+    ) {
       deleteCustomerMutation.mutate(customerId);
     }
   };
@@ -233,26 +353,33 @@ export default function Clients() {
 
   // Filter and sort customers
   const filteredCustomers = allCustomers
-    .filter(customer => {
-      const matchesSearch = customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (customer.email || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (customer.phone || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          (customer.mobile || '').toLowerCase().includes(searchQuery.toLowerCase());
-      
+    .filter((customer) => {
+      const matchesSearch =
+        customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (customer.email || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (customer.phone || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (customer.mobile || "")
+          .toLowerCase()
+          .includes(searchQuery.toLowerCase());
+
       const isHistorical = customer.isActive === false;
       const isActive = customer.isActive !== false;
-      
+
       const matchesFilter = (() => {
         switch (filterType) {
-          case 'active':
+          case "active":
             return isActive;
-          case 'historical':
+          case "historical":
             return isHistorical;
-          case 'customers':
+          case "customers":
             return !isPotentialExpenseCompany(customer);
-          case 'potential_expenses':
+          case "potential_expenses":
             return isPotentialExpenseCompany(customer);
-          case 'vip':
+          case "vip":
             return !!customer.isVipMember;
           default:
             return true;
@@ -263,12 +390,15 @@ export default function Clients() {
     })
     .sort((a, b) => {
       switch (sortBy) {
-        case 'name':
+        case "name":
           return a.name.localeCompare(b.name);
-        case 'email':
-          return (a.email || '').localeCompare(b.email || '');
-        case 'recent':
-          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+        case "email":
+          return (a.email || "").localeCompare(b.email || "");
+        case "recent":
+          return (
+            new Date(b.createdAt || 0).getTime() -
+            new Date(a.createdAt || 0).getTime()
+          );
         default:
           return 0;
       }
@@ -276,18 +406,21 @@ export default function Clients() {
 
   const getInitials = (name: string) => {
     return name
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
+      .split(" ")
+      .map((word) => word.charAt(0))
+      .join("")
       .toUpperCase()
       .slice(0, 2);
   };
 
   const getCustomerTier = (lifetimeValue: number) => {
-    if (lifetimeValue >= 10000) return { label: 'Premium', color: 'bg-purple-100 text-purple-800' };
-    if (lifetimeValue >= 5000) return { label: 'Gold', color: 'bg-yellow-100 text-yellow-800' };
-    if (lifetimeValue >= 1000) return { label: 'Silver', color: 'bg-gray-100 text-gray-800' };
-    return { label: 'Bronze', color: 'bg-orange-100 text-orange-800' };
+    if (lifetimeValue >= 10000)
+      return { label: "Premium", color: "bg-purple-100 text-purple-800" };
+    if (lifetimeValue >= 5000)
+      return { label: "Gold", color: "bg-yellow-100 text-yellow-800" };
+    if (lifetimeValue >= 1000)
+      return { label: "Silver", color: "bg-gray-100 text-gray-800" };
+    return { label: "Bronze", color: "bg-orange-100 text-orange-800" };
   };
 
   const getCustomerStatusBadge = (customer: Customer) => {
@@ -300,15 +433,12 @@ export default function Clients() {
         </Badge>
       );
     }
-    return (
-      <Badge className="bg-green-100 text-green-800">
-        Active
-      </Badge>
-    );
+    return <Badge className="bg-green-100 text-green-800">Active</Badge>;
   };
 
-  const selectedCustomerDetails = selectedCustomerId ? 
-    allCustomers.find(c => c.id === selectedCustomerId) : null;
+  const selectedCustomerDetails = selectedCustomerId
+    ? allCustomers.find((c) => c.id === selectedCustomerId)
+    : null;
 
   return (
     <div className="flex flex-col p-3 sm:p-6 space-y-4 sm:space-y-6 w-full overflow-x-hidden">
@@ -319,7 +449,11 @@ export default function Clients() {
           <p className="text-gray-600">Manage your customer database</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setActiveTab("import")} data-testid="button-import-csv">
+          <Button
+            variant="outline"
+            onClick={() => setActiveTab("import")}
+            data-testid="button-import-csv"
+          >
             <Upload className="w-4 h-4 mr-2" />
             Import CSV
           </Button>
@@ -330,324 +464,391 @@ export default function Clients() {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="flex-1 flex flex-col"
+      >
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="list" data-testid="tab-customer-list">Customer List</TabsTrigger>
-          <TabsTrigger value="import" data-testid="tab-import">Import Data</TabsTrigger>
+          <TabsTrigger value="list" data-testid="tab-customer-list">
+            Customer List
+          </TabsTrigger>
+          <TabsTrigger value="import" data-testid="tab-import">
+            Import Data
+          </TabsTrigger>
         </TabsList>
 
         {/* Client List Tab */}
         <TabsContent value="list" className="space-y-6 mt-6">
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Customers</p>
-                <p className="text-2xl font-bold">{allCustomers.length}</p>
-              </div>
-              <Users className="w-8 h-8 text-blue-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Active Customers</p>
-                <p className="text-2xl font-bold">{activeCustomers.length}</p>
-              </div>
-              <Users className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Historical</p>
-                <p className="text-2xl font-bold">{historicalCustomers.length}</p>
-              </div>
-              <Archive className="w-8 h-8 text-orange-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold">
-                  ${allCustomers.reduce((sum, customer) => sum + (parseFloat(customer.lifetimeValue || '0') || 0), 0).toLocaleString()}
-                </p>
-              </div>
-              <DollarSign className="w-8 h-8 text-amber-600" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-            <Input
-              placeholder="Search customers by name, email, or phone..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-              data-testid="input-search-clients"
-            />
-          </div>
-
-          <Select value={filterType} onValueChange={(value) => setFilterType(value as typeof filterType)}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-filter">
-              <Filter className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Filter by type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Customers</SelectItem>
-              <SelectItem value="active">Active Only</SelectItem>
-              <SelectItem value="historical">Historical Only</SelectItem>
-              <SelectItem value="customers">Customers Only</SelectItem>
-              <SelectItem value="potential_expenses">Potential Expenses</SelectItem>
-              <SelectItem value="vip">VIP Members</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-full sm:w-48" data-testid="select-sort">
-              <ArrowUpDown className="w-4 h-4 mr-2" />
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="name">Name (A-Z)</SelectItem>
-              <SelectItem value="email">Email (A-Z)</SelectItem>
-              <SelectItem value="recent">Most Recent</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Bulk Actions */}
-        {selectedCustomers.size > 0 && (
-          <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-blue-800">
-                {selectedCustomers.size} selected
-              </span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedCustomers(new Set())}
-                data-testid="button-clear-selection"
-              >
-                Clear Selection
-              </Button>
-            </div>
-            {isAdmin && (
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleBulkDelete}
-                disabled={deleteCustomersMutation.isPending}
-                data-testid="button-bulk-delete"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Delete Selected
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Clients List */}
-      <div className="flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="grid gap-4">
-            {[...Array(6)].map((_, i) => (
-              <Card key={i}>
-                <CardContent className="p-6">
-                  <div className="flex items-center gap-4">
-                    <Skeleton className="h-12 w-12 rounded-full" />
-                    <div className="space-y-2 flex-1">
-                      <Skeleton className="h-5 w-1/3" />
-                      <Skeleton className="h-4 w-1/2" />
-                      <Skeleton className="h-4 w-1/4" />
-                    </div>
-                    <Skeleton className="h-6 w-16" />
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Customers
+                    </p>
+                    <p className="text-2xl font-bold">{allCustomers.length}</p>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
+                  <Users className="w-8 h-8 text-blue-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">
+                      Active Customers
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {activeCustomers.length}
+                    </p>
+                  </div>
+                  <Users className="w-8 h-8 text-green-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">
+                      Historical
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {historicalCustomers.length}
+                    </p>
+                  </div>
+                  <Archive className="w-8 h-8 text-orange-600" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Revenue
+                    </p>
+                    <p className="text-2xl font-bold">
+                      $
+                      {allCustomers
+                        .reduce(
+                          (sum, customer) =>
+                            sum +
+                            (parseFloat(customer.lifetimeValue || "0") || 0),
+                          0,
+                        )
+                        .toLocaleString()}
+                    </p>
+                  </div>
+                  <DollarSign className="w-8 h-8 text-amber-600" />
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        ) : filteredCustomers.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Users className="w-12 h-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No customers found</h3>
-              <p className="text-gray-600 text-center max-w-md">
-                {searchQuery 
-                  ? "Try adjusting your search to find customers."
-                  : "No customers added yet. Start by adding your first customer."
-                }
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {/* Select All Header */}
-            {filteredCustomers.length > 0 && (
-              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
-                <Checkbox
-                  checked={selectedCustomers.size === filteredCustomers.length && filteredCustomers.length > 0}
-                  onCheckedChange={handleSelectAll}
-                  data-testid="checkbox-select-all"
+
+          {/* Filters */}
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <Input
+                  placeholder="Search customers by name, email, or phone..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                  data-testid="input-search-clients"
                 />
-                <span className="text-sm font-medium">
-                  Select All ({filteredCustomers.length})
-                </span>
-                {filterType === 'potential_expenses' && (
-                  <Badge variant="destructive" className="ml-auto">
-                    <AlertTriangle className="w-3 h-3 mr-1" />
+              </div>
+
+              <Select
+                value={filterType}
+                onValueChange={(value) =>
+                  setFilterType(value as typeof filterType)
+                }
+              >
+                <SelectTrigger
+                  className="w-full sm:w-48"
+                  data-testid="select-filter"
+                >
+                  <Filter className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Filter by type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Customers</SelectItem>
+                  <SelectItem value="active">Active Only</SelectItem>
+                  <SelectItem value="historical">Historical Only</SelectItem>
+                  <SelectItem value="customers">Customers Only</SelectItem>
+                  <SelectItem value="potential_expenses">
                     Potential Expenses
-                  </Badge>
+                  </SelectItem>
+                  <SelectItem value="vip">VIP Members</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger
+                  className="w-full sm:w-48"
+                  data-testid="select-sort"
+                >
+                  <ArrowUpDown className="w-4 h-4 mr-2" />
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name (A-Z)</SelectItem>
+                  <SelectItem value="email">Email (A-Z)</SelectItem>
+                  <SelectItem value="recent">Most Recent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Bulk Actions */}
+            {selectedCustomers.size > 0 && (
+              <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-center gap-4">
+                  <span className="text-sm font-medium text-blue-800">
+                    {selectedCustomers.size} selected
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSelectedCustomers(new Set())}
+                    data-testid="button-clear-selection"
+                  >
+                    Clear Selection
+                  </Button>
+                </div>
+                {isAdmin && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={handleBulkDelete}
+                    disabled={deleteCustomersMutation.isPending}
+                    data-testid="button-bulk-delete"
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Selected
+                  </Button>
                 )}
               </div>
             )}
-
-            {/* Customer List */}
-            <div className="grid gap-4">
-              {filteredCustomers.map((customer) => {
-                const tier = getCustomerTier(parseFloat(customer.lifetimeValue || '0') || 0);
-                const isExpense = isPotentialExpenseCompany(customer);
-                const isSelected = selectedCustomers.has(customer.id);
-                
-                return (
-                  <Card 
-                    key={customer.id} 
-                    className={`hover-elevate transition-colors cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`} 
-                    onClick={() => handleCustomerCardClick(customer.id)}
-                    data-testid={`card-client-${customer.id}`}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <Checkbox
-                            checked={isSelected}
-                            onCheckedChange={(checked) => handleSelectCustomer(customer.id, checked as boolean)}
-                            onClick={(e) => e.stopPropagation()}
-                            data-testid={`checkbox-select-${customer.id}`}
-                          />
-                        <Avatar className="h-12 w-12">
-                          <AvatarFallback className="bg-amber-100 text-amber-800">
-                            {getInitials(customer.name || '')}
-                          </AvatarFallback>
-                        </Avatar>
-                        
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-lg font-semibold text-gray-900" data-testid={`text-client-name-${customer.id}`}>
-                              {customer.name}
-                            </h3>
-                            {customer.isVipMember && (
-                              <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                                <Crown className="h-3 w-3 text-amber-500" />
-                                VIP
-                              </span>
-                            )}
-                            <Badge className={tier.color}>{tier.label}</Badge>
-                            {getCustomerStatusBadge(customer)}
-                          </div>
-                          
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <Mail className="w-4 h-4" />
-                              <span>{customer.email || 'No email'}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Phone className="w-4 h-4" />
-                              <span>{customer.phone || customer.mobile || 'No phone'}</span>
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-center gap-4 text-sm text-gray-600">
-                            <div className="flex items-center gap-1">
-                              <DollarSign className="w-4 h-4" />
-                              <span>Lifetime Value: ${parseFloat(customer.lifetimeValue || '0').toLocaleString()}</span>
-                            </div>
-                            {customer.importSource && (
-                              <div className="flex items-center gap-1">
-                                <span>Source: {customer.importSource}</span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between gap-2 mt-4">
-                        <div className="flex gap-2">
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              handleEditCustomer(customer);
-                            }}
-                            style={{ pointerEvents: 'auto', zIndex: 10 }}
-                            data-testid={`button-edit-${customer.id}`}
-                          >
-                            <Edit className="w-4 h-4 mr-1" />
-                            Edit
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              handleCustomerCardClick(customer.id);
-                            }}
-                            style={{ pointerEvents: 'auto', zIndex: 10 }}
-                            data-testid={`button-view-${customer.id}`}
-                          >
-                            <Eye className="w-4 h-4 mr-1" />
-                            View Details
-                          </Button>
-                        </div>
-                        {isAdmin && (
-                          <Button 
-                            variant="destructive" 
-                            size="sm" 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              handleDeleteCustomer(customer.id);
-                            }}
-                            disabled={deleteCustomerMutation.isPending}
-                            style={{ pointerEvents: 'auto', zIndex: 10 }}
-                            data-testid={`button-delete-${customer.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 mr-1" />
-                            Delete
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-            </div>
           </div>
-        )}
-      </div>
+
+          {/* Clients List */}
+          <div className="flex-1 overflow-auto">
+            {isLoading ? (
+              <div className="grid gap-4">
+                {[...Array(6)].map((_, i) => (
+                  <Card key={i}>
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-4">
+                        <Skeleton className="h-12 w-12 rounded-full" />
+                        <div className="space-y-2 flex-1">
+                          <Skeleton className="h-5 w-1/3" />
+                          <Skeleton className="h-4 w-1/2" />
+                          <Skeleton className="h-4 w-1/4" />
+                        </div>
+                        <Skeleton className="h-6 w-16" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : filteredCustomers.length === 0 ? (
+              <Card>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Users className="w-12 h-12 text-gray-400 mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">
+                    No customers found
+                  </h3>
+                  <p className="text-gray-600 text-center max-w-md">
+                    {searchQuery
+                      ? "Try adjusting your search to find customers."
+                      : "No customers added yet. Start by adding your first customer."}
+                  </p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                {/* Select All Header */}
+                {filteredCustomers.length > 0 && (
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
+                    <Checkbox
+                      checked={
+                        selectedCustomers.size === filteredCustomers.length &&
+                        filteredCustomers.length > 0
+                      }
+                      onCheckedChange={handleSelectAll}
+                      data-testid="checkbox-select-all"
+                    />
+                    <span className="text-sm font-medium">
+                      Select All ({filteredCustomers.length})
+                    </span>
+                    {filterType === "potential_expenses" && (
+                      <Badge variant="destructive" className="ml-auto">
+                        <AlertTriangle className="w-3 h-3 mr-1" />
+                        Potential Expenses
+                      </Badge>
+                    )}
+                  </div>
+                )}
+
+                {/* Customer List */}
+                <div className="grid gap-4">
+                  {filteredCustomers.map((customer) => {
+                    const tier = getCustomerTier(
+                      parseFloat(customer.lifetimeValue || "0") || 0,
+                    );
+                    const isExpense = isPotentialExpenseCompany(customer);
+                    const isSelected = selectedCustomers.has(customer.id);
+
+                    return (
+                      <Card
+                        key={customer.id}
+                        className={`hover-elevate transition-colors cursor-pointer ${isSelected ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}
+                        onClick={() => handleCustomerCardClick(customer.id)}
+                        data-testid={`card-client-${customer.id}`}
+                      >
+                        <CardContent className="p-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <Checkbox
+                                checked={isSelected}
+                                onCheckedChange={(checked) =>
+                                  handleSelectCustomer(
+                                    customer.id,
+                                    checked as boolean,
+                                  )
+                                }
+                                onClick={(e) => e.stopPropagation()}
+                                data-testid={`checkbox-select-${customer.id}`}
+                              />
+                              <Avatar className="h-12 w-12">
+                                <AvatarFallback className="bg-amber-100 text-amber-800">
+                                  {getInitials(customer.name || "")}
+                                </AvatarFallback>
+                              </Avatar>
+
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3
+                                    className="text-lg font-semibold text-gray-900"
+                                    data-testid={`text-client-name-${customer.id}`}
+                                  >
+                                    {customer.name}
+                                  </h3>
+                                  {customer.isVipMember && (
+                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                                      <Crown className="h-3 w-3 text-amber-500" />
+                                      VIP
+                                    </span>
+                                  )}
+                                  <Badge className={tier.color}>
+                                    {tier.label}
+                                  </Badge>
+                                  {getCustomerStatusBadge(customer)}
+                                </div>
+
+                                <div className="flex items-center gap-4 text-sm text-gray-600">
+                                  <div className="flex items-center gap-1">
+                                    <Mail className="w-4 h-4" />
+                                    <span>{customer.email || "No email"}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Phone className="w-4 h-4" />
+                                    <span>
+                                      {customer.phone ||
+                                        customer.mobile ||
+                                        "No phone"}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-4 text-sm text-gray-600">
+                                  <div className="flex items-center gap-1">
+                                    <DollarSign className="w-4 h-4" />
+                                    <span>
+                                      Lifetime Value: $
+                                      {parseFloat(
+                                        customer.lifetimeValue || "0",
+                                      ).toLocaleString()}
+                                    </span>
+                                  </div>
+                                  {customer.importSource && (
+                                    <div className="flex items-center gap-1">
+                                      <span>
+                                        Source: {customer.importSource}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 mt-4">
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleEditCustomer(customer);
+                                  }}
+                                  style={{ pointerEvents: "auto", zIndex: 10 }}
+                                  data-testid={`button-edit-${customer.id}`}
+                                >
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  Edit
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleCustomerCardClick(customer.id);
+                                  }}
+                                  style={{ pointerEvents: "auto", zIndex: 10 }}
+                                  data-testid={`button-view-${customer.id}`}
+                                >
+                                  <Eye className="w-4 h-4 mr-1" />
+                                  View Details
+                                </Button>
+                              </div>
+                              {isAdmin && (
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    handleDeleteCustomer(customer.id);
+                                  }}
+                                  disabled={deleteCustomerMutation.isPending}
+                                  style={{ pointerEvents: "auto", zIndex: 10 }}
+                                  data-testid={`button-delete-${customer.id}`}
+                                >
+                                  <Trash2 className="w-4 h-4 mr-1" />
+                                  Delete
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         {/* CSV Import Tab */}
@@ -667,7 +868,10 @@ export default function Clients() {
             <DialogTitle>Edit Customer</DialogTitle>
           </DialogHeader>
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(handleSubmitEdit)} className="space-y-4">
+            <form
+              onSubmit={editForm.handleSubmit(handleSubmitEdit)}
+              className="space-y-4"
+            >
               <FormField
                 control={editForm.control}
                 name="name"
@@ -681,7 +885,7 @@ export default function Clients() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={editForm.control}
                 name="email"
@@ -689,13 +893,17 @@ export default function Clients() {
                   <FormItem>
                     <FormLabel>Email</FormLabel>
                     <FormControl>
-                      <Input placeholder="Enter email address" type="email" {...field} />
+                      <Input
+                        placeholder="Enter email address"
+                        type="email"
+                        {...field}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={editForm.control}
                 name="phone"
@@ -709,7 +917,7 @@ export default function Clients() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={editForm.control}
                 name="mobile"
@@ -723,7 +931,7 @@ export default function Clients() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={editForm.control}
                 name="address"
@@ -737,14 +945,16 @@ export default function Clients() {
                   </FormItem>
                 )}
               />
-              
+
               <div className="flex gap-2 pt-4">
                 <Button type="submit" disabled={editCustomerMutation.isPending}>
-                  {editCustomerMutation.isPending ? "Saving..." : "Save Changes"}
+                  {editCustomerMutation.isPending
+                    ? "Saving..."
+                    : "Save Changes"}
                 </Button>
-                <Button 
-                  type="button" 
-                  variant="outline" 
+                <Button
+                  type="button"
+                  variant="outline"
                   onClick={() => setShowEditDialog(false)}
                 >
                   Cancel
@@ -770,22 +980,24 @@ export default function Clients() {
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
                   <AvatarFallback className="bg-amber-100 text-amber-800 text-lg">
-                    {getInitials(selectedCustomerDetails.name || '')}
+                    {getInitials(selectedCustomerDetails.name || "")}
                   </AvatarFallback>
                 </Avatar>
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-xl font-semibold">{selectedCustomerDetails.name}</h2>
+                    <h2 className="text-xl font-semibold">
+                      {selectedCustomerDetails.name}
+                    </h2>
                     {getCustomerStatusBadge(selectedCustomerDetails)}
                   </div>
                   <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
                     <div className="flex items-center gap-1">
                       <Mail className="w-4 h-4" />
-                      <span>{selectedCustomerDetails.email || 'No email'}</span>
+                      <span>{selectedCustomerDetails.email || "No email"}</span>
                     </div>
                     <div className="flex items-center gap-1">
                       <Phone className="w-4 h-4" />
-                      <span>{selectedCustomerDetails.phone || 'No phone'}</span>
+                      <span>{selectedCustomerDetails.phone || "No phone"}</span>
                     </div>
                     {selectedCustomerDetails.mobile && (
                       <div className="flex items-center gap-1">
@@ -800,20 +1012,47 @@ export default function Clients() {
               {/* Customer Information */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <h3 className="font-medium text-gray-900">Contact Information</h3>
+                  <h3 className="font-medium text-gray-900">
+                    Contact Information
+                  </h3>
                   <div className="space-y-1 text-sm">
-                    <p><strong>Address:</strong> {selectedCustomerDetails.address || 'No address'}</p>
-                    <p><strong>City:</strong> {selectedCustomerDetails.city || 'No city'}</p>
-                    <p><strong>Region:</strong> {selectedCustomerDetails.region || 'No region'}</p>
+                    <p>
+                      <strong>Address:</strong>{" "}
+                      {selectedCustomerDetails.address || "No address"}
+                    </p>
+                    <p>
+                      <strong>City:</strong>{" "}
+                      {selectedCustomerDetails.city || "No city"}
+                    </p>
+                    <p>
+                      <strong>Region:</strong>{" "}
+                      {selectedCustomerDetails.region || "No region"}
+                    </p>
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <h3 className="font-medium text-gray-900">Business Information</h3>
+                  <h3 className="font-medium text-gray-900">
+                    Business Information
+                  </h3>
                   <div className="space-y-1 text-sm">
-                    <p><strong>Source:</strong> {selectedCustomerDetails.source || 'Unknown'}</p>
-                    <p><strong>Import Source:</strong> {selectedCustomerDetails.importSource || 'Manual'}</p>
-                    <p><strong>Lifetime Value:</strong> ${parseFloat(selectedCustomerDetails.lifetimeValue || '0').toLocaleString()}</p>
-                    <p><strong>Total Jobs:</strong> {selectedCustomerDetails.totalJobs || 0}</p>
+                    <p>
+                      <strong>Source:</strong>{" "}
+                      {selectedCustomerDetails.source || "Unknown"}
+                    </p>
+                    <p>
+                      <strong>Import Source:</strong>{" "}
+                      {selectedCustomerDetails.importSource || "Manual"}
+                    </p>
+                    <p>
+                      <strong>Lifetime Value:</strong> $
+                      {parseFloat(
+                        selectedCustomerDetails.lifetimeValue || "0",
+                      ).toLocaleString()}
+                    </p>
+                    <p>
+                      <strong>Total Jobs:</strong>{" "}
+                      {selectedCustomerDetails.totalJobs || 0}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -823,25 +1062,38 @@ export default function Clients() {
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Crown className="w-5 h-5 text-amber-500" />
-                    <h3 className="font-medium text-gray-900">VIP Membership</h3>
-                    {selectedCustomerDetails.isVipMember && selectedCustomerDetails.vipMemberSince && (
-                      <span className="text-xs text-amber-700">
-                        Member since {new Date(selectedCustomerDetails.vipMemberSince).toLocaleDateString()}
-                      </span>
-                    )}
+                    <h3 className="font-medium text-gray-900">
+                      VIP Membership
+                    </h3>
+                    {selectedCustomerDetails.isVipMember &&
+                      selectedCustomerDetails.vipMemberSince && (
+                        <span className="text-xs text-amber-700">
+                          Member since{" "}
+                          {new Date(
+                            selectedCustomerDetails.vipMemberSince,
+                          ).toLocaleDateString()}
+                        </span>
+                      )}
                   </div>
                   <Switch
                     checked={!!selectedCustomerDetails.isVipMember}
                     onCheckedChange={(checked) => {
                       const now = new Date().toISOString();
-                      const vipSince = checked ? (selectedCustomerDetails.vipMemberSince ? String(selectedCustomerDetails.vipMemberSince) : now) : null;
+                      const vipSince = checked
+                        ? selectedCustomerDetails.vipMemberSince
+                          ? String(selectedCustomerDetails.vipMemberSince)
+                          : now
+                        : null;
                       updateVipMutation.mutate({
                         id: selectedCustomerDetails.id,
                         data: {
                           isVipMember: checked,
                           vipMemberSince: vipSince,
-                          vipDiscountPercent: checked ? (selectedCustomerDetails.vipDiscountPercent || vipDiscountInput) : null,
-                        }
+                          vipDiscountPercent: checked
+                            ? selectedCustomerDetails.vipDiscountPercent ||
+                              vipDiscountInput
+                            : null,
+                        },
                       });
                     }}
                     disabled={updateVipMutation.isPending}
@@ -849,13 +1101,21 @@ export default function Clients() {
                 </div>
                 {selectedCustomerDetails.isVipMember && (
                   <div className="flex items-center gap-3 pt-1">
-                    <Label className="text-sm text-gray-700 whitespace-nowrap">Discount %</Label>
+                    <Label className="text-sm text-gray-700 whitespace-nowrap">
+                      Discount %
+                    </Label>
                     <Input
                       type="number"
                       min="0"
                       max="50"
                       step="0.5"
-                      defaultValue={selectedCustomerDetails.vipDiscountPercent ? parseFloat(selectedCustomerDetails.vipDiscountPercent).toString() : "10"}
+                      defaultValue={
+                        selectedCustomerDetails.vipDiscountPercent
+                          ? parseFloat(
+                              selectedCustomerDetails.vipDiscountPercent,
+                            ).toString()
+                          : "10"
+                      }
                       onChange={(e) => setVipDiscountInput(e.target.value)}
                       className="w-24 h-8 text-sm"
                       placeholder="10"
@@ -870,7 +1130,7 @@ export default function Clients() {
                           data: {
                             isVipMember: true,
                             vipDiscountPercent: vipDiscountInput,
-                          }
+                          },
                         });
                       }}
                     >
@@ -893,18 +1153,37 @@ export default function Clients() {
               {/* Import Information */}
               {selectedCustomerDetails.importBatchId && (
                 <div className="space-y-2">
-                  <h3 className="font-medium text-gray-900">Import Information</h3>
+                  <h3 className="font-medium text-gray-900">
+                    Import Information
+                  </h3>
                   <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-lg">
-                    <p><strong>Import Batch ID:</strong> {selectedCustomerDetails.importBatchId}</p>
-                    <p><strong>Created:</strong> {selectedCustomerDetails.createdAt ? new Date(selectedCustomerDetails.createdAt).toLocaleDateString() : 'Unknown'}</p>
-                    <p><strong>Updated:</strong> {selectedCustomerDetails.updatedAt ? new Date(selectedCustomerDetails.updatedAt).toLocaleDateString() : 'Unknown'}</p>
+                    <p>
+                      <strong>Import Batch ID:</strong>{" "}
+                      {selectedCustomerDetails.importBatchId}
+                    </p>
+                    <p>
+                      <strong>Created:</strong>{" "}
+                      {selectedCustomerDetails.createdAt
+                        ? new Date(
+                            selectedCustomerDetails.createdAt,
+                          ).toLocaleDateString()
+                        : "Unknown"}
+                    </p>
+                    <p>
+                      <strong>Updated:</strong>{" "}
+                      {selectedCustomerDetails.updatedAt
+                        ? new Date(
+                            selectedCustomerDetails.updatedAt,
+                          ).toLocaleDateString()
+                        : "Unknown"}
+                    </p>
                   </div>
                 </div>
               )}
 
               {/* Action Buttons */}
               <div className="flex gap-2 pt-4 border-t">
-                <Button 
+                <Button
                   onClick={() => {
                     setShowCustomerModal(false);
                     handleEditCustomer(selectedCustomerDetails);
