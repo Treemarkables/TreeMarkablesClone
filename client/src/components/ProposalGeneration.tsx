@@ -172,10 +172,6 @@ export function ProposalGeneration({
     },
     onSuccess: (result) => {
       if (result.success) {
-        toast({
-          title: "Proposal Created",
-          description: `Proposal ${result.data.proposalNumber} with ${selectedLineItems.length} line items created successfully.`,
-        });
         queryClient.invalidateQueries({ queryKey: ['/api/proposals'] });
         onProposalCreated?.(result.data);
         

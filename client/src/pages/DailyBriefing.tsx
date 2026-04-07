@@ -462,7 +462,6 @@ export default function DailyBriefing() {
     onSuccess: () => {
       setEditingDayNote(false);
       refetch();
-      toast({ title: "Day note saved" });
     },
     onError: () => toast({ title: "Failed to save note", variant: "destructive" }),
   });

@@ -128,10 +128,6 @@ export default function NotificationPreferences() {
       return updated;
     });
 
-    toast({
-      title: "Preferences updated",
-      description: "Your notification preferences have been saved",
-    });
   };
 
   const handleEnableBrowserNotifications = async () => {
@@ -146,10 +142,6 @@ export default function NotificationPreferences() {
         window.dispatchEvent(new Event('notificationPreferencesChanged'));
         
         return updated;
-      });
-      toast({
-        title: "Browser notifications enabled",
-        description: "You'll receive desktop notifications for diary activity",
       });
     } else {
       toast({

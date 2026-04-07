@@ -467,11 +467,7 @@ export function EmailComposerModal({
       url: URL.createObjectURL(file)
     }))]);
     
-    toast({
-      title: "Files Attached",
-      description: `${fileArray.length} file(s) attached successfully`,
-    });
-
+    
     // Clear the input for future selections
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -816,11 +812,7 @@ export function EmailComposerModal({
     } else {
       recognitionRef.current.start();
       setIsListening(true);
-      toast({
-        title: "Listening...",
-        description: "Speak to compose your email",
-      });
-    }
+          }
   };
 
   return (

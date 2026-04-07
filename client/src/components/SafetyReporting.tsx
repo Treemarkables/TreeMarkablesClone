@@ -110,11 +110,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/safety-incidents'] });
       setShowNewIncidentDialog(false);
-      toast({
-        title: 'Success',
-        description: 'Safety incident reported successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -133,11 +129,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/safety-incidents'] });
       setShowEditDialog(false);
       setSelectedIncident(null);
-      toast({
-        title: 'Success',
-        description: 'Incident updated successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -155,11 +147,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/risk-assessments'] });
       setShowNewRiskAssessmentDialog(false);
-      toast({
-        title: 'Success',
-        description: 'Risk assessment created successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -178,11 +166,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/risk-assessments'] });
       setShowEditRiskAssessmentDialog(false);
       setSelectedRiskAssessment(null);
-      toast({
-        title: 'Success',
-        description: 'Risk assessment updated successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -201,11 +185,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/compliance/requirements'] });
       queryClient.invalidateQueries({ queryKey: ['/api/compliance/analytics'] });
       setShowNewComplianceDialog(false);
-      toast({
-        title: 'Success',
-        description: 'Compliance requirement created successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -225,11 +205,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
       queryClient.invalidateQueries({ queryKey: ['/api/compliance/analytics'] });
       setShowEditComplianceDialog(false);
       setSelectedCompliance(null);
-      toast({
-        title: 'Success',
-        description: 'Compliance requirement updated successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',
@@ -246,11 +222,7 @@ export function SafetyReporting({ compact = false }: SafetyReportingProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/safety-incidents'] });
-      toast({
-        title: 'Success',
-        description: 'Incident deleted successfully',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',

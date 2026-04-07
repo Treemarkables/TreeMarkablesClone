@@ -149,10 +149,6 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
       setIsCreateDialogOpen(false);
       resetForm();
-      toast({
-        title: 'Success',
-        description: 'Quote created successfully'
-      });
     },
     onError: (error: any) => {
       console.error('Quote creation error:', error);
@@ -180,10 +176,6 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
       setEditingQuote(null);
-      toast({
-        title: 'Success',
-        description: 'Quote updated successfully'
-      });
     }
   });
 
@@ -199,10 +191,6 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: 'Success',
-        description: 'Quote converted to job successfully'
-      });
     }
   });
 
@@ -215,13 +203,6 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
     },
     onSuccess: (response: any) => {
       console.log('Quote accepted successfully:', response);
-      const workOrder = response?.data?.workOrder;
-      const jobNumber = workOrder?.jobNumber || 'N/A';
-      
-      toast({
-        title: "Quote Accepted!",
-        description: `Quote has been accepted and converted to Work Order #${jobNumber}`,
-      });
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/quotes'] });
@@ -715,23 +696,11 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
               onAccept={() => acceptQuoteMutation.mutate(previewingQuote.id)}
               isAccepting={acceptQuoteMutation.isPending}
               onEmail={() => {
-                toast({
-                  title: "Email Functionality",
-                  description: "Email functionality will be implemented next.",
-                });
-              }}
+                              }}
               onDownload={() => {
-                toast({
-                  title: "PDF Generation",
-                  description: "PDF generation functionality will be implemented next.",
-                });
-              }}
+                              }}
               onCopy={() => {
-                toast({
-                  title: "Quote Copied",
-                  description: "Quote template copied to clipboard.",
-                });
-              }}
+                              }}
             />
           </DialogContent>
         </Dialog>

@@ -82,11 +82,7 @@ export default function JobTemplateManagement() {
     mutationFn: (data: InsertJobTemplate) => apiRequest('POST', '/api/job-templates', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/job-templates'] });
-      toast({
-        title: 'Template Created',
-        description: 'Job template has been created successfully.',
-      });
-      setIsCreateOpen(false);
+            setIsCreateOpen(false);
     },
     onError: (error) => {
       toast({
@@ -103,11 +99,7 @@ export default function JobTemplateManagement() {
       apiRequest('PUT', `/api/job-templates/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/job-templates'] });
-      toast({
-        title: 'Template Updated',
-        description: 'Job template has been updated successfully.',
-      });
-      setEditingTemplate(null);
+            setEditingTemplate(null);
     },
     onError: (error) => {
       toast({
@@ -123,11 +115,7 @@ export default function JobTemplateManagement() {
     mutationFn: (templateId: string) => apiRequest('DELETE', `/api/job-templates/${templateId}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/job-templates'] });
-      toast({
-        title: 'Template Deleted',
-        description: 'Job template has been deleted successfully.',
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: 'Error',

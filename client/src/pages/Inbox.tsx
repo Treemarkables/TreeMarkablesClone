@@ -111,11 +111,7 @@ export default function Inbox() {
       queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
       setShowCreateOpportunityDialog(false);
       opportunityForm.reset();
-      toast({ 
-        title: 'Opportunity created successfully',
-        description: 'The lead has been added to your pipeline'
-      });
-    },
+          },
     onError: () => {
       toast({ 
         title: 'Failed to create opportunity', 
@@ -134,11 +130,7 @@ export default function Inbox() {
       queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
       setShowCreateJobDialog(false);
       jobForm.reset();
-      toast({ 
-        title: 'Job lead created successfully',
-        description: 'The job lead has been sent to dispatch'
-      });
-      setLocation('/dispatch');
+            setLocation('/dispatch');
     },
     onError: () => {
       toast({ 
@@ -158,11 +150,7 @@ export default function Inbox() {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
-      toast({ 
-        title: 'Conversations deleted',
-        description: data.message || `Successfully deleted ${data.deletedCount} conversations`
-      });
-    },
+          },
     onError: () => {
       toast({ 
         title: 'Failed to delete conversations', 

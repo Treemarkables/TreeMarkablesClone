@@ -615,11 +615,7 @@ export function AdvancedDispatchBoard({ compact = false }: AdvancedDispatchBoard
             setJobToEdit(null);
           }}
           onJobUpdated={(updatedJob: Job) => {
-            toast({
-              title: "Job Updated",
-              description: `${updatedJob.title} has been updated successfully.`,
-            });
-            setShowGlobalJobCardEdit(false);
+                        setShowGlobalJobCardEdit(false);
             setJobToEdit(null);
             jobsQuery.refetch();
           }}

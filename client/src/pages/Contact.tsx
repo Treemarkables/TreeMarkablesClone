@@ -84,10 +84,6 @@ export default function Contact() {
           event_label: 'Contact Form',
         });
       }
-      toast({
-        title: "Enquiry Submitted!",
-        description: "Thank you for your enquiry. We'll get back to you within 24 hours.",
-      });
       form.reset();
     },
     onError: (error: Error) => {

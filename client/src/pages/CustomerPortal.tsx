@@ -197,11 +197,7 @@ export function CustomerPortal() {
         postalCode: '' // Not in API yet
       });
       setIsLoggedIn(true);
-      toast({
-        title: "Welcome back!",
-        description: `Signed in as ${customerData.name}`,
-      });
-    },
+          },
     onError: (error) => {
       console.error('Login mutation error:', error);
       toast({
@@ -250,11 +246,7 @@ export function CustomerPortal() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Service Request Submitted",
-        description: "We'll contact you within 24 hours to schedule your service.",
-      });
-      form.reset();
+            form.reset();
       // Invalidate and refetch service requests
       queryClient.invalidateQueries({ queryKey: ['customer-service-requests', customer?.id] });
     },
@@ -294,11 +286,7 @@ export function CustomerPortal() {
       return await response.json();
     },
     onSuccess: () => {
-      toast({
-        title: "Preferences Updated",
-        description: "Your communication preferences have been saved.",
-      });
-      queryClient.invalidateQueries({ queryKey: ['communication-preferences', customer?.id] });
+            queryClient.invalidateQueries({ queryKey: ['communication-preferences', customer?.id] });
     },
     onError: () => {
       toast({

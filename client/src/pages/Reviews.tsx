@@ -157,11 +157,7 @@ export default function Reviews() {
 
   const copyTemplate = (message: string) => {
     navigator.clipboard.writeText(message);
-    toast({
-      title: "Copied!",
-      description: "Template copied to clipboard"
-    });
-  };
+      };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -522,8 +518,7 @@ export default function Reviews() {
                         variant="outline"
                         onClick={() => {
                           navigator.clipboard.writeText("https://search.google.com/local/writereview?placeid=ChIJyW5ncp55Zm0R3_iU47Axcn8");
-                          toast({ title: "Copied!", description: "Google review link copied" });
-                        }}
+                                                  }}
                       >
                         <Copy className="w-4 h-4" />
                       </Button>
@@ -566,8 +561,7 @@ export default function Reviews() {
                         variant="outline"
                         onClick={() => {
                           navigator.clipboard.writeText("https://www.facebook.com/TreemarkablesGisborne/reviews");
-                          toast({ title: "Copied!", description: "Facebook review link copied" });
-                        }}
+                                                  }}
                       >
                         <Copy className="w-4 h-4" />
                       </Button>

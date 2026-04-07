@@ -153,8 +153,7 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
       setNewMarkerPosition(null);
       setMarkerForm({ label: '', notes: '', markerType: 'tree', color: '#22c55e' });
       setIsAddingMarker(false);
-      toast({ title: 'Marker added', description: 'Tree location saved successfully' });
-    },
+          },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to add marker', variant: 'destructive' });
     },
@@ -171,8 +170,7 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'tree-markers'] });
       setEditingMarker(null);
-      toast({ title: 'Marker updated', description: 'Changes saved successfully' });
-    },
+          },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to update marker', variant: 'destructive' });
     },
@@ -185,8 +183,7 @@ export function JobSiteMap({ jobId, address, defaultCenter, className }: JobSite
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'tree-markers'] });
       setEditingMarker(null);
-      toast({ title: 'Marker deleted', description: 'Tree location removed' });
-    },
+          },
     onError: () => {
       toast({ title: 'Error', description: 'Failed to delete marker', variant: 'destructive' });
     },

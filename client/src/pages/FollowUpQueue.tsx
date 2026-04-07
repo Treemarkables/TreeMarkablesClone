@@ -131,8 +131,7 @@ export default function FollowUpQueue() {
       return apiRequest('POST', `/api/quotes/${quoteId}/follow-up`, data);
     },
     onSuccess: () => {
-      toast({ title: "Follow-up logged", description: "The follow-up has been recorded successfully." });
-      queryClient.invalidateQueries({ queryKey: ['/api/quotes/follow-up-queue'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/quotes/follow-up-queue'] });
       closeFollowUpDialog();
     },
     onError: (error: any) => {

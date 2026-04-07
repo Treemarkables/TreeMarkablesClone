@@ -183,11 +183,7 @@ export default function VehicleInspection() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/vehicle-inspections'] });
-      toast({ 
-        title: 'Inspection completed',
-        description: 'Vehicle inspection has been saved successfully',
-      });
-      
+            
       // Reset form
       setSelectedVehicleId('');
       setSelectedTemplateId('');

@@ -222,11 +222,7 @@ export function PhotoDocumentation({ compact = false, jobId }: PhotoDocumentatio
       const result = await response.json();
 
       if (result.success) {
-        toast({
-          title: "Upload Successful",
-          description: `Successfully uploaded ${result.photos.length} photos`,
-        });
-        
+                
         // Clear the file input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';

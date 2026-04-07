@@ -162,11 +162,7 @@ export default function Integrations() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('xero_connected') === 'true') {
-      toast({
-        title: "Connected to Xero",
-        description: "Your Xero account has been successfully connected.",
-      });
-      // Clean up URL
+            // Clean up URL
       window.history.replaceState({}, '', '/integrations');
     } else if (params.get('error')) {
       toast({
@@ -210,11 +206,7 @@ export default function Integrations() {
     },
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['/api/xero/status'] });
-      toast({
-        title: "Connected to Xero",
-        description: `Successfully connected to ${data.tenantName || 'Xero'}`,
-      });
-    },
+          },
     onError: (error: any) => {
       toast({
         title: "Connection Failed",
@@ -231,11 +223,7 @@ export default function Integrations() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/xero/status'] });
-      toast({
-        title: "Disconnected",
-        description: "Successfully disconnected from Xero",
-      });
-    },
+          },
     onError: () => {
       toast({
         title: "Error",
@@ -340,11 +328,7 @@ export default function Integrations() {
       const result = await response.json();
       const audiences = result?.data || [];
       setMailchimpAudiences(audiences);
-      toast({
-        title: "Audiences Loaded",
-        description: `Found ${audiences.length} audience(s)`,
-      });
-    } catch (error: any) {
+          } catch (error: any) {
       toast({
         title: "Failed to Load Audiences",
         description: error.message || "Check your API key",
@@ -380,11 +364,7 @@ export default function Integrations() {
       queryClient.invalidateQueries({ queryKey: ['/api/business-settings'] });
       setShowMailchimpDialog(false);
       
-      toast({
-        title: "Mailchimp Connected",
-        description: `Connected to audience: ${testResult.audienceName}`,
-      });
-    } catch (error: any) {
+          } catch (error: any) {
       toast({
         title: "Connection Failed",
         description: error.message || "Failed to connect to Mailchimp",
@@ -398,11 +378,7 @@ export default function Integrations() {
     try {
       const response = await apiRequest('POST', '/api/mailchimp/sync', {});
       const result = await response.json();
-      toast({
-        title: "Sync Complete",
-        description: result.message || `Synced customers to Mailchimp`,
-      });
-    } catch (error: any) {
+          } catch (error: any) {
       toast({
         title: "Sync Failed",
         description: error.message || "Failed to sync customers",
@@ -426,11 +402,7 @@ export default function Integrations() {
       setMailchimpAudienceId('');
       setMailchimpAudiences([]);
       
-      toast({
-        title: "Disconnected",
-        description: "Mailchimp has been disconnected",
-      });
-    } catch (error) {
+          } catch (error) {
       toast({
         title: "Error",
         description: "Failed to disconnect Mailchimp",

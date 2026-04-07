@@ -87,10 +87,7 @@ export function SMSComposerModal({
                   customer?.mobile || customer?.phone || "";
     if (phone) {
       form.setValue("phone", phone);
-      toast({
-        description: `Filled in: ${phone}`,
-      });
-    } else {
+          } else {
       toast({
         description: "No saved phone number found",
         variant: "destructive",
@@ -158,11 +155,7 @@ export function SMSComposerModal({
       });
     },
     onSuccess: () => {
-      toast({
-        title: "SMS Sent",
-        description: "Invoice SMS has been sent successfully!",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       onClose();
       form.reset();
     },

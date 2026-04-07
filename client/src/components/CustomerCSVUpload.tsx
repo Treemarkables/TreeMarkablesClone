@@ -142,10 +142,6 @@ export function CustomerCSVUpload() {
     onSuccess: (result: MatchingResult) => {
       setMatchingResult(result);
       setUploadStep('preview');
-      toast({
-        title: "CSV Parsed Successfully",
-        description: `Found ${result.matchableRows} customers with ${result.highConfidenceMatches} high-confidence matches`
-      });
     },
     onError: (error: any) => {
       toast({
@@ -169,10 +165,6 @@ export function CustomerCSVUpload() {
       // Invalidate customers cache to refresh the UI
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       
-      toast({
-        title: "Update Complete",
-        description: `Successfully updated ${result.updated} customers`
-      });
     },
     onError: (error: any) => {
       toast({
@@ -212,10 +204,6 @@ export function CustomerCSVUpload() {
       // Invalidate customers cache to refresh the UI
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       
-      toast({
-        title: "Import Complete",
-        description: `${result.imported} imported, ${result.updated} updated, ${result.skipped} skipped`
-      });
     },
     onError: (error: any) => {
       toast({

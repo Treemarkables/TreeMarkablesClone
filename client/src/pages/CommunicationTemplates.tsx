@@ -110,10 +110,6 @@ export default function CommunicationTemplates() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/email-templates'] });
-      toast({
-        title: editingTemplate ? "Template updated" : "Template created",
-        description: `Email template "${emailForm.getValues('name')}" has been saved.`,
-      });
       setIsDialogOpen(false);
       setEditingTemplate(null);
       emailForm.reset();
@@ -138,10 +134,6 @@ export default function CommunicationTemplates() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
-      toast({
-        title: editingTemplate ? "Template updated" : "Template created",
-        description: `SMS template "${smsForm.getValues('name')}" has been saved.`,
-      });
       setIsDialogOpen(false);
       setEditingTemplate(null);
       smsForm.reset();
@@ -162,10 +154,6 @@ export default function CommunicationTemplates() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/email-templates'] });
-      toast({
-        title: "Template deleted",
-        description: "Email template has been removed.",
-      });
     },
   });
 
@@ -176,10 +164,6 @@ export default function CommunicationTemplates() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
-      toast({
-        title: "Template deleted",
-        description: "SMS template has been removed.",
-      });
     },
   });
 

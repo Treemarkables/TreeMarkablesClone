@@ -226,11 +226,6 @@ export function SpeechToQuote({ open, onOpenChange, onQuoteGenerated, context = 
         ? 'Quote generated from your speech!'
         : 'Description transcribed from your speech!';
       
-      toast({
-        title: 'Success',
-        description: successMessage,
-      });
-
       onQuoteGenerated(result.data);
       onOpenChange(false);
     } catch (error) {

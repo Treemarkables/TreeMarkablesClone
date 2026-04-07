@@ -431,11 +431,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
       queryClient.invalidateQueries({ queryKey: ['/api/jobs?limit=10000&offset=0'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
 
-      toast({
-        title: 'Job rescheduled',
-        description: `Moved to ${startTimeStr} – ${endTimeStr}`,
-      });
-    } catch {
+          } catch {
       toast({ title: 'Reschedule failed', description: 'Could not update the job time.', variant: 'destructive' });
     }
   };

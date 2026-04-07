@@ -211,10 +211,6 @@ export default function MaterialsServices() {
       queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
       setShowAddMaterialDialog(false);
       materialForm.reset();
-      toast({
-        title: "Material added successfully",
-        description: "The material has been added to your catalog.",
-      });
     },
     onError: () => {
       toast({
@@ -233,10 +229,6 @@ export default function MaterialsServices() {
       queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
       setShowEditMaterialDialog(false);
       setEditingMaterial(null);
-      toast({
-        title: "Material updated successfully",
-        description: "The material has been updated in your catalog.",
-      });
     },
     onError: () => {
       toast({
@@ -253,10 +245,6 @@ export default function MaterialsServices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/materials'] });
-      toast({
-        title: "Material deleted successfully",
-        description: "The material has been removed from your catalog.",
-      });
     },
     onError: () => {
       toast({
@@ -276,10 +264,6 @@ export default function MaterialsServices() {
       queryClient.invalidateQueries({ queryKey: ['/api/services'] });
       setShowAddServiceDialog(false);
       serviceForm.reset();
-      toast({
-        title: "Service added successfully",
-        description: "The service has been added to your catalog.",
-      });
     },
     onError: () => {
       toast({
@@ -298,10 +282,6 @@ export default function MaterialsServices() {
       queryClient.invalidateQueries({ queryKey: ['/api/services'] });
       setShowEditServiceDialog(false);
       setEditingService(null);
-      toast({
-        title: "Service updated successfully",
-        description: "The service has been updated in your catalog.",
-      });
     },
     onError: () => {
       toast({
@@ -318,10 +298,6 @@ export default function MaterialsServices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/services'] });
-      toast({
-        title: "Service deleted successfully",
-        description: "The service has been removed from your catalog.",
-      });
     },
     onError: () => {
       toast({

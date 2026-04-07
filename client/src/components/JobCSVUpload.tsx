@@ -82,10 +82,6 @@ export function JobCSVUpload() {
       // Invalidate jobs cache to refresh the UI
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       
-      toast({
-        title: "Import Complete",
-        description: `Successfully imported ${result.imported} jobs out of ${result.totalProcessed} total`
-      });
     },
     onError: (error: any) => {
       toast({

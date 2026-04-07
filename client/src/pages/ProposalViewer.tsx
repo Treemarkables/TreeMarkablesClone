@@ -107,11 +107,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     },
     onSuccess: (response: any) => {
       console.log('Proposal accepted successfully:', response);
-      toast({
-        title: "Proposal Accepted!",
-        description: "Your proposal has been accepted and converted to a work order. We'll be in touch to schedule the work.",
-      });
-      // Refresh proposal data to show updated status
+            // Refresh proposal data to show updated status
       queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
       queryClient.invalidateQueries({ queryKey: ["/api/proposals", { jobId: proposalId }] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
@@ -123,12 +119,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       if (error.message?.includes('already been accepted')) {
         queryClient.invalidateQueries({ queryKey: ["/api/proposals", proposalId] });
         queryClient.invalidateQueries({ queryKey: ["/api/proposals", { jobId: proposalId }] });
-        toast({
-          title: "Already Accepted",
-          description: "This proposal has already been accepted.",
-          variant: "default"
-        });
-      } else {
+              } else {
         toast({
           title: "Error",
           description: error.message || "Failed to accept proposal. Please try again.",

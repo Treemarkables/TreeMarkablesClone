@@ -310,11 +310,7 @@ export function NotificationBell() {
       // Notify other components in same tab
       window.dispatchEvent(new Event('notificationPreferencesChanged'));
       
-      toast({
-        title: "Browser notifications enabled",
-        description: "You'll receive desktop notifications for new diary activity",
-      });
-    } else {
+          } else {
       // Save denied state to localStorage
       const stored = localStorage.getItem('notificationPreferences');
       const existingPreferences = stored ? JSON.parse(stored) : {};

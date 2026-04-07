@@ -247,11 +247,7 @@ export function GlobalJobCard({
     try {
       const scheduledDate = new Date(`${schedulingData.date}T${schedulingData.startTime}`);
       
-      toast({
-        title: "Job Scheduled",
-        description: `Job scheduled for ${format(scheduledDate, 'PPP')} at ${format(scheduledDate, 'p')}`,
-      });
-      
+            
       setIsSchedulingModalOpen(false);
       setSchedulingData({
         date: '',

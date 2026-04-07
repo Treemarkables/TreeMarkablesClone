@@ -58,7 +58,6 @@ export default function TemplateManagement() {
       return response.json();
     },
     onSuccess: () => {
-      toast({ title: "Template created successfully" });
       setIsDialogOpen(false);
       refetch();
     },
@@ -74,7 +73,6 @@ export default function TemplateManagement() {
       return response.json();
     },
     onSuccess: () => {
-      toast({ title: "Template updated successfully" });
       setIsDialogOpen(false);
       setEditingTemplate(null);
       refetch();
@@ -91,7 +89,6 @@ export default function TemplateManagement() {
       return response.json();
     },
     onSuccess: () => {
-      toast({ title: "Template deleted successfully" });
       refetch();
     },
     onError: () => {

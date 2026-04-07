@@ -124,11 +124,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setSelectedJobs(new Set());
-      toast({
-        title: "Jobs Archived",
-        description: `Successfully archived ${selectedJobs.size} jobs`
-      });
-    },
+          },
     onError: (error: any) => {
       toast({
         title: "Archive Failed",
@@ -469,22 +465,14 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     onTabChange?.('customers');
     
     // Show user feedback with toast notification
-    toast({
-      title: "Customer Details",
-      description: "Customer details view is not yet implemented. Feature coming soon!",
-    });
-  };
+      };
 
   // Handle job navigation
   const handleViewCustomerJobs = (customerId: string, customerName: string) => {
     // Switch to jobs tab and filter by customer
     onTabChange?.('jobs');
     setJobSearchQuery(customerName);
-    toast({
-      title: "Customer Jobs",
-      description: `Showing jobs for ${customerName}`,
-    });
-  };
+      };
 
   return (
     <div className="h-full bg-background p-2 sm:p-4 md:p-6 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">

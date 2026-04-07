@@ -599,11 +599,7 @@ export function GlobalJobCard({
     const revenueIncrease = lineItem.total;
     const costIncrease = lineItem.totalCost;
     
-    toast({
-      title: "Profit Tracking",
-      description: `Added "${lineItem.description}" • Revenue: +$${revenueIncrease.toFixed(2)} • Costs: +$${costIncrease.toFixed(2)}`
-    });
-  };
+      };
 
   const removeLineItem = (index: number) => {
     const currentItems = form.getValues('lineItems') || [];
@@ -631,11 +627,7 @@ export function GlobalJobCard({
     // Enhanced profit tracking feedback with real margin calculation
     const profitImpact = margin * 1; // quantity = 1
     
-    toast({
-      title: "Item Selected from Catalog",
-      description: `${itemName} ($${unitPrice.toFixed(2)}) - Profit margin: $${profitImpact.toFixed(2)} (${margin > 0 ? ((margin / unitPrice) * 100).toFixed(1) + '%' : '0%'})`,
-    });
-  };
+      };
 
   // Filter materials and services based on search query
   const filteredItems = useMemo(() => {
@@ -685,11 +677,7 @@ export function GlobalJobCard({
     const margin = unitPrice - unitCost;
     const profitPercentage = unitPrice > 0 ? ((margin / unitPrice) * 100).toFixed(1) : '0';
     
-    toast({
-      title: "Item Added",
-      description: `${itemName} • Price: $${unitPrice.toFixed(2)} • Profit: $${margin.toFixed(2)} (${profitPercentage}%)`,
-    });
-  };
+      };
 
   // Add custom item based on search query
   const addCustomItem = (itemName: string) => {
@@ -703,11 +691,7 @@ export function GlobalJobCard({
     setSearchQuery('');
     setShowSearchResults(false);
     
-    toast({
-      title: "Custom Item",
-      description: `Creating custom item: "${itemName}". Please set price and cost.`,
-    });
-  };
+      };
 
   // Get the currently editing job
   const editingJob = useMemo(() => {
@@ -860,11 +844,7 @@ export function GlobalJobCard({
             });
             
             if (response.ok) {
-              toast({
-                title: "Photo Added",
-                description: "Screenshot uploaded successfully.",
-              });
-              queryClient.invalidateQueries({ queryKey: ['/api/jobs', currentJobId, 'diary-timeline'] });
+                            queryClient.invalidateQueries({ queryKey: ['/api/jobs', currentJobId, 'diary-timeline'] });
             }
           } catch (error) {
             console.error('📸 Failed to upload pasted image:', error);
@@ -884,11 +864,7 @@ export function GlobalJobCard({
           reader.readAsDataURL(file);
         }
         setPendingPhotos(prev => [...prev, ...imageFiles]);
-        toast({
-          title: "Photos Queued",
-          description: `${imageFiles.length} screenshot(s) will be uploaded when job is saved.`,
-        });
-      }
+              }
     };
     
     // Use capture phase to get events before they might be stopped
@@ -1373,12 +1349,7 @@ export function GlobalJobCard({
     onSuccess: async (newJob) => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
-      toast({
-        title: "Job Created",
-        description: "New job has been created successfully.",
-        duration: 1000,
-      });
-      
+            
       // Mark the source conversation as converted (prevent duplicate job creation)
       if (initialData?.conversationId) {
         try {
@@ -1489,12 +1460,7 @@ export function GlobalJobCard({
       // Refetch the specific job and customers to ensure UI has latest data
       queryClient.refetchQueries({ queryKey: ['/api/jobs', editingJob?.id] });
       queryClient.refetchQueries({ queryKey: ['/api/customers'] });
-      toast({
-        title: "Job Updated",
-        description: "Job has been updated successfully.",
-        duration: 1000,
-      });
-      onJobUpdated?.(updatedJob);
+            onJobUpdated?.(updatedJob);
     },
     onError: (error) => {
       console.error('Error updating job:', error);
@@ -1552,11 +1518,7 @@ export function GlobalJobCard({
         console.error('Failed to add diary entry:', diaryError);
       }
       
-      toast({
-        title: "Booking Cancelled",
-        description: `${employeeName}'s booking has been removed.`,
-      });
-      
+            
       // Close dialog and reset state
       setCancelBookingDialogOpen(false);
       setBookingToCancel(null);
@@ -1580,11 +1542,7 @@ export function GlobalJobCard({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Sent to Xero",
-        description: "Invoice has been successfully sent to Xero.",
-      });
-    },
+          },
     onError: (error) => {
       console.error('Error sending to Xero:', error);
       toast({
@@ -1605,11 +1563,7 @@ export function GlobalJobCard({
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob?.id] });
       queryClient.invalidateQueries({ queryKey: ['/api/invoices', editingJob?.id] });
-      toast({
-        title: "Xero Sync Reset",
-        description: "You can now re-send this invoice to Xero.",
-      });
-    },
+          },
     onError: () => {
       toast({
         title: "Reset Failed",
@@ -1629,11 +1583,7 @@ export function GlobalJobCard({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Job Archived",
-        description: "Job has been archived successfully.",
-      });
-      onClose();
+            onClose();
     },
     onError: (error) => {
       console.error('Error archiving job:', error);
@@ -1839,11 +1789,7 @@ export function GlobalJobCard({
     if (context === 'proposal' && editingJob?.id && selectedCustomer?.id) {
       // Wait for proposal query to be fully settled (not loading or fetching)
       if (isProposalLoading || isProposalFetching) {
-        toast({
-          title: "Loading",
-          description: "Please wait while we load proposal data...",
-        });
-        return;
+                return;
       }
       
       const hasProposal = jobProposalResponse?.success && jobProposalResponse.data.length > 0;
@@ -2011,11 +1957,7 @@ export function GlobalJobCard({
 
   // Handle queue click
   const handleQueueClick = () => {
-    toast({
-      title: "Queue Feature",
-      description: "Job has been added to the work queue for scheduling.",
-    });
-  };
+      };
 
   // Handle quote click
   const handleQuoteClick = () => {
@@ -2095,12 +2037,7 @@ export function GlobalJobCard({
         console.error('Failed to log to diary:', diaryError);
       }
 
-      toast({
-        title: "Quote Saved",
-        description: `Quote ${quoteResult.data.quoteNumber} has been saved successfully.`,
-        duration: 2000,
-      });
-
+      
       setIsQuoteModalOpen(false);
     } catch (error) {
       console.error('Failed to save quote:', error);
@@ -2127,19 +2064,11 @@ export function GlobalJobCard({
 
   // Handle print click
   const handlePrintClick = () => {
-    toast({
-      title: "Print Job",
-      description: "Job details sent to printer.",
-    });
-  };
+      };
 
   // Handle duplicate click
   const handleDuplicateClick = () => {
-    toast({
-      title: "Duplicate Job",
-      description: "Job has been duplicated. Edit details and save.",
-    });
-  };
+      };
 
   // Handle archive click
   const handleArchiveClick = () => {
@@ -2189,11 +2118,7 @@ The Treemarkables Team`;
       });
       
       if (response.success) {
-        toast({
-          title: "Review Request Sent",
-          description: `Email sent to ${customerEmail}${response.reviewRequestTracked ? ' and tracked' : ''}`,
-        });
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id, 'diary'] });
         queryClient.invalidateQueries({ queryKey: ['/api/reviews/requests'] });
         queryClient.invalidateQueries({ queryKey: ['/api/reviews/stats'] });
       } else {
@@ -2220,22 +2145,14 @@ The Treemarkables Team`;
     if (speechToQuoteContext === 'job-description') {
       if (quoteData.transcription) {
         form.setValue('description', quoteData.transcription);
-        toast({
-          title: "Job Description Added!",
-          description: "Your voice note has been transcribed into the job description.",
-        });
-      }
+              }
       return;
     }
     
     if (speechToQuoteContext === 'invoice-description') {
       if (quoteData.transcription) {
         form.setValue('invoiceDescription', quoteData.transcription);
-        toast({
-          title: "Invoice Description Added!",
-          description: "Your voice note has been transcribed into the invoice description.",
-        });
-      }
+              }
       return;
     }
 
@@ -2246,11 +2163,7 @@ The Treemarkables Team`;
           : quoteData.transcription;
         setInternalNotesDraft(appended);
         form.setValue('internalNotes', appended, { shouldDirty: true });
-        toast({
-          title: "Voice Note Added!",
-          description: "Your voice note has been transcribed into internal notes.",
-        });
-      }
+              }
       return;
     }
     
@@ -2284,11 +2197,7 @@ The Treemarkables Team`;
       form.setValue('lineItems', lineItems);
     }
 
-    toast({
-      title: "Quote Generated from Speech!",
-      description: "Job details have been populated. Review and save.",
-    });
-  };
+      };
 
   // Staff conflict checking - DISABLED to allow double booking
   // Conflicts are now allowed - staff can be scheduled on multiple jobs at the same time
@@ -2399,11 +2308,7 @@ The Treemarkables Team`;
         const scheduledDate = new Date(startTimeISO);
         const isMultiDay = !!scheduledEndDateISO;
         const endDateDisplay = isMultiDay ? ` – ${format(new Date(scheduledEndDateISO!), 'PPP')}` : '';
-        toast({
-          title: "Job Scheduled",
-          description: `${uniqueEmployeeIds.length} staff member(s) scheduled for ${format(scheduledDate, 'PPP')}${endDateDisplay} at ${format(scheduledDate, 'p')}`,
-        });
-
+        
         if (schedulingData.sendClientNotification && data.clientEmailMissing) {
           toast({
             title: "No email address on file",
@@ -6446,8 +6351,7 @@ The Treemarkables Team`;
                                     try {
                                       await apiRequest('PATCH', `/api/invoices/${invoice.id}`, { paidNotes: paidNotesValue });
                                       queryClient.invalidateQueries({ queryKey: ['/api/invoices', editingJob?.id] });
-                                      toast({ title: 'Payment notes saved' });
-                                    } catch {
+                                                                          } catch {
                                       toast({ title: 'Failed to save notes', variant: 'destructive' });
                                     } finally {
                                       setPaidNotesSaving(false);
@@ -6761,11 +6665,7 @@ The Treemarkables Team`;
                     variant="outline" 
                     size="sm" 
                     onClick={() => {
-                      toast({
-                        title: "Copied",
-                        description: "Quote details copied to clipboard.",
-                      });
-                    }} 
+                                          }} 
                     data-testid="button-copy-quote"
                     className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >
@@ -6789,11 +6689,7 @@ The Treemarkables Team`;
                     variant="outline" 
                     size="sm" 
                     onClick={() => {
-                      toast({
-                        title: "Download Started",
-                        description: "Quote PDF download will be available soon.",
-                      });
-                    }} 
+                                          }} 
                     data-testid="button-download-quote"
                     className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
                   >

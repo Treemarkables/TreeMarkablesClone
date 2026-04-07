@@ -454,11 +454,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       })
     }));
 
-    toast({
-      title: 'Template Applied',
-      description: `Applied "${template.name}" template settings.`,
-    });
-  };
+      };
 
   // Helper function to calculate end time based on duration
   const calculateEndTime = (startTime: string, durationHours: number): string => {
@@ -590,11 +586,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         // Clear localStorage so it doesn't keep popping up
         localStorage.removeItem('pendingJobData');
         
-        toast({
-          title: 'Job Data Loaded',
-          description: 'Contact details from conversation have been loaded. Please complete the remaining fields.'
-        });
-      } catch (error) {
+              } catch (error) {
         console.error('Error parsing pending job data:', error);
         localStorage.removeItem('pendingJobData');
       }
@@ -1126,11 +1118,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       setIsDeepSearchActive(true);
       setDeepSearchResults(searchResults);
       
-      toast({
-        title: 'Search Complete',
-        description: `Found ${searchResults.length} matching job${searchResults.length !== 1 ? 's' : ''}`,
-      });
-    } catch (error) {
+          } catch (error) {
       console.error('Deep search error:', error);
       toast({
         title: 'Search Failed',
@@ -1295,11 +1283,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         notes: '',
         assignedTo: ''
       });
-      toast({
-        title: "Job Created Successfully",
-        description: "Job has been scheduled successfully",
-      });
-    },
+          },
     onError: (error) => {
       toast({
         title: "Error",
@@ -1333,13 +1317,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
-      toast({
-        title: variables.inQueue ? 'Added to Queue' : 'Removed from Queue',
-        description: variables.inQueue
-          ? `Job queued${variables.queueReason ? `: ${variables.queueReason}` : ''}`
-          : 'Job returned to active jobs',
-      });
-      setShowQueueDialog(false);
+            setShowQueueDialog(false);
       setQueueTargetJob(null);
       setQueueReasonInput('');
     },
@@ -1357,8 +1335,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
-      toast({ title: 'Job Archived', description: 'Job removed from board and staff schedule.' });
-    },
+          },
     onError: () => {
       toast({ title: 'Error', description: 'Could not archive job', variant: 'destructive' });
     },
@@ -1371,13 +1348,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
-      toast({
-        title: variables.customerConfirmed ? 'Booking Confirmed' : 'Confirmation Removed',
-        description: variables.customerConfirmed
-          ? 'Customer has confirmed this booking'
-          : 'Booking marked as unconfirmed',
-      });
-    },
+          },
     onError: () => {
       toast({ title: 'Error', description: 'Could not update confirmation status', variant: 'destructive' });
     },
@@ -1414,10 +1385,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         id: jobId,
         updates: { status: 'completed', completedDate: new Date() }
       });
-      toast({
-        title: "Job Completed",
-        description: `Job marked as complete`,
-      });
     }
   };
 
@@ -1443,10 +1410,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updateJobMutation.mutate({
         id: jobId,
         updates: { notes: updatedNotes }
-      });
-      toast({
-        title: "Notes Added",
-        description: `Notes added to job`,
       });
     }
   };
@@ -1556,10 +1519,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         }),
       });
 
-      toast({
-        title: 'Job Scheduled',
-        description: `${job.customerName} scheduled for ${startTimeStr} – ${endTimeStr}`,
-      });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
     } catch {
@@ -1665,10 +1624,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updates
     }, {
       onSuccess: () => {
-        toast({
-          title: "Job Scheduled",
-          description: `Job #${jobToSchedule.jobId} has been scheduled for ${format(startDateTime, 'MMM dd, yyyy')} at ${schedulingData.startTime}.`,
-        });
         setShowSchedulingModal(false);
         setJobToSchedule(null);
         // Refresh the jobs data
@@ -2757,10 +2712,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             setGlobalJobCardMode('edit');
             setShowGlobalJobCard(true);
             
-            toast({
-              title: 'Job Created',
-              description: `Job #${response.data.jobNumber} created from SMS lead`,
-            });
           }
         } catch (error) {
           console.error('Failed to create job from lead:', error);

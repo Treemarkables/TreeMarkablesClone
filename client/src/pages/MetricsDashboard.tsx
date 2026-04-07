@@ -730,10 +730,6 @@ export default function MetricsDashboard() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast({
-        title: "Export Successful",
-        description: `${type === 'lead-sources' ? 'Lead source' : 'Metrics'} data has been exported successfully.`
-      });
     } catch (error) {
       toast({
         title: "Export Failed", 
@@ -777,10 +773,6 @@ export default function MetricsDashboard() {
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-      toast({
-        title: "Report Generated",
-        description: `${selectedMetric} report has been generated successfully.`
-      });
       setCustomReportDialog(false);
     } catch (error) {
       toast({

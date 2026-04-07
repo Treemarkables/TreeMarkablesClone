@@ -423,7 +423,6 @@ export default function ConversationDetail() {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations', conversationId, 'messages'] });
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       setReplyContent('');
-      toast({ title: 'Message sent successfully' });
     },
     onError: () => {
       toast({ 
@@ -452,10 +451,6 @@ export default function ConversationDetail() {
         status: 'new_lead',
         notes: ''
       });
-      toast({ 
-        title: 'Opportunity created successfully',
-        description: 'The lead has been added to your pipeline'
-      });
       setLocation('/pipeline');
     },
     onError: () => {
@@ -474,10 +469,6 @@ export default function ConversationDetail() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
-      toast({ 
-        title: 'Conversation deleted',
-        description: 'The conversation has been permanently removed'
-      });
       setLocation('/opportunities');
     },
     onError: () => {
@@ -796,7 +787,6 @@ export default function ConversationDetail() {
             <button
               onClick={() => {
                 setShowManageMenu(false);
-                toast({ title: 'Send Review Request', description: 'Feature coming soon' });
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-send-review-request"
@@ -826,7 +816,6 @@ export default function ConversationDetail() {
             <button
               onClick={() => {
                 setShowManageMenu(false);
-                toast({ title: 'Add Internal Comments', description: 'Feature coming soon' });
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-add-internal-comments"
@@ -1086,7 +1075,6 @@ export default function ConversationDetail() {
                   conversationId: conversationId
                 }));
                 
-                toast({ title: 'Navigate to Dispatch', description: 'Opening dispatch board to create job...' });
                 setShowCreateJob(false);
                 setLocation('/dispatch');
               }}

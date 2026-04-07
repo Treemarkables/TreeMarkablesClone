@@ -889,11 +889,7 @@ export default function StaffManagement() {
       return apiRequest('POST', '/api/employees', data);
     },
     onSuccess: () => {
-      toast({
-        title: "Staff Member Added",
-        description: "New staff member has been added successfully!",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
       setIsAddDialogOpen(false);
       
       // Clear filters to ensure the new staff member is visible
@@ -922,11 +918,7 @@ export default function StaffManagement() {
       return apiRequest('PUT', `/api/employees/${id}`, updateData);
     },
     onSuccess: () => {
-      toast({
-        title: "Staff Member Updated",
-        description: "Staff member has been updated successfully!",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
       setEditingStaff(null);
     },
     onError: (error: any) => {
@@ -944,11 +936,7 @@ export default function StaffManagement() {
       return apiRequest('DELETE', `/api/employees/${id}`);
     },
     onSuccess: () => {
-      toast({
-        title: "Staff Member Deleted",
-        description: "Staff member has been deleted successfully!",
-      });
-      queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+            queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
     },
     onError: (error: any) => {
       toast({
@@ -965,11 +953,7 @@ export default function StaffManagement() {
       return apiRequest('PATCH', `/api/employees/${staffId}/password`, { password });
     },
     onSuccess: () => {
-      toast({
-        title: "Password Updated",
-        description: "Password has been set successfully!",
-      });
-      setPasswordStaff(null);
+            setPasswordStaff(null);
     },
     onError: (error: any) => {
       toast({

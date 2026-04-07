@@ -168,10 +168,6 @@ export function ScheduleEventModal({
   const createEventMutation = useMutation({
     mutationFn: (data: ScheduleEventFormData) => apiRequest('POST', '/api/schedule-events', data),
     onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Schedule event created successfully',
-      });
       queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
       onEventCreated?.();
       onClose();
@@ -189,10 +185,6 @@ export function ScheduleEventModal({
   const updateEventMutation = useMutation({
     mutationFn: (data: ScheduleEventFormData) => apiRequest('PUT', `/api/schedule-events/${event?.id}`, data),
     onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Schedule event updated successfully',
-      });
       queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
       onEventUpdated?.();
       onClose();
@@ -210,10 +202,6 @@ export function ScheduleEventModal({
   const deleteEventMutation = useMutation({
     mutationFn: () => apiRequest('DELETE', `/api/schedule-events/${event?.id}`),
     onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: 'Schedule event deleted successfully',
-      });
       queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
       onEventDeleted?.();
       onClose();

@@ -186,11 +186,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
     },
     onSuccess: (result) => {
       if (result.success) {
-        toast({
-          title: "Job Created",
-          description: `Job ${result.data.title} has been created successfully.`,
-        });
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+                queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
         queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
         onJobCreated?.(result.data);
         onClose();
@@ -278,11 +274,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
               variant="secondary" 
               size="sm" 
               onClick={() => {
-                toast({
-                  title: "Call Feature",
-                  description: "Call functionality would integrate with phone system here.",
-                });
-              }}
+                              }}
               data-testid="button-call"
             >
               <Phone className="h-4 w-4 mr-1" />
@@ -301,11 +293,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
               variant="secondary" 
               size="sm" 
               onClick={() => {
-                toast({
-                  title: "Added to Queue",
-                  description: "Job has been added to the work queue for processing.",
-                });
-              }}
+                              }}
               data-testid="button-queue"
             >
               <FileText className="h-4 w-4 mr-1" />
@@ -797,11 +785,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
       open={showProposalDialog}
       onOpenChange={setShowProposalDialog}
       onProposalCreated={(proposal) => {
-        toast({
-          title: "Proposal Generated",
-          description: `Proposal for ${proposal.title} has been created successfully.`,
-        });
-        setShowProposalDialog(false);
+                setShowProposalDialog(false);
       }}
     />
 
@@ -841,11 +825,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             </Button>
             <Button 
               onClick={() => {
-                toast({
-                  title: "Email Sent",
-                  description: "Email has been sent to the customer successfully.",
-                });
-                setShowEmailDialog(false);
+                                setShowEmailDialog(false);
               }}
               data-testid="button-email-send"
             >
@@ -887,11 +867,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             </Button>
             <Button 
               onClick={() => {
-                toast({
-                  title: "SMS Sent",
-                  description: "SMS has been sent to the customer successfully.",
-                });
-                setShowSMSDialog(false);
+                                setShowSMSDialog(false);
               }}
               data-testid="button-sms-send"
             >
@@ -953,11 +929,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             </Button>
             <Button 
               onClick={() => {
-                toast({
-                  title: "Job Scheduled",
-                  description: "Job has been added to the schedule successfully.",
-                });
-                setShowScheduleDialog(false);
+                                setShowScheduleDialog(false);
               }}
               data-testid="button-schedule-confirm"
             >
@@ -979,8 +951,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             variant="ghost" 
             className="w-full justify-start" 
             onClick={() => {
-              toast({ title: "Print", description: "Job details will be printed." });
-              setShowMoreMenu(false);
+                            setShowMoreMenu(false);
             }}
             data-testid="button-more-print"
           >
@@ -991,8 +962,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             variant="ghost" 
             className="w-full justify-start" 
             onClick={() => {
-              toast({ title: "Export", description: "Job exported as PDF." });
-              setShowMoreMenu(false);
+                            setShowMoreMenu(false);
             }}
             data-testid="button-more-export"
           >
@@ -1003,8 +973,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             variant="ghost" 
             className="w-full justify-start" 
             onClick={() => {
-              toast({ title: "Duplicate", description: "Job duplicated successfully." });
-              setShowMoreMenu(false);
+                            setShowMoreMenu(false);
             }}
             data-testid="button-more-duplicate"
           >
@@ -1015,8 +984,7 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             variant="ghost" 
             className="w-full justify-start" 
             onClick={() => {
-              toast({ title: "Archive", description: "Job archived successfully." });
-              setShowMoreMenu(false);
+                            setShowMoreMenu(false);
             }}
             data-testid="button-more-archive"
           >

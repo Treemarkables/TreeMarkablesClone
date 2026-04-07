@@ -99,7 +99,6 @@ export default function SmsTemplates() {
       });
     },
     onSuccess: () => {
-      toast({ title: 'Template created successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
       handleCloseEditor();
     },
@@ -113,7 +112,6 @@ export default function SmsTemplates() {
       return apiRequest('PUT', `/api/sms-templates/${id}`, data);
     },
     onSuccess: () => {
-      toast({ title: 'Template updated successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
       handleCloseEditor();
     },
@@ -127,7 +125,6 @@ export default function SmsTemplates() {
       return apiRequest('DELETE', `/api/sms-templates/${id}`);
     },
     onSuccess: () => {
-      toast({ title: 'Template deleted successfully' });
       queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
     },
     onError: (error: Error) => {

@@ -108,11 +108,7 @@ export default function Clients() {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
       setSelectedCustomers(new Set());
-      toast({
-        title: "Customers Deleted",
-        description: `Successfully deleted ${selectedCustomers.size} customer entries`
-      });
-    },
+          },
     onError: (error: any) => {
       toast({
         title: "Delete Failed",
@@ -130,11 +126,7 @@ export default function Clients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
-      toast({
-        title: "Customer Deleted",
-        description: "Customer has been successfully deleted"
-      });
-    },
+          },
     onError: (error: any) => {
       toast({
         title: "Delete Failed",
@@ -155,11 +147,7 @@ export default function Clients() {
       setShowEditDialog(false);
       setEditingCustomer(null);
       editForm.reset();
-      toast({
-        title: "Customer Updated",
-        description: "Customer information has been successfully updated"
-      });
-    },
+          },
     onError: (error: any) => {
       toast({
         title: "Update Failed",
@@ -177,8 +165,7 @@ export default function Clients() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
       queryClient.invalidateQueries({ queryKey: ['/api/customers/historical'] });
-      toast({ title: "VIP Status Updated", description: "Customer VIP settings have been saved" });
-    },
+          },
     onError: (error: any) => {
       toast({ title: "Update Failed", description: error.message || "Failed to update VIP status", variant: "destructive" });
     }

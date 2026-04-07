@@ -214,11 +214,6 @@ export default function ContactSection() {
           console.log('Google Analytics: Enhanced form submission tracked with lead source:', leadSource.pagePath);
         }
         
-        toast({
-          title: "Quote Request Sent!",
-          description: result.message,
-        });
-        
         // Show success state
         setIsSubmitted(true);
         
