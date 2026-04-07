@@ -3363,17 +3363,32 @@ The Treemarkables Team`;
             {/* Row 2: Price + Payment status badge (only rendered when there's something to show) */}
             {mode === "edit" &&
               (() => {
+                // Line items total — each item.total is stored exc-GST (priceIncludesTax: false default)
                 const lineItemsTotal = (form.watch("lineItems") || []).reduce(
-                  (sum: number, item: any) => sum + (item.total || 0),
+                  (sum: number, item: any) => {
+                    // Prefer explicit exc-GST fields if available
+                    const exGst =
+                      item.totalExGst ??
+                      (item.priceExGst != null
+                        ? item.priceExGst * (item.quantity || 1)
+                        : null);
+                    return sum + (exGst ?? item.total ?? 0);
+                  },
                   0,
                 );
+                // Proposal subtotal is already exc-GST
                 const proposalSubtotal = parseFloat(
                   jobProposalResponse?.data?.[0]?.subtotal || "0",
                 );
+                // Quote amount is typically inc-GST — divide to get exc-GST
                 const quoteExGst =
                   parseFloat(jobQuoteResponse?.data?.[0]?.amount || "0") / 1.15;
+                // Best source: job.subtotal is explicitly exc-GST; fall back to totalAmount / 1.15
+                const jobSubtotal = parseFloat(editingJob?.subtotal || "0");
                 const jobStoredExGst =
-                  parseFloat(editingJob?.totalAmount || "0") / 1.15;
+                  jobSubtotal > 0
+                    ? jobSubtotal
+                    : parseFloat(editingJob?.totalAmount || "0") / 1.15;
                 const jobTotal =
                   lineItemsTotal ||
                   proposalSubtotal ||

@@ -160,7 +160,8 @@ interface JobAssignment {
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
-  totalAmount?: string; // Job price for display on dispatch board
+  totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
+  subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledEndDate?: string; // For multi-day jobs
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
@@ -1011,6 +1012,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
+          subtotal: apiJob.subtotal || "0",
           totalAmount:
             apiJob.subtotal && Number(apiJob.subtotal) > 0
               ? apiJob.subtotal
@@ -1020,7 +1022,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       (Number(apiJob.totalIncludingGst) / 1.15) * 100,
                     ) / 100,
                   )
-                : apiJob.totalAmount,
+                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
+                  ? String(
+                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
+                        100,
+                    )
+                  : "0",
         });
       });
     }
@@ -1091,6 +1098,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
+          subtotal: apiJob.subtotal || "0",
           totalAmount:
             apiJob.subtotal && Number(apiJob.subtotal) > 0
               ? apiJob.subtotal
@@ -1100,7 +1108,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       (Number(apiJob.totalIncludingGst) / 1.15) * 100,
                     ) / 100,
                   )
-                : apiJob.totalAmount,
+                : apiJob.totalAmount && Number(apiJob.totalAmount) > 0
+                  ? String(
+                      Math.round((Number(apiJob.totalAmount) / 1.15) * 100) /
+                        100,
+                    )
+                  : "0",
         });
       });
     }
