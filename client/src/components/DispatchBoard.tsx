@@ -501,7 +501,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     { value: 'quote', label: 'Quote' },
     { value: 'work_order', label: 'W/O' },
     { value: 'scheduled', label: 'Scheduled' },
-    { value: 'completed', label: 'Complete' },
   ];
 
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
@@ -511,7 +510,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     quote: { title: 'Quotes', subtitle: 'Quote status' },
     work_order: { title: 'Work Orders', subtitle: 'Work order status' },
     scheduled: { title: 'Scheduled', subtitle: 'Scheduled status' },
-    completed: { title: 'Completed', subtitle: 'Completed jobs' },
   };
 
   const QUEUE_REASONS = [
@@ -556,27 +554,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     notes: ''
   });
 
-  // Pagination state — start with 50, user can load more; keeps initial fetch fast
-  const [jobsLimit, setJobsLimit] = useState(50);
-  const [loadingMore, setLoadingMore] = useState(false);
-
-  // Fetch jobs from backend API with pagination
+  // Fetch all active jobs — excludes completed and archived; limit 500 (far more than needed)
+  const JOBS_QUERY_KEY = '/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true';
   const { data: jobsData, isLoading: jobsLoading, error: jobsError } = useQuery({
-    queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`],
+    queryKey: [JOBS_QUERY_KEY],
   });
-
-  // Calculate if there are more jobs to load
-  const hasMoreJobs = jobsData && jobsData.total > jobsData.data.length;
-  
-  // Function to load more jobs
-  const loadMoreJobs = () => {
-    if (!loadingMore && hasMoreJobs) {
-      setLoadingMore(true);
-      setJobsLimit(prev => prev + 50);
-      // Loading state will be cleared when query refetches
-      setTimeout(() => setLoadingMore(false), 500);
-    }
-  };
 
   // Debug logging for jobs data
   useEffect(() => {
@@ -1184,7 +1166,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (jobFilter === 'quote') return job.status === 'quote';
         if (jobFilter === 'work_order') return job.status === 'work_order';
         if (jobFilter === 'scheduled') return job.status === 'scheduled';
-        if (jobFilter === 'completed') return job.status === 'completed';
 
         // 'all' tab while searching: show all non-terminal active statuses
         if (isSearching) {
@@ -1348,7 +1329,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`] });
+      queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
       toast({
         title: variables.inQueue ? 'Added to Queue' : 'Removed from Queue',
         description: variables.inQueue
@@ -1370,7 +1351,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`] });
+      queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
       toast({ title: 'Job Archived', description: 'Job removed from board and staff schedule.' });
@@ -1386,7 +1367,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       return response.json();
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: [`/api/jobs?limit=${jobsLimit}&offset=0`] });
+      queryClient.invalidateQueries({ queryKey: [JOBS_QUERY_KEY] });
       toast({
         title: variables.customerConfirmed ? 'Booking Confirmed' : 'Confirmation Removed',
         description: variables.customerConfirmed
@@ -2684,23 +2665,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               );
             })}
 
-            {/* Load More Button */}
-            {hasMoreJobs && (
-              <div className="p-4 text-center bg-white">
-                <Button
-                  onClick={loadMoreJobs}
-                  disabled={loadingMore}
-                  variant="outline"
-                  size="sm"
-                  data-testid="button-load-more-jobs"
-                >
-                  {loadingMore ? 'Loading...' : `Load More Jobs (${jobsData?.total - jobsData?.data.length} remaining)`}
-                </Button>
-              </div>
-            )}
-
             {/* Empty State */}
-            {getTodaysJobs().length === 0 && !hasMoreJobs && (
+            {getTodaysJobs().length === 0 && (
               <div className="p-8 text-center text-gray-500 bg-white">
                 <Calendar className="h-10 w-10 mx-auto mb-3 text-gray-300" />
                 <p className="text-base mb-1">No jobs found</p>

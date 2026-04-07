@@ -178,7 +178,7 @@ export interface IStorage {
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
-  getAllJobs(options?: { limit?: number; offset?: number; status?: string }): Promise<{ jobs: Job[]; total: number }>;
+  getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
     callId: string;
@@ -1561,7 +1561,7 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(schema.jobs.createdAt));
   }
 
-  async getAllJobs(options?: { limit?: number; offset?: number; status?: string }): Promise<{ jobs: Job[]; total: number }> {
+  async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }> {
     const limit = options?.limit ?? 10; // Default to 10 jobs
     const offset = options?.offset ?? 0;
     
@@ -1569,6 +1569,14 @@ class DatabaseStorage implements IStorage {
     const conditions: any[] = [];
     if (options?.status) {
       conditions.push(eq(schema.jobs.status, options.status));
+    }
+    if (options?.excludeCompleted) {
+      conditions.push(ne(schema.jobs.status, 'completed'));
+      conditions.push(ne(schema.jobs.status, 'invoiced'));
+    }
+    if (options?.excludeArchived) {
+      conditions.push(ne(schema.jobs.status, 'archived'));
+      conditions.push(ne(schema.jobs.status, 'unsuccessful'));
     }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
     

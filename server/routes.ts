@@ -3405,7 +3405,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
-      const { customerId, status, limit, offset } = req.query;
+      const { customerId, status, limit, offset, excludeCompleted, excludeArchived } = req.query;
       
       // Parse pagination params
       const parsedLimit = limit ? parseInt(limit as string) : 10;
@@ -3437,10 +3437,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
       
-      // Default: get all jobs with pagination (default 10 jobs)
+      // Default: get all jobs with optional exclusion filters
       const result = await storage.getAllJobs({ 
         limit: parsedLimit, 
-        offset: parsedOffset 
+        offset: parsedOffset,
+        excludeCompleted: excludeCompleted === 'true',
+        excludeArchived: excludeArchived === 'true',
       });
       
       // Serialize timestamps to ISO UTC format
