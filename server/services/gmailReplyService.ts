@@ -58,19 +58,25 @@ class GmailReplyService {
       const imap = new Imap(this.imapConfig);
 
       imap.once('ready', () => {
-        imap.openBox('INBOX', false, async (err, box) => {
+        // Use '[Gmail]/All Mail' so we catch emails delivered to any label or routing
+        // rule (e.g. job-XXXX@jobs.treemarkables.co.nz) that bypasses the primary Inbox.
+        // Read-write mode (false) so we can mark emails as Seen after processing.
+        imap.openBox('[Gmail]/All Mail', false, async (err, box) => {
           if (err) {
-            console.error('📧 Error opening Gmail inbox:', err);
+            console.error('📧 Error opening Gmail All Mail folder:', err);
             imap.end();
             reject(err);
             return;
           }
 
-          // Search for unread emails from the last 7 days
+          // Search for all emails from the last 2 days (not just unread).
+          // Previously used UNSEEN-only, which skipped replies the user had already
+          // opened in Gmail. The messageId duplicate-check in processEmailReply
+          // prevents re-logging entries that are already in the diary.
           const searchDate = new Date();
-          searchDate.setDate(searchDate.getDate() - 7);
+          searchDate.setDate(searchDate.getDate() - 2);
 
-          imap.search(['UNSEEN', ['SINCE', searchDate]], async (err, results) => {
+          imap.search([['SINCE', searchDate]], async (err, results) => {
             if (err) {
               console.error('📧 Gmail search error:', err);
               imap.end();
@@ -85,7 +91,7 @@ class GmailReplyService {
               return;
             }
 
-            console.log(`📧 Found ${results.length} unread email(s) to process`);
+            console.log(`📧 Found ${results.length} email(s) in All Mail (last 2 days) to process`);
 
             const fetch = imap.fetch(results, { bodies: '', markSeen: false });
             const emailsToProcess: ParsedEmailReply[] = [];
