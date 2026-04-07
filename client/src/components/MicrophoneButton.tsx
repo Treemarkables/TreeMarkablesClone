@@ -1,23 +1,23 @@
-import { Mic, MicOff } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useSpeechToText } from '@/hooks/useSpeechToText';
-import { useToast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
+import { Mic, MicOff } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface MicrophoneButtonProps {
   onTranscript: (text: string) => void;
   className?: string;
-  size?: 'default' | 'sm' | 'lg' | 'icon';
-  variant?: 'default' | 'ghost' | 'outline' | 'secondary';
+  size?: "default" | "sm" | "lg" | "icon";
+  variant?: "default" | "ghost" | "outline" | "secondary";
   appendText?: boolean; // If true, append to existing text. If false, replace
 }
 
-export function MicrophoneButton({ 
-  onTranscript, 
+export function MicrophoneButton({
+  onTranscript,
   className,
-  size = 'icon',
-  variant = 'ghost',
-  appendText = true
+  size = "icon",
+  variant = "ghost",
+  appendText = true,
 }: MicrophoneButtonProps) {
   const { toast } = useToast();
 
@@ -28,15 +28,16 @@ export function MicrophoneButton({
       }
     },
     continuous: false,
-    language: 'en-NZ'
+    language: "en-NZ",
   });
 
   const handleClick = () => {
     if (!isSupported) {
       toast({
-        title: 'Speech recognition not supported',
-        description: 'Your browser does not support speech recognition. Try Chrome or Edge.',
-        variant: 'destructive'
+        title: "Speech recognition not supported",
+        description:
+          "Your browser does not support speech recognition. Try Chrome or Edge.",
+        variant: "destructive",
       });
       return;
     }
@@ -55,8 +56,9 @@ export function MicrophoneButton({
       variant={variant}
       onClick={handleClick}
       className={cn(
-        isListening && 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 animate-pulse',
-        className
+        isListening &&
+          "bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 animate-pulse",
+        className,
       )}
       data-testid="button-microphone"
     >

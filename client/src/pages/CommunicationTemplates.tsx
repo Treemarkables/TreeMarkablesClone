@@ -5,11 +5,39 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+  FormDescription,
+} from "@/components/ui/form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, MessageSquare, Plus, Pencil, Trash2, ChevronLeft, Paperclip } from "lucide-react";
+import {
+  Mail,
+  MessageSquare,
+  Plus,
+  Pencil,
+  Trash2,
+  ChevronLeft,
+  Paperclip,
+} from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -36,7 +64,10 @@ const emailTemplateSchema = z.object({
 const smsTemplateSchema = z.object({
   name: z.string().min(1, "Template name is required"),
   category: z.string().default("custom_message"),
-  message: z.string().min(1, "Message is required").max(306, "SMS must be 306 characters or less"),
+  message: z
+    .string()
+    .min(1, "Message is required")
+    .max(306, "SMS must be 306 characters or less"),
   variables: z.array(z.string()).default([]),
   description: z.string().optional(),
   maxLength: z.number().default(306),
@@ -56,23 +87,23 @@ export default function CommunicationTemplates() {
 
   // Fetch email templates
   const { data: emailTemplates = [], isLoading: loadingEmail } = useQuery({
-    queryKey: ['/api/email-templates'],
+    queryKey: ["/api/email-templates"],
     select: (response: any) => response.data || [],
   });
 
   // Fetch SMS templates
   const { data: smsTemplates = [], isLoading: loadingSms } = useQuery({
-    queryKey: ['/api/sms-templates'],
+    queryKey: ["/api/sms-templates"],
     select: (response: any) => response.data || [],
   });
 
   // Forms
   const emailForm = useForm<EmailTemplateFormData>({
     resolver: zodResolver(emailTemplateSchema),
-    defaultValues: { 
-      name: "", 
+    defaultValues: {
+      name: "",
       category: "custom_message",
-      subject: "", 
+      subject: "",
       htmlContent: "",
       textContent: "",
       variables: [],
@@ -80,14 +111,14 @@ export default function CommunicationTemplates() {
       isActive: true,
       isDefault: false,
       attachInvoicePdf: false,
-      createdBy: "admin"
-    }
+      createdBy: "admin",
+    },
   });
 
   const smsForm = useForm<SmsTemplateFormData>({
     resolver: zodResolver(smsTemplateSchema),
-    defaultValues: { 
-      name: "", 
+    defaultValues: {
+      name: "",
       category: "custom_message",
       message: "",
       variables: [],
@@ -95,21 +126,21 @@ export default function CommunicationTemplates() {
       maxLength: 306,
       isActive: true,
       isDefault: false,
-      createdBy: "admin"
-    }
+      createdBy: "admin",
+    },
   });
 
   // Create/Update Email Template
   const saveEmailTemplateMutation = useMutation({
     mutationFn: async (data: EmailTemplateFormData) => {
-      const endpoint = editingTemplate 
+      const endpoint = editingTemplate
         ? `/api/email-templates/${editingTemplate.id}`
-        : '/api/email-templates';
-      const method = editingTemplate ? 'PUT' : 'POST';
+        : "/api/email-templates";
+      const method = editingTemplate ? "PUT" : "POST";
       return apiRequest(method, endpoint, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/email-templates'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-templates"] });
       setIsDialogOpen(false);
       setEditingTemplate(null);
       emailForm.reset();
@@ -126,14 +157,14 @@ export default function CommunicationTemplates() {
   // Create/Update SMS Template
   const saveSmsTemplateMutation = useMutation({
     mutationFn: async (data: SmsTemplateFormData) => {
-      const endpoint = editingTemplate 
+      const endpoint = editingTemplate
         ? `/api/sms-templates/${editingTemplate.id}`
-        : '/api/sms-templates';
-      const method = editingTemplate ? 'PUT' : 'POST';
+        : "/api/sms-templates";
+      const method = editingTemplate ? "PUT" : "POST";
       return apiRequest(method, endpoint, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sms-templates"] });
       setIsDialogOpen(false);
       setEditingTemplate(null);
       smsForm.reset();
@@ -150,30 +181,30 @@ export default function CommunicationTemplates() {
   // Delete Email Template
   const deleteEmailTemplateMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/email-templates/${id}`);
+      return apiRequest("DELETE", `/api/email-templates/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/email-templates'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/email-templates"] });
     },
   });
 
   // Delete SMS Template
   const deleteSmsTemplateMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/sms-templates/${id}`);
+      return apiRequest("DELETE", `/api/sms-templates/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/sms-templates'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/sms-templates"] });
     },
   });
 
   const handleNewTemplate = () => {
     setEditingTemplate(null);
     if (activeTab === "email") {
-      emailForm.reset({ 
-        name: "", 
+      emailForm.reset({
+        name: "",
         category: "custom_message",
-        subject: "", 
+        subject: "",
         htmlContent: "",
         textContent: "",
         variables: [],
@@ -181,11 +212,11 @@ export default function CommunicationTemplates() {
         isActive: true,
         isDefault: false,
         attachInvoicePdf: false,
-        createdBy: "admin"
+        createdBy: "admin",
       });
     } else {
-      smsForm.reset({ 
-        name: "", 
+      smsForm.reset({
+        name: "",
         category: "custom_message",
         message: "",
         variables: [],
@@ -193,7 +224,7 @@ export default function CommunicationTemplates() {
         maxLength: 306,
         isActive: true,
         isDefault: false,
-        createdBy: "admin"
+        createdBy: "admin",
       });
     }
     setIsDialogOpen(true);
@@ -245,13 +276,21 @@ export default function CommunicationTemplates() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Link href="/settings">
-            <Button variant="ghost" size="icon" data-testid="button-back-to-settings">
+            <Button
+              variant="ghost"
+              size="icon"
+              data-testid="button-back-to-settings"
+            >
               <ChevronLeft className="h-5 w-5" />
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Communication Templates</h1>
-            <p className="text-gray-600">Create reusable email and SMS templates with variables</p>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Communication Templates
+            </h1>
+            <p className="text-gray-600">
+              Create reusable email and SMS templates with variables
+            </p>
           </div>
         </div>
         <Button onClick={handleNewTemplate} data-testid="button-new-template">
@@ -275,13 +314,25 @@ export default function CommunicationTemplates() {
             <Badge variant="secondary">{"{email}"}</Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            These variables are replaced with real values when a template is selected. Both <code className="text-xs bg-muted px-1 rounded">{"{customerName}"}</code> and <code className="text-xs bg-muted px-1 rounded">{"{{customer_name}}"}</code> formats work.
+            These variables are replaced with real values when a template is
+            selected. Both{" "}
+            <code className="text-xs bg-muted px-1 rounded">
+              {"{customerName}"}
+            </code>{" "}
+            and{" "}
+            <code className="text-xs bg-muted px-1 rounded">
+              {"{{customer_name}}"}
+            </code>{" "}
+            formats work.
           </p>
         </CardContent>
       </Card>
 
       {/* Templates List */}
-      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "email" | "sms")}>
+      <Tabs
+        value={activeTab}
+        onValueChange={(v) => setActiveTab(v as "email" | "sms")}
+      >
         <TabsList className="grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="email" data-testid="tab-email-templates">
             <Mail className="h-4 w-4 mr-2" />
@@ -295,16 +346,24 @@ export default function CommunicationTemplates() {
 
         <TabsContent value="email" className="mt-6 space-y-4">
           {loadingEmail ? (
-            <div className="text-center text-muted-foreground">Loading templates...</div>
+            <div className="text-center text-muted-foreground">
+              Loading templates...
+            </div>
           ) : emailTemplates.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Mail className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No email templates yet</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  No email templates yet
+                </h3>
                 <p className="text-muted-foreground text-center mb-4">
-                  Create your first email template to speed up customer communication
+                  Create your first email template to speed up customer
+                  communication
                 </p>
-                <Button onClick={handleNewTemplate} data-testid="button-create-first-email">
+                <Button
+                  onClick={handleNewTemplate}
+                  data-testid="button-create-first-email"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Email Template
                 </Button>
@@ -313,22 +372,26 @@ export default function CommunicationTemplates() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {emailTemplates.map((template: any) => (
-                <Card key={template.id} className="hover-elevate" data-testid={`card-email-template-${template.id}`}>
+                <Card
+                  key={template.id}
+                  className="hover-elevate"
+                  data-testid={`card-email-template-${template.id}`}
+                >
                   <CardHeader>
                     <CardTitle className="text-base flex items-center justify-between">
                       <span>{template.name}</span>
                       <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEditTemplate(template)}
                           data-testid={`button-edit-email-${template.id}`}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleDeleteTemplate(template.id)}
                           data-testid={`button-delete-email-${template.id}`}
                         >
@@ -340,12 +403,18 @@ export default function CommunicationTemplates() {
                   <CardContent>
                     <div className="space-y-2">
                       <div>
-                        <p className="text-sm font-medium text-muted-foreground">Subject:</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Subject:
+                        </p>
                         <p className="text-sm">{template.subject}</p>
                       </div>
                       <div>
-                        <p className="text-sm font-medium text-muted-foreground">Message:</p>
-                        <p className="text-sm line-clamp-3">{template.htmlContent}</p>
+                        <p className="text-sm font-medium text-muted-foreground">
+                          Message:
+                        </p>
+                        <p className="text-sm line-clamp-3">
+                          {template.htmlContent}
+                        </p>
                       </div>
                       {template.attachInvoicePdf && (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground pt-1">
@@ -363,16 +432,24 @@ export default function CommunicationTemplates() {
 
         <TabsContent value="sms" className="mt-6 space-y-4">
           {loadingSms ? (
-            <div className="text-center text-muted-foreground">Loading templates...</div>
+            <div className="text-center text-muted-foreground">
+              Loading templates...
+            </div>
           ) : smsTemplates.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No SMS templates yet</h3>
+                <h3 className="text-lg font-semibold mb-2">
+                  No SMS templates yet
+                </h3>
                 <p className="text-muted-foreground text-center mb-4">
-                  Create your first SMS template to speed up customer communication
+                  Create your first SMS template to speed up customer
+                  communication
                 </p>
-                <Button onClick={handleNewTemplate} data-testid="button-create-first-sms">
+                <Button
+                  onClick={handleNewTemplate}
+                  data-testid="button-create-first-sms"
+                >
                   <Plus className="h-4 w-4 mr-2" />
                   Create SMS Template
                 </Button>
@@ -381,22 +458,26 @@ export default function CommunicationTemplates() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {smsTemplates.map((template: any) => (
-                <Card key={template.id} className="hover-elevate" data-testid={`card-sms-template-${template.id}`}>
+                <Card
+                  key={template.id}
+                  className="hover-elevate"
+                  data-testid={`card-sms-template-${template.id}`}
+                >
                   <CardHeader>
                     <CardTitle className="text-base flex items-center justify-between">
                       <span>{template.name}</span>
                       <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleEditTemplate(template)}
                           data-testid={`button-edit-sms-${template.id}`}
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => handleDeleteTemplate(template.id)}
                           data-testid={`button-delete-sms-${template.id}`}
                         >
@@ -423,17 +504,21 @@ export default function CommunicationTemplates() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>
-              {editingTemplate ? "Edit" : "Create"} {activeTab === "email" ? "Email" : "SMS"} Template
+              {editingTemplate ? "Edit" : "Create"}{" "}
+              {activeTab === "email" ? "Email" : "SMS"} Template
             </DialogTitle>
             <DialogDescription>
-              Use variables like {"{customerName}"}, {"{jobNumber}"}, {"{address}"} to personalize messages
+              Use variables like {"{customerName}"}, {"{jobNumber}"},{" "}
+              {"{address}"} to personalize messages
             </DialogDescription>
           </DialogHeader>
 
           {activeTab === "email" ? (
             <Form {...emailForm}>
-              <form 
-                onSubmit={emailForm.handleSubmit((data) => saveEmailTemplateMutation.mutate(data))} 
+              <form
+                onSubmit={emailForm.handleSubmit((data) =>
+                  saveEmailTemplateMutation.mutate(data),
+                )}
                 className="space-y-4"
               >
                 <FormField
@@ -443,7 +528,11 @@ export default function CommunicationTemplates() {
                     <FormItem>
                       <FormLabel>Template Name</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Quote Follow-up" data-testid="input-template-name" />
+                        <Input
+                          {...field}
+                          placeholder="Quote Follow-up"
+                          data-testid="input-template-name"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -456,9 +545,9 @@ export default function CommunicationTemplates() {
                     <FormItem>
                       <FormLabel>Email Subject</FormLabel>
                       <FormControl>
-                        <Input 
-                          {...field} 
-                          placeholder="Your quote for job #{jobNumber}" 
+                        <Input
+                          {...field}
+                          placeholder="Your quote for job #{jobNumber}"
                           data-testid="input-email-subject"
                         />
                       </FormControl>
@@ -473,8 +562,8 @@ export default function CommunicationTemplates() {
                     <FormItem>
                       <FormLabel>Message</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          {...field} 
+                        <Textarea
+                          {...field}
                           placeholder="Hi {customerName}, attached is your quote for the work at {address}..."
                           rows={8}
                           data-testid="textarea-email-body"
@@ -495,7 +584,8 @@ export default function CommunicationTemplates() {
                           Attach invoice PDF
                         </FormLabel>
                         <FormDescription className="text-xs">
-                          Automatically attach the invoice PDF when this template is used
+                          Automatically attach the invoice PDF when this
+                          template is used
                         </FormDescription>
                       </div>
                       <FormControl>
@@ -509,23 +599,31 @@ export default function CommunicationTemplates() {
                   )}
                 />
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={saveEmailTemplateMutation.isPending}
                     data-testid="button-save-email-template"
                   >
-                    {saveEmailTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                    {saveEmailTemplateMutation.isPending
+                      ? "Saving..."
+                      : "Save Template"}
                   </Button>
                 </div>
               </form>
             </Form>
           ) : (
             <Form {...smsForm}>
-              <form 
-                onSubmit={smsForm.handleSubmit((data) => saveSmsTemplateMutation.mutate(data))} 
+              <form
+                onSubmit={smsForm.handleSubmit((data) =>
+                  saveSmsTemplateMutation.mutate(data),
+                )}
                 className="space-y-4"
               >
                 <FormField
@@ -535,7 +633,11 @@ export default function CommunicationTemplates() {
                     <FormItem>
                       <FormLabel>Template Name</FormLabel>
                       <FormControl>
-                        <Input {...field} placeholder="Job Confirmation" data-testid="input-template-name" />
+                        <Input
+                          {...field}
+                          placeholder="Job Confirmation"
+                          data-testid="input-template-name"
+                        />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -548,8 +650,8 @@ export default function CommunicationTemplates() {
                     <FormItem>
                       <FormLabel>Message</FormLabel>
                       <FormControl>
-                        <Textarea 
-                          {...field} 
+                        <Textarea
+                          {...field}
                           placeholder="Hi {customerName}, we're scheduled for {address} tomorrow. See you then!"
                           rows={6}
                           maxLength={306}
@@ -564,15 +666,21 @@ export default function CommunicationTemplates() {
                   )}
                 />
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsDialogOpen(false)}
+                  >
                     Cancel
                   </Button>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={saveSmsTemplateMutation.isPending}
                     data-testid="button-save-sms-template"
                   >
-                    {saveSmsTemplateMutation.isPending ? "Saving..." : "Save Template"}
+                    {saveSmsTemplateMutation.isPending
+                      ? "Saving..."
+                      : "Save Template"}
                   </Button>
                 </div>
               </form>

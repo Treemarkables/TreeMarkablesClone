@@ -6,28 +6,67 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardCheck, Plus, Edit, Trash2, GripVertical, Check, X } from "lucide-react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
-import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import type { SelectInspectionTemplate, SelectInspectionChecklistItem, InsertInspectionTemplate, InsertInspectionChecklistItem } from "@shared/schema";
+import {
+  ClipboardCheck,
+  Plus,
+  Edit,
+  Trash2,
+  GripVertical,
+  Check,
+  X,
+} from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import type {
+  SelectInspectionTemplate,
+  SelectInspectionChecklistItem,
+  InsertInspectionTemplate,
+  InsertInspectionChecklistItem,
+} from "@shared/schema";
 
-function SortableChecklistItem({ item, onEdit, onDelete }: {
+function SortableChecklistItem({
+  item,
+  onEdit,
+  onDelete,
+}: {
   item: SelectInspectionChecklistItem;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-  } = useSortable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, transition } =
+    useSortable({ id: item.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -35,29 +74,57 @@ function SortableChecklistItem({ item, onEdit, onDelete }: {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 p-3 bg-white border rounded-md">
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-2 p-3 bg-white border rounded-md"
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing"
+      >
         <GripVertical className="w-4 h-4 text-gray-400" />
       </div>
-      
+
       <div className="flex-1">
         <div className="flex items-center gap-2">
           <span className="font-medium">{item.question}</span>
           {item.category && (
-            <Badge variant="outline" className="text-xs">{item.category}</Badge>
+            <Badge variant="outline" className="text-xs">
+              {item.category}
+            </Badge>
           )}
         </div>
         <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
-          {item.requiresComment && <Badge variant="secondary" className="text-xs">Comment</Badge>}
-          {item.requiresPhoto && <Badge variant="secondary" className="text-xs">Photo</Badge>}
+          {item.requiresComment && (
+            <Badge variant="secondary" className="text-xs">
+              Comment
+            </Badge>
+          )}
+          {item.requiresPhoto && (
+            <Badge variant="secondary" className="text-xs">
+              Photo
+            </Badge>
+          )}
         </div>
       </div>
-      
+
       <div className="flex gap-1">
-        <Button size="sm" variant="ghost" onClick={onEdit} data-testid={`button-edit-item-${item.id}`}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onEdit}
+          data-testid={`button-edit-item-${item.id}`}
+        >
           <Edit className="w-4 h-4" />
         </Button>
-        <Button size="sm" variant="ghost" onClick={onDelete} data-testid={`button-delete-item-${item.id}`}>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onDelete}
+          data-testid={`button-delete-item-${item.id}`}
+        >
           <Trash2 className="w-4 h-4 text-destructive" />
         </Button>
       </div>
@@ -67,123 +134,183 @@ function SortableChecklistItem({ item, onEdit, onDelete }: {
 
 export default function VehicleInspectionSettings() {
   const { toast } = useToast();
-  const [selectedTemplate, setSelectedTemplate] = useState<SelectInspectionTemplate | null>(null);
+  const [selectedTemplate, setSelectedTemplate] =
+    useState<SelectInspectionTemplate | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [itemDialogOpen, setItemDialogOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Partial<InsertInspectionTemplate>>({});
-  const [editingItem, setEditingItem] = useState<Partial<InsertInspectionChecklistItem>>({});
+  const [editingTemplate, setEditingTemplate] = useState<
+    Partial<InsertInspectionTemplate>
+  >({});
+  const [editingItem, setEditingItem] = useState<
+    Partial<InsertInspectionChecklistItem>
+  >({});
 
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
       coordinateGetter: sortableKeyboardCoordinates,
-    })
+    }),
   );
 
   // Fetch templates
   const { data: templatesData } = useQuery({
-    queryKey: ['/api/inspection-templates'],
+    queryKey: ["/api/inspection-templates"],
   });
-  const templates = Array.isArray((templatesData as any)?.data) ? (templatesData as any).data : [];
+  const templates = Array.isArray((templatesData as any)?.data)
+    ? (templatesData as any).data
+    : [];
 
   // Fetch checklist items for selected template
   const { data: checklistItemsData } = useQuery({
-    queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'],
+    queryKey: ["/api/inspection-templates", selectedTemplate?.id, "items"],
     enabled: !!selectedTemplate?.id,
   });
-  const checklistItems = Array.isArray((checklistItemsData as any)?.data) ? (checklistItemsData as any).data : [];
+  const checklistItems = Array.isArray((checklistItemsData as any)?.data)
+    ? (checklistItemsData as any).data
+    : [];
 
   // Template mutations
   const createTemplateMutation = useMutation({
-    mutationFn: (data: InsertInspectionTemplate) => apiRequest('POST', '/api/inspection-templates', data),
+    mutationFn: (data: InsertInspectionTemplate) =>
+      apiRequest("POST", "/api/inspection-templates", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates"],
+      });
       setTemplateDialogOpen(false);
       setEditingTemplate({});
     },
     onError: () => {
-      toast({ title: 'Failed to create template', variant: 'destructive' });
+      toast({ title: "Failed to create template", variant: "destructive" });
     },
   });
 
   const updateTemplateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<InsertInspectionTemplate> }) =>
-      apiRequest('PATCH', `/api/inspection-templates/${id}`, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<InsertInspectionTemplate>;
+    }) => apiRequest("PATCH", `/api/inspection-templates/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates"],
+      });
       setTemplateDialogOpen(false);
       setEditingTemplate({});
     },
     onError: () => {
-      toast({ title: 'Failed to update template', variant: 'destructive' });
+      toast({ title: "Failed to update template", variant: "destructive" });
     },
   });
 
   const deleteTemplateMutation = useMutation({
-    mutationFn: (id: string) => apiRequest('DELETE', `/api/inspection-templates/${id}`),
+    mutationFn: (id: string) =>
+      apiRequest("DELETE", `/api/inspection-templates/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates"],
+      });
       if (selectedTemplate) {
         setSelectedTemplate(null);
       }
     },
     onError: () => {
-      toast({ title: 'Failed to delete template', variant: 'destructive' });
+      toast({ title: "Failed to delete template", variant: "destructive" });
     },
   });
 
   const setDefaultTemplateMutation = useMutation({
-    mutationFn: (id: string) => apiRequest('PATCH', `/api/inspection-templates/${id}/set-default`),
+    mutationFn: (id: string) =>
+      apiRequest("PATCH", `/api/inspection-templates/${id}/set-default`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates"],
+      });
     },
     onError: () => {
-      toast({ title: 'Failed to set default template', variant: 'destructive' });
+      toast({
+        title: "Failed to set default template",
+        variant: "destructive",
+      });
     },
   });
 
   // Checklist item mutations
   const createItemMutation = useMutation({
     mutationFn: (data: InsertInspectionChecklistItem) =>
-      apiRequest('POST', `/api/inspection-templates/${selectedTemplate?.id}/items`, data),
+      apiRequest(
+        "POST",
+        `/api/inspection-templates/${selectedTemplate?.id}/items`,
+        data,
+      ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates", selectedTemplate?.id, "items"],
+      });
       setItemDialogOpen(false);
       setEditingItem({});
     },
     onError: () => {
-      toast({ title: 'Failed to add checklist item', variant: 'destructive' });
+      toast({ title: "Failed to add checklist item", variant: "destructive" });
     },
   });
 
   const updateItemMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<InsertInspectionChecklistItem> }) =>
-      apiRequest('PATCH', `/api/checklist-items/${id}`, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<InsertInspectionChecklistItem>;
+    }) => apiRequest("PATCH", `/api/checklist-items/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates", selectedTemplate?.id, "items"],
+      });
       setItemDialogOpen(false);
       setEditingItem({});
     },
     onError: () => {
-      toast({ title: 'Failed to update checklist item', variant: 'destructive' });
+      toast({
+        title: "Failed to update checklist item",
+        variant: "destructive",
+      });
     },
   });
 
   const deleteItemMutation = useMutation({
-    mutationFn: (id: string) => apiRequest('DELETE', `/api/checklist-items/${id}`),
+    mutationFn: (id: string) =>
+      apiRequest("DELETE", `/api/checklist-items/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates", selectedTemplate?.id, "items"],
+      });
     },
     onError: () => {
-      toast({ title: 'Failed to delete checklist item', variant: 'destructive' });
+      toast({
+        title: "Failed to delete checklist item",
+        variant: "destructive",
+      });
     },
   });
 
   const reorderItemsMutation = useMutation({
-    mutationFn: ({ templateId, itemIds }: { templateId: string; itemIds: string[] }) =>
-      apiRequest('POST', `/api/inspection-templates/${templateId}/reorder`, { itemIds }),
+    mutationFn: ({
+      templateId,
+      itemIds,
+    }: {
+      templateId: string;
+      itemIds: string[];
+    }) =>
+      apiRequest("POST", `/api/inspection-templates/${templateId}/reorder`, {
+        itemIds,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/inspection-templates", selectedTemplate?.id, "items"],
+      });
     },
   });
 
@@ -191,23 +318,33 @@ export default function VehicleInspectionSettings() {
     const { active, over } = event;
 
     if (over && active.id !== over.id) {
-      const oldIndex = checklistItems.findIndex(item => item.id === active.id);
-      const newIndex = checklistItems.findIndex(item => item.id === over.id);
-      
+      const oldIndex = checklistItems.findIndex(
+        (item) => item.id === active.id,
+      );
+      const newIndex = checklistItems.findIndex((item) => item.id === over.id);
+
       const reorderedItems = arrayMove(checklistItems, oldIndex, newIndex);
-      const itemIds = reorderedItems.map(item => item.id);
-      
+      const itemIds = reorderedItems.map((item) => item.id);
+
       if (selectedTemplate) {
-        reorderItemsMutation.mutate({ templateId: selectedTemplate.id, itemIds });
+        reorderItemsMutation.mutate({
+          templateId: selectedTemplate.id,
+          itemIds,
+        });
       }
     }
   };
 
   const handleSaveTemplate = () => {
     if (editingTemplate.id) {
-      updateTemplateMutation.mutate({ id: editingTemplate.id, data: editingTemplate });
+      updateTemplateMutation.mutate({
+        id: editingTemplate.id,
+        data: editingTemplate,
+      });
     } else {
-      createTemplateMutation.mutate(editingTemplate as InsertInspectionTemplate);
+      createTemplateMutation.mutate(
+        editingTemplate as InsertInspectionTemplate,
+      );
     }
   };
 
@@ -215,8 +352,14 @@ export default function VehicleInspectionSettings() {
     if (editingItem.id) {
       updateItemMutation.mutate({ id: editingItem.id, data: editingItem });
     } else {
-      const nextOrder = checklistItems.length > 0 ? Math.max(...checklistItems.map(i => i.sortOrder)) + 1 : 0;
-      createItemMutation.mutate({ ...editingItem, sortOrder: nextOrder } as InsertInspectionChecklistItem);
+      const nextOrder =
+        checklistItems.length > 0
+          ? Math.max(...checklistItems.map((i) => i.sortOrder)) + 1
+          : 0;
+      createItemMutation.mutate({
+        ...editingItem,
+        sortOrder: nextOrder,
+      } as InsertInspectionChecklistItem);
     }
   };
 
@@ -225,8 +368,12 @@ export default function VehicleInspectionSettings() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Vehicle Inspection Templates</h1>
-          <p className="text-muted-foreground">Manage pre-start inspection checklists</p>
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Vehicle Inspection Templates
+          </h1>
+          <p className="text-muted-foreground">
+            Manage pre-start inspection checklists
+          </p>
         </div>
         <Button
           onClick={() => {
@@ -255,8 +402,8 @@ export default function VehicleInspectionSettings() {
                   key={template.id}
                   className={`p-3 rounded-lg cursor-pointer transition-colors ${
                     selectedTemplate?.id === template.id
-                      ? 'bg-primary/10 border border-primary'
-                      : 'bg-muted hover-elevate'
+                      ? "bg-primary/10 border border-primary"
+                      : "bg-muted hover-elevate"
                   }`}
                   onClick={() => setSelectedTemplate(template)}
                   data-testid={`card-template-${template.id}`}
@@ -266,11 +413,15 @@ export default function VehicleInspectionSettings() {
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{template.name}</span>
                         {template.isDefault && (
-                          <Badge variant="default" className="text-xs">Default</Badge>
+                          <Badge variant="default" className="text-xs">
+                            Default
+                          </Badge>
                         )}
                       </div>
                       {template.vehicleType && (
-                        <p className="text-xs text-muted-foreground mt-1">{template.vehicleType}</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {template.vehicleType}
+                        </p>
                       )}
                     </div>
                     <div className="flex gap-1">
@@ -291,7 +442,7 @@ export default function VehicleInspectionSettings() {
                         variant="ghost"
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (confirm('Delete this template?')) {
+                          if (confirm("Delete this template?")) {
                             deleteTemplateMutation.mutate(template.id);
                           }
                         }}
@@ -312,7 +463,9 @@ export default function VehicleInspectionSettings() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>
-                {selectedTemplate ? `${selectedTemplate.name} - Checklist Items` : 'Select a template'}
+                {selectedTemplate
+                  ? `${selectedTemplate.name} - Checklist Items`
+                  : "Select a template"}
               </CardTitle>
               {selectedTemplate && (
                 <div className="flex gap-2">
@@ -320,7 +473,9 @@ export default function VehicleInspectionSettings() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setDefaultTemplateMutation.mutate(selectedTemplate.id)}
+                      onClick={() =>
+                        setDefaultTemplateMutation.mutate(selectedTemplate.id)
+                      }
                       data-testid="button-set-default"
                     >
                       Set as Default
@@ -345,7 +500,9 @@ export default function VehicleInspectionSettings() {
             {!selectedTemplate ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <ClipboardCheck className="w-12 h-12 text-muted-foreground mb-3" />
-                <p className="text-muted-foreground">Select a template to view checklist items</p>
+                <p className="text-muted-foreground">
+                  Select a template to view checklist items
+                </p>
               </div>
             ) : checklistItems.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -364,8 +521,15 @@ export default function VehicleInspectionSettings() {
                 </Button>
               </div>
             ) : (
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                <SortableContext items={checklistItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={checklistItems.map((i) => i.id)}
+                  strategy={verticalListSortingStrategy}
+                >
                   <div className="space-y-2">
                     {checklistItems.map((item) => (
                       <SortableChecklistItem
@@ -376,7 +540,7 @@ export default function VehicleInspectionSettings() {
                           setItemDialogOpen(true);
                         }}
                         onDelete={() => {
-                          if (confirm('Delete this item?')) {
+                          if (confirm("Delete this item?")) {
                             deleteItemMutation.mutate(item.id);
                           }
                         }}
@@ -394,7 +558,9 @@ export default function VehicleInspectionSettings() {
       <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>{editingTemplate.id ? 'Edit Template' : 'New Template'}</DialogTitle>
+            <DialogTitle>
+              {editingTemplate.id ? "Edit Template" : "New Template"}
+            </DialogTitle>
             <DialogDescription>
               Configure the inspection template details
             </DialogDescription>
@@ -404,8 +570,13 @@ export default function VehicleInspectionSettings() {
               <Label htmlFor="name">Template Name</Label>
               <Input
                 id="name"
-                value={editingTemplate.name || ''}
-                onChange={(e) => setEditingTemplate({ ...editingTemplate, name: e.target.value })}
+                value={editingTemplate.name || ""}
+                onChange={(e) =>
+                  setEditingTemplate({
+                    ...editingTemplate,
+                    name: e.target.value,
+                  })
+                }
                 placeholder="e.g., Standard Vehicle Pre-Start"
                 data-testid="input-template-name"
               />
@@ -413,8 +584,10 @@ export default function VehicleInspectionSettings() {
             <div>
               <Label htmlFor="vehicleType">Vehicle Type (optional)</Label>
               <Select
-                value={editingTemplate.vehicleType || ''}
-                onValueChange={(value) => setEditingTemplate({ ...editingTemplate, vehicleType: value })}
+                value={editingTemplate.vehicleType || ""}
+                onValueChange={(value) =>
+                  setEditingTemplate({ ...editingTemplate, vehicleType: value })
+                }
               >
                 <SelectTrigger data-testid="select-vehicle-type">
                   <SelectValue placeholder="Select vehicle type" />
@@ -432,15 +605,24 @@ export default function VehicleInspectionSettings() {
               <Label htmlFor="description">Description (optional)</Label>
               <Textarea
                 id="description"
-                value={editingTemplate.description || ''}
-                onChange={(e) => setEditingTemplate({ ...editingTemplate, description: e.target.value })}
+                value={editingTemplate.description || ""}
+                onChange={(e) =>
+                  setEditingTemplate({
+                    ...editingTemplate,
+                    description: e.target.value,
+                  })
+                }
                 placeholder="Template description..."
                 data-testid="textarea-template-description"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setTemplateDialogOpen(false)} data-testid="button-cancel-template">
+            <Button
+              variant="outline"
+              onClick={() => setTemplateDialogOpen(false)}
+              data-testid="button-cancel-template"
+            >
               Cancel
             </Button>
             <Button
@@ -448,7 +630,7 @@ export default function VehicleInspectionSettings() {
               disabled={!editingTemplate.name}
               data-testid="button-save-template"
             >
-              {editingTemplate.id ? 'Update' : 'Create'}
+              {editingTemplate.id ? "Update" : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -458,7 +640,9 @@ export default function VehicleInspectionSettings() {
       <Dialog open={itemDialogOpen} onOpenChange={setItemDialogOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>{editingItem.id ? 'Edit Checklist Item' : 'New Checklist Item'}</DialogTitle>
+            <DialogTitle>
+              {editingItem.id ? "Edit Checklist Item" : "New Checklist Item"}
+            </DialogTitle>
             <DialogDescription>
               Add an item to the inspection checklist
             </DialogDescription>
@@ -468,8 +652,10 @@ export default function VehicleInspectionSettings() {
               <Label htmlFor="question">Question</Label>
               <Input
                 id="question"
-                value={editingItem.question || ''}
-                onChange={(e) => setEditingItem({ ...editingItem, question: e.target.value })}
+                value={editingItem.question || ""}
+                onChange={(e) =>
+                  setEditingItem({ ...editingItem, question: e.target.value })
+                }
                 placeholder="e.g., Are all lights working?"
                 data-testid="input-question-text"
               />
@@ -478,8 +664,10 @@ export default function VehicleInspectionSettings() {
               <Label htmlFor="category">Category (optional)</Label>
               <Input
                 id="category"
-                value={editingItem.category || ''}
-                onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                value={editingItem.category || ""}
+                onChange={(e) =>
+                  setEditingItem({ ...editingItem, category: e.target.value })
+                }
                 placeholder="e.g., Exterior, Engine, Safety"
                 data-testid="input-category"
               />
@@ -489,7 +677,12 @@ export default function VehicleInspectionSettings() {
                 type="checkbox"
                 id="requiresComment"
                 checked={editingItem.requiresComment || false}
-                onChange={(e) => setEditingItem({ ...editingItem, requiresComment: e.target.checked })}
+                onChange={(e) =>
+                  setEditingItem({
+                    ...editingItem,
+                    requiresComment: e.target.checked,
+                  })
+                }
                 className="rounded"
                 data-testid="checkbox-requires-comment"
               />
@@ -502,7 +695,12 @@ export default function VehicleInspectionSettings() {
                 type="checkbox"
                 id="requiresPhoto"
                 checked={editingItem.requiresPhoto || false}
-                onChange={(e) => setEditingItem({ ...editingItem, requiresPhoto: e.target.checked })}
+                onChange={(e) =>
+                  setEditingItem({
+                    ...editingItem,
+                    requiresPhoto: e.target.checked,
+                  })
+                }
                 className="rounded"
                 data-testid="checkbox-requires-photo"
               />
@@ -512,7 +710,11 @@ export default function VehicleInspectionSettings() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setItemDialogOpen(false)} data-testid="button-cancel-item">
+            <Button
+              variant="outline"
+              onClick={() => setItemDialogOpen(false)}
+              data-testid="button-cancel-item"
+            >
               Cancel
             </Button>
             <Button
@@ -520,7 +722,7 @@ export default function VehicleInspectionSettings() {
               disabled={!editingItem.question}
               data-testid="button-save-item"
             >
-              {editingItem.id ? 'Update' : 'Add'}
+              {editingItem.id ? "Update" : "Add"}
             </Button>
           </DialogFooter>
         </DialogContent>

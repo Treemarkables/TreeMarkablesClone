@@ -1,28 +1,34 @@
-import { useState, useRef, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent } from '@/components/ui/card';
-import { useToast } from '@/hooks/use-toast';
-import { useMutation } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { 
-  MessageSquare, 
-  Camera, 
-  Loader2, 
-  Upload, 
-  User, 
-  Phone, 
+import { useState, useRef, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  MessageSquare,
+  Camera,
+  Loader2,
+  Upload,
+  User,
+  Phone,
   Mail,
-  MapPin, 
+  MapPin,
   FileText,
   Sparkles,
   X,
-  Check
-} from 'lucide-react';
+  Check,
+} from "lucide-react";
 
 interface ExtractedLeadData {
   name: string;
@@ -39,17 +45,19 @@ interface CreateLeadFromMessageDialogProps {
   onLeadCreated: (data: ExtractedLeadData) => void;
 }
 
-export function CreateLeadFromMessageDialog({ 
-  open, 
-  onOpenChange, 
-  onLeadCreated 
+export function CreateLeadFromMessageDialog({
+  open,
+  onOpenChange,
+  onLeadCreated,
 }: CreateLeadFromMessageDialogProps) {
-  const [activeTab, setActiveTab] = useState<'paste' | 'screenshot'>('paste');
-  const [messageText, setMessageText] = useState('');
-  const [manualPhone, setManualPhone] = useState('');
+  const [activeTab, setActiveTab] = useState<"paste" | "screenshot">("paste");
+  const [messageText, setMessageText] = useState("");
+  const [manualPhone, setManualPhone] = useState("");
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const [extractedData, setExtractedData] = useState<ExtractedLeadData | null>(null);
+  const [extractedData, setExtractedData] = useState<ExtractedLeadData | null>(
+    null,
+  );
   const [isExtracting, setIsExtracting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -57,51 +65,55 @@ export function CreateLeadFromMessageDialog({
   // Handle clipboard paste for screenshots - works from ANY tab
   useEffect(() => {
     if (!open) return;
-    
-    console.log('📸 Paste handler setup - dialog open:', open);
+
+    console.log("📸 Paste handler setup - dialog open:", open);
 
     const handlePaste = (e: ClipboardEvent) => {
-      console.log('📸 Paste event detected!');
+      console.log("📸 Paste event detected!");
       const items = e.clipboardData?.items;
-      console.log('📸 Clipboard items:', items?.length);
+      console.log("📸 Clipboard items:", items?.length);
       if (!items) return;
 
       for (let i = 0; i < items.length; i++) {
-        console.log('📸 Item', i, 'type:', items[i].type);
-        if (items[i].type.indexOf('image') !== -1) {
+        console.log("📸 Item", i, "type:", items[i].type);
+        if (items[i].type.indexOf("image") !== -1) {
           const file = items[i].getAsFile();
-          console.log('📸 Got image file:', file?.name, file?.size);
+          console.log("📸 Got image file:", file?.name, file?.size);
           if (file) {
             setSelectedImage(file);
             const reader = new FileReader();
             reader.onloadend = () => {
-              console.log('📸 Image loaded, setting preview');
+              console.log("📸 Image loaded, setting preview");
               setImagePreview(reader.result as string);
             };
             reader.readAsDataURL(file);
             setExtractedData(null);
             // Auto-switch to screenshot tab when image is pasted
-            setActiveTab('screenshot');
+            setActiveTab("screenshot");
             e.preventDefault();
-                        break;
+            break;
           }
         }
       }
     };
 
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
+    document.addEventListener("paste", handlePaste);
+    return () => document.removeEventListener("paste", handlePaste);
   }, [open, toast]);
 
   const extractFromTextMutation = useMutation({
     mutationFn: async (data: { message: string; phone?: string }) => {
-      const response = await apiRequest('POST', '/api/leads/extract-from-message', data);
+      const response = await apiRequest(
+        "POST",
+        "/api/leads/extract-from-message",
+        data,
+      );
       return response.json();
     },
     onSuccess: (response: any) => {
       if (response.success && response.data) {
         setExtractedData(response.data);
-              }
+      }
     },
     onError: (error: any) => {
       toast({
@@ -109,34 +121,45 @@ export function CreateLeadFromMessageDialog({
         description: error.message || "Could not extract details from message",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const extractFromScreenshotMutation = useMutation({
     mutationFn: async (imageBase64: string) => {
-      console.log('📸 Starting extraction API call...');
-      const response = await apiRequest('POST', '/api/leads/extract-from-screenshot', { image: imageBase64 });
+      console.log("📸 Starting extraction API call...");
+      const response = await apiRequest(
+        "POST",
+        "/api/leads/extract-from-screenshot",
+        { image: imageBase64 },
+      );
       const result = await response.json();
-      console.log('📸 API response received:', JSON.stringify(result));
+      console.log("📸 API response received:", JSON.stringify(result));
       return result;
     },
     onSuccess: (response: any) => {
-      console.log('📸 onSuccess called with:', JSON.stringify(response));
+      console.log("📸 onSuccess called with:", JSON.stringify(response));
       // Check for data - response might already be the data object
       const extractedInfo = response?.data || response;
-      
+
       // Check if we got any useful data (non-empty strings)
-      const hasName = extractedInfo?.name && extractedInfo.name.trim() !== '';
-      const hasPhone = extractedInfo?.phone && extractedInfo.phone.trim() !== '';
-      const hasEmail = extractedInfo?.email && extractedInfo.email.trim() !== '';
-      const hasAddress = extractedInfo?.address && extractedInfo.address.trim() !== '';
-      const hasDescription = extractedInfo?.description && extractedInfo.description.trim() !== '';
-      
+      const hasName = extractedInfo?.name && extractedInfo.name.trim() !== "";
+      const hasPhone =
+        extractedInfo?.phone && extractedInfo.phone.trim() !== "";
+      const hasEmail =
+        extractedInfo?.email && extractedInfo.email.trim() !== "";
+      const hasAddress =
+        extractedInfo?.address && extractedInfo.address.trim() !== "";
+      const hasDescription =
+        extractedInfo?.description && extractedInfo.description.trim() !== "";
+
       if (hasName || hasPhone || hasEmail || hasAddress || hasDescription) {
-        console.log('📸 Extraction successful, auto-creating lead:', extractedInfo);
-                // Close dialog and create lead
-        setMessageText('');
-        setManualPhone('');
+        console.log(
+          "📸 Extraction successful, auto-creating lead:",
+          extractedInfo,
+        );
+        // Close dialog and create lead
+        setMessageText("");
+        setManualPhone("");
         setSelectedImage(null);
         setImagePreview(null);
         setExtractedData(null);
@@ -144,23 +167,25 @@ export function CreateLeadFromMessageDialog({
         onLeadCreated(extractedInfo);
       } else {
         // Still show extracted data state so user can see what happened
-        console.log('📸 No useful data extracted:', response);
+        console.log("📸 No useful data extracted:", response);
         setExtractedData(extractedInfo);
         toast({
           title: "No Details Found",
-          description: "The AI couldn't read the image. Make sure it's a clear screenshot of just the SMS conversation (not a screenshot-in-screenshot).",
+          description:
+            "The AI couldn't read the image. Make sure it's a clear screenshot of just the SMS conversation (not a screenshot-in-screenshot).",
           variant: "destructive",
         });
       }
     },
     onError: (error: any) => {
-      console.log('📸 onError called:', error);
+      console.log("📸 onError called:", error);
       toast({
         title: "Extraction Failed",
-        description: error.message || "Could not extract details from screenshot",
+        description:
+          error.message || "Could not extract details from screenshot",
         variant: "destructive",
       });
-    }
+    },
   });
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -185,9 +210,9 @@ export function CreateLeadFromMessageDialog({
       });
       return;
     }
-    extractFromTextMutation.mutate({ 
-      message: messageText, 
-      phone: manualPhone || undefined 
+    extractFromTextMutation.mutate({
+      message: messageText,
+      phone: manualPhone || undefined,
     });
   };
 
@@ -195,13 +220,13 @@ export function CreateLeadFromMessageDialog({
     // Use imagePreview directly if available (from paste), or read from selectedImage
     if (imagePreview) {
       // imagePreview is already a base64 data URL
-      const base64 = imagePreview.split(',')[1];
+      const base64 = imagePreview.split(",")[1];
       if (base64) {
         extractFromScreenshotMutation.mutate(base64);
         return;
       }
     }
-    
+
     if (!selectedImage) {
       toast({
         title: "No Screenshot",
@@ -213,7 +238,7 @@ export function CreateLeadFromMessageDialog({
 
     const reader = new FileReader();
     reader.onloadend = () => {
-      const base64 = (reader.result as string).split(',')[1];
+      const base64 = (reader.result as string).split(",")[1];
       extractFromScreenshotMutation.mutate(base64);
     };
     reader.readAsDataURL(selectedImage);
@@ -233,15 +258,17 @@ export function CreateLeadFromMessageDialog({
   };
 
   const handleClose = () => {
-    setMessageText('');
-    setManualPhone('');
+    setMessageText("");
+    setManualPhone("");
     setSelectedImage(null);
     setImagePreview(null);
     setExtractedData(null);
     onOpenChange(false);
   };
 
-  const isExtracting_ = extractFromTextMutation.isPending || extractFromScreenshotMutation.isPending;
+  const isExtracting_ =
+    extractFromTextMutation.isPending ||
+    extractFromScreenshotMutation.isPending;
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -252,11 +279,15 @@ export function CreateLeadFromMessageDialog({
             Create Lead from Message
           </DialogTitle>
           <DialogDescription>
-            Paste a customer's text message or upload a screenshot to automatically extract their details
+            Paste a customer's text message or upload a screenshot to
+            automatically extract their details
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'paste' | 'screenshot')}>
+        <Tabs
+          value={activeTab}
+          onValueChange={(v) => setActiveTab(v as "paste" | "screenshot")}
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="paste" className="flex items-center gap-2">
               <MessageSquare className="h-4 w-4" />
@@ -299,8 +330,8 @@ Thank you, Jack
               </p>
             </div>
 
-            <Button 
-              onClick={handleExtractFromText} 
+            <Button
+              onClick={handleExtractFromText}
               disabled={!messageText.trim() || isExtracting_}
               className="w-full"
               data-testid="button-extract-text"
@@ -330,12 +361,12 @@ Thank you, Jack
                 className="hidden"
                 data-testid="input-screenshot-file"
               />
-              
+
               {imagePreview ? (
                 <div className="relative">
-                  <img 
-                    src={imagePreview} 
-                    alt="Screenshot preview" 
+                  <img
+                    src={imagePreview}
+                    alt="Screenshot preview"
                     className="w-full max-h-[300px] object-contain rounded-lg border"
                   />
                   <Button
@@ -352,13 +383,15 @@ Thank you, Jack
                   </Button>
                 </div>
               ) : (
-                <Card 
+                <Card
                   className="border-dashed cursor-pointer hover-elevate"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <CardContent className="flex flex-col items-center justify-center py-8">
                     <Upload className="h-10 w-10 text-muted-foreground mb-3" />
-                    <p className="text-sm font-medium">Paste or click to upload</p>
+                    <p className="text-sm font-medium">
+                      Paste or click to upload
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">
                       Press Cmd+V to paste a screenshot, or click to browse
                     </p>
@@ -367,8 +400,8 @@ Thank you, Jack
               )}
             </div>
 
-            <Button 
-              onClick={handleExtractFromScreenshot} 
+            <Button
+              onClick={handleExtractFromScreenshot}
               disabled={(!selectedImage && !imagePreview) || isExtracting_}
               className="w-full"
               data-testid="button-extract-screenshot"
@@ -395,7 +428,7 @@ Thank you, Jack
                 <Check className="h-5 w-5" />
                 Extracted Details
               </div>
-              
+
               {extractedData.name && (
                 <div className="flex items-start gap-3">
                   <User className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -405,7 +438,7 @@ Thank you, Jack
                   </div>
                 </div>
               )}
-              
+
               {extractedData.phone && (
                 <div className="flex items-start gap-3">
                   <Phone className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -415,7 +448,7 @@ Thank you, Jack
                   </div>
                 </div>
               )}
-              
+
               {extractedData.email && (
                 <div className="flex items-start gap-3">
                   <Mail className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -435,7 +468,7 @@ Thank you, Jack
                   </div>
                 </div>
               )}
-              
+
               {extractedData.description && (
                 <div className="flex items-start gap-3">
                   <FileText className="h-4 w-4 mt-0.5 text-muted-foreground" />
@@ -446,8 +479,8 @@ Thank you, Jack
                 </div>
               )}
 
-              <Button 
-                onClick={handleCreateLead} 
+              <Button
+                onClick={handleCreateLead}
                 className="w-full mt-4"
                 data-testid="button-create-lead"
               >

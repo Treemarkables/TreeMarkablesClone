@@ -1,30 +1,30 @@
-import { useState, useEffect } from 'react';
-import { 
-  Bell, 
-  Check, 
-  Trash2, 
-  MoreVertical, 
-  User, 
-  TrendingUp, 
-  Wrench, 
-  FileText, 
-  CheckCircle, 
-  Clock, 
-  Phone, 
-  AlertCircle, 
-  Calendar, 
-  DollarSign, 
+import { useState, useEffect } from "react";
+import {
+  Bell,
+  Check,
+  Trash2,
+  MoreVertical,
+  User,
+  TrendingUp,
+  Wrench,
+  FileText,
+  CheckCircle,
+  Clock,
+  Phone,
+  AlertCircle,
+  Calendar,
+  DollarSign,
   Settings,
   Mail,
   MessageSquare,
   Camera,
   StickyNote,
-  BellRing
-} from 'lucide-react';
-import { useLocation } from 'wouter';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+  BellRing,
+} from "lucide-react";
+import { useLocation } from "wouter";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,18 +32,18 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { formatDistanceToNow } from 'date-fns';
-import { notificationService } from '@/lib/notificationService';
-import { useToast } from '@/hooks/use-toast';
+} from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { formatDistanceToNow } from "date-fns";
+import { notificationService } from "@/lib/notificationService";
+import { useToast } from "@/hooks/use-toast";
 
 interface NotificationWithDetails {
   id: string;
@@ -84,10 +84,10 @@ interface NotificationSummary {
 }
 
 const priorityColors = {
-  urgent: 'bg-red-600 text-white border-red-700',
-  high: 'bg-orange-600 text-white border-orange-700',
-  medium: 'bg-blue-600 text-white border-blue-700',
-  low: 'bg-gray-600 text-white border-gray-700',
+  urgent: "bg-red-600 text-white border-red-700",
+  high: "bg-orange-600 text-white border-orange-700",
+  medium: "bg-blue-600 text-white border-blue-700",
+  low: "bg-gray-600 text-white border-gray-700",
 };
 
 const getTypeIcon = (type: string) => {
@@ -120,23 +120,23 @@ export function NotificationBell() {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  
+
   // Check both browser permission AND user preference from localStorage
   const getUserPreference = () => {
     const permission = notificationService.getPermissionStatus();
-    
+
     // If permission is denied, notifications are disabled regardless of preference
-    if (permission === 'denied') {
+    if (permission === "denied") {
       return false;
     }
-    
+
     // If permission not granted yet, notifications are disabled
-    if (permission !== 'granted') {
+    if (permission !== "granted") {
       return false;
     }
-    
+
     // Permission is granted - check user preference
-    const stored = localStorage.getItem('notificationPreferences');
+    const stored = localStorage.getItem("notificationPreferences");
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
@@ -147,89 +147,109 @@ export function NotificationBell() {
     }
     return true; // Default to enabled if permission granted
   };
-  
+
   const [pushEnabled, setPushEnabled] = useState(getUserPreference());
   const [lastNotificationCount, setLastNotificationCount] = useState(0);
-  
+
   // Listen for preference changes (both same tab and other tabs)
   useEffect(() => {
     const handleStorageChange = () => {
       setPushEnabled(getUserPreference());
     };
-    
+
     const handleCustomChange = () => {
       setPushEnabled(getUserPreference());
     };
-    
+
     // Cross-tab changes
-    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener("storage", handleStorageChange);
     // Same-tab changes via custom event
-    window.addEventListener('notificationPreferencesChanged', handleCustomChange);
-    
+    window.addEventListener(
+      "notificationPreferencesChanged",
+      handleCustomChange,
+    );
+
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('notificationPreferencesChanged', handleCustomChange);
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(
+        "notificationPreferencesChanged",
+        handleCustomChange,
+      );
     };
   }, []);
 
   // Fetch notification summary for badge count
   const { data: summaryData } = useQuery({
-    queryKey: ['/api/notifications/summary'],
+    queryKey: ["/api/notifications/summary"],
     refetchInterval: 60000, // Poll every 60 seconds
   });
 
   // Fetch all notifications when dropdown is opened
-  const { data: notificationsData, isLoading: isLoadingNotifications } = useQuery({
-    queryKey: ['/api/notifications'],
-    enabled: isOpen,
-  });
+  const { data: notificationsData, isLoading: isLoadingNotifications } =
+    useQuery({
+      queryKey: ["/api/notifications"],
+      enabled: isOpen,
+    });
 
   // Check for new notifications and show browser notification
   useEffect(() => {
     if (!summaryData) return;
-    
-    const summary: NotificationSummary = (summaryData as any)?.data || { 
-      total: 0, 
-      unread: 0, 
-      byType: {}, 
-      byPriority: {}, 
-      recent: [] 
+
+    const summary: NotificationSummary = (summaryData as any)?.data || {
+      total: 0,
+      unread: 0,
+      byType: {},
+      byPriority: {},
+      recent: [],
     };
 
     // If we have new unread notifications and browser notifications are enabled
     // Show notification whenever unread count increases (including 0→1)
     if (pushEnabled && summary.unread > lastNotificationCount) {
       const newCount = summary.unread - lastNotificationCount;
-      
+
       // Fetch specific notification by ID to get actionUrl
       if (summary.recent && summary.recent.length > 0) {
         const latestNotificationSummary = summary.recent[0];
-        
+
         // Fetch the specific notification by ID using queryClient with a fetcher
-        queryClient.fetchQuery({
-          queryKey: ['/api/notifications', latestNotificationSummary.id],
-          queryFn: async () => {
-            const response = await fetch(`/api/notifications/${latestNotificationSummary.id}`);
-            if (!response.ok) {
-              throw new Error('Failed to fetch notification');
-            }
-            return response.json();
-          }
-        })
+        queryClient
+          .fetchQuery({
+            queryKey: ["/api/notifications", latestNotificationSummary.id],
+            queryFn: async () => {
+              const response = await fetch(
+                `/api/notifications/${latestNotificationSummary.id}`,
+              );
+              if (!response.ok) {
+                throw new Error("Failed to fetch notification");
+              }
+              return response.json();
+            },
+          })
           .then((data: any) => {
-            const latestNotification: NotificationWithDetails | undefined = data?.data;
-            
+            const latestNotification: NotificationWithDetails | undefined =
+              data?.data;
+
             // Build the URL based on notification details
-            let targetUrl = '/dispatch'; // Default fallback
-            
+            let targetUrl = "/dispatch"; // Default fallback
+
             if (latestNotification) {
               // Use actionUrl if available
               targetUrl = latestNotification.actionUrl || targetUrl;
-              
+
               // If no actionUrl, build one based on the notification type and IDs
               if (!latestNotification.actionUrl) {
-                const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
-                if (diaryTypes.includes(latestNotification.type) && latestNotification.jobId) {
+                const diaryTypes = [
+                  "email_reply",
+                  "sms_reply",
+                  "proposal_sent",
+                  "photo_added",
+                  "note_added",
+                ];
+                if (
+                  diaryTypes.includes(latestNotification.type) &&
+                  latestNotification.jobId
+                ) {
                   targetUrl = `/dispatch?job=${latestNotification.jobId}&tab=diary`;
                 } else if (latestNotification.jobId) {
                   targetUrl = `/dispatch?job=${latestNotification.jobId}`;
@@ -244,29 +264,29 @@ export function NotificationBell() {
                 }
               }
             }
-            
+
             // Always show notification with title and URL (even if fallback)
             notificationService.showNotification(
               latestNotificationSummary.title,
               {
-                body: `${newCount} new notification${newCount > 1 ? 's' : ''}`,
-                tag: 'diary-activity',
+                body: `${newCount} new notification${newCount > 1 ? "s" : ""}`,
+                tag: "diary-activity",
                 data: { url: targetUrl },
                 requireInteraction: false,
-              }
+              },
             );
           })
-          .catch(err => {
-            console.error('Failed to fetch notification details:', err);
+          .catch((err) => {
+            console.error("Failed to fetch notification details:", err);
             // Fallback: still show notification with basic info and default URL
             notificationService.showNotification(
               latestNotificationSummary.title,
               {
-                body: `${newCount} new notification${newCount > 1 ? 's' : ''}`,
-                tag: 'diary-activity',
-                data: { url: '/dispatch' },
+                body: `${newCount} new notification${newCount > 1 ? "s" : ""}`,
+                tag: "diary-activity",
+                data: { url: "/dispatch" },
                 requireInteraction: false,
-              }
+              },
             );
           });
       }
@@ -281,48 +301,55 @@ export function NotificationBell() {
   // Handle browser notification permission request
   const handleEnablePushNotifications = async () => {
     const granted = await notificationService.requestPermission();
-    
+
     if (granted) {
       // Save preference to localStorage - merge with existing preferences
-      const stored = localStorage.getItem('notificationPreferences');
-      const existingPreferences = stored ? JSON.parse(stored) : {
-        emailNotifications: true,
-        smsNotifications: true,
-        emailActivity: true,
-        smsActivity: true,
-        proposalActivity: true,
-        photoActivity: true,
-        noteActivity: true,
-        quoteActivity: true,
-        jobStatusChanges: true,
-      };
-      
+      const stored = localStorage.getItem("notificationPreferences");
+      const existingPreferences = stored
+        ? JSON.parse(stored)
+        : {
+            emailNotifications: true,
+            smsNotifications: true,
+            emailActivity: true,
+            smsActivity: true,
+            proposalActivity: true,
+            photoActivity: true,
+            noteActivity: true,
+            quoteActivity: true,
+            jobStatusChanges: true,
+          };
+
       const updatedPreferences = {
         ...existingPreferences,
         browserNotifications: true,
       };
-      
-      localStorage.setItem('notificationPreferences', JSON.stringify(updatedPreferences));
-      
+
+      localStorage.setItem(
+        "notificationPreferences",
+        JSON.stringify(updatedPreferences),
+      );
+
       // Update local state
       setPushEnabled(true);
-      
+
       // Notify other components in same tab
-      window.dispatchEvent(new Event('notificationPreferencesChanged'));
-      
-          } else {
+      window.dispatchEvent(new Event("notificationPreferencesChanged"));
+    } else {
       // Save denied state to localStorage
-      const stored = localStorage.getItem('notificationPreferences');
+      const stored = localStorage.getItem("notificationPreferences");
       const existingPreferences = stored ? JSON.parse(stored) : {};
       const updatedPreferences = {
         ...existingPreferences,
         browserNotifications: false,
       };
-      localStorage.setItem('notificationPreferences', JSON.stringify(updatedPreferences));
-      
+      localStorage.setItem(
+        "notificationPreferences",
+        JSON.stringify(updatedPreferences),
+      );
+
       // Notify other components
-      window.dispatchEvent(new Event('notificationPreferencesChanged'));
-      
+      window.dispatchEvent(new Event("notificationPreferencesChanged"));
+
       toast({
         title: "Permission denied",
         description: "Please enable notifications in your browser settings",
@@ -334,48 +361,57 @@ export function NotificationBell() {
   // Mark notification as read mutation
   const markAsReadMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('PATCH', `/api/notifications/${id}/read`);
+      return apiRequest("PATCH", `/api/notifications/${id}/read`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/summary'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/notifications/summary"],
+      });
     },
   });
 
   // Mark all as read mutation
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('PATCH', '/api/notifications/read-all', { userId: undefined });
+      return apiRequest("PATCH", "/api/notifications/read-all", {
+        userId: undefined,
+      });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/summary'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/notifications/summary"],
+      });
     },
   });
 
   // Delete notification mutation
   const deleteNotificationMutation = useMutation({
     mutationFn: async (id: string) => {
-      return apiRequest('DELETE', `/api/notifications/${id}`);
+      return apiRequest("DELETE", `/api/notifications/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/notifications/summary'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/notifications/summary"],
+      });
     },
   });
 
-  const summary: NotificationSummary = (summaryData as any)?.data || { 
-    total: 0, 
-    unread: 0, 
-    byType: {}, 
-    byPriority: {}, 
-    recent: [] 
+  const summary: NotificationSummary = (summaryData as any)?.data || {
+    total: 0,
+    unread: 0,
+    byType: {},
+    byPriority: {},
+    recent: [],
   };
-  
-  const notifications: NotificationWithDetails[] = (notificationsData as any)?.data || [];
+
+  const notifications: NotificationWithDetails[] =
+    (notificationsData as any)?.data || [];
 
   const handleNotificationClick = (notification: NotificationWithDetails) => {
-    console.log('🔔 Notification clicked:', {
+    console.log("🔔 Notification clicked:", {
       id: notification.id,
       type: notification.type,
       proposalId: notification.proposalId,
@@ -383,7 +419,7 @@ export function NotificationBell() {
       quoteId: notification.quoteId,
       leadId: notification.leadId,
       customerId: notification.customerId,
-      actionUrl: notification.actionUrl
+      actionUrl: notification.actionUrl,
     });
 
     if (!notification.isRead) {
@@ -394,17 +430,19 @@ export function NotificationBell() {
     setIsOpen(false);
 
     // Navigate to action URL if provided and it's an internal route
-    if (notification.actionUrl && notification.actionUrl.startsWith('/')) {
-      console.log('🔀 Navigating via actionUrl:', notification.actionUrl);
-      
+    if (notification.actionUrl && notification.actionUrl.startsWith("/")) {
+      console.log("🔀 Navigating via actionUrl:", notification.actionUrl);
+
       // Use setTimeout to ensure popover closes before navigation
       setTimeout(() => {
         setLocation(notification.actionUrl!);
-        
+
         // Dispatch custom event to notify components of URL change
-        window.dispatchEvent(new CustomEvent('notification-navigation', { 
-          detail: { url: notification.actionUrl } 
-        }));
+        window.dispatchEvent(
+          new CustomEvent("notification-navigation", {
+            detail: { url: notification.actionUrl },
+          }),
+        );
       }, 50);
       return;
     }
@@ -412,14 +450,16 @@ export function NotificationBell() {
     // Check metadata for conversationId (for older notifications or alternative storage)
     if (notification.metadata?.conversationId) {
       const url = `/conversation/${notification.metadata.conversationId}`;
-      console.log('🔀 Navigating via conversationId:', url);
+      console.log("🔀 Navigating via conversationId:", url);
       setLocation(url);
-      
+
       // Dispatch custom event to notify components of URL change
-      window.dispatchEvent(new CustomEvent('notification-navigation', { 
-        detail: { url } 
-      }));
-      
+      window.dispatchEvent(
+        new CustomEvent("notification-navigation", {
+          detail: { url },
+        }),
+      );
+
       setIsOpen(false);
       return;
     }
@@ -428,31 +468,41 @@ export function NotificationBell() {
     // This ensures all job-related notifications open the job card, regardless of type
     if (notification.jobId) {
       // Check if this is a diary-related notification to open the diary tab
-      const diaryTypes = ['email_reply', 'sms_reply', 'proposal_sent', 'photo_added', 'note_added'];
+      const diaryTypes = [
+        "email_reply",
+        "sms_reply",
+        "proposal_sent",
+        "photo_added",
+        "note_added",
+      ];
       if (diaryTypes.includes(notification.type)) {
         const url = `/dispatch?job=${notification.jobId}&tab=diary`;
-        console.log('🔀 Navigating to job card with diary tab:', url);
+        console.log("🔀 Navigating to job card with diary tab:", url);
         setLocation(url);
-        
+
         // Dispatch custom event to notify DispatchBoard
-        window.dispatchEvent(new CustomEvent('notification-navigation', { 
-          detail: { url } 
-        }));
-        
+        window.dispatchEvent(
+          new CustomEvent("notification-navigation", {
+            detail: { url },
+          }),
+        );
+
         setIsOpen(false);
         return;
       }
-      
+
       // Default: open job card without specific tab
       const url = `/dispatch?job=${notification.jobId}`;
-      console.log('🔀 Navigating to job card:', url);
+      console.log("🔀 Navigating to job card:", url);
       setLocation(url);
-      
+
       // Dispatch custom event to notify DispatchBoard
-      window.dispatchEvent(new CustomEvent('notification-navigation', { 
-        detail: { url } 
-      }));
-      
+      window.dispatchEvent(
+        new CustomEvent("notification-navigation", {
+          detail: { url },
+        }),
+      );
+
       setIsOpen(false);
       return;
     }
@@ -460,7 +510,7 @@ export function NotificationBell() {
     // Handle proposal notifications (only if no jobId)
     if (notification.proposalId) {
       const url = `/proposal/${notification.proposalId}`;
-      console.log('🔀 Navigating to proposal:', url);
+      console.log("🔀 Navigating to proposal:", url);
       setLocation(url);
       setIsOpen(false);
       return;
@@ -469,7 +519,7 @@ export function NotificationBell() {
     // Handle quote notifications (only if no jobId)
     if (notification.quoteId) {
       const url = `/quote/${notification.quoteId}`;
-      console.log('🔀 Navigating to quote:', url);
+      console.log("🔀 Navigating to quote:", url);
       setLocation(url);
       setIsOpen(false);
       return;
@@ -478,7 +528,7 @@ export function NotificationBell() {
     // Handle lead notifications
     if (notification.leadId) {
       const url = `/opportunities?lead=${notification.leadId}`;
-      console.log('🔀 Navigating to lead:', url);
+      console.log("🔀 Navigating to lead:", url);
       setLocation(url);
       setIsOpen(false);
       return;
@@ -487,27 +537,29 @@ export function NotificationBell() {
     // Handle customer notifications
     if (notification.customerId) {
       const url = `/clients?customer=${notification.customerId}`;
-      console.log('🔀 Navigating to customer:', url);
+      console.log("🔀 Navigating to customer:", url);
       setLocation(url);
       setIsOpen(false);
       return;
     }
 
     // If no navigation target, just close
-    console.log('⚠️ No navigation target found for notification');
+    console.log("⚠️ No navigation target found for notification");
     setIsOpen(false);
   };
 
   const getPriorityBadgeClass = (priority: string) => {
-    return priorityColors[priority as keyof typeof priorityColors] || priorityColors.medium;
+    return (
+      priorityColors[priority as keyof typeof priorityColors] ||
+      priorityColors.medium
+    );
   };
-
 
   const getRelativeTime = (dateString: string) => {
     try {
       return formatDistanceToNow(new Date(dateString), { addSuffix: true });
     } catch {
-      return 'Unknown time';
+      return "Unknown time";
     }
   };
 
@@ -516,7 +568,7 @@ export function NotificationBell() {
     if (notification.customerName) return notification.customerName;
     if (notification.jobTitle) return notification.jobTitle;
     if (notification.quoteNumber) return `Quote #${notification.quoteNumber}`;
-    return '';
+    return "";
   };
 
   return (
@@ -528,20 +580,29 @@ export function NotificationBell() {
           className="relative h-22 w-22"
           data-testid="button-notifications"
         >
-          <Bell className={`h-12 w-12 fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? 'animate-pulse' : ''}`} />
+          <Bell
+            className={`h-12 w-12 fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? "animate-pulse" : ""}`}
+          />
           {summary.unread > 0 && (
             <>
               <div className="absolute inset-0 rounded-md bg-orange-400/30 animate-ping" />
               <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white text-xs flex items-center justify-center shadow-lg animate-bounce border-2 border-white">
-                <span className="text-[11px] font-bold" data-testid="text-notification-count">
-                  {summary.unread > 99 ? '99+' : summary.unread}
+                <span
+                  className="text-[11px] font-bold"
+                  data-testid="text-notification-count"
+                >
+                  {summary.unread > 99 ? "99+" : summary.unread}
                 </span>
               </div>
             </>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-96 p-0" align="end" data-testid="dropdown-notifications">
+      <PopoverContent
+        className="w-96 p-0"
+        align="end"
+        data-testid="dropdown-notifications"
+      >
         <Card className="border-0 shadow-lg">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between mb-2">
@@ -599,7 +660,9 @@ export function NotificationBell() {
                 <div className="p-8 text-center text-muted-foreground">
                   <Bell className="h-12 w-12 mx-auto mb-3 opacity-50" />
                   <p className="text-sm">No notifications yet</p>
-                  <p className="text-xs mt-1">You'll see updates about leads, jobs, and quotes here</p>
+                  <p className="text-xs mt-1">
+                    You'll see updates about leads, jobs, and quotes here
+                  </p>
                 </div>
               ) : (
                 <div className="divide-y">
@@ -607,9 +670,9 @@ export function NotificationBell() {
                     <div
                       key={notification.id}
                       className={`p-4 cursor-pointer transition-colors hover:bg-muted/50 ${
-                        !notification.isRead 
-                          ? 'bg-gradient-to-r from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/20 border-l-2 border-l-blue-500' 
-                          : 'hover:bg-muted/50'
+                        !notification.isRead
+                          ? "bg-gradient-to-r from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/20 dark:via-purple-950/10 dark:to-pink-950/20 border-l-2 border-l-blue-500"
+                          : "hover:bg-muted/50"
                       }`}
                       onClick={() => handleNotificationClick(notification)}
                       data-testid={`notification-item-${notification.id}`}
@@ -623,20 +686,29 @@ export function NotificationBell() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex-1">
-                              <p className="font-medium text-sm text-foreground" data-testid={`notification-title-${notification.id}`}>
+                              <p
+                                className="font-medium text-sm text-foreground"
+                                data-testid={`notification-title-${notification.id}`}
+                              >
                                 {notification.title}
                               </p>
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2" data-testid={`notification-message-${notification.id}`}>
+                              <p
+                                className="text-sm text-muted-foreground mt-1 line-clamp-2"
+                                data-testid={`notification-message-${notification.id}`}
+                              >
                                 {notification.message}
                               </p>
                               {getEntityName(notification) && (
-                                <p className="text-xs text-muted-foreground mt-1 font-medium" data-testid={`notification-entity-${notification.id}`}>
+                                <p
+                                  className="text-xs text-muted-foreground mt-1 font-medium"
+                                  data-testid={`notification-entity-${notification.id}`}
+                                >
                                   {getEntityName(notification)}
                                 </p>
                               )}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <Badge 
+                              <Badge
                                 className={`text-xs px-2 py-0.5 ${getPriorityBadgeClass(notification.priority)}`}
                                 data-testid={`notification-priority-${notification.id}`}
                               >
@@ -659,7 +731,9 @@ export function NotificationBell() {
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        markAsReadMutation.mutate(notification.id);
+                                        markAsReadMutation.mutate(
+                                          notification.id,
+                                        );
                                       }}
                                       data-testid={`button-mark-read-${notification.id}`}
                                     >
@@ -670,7 +744,9 @@ export function NotificationBell() {
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      deleteNotificationMutation.mutate(notification.id);
+                                      deleteNotificationMutation.mutate(
+                                        notification.id,
+                                      );
                                     }}
                                     className="text-destructive focus:text-destructive"
                                     data-testid={`button-delete-${notification.id}`}
@@ -683,11 +759,17 @@ export function NotificationBell() {
                             </div>
                           </div>
                           <div className="flex items-center justify-between mt-2">
-                            <span className="text-xs text-muted-foreground" data-testid={`notification-time-${notification.id}`}>
+                            <span
+                              className="text-xs text-muted-foreground"
+                              data-testid={`notification-time-${notification.id}`}
+                            >
                               {getRelativeTime(notification.createdAt)}
                             </span>
                             {!notification.isRead && (
-                              <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" data-testid={`notification-unread-indicator-${notification.id}`} />
+                              <div
+                                className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"
+                                data-testid={`notification-unread-indicator-${notification.id}`}
+                              />
                             )}
                           </div>
                         </div>
@@ -697,11 +779,12 @@ export function NotificationBell() {
                 </div>
               )}
             </ScrollArea>
-            
+
             {notifications.length > 0 && (
               <div className="p-3 border-t bg-muted/30">
                 <div className="text-xs text-muted-foreground text-center">
-                  Showing {notifications.length} of {summary.total} notifications
+                  Showing {notifications.length} of {summary.total}{" "}
+                  notifications
                 </div>
               </div>
             )}

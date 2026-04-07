@@ -6,20 +6,34 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ClipboardCheck, Check, X, AlertTriangle, Camera, CheckCircle2, Upload } from "lucide-react";
+import {
+  ClipboardCheck,
+  Check,
+  X,
+  AlertTriangle,
+  Camera,
+  CheckCircle2,
+  Upload,
+} from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import type { 
-  SelectInspectionTemplate, 
-  SelectInspectionChecklistItem, 
+import type {
+  SelectInspectionTemplate,
+  SelectInspectionChecklistItem,
   InsertVehicleInspection,
   InsertInspectionResponse,
-  SelectEquipment
+  SelectEquipment,
 } from "@shared/schema";
 
-type ResponseValue = 'YES' | 'NO' | 'N/A';
+type ResponseValue = "YES" | "NO" | "N/A";
 
 interface InspectionResponse {
   checklistItemId: string;
@@ -40,44 +54,58 @@ export default function VehicleInspection() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>('');
-  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [responses, setResponses] = useState<Map<string, InspectionResponse>>(new Map());
-  const [currentStep, setCurrentStep] = useState<'vehicle' | 'inspection' | 'signature'>('vehicle');
-  const [odometerReading, setOdometerReading] = useState('');
-  const [inspectorNotes, setInspectorNotes] = useState('');
-  const [inspectorName, setInspectorName] = useState('');
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  const [responses, setResponses] = useState<Map<string, InspectionResponse>>(
+    new Map(),
+  );
+  const [currentStep, setCurrentStep] = useState<
+    "vehicle" | "inspection" | "signature"
+  >("vehicle");
+  const [odometerReading, setOdometerReading] = useState("");
+  const [inspectorNotes, setInspectorNotes] = useState("");
+  const [inspectorName, setInspectorName] = useState("");
 
   // Fetch equipment (vehicles)
   const { data: vehiclesData } = useQuery({
-    queryKey: ['/api/equipment'],
+    queryKey: ["/api/equipment"],
   });
-  const vehicles = Array.isArray((vehiclesData as any)?.data) ? (vehiclesData as any).data : [];
+  const vehicles = Array.isArray((vehiclesData as any)?.data)
+    ? (vehiclesData as any).data
+    : [];
 
   // Fetch templates
   const { data: templatesData } = useQuery({
-    queryKey: ['/api/inspection-templates'],
+    queryKey: ["/api/inspection-templates"],
   });
-  const templates = Array.isArray((templatesData as any)?.data) ? (templatesData as any).data : [];
+  const templates = Array.isArray((templatesData as any)?.data)
+    ? (templatesData as any).data
+    : [];
 
   // Fetch default template for selected vehicle
   const { data: defaultTemplateData } = useQuery({
-    queryKey: ['/api/inspection-templates/default', selectedVehicleId],
+    queryKey: ["/api/inspection-templates/default", selectedVehicleId],
     enabled: !!selectedVehicleId && !selectedTemplateId,
   });
   const defaultTemplate = (defaultTemplateData as any)?.data || null;
 
   // Fetch checklist items for selected template
   const { data: checklistItemsData } = useQuery({
-    queryKey: ['/api/inspection-templates', selectedTemplateId || defaultTemplate?.id, 'items'],
+    queryKey: [
+      "/api/inspection-templates",
+      selectedTemplateId || defaultTemplate?.id,
+      "items",
+    ],
     enabled: !!(selectedTemplateId || defaultTemplate?.id),
   });
-  const checklistItems = Array.isArray((checklistItemsData as any)?.data) ? (checklistItemsData as any).data : [];
+  const checklistItems = Array.isArray((checklistItemsData as any)?.data)
+    ? (checklistItemsData as any).data
+    : [];
 
   // Auto-load vehicle's default inspection template
   useEffect(() => {
     if (selectedVehicleId) {
-      const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
+      const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
       if (selectedVehicle?.defaultInspectionTemplateId) {
         setSelectedTemplateId(selectedVehicle.defaultInspectionTemplateId);
       }
@@ -87,11 +115,11 @@ export default function VehicleInspection() {
   // Initialize responses when checklist items load (preserve existing answers)
   useEffect(() => {
     if (checklistItems.length > 0) {
-      setResponses(prevResponses => {
+      setResponses((prevResponses) => {
         const newResponses = new Map(prevResponses);
-        
+
         // Only add missing items, preserve existing responses
-        checklistItems.forEach(item => {
+        checklistItems.forEach((item) => {
           if (!newResponses.has(item.id)) {
             newResponses.set(item.id, {
               checklistItemId: item.id,
@@ -101,20 +129,20 @@ export default function VehicleInspection() {
               requiresPhoto: item.requiresPhoto || false,
               sortOrder: item.sortOrder || 0,
               responseValue: null,
-              comments: '',
+              comments: "",
               photoUrl: null,
             });
           }
         });
-        
+
         // Remove responses for items no longer in the checklist
-        const currentItemIds = new Set(checklistItems.map(i => i.id));
-        Array.from(newResponses.keys()).forEach(id => {
+        const currentItemIds = new Set(checklistItems.map((i) => i.id));
+        Array.from(newResponses.keys()).forEach((id) => {
           if (!currentItemIds.has(id)) {
             newResponses.delete(id);
           }
         });
-        
+
         return newResponses;
       });
     }
@@ -122,17 +150,20 @@ export default function VehicleInspection() {
 
   // Auto-populate inspector name when reaching signature step
   useEffect(() => {
-    if (currentStep === 'signature' && !inspectorName && user) {
-      const defaultName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || '';
+    if (currentStep === "signature" && !inspectorName && user) {
+      const defaultName =
+        `${user.firstName || ""} ${user.lastName || ""}`.trim() ||
+        user.username ||
+        "";
       setInspectorName(defaultName);
     }
   }, [currentStep, inspectorName, user]);
 
   const createInspectionMutation = useMutation({
     mutationFn: async () => {
-      const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
-      const templateToUse = selectedTemplateId 
-        ? templates.find(t => t.id === selectedTemplateId)
+      const selectedVehicle = vehicles.find((v) => v.id === selectedVehicleId);
+      const templateToUse = selectedTemplateId
+        ? templates.find((t) => t.id === selectedTemplateId)
         : defaultTemplate;
 
       // Get signature as base64
@@ -142,72 +173,87 @@ export default function VehicleInspection() {
       // Create inspection record
       const inspectionData: InsertVehicleInspection = {
         vehicleId: selectedVehicleId,
-        vehicleName: selectedVehicle?.name || 'Unknown Vehicle',
+        vehicleName: selectedVehicle?.name || "Unknown Vehicle",
         vehicleRegistration: selectedVehicle?.registrationNumber || null,
         templateId: (selectedTemplateId || defaultTemplate?.id) as string,
-        templateName: templateToUse?.name || 'Standard Inspection',
-        inspectedBy: user?.id || 'unknown',
-        inspectorName: inspectorName || 'Unknown',
-        status: Array.from(responses.values()).some(r => r.responseValue === 'NO') ? 'fail' : 'pass',
+        templateName: templateToUse?.name || "Standard Inspection",
+        inspectedBy: user?.id || "unknown",
+        inspectorName: inspectorName || "Unknown",
+        status: Array.from(responses.values()).some(
+          (r) => r.responseValue === "NO",
+        )
+          ? "fail"
+          : "pass",
         speedometerReading: odometerReading ? parseInt(odometerReading) : null,
         overallNotes: inspectorNotes || null,
         signature: signatureDataUrl || null,
       };
 
-      const inspectionResponse = await apiRequest('POST', '/api/vehicle-inspections', inspectionData);
+      const inspectionResponse = await apiRequest(
+        "POST",
+        "/api/vehicle-inspections",
+        inspectionData,
+      );
       const inspectionResult = await inspectionResponse.json();
       const inspectionId = inspectionResult.data.id;
 
       // Create all responses
-      const responsePromises = Array.from(responses.values()).map(response => {
-        if (response.responseValue) {
-          const responseData: InsertInspectionResponse = {
-            inspectionId,
-            checklistItemId: response.checklistItemId,
-            question: response.question,
-            category: response.category,
-            requiresComment: response.requiresComment,
-            requiresPhoto: response.requiresPhoto,
-            sortOrder: response.sortOrder || 0,
-            response: response.responseValue,
-            comment: response.comments || null,
-            photos: response.photoUrl ? [response.photoUrl] : [],
-          };
-          return apiRequest('POST', `/api/vehicle-inspections/${inspectionId}/responses`, responseData);
-        }
-        return Promise.resolve();
-      });
+      const responsePromises = Array.from(responses.values()).map(
+        (response) => {
+          if (response.responseValue) {
+            const responseData: InsertInspectionResponse = {
+              inspectionId,
+              checklistItemId: response.checklistItemId,
+              question: response.question,
+              category: response.category,
+              requiresComment: response.requiresComment,
+              requiresPhoto: response.requiresPhoto,
+              sortOrder: response.sortOrder || 0,
+              response: response.responseValue,
+              comment: response.comments || null,
+              photos: response.photoUrl ? [response.photoUrl] : [],
+            };
+            return apiRequest(
+              "POST",
+              `/api/vehicle-inspections/${inspectionId}/responses`,
+              responseData,
+            );
+          }
+          return Promise.resolve();
+        },
+      );
 
       await Promise.all(responsePromises);
       return inspectionResult;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/vehicle-inspections'] });
-            
+      queryClient.invalidateQueries({ queryKey: ["/api/vehicle-inspections"] });
+
       // Reset form
-      setSelectedVehicleId('');
-      setSelectedTemplateId('');
+      setSelectedVehicleId("");
+      setSelectedTemplateId("");
       setResponses(new Map());
-      setCurrentStep('vehicle');
-      setOdometerReading('');
-      setInspectorNotes('');
-      setInspectorName('');
+      setCurrentStep("vehicle");
+      setOdometerReading("");
+      setInspectorNotes("");
+      setInspectorName("");
       setHasSignature(false);
-      
+
       // Clear signature
       const canvas = signatureCanvasRef.current;
       if (canvas) {
-        const ctx = canvas.getContext('2d');
+        const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
         }
       }
     },
     onError: (error) => {
-      toast({ 
-        title: 'Failed to complete inspection',
-        description: error instanceof Error ? error.message : 'An error occurred',
-        variant: 'destructive',
+      toast({
+        title: "Failed to complete inspection",
+        description:
+          error instanceof Error ? error.message : "An error occurred",
+        variant: "destructive",
       });
     },
   });
@@ -217,8 +263,8 @@ export default function VehicleInspection() {
     if (currentResponse) {
       const updatedResponse = { ...currentResponse, responseValue: value };
       // Clear comments and photo only if switching to YES
-      if (value === 'YES') {
-        updatedResponse.comments = '';
+      if (value === "YES") {
+        updatedResponse.comments = "";
         updatedResponse.photoUrl = null;
       }
       setResponses(new Map(responses.set(itemId, updatedResponse)));
@@ -228,7 +274,9 @@ export default function VehicleInspection() {
   const handleCommentChange = (itemId: string, comments: string) => {
     const currentResponse = responses.get(itemId);
     if (currentResponse) {
-      setResponses(new Map(responses.set(itemId, { ...currentResponse, comments })));
+      setResponses(
+        new Map(responses.set(itemId, { ...currentResponse, comments })),
+      );
     }
   };
 
@@ -239,24 +287,34 @@ export default function VehicleInspection() {
     reader.onload = (e) => {
       const currentResponse = responses.get(itemId);
       if (currentResponse && e.target?.result) {
-        setResponses(new Map(responses.set(itemId, { 
-          ...currentResponse, 
-          photoUrl: e.target.result as string 
-        })));
+        setResponses(
+          new Map(
+            responses.set(itemId, {
+              ...currentResponse,
+              photoUrl: e.target.result as string,
+            }),
+          ),
+        );
       }
     };
     reader.readAsDataURL(file);
   };
 
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const startDrawing = (
+    e:
+      | React.MouseEvent<HTMLCanvasElement>
+      | React.TouchEvent<HTMLCanvasElement>,
+  ) => {
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    const x =
+      "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y =
+      "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.beginPath();
       ctx.moveTo(x, y);
@@ -264,17 +322,23 @@ export default function VehicleInspection() {
     }
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  const draw = (
+    e:
+      | React.MouseEvent<HTMLCanvasElement>
+      | React.TouchEvent<HTMLCanvasElement>,
+  ) => {
     if (!isDrawing) return;
 
     const canvas = signatureCanvasRef.current;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
-    const x = 'touches' in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
-    const y = 'touches' in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
+    const x =
+      "touches" in e ? e.touches[0].clientX - rect.left : e.clientX - rect.left;
+    const y =
+      "touches" in e ? e.touches[0].clientY - rect.top : e.clientY - rect.top;
 
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (ctx) {
       ctx.lineTo(x, y);
       ctx.stroke();
@@ -289,7 +353,7 @@ export default function VehicleInspection() {
   const clearSignature = () => {
     const canvas = signatureCanvasRef.current;
     if (canvas) {
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (ctx) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         setHasSignature(false);
@@ -297,30 +361,40 @@ export default function VehicleInspection() {
     }
   };
 
-  const canProceedToInspection = selectedVehicleId && (selectedTemplateId || defaultTemplate);
-  
+  const canProceedToInspection =
+    selectedVehicleId && (selectedTemplateId || defaultTemplate);
+
   // Count answered questions
-  const answeredCount = Array.from(responses.values()).filter(r => r.responseValue !== null).length;
+  const answeredCount = Array.from(responses.values()).filter(
+    (r) => r.responseValue !== null,
+  ).length;
   const totalQuestions = checklistItems.length;
-  
-  const canProceedToSignature = 
-    checklistItems.length > 0 && 
-    responses.size === checklistItems.length && 
-    Array.from(responses.values()).every(r => r.responseValue !== null);
 
-  const groupedItems = checklistItems.reduce((acc, item) => {
-    const category = item.category || 'General';
-    if (!acc[category]) acc[category] = [];
-    acc[category].push(item);
-    return acc;
-  }, {} as Record<string, SelectInspectionChecklistItem[]>);
+  const canProceedToSignature =
+    checklistItems.length > 0 &&
+    responses.size === checklistItems.length &&
+    Array.from(responses.values()).every((r) => r.responseValue !== null);
 
-  if (currentStep === 'vehicle') {
+  const groupedItems = checklistItems.reduce(
+    (acc, item) => {
+      const category = item.category || "General";
+      if (!acc[category]) acc[category] = [];
+      acc[category].push(item);
+      return acc;
+    },
+    {} as Record<string, SelectInspectionChecklistItem[]>,
+  );
+
+  if (currentStep === "vehicle") {
     return (
       <div className="flex flex-col h-full p-4 md:p-6 space-y-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Vehicle Pre-Start Inspection</h1>
-          <p className="text-muted-foreground">Select vehicle and template to begin</p>
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Vehicle Pre-Start Inspection
+          </h1>
+          <p className="text-muted-foreground">
+            Select vehicle and template to begin
+          </p>
         </div>
 
         <Card>
@@ -330,12 +404,18 @@ export default function VehicleInspection() {
           <CardContent className="space-y-4">
             <div>
               <Label htmlFor="vehicle">Select Vehicle *</Label>
-              <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
-                <SelectTrigger className="text-base md:text-sm" data-testid="select-vehicle">
+              <Select
+                value={selectedVehicleId}
+                onValueChange={setSelectedVehicleId}
+              >
+                <SelectTrigger
+                  className="text-base md:text-sm"
+                  data-testid="select-vehicle"
+                >
                   <SelectValue placeholder="Choose a vehicle" />
                 </SelectTrigger>
                 <SelectContent>
-                  {vehicles.map(vehicle => (
+                  {vehicles.map((vehicle) => (
                     <SelectItem key={vehicle.id} value={vehicle.id}>
                       {vehicle.name}
                     </SelectItem>
@@ -347,10 +427,16 @@ export default function VehicleInspection() {
             {selectedVehicleId && (
               <>
                 {(() => {
-                  const selectedVehicle = vehicles.find(v => v.id === selectedVehicleId);
-                  const hasDefaultTemplate = !!selectedVehicle?.defaultInspectionTemplateId;
-                  const templateName = hasDefaultTemplate 
-                    ? templates.find(t => t.id === selectedVehicle.defaultInspectionTemplateId)?.name 
+                  const selectedVehicle = vehicles.find(
+                    (v) => v.id === selectedVehicleId,
+                  );
+                  const hasDefaultTemplate =
+                    !!selectedVehicle?.defaultInspectionTemplateId;
+                  const templateName = hasDefaultTemplate
+                    ? templates.find(
+                        (t) =>
+                          t.id === selectedVehicle.defaultInspectionTemplateId,
+                      )?.name
                     : defaultTemplate?.name;
 
                   return hasDefaultTemplate ? (
@@ -359,7 +445,7 @@ export default function VehicleInspection() {
                         <CheckCircle2 className="h-4 w-4 text-green-600" />
                         <div>
                           <p className="text-sm font-medium text-green-900">
-                            Using: {templateName || 'Assigned Template'}
+                            Using: {templateName || "Assigned Template"}
                           </p>
                           <p className="text-xs text-green-700">
                             This vehicle has a pre-assigned inspection template
@@ -369,15 +455,30 @@ export default function VehicleInspection() {
                     </div>
                   ) : (
                     <div>
-                      <Label htmlFor="template">Inspection Template (optional)</Label>
-                      <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                        <SelectTrigger className="text-base md:text-sm" data-testid="select-template">
-                          <SelectValue placeholder={defaultTemplate ? `Using default: ${defaultTemplate.name}` : "Choose a template"} />
+                      <Label htmlFor="template">
+                        Inspection Template (optional)
+                      </Label>
+                      <Select
+                        value={selectedTemplateId}
+                        onValueChange={setSelectedTemplateId}
+                      >
+                        <SelectTrigger
+                          className="text-base md:text-sm"
+                          data-testid="select-template"
+                        >
+                          <SelectValue
+                            placeholder={
+                              defaultTemplate
+                                ? `Using default: ${defaultTemplate.name}`
+                                : "Choose a template"
+                            }
+                          />
                         </SelectTrigger>
                         <SelectContent>
-                          {templates.map(template => (
+                          {templates.map((template) => (
                             <SelectItem key={template.id} value={template.id}>
-                              {template.name} {template.isDefault && '(Default)'}
+                              {template.name}{" "}
+                              {template.isDefault && "(Default)"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -407,7 +508,7 @@ export default function VehicleInspection() {
             )}
 
             <Button
-              onClick={() => setCurrentStep('inspection')}
+              onClick={() => setCurrentStep("inspection")}
               disabled={!canProceedToInspection}
               className="w-full"
               data-testid="button-start-inspection"
@@ -420,13 +521,15 @@ export default function VehicleInspection() {
     );
   }
 
-  if (currentStep === 'inspection') {
+  if (currentStep === "inspection") {
     return (
       <div className="flex flex-col h-full p-4 md:p-6 space-y-6">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold">Inspection Checklist</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">
+            Inspection Checklist
+          </h1>
           <p className="text-muted-foreground">
-            {vehicles.find(v => v.id === selectedVehicleId)?.name}
+            {vehicles.find((v) => v.id === selectedVehicleId)?.name}
           </p>
         </div>
 
@@ -437,21 +540,30 @@ export default function VehicleInspection() {
                 <CardTitle className="text-lg">{category}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {items.map(item => {
+                {items.map((item) => {
                   const response = responses.get(item.id);
                   if (!response) return null;
 
                   return (
-                    <div key={item.id} className="space-y-3 pb-4 border-b last:border-0">
+                    <div
+                      key={item.id}
+                      className="space-y-3 pb-4 border-b last:border-0"
+                    >
                       <div>
-                        <p className="font-medium text-sm md:text-base">{item.question}</p>
+                        <p className="font-medium text-sm md:text-base">
+                          {item.question}
+                        </p>
                       </div>
 
                       <div className="flex gap-2">
                         <Button
-                          variant={response.responseValue === 'YES' ? 'default' : 'outline'}
+                          variant={
+                            response.responseValue === "YES"
+                              ? "default"
+                              : "outline"
+                          }
                           size="sm"
-                          onClick={() => handleResponseChange(item.id, 'YES')}
+                          onClick={() => handleResponseChange(item.id, "YES")}
                           className="flex-1 min-h-10"
                           data-testid={`button-yes-${item.id}`}
                         >
@@ -459,9 +571,13 @@ export default function VehicleInspection() {
                           YES
                         </Button>
                         <Button
-                          variant={response.responseValue === 'NO' ? 'destructive' : 'outline'}
+                          variant={
+                            response.responseValue === "NO"
+                              ? "destructive"
+                              : "outline"
+                          }
                           size="sm"
-                          onClick={() => handleResponseChange(item.id, 'NO')}
+                          onClick={() => handleResponseChange(item.id, "NO")}
                           className="flex-1 min-h-10"
                           data-testid={`button-no-${item.id}`}
                         >
@@ -469,9 +585,13 @@ export default function VehicleInspection() {
                           NO
                         </Button>
                         <Button
-                          variant={response.responseValue === 'N/A' ? 'secondary' : 'outline'}
+                          variant={
+                            response.responseValue === "N/A"
+                              ? "secondary"
+                              : "outline"
+                          }
                           size="sm"
-                          onClick={() => handleResponseChange(item.id, 'N/A')}
+                          onClick={() => handleResponseChange(item.id, "N/A")}
                           className="flex-1 min-h-10"
                           data-testid={`button-na-${item.id}`}
                         >
@@ -480,51 +600,64 @@ export default function VehicleInspection() {
                         </Button>
                       </div>
 
-                      {(response.responseValue === 'NO' || response.responseValue === 'N/A') && (
+                      {(response.responseValue === "NO" ||
+                        response.responseValue === "N/A") && (
                         <div className="space-y-3 bg-muted/50 p-3 rounded-md">
                           {/* Always show comment field for NO or N/A */}
                           <div>
-                            <Label htmlFor={`comment-${item.id}`} className="text-xs">
-                              {response.responseValue === 'NO' 
-                                ? 'Comment (optional)' 
-                                : 'Why is this not applicable? (optional)'}
+                            <Label
+                              htmlFor={`comment-${item.id}`}
+                              className="text-xs"
+                            >
+                              {response.responseValue === "NO"
+                                ? "Comment (optional)"
+                                : "Why is this not applicable? (optional)"}
                             </Label>
                             <Textarea
                               id={`comment-${item.id}`}
                               value={response.comments}
-                              onChange={(e) => handleCommentChange(item.id, e.target.value)}
-                              placeholder={response.responseValue === 'NO' 
-                                ? 'Explain the issue...' 
-                                : 'Explain why this doesn\'t apply...'}
+                              onChange={(e) =>
+                                handleCommentChange(item.id, e.target.value)
+                              }
+                              placeholder={
+                                response.responseValue === "NO"
+                                  ? "Explain the issue..."
+                                  : "Explain why this doesn't apply..."
+                              }
                               className="text-base md:text-sm"
                               data-testid={`textarea-comment-${item.id}`}
                             />
                           </div>
 
                           {/* Only show photo option for NO responses on items that require it */}
-                          {response.responseValue === 'NO' && response.requiresPhoto && (
-                            <div>
-                              <Label htmlFor={`photo-${item.id}`} className="text-xs">
-                                Photo (optional)
-                              </Label>
-                              <div className="flex gap-2">
-                                <Input
-                                  id={`photo-${item.id}`}
-                                  type="file"
-                                  accept="image/*"
-                                  onChange={(e) => {
-                                    const file = e.target.files?.[0];
-                                    if (file) handlePhotoUpload(item.id, file);
-                                  }}
-                                  className="text-base md:text-sm"
-                                  data-testid={`input-photo-${item.id}`}
-                                />
-                                {response.photoUrl && (
-                                  <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                )}
+                          {response.responseValue === "NO" &&
+                            response.requiresPhoto && (
+                              <div>
+                                <Label
+                                  htmlFor={`photo-${item.id}`}
+                                  className="text-xs"
+                                >
+                                  Photo (optional)
+                                </Label>
+                                <div className="flex gap-2">
+                                  <Input
+                                    id={`photo-${item.id}`}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file)
+                                        handlePhotoUpload(item.id, file);
+                                    }}
+                                    className="text-base md:text-sm"
+                                    data-testid={`input-photo-${item.id}`}
+                                  />
+                                  {response.photoUrl && (
+                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          )}
+                            )}
                         </div>
                       )}
                     </div>
@@ -538,19 +671,21 @@ export default function VehicleInspection() {
         <div className="flex gap-2 sticky bottom-0 bg-background py-4 border-t">
           <Button
             variant="outline"
-            onClick={() => setCurrentStep('vehicle')}
+            onClick={() => setCurrentStep("vehicle")}
             className="flex-1"
             data-testid="button-back"
           >
             Back
           </Button>
           <Button
-            onClick={() => setCurrentStep('signature')}
+            onClick={() => setCurrentStep("signature")}
             disabled={!canProceedToSignature}
             className="flex-1"
             data-testid="button-next"
           >
-            {canProceedToSignature ? 'Next: Signature' : `Answer All (${answeredCount}/${totalQuestions})`}
+            {canProceedToSignature
+              ? "Next: Signature"
+              : `Answer All (${answeredCount}/${totalQuestions})`}
           </Button>
         </div>
       </div>
@@ -633,7 +768,7 @@ export default function VehicleInspection() {
       <div className="flex gap-2 sticky bottom-0 bg-background py-4 border-t">
         <Button
           variant="outline"
-          onClick={() => setCurrentStep('inspection')}
+          onClick={() => setCurrentStep("inspection")}
           className="flex-1"
           data-testid="button-back-to-inspection"
         >
@@ -641,11 +776,17 @@ export default function VehicleInspection() {
         </Button>
         <Button
           onClick={() => createInspectionMutation.mutate()}
-          disabled={!hasSignature || !inspectorName.trim() || createInspectionMutation.isPending}
+          disabled={
+            !hasSignature ||
+            !inspectorName.trim() ||
+            createInspectionMutation.isPending
+          }
           className="flex-1"
           data-testid="button-submit"
         >
-          {createInspectionMutation.isPending ? 'Submitting...' : 'Complete Inspection'}
+          {createInspectionMutation.isPending
+            ? "Submitting..."
+            : "Complete Inspection"}
         </Button>
       </div>
     </div>

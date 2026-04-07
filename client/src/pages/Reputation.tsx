@@ -1,19 +1,25 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  Star, 
-  Send, 
-  Mail, 
-  MessageSquare, 
-  TrendingUp, 
+import {
+  Star,
+  Send,
+  Mail,
+  MessageSquare,
+  TrendingUp,
   SkipForward,
   CheckCircle2,
-  Clock
+  Clock,
 } from "lucide-react";
 import { format } from "date-fns";
 import {
@@ -74,7 +80,9 @@ export default function Reputation() {
     queryKey: ["/api/reviews/stats"],
   });
 
-  const { data: completedJobs, isLoading: jobsLoading } = useQuery<{ data: CompletedJob[] }>({
+  const { data: completedJobs, isLoading: jobsLoading } = useQuery<{
+    data: CompletedJob[];
+  }>({
     queryKey: ["/api/reviews/completed-jobs"],
   });
 
@@ -87,7 +95,9 @@ export default function Reputation() {
       return await apiRequest("POST", "/api/reviews/send-request", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/completed-jobs"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/reviews/completed-jobs"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/stats"] });
       setSelectedJob(null);
     },
@@ -105,7 +115,9 @@ export default function Reputation() {
       return await apiRequest("POST", `/api/reviews/${requestId}/skip`, {});
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/reviews/completed-jobs"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/reviews/completed-jobs"],
+      });
     },
   });
 
@@ -123,17 +135,18 @@ export default function Reputation() {
     });
   };
 
-  const pendingJobs = completedJobs?.data.filter(
-    job => !job.reviewRequestId || job.reviewRequestStatus === 'pending'
-  ) || [];
+  const pendingJobs =
+    completedJobs?.data.filter(
+      (job) => !job.reviewRequestId || job.reviewRequestStatus === "pending",
+    ) || [];
 
-  const sentJobs = completedJobs?.data.filter(
-    job => job.reviewRequestStatus === 'sent' && !job.reviewSubmissionId
-  ) || [];
+  const sentJobs =
+    completedJobs?.data.filter(
+      (job) => job.reviewRequestStatus === "sent" && !job.reviewSubmissionId,
+    ) || [];
 
-  const reviewedJobs = completedJobs?.data.filter(
-    job => job.reviewSubmissionId
-  ) || [];
+  const reviewedJobs =
+    completedJobs?.data.filter((job) => job.reviewSubmissionId) || [];
 
   const renderStarRating = (rating: number) => {
     return (
@@ -157,7 +170,9 @@ export default function Reputation() {
       <div className="p-3 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
         {/* Header */}
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Reputation Management</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            Reputation Management
+          </h1>
           <p className="text-sm sm:text-base text-muted-foreground mt-1">
             Collect and manage customer reviews
           </p>
@@ -167,41 +182,57 @@ export default function Reputation() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Requests Sent</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium">
+                Requests Sent
+              </CardTitle>
               <Send className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">{stats?.data.totalSent || 0}</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {stats?.data.totalSent || 0}
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Reviews Received</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium">
+                Reviews Received
+              </CardTitle>
               <Star className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">{stats?.data.totalReceived || 0}</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {stats?.data.totalReceived || 0}
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Conversion Rate</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium">
+                Conversion Rate
+              </CardTitle>
               <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">{stats?.data.conversionRate || 0}%</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {stats?.data.conversionRate || 0}%
+              </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between gap-1 space-y-0 pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Avg Rating</CardTitle>
+              <CardTitle className="text-xs sm:text-sm font-medium">
+                Avg Rating
+              </CardTitle>
               <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-400 fill-yellow-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-xl sm:text-2xl font-bold">{stats?.data.averageRating || 0}</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {stats?.data.averageRating || 0}
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -221,14 +252,21 @@ export default function Reputation() {
           </TabsList>
 
           {/* Pending Jobs - Queue */}
-          <TabsContent value="pending" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+          <TabsContent
+            value="pending"
+            className="space-y-3 sm:space-y-4 mt-3 sm:mt-4"
+          >
             {jobsLoading ? (
-              <div className="text-center py-8 text-muted-foreground">Loading...</div>
+              <div className="text-center py-8 text-muted-foreground">
+                Loading...
+              </div>
             ) : pendingJobs.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
                   <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3 text-green-500" />
-                  <p className="text-sm sm:text-base">All completed jobs have been handled!</p>
+                  <p className="text-sm sm:text-base">
+                    All completed jobs have been handled!
+                  </p>
                 </CardContent>
               </Card>
             ) : (
@@ -238,26 +276,39 @@ export default function Reputation() {
                     <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start gap-2 mb-2">
-                          <Badge variant="outline" className="text-xs">#{job.jobNumber}</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            #{job.jobNumber}
+                          </Badge>
                           {job.completedDate && (
                             <span className="text-xs text-muted-foreground whitespace-nowrap">
-                              {format(new Date(job.completedDate), "MMM d, yyyy")}
+                              {format(
+                                new Date(job.completedDate),
+                                "MMM d, yyyy",
+                              )}
                             </span>
                           )}
                         </div>
-                        <h3 className="font-semibold text-sm sm:text-base truncate">{job.customerName}</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 mt-1">{job.address}</p>
+                        <h3 className="font-semibold text-sm sm:text-base truncate">
+                          {job.customerName}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 mt-1">
+                          {job.address}
+                        </p>
                         <div className="flex flex-wrap gap-2 mt-2">
                           {job.customerPhone && (
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <MessageSquare className="h-3 w-3" />
-                              <span className="truncate">{job.customerPhone}</span>
+                              <span className="truncate">
+                                {job.customerPhone}
+                              </span>
                             </div>
                           )}
                           {job.customerEmail && (
                             <div className="flex items-center gap-1 text-xs text-muted-foreground">
                               <Mail className="h-3 w-3" />
-                              <span className="truncate">{job.customerEmail}</span>
+                              <span className="truncate">
+                                {job.customerEmail}
+                              </span>
                             </div>
                           )}
                         </div>
@@ -276,7 +327,9 @@ export default function Reputation() {
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => skipMutation.mutate(job.reviewRequestId!)}
+                            onClick={() =>
+                              skipMutation.mutate(job.reviewRequestId!)
+                            }
                             data-testid={`button-skip-${job.id}`}
                           >
                             <SkipForward className="h-4 w-4" />
@@ -291,12 +344,17 @@ export default function Reputation() {
           </TabsContent>
 
           {/* Sent - Awaiting Response */}
-          <TabsContent value="sent" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+          <TabsContent
+            value="sent"
+            className="space-y-3 sm:space-y-4 mt-3 sm:mt-4"
+          >
             {sentJobs.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
                   <Clock className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3" />
-                  <p className="text-sm sm:text-base">No pending review requests</p>
+                  <p className="text-sm sm:text-base">
+                    No pending review requests
+                  </p>
                 </CardContent>
               </Card>
             ) : (
@@ -306,14 +364,20 @@ export default function Reputation() {
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className="text-xs">#{job.jobNumber}</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            #{job.jobNumber}
+                          </Badge>
                           <Badge variant="secondary" className="text-xs">
                             <Clock className="h-3 w-3 mr-1" />
                             Awaiting
                           </Badge>
                         </div>
-                        <h3 className="font-semibold text-sm sm:text-base truncate">{job.customerName}</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 mt-1">{job.address}</p>
+                        <h3 className="font-semibold text-sm sm:text-base truncate">
+                          {job.customerName}
+                        </h3>
+                        <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1 mt-1">
+                          {job.address}
+                        </p>
                       </div>
                     </div>
                   </CardContent>
@@ -323,12 +387,17 @@ export default function Reputation() {
           </TabsContent>
 
           {/* Submitted Reviews */}
-          <TabsContent value="reviews" className="space-y-3 sm:space-y-4 mt-3 sm:mt-4">
+          <TabsContent
+            value="reviews"
+            className="space-y-3 sm:space-y-4 mt-3 sm:mt-4"
+          >
             {!submissions?.data || submissions.data.length === 0 ? (
               <Card>
                 <CardContent className="py-8 text-center text-muted-foreground">
                   <Star className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-3" />
-                  <p className="text-sm sm:text-base">No reviews submitted yet</p>
+                  <p className="text-sm sm:text-base">
+                    No reviews submitted yet
+                  </p>
                 </CardContent>
               </Card>
             ) : (
@@ -339,15 +408,24 @@ export default function Reputation() {
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-2">
-                            <Badge variant="outline" className="text-xs">#{review.jobNumber}</Badge>
+                            <Badge variant="outline" className="text-xs">
+                              #{review.jobNumber}
+                            </Badge>
                             {renderStarRating(review.rating)}
                           </div>
-                          <h3 className="font-semibold text-sm sm:text-base truncate">{review.customerName}</h3>
-                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">{review.jobAddress}</p>
+                          <h3 className="font-semibold text-sm sm:text-base truncate">
+                            {review.customerName}
+                          </h3>
+                          <p className="text-xs sm:text-sm text-muted-foreground line-clamp-1">
+                            {review.jobAddress}
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-xs text-muted-foreground whitespace-nowrap">
-                            {format(new Date(review.submittedAt), "MMM d, yyyy")}
+                            {format(
+                              new Date(review.submittedAt),
+                              "MMM d, yyyy",
+                            )}
                           </p>
                         </div>
                       </div>
@@ -361,10 +439,24 @@ export default function Reputation() {
                       <div className="flex flex-wrap gap-2">
                         {review.rating >= 4 ? (
                           <>
-                            <Badge variant={review.googlePostStatus === 'posted' ? 'default' : 'secondary'} className="text-xs">
+                            <Badge
+                              variant={
+                                review.googlePostStatus === "posted"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className="text-xs"
+                            >
                               Google: {review.googlePostStatus}
                             </Badge>
-                            <Badge variant={review.facebookPostStatus === 'posted' ? 'default' : 'secondary'} className="text-xs">
+                            <Badge
+                              variant={
+                                review.facebookPostStatus === "posted"
+                                  ? "default"
+                                  : "secondary"
+                              }
+                              className="text-xs"
+                            >
                               Facebook: {review.facebookPostStatus}
                             </Badge>
                           </>
@@ -397,7 +489,9 @@ export default function Reputation() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">Customer Details</Label>
               <div className="text-sm space-y-1">
-                <p className="text-muted-foreground">Job #{selectedJob?.jobNumber}</p>
+                <p className="text-muted-foreground">
+                  Job #{selectedJob?.jobNumber}
+                </p>
                 {selectedJob?.customerPhone && (
                   <div className="flex items-center gap-2">
                     <MessageSquare className="h-4 w-4 text-muted-foreground" />
@@ -407,7 +501,9 @@ export default function Reputation() {
                 {selectedJob?.customerEmail && (
                   <div className="flex items-center gap-2">
                     <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="truncate">{selectedJob.customerEmail}</span>
+                    <span className="truncate">
+                      {selectedJob.customerEmail}
+                    </span>
                   </div>
                 )}
               </div>
@@ -415,21 +511,36 @@ export default function Reputation() {
 
             <div className="space-y-3">
               <Label className="text-sm font-medium">Send via</Label>
-              <RadioGroup value={sendVia} onValueChange={(v) => setSendVia(v as any)}>
+              <RadioGroup
+                value={sendVia}
+                onValueChange={(v) => setSendVia(v as any)}
+              >
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="sms" id="sms" data-testid="radio-sms" />
+                  <RadioGroupItem
+                    value="sms"
+                    id="sms"
+                    data-testid="radio-sms"
+                  />
                   <Label htmlFor="sms" className="font-normal cursor-pointer">
                     SMS only
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="email" id="email" data-testid="radio-email" />
+                  <RadioGroupItem
+                    value="email"
+                    id="email"
+                    data-testid="radio-email"
+                  />
                   <Label htmlFor="email" className="font-normal cursor-pointer">
                     Email only
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="both" id="both" data-testid="radio-both" />
+                  <RadioGroupItem
+                    value="both"
+                    id="both"
+                    data-testid="radio-both"
+                  />
                   <Label htmlFor="both" className="font-normal cursor-pointer">
                     Both SMS and Email
                   </Label>

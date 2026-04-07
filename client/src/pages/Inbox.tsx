@@ -1,13 +1,13 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { Conversation } from '@shared/schema';
-import { insertLeadSchema } from '@shared/schema';
+import type { Conversation } from "@shared/schema";
+import { insertLeadSchema } from "@shared/schema";
 import {
   MessageSquare,
   Search,
@@ -19,36 +19,62 @@ import {
   MoreVertical,
   Briefcase,
   UserPlus,
-  Trash2
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { formatDistanceToNow } from 'date-fns';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { formatDistanceToNow } from "date-fns";
 import { LeadFormDialog } from "@/components/LeadFormDialog";
 
 // Form schema extending insertLeadSchema with required validation
 const createLeadFormSchema = insertLeadSchema.extend({
   name: z.string().min(1, "Name is required"),
   phone: z.string().min(1, "Phone is required"),
-  status: z.string().default('new'),
-  urgency: z.enum(['low', 'medium', 'high', 'emergency']).optional().default('medium'),
+  status: z.string().default("new"),
+  urgency: z
+    .enum(["low", "medium", "high", "emergency"])
+    .optional()
+    .default("medium"),
 });
 
 export default function Inbox() {
   const [, setLocation] = useLocation();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [sourceFilter, setSourceFilter] = useState<string>('all'); // Add source filter
-  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [sourceFilter, setSourceFilter] = useState<string>("all"); // Add source filter
+  const [selectedConversation, setSelectedConversation] =
+    useState<Conversation | null>(null);
   const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
-  const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] = useState(false);
+  const [showCreateOpportunityDialog, setShowCreateOpportunityDialog] =
+    useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
@@ -58,46 +84,56 @@ export default function Inbox() {
   const jobForm = useForm<z.infer<typeof createLeadFormSchema>>({
     resolver: zodResolver(createLeadFormSchema),
     defaultValues: {
-      name: '',
-      email: '',
-      phone: '',
-      address: '',
-      serviceRequested: '',
-      urgency: 'medium',
-      status: 'new',
-      notes: ''
-    }
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      serviceRequested: "",
+      urgency: "medium",
+      status: "new",
+      notes: "",
+    },
   });
 
   // Form for creating opportunity
   const opportunityForm = useForm<z.infer<typeof createLeadFormSchema>>({
     resolver: zodResolver(createLeadFormSchema),
     defaultValues: {
-      name: '',
-      email: '',
-      phone: '',
-      address: '',
-      serviceRequested: '',
-      urgency: 'medium',
-      status: 'new',
-      notes: ''
-    }
+      name: "",
+      email: "",
+      phone: "",
+      address: "",
+      serviceRequested: "",
+      urgency: "medium",
+      status: "new",
+      notes: "",
+    },
   });
 
   // Fetch conversations from backend - filter by source
-  const { data: conversationsResponse, isLoading, refetch } = useQuery({
-    queryKey: ['/api/conversations', { search: searchTerm || undefined, source: sourceFilter !== 'all' ? sourceFilter : undefined }],
+  const {
+    data: conversationsResponse,
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: [
+      "/api/conversations",
+      {
+        search: searchTerm || undefined,
+        source: sourceFilter !== "all" ? sourceFilter : undefined,
+      },
+    ],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (searchTerm) params.append('search', searchTerm);
+      if (searchTerm) params.append("search", searchTerm);
       // Filter by source if not 'all'
-      if (sourceFilter !== 'all') {
-        params.append('source', sourceFilter);
+      if (sourceFilter !== "all") {
+        params.append("source", sourceFilter);
       }
       const response = await fetch(`/api/conversations?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch conversations');
+      if (!response.ok) throw new Error("Failed to fetch conversations");
       return response.json();
-    }
+    },
   });
 
   const conversations: Conversation[] = conversationsResponse?.data || [];
@@ -105,59 +141,59 @@ export default function Inbox() {
   // Create Opportunity mutation
   const createOpportunityMutation = useMutation({
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
-      return apiRequest('POST', '/api/leads', leadData);
+      return apiRequest("POST", "/api/leads", leadData);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       setShowCreateOpportunityDialog(false);
       opportunityForm.reset();
-          },
+    },
     onError: () => {
-      toast({ 
-        title: 'Failed to create opportunity', 
-        description: 'Please try again.',
-        variant: 'destructive'
+      toast({
+        title: "Failed to create opportunity",
+        description: "Please try again.",
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Create Job as Lead mutation
   const createJobMutation = useMutation({
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
-      return apiRequest('POST', '/api/leads', { ...leadData, status: 'new' });
+      return apiRequest("POST", "/api/leads", { ...leadData, status: "new" });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       setShowCreateJobDialog(false);
       jobForm.reset();
-            setLocation('/dispatch');
+      setLocation("/dispatch");
     },
     onError: () => {
-      toast({ 
-        title: 'Failed to create job lead', 
-        description: 'Please try again.',
-        variant: 'destructive'
+      toast({
+        title: "Failed to create job lead",
+        description: "Please try again.",
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
     mutationFn: async (ids: string[]) => {
-      return apiRequest('DELETE', '/api/conversations/bulk', { ids });
+      return apiRequest("DELETE", "/api/conversations/bulk", { ids });
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
-          },
+    },
     onError: () => {
-      toast({ 
-        title: 'Failed to delete conversations', 
-        description: 'Please try again.',
-        variant: 'destructive'
+      toast({
+        title: "Failed to delete conversations",
+        description: "Please try again.",
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Selection helpers
@@ -165,7 +201,7 @@ export default function Inbox() {
     if (selectedIds.size === filteredConversations.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(filteredConversations.map(c => c.id)));
+      setSelectedIds(new Set(filteredConversations.map((c) => c.id)));
     }
   };
 
@@ -187,38 +223,52 @@ export default function Inbox() {
 
   // Filter conversations based on status
   const filteredConversations = useMemo(() => {
-    return conversations.filter(conv => {
-      if (statusFilter === 'all') return true;
+    return conversations.filter((conv) => {
+      if (statusFilter === "all") return true;
       return conv.status === statusFilter;
     });
   }, [conversations, statusFilter]);
 
-  const unreadCount = filteredConversations.filter(conv => (conv.unreadCount || 0) > 0).length;
+  const unreadCount = filteredConversations.filter(
+    (conv) => (conv.unreadCount || 0) > 0,
+  ).length;
 
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'open': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'closed': return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200';
-      case 'pending': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      default: return 'bg-gray-100 text-gray-800';
+      case "open":
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      case "closed":
+        return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+      case "pending":
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
   const getPriorityBadgeColor = (priority: string) => {
     switch (priority) {
-      case 'high': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      case 'medium': return 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200';
-      case 'low': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-      default: return 'bg-gray-100 text-gray-800';
+      case "high":
+        return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
+      case "medium":
+        return "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200";
+      case "low":
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      default:
+        return "bg-gray-100 text-gray-800";
     }
   };
 
   const getSourceIcon = (source: string) => {
     switch (source) {
-      case 'email': return <Mail className="h-4 w-4" />;
-      case 'phone': return <Phone className="h-4 w-4" />;
-      case 'video': return <Video className="h-4 w-4" />;
-      default: return <MessageSquare className="h-4 w-4" />;
+      case "email":
+        return <Mail className="h-4 w-4" />;
+      case "phone":
+        return <Phone className="h-4 w-4" />;
+      case "video":
+        return <Video className="h-4 w-4" />;
+      default:
+        return <MessageSquare className="h-4 w-4" />;
     }
   };
 
@@ -252,8 +302,8 @@ export default function Inbox() {
               Messages from website, Facebook, email, and phone
             </p>
           </div>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => refetch()}
             data-testid="button-refresh-conversations"
@@ -306,24 +356,35 @@ export default function Inbox() {
         {filteredConversations.length > 0 && (
           <div className="flex items-center gap-4 mt-4 pt-4 border-t">
             <div className="flex items-center gap-2">
-              <Checkbox 
+              <Checkbox
                 id="select-all"
-                checked={selectedIds.size === filteredConversations.length && filteredConversations.length > 0}
+                checked={
+                  selectedIds.size === filteredConversations.length &&
+                  filteredConversations.length > 0
+                }
                 onCheckedChange={toggleSelectAll}
                 data-testid="checkbox-select-all"
               />
-              <label htmlFor="select-all" className="text-sm text-muted-foreground cursor-pointer">
+              <label
+                htmlFor="select-all"
+                className="text-sm text-muted-foreground cursor-pointer"
+              >
                 Select all ({filteredConversations.length})
               </label>
             </div>
-            
+
             {selectedIds.size > 0 && (
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{selectedIds.size} selected</span>
-                <AlertDialog open={showDeleteConfirm} onOpenChange={setShowDeleteConfirm}>
+                <span className="text-sm font-medium">
+                  {selectedIds.size} selected
+                </span>
+                <AlertDialog
+                  open={showDeleteConfirm}
+                  onOpenChange={setShowDeleteConfirm}
+                >
                   <AlertDialogTrigger asChild>
-                    <Button 
-                      variant="destructive" 
+                    <Button
+                      variant="destructive"
                       size="sm"
                       data-testid="button-bulk-delete"
                     >
@@ -333,14 +394,17 @@ export default function Inbox() {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete {selectedIds.size} conversations?</AlertDialogTitle>
+                      <AlertDialogTitle>
+                        Delete {selectedIds.size} conversations?
+                      </AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. All selected conversations and their messages will be permanently deleted.
+                        This action cannot be undone. All selected conversations
+                        and their messages will be permanently deleted.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction 
+                      <AlertDialogAction
                         onClick={handleBulkDelete}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                         disabled={bulkDeleteMutation.isPending}
@@ -351,14 +415,14 @@ export default function Inbox() {
                             Deleting...
                           </>
                         ) : (
-                          'Delete'
+                          "Delete"
                         )}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-                <Button 
-                  variant="ghost" 
+                <Button
+                  variant="ghost"
                   size="sm"
                   onClick={() => setSelectedIds(new Set())}
                 >
@@ -376,9 +440,13 @@ export default function Inbox() {
           {filteredConversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12">
               <MessageSquare className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-lg font-medium text-muted-foreground">No conversations found</p>
+              <p className="text-lg font-medium text-muted-foreground">
+                No conversations found
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
-                {searchTerm ? 'Try adjusting your search terms' : 'Messages from website, Facebook, and other channels will appear here'}
+                {searchTerm
+                  ? "Try adjusting your search terms"
+                  : "Messages from website, Facebook, and other channels will appear here"}
               </p>
             </div>
           ) : (
@@ -386,8 +454,8 @@ export default function Inbox() {
               <div
                 key={conversation.id}
                 className={`p-4 hover-elevate active-elevate-2 ${
-                  (conversation.unreadCount || 0) > 0 ? 'bg-accent/50' : ''
-                } ${selectedIds.has(conversation.id) ? 'bg-primary/10' : ''}`}
+                  (conversation.unreadCount || 0) > 0 ? "bg-accent/50" : ""
+                } ${selectedIds.has(conversation.id) ? "bg-primary/10" : ""}`}
                 data-testid={`conversation-item-${conversation.id}`}
               >
                 <div className="flex items-start gap-3">
@@ -398,36 +466,65 @@ export default function Inbox() {
                     className="mt-1"
                     data-testid={`checkbox-conversation-${conversation.id}`}
                   />
-                  <Avatar className="h-10 w-10 cursor-pointer" onClick={() => setLocation(`/conversation/${conversation.id}`)}>
+                  <Avatar
+                    className="h-10 w-10 cursor-pointer"
+                    onClick={() =>
+                      setLocation(`/conversation/${conversation.id}`)
+                    }
+                  >
                     <AvatarFallback>
-                      {conversation.title?.charAt(0).toUpperCase() || 'C'}
+                      {conversation.title?.charAt(0).toUpperCase() || "C"}
                     </AvatarFallback>
                   </Avatar>
-                  
-                  <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setLocation(`/conversation/${conversation.id}`)}>
+
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() =>
+                      setLocation(`/conversation/${conversation.id}`)
+                    }
+                  >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-2">
-                        {getSourceIcon(conversation.source || 'email')}
-                        <h3 className={`text-sm font-medium ${
-                          (conversation.unreadCount || 0) > 0 ? 'font-semibold' : ''
-                        }`}>
+                        {getSourceIcon(conversation.source || "email")}
+                        <h3
+                          className={`text-sm font-medium ${
+                            (conversation.unreadCount || 0) > 0
+                              ? "font-semibold"
+                              : ""
+                          }`}
+                        >
                           {conversation.title}
                         </h3>
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {conversation.lastMessageAt 
-                          ? formatDistanceToNow(new Date(conversation.lastMessageAt), { addSuffix: true })
-                          : formatDistanceToNow(new Date(conversation.createdAt || new Date()), { addSuffix: true })
-                        }
+                        {conversation.lastMessageAt
+                          ? formatDistanceToNow(
+                              new Date(conversation.lastMessageAt),
+                              { addSuffix: true },
+                            )
+                          : formatDistanceToNow(
+                              new Date(conversation.createdAt || new Date()),
+                              { addSuffix: true },
+                            )}
                       </span>
                     </div>
-                    
+
                     <div className="flex items-center gap-2 mt-2">
-                      <Badge className={getStatusBadgeColor(conversation.status || 'open')} variant="secondary">
-                        {conversation.status || 'open'}
+                      <Badge
+                        className={getStatusBadgeColor(
+                          conversation.status || "open",
+                        )}
+                        variant="secondary"
+                      >
+                        {conversation.status || "open"}
                       </Badge>
-                      <Badge className={getPriorityBadgeColor(conversation.priority || 'medium')} variant="secondary">
-                        {conversation.priority || 'medium'}
+                      <Badge
+                        className={getPriorityBadgeColor(
+                          conversation.priority || "medium",
+                        )}
+                        variant="secondary"
+                      >
+                        {conversation.priority || "medium"}
                       </Badge>
                       {(conversation.unreadCount || 0) > 0 && (
                         <Badge variant="destructive" className="text-xs">
@@ -439,10 +536,13 @@ export default function Inbox() {
 
                   {/* Action Menu */}
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button 
-                        variant="ghost" 
-                        size="icon" 
+                    <DropdownMenuTrigger
+                      asChild
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         className="flex-shrink-0 h-8 w-8"
                         data-testid={`button-actions-${conversation.id}`}
                       >
@@ -450,19 +550,19 @@ export default function Inbox() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedConversation(conversation);
                           jobForm.reset({
-                            name: conversation.title || '',
-                            email: '',
-                            phone: '',
-                            address: '',
-                            serviceRequested: '',
-                            urgency: 'medium',
-                            status: 'new',
-                            notes: `From quote request: ${conversation.title || ''}`
+                            name: conversation.title || "",
+                            email: "",
+                            phone: "",
+                            address: "",
+                            serviceRequested: "",
+                            urgency: "medium",
+                            status: "new",
+                            notes: `From quote request: ${conversation.title || ""}`,
                           });
                           setShowCreateJobDialog(true);
                         }}
@@ -471,19 +571,19 @@ export default function Inbox() {
                         <Briefcase className="h-4 w-4 mr-2" />
                         Create Job as Lead
                       </DropdownMenuItem>
-                      <DropdownMenuItem 
+                      <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedConversation(conversation);
                           opportunityForm.reset({
-                            name: conversation.title || '',
-                            email: '',
-                            phone: '',
-                            address: '',
-                            serviceRequested: '',
-                            urgency: 'medium',
-                            status: 'new',
-                            notes: `Converted from quote request: ${conversation.title || ''}`
+                            name: conversation.title || "",
+                            email: "",
+                            phone: "",
+                            address: "",
+                            serviceRequested: "",
+                            urgency: "medium",
+                            status: "new",
+                            notes: `Converted from quote request: ${conversation.title || ""}`,
                           });
                           setShowCreateOpportunityDialog(true);
                         }}
@@ -510,7 +610,9 @@ export default function Inbox() {
         submitLabel="Create Job Lead"
         isSubmitting={createJobMutation.isPending}
         form={jobForm}
-        onSubmit={(values) => createJobMutation.mutate({ ...values, status: 'new' })}
+        onSubmit={(values) =>
+          createJobMutation.mutate({ ...values, status: "new" })
+        }
         includeStatus={false}
         testIdPrefix="inbox-job"
       />

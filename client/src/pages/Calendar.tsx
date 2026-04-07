@@ -5,14 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
-import { 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  ChevronLeft,
+  ChevronRight,
   Calendar as CalendarIcon,
   Clock,
   MapPin,
@@ -20,21 +27,21 @@ import {
   Plus,
   Grid3x3,
   List,
-  MessageSquare
+  MessageSquare,
 } from "lucide-react";
-import { 
-  format, 
-  startOfMonth, 
-  endOfMonth, 
-  eachDayOfInterval, 
-  isSameMonth, 
-  isSameDay, 
-  addMonths, 
+import {
+  format,
+  startOfMonth,
+  endOfMonth,
+  eachDayOfInterval,
+  isSameMonth,
+  isSameDay,
+  addMonths,
   subMonths,
   startOfWeek,
   endOfWeek,
   parseISO,
-  isToday
+  isToday,
 } from "date-fns";
 import type { Job, Customer } from "@shared/schema";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -46,7 +53,7 @@ interface ApiResponse<T> {
   message?: string;
 }
 
-type ViewMode = 'month' | 'week';
+type ViewMode = "month" | "week";
 
 interface JobWithCustomer extends Job {
   customer?: Customer;
@@ -54,7 +61,7 @@ interface JobWithCustomer extends Job {
 
 export default function Calendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [viewMode, setViewMode] = useState<ViewMode>("month");
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [smsDialogOpen, setSmsDialogOpen] = useState(false);
   const [selectedJob, setSelectedJob] = useState<JobWithCustomer | null>(null);
@@ -65,12 +72,12 @@ export default function Calendar() {
 
   // Fetch jobs/appointments
   const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs'],
+    queryKey: ["/api/jobs"],
   });
 
   // Fetch customers
   const { data: customersResponse } = useQuery<ApiResponse<Customer>>({
-    queryKey: ['/api/customers'],
+    queryKey: ["/api/customers"],
   });
 
   const jobs = jobsResponse?.data || [];
@@ -78,38 +85,46 @@ export default function Calendar() {
 
   // Merge jobs with customer data
   const jobsWithCustomers: JobWithCustomer[] = useMemo(() => {
-    return jobs.map(job => {
-      const customer = customers.find(c => c.id === job.customerId);
+    return jobs.map((job) => {
+      const customer = customers.find((c) => c.id === job.customerId);
       return { ...job, customer };
     });
   }, [jobs, customers]);
 
   // Filter jobs that have a scheduled date
   const scheduledJobs = useMemo(() => {
-    return jobsWithCustomers.filter(job => job.scheduledDate && job.status !== 'unsuccessful');
+    return jobsWithCustomers.filter(
+      (job) => job.scheduledDate && job.status !== "unsuccessful",
+    );
   }, [jobsWithCustomers]);
 
   // Get appointments for a specific date
   const getAppointmentsForDate = (date: Date) => {
-    return scheduledJobs.filter(job => {
+    return scheduledJobs.filter((job) => {
       if (!job.scheduledDate) return false;
-      const jobDate = typeof job.scheduledDate === 'string' 
-        ? parseISO(job.scheduledDate) 
-        : job.scheduledDate;
+      const jobDate =
+        typeof job.scheduledDate === "string"
+          ? parseISO(job.scheduledDate)
+          : job.scheduledDate;
       return isSameDay(jobDate, date);
     });
   };
 
   // Send SMS mutation
   const sendSmsMutation = useMutation({
-    mutationFn: async (data: { phone: string; message: string; jobId?: string; customerId?: string }) => {
-      return apiRequest('/api/sms/send', {
-        method: 'POST',
+    mutationFn: async (data: {
+      phone: string;
+      message: string;
+      jobId?: string;
+      customerId?: string;
+    }) => {
+      return apiRequest("/api/sms/send", {
+        method: "POST",
         body: JSON.stringify(data),
       });
     },
     onSuccess: () => {
-            setSmsDialogOpen(false);
+      setSmsDialogOpen(false);
       setSmsMessage("");
       setSelectedJob(null);
     },
@@ -137,16 +152,20 @@ export default function Calendar() {
     setSelectedJob(job);
     const customerName = job.customer?.name || "Customer";
     const jobTitle = job.title || "your appointment";
-    
+
     // Convert UTC time from database to NZ time for display
-    const scheduledTime = job.scheduledDate 
+    const scheduledTime = job.scheduledDate
       ? formatNZTime(
-          typeof job.scheduledDate === 'string' ? job.scheduledDate : job.scheduledDate.toISOString(),
-          'full'
+          typeof job.scheduledDate === "string"
+            ? job.scheduledDate
+            : job.scheduledDate.toISOString(),
+          "full",
         )
       : "soon";
-    
-    setSmsMessage(`Hi ${customerName}, this is a reminder about ${jobTitle} scheduled for ${scheduledTime}. - Treemarkables`);
+
+    setSmsMessage(
+      `Hi ${customerName}, this is a reminder about ${jobTitle} scheduled for ${scheduledTime}. - Treemarkables`,
+    );
     setSmsDialogOpen(true);
   };
 
@@ -189,45 +208,47 @@ export default function Calendar() {
   }, [currentDate]);
 
   // Week days
-  const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   // Navigation functions
-  const goToPreviousMonth = () => setCurrentDate(prev => subMonths(prev, 1));
-  const goToNextMonth = () => setCurrentDate(prev => addMonths(prev, 1));
+  const goToPreviousMonth = () => setCurrentDate((prev) => subMonths(prev, 1));
+  const goToNextMonth = () => setCurrentDate((prev) => addMonths(prev, 1));
   const goToToday = () => setCurrentDate(new Date());
 
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'scheduled':
-        return 'bg-blue-500';
-      case 'work_order':
-        return 'bg-purple-500';
-      case 'completed':
-        return 'bg-green-500';
-      case 'quote':
-        return 'bg-amber-500';
+      case "scheduled":
+        return "bg-blue-500";
+      case "work_order":
+        return "bg-purple-500";
+      case "completed":
+        return "bg-green-500";
+      case "quote":
+        return "bg-amber-500";
       default:
-        return 'bg-gray-500';
+        return "bg-gray-500";
     }
   };
 
   // Get priority badge variant
   const getPriorityVariant = (priority: string | null) => {
     switch (priority) {
-      case 'urgent':
-        return 'destructive';
-      case 'high':
-        return 'default';
-      case 'medium':
-        return 'secondary';
+      case "urgent":
+        return "destructive";
+      case "high":
+        return "default";
+      case "medium":
+        return "secondary";
       default:
-        return 'outline';
+        return "outline";
     }
   };
 
   // Selected date appointments
-  const selectedDateAppointments = selectedDate ? getAppointmentsForDate(selectedDate) : [];
+  const selectedDateAppointments = selectedDate
+    ? getAppointmentsForDate(selectedDate)
+    : [];
 
   return (
     <div className="flex flex-col h-full bg-background w-full overflow-x-hidden">
@@ -235,7 +256,10 @@ export default function Calendar() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 border-b w-full">
         <div className="flex items-center gap-2">
           <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl sm:text-2xl font-bold" data-testid="text-calendar-title">
+          <h1
+            className="text-xl sm:text-2xl font-bold"
+            data-testid="text-calendar-title"
+          >
             Calendar
           </h1>
         </div>
@@ -244,9 +268,9 @@ export default function Calendar() {
           {/* View Mode Toggle */}
           <div className="flex items-center border rounded-md">
             <Button
-              variant={viewMode === 'month' ? 'default' : 'ghost'}
+              variant={viewMode === "month" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode('month')}
+              onClick={() => setViewMode("month")}
               className="rounded-r-none"
               data-testid="button-view-month"
             >
@@ -254,9 +278,9 @@ export default function Calendar() {
               Month
             </Button>
             <Button
-              variant={viewMode === 'week' ? 'default' : 'ghost'}
+              variant={viewMode === "week" ? "default" : "ghost"}
               size="sm"
-              onClick={() => setViewMode('week')}
+              onClick={() => setViewMode("week")}
               className="rounded-l-none"
               data-testid="button-view-week"
             >
@@ -296,8 +320,11 @@ export default function Calendar() {
           <ChevronLeft className="h-5 w-5" />
         </Button>
 
-        <h2 className="text-lg sm:text-xl font-semibold" data-testid="text-current-month">
-          {format(currentDate, 'MMMM yyyy')}
+        <h2
+          className="text-lg sm:text-xl font-semibold"
+          data-testid="text-current-month"
+        >
+          {format(currentDate, "MMMM yyyy")}
         </h2>
 
         <Button
@@ -322,7 +349,7 @@ export default function Calendar() {
             <div className="p-2 sm:p-4">
               {/* Week day headers */}
               <div className="grid grid-cols-7 gap-1 mb-2">
-                {weekDays.map(day => (
+                {weekDays.map((day) => (
                   <div
                     key={day}
                     className="text-center text-sm font-medium text-muted-foreground py-2"
@@ -337,37 +364,36 @@ export default function Calendar() {
                 {calendarDays.map((day, index) => {
                   const dayAppointments = getAppointmentsForDate(day);
                   const isCurrentMonth = isSameMonth(day, currentDate);
-                  const isSelected = selectedDate && isSameDay(day, selectedDate);
+                  const isSelected =
+                    selectedDate && isSameDay(day, selectedDate);
                   const isTodayDate = isToday(day);
 
                   return (
                     <Card
                       key={index}
                       className={`min-h-[80px] sm:min-h-[120px] cursor-pointer transition-colors ${
-                        !isCurrentMonth ? 'opacity-40' : ''
-                      } ${
-                        isSelected ? 'ring-2 ring-primary' : ''
-                      }`}
+                        !isCurrentMonth ? "opacity-40" : ""
+                      } ${isSelected ? "ring-2 ring-primary" : ""}`}
                       onClick={() => setSelectedDate(day)}
-                      data-testid={`calendar-day-${format(day, 'yyyy-MM-dd')}`}
+                      data-testid={`calendar-day-${format(day, "yyyy-MM-dd")}`}
                     >
                       <CardContent className="p-1 sm:p-2 h-full flex flex-col">
                         <div className="flex items-center justify-between mb-1">
                           <span
                             className={`text-xs sm:text-sm font-medium ${
                               isTodayDate
-                                ? 'bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center'
-                                : ''
+                                ? "bg-primary text-primary-foreground rounded-full h-6 w-6 flex items-center justify-center"
+                                : ""
                             }`}
-                            data-testid={`text-day-${format(day, 'yyyy-MM-dd')}`}
+                            data-testid={`text-day-${format(day, "yyyy-MM-dd")}`}
                           >
-                            {format(day, 'd')}
+                            {format(day, "d")}
                           </span>
                           {dayAppointments.length > 0 && (
                             <Badge
                               variant="secondary"
                               className="h-5 px-1 text-[10px]"
-                              data-testid={`badge-count-${format(day, 'yyyy-MM-dd')}`}
+                              data-testid={`badge-count-${format(day, "yyyy-MM-dd")}`}
                             >
                               {dayAppointments.length}
                             </Badge>
@@ -376,16 +402,18 @@ export default function Calendar() {
 
                         {/* Appointment indicators */}
                         <div className="flex-1 space-y-0.5 overflow-hidden">
-                          {dayAppointments.slice(0, 3).map(appointment => (
+                          {dayAppointments.slice(0, 3).map((appointment) => (
                             <div
                               key={appointment.id}
                               className={`text-[10px] sm:text-xs p-1 rounded ${getStatusColor(
-                                appointment.status
+                                appointment.status,
                               )} text-white`}
                               data-testid={`appointment-indicator-${appointment.id}`}
                             >
                               <div className="font-semibold truncate">
-                                {appointment.customer?.name || appointment.title || 'Untitled'}
+                                {appointment.customer?.name ||
+                                  appointment.title ||
+                                  "Untitled"}
                               </div>
                               {appointment.address && (
                                 <div className="text-[9px] sm:text-[10px] truncate opacity-90">
@@ -415,8 +443,11 @@ export default function Calendar() {
             <div className="p-4">
               {selectedDate ? (
                 <>
-                  <h3 className="font-semibold text-lg mb-3" data-testid="text-selected-date">
-                    {format(selectedDate, 'EEEE, MMMM d, yyyy')}
+                  <h3
+                    className="font-semibold text-lg mb-3"
+                    data-testid="text-selected-date"
+                  >
+                    {format(selectedDate, "EEEE, MMMM d, yyyy")}
                   </h3>
 
                   {selectedDateAppointments.length === 0 ? (
@@ -436,7 +467,7 @@ export default function Calendar() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {selectedDateAppointments.map(appointment => (
+                      {selectedDateAppointments.map((appointment) => (
                         <Card
                           key={appointment.id}
                           className="hover-elevate cursor-pointer"
@@ -446,11 +477,15 @@ export default function Calendar() {
                           <CardHeader className="pb-3">
                             <div className="flex items-start justify-between gap-2">
                               <CardTitle className="text-base">
-                                {appointment.title || appointment.customer?.name || 'Untitled Appointment'}
+                                {appointment.title ||
+                                  appointment.customer?.name ||
+                                  "Untitled Appointment"}
                               </CardTitle>
                               {appointment.priority && (
                                 <Badge
-                                  variant={getPriorityVariant(appointment.priority)}
+                                  variant={getPriorityVariant(
+                                    appointment.priority,
+                                  )}
                                   className="capitalize"
                                   data-testid={`badge-priority-${appointment.id}`}
                                 >
@@ -463,12 +498,15 @@ export default function Calendar() {
                             {appointment.scheduledDate && (
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <Clock className="h-4 w-4" />
-                                <span data-testid={`text-time-${appointment.id}`}>
+                                <span
+                                  data-testid={`text-time-${appointment.id}`}
+                                >
                                   {formatNZTime(
-                                    typeof appointment.scheduledDate === 'string'
+                                    typeof appointment.scheduledDate ===
+                                      "string"
                                       ? appointment.scheduledDate
                                       : appointment.scheduledDate.toISOString(),
-                                    'time'
+                                    "time",
                                   )}
                                 </span>
                               </div>
@@ -476,7 +514,10 @@ export default function Calendar() {
                             {appointment.address && (
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <MapPin className="h-4 w-4 flex-shrink-0" />
-                                <span className="truncate" data-testid={`text-location-${appointment.id}`}>
+                                <span
+                                  className="truncate"
+                                  data-testid={`text-location-${appointment.id}`}
+                                >
                                   {appointment.address}
                                 </span>
                               </div>
@@ -484,14 +525,16 @@ export default function Calendar() {
                             {appointment.customer && (
                               <div className="flex items-center gap-2 text-muted-foreground">
                                 <User className="h-4 w-4" />
-                                <span data-testid={`text-customer-${appointment.id}`}>
+                                <span
+                                  data-testid={`text-customer-${appointment.id}`}
+                                >
                                   {appointment.customer.name}
                                 </span>
                               </div>
                             )}
                             <div className="pt-2 flex items-center justify-between gap-2">
                               <Badge variant="outline" className="capitalize">
-                                {appointment.status.replace('_', ' ')}
+                                {appointment.status.replace("_", " ")}
                               </Badge>
                               {appointment.customer?.phone && (
                                 <Button
@@ -529,10 +572,13 @@ export default function Calendar() {
         <div className="lg:hidden border-t bg-card">
           <ScrollArea className="h-48">
             <div className="p-3 space-y-2">
-              <h3 className="font-semibold text-sm mb-2" data-testid="text-mobile-selected-date">
-                {format(selectedDate, 'EEE, MMM d')}
+              <h3
+                className="font-semibold text-sm mb-2"
+                data-testid="text-mobile-selected-date"
+              >
+                {format(selectedDate, "EEE, MMM d")}
               </h3>
-              {selectedDateAppointments.map(appointment => (
+              {selectedDateAppointments.map((appointment) => (
                 <Card
                   key={appointment.id}
                   className="hover-elevate cursor-pointer"
@@ -543,15 +589,17 @@ export default function Calendar() {
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-sm truncate">
-                          {appointment.title || appointment.customer?.name || 'Untitled'}
+                          {appointment.title ||
+                            appointment.customer?.name ||
+                            "Untitled"}
                         </p>
                         {appointment.scheduledDate && (
                           <p className="text-xs text-muted-foreground mt-1">
                             {formatNZTime(
-                              typeof appointment.scheduledDate === 'string'
+                              typeof appointment.scheduledDate === "string"
                                 ? appointment.scheduledDate
                                 : appointment.scheduledDate.toISOString(),
-                              'time'
+                              "time",
                             )}
                           </p>
                         )}
@@ -562,8 +610,11 @@ export default function Calendar() {
                         )}
                       </div>
                       <div className="flex flex-col gap-1 items-end">
-                        <Badge variant="outline" className="capitalize text-[10px]">
-                          {appointment.status.replace('_', ' ')}
+                        <Badge
+                          variant="outline"
+                          className="capitalize text-[10px]"
+                        >
+                          {appointment.status.replace("_", " ")}
                         </Badge>
                         {appointment.customer?.phone && (
                           <Button
@@ -587,7 +638,10 @@ export default function Calendar() {
 
       {/* SMS Dialog */}
       <Dialog open={smsDialogOpen} onOpenChange={setSmsDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]" data-testid="dialog-send-sms">
+        <DialogContent
+          className="sm:max-w-[500px]"
+          data-testid="dialog-send-sms"
+        >
           <DialogHeader>
             <DialogTitle>Send SMS to Customer</DialogTitle>
             <DialogDescription>
@@ -597,12 +651,17 @@ export default function Calendar() {
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="customer-phone">Phone Number</Label>
-              <div className="text-sm text-muted-foreground" data-testid="text-customer-phone">
-                {selectedJob?.customer?.phone || 'No phone number'}
+              <div
+                className="text-sm text-muted-foreground"
+                data-testid="text-customer-phone"
+              >
+                {selectedJob?.customer?.phone || "No phone number"}
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="sms-message">Message ({smsMessage.length}/160)</Label>
+              <Label htmlFor="sms-message">
+                Message ({smsMessage.length}/160)
+              </Label>
               <Textarea
                 id="sms-message"
                 placeholder="Enter your message..."
@@ -627,10 +686,14 @@ export default function Calendar() {
             </Button>
             <Button
               onClick={handleSendSmsConfirm}
-              disabled={!smsMessage || smsMessage.length === 0 || sendSmsMutation.isPending}
+              disabled={
+                !smsMessage ||
+                smsMessage.length === 0 ||
+                sendSmsMutation.isPending
+              }
               data-testid="button-confirm-send-sms"
             >
-              {sendSmsMutation.isPending ? 'Sending...' : 'Send SMS'}
+              {sendSmsMutation.isPending ? "Sending..." : "Send SMS"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -647,15 +710,15 @@ export default function Calendar() {
           mode="edit"
           job={jobToEdit}
           onJobCreated={() => {
-            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
             setShowJobEditDialog(false);
             setJobToEdit(null);
           }}
           onJobUpdated={() => {
-            queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
             setShowJobEditDialog(false);
             setJobToEdit(null);
-                      }}
+          }}
         />
       )}
     </div>

@@ -3,8 +3,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -27,7 +39,7 @@ import {
   PhoneCall,
   FileText,
   ExternalLink,
-  RefreshCw
+  RefreshCw,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -63,57 +75,97 @@ interface FollowUpQuote {
 // Get job status color (matching DispatchBoard)
 const getJobStatusColor = (status?: string) => {
   switch (status?.toLowerCase()) {
-    case 'completed': return '#22c55e'; // green-500
-    case 'unsuccessful': return '#ef4444'; // red-500
-    case 'invoiced': return '#a855f7'; // purple-500
-    case 'archived': return '#6b7280'; // gray-500
-    case 'work_order': return '#3b82f6'; // blue-500
-    case 'work order': return '#3b82f6'; // blue-500
-    case 'scheduled': return '#3b82f6'; // blue-500
-    case 'quote': return '#f97316'; // orange-500
-    case 'lead': return '#06b6d4'; // cyan-500
-    default: return '#f97316'; // orange-500 for proposals
+    case "completed":
+      return "#22c55e"; // green-500
+    case "unsuccessful":
+      return "#ef4444"; // red-500
+    case "invoiced":
+      return "#a855f7"; // purple-500
+    case "archived":
+      return "#6b7280"; // gray-500
+    case "work_order":
+      return "#3b82f6"; // blue-500
+    case "work order":
+      return "#3b82f6"; // blue-500
+    case "scheduled":
+      return "#3b82f6"; // blue-500
+    case "quote":
+      return "#f97316"; // orange-500
+    case "lead":
+      return "#06b6d4"; // cyan-500
+    default:
+      return "#f97316"; // orange-500 for proposals
   }
 };
 
 // Get status initials
 const getStatusInitials = (status?: string) => {
   switch (status?.toLowerCase()) {
-    case 'quote': return 'Q';
-    case 'lead': return 'L';
-    case 'scheduled': return 'S';
-    case 'work_order':
-    case 'work order': return 'WO';
-    case 'completed': return 'C';
-    case 'invoiced': return 'I';
-    case 'archived': return 'A';
-    default: return 'Q';
+    case "quote":
+      return "Q";
+    case "lead":
+      return "L";
+    case "scheduled":
+      return "S";
+    case "work_order":
+    case "work order":
+      return "WO";
+    case "completed":
+      return "C";
+    case "invoiced":
+      return "I";
+    case "archived":
+      return "A";
+    default:
+      return "Q";
   }
 };
 
 const followUpStatusOptions = [
-  { value: 'pending', label: 'Pending', color: 'bg-gray-100 text-gray-800' },
-  { value: 'contacted', label: 'Contacted', color: 'bg-blue-100 text-blue-800' },
-  { value: 'voicemail', label: 'Left Voicemail', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'no_answer', label: 'No Answer', color: 'bg-orange-100 text-orange-800' },
-  { value: 'scheduled', label: 'Callback Scheduled', color: 'bg-purple-100 text-purple-800' },
-  { value: 'not_interested', label: 'Not Interested', color: 'bg-red-100 text-red-800' },
+  { value: "pending", label: "Pending", color: "bg-gray-100 text-gray-800" },
+  {
+    value: "contacted",
+    label: "Contacted",
+    color: "bg-blue-100 text-blue-800",
+  },
+  {
+    value: "voicemail",
+    label: "Left Voicemail",
+    color: "bg-yellow-100 text-yellow-800",
+  },
+  {
+    value: "no_answer",
+    label: "No Answer",
+    color: "bg-orange-100 text-orange-800",
+  },
+  {
+    value: "scheduled",
+    label: "Callback Scheduled",
+    color: "bg-purple-100 text-purple-800",
+  },
+  {
+    value: "not_interested",
+    label: "Not Interested",
+    color: "bg-red-100 text-red-800",
+  },
 ];
 
 const contactMethodOptions = [
-  { value: 'phone', label: 'Phone Call', icon: Phone },
-  { value: 'sms', label: 'Text Message', icon: MessageSquare },
-  { value: 'email', label: 'Email', icon: Mail },
+  { value: "phone", label: "Phone Call", icon: Phone },
+  { value: "sms", label: "Text Message", icon: MessageSquare },
+  { value: "email", label: "Email", icon: Mail },
 ];
 
 export default function FollowUpQueue() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
-  
+
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [selectedQuote, setSelectedQuote] = useState<FollowUpQuote | null>(null);
+  const [selectedQuote, setSelectedQuote] = useState<FollowUpQuote | null>(
+    null,
+  );
   const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
   const [contactMethod, setContactMethod] = useState("phone");
   const [followUpNotes, setFollowUpNotes] = useState("");
@@ -122,34 +174,46 @@ export default function FollowUpQueue() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [jobCardOpen, setJobCardOpen] = useState(false);
 
-  const { data: quotesData, isLoading, refetch } = useQuery<{ success: boolean; data: FollowUpQuote[] }>({
-    queryKey: ['/api/quotes/follow-up-queue'],
+  const {
+    data: quotesData,
+    isLoading,
+    refetch,
+  } = useQuery<{ success: boolean; data: FollowUpQuote[] }>({
+    queryKey: ["/api/quotes/follow-up-queue"],
   });
 
   const logFollowUpMutation = useMutation({
     mutationFn: async ({ quoteId, data }: { quoteId: string; data: any }) => {
-      return apiRequest('POST', `/api/quotes/${quoteId}/follow-up`, data);
+      return apiRequest("POST", `/api/quotes/${quoteId}/follow-up`, data);
     },
     onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['/api/quotes/follow-up-queue'] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/quotes/follow-up-queue"],
+      });
       closeFollowUpDialog();
     },
     onError: (error: any) => {
-      toast({ title: "Error", description: error.message || "Failed to log follow-up", variant: "destructive" });
-    }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to log follow-up",
+        variant: "destructive",
+      });
+    },
   });
 
   const quotes = quotesData?.data || [];
 
-  const filteredQuotes = quotes.filter(quote => {
-    const matchesSearch = !searchTerm || 
+  const filteredQuotes = quotes.filter((quote) => {
+    const matchesSearch =
+      !searchTerm ||
       quote.quoteNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       quote.customer?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       quote.customer?.phone?.includes(searchTerm) ||
       quote.job?.jobNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = filterStatus === "all" || quote.followUpStatus === filterStatus;
-    
+
+    const matchesStatus =
+      filterStatus === "all" || quote.followUpStatus === filterStatus;
+
     return matchesSearch && matchesStatus;
   });
 
@@ -173,7 +237,11 @@ export default function FollowUpQueue() {
       setSelectedJobId(quote.job.id);
       setJobCardOpen(true);
     } else {
-      toast({ title: "No job linked", description: "This proposal is not linked to a job.", variant: "destructive" });
+      toast({
+        title: "No job linked",
+        description: "This proposal is not linked to a job.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -194,19 +262,22 @@ export default function FollowUpQueue() {
         notes: followUpNotes,
         followUpStatus,
         nextFollowUpDate: nextFollowUpDate || null,
-      }
+      },
     });
   };
 
   const formatCurrency = (amount: string | number) => {
-    const num = typeof amount === 'string' ? parseFloat(amount) : amount;
-    return new Intl.NumberFormat('en-NZ', {
-      style: 'currency',
-      currency: 'NZD'
+    const num = typeof amount === "string" ? parseFloat(amount) : amount;
+    return new Intl.NumberFormat("en-NZ", {
+      style: "currency",
+      currency: "NZD",
     }).format(num || 0);
   };
 
-  const getUrgencyBadge = (daysSinceSent: number | null, followUpCount: number | null) => {
+  const getUrgencyBadge = (
+    daysSinceSent: number | null,
+    followUpCount: number | null,
+  ) => {
     if (daysSinceSent === null) return null;
     const attempts = followUpCount || 0;
 
@@ -214,7 +285,9 @@ export default function FollowUpQueue() {
       return <Badge className="bg-red-100 text-red-800">Urgent</Badge>;
     }
     if (daysSinceSent >= 7 && attempts < 2) {
-      return <Badge className="bg-orange-100 text-orange-800">High Priority</Badge>;
+      return (
+        <Badge className="bg-orange-100 text-orange-800">High Priority</Badge>
+      );
     }
     if (daysSinceSent >= 3) {
       return <Badge className="bg-yellow-100 text-yellow-800">Follow Up</Badge>;
@@ -223,7 +296,7 @@ export default function FollowUpQueue() {
   };
 
   const getStatusBadge = (status: string | null) => {
-    const statusOption = followUpStatusOptions.find(s => s.value === status);
+    const statusOption = followUpStatusOptions.find((s) => s.value === status);
     if (!statusOption) {
       return <Badge className="bg-gray-100 text-gray-800">Pending</Badge>;
     }
@@ -236,7 +309,9 @@ export default function FollowUpQueue() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold">Follow-up Queue</h1>
-            <p className="text-muted-foreground">Track and manage quote follow-ups</p>
+            <p className="text-muted-foreground">
+              Track and manage quote follow-ups
+            </p>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             <div className="relative flex-1 min-w-[200px]">
@@ -250,18 +325,23 @@ export default function FollowUpQueue() {
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="w-[160px]" data-testid="select-filter-status">
+              <SelectTrigger
+                className="w-[160px]"
+                data-testid="select-filter-status"
+              >
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {followUpStatusOptions.map(status => (
-                  <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                {followUpStatusOptions.map((status) => (
+                  <SelectItem key={status.value} value={status.value}>
+                    {status.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               size="icon"
               onClick={() => refetch()}
               data-testid="button-refresh-queue"
@@ -282,7 +362,9 @@ export default function FollowUpQueue() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <CheckCircle2 className="h-12 w-12 text-green-500 mb-4" />
               <h3 className="text-lg font-semibold">All caught up!</h3>
-              <p className="text-muted-foreground">No quotes need follow-up at the moment.</p>
+              <p className="text-muted-foreground">
+                No quotes need follow-up at the moment.
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -297,38 +379,43 @@ export default function FollowUpQueue() {
                 <div className="flex items-start gap-3">
                   {/* Status Avatar Circle */}
                   <div className="relative flex-shrink-0">
-                    <div 
+                    <div
                       className="w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                      style={{ backgroundColor: getJobStatusColor(quote.job?.status) }}
+                      style={{
+                        backgroundColor: getJobStatusColor(quote.job?.status),
+                      }}
                     >
                       {getStatusInitials(quote.job?.status)}
                     </div>
                   </div>
-                  
+
                   {/* Job Content */}
                   <div className="flex-1 min-w-0 overflow-hidden">
                     <div className="flex items-start justify-between mb-1 gap-3">
                       <div className="min-w-0 flex-1">
                         <h3 className="font-bold text-gray-900 dark:text-gray-100 text-base truncate">
-                          {quote.customer?.name || 'Unknown Customer'}
+                          {quote.customer?.name || "Unknown Customer"}
                         </h3>
                       </div>
                       <div className="text-sm font-bold text-gray-700 dark:text-gray-300 flex-shrink-0">
                         #{quote.job?.jobNumber || quote.quoteNumber}
                       </div>
                     </div>
-                    
+
                     <div className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-semibold truncate">
-                      {quote.job?.address || 'No address specified'}
+                      {quote.job?.address || "No address specified"}
                     </div>
-                    
+
                     <div className="text-xs text-gray-500 dark:text-gray-500 mb-2 line-clamp-2 break-words">
-                      {quote.job?.description || quote.job?.title || '\u00A0'}
+                      {quote.job?.description || quote.job?.title || "\u00A0"}
                     </div>
-                    
+
                     {/* Follow-up Info Row */}
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      {getUrgencyBadge(quote.daysSinceSent, quote.followUpCount)}
+                      {getUrgencyBadge(
+                        quote.daysSinceSent,
+                        quote.followUpCount,
+                      )}
                       <span className="text-muted-foreground">
                         {formatCurrency(quote.amount)}
                       </span>
@@ -346,7 +433,7 @@ export default function FollowUpQueue() {
                       )}
                     </div>
                   </div>
-                  
+
                   {/* Action Buttons */}
                   <div className="flex gap-1 items-center flex-shrink-0">
                     {quote.customer?.phone && (
@@ -420,9 +507,12 @@ export default function FollowUpQueue() {
           {selectedQuote && (
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded-lg">
-                <div className="font-medium">Quote #{selectedQuote.quoteNumber}</div>
+                <div className="font-medium">
+                  Quote #{selectedQuote.quoteNumber}
+                </div>
                 <div className="text-sm text-muted-foreground">
-                  {selectedQuote.customer?.name} - {formatCurrency(selectedQuote.amount)}
+                  {selectedQuote.customer?.name} -{" "}
+                  {formatCurrency(selectedQuote.amount)}
                 </div>
               </div>
 
@@ -433,7 +523,7 @@ export default function FollowUpQueue() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {contactMethodOptions.map(method => (
+                    {contactMethodOptions.map((method) => (
                       <SelectItem key={method.value} value={method.value}>
                         <span className="flex items-center gap-2">
                           <method.icon className="h-4 w-4" />
@@ -447,13 +537,18 @@ export default function FollowUpQueue() {
 
               <div className="space-y-2">
                 <Label>Outcome</Label>
-                <Select value={followUpStatus} onValueChange={setFollowUpStatus}>
+                <Select
+                  value={followUpStatus}
+                  onValueChange={setFollowUpStatus}
+                >
                   <SelectTrigger data-testid="select-followup-status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {followUpStatusOptions.map(status => (
-                      <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                    {followUpStatusOptions.map((status) => (
+                      <SelectItem key={status.value} value={status.value}>
+                        {status.label}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -486,7 +581,7 @@ export default function FollowUpQueue() {
             <Button variant="outline" onClick={closeFollowUpDialog}>
               Cancel
             </Button>
-            <Button 
+            <Button
               onClick={handleLogFollowUp}
               disabled={logFollowUpMutation.isPending}
               data-testid="button-submit-followup"

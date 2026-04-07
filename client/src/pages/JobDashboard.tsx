@@ -1,27 +1,63 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Calendar, CalendarDays, Users, FileText, TrendingUp, Wrench, MessageSquare, Settings, MapPin, Clock, DollarSign, AlertTriangle, CheckCircle, Plug, Cloud, Shield, Mail, Phone, Edit2, Briefcase, Search, Filter, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Calendar,
+  CalendarDays,
+  Users,
+  FileText,
+  TrendingUp,
+  Wrench,
+  MessageSquare,
+  Settings,
+  MapPin,
+  Clock,
+  DollarSign,
+  AlertTriangle,
+  CheckCircle,
+  Plug,
+  Cloud,
+  Shield,
+  Mail,
+  Phone,
+  Edit2,
+  Briefcase,
+  Search,
+  Filter,
+  Trash2,
+} from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import Pipeline from './Pipeline';
-import { PerformanceAnalytics } from '@/components/PerformanceAnalytics';
-import { EquipmentTracker } from '@/components/EquipmentTracker';
-import CommunicationsManagement from './CommunicationsManagement';
-import Opportunities from './Opportunities';
-import Integrations from './Integrations';
-import { DispatchBoard } from '@/components/DispatchBoard';
-import { SafetyReporting } from '@/components/SafetyReporting';
-import JobTemplateManagement from '@/components/JobTemplateManagement';
-import { GlobalJobCard } from '@/components/GlobalJobCard';
-import { CustomerCSVUpload } from '@/components/CustomerCSVUpload';
-import { CSVImportManager } from '@/components/CSVImportManager';
+import Pipeline from "./Pipeline";
+import { PerformanceAnalytics } from "@/components/PerformanceAnalytics";
+import { EquipmentTracker } from "@/components/EquipmentTracker";
+import CommunicationsManagement from "./CommunicationsManagement";
+import Opportunities from "./Opportunities";
+import Integrations from "./Integrations";
+import { DispatchBoard } from "@/components/DispatchBoard";
+import { SafetyReporting } from "@/components/SafetyReporting";
+import JobTemplateManagement from "@/components/JobTemplateManagement";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { CustomerCSVUpload } from "@/components/CustomerCSVUpload";
+import { CSVImportManager } from "@/components/CSVImportManager";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -73,25 +109,30 @@ interface JobDashboardProps {
   onTabChange?: (tab: string) => void;
 }
 
-export default function JobDashboard({ activeTab = "communications", onTabChange }: JobDashboardProps) {
+export default function JobDashboard({
+  activeTab = "communications",
+  onTabChange,
+}: JobDashboardProps) {
   const [, navigate] = useLocation();
-  
+
   // State for job card modal
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isJobCardOpen, setIsJobCardOpen] = useState(false);
-  
+
   // Customer editing state
-  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(null);
+  const [editingCustomerId, setEditingCustomerId] = useState<string | null>(
+    null,
+  );
   const [editingCustomerName, setEditingCustomerName] = useState("");
-  
+
   // Jobs pagination and search state
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [currentJobPage, setCurrentJobPage] = useState(1);
   const [jobsPerPage, setJobsPerPage] = useState(10); // Show 10 jobs per page by default for faster loading
-  
+
   // Bulk selection state
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
-  
+
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { isCrew } = useAuth();
@@ -99,11 +140,13 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   // Customer update mutation
   const updateCustomerMutation = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const response = await apiRequest('PUT', `/api/customers/${id}`, { name });
+      const response = await apiRequest("PUT", `/api/customers/${id}`, {
+        name,
+      });
       return response;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/customers'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
       setEditingCustomerId(null);
       setEditingCustomerName("");
     },
@@ -111,33 +154,35 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       toast({
         title: "Error",
         description: "Failed to update customer name",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Bulk archive jobs mutation (changed from delete to archive)
   const deleteJobsMutation = useMutation({
     mutationFn: async (jobIds: string[]) => {
-      return await apiRequest('PUT', '/api/jobs/bulk-archive', { jobIds });
+      return await apiRequest("PUT", "/api/jobs/bulk-archive", { jobIds });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setSelectedJobs(new Set());
-          },
+    },
     onError: (error: any) => {
       toast({
         title: "Archive Failed",
         description: error.message || "Failed to archive jobs",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
   // Handle starting customer name edit
   const handleEditCustomerName = (customerId: string, currentName: string) => {
     setEditingCustomerId(customerId);
-    setEditingCustomerName(currentName.startsWith('Customer #') ? '' : currentName);
+    setEditingCustomerName(
+      currentName.startsWith("Customer #") ? "" : currentName,
+    );
   };
 
   // Handle saving customer name
@@ -146,11 +191,14 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       toast({
         title: "Error",
         description: "Please enter a customer name",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
-    updateCustomerMutation.mutate({ id: customerId, name: editingCustomerName.trim() });
+    updateCustomerMutation.mutate({
+      id: customerId,
+      name: editingCustomerName.trim(),
+    });
   };
 
   // Handle job item click
@@ -177,7 +225,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedJobs(new Set(paginatedJobs.map(job => job.id)));
+      setSelectedJobs(new Set(paginatedJobs.map((job) => job.id)));
     } else {
       setSelectedJobs(new Set());
     }
@@ -185,50 +233,60 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
 
   const handleBulkDelete = () => {
     if (selectedJobs.size === 0) return;
-    if (confirm(`Are you sure you want to delete ${selectedJobs.size} selected jobs? This action cannot be undone.`)) {
+    if (
+      confirm(
+        `Are you sure you want to delete ${selectedJobs.size} selected jobs? This action cannot be undone.`,
+      )
+    ) {
       deleteJobsMutation.mutate(Array.from(selectedJobs));
     }
   };
 
   // Fetch jobs data with proper typing
-  const { data: jobsResponse, isLoading: jobsLoading } = useQuery<ApiResponse<Job>>({
-    queryKey: ['/api/jobs?limit=10000'], // Increased limit to show all jobs
+  const { data: jobsResponse, isLoading: jobsLoading } = useQuery<
+    ApiResponse<Job>
+  >({
+    queryKey: ["/api/jobs?limit=10000"], // Increased limit to show all jobs
     // Refetch on mount to ensure fresh data on PWA
-    refetchOnMount: 'always',
+    refetchOnMount: "always",
     // Disable caching for jobs list to always get fresh order
     staleTime: 0,
   });
 
   // Fetch leads data with proper typing
-  const { data: leadsResponse, isLoading: leadsLoading } = useQuery<ApiResponse<Lead>>({
-    queryKey: ['/api/leads'],
+  const { data: leadsResponse, isLoading: leadsLoading } = useQuery<
+    ApiResponse<Lead>
+  >({
+    queryKey: ["/api/leads"],
   });
 
   // Fetch customers data with proper typing
-  const { data: customersResponse, isLoading: customersLoading } = useQuery<ApiResponse<Customer>>({
-    queryKey: ['/api/customers'],
+  const { data: customersResponse, isLoading: customersLoading } = useQuery<
+    ApiResponse<Customer>
+  >({
+    queryKey: ["/api/customers"],
   });
 
   // Fetch quotes data to get pricing information
   const { data: quotesResponse } = useQuery<ApiResponse<any>>({
-    queryKey: ['/api/quotes'],
+    queryKey: ["/api/quotes"],
   });
 
   // Fetch proposals data with sections to enable pricing calculation
   const { data: proposalsResponse } = useQuery<ApiResponse<any>>({
-    queryKey: ['/api/proposals?includeSections=true'],
+    queryKey: ["/api/proposals?includeSections=true"],
   });
 
   // Fetch invoices data to get final pricing (takes priority over quotes/proposals)
   const { data: invoicesResponse } = useQuery<ApiResponse<any>>({
-    queryKey: ['/api/invoices'],
+    queryKey: ["/api/invoices"],
   });
 
   // Redirect crew users if they try to access restricted tabs
   useEffect(() => {
-    const allowedCrewTabs = ['jobs', 'safety'];
+    const allowedCrewTabs = ["jobs", "safety"];
     if (isCrew && !allowedCrewTabs.includes(activeTab)) {
-      onTabChange?.('jobs');
+      onTabChange?.("jobs");
     }
   }, [isCrew, activeTab, onTabChange]);
 
@@ -243,35 +301,43 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   // No mock data - use real data only
 
   // Initialize customers first to avoid temporal dead zone
-  const transformCustomersForDisplay = (apiCustomers: Customer[]): DisplayCustomer[] => {
+  const transformCustomersForDisplay = (
+    apiCustomers: Customer[],
+  ): DisplayCustomer[] => {
     return apiCustomers.map((customer, index) => {
       // Create a more meaningful display name using job address data
-      let displayName = customer.name || 'Unnamed Customer';
-      
+      let displayName = customer.name || "Unnamed Customer";
+
       // If it's a generic placeholder name, use simple numbering
-      if (customer.name?.startsWith('Customer-')) {
-        const uniqueId = customer.name.split('-').pop()?.slice(-6) || customer.id.slice(-6);
+      if (customer.name?.startsWith("Customer-")) {
+        const uniqueId =
+          customer.name.split("-").pop()?.slice(-6) || customer.id.slice(-6);
         displayName = `Customer #${index + 1} (${uniqueId})`;
       }
 
       return {
         id: customer.id,
         name: displayName,
-        email: customer.email || '',
-        phone: customer.phone || '',
+        email: customer.email || "",
+        phone: customer.phone || "",
         totalJobs: customer.totalJobs || 0,
-        lifetimeValue: customer.lifetimeValue ? String(customer.lifetimeValue) : '0.00',
-        lastContactDate: customer.lastContactDate ? new Date(customer.lastContactDate).toLocaleDateString() : undefined
+        lifetimeValue: customer.lifetimeValue
+          ? String(customer.lifetimeValue)
+          : "0.00",
+        lastContactDate: customer.lastContactDate
+          ? new Date(customer.lastContactDate).toLocaleDateString()
+          : undefined,
       };
     });
   };
 
-  const displayCustomers: DisplayCustomer[] = customers.length > 0 ? transformCustomersForDisplay(customers) : [];
+  const displayCustomers: DisplayCustomer[] =
+    customers.length > 0 ? transformCustomersForDisplay(customers) : [];
 
   // Helper function to get customer name by ID - now safe to use
   const getCustomerName = (customerId: string) => {
-    const customer = displayCustomers.find(c => c.id === customerId);
-    return customer?.name || 'Unknown Customer';
+    const customer = displayCustomers.find((c) => c.id === customerId);
+    return customer?.name || "Unknown Customer";
   };
 
   // Helper function to calculate proposal total from line items
@@ -279,18 +345,19 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     if (!proposal?.sections || !Array.isArray(proposal.sections)) {
       return 0;
     }
-    
+
     let total = 0;
     proposal.sections.forEach((section: any) => {
       if (section.lineItems && Array.isArray(section.lineItems)) {
         section.lineItems.forEach((item: any) => {
-          if (item.selected !== false) { // Include item if not explicitly unselected
+          if (item.selected !== false) {
+            // Include item if not explicitly unselected
             total += Number(item.totalPrice || 0);
           }
         });
       }
     });
-    
+
     return total;
   };
 
@@ -300,23 +367,29 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
     const jobInvoices = invoices.filter((inv: any) => inv.jobId === job.id);
     if (jobInvoices.length > 0) {
       // Sort by creation date and get the most recent
-      const sortedInvoices = jobInvoices.sort((a: any, b: any) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      const sortedInvoices = jobInvoices.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       const latestInvoice = sortedInvoices[0];
       // Check various amount fields (totalIncludingGst, totalAmount, amount, subtotal)
-      const invoiceAmount = latestInvoice.totalIncludingGst || latestInvoice.totalAmount || latestInvoice.amount || latestInvoice.subtotal;
+      const invoiceAmount =
+        latestInvoice.totalIncludingGst ||
+        latestInvoice.totalAmount ||
+        latestInvoice.amount ||
+        latestInvoice.subtotal;
       if (invoiceAmount && Number(invoiceAmount) > 0) {
         return Number(invoiceAmount);
       }
     }
-    
+
     // SECOND: Check proposals for this job
     const jobProposals = proposals.filter((p: any) => p.jobId === job.id);
     if (jobProposals.length > 0) {
       // Sort by creation date and get the most recent
-      const sortedProposals = jobProposals.sort((a: any, b: any) => 
-        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      const sortedProposals = jobProposals.sort(
+        (a: any, b: any) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
       const latestProposal = sortedProposals[0];
       const proposalTotal = calculateProposalTotal(latestProposal);
@@ -324,7 +397,7 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
         return proposalTotal;
       }
     }
-    
+
     // THIRD: Check linked quote
     if (job.quoteId) {
       const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
@@ -332,45 +405,50 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
         return Number(linkedQuote.amount);
       }
     }
-    
+
     // FOURTH: Fall back to job.totalAmount
     return job.totalAmount ? Number(job.totalAmount) : 0;
   };
 
   // Transform API data to display format - now safe to use getCustomerName
   const transformJobsForDisplay = (apiJobs: Job[]): DisplayJob[] => {
-    return apiJobs.map(job => ({
+    return apiJobs.map((job) => ({
       id: job.id,
-      title: job.title || getCustomerName(job.customerId || ''),
-      customerId: job.customerId || '',
-      status: job.status || 'unknown',
-      priority: job.priority || 'medium',
-      scheduledDate: job.scheduledDate ? new Date(job.scheduledDate).toLocaleDateString() : '',
+      title: job.title || getCustomerName(job.customerId || ""),
+      customerId: job.customerId || "",
+      status: job.status || "unknown",
+      priority: job.priority || "medium",
+      scheduledDate: job.scheduledDate
+        ? new Date(job.scheduledDate).toLocaleDateString()
+        : "",
       estimatedValue: getJobPrice(job),
-      location: job.address || 'Location TBD',
-      customer: getCustomerName(job.customerId || '')
+      location: job.address || "Location TBD",
+      customer: getCustomerName(job.customerId || ""),
     }));
   };
 
   const transformLeadsForDisplay = (apiLeads: Lead[]): DisplayLead[] => {
-    return apiLeads.map(lead => ({
+    return apiLeads.map((lead) => ({
       id: lead.id,
-      name: lead.name || 'Unnamed Lead',
-      source: lead.source || 'Unknown',
-      status: lead.status || 'new',
+      name: lead.name || "Unnamed Lead",
+      source: lead.source || "Unknown",
+      status: lead.status || "new",
       estimatedValue: lead.estimatedValue ? Number(lead.estimatedValue) : 0,
-      lastContact: lead.followUpDate ? new Date(lead.followUpDate).toLocaleDateString() : 'Never'
+      lastContact: lead.followUpDate
+        ? new Date(lead.followUpDate).toLocaleDateString()
+        : "Never",
     }));
   };
 
   // Transform and filter jobs
-  const allDisplayJobs: DisplayJob[] = jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
-  
+  const allDisplayJobs: DisplayJob[] =
+    jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
+
   // Filter jobs based on search query and exclude archived jobs
-  const filteredJobs = allDisplayJobs.filter(job => {
+  const filteredJobs = allDisplayJobs.filter((job) => {
     // Always exclude archived jobs from the list
-    if (job.status === 'archived') return false;
-    
+    if (job.status === "archived") return false;
+
     if (!jobSearchQuery.trim()) return true;
     const query = jobSearchQuery.toLowerCase();
     return (
@@ -381,79 +459,114 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
       job.priority.toLowerCase().includes(query)
     );
   });
-  
+
   // Paginate filtered jobs
   const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
   const startIndex = (currentJobPage - 1) * jobsPerPage;
   const endIndex = startIndex + jobsPerPage;
   const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
-  
+
   // For overview tab, still show recent jobs (first 5)
   const displayJobs: DisplayJob[] = allDisplayJobs.slice(0, 5);
-  const displayLeads: DisplayLead[] = leads.length > 0 ? transformLeadsForDisplay(leads) : [];
+  const displayLeads: DisplayLead[] =
+    leads.length > 0 ? transformLeadsForDisplay(leads) : [];
 
   // Calculate metrics
-  const totalRevenue = displayJobs.reduce((sum, job) => sum + (job.estimatedValue ?? 0), 0);
-  const completedJobs = displayJobs.filter(job => job.status === "completed").length;
-  const activeJobs = displayJobs.filter(job => job.status === "in-progress" || job.status === "scheduled").length;
-  const newLeads = displayLeads.filter(lead => lead.status === "new").length;
+  const totalRevenue = displayJobs.reduce(
+    (sum, job) => sum + (job.estimatedValue ?? 0),
+    0,
+  );
+  const completedJobs = displayJobs.filter(
+    (job) => job.status === "completed",
+  ).length;
+  const activeJobs = displayJobs.filter(
+    (job) => job.status === "in-progress" || job.status === "scheduled",
+  ).length;
+  const newLeads = displayLeads.filter((lead) => lead.status === "new").length;
 
   const getJobStatusBadge = (status: string) => {
     const jobStatusConfig = {
-      "scheduled": { variant: "outline" as const, label: "Scheduled" },
+      scheduled: { variant: "outline" as const, label: "Scheduled" },
       "in-progress": { variant: "default" as const, label: "In Progress" },
-      "completed": { variant: "default" as const, label: "Completed" },
-      "cancelled": { variant: "destructive" as const, label: "Cancelled" }
+      completed: { variant: "default" as const, label: "Completed" },
+      cancelled: { variant: "destructive" as const, label: "Cancelled" },
     };
-    
+
     const config = jobStatusConfig[status as keyof typeof jobStatusConfig];
-    return <Badge variant={config?.variant || "default"} data-testid={`badge-status-${status}`}>{config?.label || status}</Badge>;
+    return (
+      <Badge
+        variant={config?.variant || "default"}
+        data-testid={`badge-status-${status}`}
+      >
+        {config?.label || status}
+      </Badge>
+    );
   };
 
   const getLeadStatusBadge = (status: string) => {
     const leadStatusConfig = {
-      "new": { variant: "default" as const, label: "New" },
-      "contacted": { variant: "outline" as const, label: "Contacted" },
-      "quoted": { variant: "outline" as const, label: "Quoted" },
-      "won": { variant: "default" as const, label: "Won" },
-      "lost": { variant: "destructive" as const, label: "Lost" }
+      new: { variant: "default" as const, label: "New" },
+      contacted: { variant: "outline" as const, label: "Contacted" },
+      quoted: { variant: "outline" as const, label: "Quoted" },
+      won: { variant: "default" as const, label: "Won" },
+      lost: { variant: "destructive" as const, label: "Lost" },
     };
-    
+
     const config = leadStatusConfig[status as keyof typeof leadStatusConfig];
-    return <Badge variant={config?.variant || "default"} data-testid={`badge-status-${status}`}>{config?.label || status}</Badge>;
+    return (
+      <Badge
+        variant={config?.variant || "default"}
+        data-testid={`badge-status-${status}`}
+      >
+        {config?.label || status}
+      </Badge>
+    );
   };
 
   const getPriorityBadge = (priority: string) => {
     const priorityConfig = {
-      "low": { variant: "outline" as const, label: "Low" },
-      "medium": { variant: "outline" as const, label: "Medium" },
-      "high": { variant: "destructive" as const, label: "High" },
-      "emergency": { variant: "destructive" as const, label: "Emergency" }
+      low: { variant: "outline" as const, label: "Low" },
+      medium: { variant: "outline" as const, label: "Medium" },
+      high: { variant: "destructive" as const, label: "High" },
+      emergency: { variant: "destructive" as const, label: "Emergency" },
     };
-    
+
     const config = priorityConfig[priority as keyof typeof priorityConfig];
-    return <Badge variant={config?.variant || "default"} data-testid={`badge-priority-${priority}`}>{config?.label || priority}</Badge>;
+    return (
+      <Badge
+        variant={config?.variant || "default"}
+        data-testid={`badge-priority-${priority}`}
+      >
+        {config?.label || priority}
+      </Badge>
+    );
   };
 
   // Helper functions for customer cards
   const getInitials = (name: string) => {
-    return (name || '')
-      .split(' ')
-      .map(word => word.charAt(0))
-      .join('')
+    return (name || "")
+      .split(" ")
+      .map((word) => word.charAt(0))
+      .join("")
       .toUpperCase()
       .slice(0, 2);
   };
 
   const getCustomerTier = (lifetimeValue: number) => {
-    if (lifetimeValue >= 10000) return { label: 'Premium', color: 'bg-purple-100 text-purple-800' };
-    if (lifetimeValue >= 5000) return { label: 'Gold', color: 'bg-yellow-100 text-yellow-800' };
-    if (lifetimeValue >= 1000) return { label: 'Silver', color: 'bg-gray-100 text-gray-800' };
-    return { label: 'Bronze', color: 'bg-orange-100 text-orange-800' };
+    if (lifetimeValue >= 10000)
+      return { label: "Premium", color: "bg-purple-100 text-purple-800" };
+    if (lifetimeValue >= 5000)
+      return { label: "Gold", color: "bg-yellow-100 text-yellow-800" };
+    if (lifetimeValue >= 1000)
+      return { label: "Silver", color: "bg-gray-100 text-gray-800" };
+    return { label: "Bronze", color: "bg-orange-100 text-orange-800" };
   };
 
   // Handle customer card click for viewing/editing
-  const handleCustomerCardClick = (customerId: string, customerName: string) => {
+  const handleCustomerCardClick = (
+    customerId: string,
+    customerName: string,
+  ) => {
     if (editingCustomerId !== customerId) {
       handleEditCustomerName(customerId, customerName);
     }
@@ -462,151 +575,236 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
   // Handle View Details button click
   const handleViewCustomerDetails = (customerId: string) => {
     // Navigate to customer details - for now, switch to customers tab and highlight
-    onTabChange?.('customers');
-    
+    onTabChange?.("customers");
+
     // Show user feedback with toast notification
-      };
+  };
 
   // Handle job navigation
   const handleViewCustomerJobs = (customerId: string, customerName: string) => {
     // Switch to jobs tab and filter by customer
-    onTabChange?.('jobs');
+    onTabChange?.("jobs");
     setJobSearchQuery(customerName);
-      };
+  };
 
   return (
     <div className="h-full bg-background p-2 sm:p-4 md:p-6 overflow-x-hidden overflow-y-auto w-full max-w-full min-w-0">
       <div className="w-full max-w-full h-full flex flex-col min-w-0">
-
-        <Tabs value={activeTab} onValueChange={onTabChange} className="flex flex-col h-full">
-          
+        <Tabs
+          value={activeTab}
+          onValueChange={onTabChange}
+          className="flex flex-col h-full"
+        >
           {/* Overview Tab */}
           <TabsContent value="overview" className="flex-1 overflow-auto">
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Card data-testid="card-total-revenue">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                  <DollarSign className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-total-revenue">
-                    ${totalRevenue.toLocaleString()}
-                  </div>
-                  <p className="text-xs text-muted-foreground">This month</p>
-                </CardContent>
-              </Card>
+                <Card data-testid="card-total-revenue">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      Total Revenue
+                    </CardTitle>
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div
+                      className="text-2xl font-bold"
+                      data-testid="text-total-revenue"
+                    >
+                      ${totalRevenue.toLocaleString()}
+                    </div>
+                    <p className="text-xs text-muted-foreground">This month</p>
+                  </CardContent>
+                </Card>
 
-              <Card data-testid="card-active-jobs">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Active Jobs</CardTitle>
-                  <Clock className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-active-jobs">{activeJobs}</div>
-                  <p className="text-xs text-muted-foreground">In progress + scheduled</p>
-                </CardContent>
-              </Card>
+                <Card data-testid="card-active-jobs">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      Active Jobs
+                    </CardTitle>
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div
+                      className="text-2xl font-bold"
+                      data-testid="text-active-jobs"
+                    >
+                      {activeJobs}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      In progress + scheduled
+                    </p>
+                  </CardContent>
+                </Card>
 
-              <Card data-testid="card-completed-jobs">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Completed Jobs</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-completed-jobs">{completedJobs}</div>
-                  <p className="text-xs text-muted-foreground">This month</p>
-                </CardContent>
-              </Card>
+                <Card data-testid="card-completed-jobs">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      Completed Jobs
+                    </CardTitle>
+                    <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div
+                      className="text-2xl font-bold"
+                      data-testid="text-completed-jobs"
+                    >
+                      {completedJobs}
+                    </div>
+                    <p className="text-xs text-muted-foreground">This month</p>
+                  </CardContent>
+                </Card>
 
-              <Card data-testid="card-new-leads">
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">New Leads</CardTitle>
-                  <AlertTriangle className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold" data-testid="text-new-leads">{newLeads}</div>
-                  <p className="text-xs text-muted-foreground">Requires attention</p>
-                </CardContent>
-              </Card>
+                <Card data-testid="card-new-leads">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">
+                      New Leads
+                    </CardTitle>
+                    <AlertTriangle className="h-4 w-4 text-muted-foreground" />
+                  </CardHeader>
+                  <CardContent>
+                    <div
+                      className="text-2xl font-bold"
+                      data-testid="text-new-leads"
+                    >
+                      {newLeads}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Requires attention
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <Card data-testid="card-recent-jobs">
-                <CardHeader>
-                  <CardTitle>Recent Jobs</CardTitle>
-                  <CardDescription>Latest job activities</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {displayJobs.slice(0, 5).map(job => (
-                      <div 
-                        key={job.id} 
-                        className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer" 
-                        data-testid={`job-item-${job.id}`}
-                        onClick={() => handleJobClick(job.id)}
-                      >
-                        <div className="flex-1">
-                          <h4 className="font-medium" data-testid={`job-title-${job.id}`}>{job.title}</h4>
-                          <p className="text-sm text-muted-foreground" data-testid={`job-customer-${job.id}`}>{job.customer}</p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <MapPin className="w-3 h-3" />
-                            <span className="text-xs text-muted-foreground" data-testid={`job-location-${job.id}`}>{job.location}</span>
+                <Card data-testid="card-recent-jobs">
+                  <CardHeader>
+                    <CardTitle>Recent Jobs</CardTitle>
+                    <CardDescription>Latest job activities</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {displayJobs.slice(0, 5).map((job) => (
+                        <div
+                          key={job.id}
+                          className="flex items-center justify-between p-3 border rounded-lg hover-elevate cursor-pointer"
+                          data-testid={`job-item-${job.id}`}
+                          onClick={() => handleJobClick(job.id)}
+                        >
+                          <div className="flex-1">
+                            <h4
+                              className="font-medium"
+                              data-testid={`job-title-${job.id}`}
+                            >
+                              {job.title}
+                            </h4>
+                            <p
+                              className="text-sm text-muted-foreground"
+                              data-testid={`job-customer-${job.id}`}
+                            >
+                              {job.customer}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <MapPin className="w-3 h-3" />
+                              <span
+                                className="text-xs text-muted-foreground"
+                                data-testid={`job-location-${job.id}`}
+                              >
+                                {job.location}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <div
+                              className="font-medium"
+                              data-testid={`job-value-${job.id}`}
+                            >
+                              ${(job.estimatedValue || 0).toLocaleString()}
+                            </div>
+                            <div className="flex gap-1">
+                              {getJobStatusBadge(job.status)}
+                              {getPriorityBadge(job.priority)}
+                            </div>
                           </div>
                         </div>
-                        <div className="text-right space-y-1">
-                          <div className="font-medium" data-testid={`job-value-${job.id}`}>${(job.estimatedValue || 0).toLocaleString()}</div>
-                          <div className="flex gap-1">
-                            {getJobStatusBadge(job.status)}
-                            {getPriorityBadge(job.priority)}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
 
-              <Card data-testid="card-recent-leads">
-                <CardHeader>
-                  <CardTitle>Recent Leads</CardTitle>
-                  <CardDescription>Latest lead inquiries</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {displayLeads.slice(0, 5).map(lead => (
-                      <div key={lead.id} className="flex items-center justify-between p-3 border rounded-lg" data-testid={`lead-item-${lead.id}`}>
-                        <div className="flex-1">
-                          <h4 className="font-medium" data-testid={`lead-name-${lead.id}`}>{lead.name}</h4>
-                          <p className="text-sm text-muted-foreground" data-testid={`lead-source-${lead.id}`}>Source: {lead.source}</p>
-                          <p className="text-xs text-muted-foreground" data-testid={`lead-last-contact-${lead.id}`}>Last contact: {lead.lastContact}</p>
+                <Card data-testid="card-recent-leads">
+                  <CardHeader>
+                    <CardTitle>Recent Leads</CardTitle>
+                    <CardDescription>Latest lead inquiries</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {displayLeads.slice(0, 5).map((lead) => (
+                        <div
+                          key={lead.id}
+                          className="flex items-center justify-between p-3 border rounded-lg"
+                          data-testid={`lead-item-${lead.id}`}
+                        >
+                          <div className="flex-1">
+                            <h4
+                              className="font-medium"
+                              data-testid={`lead-name-${lead.id}`}
+                            >
+                              {lead.name}
+                            </h4>
+                            <p
+                              className="text-sm text-muted-foreground"
+                              data-testid={`lead-source-${lead.id}`}
+                            >
+                              Source: {lead.source}
+                            </p>
+                            <p
+                              className="text-xs text-muted-foreground"
+                              data-testid={`lead-last-contact-${lead.id}`}
+                            >
+                              Last contact: {lead.lastContact}
+                            </p>
+                          </div>
+                          <div className="text-right space-y-1">
+                            <div
+                              className="font-medium"
+                              data-testid={`lead-value-${lead.id}`}
+                            >
+                              ${(lead.estimatedValue || 0).toLocaleString()}
+                            </div>
+                            {getLeadStatusBadge(lead.status)}
+                          </div>
                         </div>
-                        <div className="text-right space-y-1">
-                          <div className="font-medium" data-testid={`lead-value-${lead.id}`}>${(lead.estimatedValue || 0).toLocaleString()}</div>
-                          {getLeadStatusBadge(lead.status)}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </TabsContent>
 
           {/* All Jobs Tab */}
-          <TabsContent value="jobs" className="flex-1 overflow-auto overflow-x-hidden w-full max-w-full">
+          <TabsContent
+            value="jobs"
+            className="flex-1 overflow-auto overflow-x-hidden w-full max-w-full"
+          >
             <div className="space-y-4 w-full max-w-full min-w-0">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 w-full max-w-full min-w-0">
                 <div>
-                  <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-all-jobs">
+                  <h2
+                    className="text-2xl font-bold text-foreground mb-2"
+                    data-testid="heading-all-jobs"
+                  >
                     All Jobs ({jobs.length.toLocaleString()})
                   </h2>
-                  <p className="text-muted-foreground" data-testid="text-jobs-description">
+                  <p
+                    className="text-muted-foreground"
+                    data-testid="text-jobs-description"
+                  >
                     Complete list of all jobs including imported ServiceM8 data
                   </p>
                 </div>
-                
+
                 <div className="flex gap-2 w-full sm:w-auto min-w-0">
                   <div className="relative flex-1 sm:flex-none sm:w-64 min-w-0">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
@@ -621,7 +819,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                       data-testid="input-search-jobs"
                     />
                   </div>
-                  <Button variant="outline" size="icon" data-testid="button-filter-jobs">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    data-testid="button-filter-jobs"
+                  >
                     <Filter className="w-4 h-4" />
                   </Button>
                 </div>
@@ -660,7 +862,10 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
               {paginatedJobs.length > 0 && (
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border">
                   <Checkbox
-                    checked={selectedJobs.size === paginatedJobs.length && paginatedJobs.length > 0}
+                    checked={
+                      selectedJobs.size === paginatedJobs.length &&
+                      paginatedJobs.length > 0
+                    }
                     onCheckedChange={handleSelectAll}
                     data-testid="checkbox-select-all"
                   />
@@ -692,7 +897,9 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                 <Card>
                   <CardContent className="p-8 text-center">
                     <Briefcase className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium text-muted-foreground mb-2">No Jobs Found</h3>
+                    <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                      No Jobs Found
+                    </h3>
                     <p className="text-sm text-muted-foreground">
                       Start by creating your first job or import from ServiceM8
                     </p>
@@ -702,11 +909,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 w-full max-w-full">
                   {paginatedJobs.map((job) => {
                     const isSelected = selectedJobs.has(job.id);
-                    
+
                     return (
-                      <Card 
-                        key={job.id} 
-                        className={`hover-elevate cursor-pointer transition-all duration-200 ${isSelected ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+                      <Card
+                        key={job.id}
+                        className={`hover-elevate cursor-pointer transition-all duration-200 ${isSelected ? "ring-2 ring-blue-500 bg-blue-50" : ""}`}
                         onClick={() => handleJobClick(job.id)}
                         data-testid={`card-job-${job.id}`}
                       >
@@ -716,37 +923,55 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                               <div className="flex items-start gap-3 flex-1">
                                 <Checkbox
                                   checked={isSelected}
-                                  onCheckedChange={(checked) => handleSelectJob(job.id, checked as boolean)}
+                                  onCheckedChange={(checked) =>
+                                    handleSelectJob(job.id, checked as boolean)
+                                  }
                                   onClick={(e) => e.stopPropagation()}
                                   data-testid={`checkbox-select-job-${job.id}`}
                                 />
-                                <h3 className="font-semibold text-foreground line-clamp-2" data-testid={`text-job-customer-${job.id}`}>
+                                <h3
+                                  className="font-semibold text-foreground line-clamp-2"
+                                  data-testid={`text-job-customer-${job.id}`}
+                                >
                                   {job.customer}
                                 </h3>
                               </div>
-                              <div className="text-lg font-bold text-green-600 ml-2" data-testid={`text-job-value-${job.id}`}>
+                              <div
+                                className="text-lg font-bold text-green-600 ml-2"
+                                data-testid={`text-job-value-${job.id}`}
+                              >
                                 ${job.estimatedValue.toLocaleString()}
                               </div>
                             </div>
-                          
+
                             <div className="space-y-2">
-                              <p className="text-sm text-muted-foreground font-medium" data-testid={`text-job-title-${job.id}`}>
+                              <p
+                                className="text-sm text-muted-foreground font-medium"
+                                data-testid={`text-job-title-${job.id}`}
+                              >
                                 {job.title}
                               </p>
-                              
+
                               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                 <MapPin className="w-3 h-3" />
-                                <span className="line-clamp-1" data-testid={`text-job-location-${job.id}`}>{job.location}</span>
+                                <span
+                                  className="line-clamp-1"
+                                  data-testid={`text-job-location-${job.id}`}
+                                >
+                                  {job.location}
+                                </span>
                               </div>
-                              
+
                               {job.scheduledDate && (
                                 <div className="flex items-center gap-1 text-sm text-muted-foreground">
                                   <Calendar className="w-3 h-3" />
-                                  <span data-testid={`text-job-date-${job.id}`}>{job.scheduledDate}</span>
+                                  <span data-testid={`text-job-date-${job.id}`}>
+                                    {job.scheduledDate}
+                                  </span>
                                 </div>
                               )}
                             </div>
-                            
+
                             <div className="flex gap-2 flex-wrap">
                               {getJobStatusBadge(job.status)}
                               {getPriorityBadge(job.priority)}
@@ -758,26 +983,43 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                   })}
                 </div>
               )}
-              
+
               {/* Pagination info and controls - Always show dropdown */}
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t">
                   <div className="space-y-1">
                     {allDisplayJobs.length > 0 && (
                       <>
-                        <p className="text-sm text-muted-foreground" data-testid="text-jobs-showing">
-                          Showing {startIndex + 1}-{Math.min(endIndex, filteredJobs.length)} of {filteredJobs.length.toLocaleString()} 
-                          {jobSearchQuery ? ' filtered' : ''} jobs
+                        <p
+                          className="text-sm text-muted-foreground"
+                          data-testid="text-jobs-showing"
+                        >
+                          Showing {startIndex + 1}-
+                          {Math.min(endIndex, filteredJobs.length)} of{" "}
+                          {filteredJobs.length.toLocaleString()}
+                          {jobSearchQuery ? " filtered" : ""} jobs
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Total: {allDisplayJobs.length.toLocaleString()} jobs in database
+                          Total: {allDisplayJobs.length.toLocaleString()} jobs
+                          in database
                         </p>
                       </>
                     )}
                     <div className="flex items-center gap-2 mt-2">
-                      <label className="text-xs text-muted-foreground">Jobs per page:</label>
-                      <Select value={jobsPerPage.toString()} onValueChange={(value) => { setJobsPerPage(parseInt(value)); setCurrentJobPage(1); }}>
-                        <SelectTrigger className="w-full sm:w-20 h-8 text-xs" data-testid="select-jobs-per-page">
+                      <label className="text-xs text-muted-foreground">
+                        Jobs per page:
+                      </label>
+                      <Select
+                        value={jobsPerPage.toString()}
+                        onValueChange={(value) => {
+                          setJobsPerPage(parseInt(value));
+                          setCurrentJobPage(1);
+                        }}
+                      >
+                        <SelectTrigger
+                          className="w-full sm:w-20 h-8 text-xs"
+                          data-testid="select-jobs-per-page"
+                        >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -789,29 +1031,36 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                       </Select>
                     </div>
                   </div>
-                  
+
                   {/* Pagination controls */}
                   {totalPages > 1 && (
                     <div className="flex items-center gap-2 overflow-x-auto max-w-full">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setCurrentJobPage(prev => Math.max(prev - 1, 1))}
+                        onClick={() =>
+                          setCurrentJobPage((prev) => Math.max(prev - 1, 1))
+                        }
                         disabled={currentJobPage === 1}
                         data-testid="button-prev-page"
                       >
                         Previous
                       </Button>
-                      
+
                       <div className="flex items-center gap-1 flex-shrink-0">
                         {[...Array(Math.min(5, totalPages))].map((_, i) => {
-                          const pageNum = currentJobPage <= 3 ? i + 1 : currentJobPage - 2 + i;
+                          const pageNum =
+                            currentJobPage <= 3
+                              ? i + 1
+                              : currentJobPage - 2 + i;
                           if (pageNum > totalPages) return null;
-                          
+
                           return (
                             <Button
                               key={pageNum}
-                              variant={pageNum === currentJobPage ? "default" : "ghost"}
+                              variant={
+                                pageNum === currentJobPage ? "default" : "ghost"
+                              }
                               size="sm"
                               onClick={() => setCurrentJobPage(pageNum)}
                               className="w-8 flex-shrink-0"
@@ -821,10 +1070,12 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                             </Button>
                           );
                         })}
-                        
+
                         {totalPages > 5 && currentJobPage < totalPages - 2 && (
                           <>
-                            <span className="text-muted-foreground flex-shrink-0">...</span>
+                            <span className="text-muted-foreground flex-shrink-0">
+                              ...
+                            </span>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -837,11 +1088,15 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                           </>
                         )}
                       </div>
-                      
+
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setCurrentJobPage(prev => Math.min(prev + 1, totalPages))}
+                        onClick={() =>
+                          setCurrentJobPage((prev) =>
+                            Math.min(prev + 1, totalPages),
+                          )
+                        }
                         disabled={currentJobPage === totalPages}
                         data-testid="button-next-page"
                       >
@@ -865,7 +1120,10 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           </TabsContent>
 
           {/* Analytics Tab */}
-          <TabsContent value="analytics" className="flex-1 overflow-auto overflow-x-hidden w-full max-w-full">
+          <TabsContent
+            value="analytics"
+            className="flex-1 overflow-auto overflow-x-hidden w-full max-w-full"
+          >
             <PerformanceAnalytics />
           </TabsContent>
 
@@ -878,11 +1136,18 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           <TabsContent value="safety" className="flex-1 overflow-auto">
             <div className="space-y-6">
               <div className="mb-6">
-                <h2 className="text-2xl font-bold text-foreground mb-2" data-testid="heading-safety-management">
+                <h2
+                  className="text-2xl font-bold text-foreground mb-2"
+                  data-testid="heading-safety-management"
+                >
                   Safety Management & Compliance
                 </h2>
-                <p className="text-muted-foreground" data-testid="text-safety-description">
-                  Comprehensive safety incident tracking, risk assessments, and compliance monitoring for tree removal operations
+                <p
+                  className="text-muted-foreground"
+                  data-testid="text-safety-description"
+                >
+                  Comprehensive safety incident tracking, risk assessments, and
+                  compliance monitoring for tree removal operations
                 </p>
               </div>
 
@@ -893,7 +1158,11 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                   Job Hazard Analysis (JHA)
                 </h3>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <Card className="hover-elevate cursor-pointer" onClick={() => navigate('/jha-assessment')} data-testid="card-jha-assessment">
+                  <Card
+                    className="hover-elevate cursor-pointer"
+                    onClick={() => navigate("/jha-assessment")}
+                    data-testid="card-jha-assessment"
+                  >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <FileText className="h-5 w-5" />
@@ -902,11 +1171,16 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
                     </CardHeader>
                     <CardContent>
                       <p className="text-sm text-muted-foreground">
-                        Conduct a comprehensive hazard analysis before starting work
+                        Conduct a comprehensive hazard analysis before starting
+                        work
                       </p>
                     </CardContent>
                   </Card>
-                  <Card className="hover-elevate cursor-pointer" onClick={() => navigate('/jha-history')} data-testid="card-jha-history">
+                  <Card
+                    className="hover-elevate cursor-pointer"
+                    onClick={() => navigate("/jha-history")}
+                    data-testid="card-jha-history"
+                  >
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
                         <Calendar className="h-5 w-5" />
@@ -939,10 +1213,10 @@ export default function JobDashboard({ activeTab = "communications", onTabChange
           </TabsContent>
         </Tabs>
       </div>
-      
+
       {/* Job Card Modal for editing existing jobs */}
       {selectedJobId && (
-        <GlobalJobCard 
+        <GlobalJobCard
           isOpen={isJobCardOpen}
           onClose={handleCloseJobCard}
           mode="edit"

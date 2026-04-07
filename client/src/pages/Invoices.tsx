@@ -17,7 +17,17 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Search, Send, CheckCircle, Clock, AlertCircle, Pencil, RotateCcw, RefreshCw } from "lucide-react";
+import {
+  FileText,
+  Search,
+  Send,
+  CheckCircle,
+  Clock,
+  AlertCircle,
+  Pencil,
+  RotateCcw,
+  RefreshCw,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
@@ -37,7 +47,8 @@ export default function Invoices() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "pending">("all");
   const [sendingJobId, setSendingJobId] = useState<string | null>(null);
-  const [editingInvoice, setEditingInvoice] = useState<InvoiceWithRelations | null>(null);
+  const [editingInvoice, setEditingInvoice] =
+    useState<InvoiceWithRelations | null>(null);
   const [editFormData, setEditFormData] = useState({
     address: "",
     jobTitle: "",
@@ -47,34 +58,40 @@ export default function Invoices() {
   const { toast } = useToast();
 
   // Fetch all invoices with customer and job data
-  const { data: invoicesResponse, isLoading } = useQuery<ApiResponse<InvoiceWithRelations>>({
-    queryKey: ['/api/invoices'],
+  const { data: invoicesResponse, isLoading } = useQuery<
+    ApiResponse<InvoiceWithRelations>
+  >({
+    queryKey: ["/api/invoices"],
   });
 
   const sendToXeroMutation = useMutation({
     mutationFn: async (jobId: string) => {
       setSendingJobId(jobId);
-      const response = await apiRequest('POST', '/api/xero/send-invoice', { jobId });
+      const response = await apiRequest("POST", "/api/xero/send-invoice", {
+        jobId,
+      });
       const data = await response.json();
-      
+
       if (!response.ok) {
         throw { ...data, statusCode: response.status };
       }
-      
+
       return data;
     },
     onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       setSendingJobId(null);
     },
     onError: (error: any) => {
       setSendingJobId(null);
-      
+
       // If missing address, offer to edit invoice or job
-      if (error.missingField === 'address') {
+      if (error.missingField === "address") {
         if (error.invoiceId) {
-          const invoiceToEdit = invoices.find(inv => inv.id === error.invoiceId);
-          
+          const invoiceToEdit = invoices.find(
+            (inv) => inv.id === error.invoiceId,
+          );
+
           toast({
             title: "Missing Address",
             description: error.message || "Invoice needs a valid address",
@@ -94,7 +111,8 @@ export default function Invoices() {
           // No invoice exists yet - direct user to create invoice first
           toast({
             title: "Missing Address",
-            description: "Please create an invoice for this job first, then add an address before sending to Xero.",
+            description:
+              "Please create an invoice for this job first, then add an address before sending to Xero.",
             variant: "destructive",
           });
         }
@@ -113,14 +131,19 @@ export default function Invoices() {
   const syncPaymentsFromXero = async () => {
     setIsSyncingPayments(true);
     try {
-      const response = await apiRequest('POST', '/api/xero/sync-payment-status', { all: true });
+      const response = await apiRequest(
+        "POST",
+        "/api/xero/sync-payment-status",
+        { all: true },
+      );
       const data = await response.json();
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
     } catch {
       toast({
         title: "Sync Failed",
-        description: "Could not sync payment status from Xero. Check your Xero connection.",
+        description:
+          "Could not sync payment status from Xero. Check your Xero connection.",
         variant: "destructive",
       });
     } finally {
@@ -130,13 +153,17 @@ export default function Invoices() {
 
   const resetXeroSyncMutation = useMutation({
     mutationFn: async (invoiceId: string) => {
-      const response = await apiRequest('POST', '/api/xero/reset-invoice-sync', { invoiceId });
+      const response = await apiRequest(
+        "POST",
+        "/api/xero/reset-invoice-sync",
+        { invoiceId },
+      );
       const data = await response.json();
       if (!response.ok) throw data;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
     },
     onError: (error: any) => {
       toast({
@@ -149,11 +176,11 @@ export default function Invoices() {
 
   const updateInvoiceMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
-      const response = await apiRequest('PATCH', `/api/invoices/${id}`, data);
+      const response = await apiRequest("PATCH", `/api/invoices/${id}`, data);
       return await response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
       setEditingInvoice(null);
     },
     onError: (error: any) => {
@@ -179,7 +206,7 @@ export default function Invoices() {
 
   const handleSaveEdit = () => {
     if (!editingInvoice) return;
-    
+
     // Validate address
     const trimmedAddress = editFormData.address.trim();
     if (!trimmedAddress || trimmedAddress.length < 5) {
@@ -190,7 +217,7 @@ export default function Invoices() {
       });
       return;
     }
-    
+
     // Validate amount if provided
     const amount = editFormData.amount.trim();
     if (amount && (isNaN(Number(amount)) || Number(amount) <= 0)) {
@@ -201,7 +228,7 @@ export default function Invoices() {
       });
       return;
     }
-    
+
     updateInvoiceMutation.mutate({
       id: editingInvoice.id,
       data: {
@@ -214,23 +241,33 @@ export default function Invoices() {
   };
 
   // Filter invoices based on search and tab
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = 
-      (invoice.jobTitle?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (invoice.customer?.name?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (invoice.address?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (invoice.invoiceNumber?.toLowerCase() ?? "").includes(searchQuery.toLowerCase()) ||
-      (invoice.job?.jobNumber?.toLowerCase() ?? "").includes(searchQuery.toLowerCase());
+  const filteredInvoices = invoices.filter((invoice) => {
+    const matchesSearch =
+      (invoice.jobTitle?.toLowerCase() ?? "").includes(
+        searchQuery.toLowerCase(),
+      ) ||
+      (invoice.customer?.name?.toLowerCase() ?? "").includes(
+        searchQuery.toLowerCase(),
+      ) ||
+      (invoice.address?.toLowerCase() ?? "").includes(
+        searchQuery.toLowerCase(),
+      ) ||
+      (invoice.invoiceNumber?.toLowerCase() ?? "").includes(
+        searchQuery.toLowerCase(),
+      ) ||
+      (invoice.job?.jobNumber?.toLowerCase() ?? "").includes(
+        searchQuery.toLowerCase(),
+      );
 
-    const matchesTab = 
+    const matchesTab =
       activeTab === "all" ||
-      (activeTab === "pending" && invoice.status === 'pending');
+      (activeTab === "pending" && invoice.status === "pending");
 
     return matchesSearch && matchesTab;
   });
 
   const formatCurrency = (amount?: string | null) => {
-    if (!amount) return '$0.00';
+    if (!amount) return "$0.00";
     const num = parseFloat(amount);
     return `$${num.toFixed(2)}`;
   };
@@ -261,9 +298,17 @@ export default function Invoices() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2">
           <FileText className="h-5 w-5 sm:h-6 sm:w-6" />
-          <h1 className="text-2xl sm:text-3xl font-bold truncate" data-testid="heading-invoices">Invoices</h1>
+          <h1
+            className="text-2xl sm:text-3xl font-bold truncate"
+            data-testid="heading-invoices"
+          >
+            Invoices
+          </h1>
         </div>
-        <p className="text-sm text-muted-foreground" data-testid="text-invoices-description">
+        <p
+          className="text-sm text-muted-foreground"
+          data-testid="text-invoices-description"
+        >
           Manage and send completed job invoices to Xero
         </p>
       </div>
@@ -286,18 +331,27 @@ export default function Invoices() {
           data-testid="button-sync-xero-payments"
           className="shrink-0"
         >
-          <RefreshCw className={`h-4 w-4 mr-2 ${isSyncingPayments ? 'animate-spin' : ''}`} />
-          {isSyncingPayments ? 'Syncing...' : 'Sync from Xero'}
+          <RefreshCw
+            className={`h-4 w-4 mr-2 ${isSyncingPayments ? "animate-spin" : ""}`}
+          />
+          {isSyncingPayments ? "Syncing..." : "Sync from Xero"}
         </Button>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-        <TabsList className="grid w-full grid-cols-2 max-w-full" data-testid="tabs-invoice-filter">
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as any)}
+      >
+        <TabsList
+          className="grid w-full grid-cols-2 max-w-full"
+          data-testid="tabs-invoice-filter"
+        >
           <TabsTrigger value="all" data-testid="tab-all-invoices">
             All ({invoices.length})
           </TabsTrigger>
           <TabsTrigger value="pending" data-testid="tab-pending-invoices">
-            Pending ({invoices.filter(inv => inv.status === 'pending').length})
+            Pending ({invoices.filter((inv) => inv.status === "pending").length}
+            )
           </TabsTrigger>
         </TabsList>
 
@@ -307,8 +361,16 @@ export default function Invoices() {
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-lg font-medium" data-testid="text-no-invoices">No invoices found</p>
-                <p className="text-sm text-muted-foreground" data-testid="text-no-invoices-description">
+                <p
+                  className="text-lg font-medium"
+                  data-testid="text-no-invoices"
+                >
+                  No invoices found
+                </p>
+                <p
+                  className="text-sm text-muted-foreground"
+                  data-testid="text-no-invoices-description"
+                >
                   {activeTab === "all" && "No invoices created yet"}
                   {activeTab === "pending" && "No pending invoices"}
                 </p>
@@ -317,29 +379,50 @@ export default function Invoices() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 w-full max-w-full">
               {filteredInvoices.map((invoice) => (
-                <Card key={invoice.id} className="hover-elevate min-w-0" data-testid={`card-invoice-${invoice.id}`}>
+                <Card
+                  key={invoice.id}
+                  className="hover-elevate min-w-0"
+                  data-testid={`card-invoice-${invoice.id}`}
+                >
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-4">
                     <div className="space-y-1 flex-1 min-w-0">
-                      <CardTitle className="text-base sm:text-lg truncate" data-testid={`text-invoice-number-${invoice.id}`}>
+                      <CardTitle
+                        className="text-base sm:text-lg truncate"
+                        data-testid={`text-invoice-number-${invoice.id}`}
+                      >
                         {invoice.invoiceNumber}
                       </CardTitle>
-                      <p className="text-sm text-muted-foreground truncate" data-testid={`text-customer-${invoice.id}`}>
-                        {invoice.customer?.name || 'Unknown Customer'}
+                      <p
+                        className="text-sm text-muted-foreground truncate"
+                        data-testid={`text-customer-${invoice.id}`}
+                      >
+                        {invoice.customer?.name || "Unknown Customer"}
                       </p>
                     </div>
                     <div className="flex-shrink-0">
-                      {invoice.status === 'paid' ? (
-                        <Badge variant="default" className="gap-1" data-testid={`badge-status-${invoice.id}`}>
+                      {invoice.status === "paid" ? (
+                        <Badge
+                          variant="default"
+                          className="gap-1"
+                          data-testid={`badge-status-${invoice.id}`}
+                        >
                           <CheckCircle className="h-3 w-3" />
                           Paid
                         </Badge>
-                      ) : invoice.status === 'pending' ? (
-                        <Badge variant="secondary" className="gap-1" data-testid={`badge-status-${invoice.id}`}>
+                      ) : invoice.status === "pending" ? (
+                        <Badge
+                          variant="secondary"
+                          className="gap-1"
+                          data-testid={`badge-status-${invoice.id}`}
+                        >
                           <Clock className="h-3 w-3" />
                           Pending
                         </Badge>
                       ) : (
-                        <Badge variant="outline" data-testid={`badge-status-${invoice.id}`}>
+                        <Badge
+                          variant="outline"
+                          data-testid={`badge-status-${invoice.id}`}
+                        >
                           {invoice.status}
                         </Badge>
                       )}
@@ -348,29 +431,50 @@ export default function Invoices() {
                   <CardContent className="space-y-4">
                     <div className="space-y-2 min-w-0">
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate" data-testid={`text-job-title-${invoice.id}`}>
+                        <p
+                          className="text-sm font-medium truncate"
+                          data-testid={`text-job-title-${invoice.id}`}
+                        >
                           {invoice.jobTitle}
                         </p>
-                        <p className="text-sm text-muted-foreground truncate" data-testid={`text-address-${invoice.id}`}>
-                          {invoice.address || 'No address'}
+                        <p
+                          className="text-sm text-muted-foreground truncate"
+                          data-testid={`text-address-${invoice.id}`}
+                        >
+                          {invoice.address || "No address"}
                         </p>
                       </div>
-                      
+
                       <div className="flex items-center justify-between pt-2 border-t">
-                        <span className="text-sm text-muted-foreground">Total Amount</span>
-                        <span className="text-lg font-bold" data-testid={`text-amount-${invoice.id}`}>
+                        <span className="text-sm text-muted-foreground">
+                          Total Amount
+                        </span>
+                        <span
+                          className="text-lg font-bold"
+                          data-testid={`text-amount-${invoice.id}`}
+                        >
                           {formatCurrency(invoice.amount?.toString())}
                         </span>
                       </div>
 
                       {invoice.xeroSyncedAt && (
-                        <p className="text-xs text-muted-foreground" data-testid={`text-sent-date-${invoice.id}`}>
-                          Sent to Xero: {format(new Date(invoice.xeroSyncedAt), 'MMM d, yyyy')}
+                        <p
+                          className="text-xs text-muted-foreground"
+                          data-testid={`text-sent-date-${invoice.id}`}
+                        >
+                          Sent to Xero:{" "}
+                          {format(
+                            new Date(invoice.xeroSyncedAt),
+                            "MMM d, yyyy",
+                          )}
                         </p>
                       )}
 
                       {invoice.xeroInvoiceId && (
-                        <p className="text-xs text-muted-foreground truncate" data-testid={`text-xero-id-${invoice.id}`}>
+                        <p
+                          className="text-xs text-muted-foreground truncate"
+                          data-testid={`text-xero-id-${invoice.id}`}
+                        >
                           Xero ID: {invoice.xeroInvoiceId}
                         </p>
                       )}
@@ -393,7 +497,9 @@ export default function Invoices() {
                           data-testid={`button-send-to-xero-${invoice.id}`}
                         >
                           <Send className="h-4 w-4" />
-                          {sendingJobId === invoice.jobId ? 'Sending...' : 'Send to Xero'}
+                          {sendingJobId === invoice.jobId
+                            ? "Sending..."
+                            : "Send to Xero"}
                         </Button>
                       )}
                       {invoice.jobId && invoice.xeroSyncedAt && (
@@ -401,7 +507,11 @@ export default function Invoices() {
                           variant="outline"
                           className="flex-1 gap-2"
                           onClick={() => {
-                            if (confirm('This will reset the Xero sync so you can re-send this invoice. Make sure you have already voided the old invoice in Xero first.')) {
+                            if (
+                              confirm(
+                                "This will reset the Xero sync so you can re-send this invoice. Make sure you have already voided the old invoice in Xero first.",
+                              )
+                            ) {
                               resetXeroSyncMutation.mutate(invoice.id);
                             }
                           }}
@@ -409,7 +519,9 @@ export default function Invoices() {
                           data-testid={`button-resend-xero-${invoice.id}`}
                         >
                           <RotateCcw className="h-4 w-4" />
-                          {resetXeroSyncMutation.isPending ? 'Resetting...' : 'Re-send to Xero'}
+                          {resetXeroSyncMutation.isPending
+                            ? "Resetting..."
+                            : "Re-send to Xero"}
                         </Button>
                       )}
                     </div>
@@ -422,15 +534,19 @@ export default function Invoices() {
       </Tabs>
 
       {/* Edit Invoice Dialog */}
-      <Dialog open={!!editingInvoice} onOpenChange={(open) => !open && setEditingInvoice(null)}>
+      <Dialog
+        open={!!editingInvoice}
+        onOpenChange={(open) => !open && setEditingInvoice(null)}
+      >
         <DialogContent data-testid="dialog-edit-invoice">
           <DialogHeader>
             <DialogTitle>Edit Invoice</DialogTitle>
             <DialogDescription>
-              Update invoice details. Invoice number, customer, and job cannot be changed.
+              Update invoice details. Invoice number, customer, and job cannot
+              be changed.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="invoice-number">Invoice Number</Label>
@@ -447,7 +563,9 @@ export default function Invoices() {
               <Input
                 id="edit-job-title"
                 value={editFormData.jobTitle}
-                onChange={(e) => setEditFormData({ ...editFormData, jobTitle: e.target.value })}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, jobTitle: e.target.value })
+                }
                 data-testid="input-edit-job-title"
               />
             </div>
@@ -457,7 +575,9 @@ export default function Invoices() {
               <Input
                 id="edit-address"
                 value={editFormData.address}
-                onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, address: e.target.value })
+                }
                 placeholder="Enter service address"
                 data-testid="input-edit-address"
               />
@@ -473,7 +593,9 @@ export default function Invoices() {
                 type="number"
                 step="0.01"
                 value={editFormData.amount}
-                onChange={(e) => setEditFormData({ ...editFormData, amount: e.target.value })}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, amount: e.target.value })
+                }
                 data-testid="input-edit-amount"
               />
             </div>
@@ -483,7 +605,9 @@ export default function Invoices() {
               <Textarea
                 id="edit-notes"
                 value={editFormData.notes}
-                onChange={(e) => setEditFormData({ ...editFormData, notes: e.target.value })}
+                onChange={(e) =>
+                  setEditFormData({ ...editFormData, notes: e.target.value })
+                }
                 rows={3}
                 data-testid="input-edit-notes"
               />

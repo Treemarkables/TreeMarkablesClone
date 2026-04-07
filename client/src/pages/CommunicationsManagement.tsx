@@ -1,139 +1,200 @@
-import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { useToast } from '@/hooks/use-toast';
-import { apiRequest } from '@/lib/queryClient';
-import { 
-  Mail, MessageSquare, Bell, Settings, Activity, 
-  CheckCircle, Clock, AlertTriangle, Users,
-  BarChart3, TrendingUp, Send, MessageCircle, Phone,
-  PhoneIncoming, PhoneOutgoing, Play, Pause, Search,
-  Link2, ExternalLink, Loader2
-} from 'lucide-react';
-import type { CallRecord } from '@shared/schema';
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  Mail,
+  MessageSquare,
+  Bell,
+  Settings,
+  Activity,
+  CheckCircle,
+  Clock,
+  AlertTriangle,
+  Users,
+  BarChart3,
+  TrendingUp,
+  Send,
+  MessageCircle,
+  Phone,
+  PhoneIncoming,
+  PhoneOutgoing,
+  Play,
+  Pause,
+  Search,
+  Link2,
+  ExternalLink,
+  Loader2,
+} from "lucide-react";
+import type { CallRecord } from "@shared/schema";
 
 export default function CommunicationsManagement() {
-  const [activeTab, setActiveTab] = useState('calls');
-  const [callSearchQuery, setCallSearchQuery] = useState('');
-  const [callDirectionFilter, setCallDirectionFilter] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState("calls");
+  const [callSearchQuery, setCallSearchQuery] = useState("");
+  const [callDirectionFilter, setCallDirectionFilter] = useState<string>("all");
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
   const [linkCallDialogOpen, setLinkCallDialogOpen] = useState(false);
-  const [selectedCallForLinking, setSelectedCallForLinking] = useState<CallRecord | null>(null);
-  const [selectedJobId, setSelectedJobId] = useState<string>('');
+  const [selectedCallForLinking, setSelectedCallForLinking] =
+    useState<CallRecord | null>(null);
+  const [selectedJobId, setSelectedJobId] = useState<string>("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  
-  const { data: callsResponse, isLoading: isLoadingCalls } = useQuery<{ success: boolean; data: CallRecord[] }>({
-    queryKey: ['/api/calls'],
-    enabled: activeTab === 'calls',
+
+  const { data: callsResponse, isLoading: isLoadingCalls } = useQuery<{
+    success: boolean;
+    data: CallRecord[];
+  }>({
+    queryKey: ["/api/calls"],
+    enabled: activeTab === "calls",
   });
-  
+
   const callRecords = callsResponse?.data;
-  
+
   const { data: jobsData } = useQuery<{ success: boolean; data: any[] }>({
-    queryKey: ['/api/jobs'],
+    queryKey: ["/api/jobs"],
     enabled: linkCallDialogOpen,
   });
-  
+
   const linkCallToJobMutation = useMutation({
-    mutationFn: async ({ callId, jobId }: { callId: string; jobId: string }) => {
-      return await apiRequest('PATCH', `/api/calls/${callId}`, { jobId });
+    mutationFn: async ({
+      callId,
+      jobId,
+    }: {
+      callId: string;
+      jobId: string;
+    }) => {
+      return await apiRequest("PATCH", `/api/calls/${callId}`, { jobId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/calls'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
       setLinkCallDialogOpen(false);
       setSelectedCallForLinking(null);
-      setSelectedJobId('');
+      setSelectedJobId("");
     },
     onError: (error: any) => {
-      toast({ title: 'Error', description: error.message || 'Failed to link call to job', variant: 'destructive' });
-    }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to link call to job",
+        variant: "destructive",
+      });
+    },
   });
-  
-  const filteredCalls = callRecords?.filter(call => {
-    const matchesSearch = !callSearchQuery || 
-      call.fromNumber?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
-      call.toNumber?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
-      call.callerName?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
-      call.transcription?.toLowerCase().includes(callSearchQuery.toLowerCase());
-    
-    const matchesDirection = callDirectionFilter === 'all' || call.direction === callDirectionFilter;
-    
-    return matchesSearch && matchesDirection;
-  }) || [];
-  
+
+  const filteredCalls =
+    callRecords?.filter((call) => {
+      const matchesSearch =
+        !callSearchQuery ||
+        call.fromNumber
+          ?.toLowerCase()
+          .includes(callSearchQuery.toLowerCase()) ||
+        call.toNumber?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
+        call.callerName
+          ?.toLowerCase()
+          .includes(callSearchQuery.toLowerCase()) ||
+        call.transcription
+          ?.toLowerCase()
+          .includes(callSearchQuery.toLowerCase());
+
+      const matchesDirection =
+        callDirectionFilter === "all" || call.direction === callDirectionFilter;
+
+      return matchesSearch && matchesDirection;
+    }) || [];
+
   const formatDuration = (seconds?: number | null) => {
-    if (!seconds) return '0:00';
+    if (!seconds) return "0:00";
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
-  
+
   const formatCallTime = (dateStr?: Date | string | null) => {
-    if (!dateStr) return 'Unknown';
+    if (!dateStr) return "Unknown";
     const date = new Date(dateStr);
-    return date.toLocaleString('en-NZ', { 
-      day: 'numeric', 
-      month: 'short', 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
+    return date.toLocaleString("en-NZ", {
+      day: "numeric",
+      month: "short",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
     });
   };
 
   // Mock data for the communication system status
   const { data: communicationStatus } = useQuery({
-    queryKey: ['communication-status'],
+    queryKey: ["communication-status"],
     queryFn: async () => ({
       emailService: {
         configured: false,
-        service: 'SendGrid',
-        status: 'Mock Mode',
-        lastSent: new Date().toISOString()
+        service: "SendGrid",
+        status: "Mock Mode",
+        lastSent: new Date().toISOString(),
       },
       smsService: {
         configured: false,
-        service: 'Twilio',
-        status: 'Mock Mode',
-        lastSent: new Date().toISOString()
+        service: "Twilio",
+        status: "Mock Mode",
+        lastSent: new Date().toISOString(),
       },
       notifications: {
         enabled: true,
         totalSent: 0,
-        mockMode: true
+        mockMode: true,
       },
       recentActivity: [
         {
-          id: '1',
-          type: 'email',
-          recipient: 'sarah.johnson@email.com',
-          subject: 'Job Status Update: Tree Service Complete',
-          status: 'sent (mock)',
-          timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString()
+          id: "1",
+          type: "email",
+          recipient: "sarah.johnson@email.com",
+          subject: "Job Status Update: Tree Service Complete",
+          status: "sent (mock)",
+          timestamp: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
         },
         {
-          id: '2',
-          type: 'sms',
-          recipient: '+64 21 555 0123',
-          message: 'Your tree service has been scheduled...',
-          status: 'sent (mock)',
-          timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString()
-        }
-      ]
-    })
+          id: "2",
+          type: "sms",
+          recipient: "+64 21 555 0123",
+          message: "Your tree service has been scheduled...",
+          status: "sent (mock)",
+          timestamp: new Date(Date.now() - 32 * 60 * 1000).toISOString(),
+        },
+      ],
+    }),
   });
 
   return (
     <div className="p-3 sm:p-6 max-w-7xl mx-auto space-y-4 sm:space-y-6 w-full overflow-x-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Communications Management</h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Communications Management
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-1">
             Manage automated emails, SMS, and customer notifications
           </p>
@@ -173,7 +234,9 @@ export default function CommunicationsManagement() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Email Service</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Email Service
+                </CardTitle>
                 <Mail className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -185,14 +248,17 @@ export default function CommunicationsManagement() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {communicationStatus?.emailService.service} - {communicationStatus?.emailService.status}
+                  {communicationStatus?.emailService.service} -{" "}
+                  {communicationStatus?.emailService.status}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">SMS Service</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  SMS Service
+                </CardTitle>
                 <MessageSquare className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -204,14 +270,17 @@ export default function CommunicationsManagement() {
                   )}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {communicationStatus?.smsService.service} - {communicationStatus?.smsService.status}
+                  {communicationStatus?.smsService.service} -{" "}
+                  {communicationStatus?.smsService.status}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Notifications Sent</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Notifications Sent
+                </CardTitle>
                 <Send className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -219,14 +288,18 @@ export default function CommunicationsManagement() {
                   {communicationStatus?.notifications.totalSent || 0}
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {communicationStatus?.notifications.mockMode ? 'In mock mode' : 'This month'}
+                  {communicationStatus?.notifications.mockMode
+                    ? "In mock mode"
+                    : "This month"}
                 </p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Automation</CardTitle>
+                <CardTitle className="text-sm font-medium">
+                  Automation
+                </CardTitle>
                 <Activity className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
@@ -247,7 +320,9 @@ export default function CommunicationsManagement() {
                   <TrendingUp className="w-5 h-5 text-green-500" />
                   Service Status
                 </CardTitle>
-                <CardDescription>Communication services health check</CardDescription>
+                <CardDescription>
+                  Communication services health check
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -287,15 +362,20 @@ export default function CommunicationsManagement() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {communicationStatus?.recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                    {activity.type === 'email' ? (
+                  <div
+                    key={activity.id}
+                    className="flex items-center gap-3 p-3 border rounded-lg"
+                  >
+                    {activity.type === "email" ? (
                       <Mail className="w-4 h-4 text-blue-500" />
                     ) : (
                       <MessageCircle className="w-4 h-4 text-green-500" />
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">
-                        {activity.type === 'email' ? activity.subject : activity.message}
+                        {activity.type === "email"
+                          ? activity.subject
+                          : activity.message}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         To: {activity.recipient}
@@ -332,16 +412,22 @@ export default function CommunicationsManagement() {
                 <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
                   <div className="relative flex-1 sm:w-64">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input 
-                      placeholder="Search calls..." 
+                    <Input
+                      placeholder="Search calls..."
                       value={callSearchQuery}
                       onChange={(e) => setCallSearchQuery(e.target.value)}
                       className="pl-9"
                       data-testid="input-search-calls"
                     />
                   </div>
-                  <Select value={callDirectionFilter} onValueChange={setCallDirectionFilter}>
-                    <SelectTrigger className="w-full sm:w-32" data-testid="select-call-direction">
+                  <Select
+                    value={callDirectionFilter}
+                    onValueChange={setCallDirectionFilter}
+                  >
+                    <SelectTrigger
+                      className="w-full sm:w-32"
+                      data-testid="select-call-direction"
+                    >
                       <SelectValue placeholder="Direction" />
                     </SelectTrigger>
                     <SelectContent>
@@ -369,9 +455,12 @@ export default function CommunicationsManagement() {
               ) : (
                 <div className="space-y-3">
                   {filteredCalls.map((call) => (
-                    <div key={call.id} className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 border rounded-lg hover-elevate">
+                    <div
+                      key={call.id}
+                      className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 border rounded-lg hover-elevate"
+                    >
                       <div className="flex-shrink-0">
-                        {call.direction === 'inbound' ? (
+                        {call.direction === "inbound" ? (
                           <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
                             <PhoneIncoming className="w-5 h-5 text-blue-600 dark:text-blue-400" />
                           </div>
@@ -384,17 +473,24 @@ export default function CommunicationsManagement() {
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h4 className="text-sm font-medium">
-                            {call.callerName || (call.direction === 'inbound' ? call.fromNumber : call.toNumber)}
+                            {call.callerName ||
+                              (call.direction === "inbound"
+                                ? call.fromNumber
+                                : call.toNumber)}
                           </h4>
                           <Badge variant="outline" className="text-xs">
-                            {call.direction === 'inbound' ? 'Incoming' : 'Outgoing'}
+                            {call.direction === "inbound"
+                              ? "Incoming"
+                              : "Outgoing"}
                           </Badge>
                           {call.sentiment && (
-                            <Badge 
+                            <Badge
                               className={
-                                call.sentiment === 'positive' ? 'bg-green-500' : 
-                                call.sentiment === 'negative' ? 'bg-red-500' : 
-                                'bg-gray-500'
+                                call.sentiment === "positive"
+                                  ? "bg-green-500"
+                                  : call.sentiment === "negative"
+                                    ? "bg-red-500"
+                                    : "bg-gray-500"
                               }
                             >
                               {call.sentiment}
@@ -407,10 +503,10 @@ export default function CommunicationsManagement() {
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {call.direction === 'inbound' 
-                            ? `From: ${call.fromNumber}` 
+                          {call.direction === "inbound"
+                            ? `From: ${call.fromNumber}`
                             : `To: ${call.toNumber}`}
-                          {' • '}Duration: {formatDuration(call.duration)}
+                          {" • "}Duration: {formatDuration(call.duration)}
                         </p>
                         {call.transcriptionSummary && (
                           <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
@@ -424,10 +520,14 @@ export default function CommunicationsManagement() {
                         </p>
                         <div className="flex gap-2">
                           {call.recordingUrl && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
-                              onClick={() => setPlayingCallId(playingCallId === call.id ? null : call.id)}
+                              onClick={() =>
+                                setPlayingCallId(
+                                  playingCallId === call.id ? null : call.id,
+                                )
+                              }
                               data-testid={`button-play-call-${call.id}`}
                             >
                               {playingCallId === call.id ? (
@@ -435,12 +535,12 @@ export default function CommunicationsManagement() {
                               ) : (
                                 <Play className="w-4 h-4 mr-1" />
                               )}
-                              {playingCallId === call.id ? 'Pause' : 'Play'}
+                              {playingCallId === call.id ? "Pause" : "Play"}
                             </Button>
                           )}
                           {!call.jobId && (
-                            <Button 
-                              size="sm" 
+                            <Button
+                              size="sm"
                               variant="outline"
                               onClick={() => {
                                 setSelectedCallForLinking(call);
@@ -456,16 +556,18 @@ export default function CommunicationsManagement() {
                       </div>
                       {playingCallId === call.id && call.recordingUrl && (
                         <div className="w-full mt-3">
-                          <audio 
-                            controls 
-                            autoPlay 
-                            className="w-full" 
+                          <audio
+                            controls
+                            autoPlay
+                            className="w-full"
                             src={call.recordingUrl}
                             onEnded={() => setPlayingCallId(null)}
                           />
                           {call.transcription && (
                             <div className="mt-3 p-3 bg-muted rounded-lg">
-                              <h5 className="text-sm font-medium mb-1">Transcription</h5>
+                              <h5 className="text-sm font-medium mb-1">
+                                Transcription
+                              </h5>
                               <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                                 {call.transcription}
                               </p>
@@ -505,15 +607,18 @@ export default function CommunicationsManagement() {
               </Select>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setLinkCallDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setLinkCallDialogOpen(false)}
+              >
                 Cancel
               </Button>
-              <Button 
+              <Button
                 onClick={() => {
                   if (selectedCallForLinking && selectedJobId) {
-                    linkCallToJobMutation.mutate({ 
-                      callId: selectedCallForLinking.id, 
-                      jobId: selectedJobId 
+                    linkCallToJobMutation.mutate({
+                      callId: selectedCallForLinking.id,
+                      jobId: selectedJobId,
                     });
                   }
                 }}
@@ -597,9 +702,12 @@ export default function CommunicationsManagement() {
             <CardContent>
               <div className="space-y-3">
                 {communicationStatus?.recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center gap-4 p-4 border rounded-lg">
+                  <div
+                    key={activity.id}
+                    className="flex items-center gap-4 p-4 border rounded-lg"
+                  >
                     <div className="flex-shrink-0">
-                      {activity.type === 'email' ? (
+                      {activity.type === "email" ? (
                         <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                           <Mail className="w-4 h-4 text-blue-600" />
                         </div>
@@ -611,12 +719,14 @@ export default function CommunicationsManagement() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-sm font-medium">
-                        {activity.type === 'email' ? activity.subject : 'SMS Notification'}
+                        {activity.type === "email"
+                          ? activity.subject
+                          : "SMS Notification"}
                       </h4>
                       <p className="text-sm text-muted-foreground">
                         To: {activity.recipient}
                       </p>
-                      {activity.type === 'sms' && (
+                      {activity.type === "sms" && (
                         <p className="text-sm text-muted-foreground mt-1">
                           {activity.message}
                         </p>
@@ -634,9 +744,12 @@ export default function CommunicationsManagement() {
                 )) || (
                   <div className="text-center py-8">
                     <MessageSquare className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <h3 className="text-lg font-medium mb-2">No activity yet</h3>
+                    <h3 className="text-lg font-medium mb-2">
+                      No activity yet
+                    </h3>
                     <p className="text-muted-foreground">
-                      Communication activity will appear here when notifications are sent
+                      Communication activity will appear here when notifications
+                      are sent
                     </p>
                   </div>
                 )}
@@ -662,7 +775,8 @@ export default function CommunicationsManagement() {
                     <Badge className="bg-green-500">Active</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Automatically notify customers when job status changes to scheduled, in progress, or completed.
+                    Automatically notify customers when job status changes to
+                    scheduled, in progress, or completed.
                   </p>
                   <div className="flex gap-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
@@ -676,11 +790,14 @@ export default function CommunicationsManagement() {
 
                 <div className="p-4 border rounded-lg space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-medium">Service Request Confirmations</h3>
+                    <h3 className="font-medium">
+                      Service Request Confirmations
+                    </h3>
                     <Badge className="bg-green-500">Active</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Send confirmation when customers submit new service requests through the portal.
+                    Send confirmation when customers submit new service requests
+                    through the portal.
                   </p>
                   <div className="flex gap-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />
@@ -698,7 +815,8 @@ export default function CommunicationsManagement() {
                     <Badge className="bg-green-500">Active</Badge>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Notify customers when quotes are ready for review and acceptance.
+                    Notify customers when quotes are ready for review and
+                    acceptance.
                   </p>
                   <div className="flex gap-2">
                     <CheckCircle className="w-4 h-4 text-green-500" />

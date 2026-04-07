@@ -7,16 +7,46 @@ import { useLocation } from "wouter";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Save, CheckCircle2, Camera, Upload, Loader2, Search, Plus, X, Check } from "lucide-react";
+import {
+  ArrowLeft,
+  Save,
+  CheckCircle2,
+  Camera,
+  Upload,
+  Loader2,
+  Search,
+  Plus,
+  X,
+  Check,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import SignaturePad from "@/components/SignaturePad";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import jhaHeaderImage from "@assets/generated_images/JHA_Risk_Assessment_Header_017c01a5.png";
 
@@ -27,15 +57,19 @@ const jhaFormSchema = z.object({
   teamLeader: z.string().optional(),
   location: z.string().optional(),
   comments: z.string().optional(),
-  selectedHazards: z.array(z.object({
-    hazardTemplateId: z.union([z.number(), z.string()]),
-    hazardName: z.string(),
-    initialRisk: z.number().min(1).max(4),
-    selectedControls: z.array(z.union([z.number(), z.string()])).min(1, "At least one control measure is required"),
-    residualRisk: z.number().min(1).max(4).optional(),
-    responsiblePerson: z.string().optional(),
-    riskControl: z.string().optional()
-  }))
+  selectedHazards: z.array(
+    z.object({
+      hazardTemplateId: z.union([z.number(), z.string()]),
+      hazardName: z.string(),
+      initialRisk: z.number().min(1).max(4),
+      selectedControls: z
+        .array(z.union([z.number(), z.string()]))
+        .min(1, "At least one control measure is required"),
+      residualRisk: z.number().min(1).max(4).optional(),
+      responsiblePerson: z.string().optional(),
+      riskControl: z.string().optional(),
+    }),
+  ),
 });
 
 type JHAFormValues = z.infer<typeof jhaFormSchema>;
@@ -47,7 +81,7 @@ const PPE_OPTIONS = [
   "Protective ear muffs",
   "Hi vis shirt",
   "Protective kevlar pants",
-  "Protective steel capped boots"
+  "Protective steel capped boots",
 ];
 
 export default function JHAAssessment() {
@@ -62,48 +96,51 @@ export default function JHAAssessment() {
 
   // Get assessment ID from URL query params for editing
   const searchParams = new URLSearchParams(window.location.search);
-  const assessmentId = searchParams.get('id');
+  const assessmentId = searchParams.get("id");
   const isEditing = !!assessmentId;
 
   // Fetch existing assessment if editing
-  const { data: existingAssessmentData, isLoading: loadingExisting } = useQuery<{
-    success: boolean;
-    data: {
-      id: string;
-      activityDescription: string | null;
-      ppeRequired: string[] | null;
-      teamLeader: string | null;
-      location: string | null;
-      comments: string | null;
-      photos: string[] | null;
-      steps: Array<{
+  const { data: existingAssessmentData, isLoading: loadingExisting } =
+    useQuery<{
+      success: boolean;
+      data: {
         id: string;
-        hazardName: string;
-        hazardTemplateId: string | null;
-        initialRiskRating: number;
-        residualRiskRating: number | null;
-        responsiblePerson: string | null;
-        controlMeasures: Array<{
+        activityDescription: string | null;
+        ppeRequired: string[] | null;
+        teamLeader: string | null;
+        location: string | null;
+        comments: string | null;
+        photos: string[] | null;
+        steps: Array<{
           id: string;
-          description: string;
-          controlMeasureTemplateId: string | null;
+          hazardName: string;
+          hazardTemplateId: string | null;
+          initialRiskRating: number;
+          residualRiskRating: number | null;
+          responsiblePerson: string | null;
+          controlMeasures: Array<{
+            id: string;
+            description: string;
+            controlMeasureTemplateId: string | null;
+          }>;
         }>;
-      }>;
-      signatures: Array<{
-        id: string;
-        workerName: string;
-        signatureDataUrl: string;
-        signedAt: string;
-      }>;
-    };
-  }>({
-    queryKey: [`/api/jha/assessments/${assessmentId}?includeSteps=true&includeSignatures=true`],
-    enabled: isEditing,
-  });
+        signatures: Array<{
+          id: string;
+          workerName: string;
+          signatureDataUrl: string;
+          signedAt: string;
+        }>;
+      };
+    }>({
+      queryKey: [
+        `/api/jha/assessments/${assessmentId}?includeSteps=true&includeSignatures=true`,
+      ],
+      enabled: isEditing,
+    });
 
   // Fetch hazard templates
-  const { data: templatesData, isLoading: templatesLoading } = useQuery<{ 
-    success: boolean; 
+  const { data: templatesData, isLoading: templatesLoading } = useQuery<{
+    success: boolean;
     data: Array<{
       id: number;
       name: string;
@@ -117,13 +154,13 @@ export default function JHAAssessment() {
       }>;
     }>;
   }>({
-    queryKey: ['/api/jha/hazard-templates'],
+    queryKey: ["/api/jha/hazard-templates"],
   });
 
   const hazardTemplates = templatesData?.data || [];
   const existingAssessment = existingAssessmentData?.data;
-  const filteredHazards = hazardTemplates.filter(h => 
-    h.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredHazards = hazardTemplates.filter((h) =>
+    h.name.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const form = useForm<JHAFormValues>({
@@ -134,8 +171,8 @@ export default function JHAAssessment() {
       teamLeader: "",
       location: "",
       comments: "",
-      selectedHazards: []
-    }
+      selectedHazards: [],
+    },
   });
 
   // Load existing assessment data into form when editing
@@ -147,19 +184,20 @@ export default function JHAAssessment() {
         teamLeader: existingAssessment.teamLeader || "",
         location: existingAssessment.location || "",
         comments: existingAssessment.comments || "",
-        selectedHazards: existingAssessment.steps?.map((step) => ({
-          hazardTemplateId: step.hazardTemplateId || `custom-${step.id}`,
-          hazardName: step.hazardName,
-          initialRisk: step.initialRiskRating,
-          selectedControls: step.controlMeasures.map(cm => 
-            cm.controlMeasureTemplateId || cm.description
-          ),
-          residualRisk: step.residualRiskRating || step.initialRiskRating,
-          responsiblePerson: step.responsiblePerson || "",
-          riskControl: step.controlMeasures[0]?.description || ""
-        })) || []
+        selectedHazards:
+          existingAssessment.steps?.map((step) => ({
+            hazardTemplateId: step.hazardTemplateId || `custom-${step.id}`,
+            hazardName: step.hazardName,
+            initialRisk: step.initialRiskRating,
+            selectedControls: step.controlMeasures.map(
+              (cm) => cm.controlMeasureTemplateId || cm.description,
+            ),
+            residualRisk: step.residualRiskRating || step.initialRiskRating,
+            responsiblePerson: step.responsiblePerson || "",
+            riskControl: step.controlMeasures[0]?.description || "",
+          })) || [],
       });
-      
+
       if (existingAssessment.photos) {
         setPhotos(existingAssessment.photos);
       }
@@ -169,48 +207,69 @@ export default function JHAAssessment() {
   const selectedHazards = form.watch("selectedHazards");
 
   const createAssessmentMutation = useMutation({
-    mutationFn: async (data: JHAFormValues & { sharedSignature: string, photos: string[] }) => {
+    mutationFn: async (
+      data: JHAFormValues & { sharedSignature: string; photos: string[] },
+    ) => {
       if (isEditing && assessmentId) {
-        return apiRequest('PATCH', `/api/jha/assessments/${assessmentId}`, data);
+        return apiRequest(
+          "PATCH",
+          `/api/jha/assessments/${assessmentId}`,
+          data,
+        );
       }
-      return apiRequest('POST', '/api/jha/assessments', data);
+      return apiRequest("POST", "/api/jha/assessments", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/jha/assessments'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jha/assessments"] });
       navigate("/jha-history");
     },
     onError: (error: Error) => {
       toast({
         title: "Error",
         description: error.message || "Failed to save JHA assessment",
-        variant: "destructive"
+        variant: "destructive",
       });
-    }
+    },
   });
 
-  const toggleHazard = (hazard: typeof hazardTemplates[0]) => {
+  const toggleHazard = (hazard: (typeof hazardTemplates)[0]) => {
     const current = selectedHazards;
-    const exists = current.find(h => h.hazardTemplateId === hazard.id);
-    
+    const exists = current.find((h) => h.hazardTemplateId === hazard.id);
+
     if (exists) {
-      form.setValue("selectedHazards", current.filter(h => h.hazardTemplateId !== hazard.id), { shouldDirty: true });
+      form.setValue(
+        "selectedHazards",
+        current.filter((h) => h.hazardTemplateId !== hazard.id),
+        { shouldDirty: true },
+      );
     } else {
       const riskRating = hazard.defaultRiskRating || 2;
-      form.setValue("selectedHazards", [...current, {
-        hazardTemplateId: hazard.id,
-        hazardName: hazard.name,
-        initialRisk: riskRating,
-        selectedControls: [],
-        residualRisk: riskRating,
-        responsiblePerson: ""
-      }], { shouldDirty: true });
+      form.setValue(
+        "selectedHazards",
+        [
+          ...current,
+          {
+            hazardTemplateId: hazard.id,
+            hazardName: hazard.name,
+            initialRisk: riskRating,
+            selectedControls: [],
+            residualRisk: riskRating,
+            responsiblePerson: "",
+          },
+        ],
+        { shouldDirty: true },
+      );
     }
   };
 
-  const updateHazardField = (hazardId: number | string, field: string, value: any) => {
+  const updateHazardField = (
+    hazardId: number | string,
+    field: string,
+    value: any,
+  ) => {
     const current = selectedHazards;
-    const updated = current.map(h => 
-      h.hazardTemplateId === hazardId ? { ...h, [field]: value } : h
+    const updated = current.map((h) =>
+      h.hazardTemplateId === hazardId ? { ...h, [field]: value } : h,
     );
     form.setValue("selectedHazards", updated);
   };
@@ -237,7 +296,7 @@ export default function JHAAssessment() {
       toast({
         title: "Hazard name required",
         description: "Please enter a name for the hazard before adding it",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -245,8 +304,9 @@ export default function JHAAssessment() {
     // Use whatever controls the user has entered; filter empty strings.
     // If nothing was entered, use a placeholder so the hazard can still be added
     // and the user can fill in proper controls in the hazard detail section.
-    const validControls = customControls.filter(c => c.trim());
-    const finalControls = validControls.length > 0 ? validControls : ["To be determined"];
+    const validControls = customControls.filter((c) => c.trim());
+    const finalControls =
+      validControls.length > 0 ? validControls : ["To be determined"];
 
     const customId = `custom-${Date.now()}`;
     const newHazard = {
@@ -256,31 +316,33 @@ export default function JHAAssessment() {
       selectedControls: finalControls,
       residualRisk: 1,
       responsiblePerson: "",
-      riskControl: finalControls[0]
+      riskControl: finalControls[0],
     };
 
     form.setValue("selectedHazards", [...(selectedHazards || []), newHazard]);
-    
+
     // Reset form
     setCustomHazardName("");
     setCustomControls([""]);
     setShowCustomHazardForm(false);
+  };
 
-      };
-
-  const toggleControl = (hazardId: number | string, controlId: number | string) => {
+  const toggleControl = (
+    hazardId: number | string,
+    controlId: number | string,
+  ) => {
     const current = selectedHazards;
-    const hazard = current.find(h => h.hazardTemplateId === hazardId);
+    const hazard = current.find((h) => h.hazardTemplateId === hazardId);
     if (!hazard) return;
-    
+
     const hasControl = hazard.selectedControls.includes(controlId);
-    const updated = current.map(h => {
+    const updated = current.map((h) => {
       if (h.hazardTemplateId === hazardId) {
         return {
           ...h,
-          selectedControls: hasControl 
-            ? h.selectedControls.filter(id => id !== controlId)
-            : [...h.selectedControls, controlId]
+          selectedControls: hasControl
+            ? h.selectedControls.filter((id) => id !== controlId)
+            : [...h.selectedControls, controlId],
         };
       }
       return h;
@@ -304,21 +366,24 @@ export default function JHAAssessment() {
 
   const handlePhotoCapture = () => {
     // In a real app, this would open camera
-      };
+  };
 
   const handleSubmit = (data: JHAFormValues) => {
-    console.log("🔍 Form submit triggered", { 
+    console.log("🔍 Form submit triggered", {
       hazardCount: data.selectedHazards?.length,
       hasSignature: !!sharedSignature,
       isEditing,
-      formData: data 
+      formData: data,
     });
 
-    if (!data.activityDescription || data.activityDescription.trim().length === 0) {
+    if (
+      !data.activityDescription ||
+      data.activityDescription.trim().length === 0
+    ) {
       toast({
         title: "Activity Required",
         description: "Please enter an activity description",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -328,7 +393,7 @@ export default function JHAAssessment() {
       toast({
         title: "No Hazards Selected",
         description: "Please select at least one hazard to assess",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
@@ -339,8 +404,9 @@ export default function JHAAssessment() {
       console.log("❌ Validation failed: No signature");
       toast({
         title: "Signature Required",
-        description: "Worker signatures are required to complete the assessment",
-        variant: "destructive"
+        description:
+          "Worker signatures are required to complete the assessment",
+        variant: "destructive",
       });
       return;
     }
@@ -349,7 +415,7 @@ export default function JHAAssessment() {
     createAssessmentMutation.mutate({
       ...data,
       sharedSignature: sharedSignature || "",
-      photos
+      photos,
     });
   };
 
@@ -376,25 +442,28 @@ export default function JHAAssessment() {
 
       {/* JHA Risk Assessment Header */}
       <div className="mb-4 overflow-hidden rounded-lg shadow-md h-[150px] md:h-[250px]">
-        <img 
-          src={jhaHeaderImage} 
-          alt="Job Hazard Analysis Risk Assessment" 
+        <img
+          src={jhaHeaderImage}
+          alt="Job Hazard Analysis Risk Assessment"
           className="w-full h-full"
-          style={{ 
-            objectFit: 'cover',
-            objectPosition: 'center'
+          style={{
+            objectFit: "cover",
+            objectPosition: "center",
           }}
         />
       </div>
 
       <Form {...form}>
-        <form onSubmit={(e) => {
-          e.preventDefault();
-          console.log("📝 Form onSubmit event fired");
-          const values = form.getValues();
-          console.log("📋 Form values at submit:", values);
-          handleSubmit(values);
-        }} className="space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            console.log("📝 Form onSubmit event fired");
+            const values = form.getValues();
+            console.log("📋 Form values at submit:", values);
+            handleSubmit(values);
+          }}
+          className="space-y-4"
+        >
           {/* Header */}
           <Card>
             <CardHeader className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
@@ -402,8 +471,8 @@ export default function JHAAssessment() {
                 {isEditing ? "Edit Job Hazard Analysis" : "Job Hazard Analysis"}
               </CardTitle>
               <CardDescription className="text-white/90">
-                {isEditing 
-                  ? "Update assessment details or add additional signatures" 
+                {isEditing
+                  ? "Update assessment details or add additional signatures"
                   : "Complete this form before starting work"}
               </CardDescription>
             </CardHeader>
@@ -422,7 +491,11 @@ export default function JHAAssessment() {
                   <FormItem>
                     <FormLabel>Activity taking place *</FormLabel>
                     <FormControl>
-                      <Textarea {...field} placeholder="Enter text..." data-testid="input-activity" />
+                      <Textarea
+                        {...field}
+                        placeholder="Enter text..."
+                        data-testid="input-activity"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -437,27 +510,30 @@ export default function JHAAssessment() {
                     <FormLabel>PPE required</FormLabel>
                     <div className="space-y-2">
                       {PPE_OPTIONS.map((option) => {
-                        const isSelected = field.value?.includes(option) ?? false;
+                        const isSelected =
+                          field.value?.includes(option) ?? false;
                         return (
-                          <div 
+                          <div
                             key={option}
                             className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate"
-                            data-testid={`checkbox-ppe-${option.toLowerCase().replace(/\s+/g, '-')}`}
+                            data-testid={`checkbox-ppe-${option.toLowerCase().replace(/\s+/g, "-")}`}
                           >
-                            <Checkbox 
+                            <Checkbox
                               checked={isSelected}
                               onCheckedChange={(checked) => {
                                 const currentValue = field.value || [];
                                 if (checked) {
                                   field.onChange([...currentValue, option]);
                                 } else {
-                                  field.onChange(currentValue.filter((v: string) => v !== option));
+                                  field.onChange(
+                                    currentValue.filter(
+                                      (v: string) => v !== option,
+                                    ),
+                                  );
                                 }
                               }}
                             />
-                            <label className="flex-1 text-sm">
-                              {option}
-                            </label>
+                            <label className="flex-1 text-sm">{option}</label>
                           </div>
                         );
                       })}
@@ -473,7 +549,11 @@ export default function JHAAssessment() {
                   <FormItem>
                     <FormLabel>Team leader</FormLabel>
                     <FormControl>
-                      <Input {...field} placeholder="Enter name..." data-testid="input-team-leader" />
+                      <Input
+                        {...field}
+                        placeholder="Enter name..."
+                        data-testid="input-team-leader"
+                      />
                     </FormControl>
                   </FormItem>
                 )}
@@ -486,8 +566,8 @@ export default function JHAAssessment() {
                   <FormItem>
                     <FormLabel>Location</FormLabel>
                     <FormControl>
-                      <AddressAutocomplete 
-                        value={field.value || ''} 
+                      <AddressAutocomplete
+                        value={field.value || ""}
                         onChange={field.onChange}
                         placeholder="Search for address..."
                         data-testid="input-location"
@@ -517,14 +597,16 @@ export default function JHAAssessment() {
             <CardContent>
               <div className="space-y-2">
                 {filteredHazards.map((hazard) => {
-                  const isSelected = selectedHazards.some(h => h.hazardTemplateId === hazard.id);
+                  const isSelected = selectedHazards.some(
+                    (h) => h.hazardTemplateId === hazard.id,
+                  );
                   return (
-                    <div 
+                    <div
                       key={hazard.id}
                       className="flex items-center space-x-3 p-3 border rounded-lg hover-elevate"
                       data-testid={`checkbox-hazard-${hazard.id}`}
                     >
-                      <Checkbox 
+                      <Checkbox
                         checked={isSelected}
                         onCheckedChange={() => toggleHazard(hazard)}
                       />
@@ -538,7 +620,7 @@ export default function JHAAssessment() {
                   );
                 })}
               </div>
-              
+
               <div className="mt-4 pt-4 border-t">
                 <Button
                   type="button"
@@ -575,7 +657,8 @@ export default function JHAAssessment() {
 
                 <div>
                   <label className="text-sm font-medium mb-2 block">
-                    Risk Control Measures <span className="text-red-500">*</span>
+                    Risk Control Measures{" "}
+                    <span className="text-red-500">*</span>
                   </label>
                   <div className="space-y-2">
                     {customControls.map((control, index) => (
@@ -583,7 +666,9 @@ export default function JHAAssessment() {
                         <Input
                           placeholder="Enter control measure..."
                           value={control}
-                          onChange={(e) => updateCustomControl(index, e.target.value)}
+                          onChange={(e) =>
+                            updateCustomControl(index, e.target.value)
+                          }
                           data-testid={`input-custom-control-${index}`}
                         />
                         {customControls.length > 1 && (
@@ -641,35 +726,56 @@ export default function JHAAssessment() {
 
           {/* Selected Hazards Details */}
           {selectedHazards.map((selectedHazard) => {
-            const template = hazardTemplates.find(h => h.id === selectedHazard.hazardTemplateId);
-            const isCustom = typeof selectedHazard.hazardTemplateId === 'string' && selectedHazard.hazardTemplateId.startsWith('custom-');
+            const template = hazardTemplates.find(
+              (h) => h.id === selectedHazard.hazardTemplateId,
+            );
+            const isCustom =
+              typeof selectedHazard.hazardTemplateId === "string" &&
+              selectedHazard.hazardTemplateId.startsWith("custom-");
 
             return (
-              <Card key={selectedHazard.hazardTemplateId} className={isCustom ? "border-blue-200" : "border-cyan-200"}>
+              <Card
+                key={selectedHazard.hazardTemplateId}
+                className={isCustom ? "border-blue-200" : "border-cyan-200"}
+              >
                 <CardHeader className={isCustom ? "bg-blue-50" : "bg-cyan-50"}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <CardTitle className="text-lg">{selectedHazard.hazardName}</CardTitle>
+                      <CardTitle className="text-lg">
+                        {selectedHazard.hazardName}
+                      </CardTitle>
                       {isCustom && <Badge variant="secondary">Custom</Badge>}
                     </div>
-                    <Badge variant="outline">Initial Risk: {selectedHazard.initialRisk}</Badge>
+                    <Badge variant="outline">
+                      Initial Risk: {selectedHazard.initialRisk}
+                    </Badge>
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-4 pt-4">
                   {/* Initial Risk */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Initial risk</label>
-                    <p className="text-sm text-muted-foreground mb-2">Risk level with no controls</p>
+                    <label className="text-sm font-medium mb-2 block">
+                      Initial risk
+                    </label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Risk level with no controls
+                    </p>
                     <div className="flex gap-2">
                       {[1, 2, 3, 4].map((rating) => (
                         <button
                           key={rating}
                           type="button"
-                          onClick={() => updateHazardField(selectedHazard.hazardTemplateId, 'initialRisk', rating)}
+                          onClick={() =>
+                            updateHazardField(
+                              selectedHazard.hazardTemplateId,
+                              "initialRisk",
+                              rating,
+                            )
+                          }
                           className={`flex-1 h-12 rounded-md font-medium transition-colors ${
                             selectedHazard.initialRisk === rating
-                              ? getRiskColor(rating) + ' text-white'
-                              : 'bg-gray-200 hover:bg-gray-300'
+                              ? getRiskColor(rating) + " text-white"
+                              : "bg-gray-200 hover:bg-gray-300"
                           }`}
                           data-testid={`button-initial-risk-${selectedHazard.hazardTemplateId}-${rating}`}
                         >
@@ -680,36 +786,53 @@ export default function JHAAssessment() {
                   </div>
 
                   {/* Control Measures for Template Hazards */}
-                  {!isCustom && template?.controlMeasures && template.controlMeasures.length > 0 && (
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">
-                        Risk control measures <span className="text-red-500">*</span>
-                      </label>
-                      {selectedHazard.selectedControls.length === 0 && (
-                        <p className="text-sm text-red-500 mb-2">At least one control measure must be selected</p>
-                      )}
-                      <div className="space-y-2">
-                        {template.controlMeasures.map((control) => (
-                          <div
-                            key={control.id}
-                            className="flex items-start space-x-3 p-3 border rounded-lg hover-elevate"
-                          >
-                            <Checkbox
-                              checked={selectedHazard.selectedControls.includes(control.id)}
-                              onCheckedChange={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
-                              data-testid={`checkbox-control-${selectedHazard.hazardTemplateId}-${control.id}`}
-                            />
-                            <label 
-                              className="flex-1 cursor-pointer text-sm"
-                              onClick={() => toggleControl(selectedHazard.hazardTemplateId, control.id)}
+                  {!isCustom &&
+                    template?.controlMeasures &&
+                    template.controlMeasures.length > 0 && (
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Risk control measures{" "}
+                          <span className="text-red-500">*</span>
+                        </label>
+                        {selectedHazard.selectedControls.length === 0 && (
+                          <p className="text-sm text-red-500 mb-2">
+                            At least one control measure must be selected
+                          </p>
+                        )}
+                        <div className="space-y-2">
+                          {template.controlMeasures.map((control) => (
+                            <div
+                              key={control.id}
+                              className="flex items-start space-x-3 p-3 border rounded-lg hover-elevate"
                             >
-                              {control.description}
-                            </label>
-                          </div>
-                        ))}
+                              <Checkbox
+                                checked={selectedHazard.selectedControls.includes(
+                                  control.id,
+                                )}
+                                onCheckedChange={() =>
+                                  toggleControl(
+                                    selectedHazard.hazardTemplateId,
+                                    control.id,
+                                  )
+                                }
+                                data-testid={`checkbox-control-${selectedHazard.hazardTemplateId}-${control.id}`}
+                              />
+                              <label
+                                className="flex-1 cursor-pointer text-sm"
+                                onClick={() =>
+                                  toggleControl(
+                                    selectedHazard.hazardTemplateId,
+                                    control.id,
+                                  )
+                                }
+                              >
+                                {control.description}
+                              </label>
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {/* Control Measures for Custom Hazards */}
                   {isCustom && (
@@ -718,65 +841,105 @@ export default function JHAAssessment() {
                         Risk control measures
                       </label>
                       <div className="space-y-2">
-                        {(selectedHazard.selectedControls as string[]).map((control, index) => (
-                          <div key={index} className="p-3 border rounded-lg bg-muted/50">
-                            <p className="text-sm">{control}</p>
-                          </div>
-                        ))}
+                        {(selectedHazard.selectedControls as string[]).map(
+                          (control, index) => (
+                            <div
+                              key={index}
+                              className="p-3 border rounded-lg bg-muted/50"
+                            >
+                              <p className="text-sm">{control}</p>
+                            </div>
+                          ),
+                        )}
                       </div>
                     </div>
                   )}
 
                   {/* Who is responsible */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Who is responsible</label>
+                    <label className="text-sm font-medium mb-2 block">
+                      Who is responsible
+                    </label>
                     <Input
                       placeholder="Enter text..."
                       value={selectedHazard.responsiblePerson || ""}
-                      onChange={(e) => updateHazardField(selectedHazard.hazardTemplateId, 'responsiblePerson', e.target.value)}
+                      onChange={(e) =>
+                        updateHazardField(
+                          selectedHazard.hazardTemplateId,
+                          "responsiblePerson",
+                          e.target.value,
+                        )
+                      }
                       data-testid={`input-responsible-${selectedHazard.hazardTemplateId}`}
                     />
                   </div>
 
                   {/* Risk Control for Template Hazards */}
-                  {!isCustom && template?.controlMeasures && template.controlMeasures.length > 0 && (
-                    <div>
-                      <label className="text-sm font-medium mb-2 block">Risk Control</label>
-                      <Select
-                        value={selectedHazard.riskControl || ""}
-                        onValueChange={(value) => updateHazardField(selectedHazard.hazardTemplateId, 'riskControl', value)}
-                      >
-                        <SelectTrigger data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}>
-                          <SelectValue placeholder="Select risk control..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {template.controlMeasures.map((control) => (
-                            <SelectItem key={control.id} value={control.description}>
-                              {control.description}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
+                  {!isCustom &&
+                    template?.controlMeasures &&
+                    template.controlMeasures.length > 0 && (
+                      <div>
+                        <label className="text-sm font-medium mb-2 block">
+                          Risk Control
+                        </label>
+                        <Select
+                          value={selectedHazard.riskControl || ""}
+                          onValueChange={(value) =>
+                            updateHazardField(
+                              selectedHazard.hazardTemplateId,
+                              "riskControl",
+                              value,
+                            )
+                          }
+                        >
+                          <SelectTrigger
+                            data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}
+                          >
+                            <SelectValue placeholder="Select risk control..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {template.controlMeasures.map((control) => (
+                              <SelectItem
+                                key={control.id}
+                                value={control.description}
+                              >
+                                {control.description}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
 
                   {/* Risk Control for Custom Hazards */}
                   {isCustom && (
                     <div>
-                      <label className="text-sm font-medium mb-2 block">Risk Control</label>
+                      <label className="text-sm font-medium mb-2 block">
+                        Risk Control
+                      </label>
                       <Select
                         value={selectedHazard.riskControl || ""}
-                        onValueChange={(value) => updateHazardField(selectedHazard.hazardTemplateId, 'riskControl', value)}
+                        onValueChange={(value) =>
+                          updateHazardField(
+                            selectedHazard.hazardTemplateId,
+                            "riskControl",
+                            value,
+                          )
+                        }
                       >
-                        <SelectTrigger data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}>
+                        <SelectTrigger
+                          data-testid={`select-risk-control-${selectedHazard.hazardTemplateId}`}
+                        >
                           <SelectValue placeholder="Select risk control..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {(selectedHazard.selectedControls as string[]).map((control, index) => (
-                            <SelectItem key={index} value={control}>
-                              {control}
-                            </SelectItem>
-                          ))}
+                          {(selectedHazard.selectedControls as string[]).map(
+                            (control, index) => (
+                              <SelectItem key={index} value={control}>
+                                {control}
+                              </SelectItem>
+                            ),
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -784,18 +947,28 @@ export default function JHAAssessment() {
 
                   {/* Residual Risk */}
                   <div>
-                    <label className="text-sm font-medium mb-2 block">Residual risk</label>
-                    <p className="text-sm text-muted-foreground mb-2">Risk level with controls</p>
+                    <label className="text-sm font-medium mb-2 block">
+                      Residual risk
+                    </label>
+                    <p className="text-sm text-muted-foreground mb-2">
+                      Risk level with controls
+                    </p>
                     <div className="flex gap-2">
                       {[1, 2, 3, 4].map((rating) => (
                         <button
                           key={rating}
                           type="button"
-                          onClick={() => updateHazardField(selectedHazard.hazardTemplateId, 'residualRisk', rating)}
+                          onClick={() =>
+                            updateHazardField(
+                              selectedHazard.hazardTemplateId,
+                              "residualRisk",
+                              rating,
+                            )
+                          }
                           className={`flex-1 h-12 rounded-md font-medium transition-colors ${
                             selectedHazard.residualRisk === rating
-                              ? getRiskColor(rating) + ' text-white'
-                              : 'bg-gray-200 hover:bg-gray-300'
+                              ? getRiskColor(rating) + " text-white"
+                              : "bg-gray-200 hover:bg-gray-300"
                           }`}
                           data-testid={`button-residual-risk-${selectedHazard.hazardTemplateId}-${rating}`}
                         >
@@ -813,38 +986,60 @@ export default function JHAAssessment() {
           {selectedHazards.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">SUMMARY - Hazard / Risk & Measure</CardTitle>
+                <CardTitle className="text-lg">
+                  SUMMARY - Hazard / Risk & Measure
+                </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   {selectedHazards.map((hazard) => {
-                    const template = hazardTemplates.find(h => h.id === hazard.hazardTemplateId);
-                    const isCustom = typeof hazard.hazardTemplateId === 'string' && hazard.hazardTemplateId.startsWith('custom-');
-                    
-                    let controlsList: Array<{description: string}> = [];
+                    const template = hazardTemplates.find(
+                      (h) => h.id === hazard.hazardTemplateId,
+                    );
+                    const isCustom =
+                      typeof hazard.hazardTemplateId === "string" &&
+                      hazard.hazardTemplateId.startsWith("custom-");
+
+                    let controlsList: Array<{ description: string }> = [];
                     if (isCustom) {
-                      controlsList = (hazard.selectedControls as string[]).map(c => ({ description: c }));
+                      controlsList = (hazard.selectedControls as string[]).map(
+                        (c) => ({ description: c }),
+                      );
                     } else {
-                      controlsList = template?.controlMeasures?.filter(c => hazard.selectedControls.includes(c.id)) || [];
+                      controlsList =
+                        template?.controlMeasures?.filter((c) =>
+                          hazard.selectedControls.includes(c.id),
+                        ) || [];
                     }
-                    
+
                     return (
-                      <div key={hazard.hazardTemplateId} className="p-3 border rounded-lg bg-gray-50 space-y-2">
+                      <div
+                        key={hazard.hazardTemplateId}
+                        className="p-3 border rounded-lg bg-gray-50 space-y-2"
+                      >
                         <div className="font-medium text-sm flex items-center gap-2">
                           {hazard.hazardName}
-                          {isCustom && <Badge variant="secondary" className="text-xs">Custom</Badge>}
+                          {isCustom && (
+                            <Badge variant="secondary" className="text-xs">
+                              Custom
+                            </Badge>
+                          )}
                         </div>
                         <div className="text-sm">
-                          <span className="font-medium">Initial Risk:</span> {hazard.initialRisk}
+                          <span className="font-medium">Initial Risk:</span>{" "}
+                          {hazard.initialRisk}
                         </div>
                         {hazard.riskControl && (
                           <div className="text-sm">
-                            <span className="font-medium">Risk Control:</span> {hazard.riskControl}
+                            <span className="font-medium">Risk Control:</span>{" "}
+                            {hazard.riskControl}
                           </div>
                         )}
                         {controlsList.length > 0 && (
                           <div className="text-sm">
-                            <div className="font-medium mb-1">Control Measures:</div>
+                            <div className="font-medium mb-1">
+                              Control Measures:
+                            </div>
                             <ul className="list-disc list-inside space-y-1 text-muted-foreground">
                               {controlsList.map((c, idx) => (
                                 <li key={idx}>{c.description}</li>
@@ -854,7 +1049,8 @@ export default function JHAAssessment() {
                         )}
                         {hazard.responsiblePerson && (
                           <div className="text-sm text-muted-foreground">
-                            <span className="font-medium">Responsible:</span> {hazard.responsiblePerson}
+                            <span className="font-medium">Responsible:</span>{" "}
+                            {hazard.responsiblePerson}
                           </div>
                         )}
                       </div>
@@ -877,7 +1073,12 @@ export default function JHAAssessment() {
                 render={({ field }) => (
                   <FormItem>
                     <FormControl>
-                      <Textarea {...field} placeholder="Enter text..." rows={4} data-testid="input-comments" />
+                      <Textarea
+                        {...field}
+                        placeholder="Enter text..."
+                        rows={4}
+                        data-testid="input-comments"
+                      />
                     </FormControl>
                   </FormItem>
                 )}
@@ -892,11 +1093,20 @@ export default function JHAAssessment() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2">
-                <Button type="button" variant="destructive" onClick={handlePhotoCapture} data-testid="button-capture">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handlePhotoCapture}
+                  data-testid="button-capture"
+                >
                   <Camera className="mr-2 h-4 w-4" />
                   Capture
                 </Button>
-                <Button type="button" className="bg-cyan-500 hover:bg-cyan-600" data-testid="button-choose">
+                <Button
+                  type="button"
+                  className="bg-cyan-500 hover:bg-cyan-600"
+                  data-testid="button-choose"
+                >
                   <Upload className="mr-2 h-4 w-4" />
                   Choose
                 </Button>
@@ -904,7 +1114,10 @@ export default function JHAAssessment() {
               {photos.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
                   {photos.map((photo, idx) => (
-                    <div key={idx} className="aspect-square bg-gray-200 rounded-lg"></div>
+                    <div
+                      key={idx}
+                      className="aspect-square bg-gray-200 rounded-lg"
+                    ></div>
                   ))}
                 </div>
               )}
@@ -912,41 +1125,56 @@ export default function JHAAssessment() {
           </Card>
 
           {/* Existing Signatures */}
-          {isEditing && existingAssessment?.signatures && existingAssessment.signatures.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg">Existing Signatures</CardTitle>
-                <CardDescription>Workers who have already signed this JHA</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {existingAssessment.signatures.map((sig) => (
-                  <div key={sig.id} className="p-3 border rounded-lg bg-gray-50">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        <span className="font-medium text-sm">{sig.workerName}</span>
+          {isEditing &&
+            existingAssessment?.signatures &&
+            existingAssessment.signatures.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Existing Signatures</CardTitle>
+                  <CardDescription>
+                    Workers who have already signed this JHA
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {existingAssessment.signatures.map((sig) => (
+                    <div
+                      key={sig.id}
+                      className="p-3 border rounded-lg bg-gray-50"
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="h-4 w-4 text-green-500" />
+                          <span className="font-medium text-sm">
+                            {sig.workerName}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {format(new Date(sig.signedAt), "PPp")}
+                        </span>
                       </div>
-                      <span className="text-xs text-muted-foreground">
-                        {format(new Date(sig.signedAt), "PPp")}
-                      </span>
+                      <div className="border rounded bg-white dark:bg-gray-900 p-2">
+                        <img
+                          src={sig.signatureDataUrl}
+                          alt={`Signature by ${sig.workerName}`}
+                          className="max-h-20 w-full object-contain"
+                        />
+                      </div>
                     </div>
-                    <div className="border rounded bg-white dark:bg-gray-900 p-2">
-                      <img src={sig.signatureDataUrl} alt={`Signature by ${sig.workerName}`} className="max-h-20 w-full object-contain" />
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
           {/* New Signatures */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">
-                {isEditing ? "Add Additional Worker Signature" : "Worker Signatures"}
+                {isEditing
+                  ? "Add Additional Worker Signature"
+                  : "Worker Signatures"}
               </CardTitle>
               <CardDescription>
-                {isEditing 
+                {isEditing
                   ? "Add signature for workers who joined this job later"
                   : "All workers can sign in the box below"}
               </CardDescription>
@@ -958,12 +1186,14 @@ export default function JHAAssessment() {
                     <div className="flex items-center gap-2 mb-2">
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
                       <span className="font-medium">
-                        {isEditing ? "New signature collected" : "Signatures collected"}
+                        {isEditing
+                          ? "New signature collected"
+                          : "Signatures collected"}
                       </span>
                     </div>
-                    <img 
-                      src={sharedSignature} 
-                      alt="Worker signatures" 
+                    <img
+                      src={sharedSignature}
+                      alt="Worker signatures"
                       className="w-full border rounded bg-white"
                     />
                   </div>
@@ -998,7 +1228,7 @@ export default function JHAAssessment() {
                   isValid: form.formState.isValid,
                   errors: form.formState.errors,
                   isDirty: form.formState.isDirty,
-                  values: form.getValues()
+                  values: form.getValues(),
                 });
               }}
             >
@@ -1007,8 +1237,10 @@ export default function JHAAssessment() {
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                   {isEditing ? "Updating..." : "Submitting..."}
                 </>
+              ) : isEditing ? (
+                "Update JHA"
               ) : (
-                isEditing ? "Update JHA" : "Submit Form"
+                "Submit Form"
               )}
             </Button>
           </div>

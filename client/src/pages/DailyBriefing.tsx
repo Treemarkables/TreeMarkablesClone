@@ -28,7 +28,12 @@ import {
 function formatNZDate(dateStr: string): string {
   const [year, month, day] = dateStr.split("-").map(Number);
   const d = new Date(year, month - 1, day);
-  return d.toLocaleDateString("en-NZ", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString("en-NZ", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
 }
 
 function getTodayNZ(): string {
@@ -97,15 +102,22 @@ interface BriefingData {
   jobs: Job[];
 }
 
-function buildGearList(job: Job): { name: string; fromChecklist: boolean; checked: boolean }[] {
+function buildGearList(
+  job: Job,
+): { name: string; fromChecklist: boolean; checked: boolean }[] {
   const seen = new Set<string>();
-  const items: { name: string; fromChecklist: boolean; checked: boolean }[] = [];
+  const items: { name: string; fromChecklist: boolean; checked: boolean }[] =
+    [];
 
   for (const item of job.equipmentChecklist ?? []) {
     const key = item.equipment.trim().toLowerCase();
     if (!seen.has(key)) {
       seen.add(key);
-      items.push({ name: item.equipment.trim(), fromChecklist: true, checked: item.checked });
+      items.push({
+        name: item.equipment.trim(),
+        fromChecklist: true,
+        checked: item.checked,
+      });
     }
   }
 
@@ -143,39 +155,51 @@ function JobCard({
 
   // Optimistic checklist state — initialised from the job prop
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
-    Array.isArray(job.checklist) ? job.checklist : []
+    Array.isArray(job.checklist) ? job.checklist : [],
   );
 
   const addMutation = useMutation({
     mutationFn: () =>
-      apiRequest("POST", "/api/daily-job-notes", { jobId: job.id, date, note: newNote.trim() }),
+      apiRequest("POST", "/api/daily-job-notes", {
+        jobId: job.id,
+        date,
+        note: newNote.trim(),
+      }),
     onSuccess: () => {
       setNewNote("");
       setAdding(false);
       onNoteAdded();
     },
-    onError: () => toast({ title: "Failed to add note", variant: "destructive" }),
+    onError: () =>
+      toast({ title: "Failed to add note", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (noteId: string) => apiRequest("DELETE", `/api/daily-job-notes/${noteId}`),
+    mutationFn: (noteId: string) =>
+      apiRequest("DELETE", `/api/daily-job-notes/${noteId}`),
     onSuccess: onNoteDeleted,
-    onError: () => toast({ title: "Failed to delete note", variant: "destructive" }),
+    onError: () =>
+      toast({ title: "Failed to delete note", variant: "destructive" }),
   });
 
   const toggleChecklistItem = (itemId: string) => {
     const prev = checklist;
     const updated = prev.map((item) =>
-      item.id === itemId ? { ...item, completed: !item.completed } : item
+      item.id === itemId ? { ...item, completed: !item.completed } : item,
     );
     // Optimistic update
     setChecklist(updated);
 
-    apiRequest("PATCH", `/api/jobs/${job.id}`, { checklist: updated }).catch(() => {
-      // Revert on failure
-      setChecklist(prev);
-      toast({ title: "Couldn't save — please try again", variant: "destructive" });
-    });
+    apiRequest("PATCH", `/api/jobs/${job.id}`, { checklist: updated }).catch(
+      () => {
+        // Revert on failure
+        setChecklist(prev);
+        toast({
+          title: "Couldn't save — please try again",
+          variant: "destructive",
+        });
+      },
+    );
   };
 
   const address = job.jobAddress || job.address || "No address";
@@ -184,7 +208,11 @@ function JobCard({
   let timeStr = "";
   if (job.scheduledDate) {
     const d = new Date(job.scheduledDate);
-    timeStr = d.toLocaleTimeString("en-NZ", { hour: "numeric", minute: "2-digit", hour12: true });
+    timeStr = d.toLocaleTimeString("en-NZ", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
   }
 
   const gearItems = buildGearList(job);
@@ -213,12 +241,16 @@ function JobCard({
           </span>
           <div className="flex items-start gap-1.5">
             <MapPin className="w-3.5 h-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-            <span className="text-sm font-medium text-foreground leading-snug">{address}</span>
+            <span className="text-sm font-medium text-foreground leading-snug">
+              {address}
+            </span>
           </div>
           {job.assignedTo && job.assignedTo.length > 0 && (
             <div className="flex items-center gap-1.5 mt-1">
               <Users className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">{job.assignedTo.join(", ")}</span>
+              <span className="text-xs text-muted-foreground">
+                {job.assignedTo.join(", ")}
+              </span>
             </div>
           )}
         </div>
@@ -268,7 +300,9 @@ function JobCard({
                         : "border-blue-300 dark:border-blue-700"
                     }`}
                   >
-                    {item.checked && <Check className="w-2.5 h-2.5 text-white" />}
+                    {item.checked && (
+                      <Check className="w-2.5 h-2.5 text-white" />
+                    )}
                   </span>
                 ) : (
                   <span className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
@@ -314,7 +348,9 @@ function JobCard({
           <div className="h-1 bg-green-100 dark:bg-green-900/30">
             <div
               className="h-full bg-green-500 transition-all duration-300"
-              style={{ width: `${checklist.length > 0 ? (doneCount / checklist.length) * 100 : 0}%` }}
+              style={{
+                width: `${checklist.length > 0 ? (doneCount / checklist.length) * 100 : 0}%`,
+              }}
             />
           </div>
 
@@ -355,7 +391,9 @@ function JobCard({
           {allDone && (
             <div className="flex items-center justify-center gap-1.5 py-2 bg-green-500">
               <Check className="w-3.5 h-3.5 text-white" />
-              <span className="text-xs font-bold text-white">All tasks complete</span>
+              <span className="text-xs font-bold text-white">
+                All tasks complete
+              </span>
             </div>
           )}
         </div>
@@ -370,13 +408,19 @@ function JobCard({
           </p>
 
           {notes.length === 0 ? (
-            <p className="text-xs text-muted-foreground italic">No notes for this job</p>
+            <p className="text-xs text-muted-foreground italic">
+              No notes for this job
+            </p>
           ) : (
             <ul className="space-y-2">
               {notes.map((n) => (
                 <li key={n.id} className="flex items-start gap-2">
-                  <span className="text-orange-400 mt-0.5 flex-shrink-0 text-xs">•</span>
-                  <span className="text-xs text-foreground leading-snug flex-1">{n.note}</span>
+                  <span className="text-orange-400 mt-0.5 flex-shrink-0 text-xs">
+                    •
+                  </span>
+                  <span className="text-xs text-foreground leading-snug flex-1">
+                    {n.note}
+                  </span>
                   {isAdmin && (
                     <button
                       onClick={() => deleteMutation.mutate(n.id)}
@@ -424,7 +468,10 @@ function JobCard({
                 <Button
                   size="sm"
                   variant="ghost"
-                  onClick={() => { setAdding(false); setNewNote(""); }}
+                  onClick={() => {
+                    setAdding(false);
+                    setNewNote("");
+                  }}
                   className="h-7 text-xs"
                 >
                   <X className="w-3 h-3 mr-1" />
@@ -447,9 +494,13 @@ export default function DailyBriefing() {
   const [editingDayNote, setEditingDayNote] = useState(false);
   const [draftDayNote, setDraftDayNote] = useState("");
 
-  const { data, isLoading, refetch } = useQuery<{ success: boolean; data: BriefingData }>({
+  const { data, isLoading, refetch } = useQuery<{
+    success: boolean;
+    data: BriefingData;
+  }>({
     queryKey: ["/api/daily-briefing", date],
-    queryFn: () => fetch(`/api/daily-briefing?date=${date}`).then((r) => r.json()),
+    queryFn: () =>
+      fetch(`/api/daily-briefing?date=${date}`).then((r) => r.json()),
   });
 
   const briefingData = data?.data;
@@ -458,12 +509,14 @@ export default function DailyBriefing() {
   const allNotes = briefingData?.jobNotes ?? [];
 
   const saveDayNoteMutation = useMutation({
-    mutationFn: (content: string) => apiRequest("PUT", "/api/daily-briefing", { date, content }),
+    mutationFn: (content: string) =>
+      apiRequest("PUT", "/api/daily-briefing", { date, content }),
     onSuccess: () => {
       setEditingDayNote(false);
       refetch();
     },
-    onError: () => toast({ title: "Failed to save note", variant: "destructive" }),
+    onError: () =>
+      toast({ title: "Failed to save note", variant: "destructive" }),
   });
 
   const startEditDayNote = () => {
@@ -481,43 +534,64 @@ export default function DailyBriefing() {
           <ClipboardList className="w-4 h-4 text-primary" />
         </div>
         <div>
-          <h1 className="font-bold text-foreground text-base leading-none">Daily Briefing</h1>
+          <h1 className="font-bold text-foreground text-base leading-none">
+            Daily Briefing
+          </h1>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {isAdmin ? "Manage day notes & job instructions for your crew" : "Today's schedule and instructions"}
+            {isAdmin
+              ? "Manage day notes & job instructions for your crew"
+              : "Today's schedule and instructions"}
           </p>
         </div>
       </div>
 
       {/* Date navigation */}
       <div className="bg-background border-b border-border px-4 py-2 flex items-center justify-between">
-        <Button size="icon" variant="ghost" onClick={() => setDate(addDays(date, -1))}>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setDate(addDays(date, -1))}
+        >
           <ChevronLeft className="w-4 h-4" />
         </Button>
         <div className="text-center">
-          <p className="font-semibold text-foreground text-sm">{formatNZDate(date)}</p>
+          <p className="font-semibold text-foreground text-sm">
+            {formatNZDate(date)}
+          </p>
           {isToday && (
-            <span className="text-xs font-medium" style={{ color: "#39FF14" }}>Today</span>
+            <span className="text-xs font-medium" style={{ color: "#39FF14" }}>
+              Today
+            </span>
           )}
         </div>
-        <Button size="icon" variant="ghost" onClick={() => setDate(addDays(date, 1))}>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => setDate(addDays(date, 1))}
+        >
           <ChevronRight className="w-4 h-4" />
         </Button>
       </div>
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 max-w-2xl mx-auto w-full">
-
         {/* General Day Note */}
         <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div
             className="px-4 py-2 flex items-center justify-between"
             style={{ backgroundColor: "#0f1f0f" }}
           >
-            <p className="text-xs font-bold uppercase tracking-wider" style={{ color: "#39FF14" }}>
+            <p
+              className="text-xs font-bold uppercase tracking-wider"
+              style={{ color: "#39FF14" }}
+            >
               General Day Note
             </p>
             {isAdmin && !editingDayNote && (
-              <button onClick={startEditDayNote} className="text-gray-400 hover:text-white transition-colors">
+              <button
+                onClick={startEditDayNote}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
                 <Pencil className="w-3.5 h-3.5" />
               </button>
             )}
@@ -526,10 +600,14 @@ export default function DailyBriefing() {
           <div className="px-4 py-3">
             {!editingDayNote ? (
               dayNote ? (
-                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{dayNote}</p>
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
+                  {dayNote}
+                </p>
               ) : (
                 <p className="text-sm text-muted-foreground italic">
-                  {isAdmin ? "No note yet — tap the pencil to add one." : "No general note for today."}
+                  {isAdmin
+                    ? "No note yet — tap the pencil to add one."
+                    : "No general note for today."}
                 </p>
               )
             ) : (
@@ -551,7 +629,11 @@ export default function DailyBriefing() {
                     <Check className="w-3.5 h-3.5 mr-1" />
                     Save
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setEditingDayNote(false)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setEditingDayNote(false)}
+                  >
                     <X className="w-3.5 h-3.5 mr-1" />
                     Cancel
                   </Button>
@@ -571,7 +653,9 @@ export default function DailyBriefing() {
         ) : jobs.length === 0 ? (
           <div className="text-center py-10">
             <ClipboardList className="w-10 h-10 text-muted-foreground mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium text-muted-foreground">No jobs scheduled for this day</p>
+            <p className="text-sm font-medium text-muted-foreground">
+              No jobs scheduled for this day
+            </p>
           </div>
         ) : (
           <div>

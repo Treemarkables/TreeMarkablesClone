@@ -6,10 +6,31 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Phone, Clock, Mic, Link2, AlertCircle, Plus, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Phone,
+  Clock,
+  Mic,
+  Link2,
+  AlertCircle,
+  Plus,
+  ChevronDown,
+  ChevronUp,
+} from "lucide-react";
 import { format } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -72,7 +93,9 @@ function CallCard({
                 {call.callerName || call.fromNumber}
               </p>
               {call.callerName && (
-                <p className="text-xs text-muted-foreground">{call.fromNumber}</p>
+                <p className="text-xs text-muted-foreground">
+                  {call.fromNumber}
+                </p>
               )}
             </div>
           </div>
@@ -85,11 +108,7 @@ function CallCard({
             <Badge variant="outline" className="text-xs">
               {callTime ? format(new Date(callTime), "dd/MM HH:mm") : "—"}
             </Badge>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => onLinkJob(call)}
-            >
+            <Button size="sm" variant="outline" onClick={() => onLinkJob(call)}>
               <Link2 className="w-3 h-3 mr-1" />
               Link to Job
             </Button>
@@ -129,9 +148,13 @@ function CallCard({
             >
               <Mic className="w-3 h-3" />
               {expanded ? (
-                <>Hide transcript <ChevronUp className="w-3 h-3" /></>
+                <>
+                  Hide transcript <ChevronUp className="w-3 h-3" />
+                </>
               ) : (
-                <>View transcript <ChevronDown className="w-3 h-3" /></>
+                <>
+                  View transcript <ChevronDown className="w-3 h-3" />
+                </>
               )}
             </button>
             {expanded && (
@@ -161,7 +184,7 @@ function LinkJobDialog({
 
   const { data: jobsData, isLoading: jobsLoading } = useQuery({
     queryKey: ["/api/jobs", { limit: 100 }],
-    queryFn: () => fetch("/api/jobs?limit=100").then(r => r.json()),
+    queryFn: () => fetch("/api/jobs?limit=100").then((r) => r.json()),
     enabled: open,
   });
 
@@ -170,13 +193,19 @@ function LinkJobDialog({
   const linkMutation = useMutation({
     mutationFn: async () => {
       if (!call || !selectedJobId) throw new Error("Missing data");
-      const res = await apiRequest("POST", `/api/call-records/${call.id}/link-job`, {
-        jobId: selectedJobId,
-      });
+      const res = await apiRequest(
+        "POST",
+        `/api/call-records/${call.id}/link-job`,
+        {
+          jobId: selectedJobId,
+        },
+      );
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/call-records/unlinked"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/call-records/unlinked"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       onClose();
       setSelectedJobId("");
@@ -187,37 +216,56 @@ function LinkJobDialog({
   });
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) { onClose(); setSelectedJobId(""); } }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) {
+          onClose();
+          setSelectedJobId("");
+        }
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Link Call to Job</DialogTitle>
           <DialogDescription>
-            Select the job this call from {call?.callerName || call?.fromNumber} belongs to.
+            Select the job this call from {call?.callerName || call?.fromNumber}{" "}
+            belongs to.
           </DialogDescription>
         </DialogHeader>
 
         {call?.transcriptionSummary && (
           <div className="p-3 bg-muted rounded text-sm text-muted-foreground">
-            <strong className="text-foreground">Call summary:</strong> {call.transcriptionSummary}
+            <strong className="text-foreground">Call summary:</strong>{" "}
+            {call.transcriptionSummary}
           </div>
         )}
 
         <div className="space-y-4">
           <Select value={selectedJobId} onValueChange={setSelectedJobId}>
             <SelectTrigger>
-              <SelectValue placeholder={jobsLoading ? "Loading jobs…" : "Select a job"} />
+              <SelectValue
+                placeholder={jobsLoading ? "Loading jobs…" : "Select a job"}
+              />
             </SelectTrigger>
             <SelectContent>
               {jobs.map((job) => (
                 <SelectItem key={job.id} value={job.id}>
-                  #{job.jobNumber} — {job.customerName || "Unknown"} — {job.address || "No address"}
+                  #{job.jobNumber} — {job.customerName || "Unknown"} —{" "}
+                  {job.address || "No address"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
 
           <div className="flex gap-2 justify-end">
-            <Button variant="outline" onClick={() => { onClose(); setSelectedJobId(""); }}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                onClose();
+                setSelectedJobId("");
+              }}
+            >
               Cancel
             </Button>
             <Button
@@ -256,12 +304,14 @@ function CreateJobDialog({
         call.transcriptionSummary
           ? call.transcriptionSummary.substring(0, 80)
           : call.callerName
-          ? `Call from ${call.callerName}`
-          : "New job from inbound call"
+            ? `Call from ${call.callerName}`
+            : "New job from inbound call",
       );
       setAddress("");
       setDescription(
-        call.transcriptionSummary ? `Customer called: ${call.transcriptionSummary}` : ""
+        call.transcriptionSummary
+          ? `Customer called: ${call.transcriptionSummary}`
+          : "",
       );
     }
   }, [call?.id, open]);
@@ -272,7 +322,11 @@ function CreateJobDialog({
 
       // Create the job
       const jobRes = await apiRequest("POST", "/api/jobs", {
-        title: title.trim() || (call.callerName ? `Call from ${call.callerName}` : "New job from inbound call"),
+        title:
+          title.trim() ||
+          (call.callerName
+            ? `Call from ${call.callerName}`
+            : "New job from inbound call"),
         address: address.trim() || undefined,
         description: description.trim() || undefined,
         status: "enquiry",
@@ -293,31 +347,46 @@ function CreateJobDialog({
       return newJobId;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/call-records/unlinked"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/call-records/unlinked"],
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       onClose();
     },
     onError: (err: any) => {
-      toast({ title: err?.message || "Failed to create job", variant: "destructive" });
+      toast({
+        title: err?.message || "Failed to create job",
+        variant: "destructive",
+      });
     },
   });
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) onClose(); }}>
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+    >
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>Create New Job from Call</DialogTitle>
           <DialogDescription>
-            A new job will be created and this call recording will be linked to it.
+            A new job will be created and this call recording will be linked to
+            it.
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-3">
           <div className="p-3 bg-muted rounded text-sm">
             <span className="text-muted-foreground">Caller: </span>
-            <span className="font-medium">{call?.callerName || call?.fromNumber}</span>
+            <span className="font-medium">
+              {call?.callerName || call?.fromNumber}
+            </span>
             {call?.callerName && (
-              <span className="text-muted-foreground ml-1">({call.fromNumber})</span>
+              <span className="text-muted-foreground ml-1">
+                ({call.fromNumber})
+              </span>
             )}
           </div>
 
@@ -372,7 +441,9 @@ function CreateJobDialog({
 
 export default function UnlinkedCalls() {
   const [linkingCall, setLinkingCall] = useState<CallRecord | null>(null);
-  const [creatingJobCall, setCreatingJobCall] = useState<CallRecord | null>(null);
+  const [creatingJobCall, setCreatingJobCall] = useState<CallRecord | null>(
+    null,
+  );
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["/api/call-records/unlinked"],
@@ -427,7 +498,8 @@ export default function UnlinkedCalls() {
             <Phone className="w-10 h-10 mx-auto mb-3 opacity-30" />
             <p className="font-medium">No unlinked calls</p>
             <p className="text-sm mt-1">
-              All recorded calls have been linked to jobs, or no calls have been recorded yet.
+              All recorded calls have been linked to jobs, or no calls have been
+              recorded yet.
             </p>
           </CardContent>
         </Card>

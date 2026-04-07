@@ -1,37 +1,61 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useForm, Controller } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
-import { Calendar, Clock, Users, MapPin, Wrench, Trash2, Save, X } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { AddressAutocomplete } from '@/components/AddressAutocomplete';
-import * as z from 'zod';
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import {
+  Calendar,
+  Clock,
+  Users,
+  MapPin,
+  Wrench,
+  Trash2,
+  Save,
+  X,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
+import * as z from "zod";
 
 const scheduleEventFormSchema = z.object({
-  title: z.string().min(1, 'Title is required'),
+  title: z.string().min(1, "Title is required"),
   description: z.string().optional(),
-  type: z.enum(['job', 'meeting', 'maintenance', 'break']),
-  startDate: z.string().min(1, 'Start date is required'),
-  endDate: z.string().min(1, 'End date is required'),
+  type: z.enum(["job", "meeting", "maintenance", "break"]),
+  startDate: z.string().min(1, "Start date is required"),
+  endDate: z.string().min(1, "End date is required"),
   location: z.string().optional(),
   address: z.string().optional(),
-  priority: z.enum(['low', 'medium', 'high', 'urgent']),
+  priority: z.enum(["low", "medium", "high", "urgent"]),
   jobId: z.string().optional(),
   customerId: z.string().optional(),
   assignedEmployees: z.array(z.string()).optional(),
   equipment: z.array(z.string()).optional(),
   requiredSkills: z.array(z.string()).optional(),
-  estimatedDuration: z.number().min(1, 'Duration must be at least 1 minute').optional(),
+  estimatedDuration: z
+    .number()
+    .min(1, "Duration must be at least 1 minute")
+    .optional(),
   weatherDependent: z.boolean().optional(),
   color: z.string().optional(),
 });
@@ -49,22 +73,29 @@ interface ScheduleEventModalProps {
 }
 
 const eventTypeConfig = {
-  job: { label: 'Job', color: '#EF4444', icon: Wrench },
-  meeting: { label: 'Meeting', color: '#3B82F6', icon: Users },
-  maintenance: { label: 'Maintenance', color: '#F59E0B', icon: Wrench },
-  break: { label: 'Break', color: '#6B7280', icon: Clock },
+  job: { label: "Job", color: "#EF4444", icon: Wrench },
+  meeting: { label: "Meeting", color: "#3B82F6", icon: Users },
+  maintenance: { label: "Maintenance", color: "#F59E0B", icon: Wrench },
+  break: { label: "Break", color: "#6B7280", icon: Clock },
 };
 
 const priorityConfig = {
-  low: { label: 'Low', color: '#6B7280' },
-  medium: { label: 'Medium', color: '#3B82F6' },
-  high: { label: 'High', color: '#F59E0B' },
-  urgent: { label: 'Urgent', color: '#EF4444' },
+  low: { label: "Low", color: "#6B7280" },
+  medium: { label: "Medium", color: "#3B82F6" },
+  high: { label: "High", color: "#F59E0B" },
+  urgent: { label: "Urgent", color: "#EF4444" },
 };
 
 const skillsOptions = [
-  'chainsaw', 'climbing', 'bucket_truck', 'pruning', 'safety_management',
-  'emergency_response', 'chipper_operation', 'cleanup', 'ground_work'
+  "chainsaw",
+  "climbing",
+  "bucket_truck",
+  "pruning",
+  "safety_management",
+  "emergency_response",
+  "chipper_operation",
+  "cleanup",
+  "ground_work",
 ];
 
 export function ScheduleEventModal({
@@ -74,7 +105,7 @@ export function ScheduleEventModal({
   selectedDate,
   onEventCreated,
   onEventUpdated,
-  onEventDeleted
+  onEventDeleted,
 }: ScheduleEventModalProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -82,22 +113,22 @@ export function ScheduleEventModal({
 
   // Fetch data for form options
   const { data: employeesData } = useQuery({
-    queryKey: ['/api/employees', 'active'],
+    queryKey: ["/api/employees", "active"],
     enabled: isOpen,
   });
 
   const { data: equipmentData } = useQuery({
-    queryKey: ['/api/equipment'],
+    queryKey: ["/api/equipment"],
     enabled: isOpen,
   });
 
   const { data: customersData } = useQuery({
-    queryKey: ['/api/customers'],
+    queryKey: ["/api/customers"],
     enabled: isOpen,
   });
 
   const { data: jobTemplatesData } = useQuery({
-    queryKey: ['/api/job-templates'],
+    queryKey: ["/api/job-templates"],
     enabled: isOpen,
   });
 
@@ -109,20 +140,25 @@ export function ScheduleEventModal({
   const form = useForm<ScheduleEventFormData>({
     resolver: zodResolver(scheduleEventFormSchema),
     defaultValues: {
-      title: '',
-      description: '',
-      type: 'job',
-      startDate: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm") : '',
-      endDate: selectedDate ? format(new Date(selectedDate.getTime() + 4 * 60 * 60 * 1000), "yyyy-MM-dd'T'HH:mm") : '',
-      location: '',
-      address: '',
-      priority: 'medium',
+      title: "",
+      description: "",
+      type: "job",
+      startDate: selectedDate ? format(selectedDate, "yyyy-MM-dd'T'HH:mm") : "",
+      endDate: selectedDate
+        ? format(
+            new Date(selectedDate.getTime() + 4 * 60 * 60 * 1000),
+            "yyyy-MM-dd'T'HH:mm",
+          )
+        : "",
+      location: "",
+      address: "",
+      priority: "medium",
       assignedEmployees: [],
       equipment: [],
       requiredSkills: [],
       estimatedDuration: 240, // 4 hours default
       weatherDependent: false,
-      color: '#3B82F6',
+      color: "#3B82F6",
     },
   });
 
@@ -130,9 +166,9 @@ export function ScheduleEventModal({
   useEffect(() => {
     if (event && isOpen) {
       // Handle both CalendarEvent format and ScheduleEvent format
-      let startDateStr = '';
-      let endDateStr = '';
-      
+      let startDateStr = "";
+      let endDateStr = "";
+
       if (event.startDate && event.endDate) {
         // Schedule event format (from API)
         startDateStr = format(new Date(event.startDate), "yyyy-MM-dd'T'HH:mm");
@@ -144,73 +180,75 @@ export function ScheduleEventModal({
       }
 
       form.reset({
-        title: event.title || '',
-        description: event.description || '',
-        type: event.type || 'job',
+        title: event.title || "",
+        description: event.description || "",
+        type: event.type || "job",
         startDate: startDateStr,
         endDate: endDateStr,
-        location: event.location || '',
-        address: event.address || '',
-        priority: event.priority || 'medium',
-        jobId: event.jobId || '',
-        customerId: event.customerId || '',
+        location: event.location || "",
+        address: event.address || "",
+        priority: event.priority || "medium",
+        jobId: event.jobId || "",
+        customerId: event.customerId || "",
         assignedEmployees: event.assignedEmployees || [],
         equipment: event.equipment || [],
         requiredSkills: event.requiredSkills || [],
         estimatedDuration: event.estimatedDuration || 240,
         weatherDependent: event.weatherDependent || false,
-        color: event.color || '#3B82F6',
+        color: event.color || "#3B82F6",
       });
     }
   }, [event, isOpen, form]);
 
   // Create event mutation
   const createEventMutation = useMutation({
-    mutationFn: (data: ScheduleEventFormData) => apiRequest('POST', '/api/schedule-events', data),
+    mutationFn: (data: ScheduleEventFormData) =>
+      apiRequest("POST", "/api/schedule-events", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       onEventCreated?.();
       onClose();
     },
     onError: () => {
       toast({
-        title: 'Error',
-        description: 'Failed to create schedule event',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to create schedule event",
+        variant: "destructive",
       });
     },
   });
 
   // Update event mutation
   const updateEventMutation = useMutation({
-    mutationFn: (data: ScheduleEventFormData) => apiRequest('PUT', `/api/schedule-events/${event?.id}`, data),
+    mutationFn: (data: ScheduleEventFormData) =>
+      apiRequest("PUT", `/api/schedule-events/${event?.id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       onEventUpdated?.();
       onClose();
     },
     onError: () => {
       toast({
-        title: 'Error',
-        description: 'Failed to update schedule event',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to update schedule event",
+        variant: "destructive",
       });
     },
   });
 
   // Delete event mutation
   const deleteEventMutation = useMutation({
-    mutationFn: () => apiRequest('DELETE', `/api/schedule-events/${event?.id}`),
+    mutationFn: () => apiRequest("DELETE", `/api/schedule-events/${event?.id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/schedule-events'] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       onEventDeleted?.();
       onClose();
     },
     onError: () => {
       toast({
-        title: 'Error',
-        description: 'Failed to delete schedule event',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to delete schedule event",
+        variant: "destructive",
       });
     },
   });
@@ -224,7 +262,7 @@ export function ScheduleEventModal({
   };
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this event?')) {
+    if (window.confirm("Are you sure you want to delete this event?")) {
       setIsDeleting(true);
       deleteEventMutation.mutate();
     }
@@ -236,7 +274,7 @@ export function ScheduleEventModal({
     onClose();
   };
 
-  const selectedType = form.watch('type');
+  const selectedType = form.watch("type");
   const typeConfig = eventTypeConfig[selectedType];
 
   return (
@@ -245,10 +283,12 @@ export function ScheduleEventModal({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             {typeConfig && <typeConfig.icon className="h-5 w-5" />}
-            {event ? 'Edit Schedule Event' : 'Create Schedule Event'}
+            {event ? "Edit Schedule Event" : "Create Schedule Event"}
           </DialogTitle>
           <DialogDescription>
-            {event ? 'Update the details of this schedule event' : 'Create a new event in the schedule'}
+            {event
+              ? "Update the details of this schedule event"
+              : "Create a new event in the schedule"}
           </DialogDescription>
         </DialogHeader>
 
@@ -259,12 +299,14 @@ export function ScheduleEventModal({
               <Label htmlFor="title">Title *</Label>
               <Input
                 id="title"
-                {...form.register('title')}
+                {...form.register("title")}
                 placeholder="Event title..."
                 data-testid="input-event-title"
               />
               {form.formState.errors.title && (
-                <p className="text-sm text-red-500">{form.formState.errors.title.message}</p>
+                <p className="text-sm text-red-500">
+                  {form.formState.errors.title.message}
+                </p>
               )}
             </div>
 
@@ -274,7 +316,11 @@ export function ScheduleEventModal({
                 control={form.control}
                 name="type"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange} data-testid="select-event-type">
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    data-testid="select-event-type"
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -298,7 +344,7 @@ export function ScheduleEventModal({
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
-              {...form.register('description')}
+              {...form.register("description")}
               placeholder="Event description..."
               rows={3}
               data-testid="textarea-event-description"
@@ -312,11 +358,13 @@ export function ScheduleEventModal({
               <Input
                 id="startDate"
                 type="datetime-local"
-                {...form.register('startDate')}
+                {...form.register("startDate")}
                 data-testid="input-start-date"
               />
               {form.formState.errors.startDate && (
-                <p className="text-sm text-red-500">{form.formState.errors.startDate.message}</p>
+                <p className="text-sm text-red-500">
+                  {form.formState.errors.startDate.message}
+                </p>
               )}
             </div>
 
@@ -325,11 +373,13 @@ export function ScheduleEventModal({
               <Input
                 id="endDate"
                 type="datetime-local"
-                {...form.register('endDate')}
+                {...form.register("endDate")}
                 data-testid="input-end-date"
               />
               {form.formState.errors.endDate && (
-                <p className="text-sm text-red-500">{form.formState.errors.endDate.message}</p>
+                <p className="text-sm text-red-500">
+                  {form.formState.errors.endDate.message}
+                </p>
               )}
             </div>
 
@@ -339,7 +389,7 @@ export function ScheduleEventModal({
                 id="estimatedDuration"
                 type="number"
                 min="1"
-                {...form.register('estimatedDuration', { valueAsNumber: true })}
+                {...form.register("estimatedDuration", { valueAsNumber: true })}
                 placeholder="240"
                 data-testid="input-duration"
               />
@@ -352,7 +402,7 @@ export function ScheduleEventModal({
               <Label htmlFor="location">Location</Label>
               <Input
                 id="location"
-                {...form.register('location')}
+                {...form.register("location")}
                 placeholder="Location name..."
                 data-testid="input-location"
               />
@@ -361,8 +411,8 @@ export function ScheduleEventModal({
             <div className="space-y-2">
               <Label htmlFor="address">Address</Label>
               <AddressAutocomplete
-                value={form.getValues('address') || ''}
-                onChange={(value) => form.setValue('address', value)}
+                value={form.getValues("address") || ""}
+                onChange={(value) => form.setValue("address", value)}
                 placeholder="Full address..."
                 mode="full"
                 data-testid="input-address"
@@ -375,7 +425,11 @@ export function ScheduleEventModal({
                 control={form.control}
                 name="priority"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange} data-testid="select-priority">
+                  <Select
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    data-testid="select-priority"
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -383,8 +437,8 @@ export function ScheduleEventModal({
                       {Object.entries(priorityConfig).map(([key, config]) => (
                         <SelectItem key={key} value={key}>
                           <div className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full" 
+                            <div
+                              className="w-3 h-3 rounded-full"
                               style={{ backgroundColor: config.color }}
                             />
                             {config.label}
@@ -410,7 +464,10 @@ export function ScheduleEventModal({
               <Label>Assigned Employees</Label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto">
                 {employees.map((employee: any) => (
-                  <div key={employee.id} className="flex items-center space-x-2">
+                  <div
+                    key={employee.id}
+                    className="flex items-center space-x-2"
+                  >
                     <Controller
                       control={form.control}
                       name="assignedEmployees"
@@ -419,16 +476,25 @@ export function ScheduleEventModal({
                           checked={field.value?.includes(employee.id)}
                           onCheckedChange={(checked) => {
                             if (checked) {
-                              field.onChange([...(field.value || []), employee.id]);
+                              field.onChange([
+                                ...(field.value || []),
+                                employee.id,
+                              ]);
                             } else {
-                              field.onChange(field.value?.filter((id: string) => id !== employee.id));
+                              field.onChange(
+                                field.value?.filter(
+                                  (id: string) => id !== employee.id,
+                                ),
+                              );
                             }
                           }}
                           data-testid={`checkbox-employee-${employee.id}`}
                         />
                       )}
                     />
-                    <Label className="text-sm">{employee.firstName} {employee.lastName}</Label>
+                    <Label className="text-sm">
+                      {employee.firstName} {employee.lastName}
+                    </Label>
                     <Badge variant="outline" className="text-xs">
                       {employee.position}
                     </Badge>
@@ -453,17 +519,23 @@ export function ScheduleEventModal({
                             if (checked) {
                               field.onChange([...(field.value || []), item.id]);
                             } else {
-                              field.onChange(field.value?.filter((id: string) => id !== item.id));
+                              field.onChange(
+                                field.value?.filter(
+                                  (id: string) => id !== item.id,
+                                ),
+                              );
                             }
                           }}
-                          disabled={item.status !== 'available'}
+                          disabled={item.status !== "available"}
                           data-testid={`checkbox-equipment-${item.id}`}
                         />
                       )}
                     />
                     <Label className="text-sm">{item.name}</Label>
-                    <Badge 
-                      variant={item.status === 'available' ? 'default' : 'secondary'}
+                    <Badge
+                      variant={
+                        item.status === "available" ? "default" : "secondary"
+                      }
                       className="text-xs"
                     >
                       {item.status}
@@ -489,14 +561,18 @@ export function ScheduleEventModal({
                             if (checked) {
                               field.onChange([...(field.value || []), skill]);
                             } else {
-                              field.onChange(field.value?.filter((s: string) => s !== skill));
+                              field.onChange(
+                                field.value?.filter((s: string) => s !== skill),
+                              );
                             }
                           }}
                           data-testid={`checkbox-skill-${skill}`}
                         />
                       )}
                     />
-                    <Label className="text-sm capitalize">{skill.replace('_', ' ')}</Label>
+                    <Label className="text-sm capitalize">
+                      {skill.replace("_", " ")}
+                    </Label>
                   </div>
                 ))}
               </div>
@@ -537,7 +613,7 @@ export function ScheduleEventModal({
                 </Button>
               )}
             </div>
-            
+
             <div className="flex gap-2">
               <Button
                 type="button"
@@ -550,11 +626,13 @@ export function ScheduleEventModal({
               </Button>
               <Button
                 type="submit"
-                disabled={createEventMutation.isPending || updateEventMutation.isPending}
+                disabled={
+                  createEventMutation.isPending || updateEventMutation.isPending
+                }
                 data-testid="button-save-event"
               >
                 <Save className="h-4 w-4 mr-2" />
-                {event ? 'Update Event' : 'Create Event'}
+                {event ? "Update Event" : "Create Event"}
               </Button>
             </div>
           </div>

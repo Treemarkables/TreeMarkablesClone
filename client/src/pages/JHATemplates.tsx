@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
   DialogTitle,
-  DialogTrigger 
+  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   Select,
@@ -47,19 +47,21 @@ export default function JHATemplates() {
   const { toast } = useToast();
   const [showHazardDialog, setShowHazardDialog] = useState(false);
   const [showControlDialog, setShowControlDialog] = useState(false);
-  const [selectedHazard, setSelectedHazard] = useState<JhaHazardTemplate | null>(null);
-  const [selectedControl, setSelectedControl] = useState<JhaControlMeasureTemplate | null>(null);
+  const [selectedHazard, setSelectedHazard] =
+    useState<JhaHazardTemplate | null>(null);
+  const [selectedControl, setSelectedControl] =
+    useState<JhaControlMeasureTemplate | null>(null);
 
   const [hazardForm, setHazardForm] = useState({
     name: "",
     description: "",
-    category: ""
+    category: "",
   });
 
   const [controlForm, setControlForm] = useState({
     description: "",
     hierarchyLevel: 3,
-    riskReduction: 1
+    riskReduction: 1,
   });
 
   const { data: hazards, isLoading: loadingHazards } = useQuery({
@@ -67,82 +69,119 @@ export default function JHATemplates() {
   });
 
   const { data: controls, isLoading: loadingControls } = useQuery({
-    queryKey: [`/api/jha/control-measures?hazardTemplateId=${selectedHazard?.id}`],
+    queryKey: [
+      `/api/jha/control-measures?hazardTemplateId=${selectedHazard?.id}`,
+    ],
     enabled: !!selectedHazard,
   });
 
   const createHazardMutation = useMutation({
-    mutationFn: (data: typeof hazardForm) => 
+    mutationFn: (data: typeof hazardForm) =>
       apiRequest("POST", "/api/jha/hazard-templates", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jha/hazard-templates"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jha/hazard-templates"],
+      });
       setShowHazardDialog(false);
       setHazardForm({ name: "", description: "", category: "" });
     },
     onError: () => {
-      toast({ title: "Failed to create hazard template", variant: "destructive" });
-    }
+      toast({
+        title: "Failed to create hazard template",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateHazardMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: typeof hazardForm }) => 
+    mutationFn: ({ id, data }: { id: string; data: typeof hazardForm }) =>
       apiRequest("PATCH", `/api/jha/hazard-templates/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jha/hazard-templates"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jha/hazard-templates"],
+      });
       setShowHazardDialog(false);
       setSelectedHazard(null);
     },
     onError: () => {
-      toast({ title: "Failed to update hazard template", variant: "destructive" });
-    }
+      toast({
+        title: "Failed to update hazard template",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteHazardMutation = useMutation({
-    mutationFn: (id: string) => 
+    mutationFn: (id: string) =>
       apiRequest("DELETE", `/api/jha/hazard-templates/${id}`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jha/hazard-templates"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jha/hazard-templates"],
+      });
     },
     onError: () => {
-      toast({ title: "Failed to delete hazard template", variant: "destructive" });
-    }
+      toast({
+        title: "Failed to delete hazard template",
+        variant: "destructive",
+      });
+    },
   });
 
   const createControlMutation = useMutation({
-    mutationFn: (data: typeof controlForm & { hazardTemplateId: string }) => 
+    mutationFn: (data: typeof controlForm & { hazardTemplateId: string }) =>
       apiRequest("POST", "/api/jha/control-measures", data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jha/control-measures"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jha/control-measures"],
+      });
       setShowControlDialog(false);
       setControlForm({ description: "", hierarchyLevel: 3, riskReduction: 1 });
     },
     onError: () => {
-      toast({ title: "Failed to create control measure", variant: "destructive" });
-    }
+      toast({
+        title: "Failed to create control measure",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateControlMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<typeof controlForm> }) => 
-      apiRequest("PATCH", `/api/jha/control-measures/${id}`, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: Partial<typeof controlForm>;
+    }) => apiRequest("PATCH", `/api/jha/control-measures/${id}`, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jha/control-measures"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jha/control-measures"],
+      });
       setShowControlDialog(false);
       setSelectedControl(null);
     },
     onError: () => {
-      toast({ title: "Failed to update control measure", variant: "destructive" });
-    }
+      toast({
+        title: "Failed to update control measure",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteControlMutation = useMutation({
-    mutationFn: (id: string) => 
+    mutationFn: (id: string) =>
       apiRequest("DELETE", `/api/jha/control-measures/${id}`, {}),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jha/control-measures"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jha/control-measures"],
+      });
     },
     onError: () => {
-      toast({ title: "Failed to delete control measure", variant: "destructive" });
-    }
+      toast({
+        title: "Failed to delete control measure",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleSaveHazard = () => {
@@ -157,9 +196,15 @@ export default function JHATemplates() {
     if (!selectedHazard) return;
 
     if (selectedControl) {
-      updateControlMutation.mutate({ id: selectedControl.id, data: controlForm });
+      updateControlMutation.mutate({
+        id: selectedControl.id,
+        data: controlForm,
+      });
     } else {
-      createControlMutation.mutate({ ...controlForm, hazardTemplateId: selectedHazard.id });
+      createControlMutation.mutate({
+        ...controlForm,
+        hazardTemplateId: selectedHazard.id,
+      });
     }
   };
 
@@ -168,7 +213,7 @@ export default function JHATemplates() {
     2: "Substitution",
     3: "Engineering Controls",
     4: "Administrative Controls",
-    5: "Personal Protective Equipment (PPE)"
+    5: "Personal Protective Equipment (PPE)",
   };
 
   return (
@@ -182,7 +227,7 @@ export default function JHATemplates() {
         </div>
         <Dialog open={showHazardDialog} onOpenChange={setShowHazardDialog}>
           <DialogTrigger asChild>
-            <Button 
+            <Button
               data-testid="button-create-hazard-template"
               onClick={() => {
                 setSelectedHazard(null);
@@ -196,7 +241,9 @@ export default function JHATemplates() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {selectedHazard ? "Edit Hazard Template" : "Create Hazard Template"}
+                {selectedHazard
+                  ? "Edit Hazard Template"
+                  : "Create Hazard Template"}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
@@ -206,7 +253,9 @@ export default function JHATemplates() {
                   id="hazard-name"
                   data-testid="input-hazard-name"
                   value={hazardForm.name}
-                  onChange={(e) => setHazardForm({ ...hazardForm, name: e.target.value })}
+                  onChange={(e) =>
+                    setHazardForm({ ...hazardForm, name: e.target.value })
+                  }
                   placeholder="e.g., Falling Debris"
                 />
               </div>
@@ -216,7 +265,12 @@ export default function JHATemplates() {
                   id="hazard-description"
                   data-testid="input-hazard-description"
                   value={hazardForm.description}
-                  onChange={(e) => setHazardForm({ ...hazardForm, description: e.target.value })}
+                  onChange={(e) =>
+                    setHazardForm({
+                      ...hazardForm,
+                      description: e.target.value,
+                    })
+                  }
                   placeholder="Describe the hazard..."
                 />
               </div>
@@ -226,19 +280,21 @@ export default function JHATemplates() {
                   id="hazard-category"
                   data-testid="input-hazard-category"
                   value={hazardForm.category}
-                  onChange={(e) => setHazardForm({ ...hazardForm, category: e.target.value })}
+                  onChange={(e) =>
+                    setHazardForm({ ...hazardForm, category: e.target.value })
+                  }
                   placeholder="e.g., Tree Work, Equipment"
                 />
               </div>
               <div className="flex justify-end gap-2">
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={() => setShowHazardDialog(false)}
                   data-testid="button-cancel-hazard"
                 >
                   Cancel
                 </Button>
-                <Button 
+                <Button
                   onClick={handleSaveHazard}
                   disabled={!hazardForm.name}
                   data-testid="button-save-hazard"
@@ -268,7 +324,9 @@ export default function JHATemplates() {
                     key={hazard.id}
                     data-testid={`hazard-item-${hazard.id}`}
                     className={`p-3 rounded-md border cursor-pointer hover-elevate ${
-                      selectedHazard?.id === hazard.id ? "border-primary bg-primary/5" : ""
+                      selectedHazard?.id === hazard.id
+                        ? "border-primary bg-primary/5"
+                        : ""
                     }`}
                     onClick={() => setSelectedHazard(hazard)}
                   >
@@ -300,7 +358,7 @@ export default function JHATemplates() {
                             setHazardForm({
                               name: hazard.name,
                               description: hazard.description || "",
-                              category: hazard.category || ""
+                              category: hazard.category || "",
                             });
                             setShowHazardDialog(true);
                           }}
@@ -333,17 +391,26 @@ export default function JHATemplates() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>
-                {selectedHazard ? `Control Measures - ${selectedHazard.name}` : "Control Measures"}
+                {selectedHazard
+                  ? `Control Measures - ${selectedHazard.name}`
+                  : "Control Measures"}
               </CardTitle>
               {selectedHazard && (
-                <Dialog open={showControlDialog} onOpenChange={setShowControlDialog}>
+                <Dialog
+                  open={showControlDialog}
+                  onOpenChange={setShowControlDialog}
+                >
                   <DialogTrigger asChild>
                     <Button
                       size="sm"
                       data-testid="button-add-control-measure"
                       onClick={() => {
                         setSelectedControl(null);
-                        setControlForm({ description: "", hierarchyLevel: 3, riskReduction: 1 });
+                        setControlForm({
+                          description: "",
+                          hierarchyLevel: 3,
+                          riskReduction: 1,
+                        });
                       }}
                     >
                       <Plus className="mr-2 h-4 w-4" />
@@ -353,42 +420,60 @@ export default function JHATemplates() {
                   <DialogContent>
                     <DialogHeader>
                       <DialogTitle>
-                        {selectedControl ? "Edit Control Measure" : "Add Control Measure"}
+                        {selectedControl
+                          ? "Edit Control Measure"
+                          : "Add Control Measure"}
                       </DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="control-description">Control Measure</Label>
+                        <Label htmlFor="control-description">
+                          Control Measure
+                        </Label>
                         <Textarea
                           id="control-description"
                           data-testid="input-control-description"
                           value={controlForm.description}
-                          onChange={(e) => setControlForm({ ...controlForm, description: e.target.value })}
+                          onChange={(e) =>
+                            setControlForm({
+                              ...controlForm,
+                              description: e.target.value,
+                            })
+                          }
                           placeholder="e.g., Wear the correct P.P.E. for the job"
                         />
                       </div>
                       <div>
-                        <Label htmlFor="hierarchy-level">Hierarchy of Controls</Label>
+                        <Label htmlFor="hierarchy-level">
+                          Hierarchy of Controls
+                        </Label>
                         <Select
                           value={controlForm.hierarchyLevel.toString()}
-                          onValueChange={(value) => 
-                            setControlForm({ ...controlForm, hierarchyLevel: parseInt(value) })
+                          onValueChange={(value) =>
+                            setControlForm({
+                              ...controlForm,
+                              hierarchyLevel: parseInt(value),
+                            })
                           }
                         >
                           <SelectTrigger data-testid="select-hierarchy-level">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            {Object.entries(hierarchyLabels).map(([level, label]) => (
-                              <SelectItem key={level} value={level}>
-                                {level}. {label}
-                              </SelectItem>
-                            ))}
+                            {Object.entries(hierarchyLabels).map(
+                              ([level, label]) => (
+                                <SelectItem key={level} value={level}>
+                                  {level}. {label}
+                                </SelectItem>
+                              ),
+                            )}
                           </SelectContent>
                         </Select>
                       </div>
                       <div>
-                        <Label htmlFor="risk-reduction">Risk Reduction Level (1-5)</Label>
+                        <Label htmlFor="risk-reduction">
+                          Risk Reduction Level (1-5)
+                        </Label>
                         <Input
                           id="risk-reduction"
                           type="number"
@@ -396,20 +481,23 @@ export default function JHATemplates() {
                           max="5"
                           data-testid="input-risk-reduction"
                           value={controlForm.riskReduction}
-                          onChange={(e) => 
-                            setControlForm({ ...controlForm, riskReduction: parseInt(e.target.value) })
+                          onChange={(e) =>
+                            setControlForm({
+                              ...controlForm,
+                              riskReduction: parseInt(e.target.value),
+                            })
                           }
                         />
                       </div>
                       <div className="flex justify-end gap-2">
-                        <Button 
-                          variant="outline" 
+                        <Button
+                          variant="outline"
                           onClick={() => setShowControlDialog(false)}
                           data-testid="button-cancel-control"
                         >
                           Cancel
                         </Button>
-                        <Button 
+                        <Button
                           onClick={handleSaveControl}
                           disabled={!controlForm.description}
                           data-testid="button-save-control"
@@ -425,7 +513,9 @@ export default function JHATemplates() {
           </CardHeader>
           <CardContent>
             {!selectedHazard ? (
-              <p className="text-muted-foreground">Select a hazard template to view its control measures</p>
+              <p className="text-muted-foreground">
+                Select a hazard template to view its control measures
+              </p>
             ) : loadingControls ? (
               <p className="text-muted-foreground">Loading...</p>
             ) : controls?.data?.length === 0 ? (
@@ -443,7 +533,8 @@ export default function JHATemplates() {
                         <Checkbox checked className="mr-2 align-top" />
                         <span className="text-sm">{control.description}</span>
                         <div className="mt-1 text-xs text-muted-foreground">
-                          Level {control.hierarchyLevel}: {hierarchyLabels[control.hierarchyLevel]}
+                          Level {control.hierarchyLevel}:{" "}
+                          {hierarchyLabels[control.hierarchyLevel]}
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -456,7 +547,7 @@ export default function JHATemplates() {
                             setControlForm({
                               description: control.description,
                               hierarchyLevel: control.hierarchyLevel,
-                              riskReduction: control.riskReduction || 1
+                              riskReduction: control.riskReduction || 1,
                             });
                             setShowControlDialog(true);
                           }}

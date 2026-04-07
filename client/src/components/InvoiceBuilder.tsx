@@ -1,19 +1,45 @@
-import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Save, Send, X, Loader2, MapPin, Mail, FileText, Plus, Trash2, DollarSign, MessageSquare, FileDown, Package, User } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { InvoiceTemplate } from '@/components/InvoiceTemplate';
-import { EmailComposerModal } from '@/components/EmailComposerModal';
-import { SMSComposerModal } from '@/components/SMSComposerModal';
-import { apiRequest, queryClient } from '@/lib/queryClient';
-import type { DocumentTemplate, Customer, Job } from '@shared/schema';
+import { useState, useEffect, useRef } from "react";
+import { useQuery } from "@tanstack/react-query";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Save,
+  Send,
+  X,
+  Loader2,
+  MapPin,
+  Mail,
+  FileText,
+  Plus,
+  Trash2,
+  DollarSign,
+  MessageSquare,
+  FileDown,
+  Package,
+  User,
+} from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { InvoiceTemplate } from "@/components/InvoiceTemplate";
+import { EmailComposerModal } from "@/components/EmailComposerModal";
+import { SMSComposerModal } from "@/components/SMSComposerModal";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import type { DocumentTemplate, Customer, Job } from "@shared/schema";
 
 interface InvoiceBuilderProps {
   isOpen: boolean;
@@ -50,70 +76,85 @@ interface CreatedInvoice {
   address: string;
 }
 
-export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate, startFresh = false }: InvoiceBuilderProps) {
+export function InvoiceBuilder({
+  isOpen,
+  onClose,
+  job,
+  customer,
+  invoiceTemplate,
+  startFresh = false,
+}: InvoiceBuilderProps) {
   const { toast } = useToast();
   const [isCreating, setIsCreating] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
-  const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(null);
+  const [createdInvoice, setCreatedInvoice] = useState<CreatedInvoice | null>(
+    null,
+  );
   const [showEmailComposer, setShowEmailComposer] = useState(false);
   const [showSmsComposer, setShowSmsComposer] = useState(false);
   const [initializedJobId, setInitializedJobId] = useState<string | null>(null);
-  const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(null);
-  
+  const [existingInvoiceId, setExistingInvoiceId] = useState<string | null>(
+    null,
+  );
+
   // Immediate lock to prevent concurrent button clicks (doesn't rely on state updates)
   const isCreatingRef = useRef(false);
-  
+
   // Editable fields
-  const [editableAddress, setEditableAddress] = useState('');
-  const [editableContactName, setEditableContactName] = useState('');
-  const [editableEmail, setEditableEmail] = useState('');
-  const [editableDescription, setEditableDescription] = useState('');
-  const [editableNotes, setEditableNotes] = useState('');
+  const [editableAddress, setEditableAddress] = useState("");
+  const [editableContactName, setEditableContactName] = useState("");
+  const [editableEmail, setEditableEmail] = useState("");
+  const [editableDescription, setEditableDescription] = useState("");
+  const [editableNotes, setEditableNotes] = useState("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
 
   // Fetch proposals for this job
   const { data: proposalsResponse, isLoading: loadingProposals } = useQuery({
-    queryKey: ['/api/proposals', job.id],
+    queryKey: ["/api/proposals", job.id],
     queryFn: async () => {
-      const response = await fetch(`/api/proposals?jobId=${job.id}&includeSections=true`);
-      if (!response.ok) throw new Error('Failed to fetch proposals');
+      const response = await fetch(
+        `/api/proposals?jobId=${job.id}&includeSections=true`,
+      );
+      if (!response.ok) throw new Error("Failed to fetch proposals");
       return response.json();
     },
-    enabled: isOpen
+    enabled: isOpen,
   });
 
   // Fetch quotes for this job
   const { data: quotesResponse, isLoading: loadingQuotes } = useQuery({
-    queryKey: ['/api/quotes', job.id],
+    queryKey: ["/api/quotes", job.id],
     queryFn: async () => {
       const response = await fetch(`/api/quotes?jobId=${job.id}`);
-      if (!response.ok) throw new Error('Failed to fetch quotes');
+      if (!response.ok) throw new Error("Failed to fetch quotes");
       return response.json();
     },
-    enabled: isOpen
+    enabled: isOpen,
   });
 
   // Fetch existing invoices for this job
   const { data: invoicesResponse, isLoading: loadingInvoices } = useQuery({
-    queryKey: ['/api/invoices', job.id],
+    queryKey: ["/api/invoices", job.id],
     queryFn: async () => {
       const response = await fetch(`/api/invoices?jobId=${job.id}`);
-      if (!response.ok) throw new Error('Failed to fetch invoices');
+      if (!response.ok) throw new Error("Failed to fetch invoices");
       return response.json();
     },
-    enabled: isOpen && !!job.id
+    enabled: isOpen && !!job.id,
   });
 
   // Fetch materials/services for line item selection
   const { data: materialsData } = useQuery({
-    queryKey: ['/api/materials'],
+    queryKey: ["/api/materials"],
     enabled: isOpen,
   });
   const materials = (materialsData as any)?.data || [];
 
   // Materials dropdown state
-  const [materialsDropdownItemId, setMaterialsDropdownItemId] = useState<string | null>(null);
-  const [materialSearchQuery, setMaterialSearchQuery] = useState('');
+  const [materialsDropdownItemId, setMaterialsDropdownItemId] = useState<
+    string | null
+  >(null);
+  const [materialSearchQuery, setMaterialSearchQuery] = useState("");
 
   // Reset initialization when modal closes so it reloads when reopened
   useEffect(() => {
@@ -135,15 +176,32 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     const dataLoaded = !loadingProposals && !loadingQuotes && !loadingInvoices;
     if (!dataLoaded) return;
 
-    console.log('🔄 Initializing invoice for job:', job.id, '(previous:', initializedJobId, ')');
+    console.log(
+      "🔄 Initializing invoice for job:",
+      job.id,
+      "(previous:",
+      initializedJobId,
+      ")",
+    );
 
     // Check if an invoice already exists for this job
-    console.log('🔍 InvoiceBuilder initialization - invoicesResponse:', invoicesResponse);
+    console.log(
+      "🔍 InvoiceBuilder initialization - invoicesResponse:",
+      invoicesResponse,
+    );
     const existingInvoices = invoicesResponse?.data || [];
-    console.log('🔍 Existing invoices found:', existingInvoices.length, existingInvoices);
+    console.log(
+      "🔍 Existing invoices found:",
+      existingInvoices.length,
+      existingInvoices,
+    );
     if (existingInvoices.length > 0) {
       const existingInvoice = existingInvoices[0]; // Use the first (most recent) invoice
-      console.log('📄 Found existing invoice:', existingInvoice.invoiceNumber, existingInvoice);
+      console.log(
+        "📄 Found existing invoice:",
+        existingInvoice.invoiceNumber,
+        existingInvoice,
+      );
       setCreatedInvoice({
         id: existingInvoice.id,
         invoiceNumber: existingInvoice.invoiceNumber,
@@ -154,58 +212,69 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         dueDate: existingInvoice.dueDate,
         issueDate: existingInvoice.issueDate,
         items: existingInvoice.items || [],
-        notes: existingInvoice.notes || '',
-        address: existingInvoice.address || job.address || customer.address || ''
+        notes: existingInvoice.notes || "",
+        address:
+          existingInvoice.address || job.address || customer.address || "",
       });
       setExistingInvoiceId(existingInvoice.id);
-      
+
       // Populate line items from existing invoice
       if (existingInvoice.items && Array.isArray(existingInvoice.items)) {
-        const convertedItems = existingInvoice.items.map((item: any, index: number) => ({
-          id: item.id || `item-${index}`,
-          description: item.description || '',
-          quantity: parseFloat(item.quantity || '1'),
-          unitPrice: parseFloat(item.rate || item.unitPrice || '0'),
-          total: parseFloat(item.amount || item.total || '0'),
-          unit: item.unit || 'each',
-          category: item.category,
-          serviceId: item.serviceId,
-          materialId: item.materialId,
-          unitCost: item.unitCost ? parseFloat(item.unitCost) : undefined
-        }));
+        const convertedItems = existingInvoice.items.map(
+          (item: any, index: number) => ({
+            id: item.id || `item-${index}`,
+            description: item.description || "",
+            quantity: parseFloat(item.quantity || "1"),
+            unitPrice: parseFloat(item.rate || item.unitPrice || "0"),
+            total: parseFloat(item.amount || item.total || "0"),
+            unit: item.unit || "each",
+            category: item.category,
+            serviceId: item.serviceId,
+            materialId: item.materialId,
+            unitCost: item.unitCost ? parseFloat(item.unitCost) : undefined,
+          }),
+        );
         setLineItems(convertedItems);
       }
-      
+
       // Populate notes and description from existing invoice (always set, even if empty)
       // description is the primary field; fall back to notes for older invoices that stored description there
-      setEditableNotes(existingInvoice.notes ?? '');
-      setEditableDescription(existingInvoice.description ?? existingInvoice.notes ?? '');
+      setEditableNotes(existingInvoice.notes ?? "");
+      setEditableDescription(
+        existingInvoice.description ?? existingInvoice.notes ?? "",
+      );
     } else {
-      console.log('⚠️ No existing invoices found for this job');
+      console.log("⚠️ No existing invoices found for this job");
     }
 
     // Set address, contact name, and email - use billing address if available
-    setEditableAddress(job.billingAddress || job.address || customer.address || '');
+    setEditableAddress(
+      job.billingAddress || job.address || customer.address || "",
+    );
     // Build contact name from job contact or existing invoice
-    const contactName = job.jobContactFirstName && job.jobContactLastName 
-      ? `${job.jobContactFirstName} ${job.jobContactLastName}`
-      : job.jobContactFirstName || job.jobContactLastName || '';
-    const existingInvoiceContactName = existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
+    const contactName =
+      job.jobContactFirstName && job.jobContactLastName
+        ? `${job.jobContactFirstName} ${job.jobContactLastName}`
+        : job.jobContactFirstName || job.jobContactLastName || "";
+    const existingInvoiceContactName =
+      existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
     setEditableContactName(existingInvoiceContactName || contactName);
-    setEditableEmail(customer.email || '');
+    setEditableEmail(customer.email || "");
 
     // Get proposals and quotes
     const proposals = proposalsResponse?.data || [];
     const quotes = quotesResponse?.data || [];
 
     // Find accepted proposal or most recent sent proposal
-    const acceptedProposal = proposals.find((p: any) => p.status === 'accepted');
-    const sentProposal = proposals.find((p: any) => p.status === 'sent');
+    const acceptedProposal = proposals.find(
+      (p: any) => p.status === "accepted",
+    );
+    const sentProposal = proposals.find((p: any) => p.status === "sent");
     const proposal = acceptedProposal || sentProposal || proposals[0];
 
     // Find accepted or sent quote
-    const acceptedQuote = quotes.find((q: any) => q.status === 'accepted');
-    const sentQuote = quotes.find((q: any) => q.status === 'sent');
+    const acceptedQuote = quotes.find((q: any) => q.status === "accepted");
+    const sentQuote = quotes.find((q: any) => q.status === "sent");
     const quote = acceptedQuote || sentQuote || quotes[0];
 
     // Extract line items from proposal sections or quote
@@ -218,10 +287,10 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           section.lineItems.forEach((item: any) => {
             extractedItems.push({
               id: Math.random().toString(),
-              description: item.description || '',
+              description: item.description || "",
               quantity: item.quantity || 1,
               unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-              total: parseFloat(item.total || item.amount || 0)
+              total: parseFloat(item.total || item.amount || 0),
             });
           });
         }
@@ -229,38 +298,48 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
 
     // If proposal had no line items, fall back to quote
-    if (extractedItems.length === 0 && quote?.lineItems && Array.isArray(quote.lineItems)) {
+    if (
+      extractedItems.length === 0 &&
+      quote?.lineItems &&
+      Array.isArray(quote.lineItems)
+    ) {
       quote.lineItems.forEach((item: any) => {
         extractedItems.push({
           id: Math.random().toString(),
-          description: item.description || '',
+          description: item.description || "",
           quantity: item.quantity || 1,
           unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-          total: parseFloat(item.total || item.amount || 0)
+          total: parseFloat(item.total || item.amount || 0),
         });
       });
     }
 
     // If still no items, fall back to job line items
-    if (extractedItems.length === 0 && job.lineItems && job.lineItems.length > 0) {
+    if (
+      extractedItems.length === 0 &&
+      job.lineItems &&
+      job.lineItems.length > 0
+    ) {
       extractedItems = job.lineItems.map((item: any) => ({
         id: item.id || Math.random().toString(),
-        description: item.description || '',
+        description: item.description || "",
         quantity: item.quantity || 1,
         unitPrice: item.unitPrice || 0,
-        total: item.total || (item.quantity * item.unitPrice) || 0
+        total: item.total || item.quantity * item.unitPrice || 0,
       }));
     }
 
     // Final fallback to job total
     if (extractedItems.length === 0) {
-      extractedItems = [{
-        id: Math.random().toString(),
-        description: job.description || 'Tree service',
-        quantity: 1,
-        unitPrice: parseFloat(job.totalAmount || '0'),
-        total: parseFloat(job.totalAmount || '0')
-      }];
+      extractedItems = [
+        {
+          id: Math.random().toString(),
+          description: job.description || "Tree service",
+          quantity: 1,
+          unitPrice: parseFloat(job.totalAmount || "0"),
+          total: parseFloat(job.totalAmount || "0"),
+        },
+      ];
     }
 
     // Only set line items if no existing invoice (existing invoice line items were set earlier)
@@ -271,20 +350,31 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     // Set description from proposal/quote (only if no existing invoice)
     if (!existingInvoices.length) {
       if (proposal) {
-        setEditableDescription(proposal.introduction || job.description || '');
+        setEditableDescription(proposal.introduction || job.description || "");
       } else if (quote) {
-        setEditableDescription(quote.description || job.description || '');
+        setEditableDescription(quote.description || job.description || "");
       } else {
-        setEditableDescription(job.description || '');
+        setEditableDescription(job.description || "");
       }
-      
+
       // Initialize notes for new invoices (use job notes as default)
-      setEditableNotes(job.notes || '');
+      setEditableNotes(job.notes || "");
     }
 
     // Mark this job as initialized to prevent overwriting user edits
     setInitializedJobId(job.id);
-  }, [isOpen, initializedJobId, loadingProposals, loadingQuotes, loadingInvoices, proposalsResponse, quotesResponse, invoicesResponse, job, customer]);
+  }, [
+    isOpen,
+    initializedJobId,
+    loadingProposals,
+    loadingQuotes,
+    loadingInvoices,
+    proposalsResponse,
+    quotesResponse,
+    invoicesResponse,
+    job,
+    customer,
+  ]);
 
   // Reset when modal closes
   useEffect(() => {
@@ -293,54 +383,66 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       setExistingInvoiceId(null);
       setIsCreating(false);
       setLineItems([]);
-      setEditableNotes('');
-      setEditableDescription('');
-      setEditableAddress('');
-      setEditableContactName('');
-      setEditableEmail('');
+      setEditableNotes("");
+      setEditableDescription("");
+      setEditableAddress("");
+      setEditableContactName("");
+      setEditableEmail("");
       setInitializedJobId(null);
     }
   }, [isOpen]);
 
   // Calculate totals
   const calculateTotals = () => {
-    const subtotal = lineItems.reduce((sum, item) => sum + (item.total || 0), 0);
+    const subtotal = lineItems.reduce(
+      (sum, item) => sum + (item.total || 0),
+      0,
+    );
     const gst = subtotal * 0.15;
     const total = subtotal + gst;
     return { subtotal, gst, total };
   };
 
   // Update line item
-  const updateLineItem = (id: string, field: keyof InvoiceLineItem, value: any) => {
-    setLineItems(items => items.map(item => {
-      if (item.id === id) {
-        const updated = { ...item, [field]: value };
-        // Recalculate total if quantity or unitPrice changed
-        if (field === 'quantity' || field === 'unitPrice') {
-          updated.total = updated.quantity * updated.unitPrice;
+  const updateLineItem = (
+    id: string,
+    field: keyof InvoiceLineItem,
+    value: any,
+  ) => {
+    setLineItems((items) =>
+      items.map((item) => {
+        if (item.id === id) {
+          const updated = { ...item, [field]: value };
+          // Recalculate total if quantity or unitPrice changed
+          if (field === "quantity" || field === "unitPrice") {
+            updated.total = updated.quantity * updated.unitPrice;
+          }
+          return updated;
         }
-        return updated;
-      }
-      return item;
-    }));
+        return item;
+      }),
+    );
   };
 
   // Add new line item
   const addLineItem = (category?: string) => {
-    setLineItems([...lineItems, {
-      id: Math.random().toString(),
-      description: '',
-      quantity: 1,
-      unitPrice: 0,
-      total: 0,
-      category: category || 'other'
-    }]);
+    setLineItems([
+      ...lineItems,
+      {
+        id: Math.random().toString(),
+        description: "",
+        quantity: 1,
+        unitPrice: 0,
+        total: 0,
+        category: category || "other",
+      },
+    ]);
   };
 
   // Remove line item
   const removeLineItem = (id: string) => {
     if (lineItems.length > 1) {
-      setLineItems(lineItems.filter(item => item.id !== id));
+      setLineItems(lineItems.filter((item) => item.id !== id));
     }
   };
 
@@ -349,51 +451,59 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     const proposals = proposalsResponse?.data || [];
     const quotes = quotesResponse?.data || [];
 
-    console.log('🔍 Import Debug - Proposals:', proposals);
-    console.log('🔍 Import Debug - Quotes:', quotes);
+    console.log("🔍 Import Debug - Proposals:", proposals);
+    console.log("🔍 Import Debug - Quotes:", quotes);
 
     // Find accepted proposal or most recent sent proposal
-    const acceptedProposal = proposals.find((p: any) => p.status === 'accepted');
-    const sentProposal = proposals.find((p: any) => p.status === 'sent');
+    const acceptedProposal = proposals.find(
+      (p: any) => p.status === "accepted",
+    );
+    const sentProposal = proposals.find((p: any) => p.status === "sent");
     const proposal = acceptedProposal || sentProposal || proposals[0];
 
-    console.log('🔍 Import Debug - Selected Proposal:', proposal);
+    console.log("🔍 Import Debug - Selected Proposal:", proposal);
 
     // Find accepted or sent quote
-    const acceptedQuote = quotes.find((q: any) => q.status === 'accepted');
-    const sentQuote = quotes.find((q: any) => q.status === 'sent');
+    const acceptedQuote = quotes.find((q: any) => q.status === "accepted");
+    const sentQuote = quotes.find((q: any) => q.status === "sent");
     const quote = acceptedQuote || sentQuote || quotes[0];
 
-    console.log('🔍 Import Debug - Selected Quote:', quote);
+    console.log("🔍 Import Debug - Selected Quote:", quote);
 
     // Extract line items from proposal or quote
     let extractedItems: InvoiceLineItem[] = [];
 
     // Check if proposal has direct line items array
     if (proposal?.lineItems && Array.isArray(proposal.lineItems)) {
-      console.log('🔍 Import Debug - Found proposal.lineItems:', proposal.lineItems);
+      console.log(
+        "🔍 Import Debug - Found proposal.lineItems:",
+        proposal.lineItems,
+      );
       proposal.lineItems.forEach((item: any) => {
         extractedItems.push({
           id: Math.random().toString(),
-          description: item.description || '',
+          description: item.description || "",
           quantity: item.quantity || 1,
           unitPrice: parseFloat(item.unitPrice || 0),
-          total: parseFloat(item.totalPrice || item.total || 0)
+          total: parseFloat(item.totalPrice || item.total || 0),
         });
       });
     }
     // Check if proposal has sections with line items
     else if (proposal?.sections && Array.isArray(proposal.sections)) {
-      console.log('🔍 Import Debug - Found proposal.sections:', proposal.sections);
+      console.log(
+        "🔍 Import Debug - Found proposal.sections:",
+        proposal.sections,
+      );
       proposal.sections.forEach((section: any) => {
         if (section.lineItems && Array.isArray(section.lineItems)) {
           section.lineItems.forEach((item: any) => {
             extractedItems.push({
               id: Math.random().toString(),
-              description: item.description || '',
+              description: item.description || "",
               quantity: item.quantity || 1,
               unitPrice: parseFloat(item.unitPrice || 0),
-              total: parseFloat(item.totalPrice || item.total || 0)
+              total: parseFloat(item.totalPrice || item.total || 0),
             });
           });
         }
@@ -401,28 +511,33 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
     }
 
     // If proposal had no line items, fall back to quote
-    if (extractedItems.length === 0 && quote?.lineItems && Array.isArray(quote.lineItems)) {
-      console.log('🔍 Import Debug - Using quote.lineItems:', quote.lineItems);
+    if (
+      extractedItems.length === 0 &&
+      quote?.lineItems &&
+      Array.isArray(quote.lineItems)
+    ) {
+      console.log("🔍 Import Debug - Using quote.lineItems:", quote.lineItems);
       quote.lineItems.forEach((item: any) => {
         extractedItems.push({
           id: Math.random().toString(),
-          description: item.description || '',
+          description: item.description || "",
           quantity: item.quantity || 1,
           unitPrice: parseFloat(item.rate || item.unitPrice || 0),
-          total: parseFloat(item.total || item.amount || 0)
+          total: parseFloat(item.total || item.amount || 0),
         });
       });
     }
 
-    console.log('🔍 Import Debug - Extracted Items:', extractedItems);
+    console.log("🔍 Import Debug - Extracted Items:", extractedItems);
 
     if (extractedItems.length > 0) {
       setLineItems(extractedItems);
     } else {
       toast({
         title: "No Items Found",
-        description: "No line items found in the quote or proposal for this job.",
-        variant: "destructive"
+        description:
+          "No line items found in the quote or proposal for this job.",
+        variant: "destructive",
       });
     }
   };
@@ -431,83 +546,99 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   const createInvoice = async () => {
     // Immediate lock check (doesn't rely on state updates)
     if (isCreatingRef.current) {
-      console.log('🔒 Invoice creation already in progress (ref lock), skipping...');
+      console.log(
+        "🔒 Invoice creation already in progress (ref lock), skipping...",
+      );
       return null;
     }
-    
+
     // Prevent multiple simultaneous creations
     if (isCreating) {
-      console.log('🔒 Invoice creation already in progress (state lock), skipping...');
+      console.log(
+        "🔒 Invoice creation already in progress (state lock), skipping...",
+      );
       return null;
     }
-    
+
     // Set immediate lock
     isCreatingRef.current = true;
-    
+
     // Validate
     if (!editableAddress.trim()) {
       isCreatingRef.current = false;
       toast({
         title: "Address Required",
         description: "Please enter a service address for the invoice.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return null;
     }
 
-    if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
+    if (
+      lineItems.length === 0 ||
+      lineItems.every((item) => !item.description.trim())
+    ) {
       isCreatingRef.current = false;
       toast({
         title: "Line Items Required",
         description: "Please add at least one line item with a description.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return null;
     }
 
     setIsCreating(true);
-    
+
     try {
-      const formattedLineItems = lineItems.map(item => ({
+      const formattedLineItems = lineItems.map((item) => ({
         description: item.description,
         quantity: item.quantity,
         rate: item.unitPrice,
         amount: item.total,
-        category: item.category || 'other',
+        category: item.category || "other",
         materialId: item.materialId,
         serviceId: item.serviceId,
-        unitCost: item.unitCost
+        unitCost: item.unitCost,
       }));
 
-      const res = await apiRequest('POST', `/api/jobs/${job.id}/convert-to-invoice`, {
-        invoiceType: 'full',
-        customData: {
-          address: editableAddress,
-          contactName: editableContactName || undefined,
-          dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-          notes: editableNotes,
-          description: editableDescription,
-          lineItems: formattedLineItems
-        }
-      });
+      const res = await apiRequest(
+        "POST",
+        `/api/jobs/${job.id}/convert-to-invoice`,
+        {
+          invoiceType: "full",
+          customData: {
+            address: editableAddress,
+            contactName: editableContactName || undefined,
+            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+              .toISOString()
+              .split("T")[0],
+            notes: editableNotes,
+            description: editableDescription,
+            lineItems: formattedLineItems,
+          },
+        },
+      );
 
       const response = await res.json();
 
       // Handle 409 Conflict - invoice already exists
       if (res.status === 409 && response.invoiceId) {
-        console.log('📄 Invoice already exists, using existing ID:', response.invoiceId);
-        
+        console.log(
+          "📄 Invoice already exists, using existing ID:",
+          response.invoiceId,
+        );
+
         const existingInvoice = {
           id: response.invoiceId,
-          invoiceNumber: response.invoiceNumber || 'Unknown'
+          invoiceNumber: response.invoiceNumber || "Unknown",
         };
-        
+
         setCreatedInvoice(existingInvoice);
         setExistingInvoiceId(response.invoiceId);
-        
+
         toast({
           title: "Invoice Already Exists",
-          description: `Using existing invoice ${response.invoiceNumber || 'for this job'}.`
+          description: `Using existing invoice ${response.invoiceNumber || "for this job"}.`,
         });
 
         return existingInvoice;
@@ -515,29 +646,33 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
       if (response.success) {
         setCreatedInvoice(response.data);
-        
+
         // Invalidate queries
-        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+        queryClient.invalidateQueries({
+          queryKey: [`/api/jobs/${job.id}/invoices`],
+        });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'diary-timeline'] });
-        
+        queryClient.invalidateQueries({
+          queryKey: ["/api/jobs", job.id, "diary-timeline"],
+        });
+
         return response.data;
       } else {
         toast({
           title: "Error",
           description: response.message || "Failed to create invoice.",
-          variant: "destructive"
+          variant: "destructive",
         });
         return null;
       }
     } catch (error) {
-      console.error('❌ Error creating invoice:', error);
-      console.error('❌ Error details:', JSON.stringify(error, null, 2));
+      console.error("❌ Error creating invoice:", error);
+      console.error("❌ Error details:", JSON.stringify(error, null, 2));
       toast({
         title: "Error",
         description: "Failed to create invoice. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return null;
     } finally {
@@ -549,7 +684,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
   // Update existing invoice
   const updateInvoice = async () => {
     if (!existingInvoiceId) {
-      console.error('❌ No existing invoice ID to update');
+      console.error("❌ No existing invoice ID to update");
       return null;
     }
 
@@ -558,31 +693,34 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       toast({
         title: "Address Required",
         description: "Please enter a service address for the invoice.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return null;
     }
 
-    if (lineItems.length === 0 || lineItems.every(item => !item.description.trim())) {
+    if (
+      lineItems.length === 0 ||
+      lineItems.every((item) => !item.description.trim())
+    ) {
       toast({
         title: "Line Items Required",
         description: "Please add at least one line item with a description.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return null;
     }
 
     setIsCreating(true);
-    
+
     try {
-      console.log('🔄 Updating invoice:', existingInvoiceId);
-      
+      console.log("🔄 Updating invoice:", existingInvoiceId);
+
       // Format line items for database (using rate/amount instead of unitPrice/total)
-      const formattedLineItems = lineItems.map(item => ({
+      const formattedLineItems = lineItems.map((item) => ({
         description: item.description,
         quantity: item.quantity.toString(),
         rate: item.unitPrice,
-        amount: item.total
+        amount: item.total,
       }));
 
       // Calculate new amount from line items
@@ -594,37 +732,43 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         items: formattedLineItems,
         amount: subtotal.toString(),
         description: editableDescription,
-        notes: editableNotes
+        notes: editableNotes,
       };
 
-      console.log('📤 Sending update with data:', updateData);
+      console.log("📤 Sending update with data:", updateData);
 
-      const res = await apiRequest('PATCH', `/api/invoices/${existingInvoiceId}`, updateData);
+      const res = await apiRequest(
+        "PATCH",
+        `/api/invoices/${existingInvoiceId}`,
+        updateData,
+      );
       const response = await res.json();
 
       if (response.success) {
-        console.log('✅ Invoice updated successfully');
-        
+        console.log("✅ Invoice updated successfully");
+
         // Invalidate queries to refresh data
-        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+        queryClient.invalidateQueries({
+          queryKey: [`/api/jobs/${job.id}/invoices`],
+        });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
-        
+
         return response.data;
       } else {
         toast({
           title: "Error",
           description: response.message || "Failed to update invoice.",
-          variant: "destructive"
+          variant: "destructive",
         });
         return null;
       }
     } catch (error) {
-      console.error('❌ Error updating invoice:', error);
+      console.error("❌ Error updating invoice:", error);
       toast({
         title: "Error",
         description: "Failed to update invoice. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return null;
     } finally {
@@ -634,29 +778,31 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Save invoice only
   const handleSaveInvoice = async (e?: React.MouseEvent) => {
-    console.log('🎯 SAVE INVOICE CLICKED');
+    console.log("🎯 SAVE INVOICE CLICKED");
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     // Immediate lock check
     if (isCreatingRef.current) {
-      console.log('🔒 Save blocked: invoice creation in progress');
+      console.log("🔒 Save blocked: invoice creation in progress");
       return;
     }
-    
+
     // Prevent execution if already creating
     if (isCreating) return;
-    
+
     // If invoice already exists, update it instead of creating new one
     if (existingInvoiceId) {
-      console.log('📝 Existing invoice detected, updating instead of creating new');
+      console.log(
+        "📝 Existing invoice detected, updating instead of creating new",
+      );
       const updated = await updateInvoice();
       if (updated) {
         handleClose();
       }
       return;
     }
-    
+
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
@@ -666,67 +812,67 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   // Create and send invoice
   const handleSendInvoice = async (e?: React.MouseEvent) => {
-    console.log('🎯 SEND INVOICE CLICKED');
+    console.log("🎯 SEND INVOICE CLICKED");
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     // Immediate lock check
     if (isCreatingRef.current) {
-      console.log('🔒 Send blocked: invoice creation in progress');
+      console.log("🔒 Send blocked: invoice creation in progress");
       return;
     }
-    
+
     // Prevent execution if already creating
     if (isCreating) return;
-    
+
     // If invoice already exists, update it first then open email composer
     if (existingInvoiceId) {
-      console.log('📝 Existing invoice detected, updating before sending');
+      console.log("📝 Existing invoice detected, updating before sending");
       const updated = await updateInvoice();
       if (updated) {
-        console.log('📧 Invoice updated successfully, opening email composer');
+        console.log("📧 Invoice updated successfully, opening email composer");
         setShowEmailComposer(true);
       } else {
-        console.log('❌ Failed to update invoice, not opening composer');
+        console.log("❌ Failed to update invoice, not opening composer");
       }
       return;
     }
-    
+
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
-      console.log('📧 Invoice created successfully, opening email composer');
+      console.log("📧 Invoice created successfully, opening email composer");
       setShowEmailComposer(true);
     } else {
-      console.log('❌ Failed to create invoice, not opening composer');
+      console.log("❌ Failed to create invoice, not opening composer");
     }
   };
 
   // Create and send invoice via SMS
   const handleSmsInvoice = async (e?: React.MouseEvent) => {
-    console.log('🎯 SMS INVOICE CLICKED');
+    console.log("🎯 SMS INVOICE CLICKED");
     e?.preventDefault();
     e?.stopPropagation();
-    
+
     // Immediate lock check
     if (isCreatingRef.current) {
-      console.log('🔒 SMS blocked: invoice creation in progress');
+      console.log("🔒 SMS blocked: invoice creation in progress");
       return;
     }
-    
+
     // Prevent execution if already creating
     if (isCreating) return;
-    
+
     // If invoice already exists, update it first then open SMS composer
     if (existingInvoiceId) {
-      console.log('📝 Existing invoice detected, updating before sending SMS');
+      console.log("📝 Existing invoice detected, updating before sending SMS");
       const updated = await updateInvoice();
       if (updated) {
         setShowSmsComposer(true);
       }
       return;
     }
-    
+
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
@@ -736,38 +882,40 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
   const handleDeleteInvoice = async () => {
     if (!existingInvoiceId || !createdInvoice) return;
-    
+
     const confirmed = window.confirm(
-      `Are you sure you want to delete Invoice #${createdInvoice.invoiceNumber}? This action cannot be undone.`
+      `Are you sure you want to delete Invoice #${createdInvoice.invoiceNumber}? This action cannot be undone.`,
     );
-    
+
     if (!confirmed) return;
-    
+
     try {
       const response = await apiRequest(`/api/invoices/${existingInvoiceId}`, {
-        method: 'DELETE',
+        method: "DELETE",
       });
-      
+
       if (response.success) {
         // Invalidate queries to refresh data
-        queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-        queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
+        queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
+        queryClient.invalidateQueries({
+          queryKey: [`/api/jobs/${job.id}/invoices`],
+        });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
-        
+
         handleClose();
       } else {
         toast({
           title: "Error",
           description: response.message || "Failed to delete invoice.",
-          variant: "destructive"
+          variant: "destructive",
         });
       }
     } catch (error) {
-      console.error('Error deleting invoice:', error);
+      console.error("Error deleting invoice:", error);
       toast({
         title: "Error",
         description: "Failed to delete invoice. Please try again.",
-        variant: "destructive"
+        variant: "destructive",
       });
     }
   };
@@ -800,9 +948,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   <span>Create New Invoice</span>
                 )}
               </div>
-              <Button 
-                variant="ghost" 
-                size="icon" 
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={handleClose}
                 data-testid="button-close-invoice"
               >
@@ -814,7 +962,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-              <span className="ml-3 text-gray-600">Loading invoice data...</span>
+              <span className="ml-3 text-gray-600">
+                Loading invoice data...
+              </span>
             </div>
           ) : (
             <div className="space-y-6">
@@ -831,8 +981,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       </h3>
                       <div className="mt-2 text-sm text-amber-700">
                         <p>
-                          You are editing invoice <strong>#{createdInvoice.invoiceNumber}</strong>. 
-                          Any changes you make will update this existing invoice.
+                          You are editing invoice{" "}
+                          <strong>#{createdInvoice.invoiceNumber}</strong>. Any
+                          changes you make will update this existing invoice.
                         </p>
                       </div>
                     </div>
@@ -853,7 +1004,8 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       </h3>
                       <div className="mt-2 text-sm text-blue-700">
                         <p>
-                          A new invoice will be created with invoice number <strong>#{job.jobNumber || 'auto-generated'}</strong>
+                          A new invoice will be created with invoice number{" "}
+                          <strong>#{job.jobNumber || "auto-generated"}</strong>
                         </p>
                       </div>
                     </div>
@@ -916,7 +1068,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
                 {/* Description */}
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium">Invoice Description</Label>
+                  <Label className="text-sm font-medium">
+                    Invoice Description
+                  </Label>
                   <Textarea
                     value={editableDescription}
                     onChange={(e) => setEditableDescription(e.target.value)}
@@ -940,7 +1094,9 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                         data-testid="button-import-from-quote"
                       >
                         <FileDown className="h-4 w-4 mr-1" />
-                        <span className="hidden sm:inline">Import from Quote/Proposal</span>
+                        <span className="hidden sm:inline">
+                          Import from Quote/Proposal
+                        </span>
                         <span className="sm:hidden">Import</span>
                       </Button>
                       <Button
@@ -958,36 +1114,68 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
                   {/* Category Legend */}
                   <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500"></span>Labour (Fixed)</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"></span>Labour (Charge-out)</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-500"></span>Materials</span>
-                    <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-purple-500"></span>Equipment</span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      Labour (Fixed)
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                      Labour (Charge-out)
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                      Materials
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-purple-500"></span>
+                      Equipment
+                    </span>
                   </div>
 
                   <div className="space-y-3">
                     {lineItems.map((item, index) => (
-                      <div key={item.id} className="bg-muted/30 rounded-lg border p-3 space-y-3">
+                      <div
+                        key={item.id}
+                        className="bg-muted/30 rounded-lg border p-3 space-y-3"
+                      >
                         {/* Header row with category badge and delete button */}
                         <div className="flex items-center justify-between gap-2">
                           <Select
-                            value={item.category || 'other'}
-                            onValueChange={(value) => updateLineItem(item.id, 'category', value)}
+                            value={item.category || "other"}
+                            onValueChange={(value) =>
+                              updateLineItem(item.id, "category", value)
+                            }
                           >
-                            <SelectTrigger className={`w-auto h-7 text-xs px-2 border-0 ${
-                              item.category === 'labor_fixed' ? 'bg-blue-100 text-blue-700' :
-                              item.category === 'labor_chargeout' ? 'bg-green-100 text-green-700' :
-                              item.category === 'materials' ? 'bg-orange-100 text-orange-700' :
-                              item.category === 'equipment' ? 'bg-purple-100 text-purple-700' :
-                              item.category === 'disposal' ? 'bg-red-100 text-red-700' :
-                              'bg-gray-100 text-gray-700'
-                            }`}>
+                            <SelectTrigger
+                              className={`w-auto h-7 text-xs px-2 border-0 ${
+                                item.category === "labor_fixed"
+                                  ? "bg-blue-100 text-blue-700"
+                                  : item.category === "labor_chargeout"
+                                    ? "bg-green-100 text-green-700"
+                                    : item.category === "materials"
+                                      ? "bg-orange-100 text-orange-700"
+                                      : item.category === "equipment"
+                                        ? "bg-purple-100 text-purple-700"
+                                        : item.category === "disposal"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-gray-100 text-gray-700"
+                              }`}
+                            >
                               <SelectValue placeholder="Category" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="labor_fixed">Labour (Fixed)</SelectItem>
-                              <SelectItem value="labor_chargeout">Labour (Charge-out)</SelectItem>
-                              <SelectItem value="materials">Materials</SelectItem>
-                              <SelectItem value="equipment">Equipment</SelectItem>
+                              <SelectItem value="labor_fixed">
+                                Labour (Fixed)
+                              </SelectItem>
+                              <SelectItem value="labor_chargeout">
+                                Labour (Charge-out)
+                              </SelectItem>
+                              <SelectItem value="materials">
+                                Materials
+                              </SelectItem>
+                              <SelectItem value="equipment">
+                                Equipment
+                              </SelectItem>
                               <SelectItem value="disposal">Disposal</SelectItem>
                               <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
@@ -1003,15 +1191,21 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                             <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-600" />
                           </Button>
                         </div>
-                        
+
                         {/* Description field with materials dropdown */}
                         <div className="relative">
-                          <Label className="text-xs text-muted-foreground mb-1 block">Description (type to search materials)</Label>
+                          <Label className="text-xs text-muted-foreground mb-1 block">
+                            Description (type to search materials)
+                          </Label>
                           <div className="relative">
                             <Input
                               value={item.description}
                               onChange={(e) => {
-                                updateLineItem(item.id, 'description', e.target.value);
+                                updateLineItem(
+                                  item.id,
+                                  "description",
+                                  e.target.value,
+                                );
                                 setMaterialSearchQuery(e.target.value);
                                 setMaterialsDropdownItemId(item.id);
                               }}
@@ -1021,9 +1215,13 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                               }}
                               onBlur={(e) => {
                                 setTimeout(() => {
-                                  if (!e.relatedTarget?.closest('[data-materials-dropdown]')) {
+                                  if (
+                                    !e.relatedTarget?.closest(
+                                      "[data-materials-dropdown]",
+                                    )
+                                  ) {
                                     setMaterialsDropdownItemId(null);
-                                    setMaterialSearchQuery('');
+                                    setMaterialSearchQuery("");
                                   }
                                 }, 150);
                               }}
@@ -1033,27 +1231,37 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                             />
                             <Package className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                           </div>
-                          
+
                           {/* Materials dropdown */}
                           {materialsDropdownItemId === item.id && (
-                            <div 
+                            <div
                               data-materials-dropdown
                               className="absolute z-50 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto"
                             >
                               {materials.length === 0 ? (
                                 <div className="p-3 text-sm text-muted-foreground text-center">
-                                  No materials found. Add items in Settings &gt; Materials.
+                                  No materials found. Add items in Settings &gt;
+                                  Materials.
                                 </div>
                               ) : (
                                 <>
                                   <div className="p-2 border-b bg-muted/30">
-                                    <span className="text-xs font-medium text-muted-foreground">Select from Materials & Services</span>
+                                    <span className="text-xs font-medium text-muted-foreground">
+                                      Select from Materials & Services
+                                    </span>
                                   </div>
                                   {materials
-                                    .filter((m: any) => 
-                                      !materialSearchQuery || 
-                                      m.name?.toLowerCase().includes(materialSearchQuery.toLowerCase()) ||
-                                      m.itemNumber?.toString().includes(materialSearchQuery)
+                                    .filter(
+                                      (m: any) =>
+                                        !materialSearchQuery ||
+                                        m.name
+                                          ?.toLowerCase()
+                                          .includes(
+                                            materialSearchQuery.toLowerCase(),
+                                          ) ||
+                                        m.itemNumber
+                                          ?.toString()
+                                          .includes(materialSearchQuery),
                                     )
                                     .slice(0, 10)
                                     .map((material: any) => (
@@ -1062,49 +1270,97 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                                         className="flex items-center justify-between p-2 hover:bg-accent cursor-pointer border-b last:border-b-0"
                                         onMouseDown={(e) => {
                                           e.preventDefault();
-                                          const price = typeof material.price === 'string' ? parseFloat(material.price) : material.price || 0;
-                                          const cost = typeof material.cost === 'string' ? parseFloat(material.cost) : material.cost || 0;
+                                          const price =
+                                            typeof material.price === "string"
+                                              ? parseFloat(material.price)
+                                              : material.price || 0;
+                                          const cost =
+                                            typeof material.cost === "string"
+                                              ? parseFloat(material.cost)
+                                              : material.cost || 0;
                                           // Determine if this is a material or a service based on the category/type
-                                          const isService = material.category === 'Labour' || material.basePrice !== undefined;
+                                          const isService =
+                                            material.category === "Labour" ||
+                                            material.basePrice !== undefined;
                                           // Update this line item with material data
-                                          setLineItems(prev => prev.map(li => 
-                                            li.id === item.id 
-                                              ? { 
-                                                  ...li, 
-                                                  description: material.name || `Item #${material.itemNumber}`,
-                                                  unitPrice: price,
-                                                  quantity: li.quantity || 1,
-                                                  total: (li.quantity || 1) * price,
-                                                  category: material.category === 'Labour' ? 'labor_chargeout' : 
-                                                           material.category === 'Equipment' ? 'equipment' : 
-                                                           material.category === 'Materials' ? 'materials' : li.category,
-                                                  materialId: !isService ? material.id : undefined,
-                                                  serviceId: isService ? material.id : undefined,
-                                                  unitCost: cost
-                                                }
-                                              : li
-                                          ));
+                                          setLineItems((prev) =>
+                                            prev.map((li) =>
+                                              li.id === item.id
+                                                ? {
+                                                    ...li,
+                                                    description:
+                                                      material.name ||
+                                                      `Item #${material.itemNumber}`,
+                                                    unitPrice: price,
+                                                    quantity: li.quantity || 1,
+                                                    total:
+                                                      (li.quantity || 1) *
+                                                      price,
+                                                    category:
+                                                      material.category ===
+                                                      "Labour"
+                                                        ? "labor_chargeout"
+                                                        : material.category ===
+                                                            "Equipment"
+                                                          ? "equipment"
+                                                          : material.category ===
+                                                              "Materials"
+                                                            ? "materials"
+                                                            : li.category,
+                                                    materialId: !isService
+                                                      ? material.id
+                                                      : undefined,
+                                                    serviceId: isService
+                                                      ? material.id
+                                                      : undefined,
+                                                    unitCost: cost,
+                                                  }
+                                                : li,
+                                            ),
+                                          );
                                           setMaterialsDropdownItemId(null);
-                                          setMaterialSearchQuery('');
+                                          setMaterialSearchQuery("");
                                         }}
                                         data-testid={`material-option-${material.id}`}
                                       >
                                         <div className="flex flex-col">
-                                          <span className="text-sm font-medium">{material.name}</span>
-                                          <span className="text-xs text-muted-foreground">#{material.itemNumber} · {material.category || 'Uncategorized'}</span>
+                                          <span className="text-sm font-medium">
+                                            {material.name}
+                                          </span>
+                                          <span className="text-xs text-muted-foreground">
+                                            #{material.itemNumber} ·{" "}
+                                            {material.category ||
+                                              "Uncategorized"}
+                                          </span>
                                         </div>
-                                        <Badge variant="secondary" className="ml-2">
-                                          ${typeof material.price === 'string' ? parseFloat(material.price).toFixed(2) : (material.price || 0).toFixed(2)}
+                                        <Badge
+                                          variant="secondary"
+                                          className="ml-2"
+                                        >
+                                          $
+                                          {typeof material.price === "string"
+                                            ? parseFloat(
+                                                material.price,
+                                              ).toFixed(2)
+                                            : (material.price || 0).toFixed(2)}
                                         </Badge>
                                       </div>
                                     ))}
-                                  {materials.filter((m: any) => 
-                                    !materialSearchQuery || 
-                                    m.name?.toLowerCase().includes(materialSearchQuery.toLowerCase()) ||
-                                    m.itemNumber?.toString().includes(materialSearchQuery)
+                                  {materials.filter(
+                                    (m: any) =>
+                                      !materialSearchQuery ||
+                                      m.name
+                                        ?.toLowerCase()
+                                        .includes(
+                                          materialSearchQuery.toLowerCase(),
+                                        ) ||
+                                      m.itemNumber
+                                        ?.toString()
+                                        .includes(materialSearchQuery),
                                   ).length === 0 && (
                                     <div className="p-3 text-sm text-muted-foreground text-center">
-                                      No matching materials. You can still type a custom description.
+                                      No matching materials. You can still type
+                                      a custom description.
                                     </div>
                                   )}
                                 </>
@@ -1112,17 +1368,25 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                             </div>
                           )}
                         </div>
-                        
+
                         {/* Quantity, Unit Price, and Total in a row */}
                         <div className="grid grid-cols-3 gap-3">
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1 block">
-                              {item.category?.startsWith('labor') ? 'Hours' : 'Qty'}
+                              {item.category?.startsWith("labor")
+                                ? "Hours"
+                                : "Qty"}
                             </Label>
                             <Input
                               type="number"
-                              value={item.quantity || ''}
-                              onChange={(e) => updateLineItem(item.id, 'quantity', parseFloat(e.target.value) || 0)}
+                              value={item.quantity || ""}
+                              onChange={(e) =>
+                                updateLineItem(
+                                  item.id,
+                                  "quantity",
+                                  parseFloat(e.target.value) || 0,
+                                )
+                              }
                               placeholder="0"
                               className="text-sm"
                               data-testid={`input-item-quantity-${index}`}
@@ -1130,20 +1394,30 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                           </div>
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1 block">
-                              {item.category?.startsWith('labor') ? 'Rate/hr' : 'Unit Price'}
+                              {item.category?.startsWith("labor")
+                                ? "Rate/hr"
+                                : "Unit Price"}
                             </Label>
                             <Input
                               type="number"
                               step="0.01"
-                              value={item.unitPrice || ''}
-                              onChange={(e) => updateLineItem(item.id, 'unitPrice', parseFloat(e.target.value) || 0)}
+                              value={item.unitPrice || ""}
+                              onChange={(e) =>
+                                updateLineItem(
+                                  item.id,
+                                  "unitPrice",
+                                  parseFloat(e.target.value) || 0,
+                                )
+                              }
                               placeholder="0.00"
                               className="text-sm"
                               data-testid={`input-item-price-${index}`}
                             />
                           </div>
                           <div>
-                            <Label className="text-xs text-muted-foreground mb-1 block">Total</Label>
+                            <Label className="text-xs text-muted-foreground mb-1 block">
+                              Total
+                            </Label>
                             <div className="h-9 flex items-center px-3 bg-muted rounded-md text-sm font-semibold">
                               ${item.total.toFixed(2)}
                             </div>
@@ -1156,8 +1430,12 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   {/* Totals */}
                   <div className="bg-white p-4 rounded border space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Subtotal (excl GST):</span>
-                      <span className="font-medium">${subtotal.toFixed(2)}</span>
+                      <span className="text-gray-600">
+                        Subtotal (excl GST):
+                      </span>
+                      <span className="font-medium">
+                        ${subtotal.toFixed(2)}
+                      </span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">GST (15%):</span>
@@ -1186,7 +1464,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                     Delete Invoice
                   </Button>
                 )}
-                
+
                 <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto w-full sm:w-auto">
                   <Button
                     type="button"
@@ -1197,101 +1475,109 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                   >
                     Cancel
                   </Button>
-                <Button
-                  type="button"
-                  onClick={handleSaveInvoice}
-                  disabled={isCreating}
-                  variant="outline"
-                  data-testid="button-save-invoice"
-                  className="w-full sm:w-auto"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4 mr-2" />
-                      Save Invoice
-                    </>
-                  )}
-                </Button>
-                {createdInvoice?.id && (
                   <Button
                     type="button"
-                    onClick={async () => {
-                      setIsDownloadingPdf(true);
-                      try {
-                        const response = await fetch(`/api/invoices/${createdInvoice.id}/pdf`);
-                        if (!response.ok) throw new Error('Failed to fetch PDF');
-                        const blob = await response.blob();
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = `Invoice-${createdInvoice.invoiceNumber || createdInvoice.id}.pdf`;
-                        document.body.appendChild(a);
-                        a.click();
-                        document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
-                      } catch (err) {
-                        toast({ title: 'Download failed', description: 'Could not download the PDF. Please try again.', variant: 'destructive' });
-                      } finally {
-                        setIsDownloadingPdf(false);
-                      }
-                    }}
-                    disabled={isDownloadingPdf}
+                    onClick={handleSaveInvoice}
+                    disabled={isCreating}
                     variant="outline"
-                    data-testid="button-download-pdf"
+                    data-testid="button-save-invoice"
                     className="w-full sm:w-auto"
                   >
-                    {isDownloadingPdf ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Saving...
+                      </>
                     ) : (
-                      <FileDown className="h-4 w-4 mr-2" />
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        Save Invoice
+                      </>
                     )}
-                    {isDownloadingPdf ? 'Preparing...' : 'Download PDF'}
                   </Button>
-                )}
-                <Button
-                  type="button"
-                  onClick={handleSmsInvoice}
-                  disabled={isCreating}
-                  variant="outline"
-                  data-testid="button-sms-invoice-builder"
-                  className="w-full sm:w-auto"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      SMS Invoice
-                    </>
+                  {createdInvoice?.id && (
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        setIsDownloadingPdf(true);
+                        try {
+                          const response = await fetch(
+                            `/api/invoices/${createdInvoice.id}/pdf`,
+                          );
+                          if (!response.ok)
+                            throw new Error("Failed to fetch PDF");
+                          const blob = await response.blob();
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `Invoice-${createdInvoice.invoiceNumber || createdInvoice.id}.pdf`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+                        } catch (err) {
+                          toast({
+                            title: "Download failed",
+                            description:
+                              "Could not download the PDF. Please try again.",
+                            variant: "destructive",
+                          });
+                        } finally {
+                          setIsDownloadingPdf(false);
+                        }
+                      }}
+                      disabled={isDownloadingPdf}
+                      variant="outline"
+                      data-testid="button-download-pdf"
+                      className="w-full sm:w-auto"
+                    >
+                      {isDownloadingPdf ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <FileDown className="h-4 w-4 mr-2" />
+                      )}
+                      {isDownloadingPdf ? "Preparing..." : "Download PDF"}
+                    </Button>
                   )}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSendInvoice}
-                  disabled={isCreating}
-                  className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-                  data-testid="button-send-invoice"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="h-4 w-4 mr-2" />
-                      Send Invoice
-                    </>
-                  )}
-                </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSmsInvoice}
+                    disabled={isCreating}
+                    variant="outline"
+                    data-testid="button-sms-invoice-builder"
+                    className="w-full sm:w-auto"
+                  >
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <MessageSquare className="h-4 w-4 mr-2" />
+                        SMS Invoice
+                      </>
+                    )}
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={handleSendInvoice}
+                    disabled={isCreating}
+                    className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+                    data-testid="button-send-invoice"
+                  >
+                    {isCreating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4 mr-2" />
+                        Send Invoice
+                      </>
+                    )}
+                  </Button>
                 </div>
               </div>
 
@@ -1306,19 +1592,21 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
                       customerId: customer.id,
                       jobId: job.id,
                       amount: subtotal.toString(),
-                      status: 'draft' as const,
-                      dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                      status: "draft" as const,
+                      dueDate: new Date(
+                        Date.now() + 7 * 24 * 60 * 60 * 1000,
+                      ).toISOString(),
                       issueDate: new Date().toISOString(),
-                      items: lineItems.map(item => ({
+                      items: lineItems.map((item) => ({
                         description: item.description,
                         quantity: item.quantity,
                         rate: item.unitPrice,
                         amount: item.total,
-                        category: item.category || 'other'
+                        category: item.category || "other",
                       })),
                       address: editableAddress,
                       customer,
-                      job
+                      job,
                     }}
                     customer={customer}
                     jobAddress={editableAddress}
@@ -1366,7 +1654,7 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
             id: createdInvoice.id,
             invoiceNumber: createdInvoice.invoiceNumber,
             amount: createdInvoice.amount,
-            dueDate: createdInvoice.dueDate
+            dueDate: createdInvoice.dueDate,
           }}
           templateType="invoice"
         />
