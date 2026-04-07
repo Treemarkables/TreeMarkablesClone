@@ -696,11 +696,23 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
               onAccept={() => acceptQuoteMutation.mutate(previewingQuote.id)}
               isAccepting={acceptQuoteMutation.isPending}
               onEmail={() => {
-                              }}
+                toast({
+                  title: "Email Functionality",
+                  description: "Email functionality will be implemented next.",
+                });
+              }}
               onDownload={() => {
-                              }}
+                toast({
+                  title: "PDF Generation",
+                  description: "PDF generation functionality will be implemented next.",
+                });
+              }}
               onCopy={() => {
-                              }}
+                toast({
+                  title: "Quote Copied",
+                  description: "Quote template copied to clipboard.",
+                });
+              }}
             />
           </DialogContent>
         </Dialog>

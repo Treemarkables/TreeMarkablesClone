@@ -731,6 +731,11 @@ export function JobDiarySection({
   const handleOpenInvoice = (invoiceNumber: string) => {
     if (onInvoiceClick) {
       onInvoiceClick(invoiceNumber);
+    } else {
+      toast({
+        title: "Invoice",
+        description: `Invoice ${invoiceNumber} — open the Billing tab to view.`,
+      });
     }
   };
 

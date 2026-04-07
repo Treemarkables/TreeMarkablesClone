@@ -844,7 +844,7 @@ export function GlobalJobCard({
             });
             
             if (response.ok) {
-                            queryClient.invalidateQueries({ queryKey: ['/api/jobs', currentJobId, 'diary-timeline'] });
+              queryClient.invalidateQueries({ queryKey: ['/api/jobs', currentJobId, 'diary-timeline'] });
             }
           } catch (error) {
             console.error('📸 Failed to upload pasted image:', error);
@@ -1789,7 +1789,11 @@ export function GlobalJobCard({
     if (context === 'proposal' && editingJob?.id && selectedCustomer?.id) {
       // Wait for proposal query to be fully settled (not loading or fetching)
       if (isProposalLoading || isProposalFetching) {
-                return;
+        toast({
+          title: "Loading",
+          description: "Please wait while we load proposal data...",
+        });
+        return;
       }
       
       const hasProposal = jobProposalResponse?.success && jobProposalResponse.data.length > 0;

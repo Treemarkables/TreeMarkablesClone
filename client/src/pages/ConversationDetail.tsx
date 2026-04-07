@@ -787,6 +787,7 @@ export default function ConversationDetail() {
             <button
               onClick={() => {
                 setShowManageMenu(false);
+                toast({ title: 'Send Review Request', description: 'Feature coming soon' });
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-send-review-request"
@@ -816,6 +817,7 @@ export default function ConversationDetail() {
             <button
               onClick={() => {
                 setShowManageMenu(false);
+                toast({ title: 'Add Internal Comments', description: 'Feature coming soon' });
               }}
               className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-add-internal-comments"

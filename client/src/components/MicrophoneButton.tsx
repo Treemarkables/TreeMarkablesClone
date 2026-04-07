@@ -42,10 +42,6 @@ export function MicrophoneButton({
     }
 
     toggleListening();
-
-    if (!isListening) {
-      // listening started
-    }
   };
 
   if (!isSupported) {
