@@ -10349,6 +10349,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Update a staff assignment (reschedule drag-and-drop)
+  app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
+    try {
+      const { startTime, endTime, employeeId, notes, status } = req.body;
+      const updates: Record<string, unknown> = {};
+      if (startTime) updates.startTime = new Date(startTime);
+      if (endTime) updates.endTime = new Date(endTime);
+      if (employeeId !== undefined) updates.employeeId = employeeId;
+      if (notes !== undefined) updates.notes = notes;
+      if (status) updates.status = status;
+      const updated = await storage.updateJobStaffAssignment(req.params.id, updates as Parameters<typeof storage.updateJobStaffAssignment>[1]);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating staff assignment:', error);
+      res.status(500).json({ success: false, message: 'Error updating staff assignment' });
+    }
+  });
+
   // Delete a staff assignment
   app.delete('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {

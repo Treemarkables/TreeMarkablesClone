@@ -1235,7 +1235,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     const sorted = uniqueJobs
       .sort((a, b) => {
-        // When searching, rank by relevance (quick search only contains active jobs)
+        // When searching, rank by relevance first
         if (searchQuery.trim()) {
           const query = searchQuery.toLowerCase().trim();
           const scoreJob = (job: JobAssignment) => {
@@ -1245,15 +1245,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             const addr = job.address?.toLowerCase() || '';
             const svc = job.serviceType?.toLowerCase() || '';
             if (addr.includes(query) || svc.includes(query)) return 2;
-            return 1; // matched description or jobId
+            return 1;
           };
           const diff = scoreJob(b) - scoreJob(a);
           if (diff !== 0) return diff;
         }
-        // Sort by start time (earliest first)
-        const timeA = new Date(a.startTime).getTime();
-        const timeB = new Date(b.startTime).getTime();
-        return timeA - timeB;
+        // Sort by most recently active (descending) — jobs with recent messages or changes appear at top
+        const getActivityTime = (job: JobAssignment): number => {
+          const activity = job.lastActivityAt ? new Date(job.lastActivityAt).getTime() : 0;
+          const startT = job.startTime ? new Date(job.startTime).getTime() : 0;
+          return Math.max(activity, startT);
+        };
+        return getActivityTime(b) - getActivityTime(a);
       });
     
     return sorted;

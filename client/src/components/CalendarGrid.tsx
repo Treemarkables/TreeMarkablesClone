@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, GripVertical } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import {
   format, addDays, subDays, startOfDay, addWeeks, subWeeks,
@@ -8,9 +8,10 @@ import {
   startOfMonth, endOfMonth,
 } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
-import { isSameDayNZ, isBetweenNZ, getNZDateString } from '@shared/dateUtils';
-import { useQuery } from '@tanstack/react-query';
+import { isSameDayNZ, isBetweenNZ, getNZDateString, nzTimeToUTC } from '@shared/dateUtils';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
+import { useToast } from '@/hooks/use-toast';
 
 const NZ_TZ = 'Pacific/Auckland';
 
@@ -71,6 +72,11 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  // Track internal drag state (job blocks dragged within the calendar)
+  const dragRef = useRef<{ jobId: string; employeeId: string; assignmentId: string | null; durationHours: number } | null>(null);
 
   const currentDate = externalDate || internalDate;
   const setCurrentDate = (date: Date) => {
@@ -364,6 +370,76 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
     ? (dayRevenue >= 1000 ? Math.round(dayRevenue / 100) * 100 : Math.round(dayRevenue))
     : null;
 
+  // ── Internal reschedule (drag within calendar) ────────────────────────────
+  const handleInternalReschedule = async (
+    jobId: string,
+    fromEmployeeId: string,
+    assignmentId: string | null,
+    durationHours: number,
+    toHour: number,
+    toEmployeeId: string,
+    toDate: Date,
+  ) => {
+    const job = jobMap.get(jobId);
+    if (!job) return;
+
+    const nzDateStr = toDate.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
+    const endHour = Math.min(toHour + durationHours, 23);
+    const startTimeStr = `${String(toHour).padStart(2, '0')}:00`;
+    const endTimeStr = `${String(endHour).padStart(2, '0')}:00`;
+
+    const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
+    const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
+
+    try {
+      if (assignmentId) {
+        await fetch(`/api/staff-assignments/${assignmentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            employeeId: toEmployeeId,
+          }),
+        });
+      } else {
+        // No assignment record — create one
+        await fetch(`/api/jobs/${jobId}/staff-assignments`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staffAssignments: [{
+              employeeId: toEmployeeId,
+              startTime: startDateTime.toISOString(),
+              endTime: endDateTime.toISOString(),
+              notes: '',
+            }],
+            sendNotifications: false,
+            sendClientNotification: false,
+            addOnly: true,
+          }),
+        });
+      }
+
+      await fetch(`/api/jobs/${jobId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledDate: startDateTime.toISOString() }),
+      });
+
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs?limit=10000&offset=0'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+
+      toast({
+        title: 'Job rescheduled',
+        description: `Moved to ${startTimeStr} – ${endTimeStr}`,
+      });
+    } catch {
+      toast({ title: 'Reschedule failed', description: 'Could not update the job time.', variant: 'destructive' });
+    }
+  };
+
   // ── Date range label ───────────────────────────────────────────────────────
   const dateRangeDisplay = useMemo(() => {
     if (viewMode === 'day') return format(currentDate, 'EEE d MMMM yyyy');
@@ -490,6 +566,8 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
 
                 {viewMode === 'day'
                   ? timeSlots.map(slot => {
+                      const dateKey = getNZDateString(currentDate);
+                      const assignedItems = assignmentsByEmployeeDate.get(`${employee.id}__${dateKey}`) || [];
                       const items = getItemsForHour(employee.id, currentDate, slot.hour);
                       const slotKey = `${employee.id}-${slot.hour}`;
                       const isOver = dragOverSlot === slotKey;
@@ -498,35 +576,71 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
                           key={slot.hour}
                           className={`w-[110px] flex-shrink-0 border-r p-1 min-h-[80px] transition-colors duration-100 ${isOver ? 'bg-blue-50 border-blue-300 border-2' : ''}`}
                           data-testid={`slot-${employee.id}-${slot.hour}`}
-                          onDragOver={onJobDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverSlot(slotKey); } : undefined}
-                          onDragLeave={onJobDrop ? () => setDragOverSlot(null) : undefined}
-                          onDrop={onJobDrop ? (e) => {
+                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverSlot(slotKey); }}
+                          onDragLeave={() => setDragOverSlot(null)}
+                          onDrop={(e) => {
                             e.preventDefault();
                             setDragOverSlot(null);
-                            const jobId = e.dataTransfer.getData('jobId');
-                            if (jobId) onJobDrop(jobId, currentDate, slot.hour, employee.id);
-                          } : undefined}
+                            const drag = dragRef.current;
+                            if (drag) {
+                              // Internal reschedule: job block dragged within calendar
+                              dragRef.current = null;
+                              handleInternalReschedule(
+                                drag.jobId,
+                                drag.employeeId,
+                                drag.assignmentId,
+                                drag.durationHours,
+                                slot.hour,
+                                employee.id,
+                                currentDate,
+                              );
+                            } else if (onJobDrop) {
+                              // External drop from right panel
+                              const jobId = e.dataTransfer.getData('jobId');
+                              if (jobId) onJobDrop(jobId, currentDate, slot.hour, employee.id);
+                            }
+                          }}
                         >
                           {isOver && (
                             <div className="text-[10px] text-blue-500 font-medium text-center py-1 opacity-80">
                               Drop to schedule {slot.label}
                             </div>
                           )}
-                          {items.map(job => (
-                            <div
-                              key={job.id}
-                              className={`text-xs p-1.5 rounded border cursor-pointer mb-1 ${getStatusColor(job.status)}`}
-                              onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
-                              data-testid={`job-block-${job.id}`}
-                            >
-                              <div className="flex items-center justify-between gap-1">
-                                <div className="font-semibold line-clamp-2 leading-tight flex-1">{getCustomerName(job)}</div>
-                                {job.customerConfirmed && <Check className="h-3 w-3 text-green-600 flex-shrink-0" />}
+                          {items.map(job => {
+                            const assignment = assignedItems.find(x => x.job.id === job.id)?.assignment || null;
+                            const durationHours = assignment
+                              ? Math.max(1, Math.round((new Date(assignment.endTime).getTime() - new Date(assignment.startTime).getTime()) / 3600000))
+                              : 2;
+                            return (
+                              <div
+                                key={job.id}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.stopPropagation();
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  e.dataTransfer.setData('text/plain', job.id);
+                                  dragRef.current = {
+                                    jobId: job.id,
+                                    employeeId: employee.id,
+                                    assignmentId: assignment?.id ?? null,
+                                    durationHours,
+                                  };
+                                }}
+                                onDragEnd={() => { dragRef.current = null; }}
+                                className={`text-xs p-1.5 rounded border cursor-grab active:cursor-grabbing mb-1 ${getStatusColor(job.status)}`}
+                                onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
+                                data-testid={`job-block-${job.id}`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <GripVertical className="h-3 w-3 opacity-40 flex-shrink-0" />
+                                  <div className="font-semibold line-clamp-2 leading-tight flex-1">{getCustomerName(job)}</div>
+                                  {job.customerConfirmed && <Check className="h-3 w-3 text-green-600 flex-shrink-0" />}
+                                </div>
+                                <div className="opacity-70 truncate mt-0.5">{job.address?.split(',')[0]}</div>
+                                <div className="opacity-80 mt-0.5 font-mono">#{job.jobNumber}</div>
                               </div>
-                              <div className="opacity-70 truncate mt-0.5">{job.address?.split(',')[0]}</div>
-                              <div className="opacity-80 mt-0.5 font-mono">#{job.jobNumber}</div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })
@@ -539,14 +653,20 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
                           key={date.toISOString()}
                           className={`w-36 flex-shrink-0 border-r p-1 min-h-[80px] transition-colors duration-100 ${isOver ? 'bg-blue-50 border-blue-300 border-2' : ''}`}
                           data-testid={`slot-${employee.id}-${format(date, 'yyyy-MM-dd')}`}
-                          onDragOver={onJobDrop ? (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverSlot(slotKey); } : undefined}
-                          onDragLeave={onJobDrop ? () => setDragOverSlot(null) : undefined}
-                          onDrop={onJobDrop ? (e) => {
+                          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverSlot(slotKey); }}
+                          onDragLeave={() => setDragOverSlot(null)}
+                          onDrop={(e) => {
                             e.preventDefault();
                             setDragOverSlot(null);
-                            const jobId = e.dataTransfer.getData('jobId');
-                            if (jobId) onJobDrop(jobId, date, 8, employee.id);
-                          } : undefined}
+                            const drag = dragRef.current;
+                            if (drag) {
+                              dragRef.current = null;
+                              handleInternalReschedule(drag.jobId, drag.employeeId, drag.assignmentId, drag.durationHours, 8, employee.id, date);
+                            } else if (onJobDrop) {
+                              const jobId = e.dataTransfer.getData('jobId');
+                              if (jobId) onJobDrop(jobId, date, 8, employee.id);
+                            }
+                          }}
                         >
                           {isOver && (
                             <div className="text-[10px] text-blue-500 font-medium text-center py-1 opacity-80">
