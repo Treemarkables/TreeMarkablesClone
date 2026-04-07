@@ -182,7 +182,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   return (
     <Sidebar>
 
-      <SidebarContent className="pt-safe pt-6 md:pt-0">
+      <SidebarContent className="pt-safe pt-6 md:pt-0 font-bold">
         {/* Core Dashboard */}
         <SidebarGroup>
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
