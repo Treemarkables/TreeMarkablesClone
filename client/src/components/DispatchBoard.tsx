@@ -1510,9 +1510,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     setSelectedJob(null); // Close the job details dialog
   };
 
-  // Called when a job is dragged from the right panel and dropped onto a calendar slot.
-  // Schedules the job directly at the dropped time — no staff assignment required.
-  const handleCalendarJobDrop = (jobId: string, date: Date, hour: number) => {
+  // Called when a job is dragged from the right panel and dropped onto a specific staff row + time slot.
+  // Updates the job's scheduledDate and creates a staff assignment for the dropped employee.
+  const handleCalendarJobDrop = async (jobId: string, date: Date, hour: number, employeeId: string) => {
     const job = jobsData?.data?.find((j: any) => j.id === jobId);
     if (!job) {
       toast({ title: 'Job not found', variant: 'destructive' });
@@ -1520,15 +1520,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
 
     const nzDateStr = date.toLocaleDateString('en-CA', { timeZone: 'Pacific/Auckland' });
-    const endHour = Math.min(hour + 2, 18);
+    const durationHours = job.estimatedDuration || 2;
+    const endHour = Math.min(hour + durationHours, 23);
     const startTimeStr = `${String(hour).padStart(2, '0')}:00`;
     const endTimeStr = `${String(endHour).padStart(2, '0')}:00`;
 
     const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
+    const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
 
     const updates: any = {
       scheduledDate: startDateTime.toISOString(),
-      estimatedDuration: 2,
+      estimatedDuration: durationHours,
     };
 
     // Only advance status if not already scheduled/complete/archived
@@ -1536,19 +1538,40 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updates.status = 'scheduled';
     }
 
-    updateJobMutation.mutate({ id: jobId, updates }, {
-      onSuccess: () => {
-        toast({
-          title: 'Job Scheduled',
-          description: `${job.customerName} scheduled for ${startTimeStr} – ${endTimeStr}`,
-        });
-        queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
-      },
-      onError: () => {
-        toast({ title: 'Scheduling Failed', description: 'Could not schedule the job. Please try again.', variant: 'destructive' });
-      }
-    });
+    try {
+      // 1. Update the job's scheduled date + status
+      await fetch(`/api/jobs/${jobId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+
+      // 2. Create a staff assignment for the specific employee row that was dropped onto
+      await fetch(`/api/jobs/${jobId}/staff-assignments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          staffAssignments: [{
+            employeeId,
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            notes: '',
+          }],
+          sendNotifications: false,
+          sendClientNotification: false,
+          addOnly: true,
+        }),
+      });
+
+      toast({
+        title: 'Job Scheduled',
+        description: `${job.customerName} scheduled for ${startTimeStr} – ${endTimeStr}`,
+      });
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+    } catch {
+      toast({ title: 'Scheduling Failed', description: 'Could not schedule the job. Please try again.', variant: 'destructive' });
+    }
   };
 
   const handleCreateJob = () => {

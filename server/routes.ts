@@ -10011,7 +10011,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
-      const { staffAssignments, sendNotifications = true, sendClientNotification = false } = req.body;
+      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false } = req.body;
       const jobId = req.params.jobId;
 
       if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
@@ -10085,11 +10085,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       }
 
       // Delete existing staff assignments for this job to prevent duplicates when rescheduling
+      // Skip deletion when addOnly=true (e.g. drag-drop onto a specific employee row)
       const existingAssignments = await storage.getJobStaffAssignmentsByJob(jobId);
-      for (const existing of existingAssignments) {
-        await storage.deleteJobStaffAssignment(existing.id);
+      if (!addOnly) {
+        for (const existing of existingAssignments) {
+          await storage.deleteJobStaffAssignment(existing.id);
+        }
+        console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
+      } else {
+        // Remove only duplicate assignments for the same employee+time to avoid double-booking
+        const newStart = allAssignmentsToCreate[0]?.startTime?.getTime();
+        for (const existing of existingAssignments) {
+          const empMatch = allAssignmentsToCreate.some(a => a.employeeId === existing.employeeId);
+          const timeMatch = existing.startTime && Math.abs(new Date(existing.startTime).getTime() - newStart) < 60000;
+          if (empMatch && timeMatch) {
+            await storage.deleteJobStaffAssignment(existing.id);
+          }
+        }
       }
-      console.log(`🗑️ Deleted ${existingAssignments.length} existing staff assignment(s) for job ${jobId}`);
 
       // Create all per-day assignments
       const created = [];

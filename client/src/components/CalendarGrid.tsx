@@ -62,7 +62,7 @@ type ViewMode = 'day' | 'week' | '2weeks' | '4weeks' | 'month';
 interface CalendarGridProps {
   selectedDate?: Date;
   onDateChange?: (date: Date) => void;
-  onJobDrop?: (jobId: string, date: Date, hour: number) => void;
+  onJobDrop?: (jobId: string, date: Date, hour: number, employeeId: string) => void;
 }
 
 export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDrop }: CalendarGridProps = {}) {
@@ -504,7 +504,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
                             e.preventDefault();
                             setDragOverSlot(null);
                             const jobId = e.dataTransfer.getData('jobId');
-                            if (jobId) onJobDrop(jobId, currentDate, slot.hour);
+                            if (jobId) onJobDrop(jobId, currentDate, slot.hour, employee.id);
                           } : undefined}
                         >
                           {isOver && (
@@ -545,7 +545,7 @@ export function CalendarGrid({ selectedDate: externalDate, onDateChange, onJobDr
                             e.preventDefault();
                             setDragOverSlot(null);
                             const jobId = e.dataTransfer.getData('jobId');
-                            if (jobId) onJobDrop(jobId, date, 8);
+                            if (jobId) onJobDrop(jobId, date, 8, employee.id);
                           } : undefined}
                         >
                           {isOver && (
