@@ -366,7 +366,7 @@ export function JobDiarySection({
   // Variable replacement function
   const replaceTemplateVariables = (template: string) => {
     const customerName = jobData?.customerName || '';
-    const address = jobData?.jobAddress || '';
+    const address = jobData?.jobAddress || jobData?.address || '';
     const phone = jobData?.customerPhone || customerPhone || '';
     const email = jobData?.customerEmail || customerEmail || '';
     
@@ -378,18 +378,35 @@ export function JobDiarySection({
         const parts = customerName.split(',').map(p => p.trim());
         firstName = parts.length === 2 ? parts[1] : customerName.split(' ')[0];
       } else {
-        // Extract first word as first name
         firstName = customerName.split(' ')[0];
       }
     }
-    
-    return template
-      .replace(/{firstName}/g, firstName)
-      .replace(/{customerName}/g, customerName)
-      .replace(/{jobNumber}/g, jobId)
-      .replace(/{address}/g, address)
-      .replace(/{phone}/g, phone)
-      .replace(/{email}/g, email);
+
+    // Build a map of all variable aliases → value
+    // Supports both {camelCase} and {snake_case} as well as {{double_braces}}
+    const vars: Record<string, string> = {
+      customerName,
+      customer_name: customerName,
+      firstName,
+      first_name: firstName,
+      jobNumber: String(jobData?.jobNumber || jobId || ''),
+      job_number: String(jobData?.jobNumber || jobId || ''),
+      address,
+      customer_address: address,
+      phone,
+      customer_phone: phone,
+      email,
+      customer_email: email,
+    };
+
+    let result = template;
+    for (const [key, value] of Object.entries(vars)) {
+      // Replace {{key}} (double-brace) and {key} (single-brace), case-insensitive key match
+      result = result
+        .replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'gi'), value)
+        .replace(new RegExp(`\\{\\s*${key}\\s*\\}`, 'gi'), value);
+    }
+    return result;
   };
 
   // Handle template selection for email

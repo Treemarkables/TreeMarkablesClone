@@ -284,13 +284,14 @@ export default function CommunicationTemplates() {
         <CardContent>
           <div className="flex flex-wrap gap-2">
             <Badge variant="secondary">{"{customerName}"}</Badge>
+            <Badge variant="secondary">{"{firstName}"}</Badge>
             <Badge variant="secondary">{"{jobNumber}"}</Badge>
             <Badge variant="secondary">{"{address}"}</Badge>
             <Badge variant="secondary">{"{phone}"}</Badge>
             <Badge variant="secondary">{"{email}"}</Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-2">
-            Use these variables in your templates - they'll be automatically replaced with actual values
+            These variables are replaced with real values when a template is selected. Both <code className="text-xs bg-muted px-1 rounded">{"{customerName}"}</code> and <code className="text-xs bg-muted px-1 rounded">{"{{customer_name}}"}</code> formats work.
           </p>
         </CardContent>
       </Card>
