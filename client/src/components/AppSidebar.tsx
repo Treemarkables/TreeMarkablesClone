@@ -27,7 +27,8 @@ import {
   Clock,
   PhoneCall,
   Package,
-  Leaf
+  Leaf,
+  TrendingUp,
 } from "lucide-react";
 import {
   Sidebar,
@@ -156,20 +157,16 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
   }, [location, setOpenMobile, isMobile]);
   
   const handleTabClick = (tabValue: string) => {
-    // If not on job dashboard, navigate there first
     if (location !== "/job-dashboard") {
       setLocation("/job-dashboard");
     }
-    // Set the tab
     onTabChange(tabValue);
-    // Close sidebar on mobile only
     if (isMobile) {
       setOpenMobile(false);
     }
   };
   
   const handleLinkClick = (e: React.MouseEvent) => {
-    // Close sidebar on mobile only for immediate feedback
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -188,13 +185,11 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {/* Dispatch Board - Available to both crew and admin - TOP OF MENU */}
+              {/* Dispatch Board */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"}>
                   <Link href="/dispatch" onClick={handleLinkClick} data-testid="link-dispatch">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Calendar className="h-4 w-4" />
-                    </span>
+                    <Calendar className="h-4 w-4 text-blue-500" />
                     <span>Dispatch Board</span>
                   </Link>
                 </SidebarMenuButton>
@@ -208,17 +203,13 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                       onClick={() => handleTabClick(item.value)}
                       data-testid={`button-tab-${item.value}`}
                     >
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <item.icon className="h-4 w-4" />
-                      </span>
+                      <item.icon className={`h-4 w-4 ${item.value === 'safety' ? 'text-amber-500' : 'text-blue-500'}`} />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton asChild isActive={location === item.url}>
                       <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <item.icon className="h-4 w-4" />
-                        </span>
+                        <item.icon className="h-4 w-4 text-blue-500" />
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -226,85 +217,71 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 </SidebarMenuItem>
               ))}
               
-              {/* Staff Schedule - Available to both crew and admin */}
+              {/* Staff Schedule */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
                   <Link href="/staff-schedule" onClick={handleLinkClick} data-testid="link-staff-schedule">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Users className="h-4 w-4" />
-                    </span>
+                    <Users className="h-4 w-4 text-blue-500" />
                     <span>Staff Schedule</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               
-              {/* Vehicle Inspection - Available to both crew and admin */}
+              {/* Vehicle Inspection */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/vehicle-inspection"}>
                   <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <ClipboardCheck className="h-4 w-4" />
-                    </span>
+                    <ClipboardCheck className="h-4 w-4 text-amber-500" />
                     <span>Vehicle Inspection</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               
-              {/* Inspection History - Available to both crew and admin */}
+              {/* Inspection History */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/vehicle-inspection-history"}>
                   <Link href="/vehicle-inspection-history" onClick={handleLinkClick} data-testid="link-inspection-history">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <HistoryIconLucide className="h-4 w-4" />
-                    </span>
+                    <HistoryIconLucide className="h-4 w-4 text-amber-500" />
                     <span>Inspection History</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               
-              {/* JHA Assessment - Available to both crew and admin */}
+              {/* JHA Assessment */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/jha-assessment"}>
                   <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Shield className="h-4 w-4" />
-                    </span>
+                    <Shield className="h-4 w-4 text-amber-500" />
                     <span>JHA Assessment</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
               
-              {/* JHA History - Available to both crew and admin */}
+              {/* JHA History */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/jha-history"}>
                   <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <HistoryIconLucide className="h-4 w-4" />
-                    </span>
+                    <HistoryIconLucide className="h-4 w-4 text-amber-500" />
                     <span>JHA History</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Mulch Drops - Available to all users */}
+              {/* Mulch Drops */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/mulch-drops"}>
                   <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
-                      <Leaf className="h-4 w-4" />
-                    </span>
+                    <Leaf className="h-4 w-4 text-green-500" />
                     <span>Mulch Drops</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Daily Briefing - Available to all users */}
+              {/* Daily Briefing */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/daily-briefing"}>
                   <Link href="/daily-briefing" onClick={handleLinkClick} data-testid="link-daily-briefing">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-700">
-                      <ClipboardList className="h-4 w-4" />
-                    </span>
+                    <ClipboardList className="h-4 w-4 text-orange-500" />
                     <span>Daily Briefing</span>
                   </Link>
                 </SidebarMenuButton>
@@ -327,17 +304,13 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                       onClick={() => handleTabClick(item.value)}
                       data-testid={`button-tab-${item.value}`}
                     >
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <item.icon className="h-4 w-4" />
-                      </span>
+                      <item.icon className="h-4 w-4 text-violet-500" />
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   ) : (
                     <SidebarMenuButton asChild isActive={location === item.url}>
                       <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <item.icon className="h-4 w-4" />
-                        </span>
+                        <item.icon className="h-4 w-4 text-violet-500" />
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -358,9 +331,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/calendar"}>
                     <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <CalendarDays className="h-4 w-4" />
-                      </span>
+                      <CalendarDays className="h-4 w-4 text-indigo-500" />
                       <span>Calendar</span>
                     </Link>
                   </SidebarMenuButton>
@@ -368,9 +339,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/workflows"}>
                     <Link href="/workflows" onClick={handleLinkClick} data-testid="link-workflows">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Workflow className="h-4 w-4" />
-                      </span>
+                      <Workflow className="h-4 w-4 text-indigo-500" />
                       <span>Workflows</span>
                     </Link>
                   </SidebarMenuButton>
@@ -378,9 +347,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/opportunities"}>
                     <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <MessageSquare className="h-4 w-4" />
-                      </span>
+                      <MessageSquare className="h-4 w-4 text-indigo-500" />
                       <span>Conversations</span>
                     </Link>
                   </SidebarMenuButton>
@@ -388,9 +355,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/follow-up-queue"}>
                     <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <PhoneCall className="h-4 w-4" />
-                      </span>
+                      <PhoneCall className="h-4 w-4 text-indigo-500" />
                       <span>Follow-up Queue</span>
                     </Link>
                   </SidebarMenuButton>
@@ -398,9 +363,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/reputation"}>
                     <Link href="/reputation" onClick={handleLinkClick} data-testid="link-reputation">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Star className="h-4 w-4" />
-                      </span>
+                      <Star className="h-4 w-4 text-indigo-500" />
                       <span>Reputation</span>
                     </Link>
                   </SidebarMenuButton>
@@ -408,9 +371,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/reviews"}>
                     <Link href="/reviews" onClick={handleLinkClick} data-testid="link-reviews">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Star className="h-4 w-4 fill-current" />
-                      </span>
+                      <Star className="h-4 w-4 fill-indigo-500 text-indigo-500" />
                       <span>Reviews</span>
                     </Link>
                   </SidebarMenuButton>
@@ -418,9 +379,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/marketing"}>
                     <Link href="/marketing" onClick={handleLinkClick} data-testid="link-marketing">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Megaphone className="h-4 w-4" />
-                      </span>
+                      <Megaphone className="h-4 w-4 text-indigo-500" />
                       <span>Marketing Planner</span>
                     </Link>
                   </SidebarMenuButton>
@@ -428,9 +387,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/inbox"}>
                     <Link href="/inbox" onClick={handleLinkClick} data-testid="link-inbox">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Inbox className="h-4 w-4" />
-                      </span>
+                      <Inbox className="h-4 w-4 text-indigo-500" />
                       <span>Inbox</span>
                     </Link>
                   </SidebarMenuButton>
@@ -438,9 +395,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/communications"}>
                     <Link href="/communications" onClick={handleLinkClick} data-testid="link-call-log">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <PhoneCall className="h-4 w-4" />
-                      </span>
+                      <PhoneCall className="h-4 w-4 text-indigo-500" />
                       <span>Call Log</span>
                     </Link>
                   </SidebarMenuButton>
@@ -448,9 +403,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/metrics"}>
                     <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <BarChart3 className="h-4 w-4" />
-                      </span>
+                      <TrendingUp className="h-4 w-4 text-indigo-500" />
                       <span>Metrics Dashboard</span>
                     </Link>
                   </SidebarMenuButton>
@@ -479,9 +432,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     }
                   }}
                 >
-                  <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                    <Settings className="h-4 w-4" />
-                  </span>
+                  <Settings className="h-4 w-4 text-muted-foreground" />
                   <span>Settings</span>
                 </button>
               </SidebarMenuButton>
@@ -499,9 +450,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   }
                 }}
               >
-                <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                  <LogOut className="h-4 w-4" />
-                </span>
+                <LogOut className="h-4 w-4 text-muted-foreground" />
                 <span>Log Out</span>
               </button>
             </SidebarMenuButton>
