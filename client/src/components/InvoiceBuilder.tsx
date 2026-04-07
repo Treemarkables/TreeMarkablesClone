@@ -505,6 +505,11 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         setCreatedInvoice(existingInvoice);
         setExistingInvoiceId(response.invoiceId);
         
+        toast({
+          title: "Invoice Already Exists",
+          description: `Using existing invoice ${response.invoiceNumber || 'for this job'}.`
+        });
+
         return existingInvoice;
       }
 
