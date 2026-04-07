@@ -15,10 +15,7 @@ async function fetchFirebaseConfig() {
     
     if (data.success && data.configured && data.config) {
       firebaseConfig = data.config;
-      
-      // Get VAPID key from API response
       vapidKey = data.vapidKey || '';
-      
       return true;
     }
     
@@ -34,7 +31,6 @@ async function fetchFirebaseConfig() {
 export async function initializeFirebase() {
   try {
     if (!app) {
-      // Fetch config if not already loaded
       if (!firebaseConfig) {
         const configured = await fetchFirebaseConfig();
         if (!configured) {
@@ -44,8 +40,6 @@ export async function initializeFirebase() {
       
       app = initializeApp(firebaseConfig);
       
-      // Initialize messaging only if all required APIs are supported
-      // This prevents errors in browsers that don't support messaging
       if (isNotificationSupported()) {
         try {
           messaging = getMessaging(app);
@@ -55,7 +49,7 @@ export async function initializeFirebase() {
           messaging = null;
         }
       } else {
-        console.warn('⚠️ Push notifications not supported in this browser');
+        console.warn('⚠️ Push notifications not supported in this context');
       }
     }
     return { app, messaging };
@@ -70,7 +64,6 @@ export async function requestNotificationPermission(): Promise<string | null> {
   try {
     console.log('🔔 Requesting notification permission...');
     
-    // Check if Firebase is configured
     if (!firebaseConfig) {
       console.log('📡 Firebase not initialized yet, fetching config...');
       const initialized = await fetchFirebaseConfig();
@@ -80,7 +73,6 @@ export async function requestNotificationPermission(): Promise<string | null> {
       }
     }
     
-    // Check VAPID key
     if (!vapidKey) {
       console.error('❌ VAPID key not found');
       throw new Error('VAPID key not configured. Please contact your administrator.');
@@ -97,7 +89,6 @@ export async function requestNotificationPermission(): Promise<string | null> {
 
     console.log('✅ Notification permission granted');
     
-    // Initialize Firebase and messaging if not already done
     if (!messaging) {
       console.log('🔧 Initializing messaging...');
       await initializeFirebase();
@@ -108,8 +99,28 @@ export async function requestNotificationPermission(): Promise<string | null> {
       throw new Error('Failed to initialize Firebase messaging');
     }
 
+    // Get the existing service worker registration so Firebase uses sw.js
+    // instead of looking for firebase-messaging-sw.js (which doesn't exist)
+    let swRegistration: ServiceWorkerRegistration | undefined;
+    try {
+      await navigator.serviceWorker.ready;
+      swRegistration = await navigator.serviceWorker.getRegistration('/sw.js') || undefined;
+      if (swRegistration) {
+        console.log('✅ Using existing service worker registration');
+      } else {
+        // Register sw.js if not already registered
+        swRegistration = await navigator.serviceWorker.register('/sw.js');
+        console.log('✅ Service worker registered');
+      }
+    } catch (swError) {
+      console.warn('⚠️ Could not get service worker registration, proceeding without:', swError);
+    }
+
     console.log('📡 Getting FCM token with VAPID key...');
-    const token = await getToken(messaging, { vapidKey: vapidKey! });
+    const token = await getToken(messaging, { 
+      vapidKey: vapidKey!,
+      serviceWorkerRegistration: swRegistration,
+    });
     console.log('✅ FCM Token obtained:', token.substring(0, 20) + '...');
     return token;
   } catch (error) {
@@ -135,35 +146,46 @@ export function onForegroundMessage(callback: (payload: any) => void) {
   });
 }
 
-// Check if notifications are supported
+// Detect if running as an installed PWA (standalone mode)
+export function isRunningAsStandalone(): boolean {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+  );
+}
+
+// Detect actual Safari (not Chrome/Firefox/Brave on iOS which use different engines)
+export function isActualSafari(): boolean {
+  const ua = navigator.userAgent;
+  const isChrome = /CriOS|Chrome/i.test(ua);
+  const isFirefox = /FxiOS|Firefox/i.test(ua);
+  const isBrave = /Brave/i.test(ua);
+  const hasSafari = /Safari/i.test(ua);
+  return hasSafari && !isChrome && !isFirefox && !isBrave;
+}
+
+// Check if notifications are supported in the current context
 export function isNotificationSupported(): boolean {
   try {
-    // Basic API checks
     const hasServiceWorker = 'serviceWorker' in navigator;
     const hasPushManager = 'PushManager' in window;
     const hasNotification = 'Notification' in window;
     const hasIndexedDB = 'indexedDB' in window;
     
-    // Safari (both iOS and macOS) doesn't fully support Firebase Cloud Messaging
-    // We need to detect ACTUAL Safari, not Chrome/Firefox/Brave on iOS
-    const userAgent = navigator.userAgent;
-    
-    // Chrome on iOS uses "CriOS", Firefox uses "FxiOS", Brave is similar to Chrome
-    const isChrome = /CriOS|Chrome/i.test(userAgent);
-    const isFirefox = /FxiOS|Firefox/i.test(userAgent);
-    const isBrave = /Brave/i.test(userAgent);
-    const hasSafari = /Safari/i.test(userAgent);
-    
-    // It's Safari ONLY if it has Safari in UA but none of the other browsers
-    const isActualSafari = hasSafari && !isChrome && !isFirefox && !isBrave;
-    
-    // Exclude ONLY actual Safari from notification support
-    if (isActualSafari) {
-      console.log('⚠️ Safari browser detected - Firebase messaging not supported');
-      return false;
+    if (!hasServiceWorker || !hasPushManager || !hasNotification || !hasIndexedDB) return false;
+
+    // Safari (iOS and macOS) only supports Web Push when the PWA is installed to the home screen.
+    // iOS 16.4+ supports this natively. In a regular browser tab it won't work.
+    if (isActualSafari()) {
+      if (!isRunningAsStandalone()) {
+        console.log('⚠️ Safari: push notifications require "Add to Home Screen" first (iOS 16.4+)');
+        return false;
+      }
+      console.log('✅ Safari PWA standalone mode detected — Web Push supported (iOS 16.4+)');
+      return true;
     }
     
-    return hasServiceWorker && hasPushManager && hasNotification && hasIndexedDB;
+    return true;
   } catch {
     return false;
   }

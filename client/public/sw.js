@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v12-queue-tab';
-const STATIC_CACHE = 'treemarkables-static-v12-queue-tab';
-const API_CACHE = 'treemarkables-api-v12-queue-tab';
+const CACHE_NAME = 'treemarkables-v13-ios-push';
+const STATIC_CACHE = 'treemarkables-static-v13-ios-push';
+const API_CACHE = 'treemarkables-api-v13-ios-push';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,14 +10,14 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v12] Installing - forcing immediate activation');
+  console.log('[SW v13] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v12] Installed - skipping waiting');
+        console.log('[SW v13] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
@@ -25,20 +25,20 @@ self.addEventListener('install', function(event) {
 
 // Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v12] Activating - deleting ALL old caches');
+  console.log('[SW v13] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v12] Found caches:', cacheNames);
+      console.log('[SW v13] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v12-queue-tab')) {
-            console.log('[SW v12] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v13-ios-push')) {
+            console.log('[SW v13] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v12] Taking control of all clients');
+      console.log('[SW v13] Taking control of all clients');
       return self.clients.claim();
     })
   );
@@ -169,32 +169,59 @@ self.addEventListener('fetch', function(event) {
   );
 });
 
-// Push notification handler
+// Push notification handler — supports both Firebase JSON format and plain text
 self.addEventListener('push', function(event) {
-  const options = {
-    body: event.data ? event.data.text() : 'New job update available',
+  var title = 'Treemarkables';
+  var body = 'New job update available';
+  var clickUrl = '/dispatch';
+  var tag = 'general';
+
+  if (event.data) {
+    try {
+      // Firebase sends JSON: { notification: { title, body }, data: { clickAction, type } }
+      var payload = event.data.json();
+      var notif = payload.notification || {};
+      var data = payload.data || {};
+      title = notif.title || payload.title || title;
+      body = notif.body || payload.body || body;
+      clickUrl = data.clickAction || notif.click_action || clickUrl;
+      tag = data.type || tag;
+    } catch (e) {
+      // Plain text fallback
+      body = event.data.text() || body;
+    }
+  }
+
+  var options = {
+    body: body,
     icon: '/tree-icon-192.png',
     badge: '/tree-icon-192.png',
+    tag: tag,
+    data: { clickUrl: clickUrl },
     vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'View Jobs',
-        icon: '/tree-icon-192.png'
-      },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/tree-icon-192.png'
-      }
-    ]
   };
 
   event.waitUntil(
-    self.registration.showNotification('Treemarkables Jobs', options)
+    self.registration.showNotification(title, options)
+  );
+});
+
+// Open the app when a notification is tapped
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  var clickUrl = (event.notification.data && event.notification.data.clickUrl) || '/dispatch';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (client.url.indexOf(self.location.origin) === 0 && 'focus' in client) {
+          client.navigate(clickUrl);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(clickUrl);
+      }
+    })
   );
 });

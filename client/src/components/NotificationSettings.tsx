@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { requestNotificationPermission, isNotificationSupported as checkNotificationSupport } from "@/lib/firebase";
+import { requestNotificationPermission, isNotificationSupported as checkNotificationSupport, isActualSafari, isRunningAsStandalone } from "@/lib/firebase";
 
 interface NotificationPreferences {
   id: string;
@@ -158,45 +158,47 @@ export function NotificationSettings() {
   }
 
   if (!notificationsSupported) {
-    // Detect if user is on iOS
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    
+    const onSafari = isActualSafari();
+    const standalone = isRunningAsStandalone();
+
+    // iOS Safari in browser tab — needs to be installed first
+    if (onSafari && !standalone) {
+      return (
+        <Alert>
+          <Bell className="h-4 w-4" />
+          <AlertDescription className="space-y-3">
+            <p className="font-semibold">One more step to enable push notifications</p>
+            <p className="text-sm">
+              Your iPhone supports push notifications for this app, but you need to install it to your home screen first.
+            </p>
+            <div className="bg-muted/50 p-3 rounded-md space-y-2">
+              <p className="text-sm font-medium">How to install:</p>
+              <ol className="text-sm list-decimal list-inside space-y-1 ml-2">
+                <li>Tap the <strong>Share</strong> button at the bottom of Safari</li>
+                <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+                <li>Tap <strong>Add</strong> in the top right</li>
+                <li>Open the app from your home screen and come back here</li>
+              </ol>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Requires iOS 16.4 or later. Once installed, push notifications work just like a native app.
+            </p>
+          </AlertDescription>
+        </Alert>
+      );
+    }
+
+    // Any other unsupported browser
     return (
       <Alert>
         <BellOff className="h-4 w-4" />
         <AlertDescription className="space-y-3">
-          <p className="font-semibold">Push notifications not available on this device</p>
-          
-          {isIOS ? (
-            <>
-              <p className="text-sm">
-                Apple doesn't allow push notifications in any iPhone browser (Safari, Chrome, Firefox, or Brave). 
-                This is an Apple restriction, not a limitation of this app.
-              </p>
-              <div className="bg-muted/50 p-3 rounded-md space-y-2">
-                <p className="text-sm font-medium">How to get notifications:</p>
-                <ul className="text-sm list-disc list-inside space-y-1 ml-2">
-                  <li><strong>Use on desktop/laptop</strong> - Full push notification support</li>
-                  <li><strong>SMS alerts</strong> - You already have SMS Everyone integration set up</li>
-                  <li><strong>Email notifications</strong> - Alternative for important updates</li>
-                </ul>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm">
-                Safari doesn't fully support push notifications yet. For notifications, please use:
-              </p>
-              <ul className="text-sm list-disc list-inside space-y-1 ml-2">
-                <li><strong>Chrome</strong> - Best compatibility</li>
-                <li><strong>Firefox</strong> - Fully supported</li>
-                <li><strong>Brave</strong> - Fully supported</li>
-              </ul>
-            </>
-          )}
-          
+          <p className="font-semibold">Push notifications not available in this browser</p>
+          <p className="text-sm">
+            For push notifications, please use Chrome, Firefox, or Brave — or open this app in Safari on iOS and add it to your home screen.
+          </p>
           <p className="text-sm text-muted-foreground">
-            The notification system is fully configured and works great on desktop browsers!
+            The notification system is fully configured and works great on desktop browsers and installed iOS PWAs.
           </p>
         </AlertDescription>
       </Alert>
