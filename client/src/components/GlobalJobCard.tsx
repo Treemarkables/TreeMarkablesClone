@@ -1125,7 +1125,10 @@ export function GlobalJobCard({
           }
           apiRequest('PUT', `/api/jobs/${editingJob?.id}`, changedData).then(() => {
             console.log('✅ Deferred auto-save completed');
+            // RC7 FIX: Guard so reset() watch callbacks aren't treated as user edits.
+            isResettingRef.current = true;
             form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+            isResettingRef.current = false;
             hasUserChangedRef.current = false;
             changedFieldsRef.current.clear();
             queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
@@ -1200,6 +1203,10 @@ export function GlobalJobCard({
   ]));
 
   const changedFieldsRef = useRef<Set<string>>(new Set());
+  // RC7 FIX: Prevents form.reset() (used to advance the dirty baseline after autosave)
+  // from firing watch callbacks that are mistakenly treated as user edits, which caused
+  // an infinite autosave loop and silently overwrote contact fields with empty strings.
+  const isResettingRef = useRef(false);
   
   useEffect(() => {
     if (mode !== 'edit' || !editingJob?.id) return;
@@ -1210,6 +1217,14 @@ export function GlobalJobCard({
     
     const subscription = form.watch((values, { name }) => {
       if (!name || !autoSaveFieldsRef.current.has(name)) {
+        return;
+      }
+
+      // RC7 FIX: Ignore watch callbacks fired by form.reset() baseline-advance calls.
+      // reset() fires all subscriptions synchronously even when keepValues:true — without
+      // this guard those callbacks re-added every contact field to changedFieldsRef,
+      // triggering another autosave → reset() → autosave infinite loop.
+      if (isResettingRef.current) {
         return;
       }
 
@@ -1258,7 +1273,10 @@ export function GlobalJobCard({
           
           // RC2 FIX: Update form baseline so isDirty reflects changes since last save,
           // not since the form first opened. Prevents stale dirty-state triggering resets.
+          // RC7 FIX: Guard with isResettingRef so reset() watch callbacks are ignored.
+          isResettingRef.current = true;
           form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+          isResettingRef.current = false;
           
           // RC4 FIX: Optimistically update the cache with the saved values BEFORE invalidating,
           // so any background refetch that fires immediately sees the correct email/fields.

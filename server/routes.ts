@@ -3625,17 +3625,22 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
       
-      // RC6 FIX: Early protection for jobContactEmail BEFORE Zod validation runs.
+      // RC6 FIX: Early protection for contact fields BEFORE Zod validation runs.
       // Zod partial() can drop or transform fields — this reads raw req.body to catch erasures.
-      // If the request sends an empty/null email but the DB has a real value, strip it from the
+      // If the request sends an empty/null value but the DB has a real value, strip it from the
       // update so the database value is naturally preserved by the partial update pattern.
-      const emailFieldsToProtect = ['jobContactEmail', 'billingContactEmail'];
-      for (const emailField of emailFieldsToProtect) {
-        const rawVal = req.body[emailField];
+      // RC7 FIX: Extended to phone/mobile fields (previously only email was guarded here).
+      const contactFieldsToProtect = [
+        'jobContactEmail', 'billingContactEmail',
+        'jobContactMobile', 'jobContactPhone',
+        'billingContactMobile', 'billingContactPhone',
+      ];
+      for (const contactField of contactFieldsToProtect) {
+        const rawVal = req.body[contactField];
         const isEmpty = rawVal === '' || rawVal === null || rawVal === undefined;
-        if (isEmpty && emailField in req.body) {
-          console.log(`🔒 RC6: Stripping empty "${emailField}" from PUT body to preserve DB value`);
-          delete processedBody[emailField];
+        if (isEmpty && contactField in req.body) {
+          console.log(`🔒 RC6/RC7: Stripping empty "${contactField}" from PUT body to preserve DB value`);
+          delete processedBody[contactField];
         }
       }
       
