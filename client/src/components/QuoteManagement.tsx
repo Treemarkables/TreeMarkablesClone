@@ -708,10 +708,6 @@ export default function QuoteManagement({ compact = false }: QuoteManagementProp
                 });
               }}
               onCopy={() => {
-                toast({
-                  title: "Quote Copied",
-                  description: "Quote template copied to clipboard.",
-                });
               }}
             />
           </DialogContent>
