@@ -472,6 +472,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     
     return `${endDate.getHours().toString().padStart(2, '0')}:${endDate.getMinutes().toString().padStart(2, '0')}`;
   };
+  // Inner panel split: calendar vs job cards (persisted in localStorage)
+  const [innerPanelSizes, setInnerPanelSizes] = useState<number[]>(() => {
+    try {
+      const saved = localStorage.getItem('dispatch-inner-panel-sizes');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [60, 40];
+  });
+
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0); // Start of day
@@ -1873,20 +1882,32 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         <ResizablePanelGroup direction="horizontal" className="h-full w-full">
           {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
           <ResizablePanel defaultSize={showGlobalJobCard ? 50 : 100} minSize={30}>
-            <div className="flex gap-4 h-full pr-2">
+            <ResizablePanelGroup
+              direction="horizontal"
+              className="h-full"
+              onLayout={(sizes) => {
+                setInnerPanelSizes(sizes);
+                localStorage.setItem('dispatch-inner-panel-sizes', JSON.stringify(sizes));
+              }}
+            >
               {/* Calendar Grid */}
-              <div className="w-[60%] h-full" data-testid="calendar-grid-container" onDragOver={(e) => e.preventDefault()}>
-                <Card className="h-full overflow-hidden" onDragOver={(e) => e.preventDefault()}>
-                  <CalendarGrid 
-                    selectedDate={selectedDate}
-                    onDateChange={setSelectedDate}
-                    onJobDrop={handleCalendarJobDrop}
-                  />
-                </Card>
-              </div>
+              <ResizablePanel defaultSize={innerPanelSizes[0]} minSize={35} data-testid="calendar-grid-container">
+                <div className="h-full pr-2" onDragOver={(e) => e.preventDefault()}>
+                  <Card className="h-full overflow-hidden" onDragOver={(e) => e.preventDefault()}>
+                    <CalendarGrid 
+                      selectedDate={selectedDate}
+                      onDateChange={setSelectedDate}
+                      onJobDrop={handleCalendarJobDrop}
+                    />
+                  </Card>
+                </div>
+              </ResizablePanel>
+
+              <ResizableHandle withHandle className="bg-transparent hover:bg-border transition-colors" />
 
               {/* Job Cards Panel */}
-              <div className="flex w-[40%] h-full flex-col" data-testid="job-cards-container">
+              <ResizablePanel defaultSize={innerPanelSizes[1]} minSize={20}>
+              <div className="flex h-full flex-col pl-2" data-testid="job-cards-container">
                 <Card className="overflow-x-hidden flex flex-col flex-1 min-h-0" style={{pointerEvents: 'auto'}}>
                   <CardHeader className="flex-shrink-0 border-b pb-3">
               <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -2236,7 +2257,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             </CardContent>
           </Card>
         </div>
-            </div>
+              </ResizablePanel>
+            </ResizablePanelGroup>
           </ResizablePanel>
 
           {/* Resizable Handle */}
