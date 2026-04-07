@@ -154,6 +154,10 @@ export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
     }
 
     if (isValidatingMargin) {
+      toast({
+        title: "Validation in Progress",
+        description: "Please wait while we validate the gross margin calculation.",
+      });
       return false;
     }
 
