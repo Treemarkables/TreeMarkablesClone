@@ -297,10 +297,6 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
               variant="secondary" 
               size="sm" 
               onClick={() => {
-                toast({
-                  title: "Added to Queue",
-                  description: "Job has been added to the work queue for processing.",
-                });
               }}
               data-testid="button-queue"
             >
@@ -959,7 +955,6 @@ export function ServiceJobForm({ isOpen, onClose, customerId, onJobCreated }: Se
             variant="ghost" 
             className="w-full justify-start" 
             onClick={() => {
-              toast({ title: "Print", description: "Job details will be printed." });
               setShowMoreMenu(false);
             }}
             data-testid="button-more-print"
