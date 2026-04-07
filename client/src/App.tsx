@@ -186,12 +186,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       queryClient.refetchQueries({ queryKey: ['/api/job-templates'] }),
     ]);
     
-    // Show success toast
-    toast({
-      title: "Data refreshed",
-      description: "All data has been reloaded from the server.",
-    });
-    
     setTimeout(() => setIsRefreshing(false), 500);
   };
   

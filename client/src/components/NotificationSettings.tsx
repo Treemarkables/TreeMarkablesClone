@@ -51,11 +51,7 @@ export function NotificationSettings() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/preferences"] });
-      toast({
-        title: "✅ Preferences saved",
-        description: "Your notification preferences have been updated.",
-      });
-    },
+          },
     onError: () => {
       toast({
         title: "Error",
@@ -74,11 +70,7 @@ export function NotificationSettings() {
     },
     onSuccess: (data: any) => {
       if (data.success) {
-        toast({
-          title: "🧪 Test notification sent",
-          description: data.message,
-        });
-      } else {
+              } else {
         toast({
           title: "No devices found",
           description: data.message,
@@ -124,11 +116,7 @@ export function NotificationSettings() {
         });
 
         setPermissionState("granted");
-        toast({
-          title: "✅ Notifications enabled",
-          description: "You'll now receive push notifications for important updates.",
-        });
-      } catch (error) {
+              } catch (error) {
         console.error("Error registering token:", error);
         toast({
           title: "Setup incomplete",

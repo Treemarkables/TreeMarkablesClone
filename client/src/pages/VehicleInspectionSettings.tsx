@@ -98,7 +98,6 @@ export default function VehicleInspectionSettings() {
     mutationFn: (data: InsertInspectionTemplate) => apiRequest('POST', '/api/inspection-templates', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
-      toast({ title: 'Template created successfully' });
       setTemplateDialogOpen(false);
       setEditingTemplate({});
     },
@@ -112,7 +111,6 @@ export default function VehicleInspectionSettings() {
       apiRequest('PATCH', `/api/inspection-templates/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
-      toast({ title: 'Template updated successfully' });
       setTemplateDialogOpen(false);
       setEditingTemplate({});
     },
@@ -125,7 +123,6 @@ export default function VehicleInspectionSettings() {
     mutationFn: (id: string) => apiRequest('DELETE', `/api/inspection-templates/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
-      toast({ title: 'Template deleted successfully' });
       if (selectedTemplate) {
         setSelectedTemplate(null);
       }
@@ -139,7 +136,6 @@ export default function VehicleInspectionSettings() {
     mutationFn: (id: string) => apiRequest('PATCH', `/api/inspection-templates/${id}/set-default`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates'] });
-      toast({ title: 'Default template updated' });
     },
     onError: () => {
       toast({ title: 'Failed to set default template', variant: 'destructive' });
@@ -152,7 +148,6 @@ export default function VehicleInspectionSettings() {
       apiRequest('POST', `/api/inspection-templates/${selectedTemplate?.id}/items`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
-      toast({ title: 'Checklist item added' });
       setItemDialogOpen(false);
       setEditingItem({});
     },
@@ -166,7 +161,6 @@ export default function VehicleInspectionSettings() {
       apiRequest('PATCH', `/api/checklist-items/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
-      toast({ title: 'Checklist item updated' });
       setItemDialogOpen(false);
       setEditingItem({});
     },
@@ -179,7 +173,6 @@ export default function VehicleInspectionSettings() {
     mutationFn: (id: string) => apiRequest('DELETE', `/api/checklist-items/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/inspection-templates', selectedTemplate?.id, 'items'] });
-      toast({ title: 'Checklist item deleted' });
     },
     onError: () => {
       toast({ title: 'Failed to delete checklist item', variant: 'destructive' });

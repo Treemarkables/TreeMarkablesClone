@@ -731,11 +731,6 @@ export function JobDiarySection({
   const handleOpenInvoice = (invoiceNumber: string) => {
     if (onInvoiceClick) {
       onInvoiceClick(invoiceNumber);
-    } else {
-      toast({
-        title: "Invoice",
-        description: `Invoice ${invoiceNumber} — open the Billing tab to view.`,
-      });
     }
   };
 
@@ -2309,10 +2304,6 @@ export function JobDiarySection({
                   const data = await response.json();
                   
                   if (data.success) {
-                    toast({
-                      title: "Booked!",
-                      description: "Appointment added to your Google Calendar"
-                    });
                     setCalendarBookingOpen(false);
                     queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId, 'diary'] });
                   } else {

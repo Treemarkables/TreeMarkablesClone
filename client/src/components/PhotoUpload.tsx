@@ -101,11 +101,7 @@ export default function PhotoUpload({
       setPreviewPhotos(newPhotos);
       onPhotosChange?.(newPhotos);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Photos uploaded successfully!",
-        description: `Added ${photoUrls.length} ${type} photo(s)`,
-      });
-    },
+          },
     onError: (error: any) => {
       console.error('Upload error:', error);
       toast({
@@ -142,11 +138,7 @@ export default function PhotoUpload({
       setPreviewPhotos(newPhotos);
       onPhotosChange?.(newPhotos);
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Photo deleted",
-        description: "Photo removed successfully",
-      });
-    },
+          },
     onError: (error: any) => {
       toast({
         variant: "destructive",

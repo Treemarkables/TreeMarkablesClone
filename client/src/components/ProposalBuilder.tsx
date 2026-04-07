@@ -1018,13 +1018,6 @@ export function ProposalBuilder({
     },
     onSuccess: (response: any) => {
       console.log('Proposal accepted successfully:', response);
-      const workOrder = response?.data?.workOrder;
-      const jobNumber = workOrder?.jobNumber || 'N/A';
-      
-      toast({
-        title: "Proposal Accepted!",
-        description: `Proposal has been accepted and converted to Work Order #${jobNumber}`,
-      });
       
       // Invalidate queries to refresh data
       queryClient.invalidateQueries({ queryKey: ['/api/proposals'] });
@@ -1302,10 +1295,6 @@ export function ProposalBuilder({
     // If no job ID and we have a callback to save the parent job, call it first
     if (!effectiveJobId && onRequestJobSave) {
       try {
-        toast({
-          title: "Saving Job",
-          description: "Saving job before creating proposal...",
-        });
         effectiveJobId = await onRequestJobSave();
         form.setValue('jobId', effectiveJobId);
       } catch (error) {
@@ -1350,10 +1339,6 @@ export function ProposalBuilder({
 
     try {
       await saveDraftMutation.mutateAsync(proposalData);
-      toast({
-        title: "Saved",
-        description: "Proposal saved successfully",
-      });
     } catch (error) {
       console.error('Manual save error:', error);
       toast({
@@ -1374,10 +1359,6 @@ export function ProposalBuilder({
         // If no job ID and we have a callback to save the parent job, call it first
         if (!effectiveJobId && onRequestJobSave) {
           try {
-            toast({
-              title: "Saving Job",
-              description: "Saving job before creating proposal...",
-            });
             effectiveJobId = await onRequestJobSave();
             form.setValue('jobId', effectiveJobId);
           } catch (error) {
@@ -1609,10 +1590,6 @@ export function ProposalBuilder({
                                   };
                                   
                                   recognition.start();
-                                  toast({
-                                    title: "Listening...",
-                                    description: "Speak now to add to description",
-                                  });
                                 }}
                                 data-testid={`button-voice-section-description-${section.id}`}
                               >

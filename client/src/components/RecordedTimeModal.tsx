@@ -170,11 +170,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
 
     // Warn if adding many entries at once
     if (newEntry.staffIds.length > 25) {
-      toast({
-        title: "Large Selection",
-        description: `You're adding ${newEntry.staffIds.length} entries at once. This may take a moment.`,
-      });
-    }
+          }
 
     // Track staff without rates
     const staffWithoutRates: string[] = [];
@@ -243,11 +239,7 @@ export function RecordedTimeModal({ isOpen, onClose, jobId, jobNumber }: Recorde
       queryClient.invalidateQueries({ queryKey: ['time-entries', jobId] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs', jobId] });
       refetchTimeEntries();
-      toast({
-        title: "Success",
-        description: "Time entry deleted",
-      });
-    },
+          },
     onError: () => {
       toast({
         title: "Error",

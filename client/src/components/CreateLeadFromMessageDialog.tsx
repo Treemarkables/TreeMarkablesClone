@@ -83,11 +83,7 @@ export function CreateLeadFromMessageDialog({
             // Auto-switch to screenshot tab when image is pasted
             setActiveTab('screenshot');
             e.preventDefault();
-            toast({
-              title: "Screenshot Pasted",
-              description: "Image captured from clipboard",
-            });
-            break;
+                        break;
           }
         }
       }
@@ -105,11 +101,7 @@ export function CreateLeadFromMessageDialog({
     onSuccess: (response: any) => {
       if (response.success && response.data) {
         setExtractedData(response.data);
-        toast({
-          title: "Details Extracted",
-          description: "Customer information has been extracted from the message",
-        });
-      }
+              }
     },
     onError: (error: any) => {
       toast({
@@ -142,11 +134,7 @@ export function CreateLeadFromMessageDialog({
       
       if (hasName || hasPhone || hasEmail || hasAddress || hasDescription) {
         console.log('📸 Extraction successful, auto-creating lead:', extractedInfo);
-        toast({
-          title: "Creating Job...",
-          description: `Found: ${[hasName && 'name', hasPhone && 'phone', hasEmail && 'email', hasAddress && 'address', hasDescription && 'details'].filter(Boolean).join(', ')}`,
-        });
-        // Close dialog and create lead
+                // Close dialog and create lead
         setMessageText('');
         setManualPhone('');
         setSelectedImage(null);

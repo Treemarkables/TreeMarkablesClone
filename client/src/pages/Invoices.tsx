@@ -117,10 +117,6 @@ export default function Invoices() {
       const data = await response.json();
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-      toast({
-        title: "Xero Payment Sync Complete",
-        description: `Checked ${data.synced ?? 0} invoice(s). ${data.nowPaid ?? 0} newly marked as paid.`,
-      });
     } catch {
       toast({
         title: "Sync Failed",
@@ -141,10 +137,6 @@ export default function Invoices() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
-      toast({
-        title: "Xero Sync Reset",
-        description: "You can now re-send this invoice to Xero.",
-      });
     },
     onError: (error: any) => {
       toast({

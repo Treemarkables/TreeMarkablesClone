@@ -90,10 +90,6 @@ export default function Reputation() {
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/completed-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/stats"] });
       setSelectedJob(null);
-      toast({
-        title: "Review request sent!",
-        description: `Request sent to ${selectedJob?.customerName}`,
-      });
     },
     onError: () => {
       toast({
@@ -110,10 +106,6 @@ export default function Reputation() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reviews/completed-jobs"] });
-      toast({
-        title: "Job skipped",
-        description: "This job has been marked as skipped",
-      });
     },
   });
 

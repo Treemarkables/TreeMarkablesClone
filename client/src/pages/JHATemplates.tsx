@@ -78,7 +78,6 @@ export default function JHATemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/hazard-templates"] });
       setShowHazardDialog(false);
       setHazardForm({ name: "", description: "", category: "" });
-      toast({ title: "Hazard template created successfully" });
     },
     onError: () => {
       toast({ title: "Failed to create hazard template", variant: "destructive" });
@@ -92,7 +91,6 @@ export default function JHATemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/hazard-templates"] });
       setShowHazardDialog(false);
       setSelectedHazard(null);
-      toast({ title: "Hazard template updated successfully" });
     },
     onError: () => {
       toast({ title: "Failed to update hazard template", variant: "destructive" });
@@ -104,7 +102,6 @@ export default function JHATemplates() {
       apiRequest("DELETE", `/api/jha/hazard-templates/${id}`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/hazard-templates"] });
-      toast({ title: "Hazard template deleted successfully" });
     },
     onError: () => {
       toast({ title: "Failed to delete hazard template", variant: "destructive" });
@@ -118,7 +115,6 @@ export default function JHATemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/control-measures"] });
       setShowControlDialog(false);
       setControlForm({ description: "", hierarchyLevel: 3, riskReduction: 1 });
-      toast({ title: "Control measure created successfully" });
     },
     onError: () => {
       toast({ title: "Failed to create control measure", variant: "destructive" });
@@ -132,7 +128,6 @@ export default function JHATemplates() {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/control-measures"] });
       setShowControlDialog(false);
       setSelectedControl(null);
-      toast({ title: "Control measure updated successfully" });
     },
     onError: () => {
       toast({ title: "Failed to update control measure", variant: "destructive" });
@@ -144,7 +139,6 @@ export default function JHATemplates() {
       apiRequest("DELETE", `/api/jha/control-measures/${id}`, {}),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/control-measures"] });
-      toast({ title: "Control measure deleted successfully" });
     },
     onError: () => {
       toast({ title: "Failed to delete control measure", variant: "destructive" });

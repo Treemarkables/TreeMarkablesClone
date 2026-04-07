@@ -153,11 +153,7 @@ export function PhotoCaptureModal({ isOpen, onClose, jobId, onPendingPhotos }: P
     // If in pending mode (no jobId), pass files back to parent instead of uploading
     if (isPendingMode && onPendingPhotos) {
       onPendingPhotos(selectedFiles, previewUrls);
-      toast({
-        title: "Photos Queued",
-        description: `${selectedFiles.length} photo(s) will be uploaded when job is saved.`,
-      });
-      handleClose();
+            handleClose();
       return;
     }
     

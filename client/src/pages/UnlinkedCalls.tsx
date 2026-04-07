@@ -178,7 +178,6 @@ function LinkJobDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/call-records/unlinked"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      toast({ title: "Call linked to job" });
       onClose();
       setSelectedJobId("");
     },
@@ -296,7 +295,6 @@ function CreateJobDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/call-records/unlinked"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      toast({ title: "Job created and call linked" });
       onClose();
     },
     onError: (err: any) => {

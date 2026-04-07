@@ -44,10 +44,6 @@ export default function SettingsPreferences() {
       queryClient.invalidateQueries({ queryKey: ['/api/analytics'] });
       queryClient.invalidateQueries({ queryKey: ['/api/overview'] });
       queryClient.invalidateQueries({ queryKey: ['/api/analytics/lead-source'] });
-      toast({
-        title: "Settings Updated",
-        description: "Your preferences have been saved successfully.",
-      });
     },
     onError: () => {
       toast({

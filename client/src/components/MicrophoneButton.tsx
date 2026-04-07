@@ -44,10 +44,7 @@ export function MicrophoneButton({
     toggleListening();
 
     if (!isListening) {
-      toast({
-        title: 'Listening...',
-        description: 'Speak now. Click again to stop.',
-      });
+      // listening started
     }
   };
 

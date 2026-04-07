@@ -418,10 +418,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
 
     if (extractedItems.length > 0) {
       setLineItems(extractedItems);
-      toast({
-        title: "Line Items Imported",
-        description: `Imported ${extractedItems.length} line item(s) from ${proposal ? 'proposal' : 'quote'}.`
-      });
     } else {
       toast({
         title: "No Items Found",
@@ -509,11 +505,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         setCreatedInvoice(existingInvoice);
         setExistingInvoiceId(response.invoiceId);
         
-        toast({
-          title: "Invoice Already Exists",
-          description: `Using existing invoice ${response.invoiceNumber || 'for this job'}.`
-        });
-
         return existingInvoice;
       }
 
@@ -526,11 +517,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
         queryClient.invalidateQueries({ queryKey: ['/api/jobs', job.id, 'diary-timeline'] });
         
-        toast({
-          title: "Invoice Created",
-          description: `Invoice ${response.data.invoiceNumber} created successfully.`
-        });
-
         return response.data;
       } else {
         toast({
@@ -619,11 +605,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}`] });
         
-        toast({
-          title: "Invoice Updated",
-          description: `Invoice updated successfully with new amount: $${(subtotal * 1.15).toFixed(2)} (inc GST)`
-        });
-
         return response.data;
       } else {
         toast({
@@ -763,11 +744,6 @@ export function InvoiceBuilder({ isOpen, onClose, job, customer, invoiceTemplate
       });
       
       if (response.success) {
-        toast({
-          title: "Invoice Deleted",
-          description: `Invoice #${createdInvoice.invoiceNumber} has been deleted successfully.`
-        });
-        
         // Invalidate queries to refresh data
         queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
         queryClient.invalidateQueries({ queryKey: [`/api/jobs/${job.id}/invoices`] });

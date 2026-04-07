@@ -109,11 +109,7 @@ export default function Calendar() {
       });
     },
     onSuccess: () => {
-      toast({
-        title: "SMS Sent",
-        description: "Your message has been sent successfully.",
-      });
-      setSmsDialogOpen(false);
+            setSmsDialogOpen(false);
       setSmsMessage("");
       setSelectedJob(null);
     },
@@ -659,11 +655,7 @@ export default function Calendar() {
             queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
             setShowJobEditDialog(false);
             setJobToEdit(null);
-            toast({
-              title: "Job Updated",
-              description: "The job has been updated successfully.",
-            });
-          }}
+                      }}
         />
       )}
     </div>

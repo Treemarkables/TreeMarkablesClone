@@ -266,11 +266,7 @@ export default function JHAAssessment() {
     setCustomControls([""]);
     setShowCustomHazardForm(false);
 
-    toast({
-      title: "Custom hazard added",
-      description: `"${customHazardName.trim()}" has been added. You can update the control measures below.`,
-    });
-  };
+      };
 
   const toggleControl = (hazardId: number | string, controlId: number | string) => {
     const current = selectedHazards;
@@ -308,11 +304,7 @@ export default function JHAAssessment() {
 
   const handlePhotoCapture = () => {
     // In a real app, this would open camera
-    toast({
-      title: "Photo Capture",
-      description: "Camera functionality would open here",
-    });
-  };
+      };
 
   const handleSubmit = (data: JHAFormValues) => {
     console.log("🔍 Form submit triggered", { 

@@ -294,7 +294,6 @@ export default function MulchDrops() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] });
       setAddOpen(false);
-      toast({ title: "Mulch drop created" });
     },
     onError: () => toast({ title: "Failed to create", variant: "destructive" }),
   });
@@ -305,7 +304,6 @@ export default function MulchDrops() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] });
       setEditDrop(null);
-      toast({ title: "Updated" });
     },
     onError: () => toast({ title: "Failed to update", variant: "destructive" }),
   });
@@ -315,7 +313,6 @@ export default function MulchDrops() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] });
       setDeleteId(null);
-      toast({ title: "Deleted" });
     },
     onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
   });
@@ -368,9 +365,6 @@ export default function MulchDrops() {
         source: "facebook",
       });
       setAddOpen(true);
-      if (!name) {
-        toast({ title: "Details extracted — check and fill in anything missing" });
-      }
     } catch {
       toast({ title: "Could not read screenshot — please fill in manually", variant: "destructive" });
       addForm.reset({ name: "", phone: "", address: "", dropNotes: "", notes: "", status: "pending", source: "manual" });

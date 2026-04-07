@@ -196,7 +196,6 @@ export default function Opportunities() {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       setReplyContent('');
       setShowReplyDialog(false);
-      toast({ title: 'Reply sent successfully' });
     },
     onError: () => {
       toast({ 
@@ -216,10 +215,6 @@ export default function Opportunities() {
       queryClient.invalidateQueries({ queryKey: ['/api/leads'] });
       setShowCreateOpportunityDialog(false);
       opportunityForm.reset();
-      toast({ 
-        title: 'Opportunity created successfully',
-        description: 'The lead has been added to your pipeline'
-      });
     },
     onError: () => {
       toast({ 
@@ -276,10 +271,6 @@ export default function Opportunities() {
       queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
       setShowCreateJobDialog(false);
       jobForm.reset();
-      toast({ 
-        title: 'Quote job created successfully',
-        description: 'The quote is now on the dispatch board ready to be worked on'
-      });
       setLocation('/dispatch');
     },
     onError: (error: any) => {
@@ -344,10 +335,6 @@ export default function Opportunities() {
       queryClient.invalidateQueries({ queryKey: ['/api/conversations'] });
       setSelectedIds(new Set());
       setShowDeleteConfirm(false);
-      toast({ 
-        title: 'Conversations deleted',
-        description: `Successfully deleted ${selectedIds.size} conversation(s)`
-      });
     },
     onError: () => {
       toast({ 

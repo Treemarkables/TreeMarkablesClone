@@ -47,7 +47,6 @@ export default function CommunicationsManagement() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/calls'] });
-      toast({ title: 'Success', description: 'Call linked to job successfully' });
       setLinkCallDialogOpen(false);
       setSelectedCallForLinking(null);
       setSelectedJobId('');

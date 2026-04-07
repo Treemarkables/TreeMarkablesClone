@@ -73,11 +73,7 @@ export default function Developer() {
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    toast({
-      title: "Copied to clipboard",
-      description: `${label} copied successfully`,
-    });
-  };
+      };
 
   const getStatusColor = (status: string) => {
     switch (status) {
