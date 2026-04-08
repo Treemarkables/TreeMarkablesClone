@@ -1452,6 +1452,10 @@ export function GlobalJobCard({
   useEffect(() => {
     if (mode !== "edit" || !editingJob?.id) return;
 
+    // RC8 FIX: Capture job ID at effect-start time so the cleanup closure
+    // uses the correct job ID even if editingJob has changed by cleanup time.
+    const capturedJobId = editingJob.id;
+
     changedFieldsRef.current.clear();
 
     let timeoutId: NodeJS.Timeout;
@@ -1551,10 +1555,35 @@ export function GlobalJobCard({
     });
 
     return () => {
+      subscription.unsubscribe();
+
+      // RC8 FIX: On unmount (card closed / job switched), flush any pending
+      // auto-save immediately instead of silently discarding it.
+      // clearTimeout() alone would lose user edits made within the 1.5s debounce
+      // window — the most common cause of "I typed something and it disappeared".
       if (timeoutId) {
         clearTimeout(timeoutId);
       }
-      subscription.unsubscribe();
+
+      if (
+        hasUserChangedRef.current &&
+        changedFieldsRef.current.size > 0 &&
+        capturedJobId
+      ) {
+        const formData = form.getValues();
+        const changedData: Record<string, any> = {};
+        for (const field of changedFieldsRef.current) {
+          changedData[field] = (formData as any)[field];
+        }
+        // keepalive ensures the request completes even after the component
+        // unmounts or the user navigates away mid-session.
+        fetch(`/api/jobs/${capturedJobId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(changedData),
+          keepalive: true,
+        }).catch(() => {}); // best-effort, silent failure
+      }
     };
   }, [form, mode, editingJob?.id, queryClient]);
 
@@ -2814,13 +2843,17 @@ The Treemarkables Team`;
       return;
     }
 
-    // Commit any open description popup draft before reading form values.
-    // Without this, clicking Save while the crew notes popup is open loses the typed text.
+    // Commit any open popup drafts before reading form values.
+    // Without this, clicking Save while a popup is open loses the typed text.
     // Do NOT call setDescriptionPopupOpen(false) here — closing the Radix Dialog mid-save
     // triggers focus management that disrupts the create→edit split-screen transition.
     // The popup is closed in createJobMutation.onSuccess after the transition completes.
     if (descriptionPopupOpen && descriptionDraft) {
       form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
+    // RC10 FIX: Mirror the description sync for internal notes popup.
+    if (internalNotesPopupOpen && internalNotesDraft) {
+      form.setValue("internalNotes", internalNotesDraft, { shouldDirty: true });
     }
 
     let formData = form.getValues();
@@ -3104,10 +3137,14 @@ The Treemarkables Team`;
       return;
     }
 
-    // Commit any open description popup draft before reading form values.
-    // Do NOT close the popup here — see handleSave comment for why.
+    // Commit any open popup drafts before reading form values.
+    // Do NOT close the popups here — see handleSave comment for why.
     if (descriptionPopupOpen && descriptionDraft) {
       form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
+    // RC10 FIX: Mirror for internal notes popup.
+    if (internalNotesPopupOpen && internalNotesDraft) {
+      form.setValue("internalNotes", internalNotesDraft, { shouldDirty: true });
     }
 
     const formData = form.getValues();
