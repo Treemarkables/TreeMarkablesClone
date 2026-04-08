@@ -57,12 +57,16 @@ interface MatchedRow {
 
 // ─── Matching logic ──────────────────────────────────────────────────────────
 
+/** Extract a job number from a Xero reference string (e.g. "Job #3664" → "3664") */
+function extractJobNumberFromRef(ref: string | null): string | null {
+  if (!ref) return null;
+  const m = ref.match(/#?(\d{3,6})\b/);
+  return m ? m[1] : null;
+}
+
 function nameSimilarity(a: string, b: string): number {
   const normalize = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, "")
-      .trim();
+    s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
   const tokenize = (s: string): Set<string> =>
     new Set(s.split(/\s+/).filter(Boolean));
 
@@ -77,39 +81,55 @@ function nameSimilarity(a: string, b: string): number {
   return intersection / union;
 }
 
+function subtotalPctDiff(a: number | null, b: number | null): number | null {
+  if (a == null || b == null) return null;
+  return Math.abs(a - b) / Math.max(Math.abs(a), 0.01);
+}
+
 function scoreMatch(
   xeroInv: XeroInvoice,
   vibeJob: VibeJob,
 ): { score: number; reasons: string[] } {
-  let score = 0;
   const reasons: string[] = [];
 
-  // Criterion 1 — Job ID anywhere in Xero reference (highest weight)
-  if (
-    xeroInv.reference &&
-    xeroInv.reference.includes(String(vibeJob.jobId))
-  ) {
-    score += 3;
-    reasons.push("Job ID in reference");
+  // ── Rule 0: hard exclusion ────────────────────────────────────────────────
+  // If the Xero reference explicitly names a job number AND it differs from
+  // this Vibe job, it cannot be a match — return 0 immediately.
+  const refJobNum = extractJobNumberFromRef(xeroInv.reference);
+  if (refJobNum !== null) {
+    const vibeNum = String(vibeJob.jobNumber ?? vibeJob.jobId);
+    if (refJobNum !== vibeNum) {
+      return { score: 0, reasons: [] };
+    }
   }
 
-  // Criterion 2 — Fuzzy client name match
+  let score = 0;
+
+  // ── Criterion 1: Job number in reference (highest weight) ─────────────────
+  if (refJobNum !== null) {
+    // We already confirmed it matches (otherwise we'd have returned above)
+    score += 3;
+    reasons.push("Job # in reference");
+  }
+
+  // ── Criterion 2: Fuzzy name match ─────────────────────────────────────────
+  // Require ≥ 0.65 Jaccard similarity AND amounts within 20% for a name-only
+  // match to count. This prevents a single shared first-name token from
+  // creating a false match between completely different customers/amounts.
+  const amtDiff = subtotalPctDiff(xeroInv.subtotal, vibeJob.subtotal);
   if (xeroInv.contactName && vibeJob.customerName) {
     const sim = nameSimilarity(xeroInv.contactName, vibeJob.customerName);
-    if (sim >= 0.5) {
+    const amountsCompatible = amtDiff == null || amtDiff <= 0.20;
+    if (sim >= 0.65 && amountsCompatible) {
       score += 2;
       reasons.push("Name match");
     }
   }
 
-  // Criterion 3 — Subtotal (exc GST) match within 1%
-  if (xeroInv.subtotal != null && vibeJob.subtotal != null) {
-    const diff = Math.abs(xeroInv.subtotal - vibeJob.subtotal);
-    const base = Math.max(Math.abs(xeroInv.subtotal), 0.01);
-    if (diff / base < 0.01) {
-      score += 1;
-      reasons.push("Amount match");
-    }
+  // ── Criterion 3: Amount match within 5% ───────────────────────────────────
+  if (amtDiff != null && amtDiff < 0.05) {
+    score += 1;
+    reasons.push("Amount match");
   }
 
   return { score, reasons };
@@ -133,13 +153,17 @@ function buildMatches(
       }
     }
 
+    // Require a minimum score of 2 to surface any match at all.
+    // A score of 1 (amount-only, no name, no job number) is too weak to show.
+    const viableScore = bestScore >= 2 ? bestScore : 0;
+
     return {
       xeroInvoice: inv,
-      vibeJob: bestScore > 0 ? bestJob : null,
-      score: bestScore,
+      vibeJob: viableScore > 0 ? bestJob : null,
+      score: viableScore,
       reasons: bestReasons,
-      // Auto-accept high-confidence matches (score >= 3 means job ID hit)
-      state: bestScore >= 3 ? "accepted" : "pending",
+      // Auto-accept only when a job number reference hit (score ≥ 3)
+      state: viableScore >= 3 ? "accepted" : "pending",
     };
   });
 }
