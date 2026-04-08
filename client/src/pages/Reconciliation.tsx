@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -14,6 +14,8 @@ import {
   GitMerge,
   ChevronRight,
   ChevronDown,
+  Calendar,
+  AlertTriangle,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -39,6 +41,7 @@ interface VibeJob {
   subtotal: number | null;
   totalAmount: number | null;
   scheduledDate: string | null;
+  completedDate: string | null;
   status: string | null;
 }
 
@@ -179,6 +182,22 @@ function fmtDate(d: string | null) {
   const date = new Date(d);
   if (isNaN(date.getTime())) return d;
   return date.toLocaleDateString("en-NZ", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between gap-4">
+      <dt className="text-gray-500 flex-shrink-0">{label}</dt>
+      <dd className="font-medium text-gray-900 dark:text-white text-right">{value ?? "—"}</dd>
+    </div>
+  );
+}
+
+function amountMismatch(xeroSubtotal: number | null, jobSubtotal: number | null): boolean {
+  if (xeroSubtotal == null || jobSubtotal == null) return false;
+  const diff = Math.abs(xeroSubtotal - jobSubtotal);
+  const base = Math.max(Math.abs(xeroSubtotal), 0.01);
+  return diff / base >= 0.01;
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -416,6 +435,19 @@ export default function Reconciliation() {
           const isAccepted = row.state === "accepted";
           const isRejected = row.state === "rejected";
 
+          const isExpanded = expandedRows.has(inv.invoiceId);
+          const xeroGst =
+            inv.amountDue != null && inv.subtotal != null
+              ? inv.amountDue - inv.subtotal
+              : null;
+          const jobGst =
+            job && job.totalAmount != null && job.subtotal != null
+              ? job.totalAmount - job.subtotal
+              : null;
+
+          const hasMismatch = job ? amountMismatch(inv.subtotal, job.subtotal) : false;
+          const jobDate = job ? (job.completedDate ?? job.scheduledDate) : null;
+
           return (
             <Card
               key={inv.invoiceId}
@@ -439,6 +471,12 @@ export default function Reconciliation() {
                         </span>
                       )}
                     </p>
+                    {inv.date && (
+                      <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {fmtDate(inv.date)}
+                      </p>
+                    )}
                     <p className="text-sm font-medium mt-1">
                       {fmt(inv.subtotal)}{" "}
                       <span className="text-xs text-gray-400 font-normal">
@@ -474,12 +512,26 @@ export default function Reconciliation() {
                           )}
                           {job.title ?? job.address ?? `Job ${job.jobId}`}
                         </p>
-                        <p className="text-sm font-medium mt-1">
-                          {fmt(job.subtotal)}{" "}
-                          <span className="text-xs text-gray-400 font-normal">
-                            exc GST
-                          </span>
-                        </p>
+                        {jobDate && (
+                          <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {fmtDate(jobDate)}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <p className={`text-sm font-medium ${hasMismatch ? "text-amber-600" : ""}`}>
+                            {fmt(job.subtotal)}{" "}
+                            <span className="text-xs text-gray-400 font-normal">
+                              exc GST
+                            </span>
+                          </p>
+                          {hasMismatch && (
+                            <span className="flex items-center gap-1 text-xs text-amber-600 font-medium">
+                              <AlertTriangle className="h-3 w-3" />
+                              Amount differs from Xero
+                            </span>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <div className="flex items-center gap-2 text-gray-400">
@@ -489,42 +541,54 @@ export default function Reconciliation() {
                     )}
                   </div>
 
-                  {/* Accept / Reject buttons */}
-                  {job && (
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button
-                        size="sm"
-                        variant={isAccepted ? "default" : "outline"}
-                        className={
-                          isAccepted
-                            ? "bg-green-600 hover:bg-green-700 text-white"
-                            : ""
-                        }
-                        onClick={() =>
-                          setRowState(
-                            inv.invoiceId,
-                            isAccepted ? "pending" : "accepted",
-                          )
-                        }
-                      >
-                        <CheckCircle className="h-4 w-4 mr-1" />
-                        {isAccepted ? "Accepted" : "Accept"}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant={isRejected ? "destructive" : "outline"}
-                        onClick={() =>
-                          setRowState(
-                            inv.invoiceId,
-                            isRejected ? "pending" : "rejected",
-                          )
-                        }
-                      >
-                        <XCircle className="h-4 w-4 mr-1" />
-                        {isRejected ? "Rejected" : "Reject"}
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {job && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant={isAccepted ? "default" : "outline"}
+                          className={
+                            isAccepted
+                              ? "bg-green-600 hover:bg-green-700 text-white"
+                              : ""
+                          }
+                          onClick={() =>
+                            setRowState(
+                              inv.invoiceId,
+                              isAccepted ? "pending" : "accepted",
+                            )
+                          }
+                        >
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          {isAccepted ? "Accepted" : "Accept"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={isRejected ? "destructive" : "outline"}
+                          onClick={() =>
+                            setRowState(
+                              inv.invoiceId,
+                              isRejected ? "pending" : "rejected",
+                            )
+                          }
+                        >
+                          <XCircle className="h-4 w-4 mr-1" />
+                          {isRejected ? "Rejected" : "Reject"}
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-gray-500 hover:text-gray-700 px-2"
+                      onClick={() => toggleExpanded(inv.invoiceId)}
+                      title={isExpanded ? "Hide details" : "More details"}
+                    >
+                      <ChevronDown
+                        className={`h-4 w-4 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`}
+                      />
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Inline match reasons on mobile */}
@@ -532,6 +596,82 @@ export default function Reconciliation() {
                   <p className="text-xs text-gray-400 mt-2 lg:hidden">
                     Matched on: {row.reasons.join(" · ")}
                   </p>
+                )}
+
+                {isExpanded && (
+                  <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* Xero invoice details */}
+                      <div>
+                        <p className="text-xs font-semibold text-orange-600 uppercase tracking-wide mb-3">
+                          Xero Invoice Details
+                        </p>
+                        <dl className="space-y-1.5 text-sm">
+                          <DetailRow label="Invoice number" value={inv.invoiceNumber} />
+                          <DetailRow label="Invoice date" value={fmtDate(inv.date)} />
+                          <DetailRow label="Due date" value={fmtDate(inv.dueDate)} />
+                          <DetailRow label="Contact / payee" value={inv.contactName} />
+                          <DetailRow label="Reference" value={inv.reference} />
+                          <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 mt-1.5 space-y-1.5">
+                            <DetailRow label="Subtotal (exc GST)" value={fmt(inv.subtotal)} />
+                            <DetailRow label="GST amount" value={fmt(xeroGst)} />
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-gray-500 flex-shrink-0">Total (inc GST)</dt>
+                              <dd className="font-semibold text-gray-900 dark:text-white text-right">{fmt(inv.amountDue)}</dd>
+                            </div>
+                          </div>
+                          <div className="flex justify-between gap-4">
+                            <dt className="text-gray-500 flex-shrink-0">Status</dt>
+                            <dd className="text-right">
+                              <Badge className="bg-green-100 text-green-800 border-green-200 text-xs">
+                                {inv.status ?? "AUTHORISED"}
+                              </Badge>
+                            </dd>
+                          </div>
+                        </dl>
+                      </div>
+
+                      {/* Vibe job details */}
+                      {job ? (
+                        <div>
+                          <p className="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-3">
+                            Vibe Job Details
+                          </p>
+                          <dl className="space-y-1.5 text-sm">
+                            <DetailRow label="Job number" value={job.jobNumber ? `#${job.jobNumber}` : null} />
+                            <DetailRow label="Job title" value={job.title} />
+                            <DetailRow label="Customer name" value={job.customerName} />
+                            <DetailRow label="Address" value={job.address} />
+                            <DetailRow label="Scheduled date" value={fmtDate(job.scheduledDate)} />
+                            <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 mt-1.5 space-y-1.5">
+                              <DetailRow label="Subtotal (exc GST)" value={fmt(job.subtotal)} />
+                              <DetailRow label="GST amount" value={fmt(jobGst)} />
+                              <div className="flex justify-between gap-4">
+                                <dt className="text-gray-500 flex-shrink-0">Total (inc GST)</dt>
+                                <dd className="font-semibold text-gray-900 dark:text-white text-right">{fmt(job.totalAmount)}</dd>
+                              </div>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                              <dt className="text-gray-500 flex-shrink-0">Status</dt>
+                              <dd className="text-right">
+                                <Badge className="bg-blue-100 text-blue-800 border-blue-200 text-xs capitalize">
+                                  {job.status ?? "completed"}
+                                </Badge>
+                              </dd>
+                            </div>
+                            {row.reasons.length > 0 && (
+                              <DetailRow label="Matched on" value={row.reasons.join(" · ")} />
+                            )}
+                          </dl>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-gray-400 text-sm">
+                          <AlertCircle className="h-4 w-4" />
+                          No Vibe job matched for this invoice.
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </CardContent>
             </Card>
