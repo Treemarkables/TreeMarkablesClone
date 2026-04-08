@@ -1706,18 +1706,28 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
 
       const jobs = await storage.getCompletedJobsWithCustomerNames();
 
-      const data = jobs.map((job) => ({
-        jobId: job.id,
-        jobNumber: job.jobNumber ?? null,
-        customerName: job.customerName ?? null,
-        title: job.title ?? null,
-        address: job.address ?? null,
-        subtotal: job.subtotal != null ? Number(job.subtotal) : null,
-        totalAmount: job.totalAmount != null ? Number(job.totalAmount) : null,
-        scheduledDate: job.scheduledDate ? job.scheduledDate.toISOString() : null,
-        completedDate: job.completedDate ? job.completedDate.toISOString() : null,
-        status: job.status ?? null,
-      }));
+      const data = jobs.map((job) => {
+        // Prefer the job's own subtotal (exc GST). If it's null/zero but an
+        // invoice exists for this job, back out the 15% NZ GST from the
+        // invoice total to derive the exc-GST subtotal.
+        let subtotal: number | null = job.subtotal != null ? Number(job.subtotal) : null;
+        if ((subtotal == null || subtotal === 0) && job.invoiceAmountIncGst != null && job.invoiceAmountIncGst > 0) {
+          subtotal = Math.round((job.invoiceAmountIncGst / 1.15) * 100) / 100;
+        }
+
+        return {
+          jobId: job.id,
+          jobNumber: job.jobNumber ?? null,
+          customerName: job.customerName ?? null,
+          title: job.title ?? null,
+          address: job.address ?? null,
+          subtotal,
+          totalAmount: job.totalAmount != null ? Number(job.totalAmount) : null,
+          scheduledDate: job.scheduledDate ? job.scheduledDate.toISOString() : null,
+          completedDate: job.completedDate ? job.completedDate.toISOString() : null,
+          status: job.status ?? null,
+        };
+      });
 
       return res.json({ success: true, data });
     } catch (error: unknown) {
