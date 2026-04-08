@@ -11396,15 +11396,31 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Update business settings
   app.put('/api/business-settings', async (req: Request, res: Response) => {
     try {
-      // Pre-process date strings into Date objects before Zod validation
+      // Pre-process values to match Zod schema expectations before validation
       const rawBody = { ...req.body };
+
+      // Timestamp fields: convert ISO strings → Date objects
       if (typeof rawBody.metricsStartDate === 'string' && rawBody.metricsStartDate) {
         rawBody.metricsStartDate = new Date(rawBody.metricsStartDate);
       } else if (rawBody.metricsStartDate === null || rawBody.metricsStartDate === '') {
         rawBody.metricsStartDate = null;
       }
 
-      const validatedData = updateBusinessSettingsSchema.parse(rawBody);
+      // Decimal fields: Drizzle maps them to z.string() — convert numbers → strings
+      if (typeof rawBody.defaultGrossMarginPct === 'number') {
+        rawBody.defaultGrossMarginPct = String(rawBody.defaultGrossMarginPct);
+      }
+
+      const validationResult = updateBusinessSettingsSchema.safeParse(rawBody);
+      if (!validationResult.success) {
+        console.error('Business settings validation error:', JSON.stringify(validationResult.error.errors, null, 2));
+        return res.status(400).json({
+          success: false,
+          message: 'Validation error',
+          errors: validationResult.error.errors,
+        });
+      }
+      const validatedData = validationResult.data;
       
       // Filter out sensitive fields that should not be updated with masked values
       const cleanData = { ...validatedData };
