@@ -775,11 +775,15 @@ export function JobDiarySection({
         });
       }
 
-      // Sort by timestamp (newest first)
-      return entries.sort(
-        (a, b) =>
-          new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
-      );
+      // Sort by timestamp (newest first) — NaN-safe so invalid timestamps go to bottom
+      return entries.sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        if (isNaN(tb) && isNaN(ta)) return 0;
+        if (isNaN(tb)) return 1;
+        if (isNaN(ta)) return -1;
+        return tb - ta;
+      });
     },
   });
 

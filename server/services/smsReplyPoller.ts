@@ -2,6 +2,7 @@ import { retrieveSMSReplies } from './smsEveryoneClient';
 import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, notifications, conversations, conversationMessages } from '@shared/schema';
 import { eq, or, sql, desc } from 'drizzle-orm';
+import { fromZonedTime } from 'date-fns-tz';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
 let pollingIntervalId: NodeJS.Timeout | null = null;
@@ -102,11 +103,14 @@ async function processSMSReplies() {
         let customerName = matchedCustomer?.name || 'Customer';
 
         // Create diary entry for the SMS reply
-        // SMS Everyone NZ timestamps are in NZ local time (NZDT = UTC+13) without timezone indicator
-        // Convert to ISO-8601 format with timezone for correct parsing
-        // Example: "2025-10-13 11:25:40" -> "2025-10-13T11:25:40+13:00"
-        const isoTimestamp = reply.Received.replace(' ', 'T') + '+13:00';
-        const receivedTimestamp = new Date(isoTimestamp);
+        // SMS Everyone NZ timestamps are in NZ local time without timezone indicator.
+        // Use fromZonedTime (date-fns-tz) so it automatically handles NZST (+12:00) vs
+        // NZDT (+13:00) based on the actual date — no hardcoded offset needed.
+        // Example: "2026-04-09 09:31:40" in "Pacific/Auckland" -> correct UTC
+        const receivedTimestamp = fromZonedTime(
+          reply.Received.replace(' ', 'T'),
+          'Pacific/Auckland'
+        );
         
         await db.insert(jobDiaryEntries).values({
           jobId: matchedJob.id,
