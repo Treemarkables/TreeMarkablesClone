@@ -57,7 +57,7 @@ import twilio from "twilio";
 import jwt from "jsonwebtoken";
 import path from "path";
 import bcrypt from "bcrypt";
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import archiver from "archiver";
 import heicConvert from "heic-convert";
@@ -89,7 +89,7 @@ import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
-import { PhotoStorageService } from "./photoStorage";
+import { PhotoStorageService, objectStorageClient } from "./photoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
@@ -6112,6 +6112,92 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // ----------------------------------------
+  // TWILIO LIVE CALL RECORDING — OPTION 2
+  // Caller rings owner's real number → carrier forwards here →
+  // Twilio dials HERO_PHONE_NUMBER while recording → on no-answer, takes voicemail.
+  // Configure in Twilio console: "A CALL COMES IN" → Webhook → this URL.
+  // ----------------------------------------
+
+  // Serve recordings from persistent Object Storage
+  app.get('/api/recordings/:filename', async (req: Request, res: Response) => {
+    try {
+      const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+      if (!privateDir) {
+        return res.status(500).json({ error: 'Object storage not configured' });
+      }
+      const filename = req.params.filename;
+      if (!filename || filename.includes('..')) {
+        return res.status(400).json({ error: 'Invalid filename' });
+      }
+      const objectPath = `${privateDir}/recordings/${filename}`;
+      const parts = objectPath.replace(/^\//, '').split('/');
+      const bucketName = parts[0];
+      const objectName = parts.slice(1).join('/');
+      const [content] = await objectStorageClient.bucket(bucketName).file(objectName).download();
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.send(content);
+    } catch (error: any) {
+      console.error('❌ Error serving recording:', error);
+      res.status(404).json({ error: 'Recording not found' });
+    }
+  });
+
+  // TwiML: answer the call → dial owner's real phone while recording
+  app.post('/api/webhooks/twilio-answer', (req: Request, res: Response) => {
+    const ownerPhone = process.env.HERO_PHONE_NUMBER;
+    if (!ownerPhone) {
+      console.error('❌ HERO_PHONE_NUMBER not set - cannot forward call');
+      res.type('text/xml');
+      return res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Sorry, we are unable to take your call right now. Please try again later.</Say>
+</Response>`);
+    }
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+
+    console.log(`📞 Twilio answer webhook — forwarding to ${ownerPhone}, baseUrl: ${baseUrl}`);
+
+    res.type('text/xml');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial
+    record="record-from-answer"
+    recordingStatusCallback="${baseUrl}/api/webhooks/twilio-voice"
+    recordingStatusCallbackEvent="completed"
+    timeout="20"
+    action="${baseUrl}/api/webhooks/twilio-no-answer"
+  >
+    <Number>${ownerPhone}</Number>
+  </Dial>
+</Response>`);
+  });
+
+  // TwiML: owner didn't answer → take a voicemail (still records and processes)
+  app.post('/api/webhooks/twilio-no-answer', (req: Request, res: Response) => {
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const baseUrl = `${protocol}://${host}`;
+
+    console.log(`📞 Twilio no-answer — switching to voicemail`);
+
+    res.type('text/xml');
+    res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say voice="alice">Hi, you have reached Treemarkables. We are unable to take your call right now. Please leave your name, address, and details of the work you need done, and we will call you back as soon as possible.</Say>
+  <Record
+    maxLength="300"
+    transcribe="false"
+    recordingStatusCallback="${baseUrl}/api/webhooks/twilio-voice"
+    recordingStatusCallbackEvent="completed"
+  />
+</Response>`);
+  });
+
   // Twilio webhook for voice call status updates
   app.post('/api/webhooks/twilio-voice', async (req: Request, res: Response) => {
     try {
@@ -6121,43 +6207,77 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(403).send('Forbidden');
       }
 
-      const { CallSid, CallStatus, From, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
+      // ForwardedFrom is set by the carrier when a call is forwarded from the owner's
+      // real number to the Twilio number. Use it so we get the customer's number, not the owner's.
+      const { CallSid, CallStatus, From, ForwardedFrom, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
       
-      console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}`);
+      console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}, From: ${From}, ForwardedFrom: ${ForwardedFrom}`);
       
       // Handle call completed with recording
       if (CallStatus === 'completed' && RecordingUrl) {
         console.log(`🎙️ Call ${CallSid} completed with recording: ${RecordingUrl}`);
         
-        // Normalize phone number
+        // Normalize phone number (NZ format)
         const normalizePhone = (phone: string): string => {
+          if (!phone) return phone;
           const cleaned = phone.replace(/\D/g, '');
           if (cleaned.startsWith('64')) return `+${cleaned}`;
           if (cleaned.startsWith('0')) return `+64${cleaned.substring(1)}`;
           if (cleaned.length === 9 || cleaned.length === 10) return `+64${cleaned}`;
           return phone;
         };
+
+        // Use ForwardedFrom when the call was forwarded (gives real customer number).
+        // Fall back to From if ForwardedFrom is absent (direct call to Twilio number).
+        const rawCallerPhone = ForwardedFrom || From;
+        const callerPhone = normalizePhone(rawCallerPhone);
+        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone})`);
         
-        const callerPhone = normalizePhone(From);
-        
-        // Download recording from Twilio
+        // Download recording from Twilio and store in Object Storage (persistent across restarts)
         const recordingFilename = `twilio-${CallSid}-${Date.now()}.mp3`;
-        const recordingPath = path.join(recordingsDir, recordingFilename);
         const recordingUrlWithAuth = `${RecordingUrl}.mp3?Download=true`;
-        
-        // Download with Twilio auth
         const authHeader = 'Basic ' + Buffer.from(`${process.env.TWILIO_ACCOUNT_SID}:${process.env.TWILIO_AUTH_TOKEN}`).toString('base64');
-        
-        const https = await import('https');
-        const file = fs.createWriteStream(recordingPath);
-        
-        https.get(recordingUrlWithAuth, {
-          headers: { 'Authorization': authHeader }
-        }, (response) => {
-          response.pipe(file);
-          file.on('finish', async () => {
-            file.close();
-            console.log(`✅ Recording downloaded: ${recordingPath}`);
+
+        // Download as buffer then upload to Object Storage
+        let recordingBuffer: Buffer;
+        try {
+          const dlResponse = await fetch(recordingUrlWithAuth, { headers: { 'Authorization': authHeader } });
+          if (!dlResponse.ok) throw new Error(`Twilio download failed: ${dlResponse.status}`);
+          recordingBuffer = Buffer.from(await dlResponse.arrayBuffer());
+          console.log(`✅ Recording downloaded (${recordingBuffer.length} bytes)`);
+        } catch (dlErr) {
+          console.error('❌ Failed to download recording:', dlErr);
+          return;
+        }
+
+        // Upload to persistent Object Storage
+        const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+        let servingUrl = `/api/recordings/${recordingFilename}`;
+        if (privateDir) {
+          try {
+            const objectPath = `${privateDir}/recordings/${recordingFilename}`;
+            const parts = objectPath.replace(/^\//, '').split('/');
+            const bucketName = parts[0];
+            const objectName = parts.slice(1).join('/');
+            await objectStorageClient.bucket(bucketName).file(objectName).save(recordingBuffer, { contentType: 'audio/mpeg' });
+            console.log(`✅ Recording uploaded to Object Storage: ${objectName}`);
+          } catch (storageErr) {
+            console.error('❌ Object Storage upload failed, falling back to local:', storageErr);
+            // Fallback: save locally (ephemeral but better than nothing)
+            const recordingPath = path.join(recordingsDir, recordingFilename);
+            fs.writeFileSync(recordingPath, recordingBuffer);
+            servingUrl = `/uploads/recordings/${recordingFilename}`;
+          }
+        } else {
+          // No Object Storage configured — save locally
+          const recordingPath = path.join(recordingsDir, recordingFilename);
+          fs.writeFileSync(recordingPath, recordingBuffer);
+          servingUrl = `/uploads/recordings/${recordingFilename}`;
+          console.warn('⚠️ PRIVATE_OBJECT_DIR not set — recording saved locally (not persistent)');
+        }
+
+        // Create call record in DB
+        {
             
             // Create call record
             const call = await storage.createCall({
@@ -6165,18 +6285,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               direction: 'inbound',
               status: 'answered',
               duration: parseInt(RecordingDuration || '0'),
-              recordingUrl: `/uploads/recordings/${recordingFilename}`,
+              recordingUrl: servingUrl,
               twilioCallSid: CallSid
             });
             
             console.log(`📝 Call record created: ${call.id}`);
             
-            // Transcribe and extract job data (async)
+            // Transcribe and extract job data (async — buffer already in memory)
             setTimeout(async () => {
               try {
-                // Transcribe with Whisper
+                // Transcribe with Whisper using the in-memory buffer
+                const audioFile = await toFile(recordingBuffer, recordingFilename, { type: 'audio/mpeg' });
                 const transcription = await openai.audio.transcriptions.create({
-                  file: fs.createReadStream(recordingPath),
+                  file: audioFile,
                   model: 'whisper-1',
                   language: 'en',
                   response_format: 'text'
@@ -6289,9 +6410,9 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                   if (jobData.estimatedPrice || transcript.toLowerCase().includes('price') || transcript.toLowerCase().includes('cost') || transcript.toLowerCase().includes('quote')) {
                     console.log('💰 Pricing discussion detected - generating quote draft...');
                     
-                    // Extract detailed quote information with GPT-5
+                    // Extract detailed quote information with GPT-4o
                     const quoteExtraction = await openai.chat.completions.create({
-                      model: 'gpt-5',
+                      model: 'gpt-4o',
                       messages: [
                         {
                           role: 'system',
@@ -6372,11 +6493,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
               } catch (error) {
                 console.error('❌ Error processing call recording:', error);
               }
-            }, 1000); // Small delay to ensure file is fully written
-          });
-        }).on('error', (err) => {
-          console.error('❌ Error downloading recording:', err);
-        });
+            }, 500);
+        }
       }
       
       // Respond to Twilio
