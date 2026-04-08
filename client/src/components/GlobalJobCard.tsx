@@ -356,8 +356,23 @@ export function GlobalJobCard({
     },
   });
 
-  // Watch only the customerId field for effect dependencies (stable primitive)
+  // Hoist ALL form.watch() calls to the top of the component.
+  // CRITICAL: Multiple form.watch("field") calls scattered in JSX create multiple subscriptions
+  // to the same field, causing cascading re-renders when form.reset() or replaceLineItems() fires.
+  // One subscription per field at component top = predictable, non-cascading re-renders.
   const watchedCustomerId = (form.watch("customerId") as string) ?? "";
+  const watchedStatus = form.watch("status") as string;
+  const watchedLineItems = (form.watch("lineItems") || []) as any[];
+  const watchedEtaNotificationRequested = form.watch("etaNotificationRequested") as boolean;
+  const watchedAddress = (form.watch("address") || "") as string;
+  const watchedNewCustomerName = (form.watch("newCustomerName") || "") as string;
+  const watchedIsNewCustomer = form.watch("isNewCustomer") as boolean;
+  const watchedSameAsJobAddress = form.watch("sameAsJobAddress") as boolean;
+  const watchedDescription = (form.watch("description") || "") as string;
+  const watchedPaidAmount = (form.watch("paidAmount") || "0") as string;
+  const watchedBillingContactEmail = (form.watch("billingContactEmail") || "") as string;
+  const watchedJobContactEmail = (form.watch("jobContactEmail") || "") as string;
+  const watchedBillingNameOverride = (form.watch("billingNameOverride") || "") as string;
   const selectedVipCustomer = customers.find((c) => c.id === watchedCustomerId);
   useEffect(() => {
     if (watchedCustomerId && customers && customers.length > 0) {
@@ -3300,7 +3315,7 @@ The Treemarkables Team`;
   // In create mode, use form.watch since there's no editingJob yet
   // IMPORTANT: This line accesses editingJob, so it must come AFTER the loading check above
   const currentStatus =
-    mode === "edit" ? editingJob?.status : form.watch("status");
+    mode === "edit" ? editingJob?.status : watchedStatus;
 
   if (jobLoading) {
     const loadingContent = (
@@ -3398,7 +3413,7 @@ The Treemarkables Team`;
             {mode === "edit" &&
               (() => {
                 // Line items total — each item.total is stored exc-GST (priceIncludesTax: false default)
-                const lineItemsTotal = (form.watch("lineItems") || []).reduce(
+                const lineItemsTotal = watchedLineItems.reduce(
                   (sum: number, item: any) => {
                     // Prefer explicit exc-GST fields if available
                     const exGst =
@@ -4298,7 +4313,7 @@ The Treemarkables Team`;
                     <div className="space-y-3 md:space-y-4">
                       {/* ETA Notification Banner */}
                       {mode === "edit" &&
-                        form.watch("etaNotificationRequested") && (
+                        watchedEtaNotificationRequested && (
                           <div className="flex items-start gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950">
                             <Bell className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -4761,11 +4776,11 @@ The Treemarkables Team`;
                             </div>
 
                             {/* Row 3: Address */}
-                            {form.watch("address") && (
+                            {watchedAddress && (
                               <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                 <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                                 <span className="truncate">
-                                  {form.watch("address")}
+                                  {watchedAddress}
                                 </span>
                               </div>
                             )}
@@ -5147,7 +5162,7 @@ The Treemarkables Team`;
                                         className={cn(
                                           "w-full justify-between h-10",
                                           !field.value &&
-                                            !form.watch("newCustomerName") &&
+                                            !watchedNewCustomerName &&
                                             "text-muted-foreground",
                                         )}
                                       >
@@ -5155,8 +5170,8 @@ The Treemarkables Team`;
                                           ? customers.find(
                                               (c) => c.id === field.value,
                                             )?.name
-                                          : form.watch("newCustomerName")
-                                            ? form.watch("newCustomerName")
+                                          : watchedNewCustomerName
+                                            ? watchedNewCustomerName
                                             : "Select or enter customer..."}
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                       </Button>
@@ -5910,8 +5925,8 @@ The Treemarkables Team`;
                         </div>
 
                         {/* Show New Customer Fields When Creating */}
-                        {form.watch("isNewCustomer") &&
-                          form.watch("newCustomerName") && (
+                        {watchedIsNewCustomer &&
+                          watchedNewCustomerName && (
                             <div className="space-y-3">
                               <div className="grid grid-cols-2 gap-3">
                                 <FormField
@@ -6115,7 +6130,7 @@ The Treemarkables Team`;
                             />
 
                             {/* Unsuccessful Reason - Only show when status is unsuccessful */}
-                            {form.watch("status") === "unsuccessful" && (
+                            {watchedStatus === "unsuccessful" && (
                               <div className="mt-3 space-y-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
                                 <FormField
                                   control={form.control}
@@ -6863,8 +6878,7 @@ The Treemarkables Team`;
                                     }
 
                                     // Calculate from line items (these are typically exc GST unit prices)
-                                    const lineItems =
-                                      form.watch("lineItems") || [];
+                                    const lineItems = watchedLineItems;
                                     let totalExcGst = lineItems.reduce(
                                       (sum: number, item: any) => {
                                         const itemTotal =
@@ -6952,8 +6966,8 @@ The Treemarkables Team`;
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
                                   {(formLoadedJobId === editingJob?.id
-                                    ? form.watch("description")
-                                    : form.watch("description") ||
+                                    ? watchedDescription
+                                    : watchedDescription ||
                                       editingJob?.description) || (
                                     <span className="text-gray-400 italic">
                                       Click to add a job description...
@@ -7338,7 +7352,7 @@ The Treemarkables Team`;
                                       {...field}
                                       className="h-9 text-base md:text-sm"
                                       placeholder="Billing Address"
-                                      disabled={form.watch("sameAsJobAddress")}
+                                      disabled={watchedSameAsJobAddress}
                                     />
                                   </FormControl>
                                 </FormItem>
@@ -8253,11 +8267,9 @@ The Treemarkables Team`;
                           <div></div> {/* Left side spacer */}
                           <div className="space-y-2 text-sm">
                             {(() => {
-                              const lineItems = form.watch("lineItems") || [];
+                              const lineItems = watchedLineItems;
                               const gstRate = 0.15; // 15% GST for New Zealand
-                              const paidAmount = parseFloat(
-                                form.watch("paidAmount") || "0",
-                              );
+                              const paidAmount = parseFloat(watchedPaidAmount);
 
                               // Calculate totals by checking each line item's priceIncludesTax flag
                               let subtotal = 0;
@@ -8607,13 +8619,13 @@ The Treemarkables Team`;
           job={{
             ...editingJob,
             billingContactEmail:
-              form.watch("billingContactEmail") || editingJob?.billingContactEmail,
+              watchedBillingContactEmail || editingJob?.billingContactEmail,
             jobContactEmail:
-              form.watch("jobContactEmail") || editingJob?.jobContactEmail,
+              watchedJobContactEmail || editingJob?.jobContactEmail,
           }}
           customEmail={
             emailContext !== "invoice"
-              ? form.watch("jobContactEmail") ||
+              ? watchedJobContactEmail ||
                 editingJob?.jobContactEmail ||
                 undefined
               : undefined
@@ -8623,10 +8635,10 @@ The Treemarkables Team`;
               ? {
                   ...selectedCustomer,
                   billingContactEmail:
-                    form.watch("billingContactEmail") ||
+                    watchedBillingContactEmail ||
                     editingJob.billingContactEmail,
                   email:
-                    form.watch("billingContactEmail") ||
+                    watchedBillingContactEmail ||
                     editingJob.billingContactEmail ||
                     editingJob.jobContactEmail ||
                     selectedCustomer?.email,
@@ -8641,7 +8653,7 @@ The Treemarkables Team`;
                     selectedCustomer?.address,
                   // Use billing name override from FORM (current unsaved value) first, then fall back to saved value
                   name:
-                    form.watch("billingNameOverride") ||
+                    watchedBillingNameOverride ||
                     editingJob.billingNameOverride ||
                     selectedCustomer?.name ||
                     `${editingJob.jobContactFirstName || ""} ${editingJob.jobContactLastName || ""}`.trim(),
@@ -8658,7 +8670,7 @@ The Treemarkables Team`;
                   totalAmount: jobQuoteResponse.data[0].amount,
                   validUntil: jobQuoteResponse.data[0].validUntil,
                   status: jobQuoteResponse.data[0].status,
-                  lineItems: form.watch("lineItems") || [],
+                  lineItems: watchedLineItems,
                 }
               : undefined
           }
@@ -8925,10 +8937,10 @@ The Treemarkables Team`;
           customerId={selectedCustomer?.id}
           mode={editingProposalId ? "edit" : "create"}
           proposalId={editingProposalId}
-          jobDescription={form.watch("description") || ""}
-          lineItems={form.watch("lineItems") || []}
+          jobDescription={watchedDescription}
+          lineItems={watchedLineItems}
           customEmail={
-            form.watch("jobContactEmail") ||
+            watchedJobContactEmail ||
             editingJob?.jobContactEmail ||
             undefined
           }
