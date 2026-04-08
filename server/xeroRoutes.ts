@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { XeroClient, PayrollNzApi, Configuration } from 'xero-node';
+import { XeroClient, PayrollNzApi, Configuration, Invoice, Payment } from 'xero-node';
 import type { IStorage } from './storage';
 import { TimeTrackingService } from './timeTrackingService';
 
@@ -1609,6 +1609,43 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   // RECONCILIATION ENDPOINTS
   // ============================================================
 
+  // Shared precheck: validates Xero connectivity and resolved bank account code.
+  // Returns { client, tenantId, bankAccountCode } on success or sends an error response and returns null.
+  async function reconciliationPrecheck(
+    req: Request,
+    res: Response,
+    requireBankCode: boolean,
+    bodyBankCode?: string,
+  ): Promise<{ client: XeroClient; tenantId: string; bankAccountCode: string | null } | null> {
+    const client = await getValidXeroClient();
+    if (!client) {
+      res.status(400).json({ success: false, message: 'Not connected to Xero. Please connect first.' });
+      return null;
+    }
+
+    const connection = await storage.getXeroConnection('custom-connection');
+    if (!connection) {
+      res.status(400).json({ success: false, message: 'No active Xero connection found.' });
+      return null;
+    }
+
+    let bankAccountCode: string | null = bodyBankCode ?? null;
+    if (!bankAccountCode) {
+      const settings = await storage.getBusinessSettings();
+      bankAccountCode = settings?.xeroDefaultBankAccountCode ?? null;
+    }
+
+    if (requireBankCode && !bankAccountCode) {
+      res.status(400).json({
+        success: false,
+        message: 'No bank account code configured. Set xeroDefaultBankAccountCode in Business Settings or pass bankAccountCode in the request body.',
+      });
+      return null;
+    }
+
+    return { client, tenantId: connection.tenantId, bankAccountCode };
+  }
+
   // GET /api/reconciliation/xero-sales
   // Returns AUTHORISED ACCREC invoices from Xero for reconciliation matching
   app.get('/api/reconciliation/xero-sales', async (req: Request, res: Response) => {
@@ -1616,73 +1653,70 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     try {
-      const client = await getValidXeroClient();
-      if (!client) {
-        return res.status(400).json({ success: false, message: 'Not connected to Xero. Please connect first.' });
-      }
+      const pre = await reconciliationPrecheck(req, res, true);
+      if (!pre) return;
+      const { client, tenantId } = pre;
 
-      const connection = await storage.getXeroConnection('custom-connection');
-      if (!connection) {
-        return res.status(400).json({ success: false, message: 'No active Xero connection found.' });
-      }
-      const tenantId = connection.tenantId;
-
-      // Fetch AUTHORISED invoices (statuses filter is applied server-side by Xero)
       const response = await client.accountingApi.getInvoices(
         tenantId,
-        undefined, // ifModifiedSince
-        undefined, // where
-        undefined, // order
-        undefined, // ids
-        undefined, // invoiceNumbers
-        undefined, // contactIDs
-        ['AUTHORISED'], // statuses
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        ['AUTHORISED'],
       );
 
-      const allInvoices = response.body.invoices ?? [];
+      const allInvoices: Invoice[] = response.body.invoices ?? [];
+      const salesInvoices = allInvoices.filter(
+        (inv) => inv.type === Invoice.TypeEnum.ACCREC,
+      );
 
-      // Filter to ACCREC (accounts receivable / sales) only
-      const salesInvoices = allInvoices.filter((inv: any) => inv.type === 'ACCREC');
-
-      const result = salesInvoices.map((inv: any) => ({
-        invoiceId: inv.invoiceID,
+      const data = salesInvoices.map((inv) => ({
+        invoiceId: inv.invoiceID ?? null,
         invoiceNumber: inv.invoiceNumber ?? null,
         reference: inv.reference ?? null,
         contactName: inv.contact?.name ?? null,
-        amountDue: inv.amountDue != null ? parseFloat(inv.amountDue.toString()) : null,
-        subTotal: inv.subTotal != null ? parseFloat(inv.subTotal.toString()) : null,
+        amountDue: inv.amountDue != null ? Number(inv.amountDue) : null,
+        subTotal: inv.subTotal != null ? Number(inv.subTotal) : null,
         date: inv.date ?? null,
         dueDate: inv.dueDate ?? null,
       }));
 
-      return res.json({ success: true, data: result });
-    } catch (error: any) {
+      return res.json({ success: true, data });
+    } catch (error: unknown) {
       console.error('Error fetching Xero sales invoices:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch Xero invoices.' });
     }
   });
 
   // GET /api/reconciliation/vibe-jobs
-  // Returns completed jobs with customer names for reconciliation matching
+  // Returns completed jobs with customer names for reconciliation matching.
+  // Requires Xero connectivity and a configured bank account code so all
+  // reconciliation endpoints fail consistently when the integration is not ready.
   app.get('/api/reconciliation/vibe-jobs', async (req: Request, res: Response) => {
     if (!req.session.employeeId) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     try {
+      const pre = await reconciliationPrecheck(req, res, true);
+      if (!pre) return;
+
       const jobs = await storage.getCompletedJobsWithCustomerNames();
 
-      const result = jobs.map((job) => ({
+      const data = jobs.map((job) => ({
         jobId: job.id,
         jobNumber: job.jobNumber ?? null,
         customerName: job.customerName ?? null,
         title: job.title ?? null,
         address: job.address ?? null,
-        subtotal: job.subtotal != null ? parseFloat(job.subtotal.toString()) : null,
-        totalAmount: job.totalAmount != null ? parseFloat(job.totalAmount.toString()) : null,
+        subtotal: job.subtotal != null ? Number(job.subtotal) : null,
+        totalAmount: job.totalAmount != null ? Number(job.totalAmount) : null,
       }));
 
-      return res.json({ success: true, data: result });
-    } catch (error: any) {
+      return res.json({ success: true, data });
+    } catch (error: unknown) {
       console.error('Error fetching completed jobs for reconciliation:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch completed jobs.' });
     }
@@ -1695,84 +1729,54 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
       return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
     try {
-      const { matches, bankAccountCode: bodyBankCode } = req.body as {
+      const body = req.body as {
         matches: Array<{ xeroInvoiceId: string; jobId: string; amount: number; bankAccountCode?: string }>;
         bankAccountCode?: string;
       };
+      const { matches, bankAccountCode: bodyBankCode } = body;
 
       if (!Array.isArray(matches) || matches.length === 0) {
         return res.status(400).json({ success: false, message: 'matches array is required and must not be empty.' });
       }
 
-      // Determine bank account code: request body override → business settings
-      let resolvedBankCode: string | null | undefined = bodyBankCode;
-      if (!resolvedBankCode) {
-        const settings = await storage.getBusinessSettings();
-        resolvedBankCode = settings?.xeroDefaultBankAccountCode;
-      }
+      const pre = await reconciliationPrecheck(req, res, true, bodyBankCode);
+      if (!pre) return;
+      const { client, tenantId, bankAccountCode: resolvedBankCode } = pre;
 
-      if (!resolvedBankCode) {
-        return res.status(400).json({
-          success: false,
-          message: 'No bank account code configured. Set xeroDefaultBankAccountCode in Business Settings or pass bankAccountCode in the request body.',
-        });
-      }
+      const today = new Date().toISOString().slice(0, 10);
 
-      const client = await getValidXeroClient();
-      if (!client) {
-        return res.status(400).json({ success: false, message: 'Not connected to Xero. Please connect first.' });
-      }
-
-      const connection = await storage.getXeroConnection('custom-connection');
-      if (!connection) {
-        return res.status(400).json({ success: false, message: 'No active Xero connection found.' });
-      }
-      const tenantId = connection.tenantId;
-
-      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-
-      const results: Array<{ xeroInvoiceId: string; jobId: string; success: boolean; message: string; paymentId?: string }> = [];
+      type MatchResult = { xeroInvoiceId: string; jobId: string; success: boolean; message: string; paymentId?: string };
+      const results: MatchResult[] = [];
 
       for (const match of matches) {
-        const perMatchBankCode = match.bankAccountCode || resolvedBankCode;
+        const perMatchBankCode = match.bankAccountCode ?? resolvedBankCode ?? '';
+        const payment: Payment = {
+          invoice: { invoiceID: match.xeroInvoiceId },
+          account: { code: perMatchBankCode },
+          amount: match.amount,
+          date: today,
+        };
         try {
-          const paymentResponse = await client.accountingApi.createPayment(tenantId, {
-            invoice: { invoiceID: match.xeroInvoiceId },
-            account: { code: perMatchBankCode },
-            amount: match.amount,
-            date: today,
-          } as any);
-
-          const payment = paymentResponse.body as any;
+          const paymentResponse = await client.accountingApi.createPayment(tenantId, payment);
+          const created: Payment = paymentResponse.body;
           results.push({
             xeroInvoiceId: match.xeroInvoiceId,
             jobId: match.jobId,
             success: true,
             message: 'Payment created in Xero',
-            paymentId: payment.paymentID ?? payment.payments?.[0]?.paymentID ?? undefined,
+            paymentId: created.paymentID,
           });
-        } catch (matchErr: any) {
-          const errMsg = matchErr?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message
-            ?? matchErr?.message
-            ?? 'Unknown error';
-          results.push({
-            xeroInvoiceId: match.xeroInvoiceId,
-            jobId: match.jobId,
-            success: false,
-            message: errMsg,
-          });
+        } catch (matchErr: unknown) {
+          const err = matchErr as { response?: { body?: { Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }> } } } & Error;
+          const errMsg = err?.response?.body?.Elements?.[0]?.ValidationErrors?.[0]?.Message ?? err?.message ?? 'Unknown error';
+          results.push({ xeroInvoiceId: match.xeroInvoiceId, jobId: match.jobId, success: false, message: errMsg });
         }
       }
 
-      const succeeded = results.filter(r => r.success).length;
-      const failed = results.filter(r => !r.success).length;
-
-      return res.json({
-        success: failed === 0,
-        summary: { succeeded, failed, total: results.length },
-        results,
-      });
-    } catch (error: any) {
+      const succeeded = results.filter((r) => r.success).length;
+      const failed = results.filter((r) => !r.success).length;
+      return res.json({ success: failed === 0, summary: { succeeded, failed, total: results.length }, results });
+    } catch (error: unknown) {
       console.error('Error committing reconciliation payments:', error);
       res.status(500).json({ success: false, message: 'Failed to commit reconciliation payments.' });
     }
