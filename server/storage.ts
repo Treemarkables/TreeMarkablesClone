@@ -178,7 +178,7 @@ export interface IStorage {
   updateJob(id: string, updates: Partial<InsertJob>): Promise<Job>;
   getJobsByCustomer(customerId: string): Promise<Job[]>;
   getJobsByStatus(status: string): Promise<Job[]>;
-  getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null }>>;
+  getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>>;
   getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }>;
   createJobFromCall(params: {
@@ -1562,16 +1562,22 @@ class DatabaseStorage implements IStorage {
       .orderBy(desc(schema.jobs.createdAt));
   }
 
-  async getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null }>> {
+  async getCompletedJobsWithCustomerNames(): Promise<Array<Job & { customerName: string | null; invoiceAmountIncGst: number | null }>> {
     const rows = await db.select({
       job: schema.jobs,
       customerName: schema.customers.name,
+      invoiceAmountIncGst: schema.invoices.amount,
     })
       .from(schema.jobs)
       .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
+      .leftJoin(schema.invoices, eq(schema.invoices.jobId, schema.jobs.id))
       .where(eq(schema.jobs.status, 'completed'))
       .orderBy(desc(schema.jobs.createdAt));
-    return rows.map((row) => ({ ...row.job, customerName: row.customerName ?? null }));
+    return rows.map((row) => ({
+      ...row.job,
+      customerName: row.customerName ?? null,
+      invoiceAmountIncGst: row.invoiceAmountIncGst != null ? Number(row.invoiceAmountIncGst) : null,
+    }));
   }
 
   async getAllJobs(options?: { limit?: number; offset?: number; status?: string; excludeCompleted?: boolean; excludeArchived?: boolean }): Promise<{ jobs: Job[]; total: number }> {

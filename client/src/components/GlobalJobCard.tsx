@@ -6455,6 +6455,7 @@ The Treemarkables Team`;
                                       onCheckedChange={(checked) =>
                                         field.onChange(checked === true)
                                       }
+                                      onClick={(e) => e.stopPropagation()}
                                       className="ml-auto"
                                       data-testid="checkbox-eta-notification"
                                     />
