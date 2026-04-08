@@ -90,6 +90,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
 import type { JobTemplate } from "@shared/schema";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { CreateLeadFromMessageDialog } from "@/components/CreateLeadFromMessageDialog";
@@ -2737,18 +2738,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                       {/* GlobalJobCard content */}
                       <div className="flex-1 overflow-auto">
-                        <GlobalJobCard
-                          isOpen={true}
-                          mode={globalJobCardMode}
-                          jobId={jobToEdit?.jobId || jobToEdit?.id}
-                          initialData={initialJobData}
-                          onClose={() => {
-                            setShowGlobalJobCard(false);
-                            setJobToEdit(null);
-                            setInitialJobData(null);
-                          }}
-                          renderInline={true}
-                        />
+                        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); }}>
+                          <GlobalJobCard
+                            isOpen={true}
+                            mode={globalJobCardMode}
+                            jobId={jobToEdit?.jobId || jobToEdit?.id}
+                            initialData={initialJobData}
+                            onClose={() => {
+                              setShowGlobalJobCard(false);
+                              setJobToEdit(null);
+                              setInitialJobData(null);
+                            }}
+                            renderInline={true}
+                          />
+                        </JobCardErrorBoundary>
                       </div>
                     </div>
                   </div>
@@ -3265,17 +3268,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
       {/* Modal version for mobile only - renders as Dialog on screens < 1024px */}
       <div className="lg:hidden">
-        <GlobalJobCard
-          isOpen={showGlobalJobCard}
-          mode={globalJobCardMode}
-          jobId={jobToEdit?.jobId || jobToEdit?.id}
-          initialData={initialJobData}
-          onClose={() => {
-            setShowGlobalJobCard(false);
-            setJobToEdit(null);
-            setInitialJobData(null);
-          }}
-        />
+        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
+          <GlobalJobCard
+            isOpen={showGlobalJobCard}
+            mode={globalJobCardMode}
+            jobId={jobToEdit?.jobId || jobToEdit?.id}
+            initialData={initialJobData}
+            onClose={() => {
+              setShowGlobalJobCard(false);
+              setJobToEdit(null);
+              setInitialJobData(null);
+            }}
+          />
+        </JobCardErrorBoundary>
       </div>
 
       {/* Create Lead from Message Dialog */}

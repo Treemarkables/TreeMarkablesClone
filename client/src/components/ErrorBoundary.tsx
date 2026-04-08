@@ -10,13 +10,13 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  errorInfo: string;
+  componentStack: string;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, errorInfo: '' };
+    this.state = { hasError: false, error: null, componentStack: '' };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -24,8 +24,19 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-    this.setState({ errorInfo: errorInfo.componentStack });
+    const stack = errorInfo.componentStack || '';
+    this.setState({ componentStack: stack });
+
+    // Save to localStorage so diagnostics survive a page reload
+    try {
+      localStorage.setItem('lastAppCrash', JSON.stringify({
+        message: error.message,
+        stack: error.stack?.substring(0, 2000),
+        componentStack: stack.substring(0, 3000),
+        url: window.location.href,
+        timestamp: new Date().toISOString(),
+      }));
+    } catch (_) {}
 
     try {
       fetch('/api/client-errors', {
@@ -34,7 +45,7 @@ export class ErrorBoundary extends Component<Props, State> {
         body: JSON.stringify({
           message: error.message,
           stack: error.stack,
-          componentStack: errorInfo.componentStack,
+          componentStack: stack,
           url: window.location.href,
           userAgent: navigator.userAgent,
         }),
@@ -47,7 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: null, errorInfo: '' });
+    this.setState({ hasError: false, error: null, componentStack: '' });
   };
 
   handleGoHome = () => {
@@ -59,6 +70,13 @@ export class ErrorBoundary extends Component<Props, State> {
       if (this.props.fallback) {
         return this.props.fallback;
       }
+
+      // Show truncated component stack for diagnosis
+      const stackLines = this.state.componentStack
+        .split('\n')
+        .filter(l => l.trim())
+        .slice(0, 12)
+        .join('\n');
 
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
@@ -74,7 +92,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </h2>
             
             <p className="text-gray-600 mb-6">
-              Don't worry - your data is safe. Try one of these options to get back on track.
+              Don't worry — your data is safe. Try one of these options to get back on track.
             </p>
 
             <div className="space-y-3">
@@ -104,9 +122,19 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {this.state.error && (
-              <div className="mt-6 text-left bg-gray-100 rounded p-3 text-xs overflow-auto max-h-32">
-                <p className="font-mono text-red-600">{this.state.error.message}</p>
-              </div>
+              <details className="mt-6 text-left" open>
+                <summary className="text-xs font-medium text-gray-500 cursor-pointer mb-2">
+                  Error details (share this to get help)
+                </summary>
+                <div className="bg-gray-50 rounded p-3 text-xs overflow-auto max-h-48 space-y-2">
+                  <p className="font-mono text-red-600 break-all">{this.state.error.message}</p>
+                  {stackLines && (
+                    <pre className="font-mono text-gray-500 whitespace-pre-wrap text-[10px] leading-relaxed">
+                      {stackLines}
+                    </pre>
+                  )}
+                </div>
+              </details>
             )}
           </div>
         </div>

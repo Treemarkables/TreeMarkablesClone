@@ -26,6 +26,7 @@ import {
 } from "@shared/dateUtils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { useToast } from "@/hooks/use-toast";
 
 const NZ_TZ = "Pacific/Auckland";
@@ -934,15 +935,17 @@ export function CalendarGrid({
 
       {/* Job card modal */}
       {selectedJobId && showJobCard && (
-        <GlobalJobCard
-          isOpen={showJobCard}
-          mode="edit"
-          jobId={selectedJobId}
-          onClose={() => {
-            setShowJobCard(false);
-            setSelectedJobId(null);
-          }}
-        />
+        <JobCardErrorBoundary onClose={() => { setShowJobCard(false); setSelectedJobId(null); }}>
+          <GlobalJobCard
+            isOpen={showJobCard}
+            mode="edit"
+            jobId={selectedJobId}
+            onClose={() => {
+              setShowJobCard(false);
+              setSelectedJobId(null);
+            }}
+          />
+        </JobCardErrorBoundary>
       )}
     </div>
   );
