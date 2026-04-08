@@ -27,7 +27,8 @@ import {
   Clock,
   PhoneCall,
   Package,
-  Leaf
+  Leaf,
+  GitMerge
 } from "lucide-react";
 import {
   Sidebar,
@@ -139,6 +140,13 @@ const businessItems = [
     url: "/integrations",
     icon: Plug,
     value: "integrations",
+    isTab: false
+  },
+  {
+    title: "Xero Reconciliation",
+    url: "/reconciliation",
+    icon: GitMerge,
+    value: "reconciliation",
     isTab: false
   }
 ];

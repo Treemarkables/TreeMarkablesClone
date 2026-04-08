@@ -70,6 +70,7 @@ import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import UnlinkedCalls from "@/pages/UnlinkedCalls";
+import Reconciliation from "@/pages/Reconciliation";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Bot } from "lucide-react";
@@ -629,6 +630,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Integrations />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/reconciliation">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Reconciliation />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
