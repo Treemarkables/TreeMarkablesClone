@@ -6534,19 +6534,27 @@ The Treemarkables Team`;
                               return (
                                 <FormItem>
                                   <FormControl>
+                                    {/* RC13 FIX: onClick moved OFF the outer div and onto Bell + span only.
+                                        Radix UI Checkbox dispatches synthetic click events on its hidden
+                                        <input> which bubble up through a parent div onClick, causing
+                                        handleToggle to fire twice (once from onCheckedChange, once from
+                                        the bubbled synthetic click). By moving onClick to the Bell icon
+                                        and label text only (siblings of Checkbox, not parents), Radix
+                                        internal events can never reach these handlers. */}
                                     <div
-                                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer select-none transition-colors ${
+                                      className={`flex items-center gap-2 p-2 rounded-md border select-none transition-colors ${
                                         field.value
                                           ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
                                           : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"
                                       }`}
-                                      onClick={() => handleToggle(!field.value)}
                                     >
                                       <Bell
-                                        className={`h-4 w-4 flex-shrink-0 ${field.value ? "text-amber-600" : "text-gray-400"}`}
+                                        className={`h-4 w-4 flex-shrink-0 cursor-pointer ${field.value ? "text-amber-600" : "text-gray-400"}`}
+                                        onClick={() => handleToggle(!field.value)}
                                       />
                                       <span
-                                        className={`text-sm font-medium leading-none ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
+                                        className={`text-sm font-medium leading-none cursor-pointer flex-1 ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
+                                        onClick={() => handleToggle(!field.value)}
                                       >
                                         {field.value
                                           ? "Customer wants ETA notification"
@@ -6557,7 +6565,6 @@ The Treemarkables Team`;
                                         onCheckedChange={(checked) =>
                                           handleToggle(checked === true)
                                         }
-                                        onClick={(e) => e.stopPropagation()}
                                         className="ml-auto"
                                         data-testid="checkbox-eta-notification"
                                       />
