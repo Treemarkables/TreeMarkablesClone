@@ -15,7 +15,7 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { invoices, customers, jobs } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -757,6 +757,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerXeroRoutes(app, storage);
   
   // ========================================
+  // CLIENT-SIDE ERROR LOGGING
+  app.post('/api/client-errors', (req: Request, res: Response) => {
+    const { message, stack, componentStack, url, userAgent } = req.body || {};
+    console.error('🚨 [CLIENT ERROR]', {
+      message,
+      url,
+      userAgent,
+      stack: stack?.slice(0, 500),
+      componentStack: componentStack?.slice(0, 500),
+    });
+    res.json({ success: true });
+  });
+
   // AUTHENTICATION ENDPOINTS
   // ========================================
 

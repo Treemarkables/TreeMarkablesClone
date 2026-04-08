@@ -1833,7 +1833,7 @@ export function GlobalJobCard({
 
     try {
       // Clone and filter the assignedTo array
-      const updatedAssignedTo = (editingJob.assignedTo || []).filter(
+      const updatedAssignedTo = (Array.isArray(editingJob.assignedTo) ? editingJob.assignedTo : []).filter(
         (id) => id !== employeeId,
       );
 
@@ -7042,7 +7042,7 @@ The Treemarkables Team`;
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate &&
-                          editingJob?.assignedTo &&
+                          Array.isArray(editingJob?.assignedTo) &&
                           editingJob.assignedTo.length > 0 && (
                             <div className="md:hidden mb-4">
                               <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
@@ -7072,12 +7072,12 @@ The Treemarkables Team`;
                                             {staffName}
                                           </span>
                                           <span className="text-xs text-gray-500">
-                                            {format(
-                                              new Date(
-                                                editingJob.scheduledDate!,
-                                              ),
-                                              "h:mm a",
-                                            )}
+                                            {(() => {
+                                              try {
+                                                const d = new Date(editingJob.scheduledDate!);
+                                                return isNaN(d.getTime()) ? "" : format(d, "h:mm a");
+                                              } catch { return ""; }
+                                            })()}
                                           </span>
                                         </div>
                                       );
@@ -7093,7 +7093,7 @@ The Treemarkables Team`;
                             Upcoming Bookings
                           </label>
                           <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
-                            {editingJob?.assignedTo &&
+                            {Array.isArray(editingJob?.assignedTo) &&
                               editingJob.assignedTo.map(
                                 (employeeId: string) => {
                                   const employee = employees.find(
