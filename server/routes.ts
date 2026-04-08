@@ -11396,7 +11396,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Update business settings
   app.put('/api/business-settings', async (req: Request, res: Response) => {
     try {
-      const validatedData = updateBusinessSettingsSchema.parse(req.body);
+      // Pre-process date strings into Date objects before Zod validation
+      const rawBody = { ...req.body };
+      if (typeof rawBody.metricsStartDate === 'string' && rawBody.metricsStartDate) {
+        rawBody.metricsStartDate = new Date(rawBody.metricsStartDate);
+      } else if (rawBody.metricsStartDate === null || rawBody.metricsStartDate === '') {
+        rawBody.metricsStartDate = null;
+      }
+
+      const validatedData = updateBusinessSettingsSchema.parse(rawBody);
       
       // Filter out sensitive fields that should not be updated with masked values
       const cleanData = { ...validatedData };
