@@ -1679,7 +1679,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         reference: inv.reference ?? null,
         contactName: inv.contact?.name ?? null,
         amountDue: inv.amountDue != null ? Number(inv.amountDue) : null,
-        subTotal: inv.subTotal != null ? Number(inv.subTotal) : null,
+        subtotal: inv.subTotal != null ? Number(inv.subTotal) : null,
         date: inv.date ?? null,
         dueDate: inv.dueDate ?? null,
       }));
@@ -1758,13 +1758,14 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         };
         try {
           const paymentResponse = await client.accountingApi.createPayment(tenantId, payment);
-          const created: Payment = paymentResponse.body;
+          // xero-node wraps the response in a Payments object; extract the first record
+          const created: Payment | undefined = (paymentResponse.body as { payments?: Payment[] }).payments?.[0];
           results.push({
             xeroInvoiceId: match.xeroInvoiceId,
             jobId: match.jobId,
             success: true,
             message: 'Payment created in Xero',
-            paymentId: created.paymentID,
+            paymentId: created?.paymentID,
           });
         } catch (matchErr: unknown) {
           const err = matchErr as { response?: { body?: { Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }> } } } & Error;
