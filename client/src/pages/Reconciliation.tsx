@@ -13,6 +13,7 @@ import {
   RefreshCw,
   GitMerge,
   ChevronRight,
+  ChevronDown,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -26,6 +27,7 @@ interface XeroInvoice {
   subtotal: number | null;
   date: string | null;
   dueDate: string | null;
+  status: string | null;
 }
 
 interface VibeJob {
@@ -36,6 +38,8 @@ interface VibeJob {
   address: string | null;
   subtotal: number | null;
   totalAmount: number | null;
+  scheduledDate: string | null;
+  status: string | null;
 }
 
 type MatchState = "accepted" | "rejected" | "pending";
@@ -170,6 +174,13 @@ function fmt(n: number | null) {
   return `$${n.toLocaleString("en-NZ", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+function fmtDate(d: string | null) {
+  if (!d) return "—";
+  const date = new Date(d);
+  if (isNaN(date.getTime())) return d;
+  return date.toLocaleDateString("en-NZ", { day: "2-digit", month: "short", year: "numeric" });
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function Reconciliation() {
@@ -209,6 +220,15 @@ export default function Reconciliation() {
   );
 
   const [rowStates, setRowStates] = useState<Record<string, MatchState>>({});
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+
+  function toggleExpanded(invoiceId: string) {
+    setExpandedRows((prev) => {
+      const next = new Set(prev);
+      next.has(invoiceId) ? next.delete(invoiceId) : next.add(invoiceId);
+      return next;
+    });
+  }
 
   // Merge computed matches with any user overrides
   const rows: MatchedRow[] = useMemo(

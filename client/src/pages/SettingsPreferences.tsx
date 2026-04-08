@@ -14,6 +14,7 @@ import {
   ArrowLeft,
   TrendingUp,
   Percent,
+  FileText,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +37,7 @@ export default function SettingsPreferences() {
   );
   const [defaultGrossMarginPct, setDefaultGrossMarginPct] =
     useState<string>("");
+  const [invoicePaymentDays, setInvoicePaymentDays] = useState<string>("7");
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -49,6 +51,8 @@ export default function SettingsPreferences() {
     }
     const pct = parseFloat(settings?.data?.defaultGrossMarginPct || "0") || 0;
     setDefaultGrossMarginPct(pct > 0 ? String(pct) : "");
+    const days = settings?.data?.invoicePaymentDays ?? 7;
+    setInvoicePaymentDays(String(days));
   }, [settings]);
 
   // Mutation to update settings
@@ -76,12 +80,15 @@ export default function SettingsPreferences() {
 
   const handleSave = () => {
     const marginValue = parseFloat(defaultGrossMarginPct) || 0;
+    const daysValue = parseInt(invoicePaymentDays, 10);
     updateSettingsMutation.mutate({
       metricsStartDate: metricsStartDate
         ? metricsStartDate.toISOString()
         : null,
       defaultGrossMarginPct:
         marginValue >= 0 && marginValue <= 100 ? marginValue : 0,
+      invoicePaymentDays:
+        !isNaN(daysValue) && daysValue >= 1 && daysValue <= 365 ? daysValue : 7,
     });
   };
 
@@ -218,6 +225,44 @@ export default function SettingsPreferences() {
                 </p>
               </div>
             )}
+
+            {/* Invoice Payment Terms */}
+            <div className="space-y-2 pt-2 border-t">
+              <Label
+                htmlFor="invoice-payment-days"
+                className="text-base font-medium flex items-center gap-2"
+              >
+                <FileText className="w-4 h-4" />
+                Invoice Payment Terms
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Number of days from invoice issue date until payment is due.
+                This applies to all new invoices generated from job cards.
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <div className="relative w-40">
+                  <Input
+                    id="invoice-payment-days"
+                    type="number"
+                    min="1"
+                    max="365"
+                    step="1"
+                    value={invoicePaymentDays}
+                    onChange={(e) => setInvoicePaymentDays(e.target.value)}
+                    placeholder="7"
+                    data-testid="input-invoice-payment-days"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">
+                    days
+                  </span>
+                </div>
+                {parseInt(invoicePaymentDays, 10) > 0 && !isNaN(parseInt(invoicePaymentDays, 10)) && (
+                  <p className="text-sm text-muted-foreground">
+                    Due {parseInt(invoicePaymentDays, 10) === 1 ? "1 day" : `${parseInt(invoicePaymentDays, 10)} days`} after issue
+                  </p>
+                )}
+              </div>
+            </div>
 
             {/* Default Gross Margin */}
             <div className="space-y-2 pt-2 border-t">
