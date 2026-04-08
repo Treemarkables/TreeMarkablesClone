@@ -1612,13 +1612,16 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   // GET /api/reconciliation/xero-sales
   // Returns AUTHORISED ACCREC invoices from Xero for reconciliation matching
   app.get('/api/reconciliation/xero-sales', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     try {
       const client = await getValidXeroClient();
       if (!client) {
         return res.status(400).json({ success: false, message: 'Not connected to Xero. Please connect first.' });
       }
 
-      const connection = await storage.getActiveXeroConnection();
+      const connection = await storage.getXeroConnection('custom-connection');
       if (!connection) {
         return res.status(400).json({ success: false, message: 'No active Xero connection found.' });
       }
@@ -1662,16 +1665,18 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   // GET /api/reconciliation/vibe-jobs
   // Returns completed jobs with customer names for reconciliation matching
   app.get('/api/reconciliation/vibe-jobs', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     try {
-      const { jobs } = await storage.getAllJobs({ status: 'completed', limit: 999999 });
+      const jobs = await storage.getCompletedJobsWithCustomerNames();
 
-      const result = jobs.map((job: any) => ({
+      const result = jobs.map((job) => ({
         jobId: job.id,
         jobNumber: job.jobNumber ?? null,
         customerName: job.customerName ?? null,
         title: job.title ?? null,
         address: job.address ?? null,
-        status: job.status,
         subtotal: job.subtotal != null ? parseFloat(job.subtotal.toString()) : null,
         totalAmount: job.totalAmount != null ? parseFloat(job.totalAmount.toString()) : null,
       }));
@@ -1686,6 +1691,9 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
   // POST /api/reconciliation/commit
   // Creates Xero payments for each confirmed invoice–job match
   app.post('/api/reconciliation/commit', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
     try {
       const { matches, bankAccountCode: bodyBankCode } = req.body as {
         matches: Array<{ xeroInvoiceId: string; jobId: string; amount: number; bankAccountCode?: string }>;
@@ -1715,7 +1723,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         return res.status(400).json({ success: false, message: 'Not connected to Xero. Please connect first.' });
       }
 
-      const connection = await storage.getActiveXeroConnection();
+      const connection = await storage.getXeroConnection('custom-connection');
       if (!connection) {
         return res.status(400).json({ success: false, message: 'No active Xero connection found.' });
       }
