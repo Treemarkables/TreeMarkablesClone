@@ -1680,6 +1680,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         contactName: inv.contact?.name ?? null,
         amountDue: inv.amountDue != null ? Number(inv.amountDue) : null,
         subtotal: inv.subTotal != null ? Number(inv.subTotal) : null,
+        total: inv.total != null ? Number(inv.total) : null,
         date: inv.date ?? null,
         dueDate: inv.dueDate ?? null,
         status: inv.status ?? null,

@@ -27,6 +27,8 @@ interface XeroInvoice {
   contactName: string | null;
   amountDue: number | null;
   subtotal: number | null;
+  /** Total including GST — the canonical amount to display on the Xero side */
+  total: number | null;
   date: string | null;
   dueDate: string | null;
   status: string | null;
@@ -86,6 +88,19 @@ function subtotalPctDiff(a: number | null, b: number | null): number | null {
   return Math.abs(a - b) / Math.max(Math.abs(a), 0.01);
 }
 
+/**
+ * Derive the exc-GST amount from a Xero invoice.
+ * Xero's `total` is always inc GST; divide by 1.15 to get exc GST.
+ * Fall back to `subtotal` only when `total` is unavailable.
+ */
+function xeroExcGst(inv: XeroInvoice): number | null {
+  if (inv.total != null && inv.total > 0) {
+    return Math.round((inv.total / 1.15) * 100) / 100;
+  }
+  // Legacy fallback: if total is missing, use subtotal as-is
+  return inv.subtotal;
+}
+
 function scoreMatch(
   xeroInv: XeroInvoice,
   vibeJob: VibeJob,
@@ -107,16 +122,16 @@ function scoreMatch(
 
   // ── Criterion 1: Job number in reference (highest weight) ─────────────────
   if (refJobNum !== null) {
-    // We already confirmed it matches (otherwise we'd have returned above)
     score += 3;
     reasons.push("Job # in reference");
   }
 
   // ── Criterion 2: Fuzzy name match ─────────────────────────────────────────
-  // Require ≥ 0.65 Jaccard similarity AND amounts within 20% for a name-only
-  // match to count. This prevents a single shared first-name token from
-  // creating a false match between completely different customers/amounts.
-  const amtDiff = subtotalPctDiff(xeroInv.subtotal, vibeJob.subtotal);
+  // Compare Xero's total/1.15 (exc GST) against Vibe job's subtotal (exc GST)
+  // so both sides are in the same tax basis regardless of how the invoice
+  // was created in Xero.
+  const xeroExcGstAmt = xeroExcGst(xeroInv);
+  const amtDiff = subtotalPctDiff(xeroExcGstAmt, vibeJob.subtotal);
   if (xeroInv.contactName && vibeJob.customerName) {
     const sim = nameSimilarity(xeroInv.contactName, vibeJob.customerName);
     const amountsCompatible = amtDiff == null || amtDiff <= 0.20;
@@ -460,16 +475,17 @@ export default function Reconciliation() {
           const isRejected = row.state === "rejected";
 
           const isExpanded = expandedRows.has(inv.invoiceId);
-          const xeroGst =
-            inv.amountDue != null && inv.subtotal != null
-              ? inv.amountDue - inv.subtotal
-              : null;
+          // Use total (inc GST) as the authoritative Xero amount; derive exc GST and GST from it.
+          const xeroTotal = inv.total ?? inv.amountDue;
+          const xeroExcGstDisplay = xeroTotal != null ? Math.round((xeroTotal / 1.15) * 100) / 100 : null;
+          const xeroGst = xeroTotal != null && xeroExcGstDisplay != null ? Math.round((xeroTotal - xeroExcGstDisplay) * 100) / 100 : null;
           const jobGst =
             job && job.totalAmount != null && job.subtotal != null
               ? job.totalAmount - job.subtotal
               : null;
 
-          const hasMismatch = job ? amountMismatch(inv.subtotal, job.subtotal) : false;
+          // Compare Xero's total/1.15 (exc GST) against Vibe job's subtotal (exc GST)
+          const hasMismatch = job ? amountMismatch(xeroExcGst(inv), job.subtotal) : false;
           const jobDate = job ? (job.completedDate ?? job.scheduledDate) : null;
 
           return (
@@ -502,9 +518,9 @@ export default function Reconciliation() {
                       </p>
                     )}
                     <p className="text-sm font-medium mt-1">
-                      {fmt(inv.subtotal)}{" "}
+                      {fmt(inv.total ?? inv.amountDue)}{" "}
                       <span className="text-xs text-gray-400 font-normal">
-                        exc GST
+                        inc GST
                       </span>
                     </p>
                   </div>
@@ -637,11 +653,11 @@ export default function Reconciliation() {
                           <DetailRow label="Contact / payee" value={inv.contactName} />
                           <DetailRow label="Reference" value={inv.reference} />
                           <div className="border-t border-gray-100 dark:border-gray-700 pt-1.5 mt-1.5 space-y-1.5">
-                            <DetailRow label="Subtotal (exc GST)" value={fmt(inv.subtotal)} />
+                            <DetailRow label="Subtotal (exc GST)" value={fmt(xeroExcGstDisplay)} />
                             <DetailRow label="GST amount" value={fmt(xeroGst)} />
                             <div className="flex justify-between gap-4">
                               <dt className="text-gray-500 flex-shrink-0">Total (inc GST)</dt>
-                              <dd className="font-semibold text-gray-900 dark:text-white text-right">{fmt(inv.amountDue)}</dd>
+                              <dd className="font-semibold text-gray-900 dark:text-white text-right">{fmt(xeroTotal)}</dd>
                             </div>
                           </div>
                           <div className="flex justify-between gap-4">
