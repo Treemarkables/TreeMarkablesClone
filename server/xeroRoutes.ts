@@ -1715,6 +1715,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         subtotal: job.subtotal != null ? Number(job.subtotal) : null,
         totalAmount: job.totalAmount != null ? Number(job.totalAmount) : null,
         scheduledDate: job.scheduledDate ? job.scheduledDate.toISOString() : null,
+        completedDate: job.completedDate ? job.completedDate.toISOString() : null,
         status: job.status ?? null,
       }));
 
