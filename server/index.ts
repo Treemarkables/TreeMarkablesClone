@@ -367,6 +367,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS default_gross_margin_pct NUMERIC(5,2) NOT NULL DEFAULT 0
       `);
       log("✅ Schema migration: business_settings.default_gross_margin_pct ready", "startup");
+
+      // Add xero_default_bank_account_code to business_settings for reconciliation
+      await pool.query(`
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS xero_default_bank_account_code TEXT
+      `);
+      log("✅ Schema migration: business_settings.xero_default_bank_account_code ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }
