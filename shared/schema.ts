@@ -1049,6 +1049,9 @@ export const businessSettings = pgTable("business_settings", {
   // Analytics Defaults
   defaultGrossMarginPct: decimal("default_gross_margin_pct", { precision: 5, scale: 2 }).notNull().default("0"),
 
+  // Invoice Settings
+  invoicePaymentDays: integer("invoice_payment_days").default(7),
+
   // Xero Integration
   xeroDefaultBankAccountCode: text("xero_default_bank_account_code"),
 

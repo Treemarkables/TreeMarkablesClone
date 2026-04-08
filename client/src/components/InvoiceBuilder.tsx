@@ -143,6 +143,13 @@ export function InvoiceBuilder({
     enabled: isOpen && !!job.id,
   });
 
+  // Fetch business settings for invoice payment days
+  const { data: businessSettings } = useQuery({
+    queryKey: ["/api/business-settings"],
+    enabled: isOpen,
+  });
+  const invoicePaymentDays: number = (businessSettings as any)?.data?.invoicePaymentDays ?? 7;
+
   // Fetch materials/services for line item selection
   const { data: materialsData } = useQuery({
     queryKey: ["/api/materials"],
@@ -609,7 +616,7 @@ export function InvoiceBuilder({
           customData: {
             address: editableAddress,
             contactName: editableContactName || undefined,
-            dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+            dueDate: new Date(Date.now() + invoicePaymentDays * 24 * 60 * 60 * 1000)
               .toISOString()
               .split("T")[0],
             notes: editableNotes,
@@ -1594,7 +1601,7 @@ export function InvoiceBuilder({
                       amount: subtotal.toString(),
                       status: "draft" as const,
                       dueDate: new Date(
-                        Date.now() + 7 * 24 * 60 * 60 * 1000,
+                        Date.now() + invoicePaymentDays * 24 * 60 * 60 * 1000,
                       ).toISOString(),
                       issueDate: new Date().toISOString(),
                       items: lineItems.map((item) => ({

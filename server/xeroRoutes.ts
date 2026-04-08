@@ -1682,6 +1682,7 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         subtotal: inv.subTotal != null ? Number(inv.subTotal) : null,
         date: inv.date ?? null,
         dueDate: inv.dueDate ?? null,
+        status: inv.status ?? null,
       }));
 
       return res.json({ success: true, data });
@@ -1713,6 +1714,8 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         address: job.address ?? null,
         subtotal: job.subtotal != null ? Number(job.subtotal) : null,
         totalAmount: job.totalAmount != null ? Number(job.totalAmount) : null,
+        scheduledDate: job.scheduledDate ? job.scheduledDate.toISOString() : null,
+        status: job.status ?? null,
       }));
 
       return res.json({ success: true, data });

@@ -373,6 +373,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS xero_default_bank_account_code TEXT
       `);
       log("✅ Schema migration: business_settings.xero_default_bank_account_code ready", "startup");
+
+      // Add invoice_payment_days to business_settings
+      await pool.query(`
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS invoice_payment_days INTEGER NOT NULL DEFAULT 7
+      `);
+      log("✅ Schema migration: business_settings.invoice_payment_days ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

@@ -4929,14 +4929,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Generate invoice number using job number
       const invoiceNumber = job?.jobNumber ? String(job.jobNumber) : `INV-${Date.now().toString().slice(-6)}`;
 
-      // Calculate due date - use custom date if provided, otherwise default to 7 days
+      // Calculate due date - use custom date if provided, otherwise read from business settings
       const issueDate = new Date();
       let dueDate: Date;
       if (customData.dueDate) {
         dueDate = new Date(customData.dueDate);
       } else {
+        const bizSettings = await storage.getBusinessSettings();
+        const defaultDueDays = bizSettings?.invoicePaymentDays ?? 7;
         dueDate = new Date();
-        const defaultDueDays = 7; // fallback to 7 days
         dueDate.setDate(dueDate.getDate() + defaultDueDays);
       }
 
