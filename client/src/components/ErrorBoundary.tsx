@@ -10,13 +10,14 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  componentStack: string;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
+  private capturedComponentStack: string = '';
+
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, componentStack: '' };
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -24,20 +25,23 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
-    const stack = errorInfo.componentStack || '';
-    this.setState({ componentStack: stack });
+    // IMPORTANT: Do NOT call setState here — it triggers another render cycle
+    // which can cause infinite loops when the error itself is a maximum-update-depth error.
+    // Instead, store the component stack in a class property.
+    this.capturedComponentStack = errorInfo.componentStack || '';
 
-    // Save to localStorage so diagnostics survive a page reload
+    // Persist to localStorage for post-reload diagnosis
     try {
       localStorage.setItem('lastAppCrash', JSON.stringify({
         message: error.message,
         stack: error.stack?.substring(0, 2000),
-        componentStack: stack.substring(0, 3000),
+        componentStack: this.capturedComponentStack.substring(0, 3000),
         url: window.location.href,
         timestamp: new Date().toISOString(),
       }));
     } catch (_) {}
 
+    // Fire-and-forget server log
     try {
       fetch('/api/client-errors', {
         method: 'POST',
@@ -45,7 +49,7 @@ export class ErrorBoundary extends Component<Props, State> {
         body: JSON.stringify({
           message: error.message,
           stack: error.stack,
-          componentStack: stack,
+          componentStack: this.capturedComponentStack,
           url: window.location.href,
           userAgent: navigator.userAgent,
         }),
@@ -58,7 +62,8 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   handleRetry = () => {
-    this.setState({ hasError: false, error: null, componentStack: '' });
+    this.capturedComponentStack = '';
+    this.setState({ hasError: false, error: null });
   };
 
   handleGoHome = () => {
@@ -71,8 +76,7 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
-      // Show truncated component stack for diagnosis
-      const stackLines = this.state.componentStack
+      const stackLines = this.capturedComponentStack
         .split('\n')
         .filter(l => l.trim())
         .slice(0, 12)
@@ -86,33 +90,33 @@ export class ErrorBoundary extends Component<Props, State> {
                 <AlertTriangle className="w-8 h-8 text-orange-600" />
               </div>
             </div>
-            
+
             <h2 className="text-xl font-semibold text-gray-900 mb-2">
               Something went wrong
             </h2>
-            
+
             <p className="text-gray-600 mb-6">
               Don't worry — your data is safe. Try one of these options to get back on track.
             </p>
 
             <div className="space-y-3">
-              <Button 
+              <Button
                 onClick={this.handleRetry}
                 className="w-full bg-orange-600 hover:bg-orange-700"
               >
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Try Again
               </Button>
-              
-              <Button 
+
+              <Button
                 onClick={this.handleGoHome}
                 variant="outline"
                 className="w-full"
               >
                 Go to Dispatch Board
               </Button>
-              
-              <Button 
+
+              <Button
                 onClick={this.handleReload}
                 variant="ghost"
                 className="w-full text-gray-500"
