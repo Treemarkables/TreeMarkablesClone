@@ -6146,6 +6146,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   // TwiML: answer the call → dial owner's real phone while recording
   app.post('/api/webhooks/twilio-answer', (req: Request, res: Response) => {
+    // Validate Twilio signature to prevent spoofed requests
+    if (!validateTwilioSignature(req)) {
+      console.error('❌ Invalid Twilio signature for answer webhook');
+      return res.status(403).send('Forbidden');
+    }
+
     const ownerPhone = process.env.HERO_PHONE_NUMBER;
     if (!ownerPhone) {
       console.error('❌ HERO_PHONE_NUMBER not set - cannot forward call');
@@ -6209,12 +6215,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       // ForwardedFrom is set by the carrier when a call is forwarded from the owner's
       // real number to the Twilio number. Use it so we get the customer's number, not the owner's.
-      const { CallSid, CallStatus, From, ForwardedFrom, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
+      const { CallSid, CallStatus, RecordingStatus, From, ForwardedFrom, To, RecordingUrl, RecordingSid, RecordingDuration } = req.body;
       
-      console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}, From: ${From}, ForwardedFrom: ${ForwardedFrom}`);
+      console.log(`📞 Twilio voice webhook - CallSid: ${CallSid}, Status: ${CallStatus}, RecordingStatus: ${RecordingStatus}, From: ${From}, ForwardedFrom: ${ForwardedFrom}`);
       
-      // Handle call completed with recording
-      if (CallStatus === 'completed' && RecordingUrl) {
+      // Handle call completed with recording.
+      // Twilio recording status callbacks send RecordingStatus='completed', NOT CallStatus='completed',
+      // so we must match on either field to handle both call-status and recording-status payloads.
+      if ((CallStatus === 'completed' || RecordingStatus === 'completed') && RecordingUrl) {
         console.log(`🎙️ Call ${CallSid} completed with recording: ${RecordingUrl}`);
         
         // Normalize phone number (NZ format)
@@ -6369,7 +6377,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                 // Create or find customer
                 let customer;
                 const customers = await storage.getAllCustomers();
-                customer = customers.find(c => c.phone && normalizePhone(c.phone) === callerPhone);
+                // Check both phone and mobile fields to avoid creating duplicate customers
+                customer = customers.find(c =>
+                  (c.phone && normalizePhone(c.phone) === callerPhone) ||
+                  ((c as any).mobile && normalizePhone((c as any).mobile) === callerPhone)
+                );
                 
                 if (!customer && jobData.customerName) {
                   customer = await storage.createCustomer({
@@ -6380,9 +6392,20 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                   });
                   console.log(`✅ New customer created: ${customer.name}`);
                 }
+
+                // Link the call record to the customer now that we know who it is
+                if (customer) {
+                  await storage.updateCall(call.id, { customerId: customer.id });
+                  console.log(`🔗 Call record linked to customer: ${customer.id}`);
+                }
                 
                 // Create job if we have enough data
                 if (customer && (jobData.serviceType || jobData.address)) {
+                  // Split customerName into first/last for job contact fields
+                  const nameParts = (jobData.customerName || customer.name || '').trim().split(/\s+/);
+                  const jobContactFirstName = nameParts[0] || '';
+                  const jobContactLastName = nameParts.slice(1).join(' ') || '';
+
                   const job = await storage.createJob({
                     customerId: customer.id,
                     status: jobData.urgency === 'emergency' ? 'in-progress' : 'scheduled',
@@ -6390,10 +6413,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                     serviceType: jobData.serviceType || 'other',
                     priority: jobData.urgency === 'emergency' ? 'urgent' : 'normal',
                     estimatedAmount: jobData.estimatedPrice ? String(jobData.estimatedPrice) : undefined,
-                    notes: jobData.notes || ''
+                    notes: jobData.notes || '',
+                    jobContactPhone: callerPhone,
+                    jobContactFirstName: jobContactFirstName || undefined,
+                    jobContactLastName: jobContactLastName || undefined
                   });
                   
-                  // Log to job diary
+                  // Log to job diary with recording metadata so the audio player renders
                   await storage.createJobDiaryEntry({
                     jobId: job.id,
                     entryType: 'call',
@@ -6401,7 +6427,11 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                     description: `Call received from ${customer.name} (${callerPhone})\n\nTranscript:\n${transcript}\n\nAuto-extracted:\n${JSON.stringify(jobData, null, 2)}`,
                     authorName: 'System',
                     authorRole: 'system',
-                    tags: ['call', 'auto-created', 'ai-extracted']
+                    tags: ['call', 'auto-created', 'ai-extracted'],
+                    metadata: {
+                      recordingUrl: servingUrl,
+                      transcription: transcript
+                    }
                   });
                   
                   console.log(`✅ Job #${job.jobNumber} auto-created from call`);
