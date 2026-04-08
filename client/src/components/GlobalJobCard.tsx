@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useForm, useFieldArray } from "react-hook-form";
+import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
@@ -356,23 +356,68 @@ export function GlobalJobCard({
     },
   });
 
-  // Hoist ALL form.watch() calls to the top of the component.
-  // CRITICAL: Multiple form.watch("field") calls scattered in JSX create multiple subscriptions
-  // to the same field, causing cascading re-renders when form.reset() or replaceLineItems() fires.
-  // One subscription per field at component top = predictable, non-cascading re-renders.
-  const watchedCustomerId = (form.watch("customerId") as string) ?? "";
-  const watchedStatus = form.watch("status") as string;
-  const watchedLineItems = (form.watch("lineItems") || []) as any[];
-  const watchedEtaNotificationRequested = form.watch("etaNotificationRequested") as boolean;
-  const watchedAddress = (form.watch("address") || "") as string;
-  const watchedNewCustomerName = (form.watch("newCustomerName") || "") as string;
-  const watchedIsNewCustomer = form.watch("isNewCustomer") as boolean;
-  const watchedSameAsJobAddress = form.watch("sameAsJobAddress") as boolean;
-  const watchedDescription = (form.watch("description") || "") as string;
-  const watchedPaidAmount = (form.watch("paidAmount") || "0") as string;
-  const watchedBillingContactEmail = (form.watch("billingContactEmail") || "") as string;
-  const watchedJobContactEmail = (form.watch("jobContactEmail") || "") as string;
-  const watchedBillingNameOverride = (form.watch("billingNameOverride") || "") as string;
+  // useFieldArray must come BEFORE useWatch so that lineItems is managed
+  // by useFieldArray exclusively — having form.watch("lineItems") AND useFieldArray
+  // on the same field creates competing subscriptions that cascade into an infinite
+  // re-render loop when replaceLineItems() fires during form reset.
+  const {
+    fields: lineItemFields,
+    append: appendLineItem,
+    remove: removeLineItemField,
+    update: updateLineItemField,
+    replace: replaceLineItems,
+  } = useFieldArray({
+    control: form.control,
+    name: "lineItems",
+  });
+
+  // Single useWatch call for all scalar fields (NOT lineItems — that's managed by useFieldArray above).
+  // Using one useWatch() instead of 13 individual form.watch() calls avoids accumulating
+  // subscriptions and prevents cascading re-renders when form.reset() fires.
+  const [
+    watchedCustomerId_raw,
+    watchedStatus_raw,
+    watchedEtaNotificationRequested_raw,
+    watchedAddress_raw,
+    watchedNewCustomerName_raw,
+    watchedIsNewCustomer_raw,
+    watchedSameAsJobAddress_raw,
+    watchedDescription_raw,
+    watchedPaidAmount_raw,
+    watchedBillingContactEmail_raw,
+    watchedJobContactEmail_raw,
+    watchedBillingNameOverride_raw,
+  ] = useWatch({
+    control: form.control,
+    name: [
+      "customerId",
+      "status",
+      "etaNotificationRequested",
+      "address",
+      "newCustomerName",
+      "isNewCustomer",
+      "sameAsJobAddress",
+      "description",
+      "paidAmount",
+      "billingContactEmail",
+      "jobContactEmail",
+      "billingNameOverride",
+    ],
+  });
+  const watchedCustomerId = (watchedCustomerId_raw as string) ?? "";
+  const watchedStatus = (watchedStatus_raw as string) ?? "";
+  const watchedEtaNotificationRequested = (watchedEtaNotificationRequested_raw as boolean) ?? false;
+  const watchedAddress = (watchedAddress_raw as string) ?? "";
+  const watchedNewCustomerName = (watchedNewCustomerName_raw as string) ?? "";
+  const watchedIsNewCustomer = (watchedIsNewCustomer_raw as boolean) ?? false;
+  const watchedSameAsJobAddress = (watchedSameAsJobAddress_raw as boolean) ?? true;
+  const watchedDescription = (watchedDescription_raw as string) ?? "";
+  const watchedPaidAmount = (watchedPaidAmount_raw as string) ?? "0";
+  const watchedBillingContactEmail = (watchedBillingContactEmail_raw as string) ?? "";
+  const watchedJobContactEmail = (watchedJobContactEmail_raw as string) ?? "";
+  const watchedBillingNameOverride = (watchedBillingNameOverride_raw as string) ?? "";
+  // lineItems is sourced from useFieldArray.fields (NOT form.watch) to avoid double-subscription
+  const watchedLineItems = lineItemFields as any[];
   const selectedVipCustomer = customers.find((c) => c.id === watchedCustomerId);
   useEffect(() => {
     if (watchedCustomerId && customers && customers.length > 0) {
@@ -1109,18 +1154,8 @@ export function GlobalJobCard({
     };
   }, []);
 
-  // Properly manage line items as form field array
-  const {
-    fields: lineItemFields,
-    append: appendLineItem,
-    remove: removeLineItemField,
-    update: updateLineItemField,
-    replace: replaceLineItems,
-  } = useFieldArray({
-    control: form.control,
-    name: "lineItems",
-  });
   // Keep a stable ref so the form-reset effect doesn't re-fire every render
+  // (useFieldArray + replaceLineItems are now declared at the top of the component)
   replaceLineItemsRef.current = replaceLineItems;
 
   // Get customerId from the consolidated formData watch
