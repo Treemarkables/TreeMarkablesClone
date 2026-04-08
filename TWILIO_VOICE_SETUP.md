@@ -1,205 +1,193 @@
-# Twilio Voice Call Recording & Auto Job Creation Setup
+# Twilio Voice Call Recording Setup — Live Call + Auto Transcription
 
 ## Overview
-This system automatically:
-1. Records all incoming phone calls to your Twilio number
-2. Transcribes calls using OpenAI Whisper
-3. Extracts job details using GPT-5
-4. Creates customers and jobs automatically
-5. **NEW**: Auto-generates quote drafts when pricing is discussed
+
+When a customer calls your real number (on business cards, website, etc.) and you don't answer — or you've set up conditional forwarding — the call routes to Twilio. Twilio then:
+
+1. Calls your real phone so you can answer and have a live conversation
+2. Records the entire conversation
+3. Transcribes it with OpenAI Whisper
+4. Extracts the customer name, address, and job details
+5. Auto-creates a customer and job in your app
+6. Auto-generates a draft quote if pricing was discussed
+
+If you don't answer within 20 seconds, it plays a voicemail greeting and records a message instead — which goes through the same transcription pipeline.
 
 ## Prerequisites
-- Active Twilio account with phone number
-- Twilio credentials configured (TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER)
-- OpenAI API key configured (OPENAI_API_KEY)
 
-## Twilio Phone Number Configuration
+- Active Twilio account with a NZ phone number
+- `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` configured as secrets
+- `HERO_PHONE_NUMBER` secret set to your real phone number (e.g. `+6421XXXXXXX`)
+- `OPENAI_API_KEY` configured
 
-### Step 1: Configure Voice Settings
-1. Go to [Twilio Console](https://console.twilio.com/)
-2. Navigate to **Phone Numbers → Manage → Active Numbers**
-3. Click on your Twilio phone number
+## How Calls Reach Twilio
 
-### Step 2: Enable Call Recording
-Under **Voice & Fax** section:
+**Option A — Carrier conditional forwarding (recommended)**
 
-**A CALL COMES IN:**
-- Set to: `TwiML Bin` (or `Webhook`)
-- Create a new TwiML Bin with this content:
+Set up forwarding on your NZ carrier so unanswered calls go to your Twilio number:
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="alice">Thank you for calling Treemarkables. Please leave your details and we'll get back to you shortly.</Say>
-    <Record 
-        maxLength="300" 
-        transcribe="false" 
-        recordingStatusCallback="https://YOUR_REPL_URL.replit.app/api/webhooks/twilio-voice"
-        recordingStatusCallbackEvent="completed"
-    />
-</Response>
+| Carrier | Code to enable | Code to disable |
+|---------|---------------|-----------------|
+| Spark | `**61*+64[TwilioNumber]*11*20#` | `##61#` |
+| Vodafone | `**61*+64[TwilioNumber]#` | `##61#` |
+| 2degrees | `**61*+64[TwilioNumber]#` | `##61#` |
+
+Replace `[TwilioNumber]` with your Twilio number digits only (e.g. `94123456` for a 09 number). The `20` sets the ring time to 20 seconds before forwarding.
+
+**Option B — iPhone call forwarding**
+
+Settings → Phone → Call Forwarding → enter your Twilio number. Note: this forwards ALL calls, not just unanswered ones.
+
+## Twilio Console Configuration
+
+### Step 1: Get your deployed app URL
+
+Use your **published** app URL (not the dev preview URL):
+```
+https://your-app-name.replit.app
 ```
 
-**Replace `YOUR_REPL_URL` with your actual Replit app URL.**
+### Step 2: Configure your Twilio phone number
 
-### Step 3: Configure Status Callback (Alternative Method)
+1. Go to [Twilio Console](https://console.twilio.com/)
+2. Navigate to **Phone Numbers → Manage → Active Numbers**
+3. Click your Twilio NZ number
 
-If you prefer to answer calls differently, you can also set:
+Under **Voice Configuration**:
 
 **A CALL COMES IN:**
 - Set to: `Webhook`
-- URL: `https://YOUR_REPL_URL.replit.app/api/webhooks/twilio-voice`
+- URL: `https://your-app-name.replit.app/api/webhooks/twilio-answer`
 - Method: `HTTP POST`
 
-**STATUS CALLBACK URL:**
-- URL: `https://YOUR_REPL_URL.replit.app/api/webhooks/twilio-voice`
+**STATUS CALLBACK URL:** *(optional but recommended for missed call tracking)*
+- URL: `https://your-app-name.replit.app/api/webhooks/twilio-voice`
 - Method: `HTTP POST`
-
-### Step 4: Enable Recording on All Calls
-
-Under **Voice Configuration**:
-- Recording: `Record from answer`
-- Recording Channels: `Dual channel`
-- Status Callback: `https://YOUR_REPL_URL.replit.app/api/webhooks/twilio-voice`
 
 Click **Save** at the bottom.
 
-## How It Works
+### That's it
 
-### Call Flow
-1. **Customer calls** → Twilio phone number
-2. **Call is answered** → Custom greeting plays
-3. **Recording starts** → Customer leaves message
-4. **Call ends** → Twilio sends webhook to `/api/webhooks/twilio-voice`
-5. **System processes**:
-   - Downloads MP3 recording
-   - Transcribes with Whisper
-   - Extracts job data with GPT-5
-   - Creates/finds customer by phone
-   - Creates job automatically
-   - **Auto-generates quote if pricing discussed**
-   - Logs everything to job diary
+No TwiML Bin needed. The app dynamically generates the TwiML at runtime using your `HERO_PHONE_NUMBER` secret.
 
-### Data Extraction
-GPT-4 extracts:
-- **Customer Name**: From conversation
-- **Phone Number**: From caller ID
-- **Service Type**: tree-removal, pruning, stump-grinding, etc.
-- **Address**: Job location
-- **Urgency**: emergency, urgent, normal, low
-- **Estimated Price**: If quoted in call
-- **Notes**: Key job details
+## What Happens on Each Call
 
-### Auto Job Creation Rules
-A job is auto-created if:
-- Customer exists or can be created (needs name from call)
-- AND (service type OR address is mentioned)
+```
+Customer calls your real number
+    ↓
+Carrier forwards to Twilio (if unanswered)
+    ↓
+Twilio hits /api/webhooks/twilio-answer
+    ↓
+App rings HERO_PHONE_NUMBER (your real phone)
+    ↓
+If you answer: conversation recorded in real time
+If no answer (20s): voicemail greeting plays, customer leaves message
+    ↓
+Recording sent to /api/webhooks/twilio-voice
+    ↓
+App downloads MP3 → stores in Object Storage (permanent)
+    ↓
+Whisper transcribes the audio
+    ↓
+GPT-4 extracts: customer name, address, service type, urgency, price
+    ↓
+Customer record created (or matched by phone number)
+Job created and linked to customer
+If pricing discussed: draft quote auto-generated
+All logged to job diary with full transcript
+```
 
-Otherwise, the call is recorded and transcribed but no job is created.
+## Caller ID — How It Works
 
-### Auto Quote Generation (NEW)
-When a job is auto-created from a call, the system analyzes the transcript for pricing discussions:
+When your NZ carrier forwards a call to Twilio, it passes the original caller's number in a `ForwardedFrom` header. The app reads this so the customer is correctly identified — not you (the phone owner).
 
-**Quote is auto-generated if ANY of these are detected:**
-- Estimated price mentioned in call (e.g., "$2000", "two thousand dollars")
-- Keywords: "price", "cost", "quote" in transcript
+If a call comes directly to the Twilio number (not forwarded), the app falls back to the standard `From` field.
 
-**Quote Extraction Process:**
-1. GPT-5 analyzes transcript for pricing components
-2. Extracts detailed quote information:
-   - Job description
-   - Tree types mentioned
-   - Estimated price (in NZD)
-   - Line items (if multiple services discussed)
-   - Additional notes
-3. Creates proposal/quote with status "draft"
-4. Logs quote creation to job diary with extracted details
+## What You'll See After a Call
 
-**Example:**
-Call transcript: *"I need two oak trees removed and stumps ground. Tree removal is $1500, stump grinding $500."*
+In the **Job Diary** for the auto-created job:
+- Phone icon entry with the full transcript
+- Inline audio player to replay the recording
+- Sentiment badge (Positive / Neutral / Negative)
+- Auto-extracted job details shown as a summary
 
-Generated quote:
-- Section 1: "Tree removal" - 2 × $750 = $1,500
-- Section 2: "Stump grinding" - 1 × $500 = $500
-- Total: $2,000
-
-The quote is saved as a draft and appears in the job's proposals list, ready for review and sending to the customer.
+In the **Communications** tab:
+- All call records with linked job numbers
+- Search by caller name, number, or transcript content
 
 ## Testing
 
-### 1. Test Call (with Quote Generation)
-Call your Twilio number and say:
-> "Hi, my name is John Smith. I need a large oak tree removed from 123 Main Street in Auckland. It's urgent, probably about $2000."
+### 1. Test the answer flow
 
-### 2. Check Logs
+Call your Twilio number directly. Within 2 seconds your `HERO_PHONE_NUMBER` should ring. Answer it and have a short conversation:
+
+> "Hi, I'm John Smith calling about removing a large kahikatea tree at 47 Remuera Road Auckland. I was quoted about $1,800."
+
+### 2. Test the voicemail fallback
+
+Call your Twilio number and let it ring for 20+ seconds without answering on `HERO_PHONE_NUMBER`. You should hear the voicemail greeting and be able to leave a message.
+
+### 3. Check logs
+
 Watch server logs for:
 ```
-📞 Twilio voice webhook - CallSid: CA..., Status: completed
+📞 Twilio answer webhook — forwarding to +6421XXXXXXX
+📞 Twilio voice webhook - CallSid: CA...
 🎙️ Call CA... completed with recording: https://...
-✅ Recording downloaded: /uploads/recordings/twilio-CA...mp3
-📝 Call record created: <call-id>
-✅ Call transcribed: Hi, my name is John Smith...
+✅ Recording downloaded (XXXXXX bytes)
+✅ Recording uploaded to Object Storage
+📝 Call record created: <uuid>
+✅ Call transcribed: Hi, I'm John Smith...
 🤖 Extracted job data: { customerName: 'John Smith', ... }
 ✅ New customer created: John Smith
 ✅ Job #1234 auto-created from call
 💰 Pricing discussion detected - generating quote draft...
-📋 Quote data extracted: { estimatedPrice: 2000, ... }
 ✅ Quote auto-generated for job #1234
 ```
 
-### 3. Verify in App
-1. Check **Dispatch Board** for new job
-2. View **Job Diary** for call transcript and quote creation log
-3. Check **Proposals** tab on job for auto-generated quote draft
-4. Check **Customer** was created with phone number
+### 4. Verify in app
 
-## Webhook URL
-Your webhook endpoint is:
-```
-https://YOUR_REPL_URL.replit.app/api/webhooks/twilio-voice
-```
+1. Open **Dispatch Board** — new job should appear
+2. Open the job card → **Diary** tab — call transcript and audio player should be there
+3. Open **Communications** tab → **Calls** — recording should be listed and playable
 
-This endpoint:
-- Accepts POST requests from Twilio
-- Expects form data with: `CallSid`, `CallStatus`, `From`, `To`, `RecordingUrl`, `RecordingDuration`
-- Returns TwiML response to Twilio
+## Costs (Approximate — NZD)
 
-## Costs (Approximate)
-- **Phone Number**: $1/month
-- **Incoming Calls**: $0.0085/minute
-- **Recording**: $0.0025/minute
-- **Whisper Transcription**: $0.006/minute
-- **GPT-5 Job Extraction**: ~$0.015/call
-- **GPT-5 Quote Extraction**: ~$0.015/call (when pricing discussed)
+| Item | Cost |
+|------|------|
+| Twilio NZ number | ~$1.50/month |
+| Inbound call to Twilio | ~$0.01/min |
+| Outbound call to HERO_PHONE_NUMBER | ~$0.03/min |
+| Recording storage | ~$0.004/min |
+| Whisper transcription | ~$0.006/min |
+| GPT-4 extraction | ~$0.02/call |
+| GPT-4o quote extraction | ~$0.02/call (when pricing discussed) |
 
-**Example**: 100 calls × 3 min avg = ~$3.30 + Whisper/GPT costs
-**With Quote Generation**: Add ~$0.015 per call with pricing discussion
+**Example:** 50 calls × 5 min avg = ~$5–8 NZD/month total. Recordings are stored permanently at no ongoing cost via Replit Object Storage.
 
 ## Troubleshooting
 
-### No webhook received
-- Check Twilio phone number configuration
-- Verify webhook URL is correct and publicly accessible
+**HERO_PHONE_NUMBER doesn't ring**
+- Check the secret is set to E.164 format: `+6421XXXXXXX`
+- Verify your Twilio number webhook URL points to `/api/webhooks/twilio-answer` (not `/twilio-voice`)
 - Check Twilio debugger: https://console.twilio.com/debugger
 
-### Recording not downloaded
-- Verify TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN are set
-- Check server has write permissions to /uploads/recordings/
+**Recording not appearing in job diary**
+- Check server logs for `❌ Failed to download recording`
+- Verify `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` secrets are set
+- Make sure `PRIVATE_OBJECT_DIR` environment variable is set (should be auto-configured)
 
-### Job not created
+**Webhook signature rejected (403)**
+- Must use the deployed (published) app URL in Twilio, not the dev preview URL
+- The dev URL changes; the published URL is stable
+
+**Customer not created / job not created**
 - Check logs for "Insufficient data to create job"
-- Ensure customer name is mentioned in call
-- Verify service type or address is mentioned
+- The customer's name must be mentioned in the call
+- Either a service type or an address must be mentioned
 
-### Transcription fails
-- Verify OPENAI_API_KEY is set
-- Check recording file exists and is readable
-- Ensure OpenAI API quota is available
-
-## Security Notes
-- **Webhook signature validation**: All requests validated using X-Twilio-Signature header
-- **Request authentication**: Only requests from Twilio with valid signatures are processed
-- **Recordings storage**: Stored locally in /uploads/recordings/ with unique filenames
-- **Transcripts storage**: Stored in database with job diary linkage
-- **Phone normalization**: All numbers normalized to NZ format (+64)
-- **HTTPS required**: Webhook must be accessed over HTTPS in production
+**Caller showing as wrong number**
+- If `ForwardedFrom` is empty, your carrier may not be passing it through
+- Check Twilio logs for the `From` and `ForwardedFrom` fields
+- As a workaround, have customers call the Twilio number directly
