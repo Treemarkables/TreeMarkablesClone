@@ -356,8 +356,12 @@ export function GlobalJobCard({
     },
   });
 
-  // Watch customerId and update selectedCustomerName when it changes
-  const watchedCustomerId = form.watch("customerId");
+  // Single form.watch() call — consolidates all subscriptions into one to avoid
+  // excessive re-renders from multiple individual form.watch("fieldName") calls.
+  const formData = form.watch();
+
+  // Derive specific field values from formData (stable primitives for effect deps)
+  const watchedCustomerId = (formData.customerId as string) ?? "";
   const selectedVipCustomer = customers.find((c) => c.id === watchedCustomerId);
   useEffect(() => {
     if (watchedCustomerId && customers && customers.length > 0) {
@@ -1108,8 +1112,8 @@ export function GlobalJobCard({
   // Keep a stable ref so the form-reset effect doesn't re-fire every render
   replaceLineItemsRef.current = replaceLineItems;
 
-  // Watch customerId from form for finding selected customer
-  const formCustomerId = form.watch("customerId");
+  // Get customerId from the consolidated formData watch
+  const formCustomerId = watchedCustomerId;
 
   // Find selected customer based on form data or editing job
   const selectedCustomer = useMemo(() => {
@@ -1439,7 +1443,6 @@ export function GlobalJobCard({
       "equipment",
       "internalNotes",
       "customerConfirmed",
-      "etaNotificationRequested",
     ]),
   );
 
@@ -1613,8 +1616,6 @@ export function GlobalJobCard({
       setIsAutoSaving(false);
     }
   };
-
-  const formData = form.watch();
 
   // Job create/update mutations
   const createJobMutation = useMutation({
@@ -3303,7 +3304,7 @@ The Treemarkables Team`;
   // In create mode, use form.watch since there's no editingJob yet
   // IMPORTANT: This line accesses editingJob, so it must come AFTER the loading check above
   const currentStatus =
-    mode === "edit" ? editingJob?.status : form.watch("status");
+    mode === "edit" ? editingJob?.status : formData.status;
 
   if (jobLoading) {
     const loadingContent = (
@@ -3401,7 +3402,7 @@ The Treemarkables Team`;
             {mode === "edit" &&
               (() => {
                 // Line items total — each item.total is stored exc-GST (priceIncludesTax: false default)
-                const lineItemsTotal = (form.watch("lineItems") || []).reduce(
+                const lineItemsTotal = (formData.lineItems || []).reduce(
                   (sum: number, item: any) => {
                     // Prefer explicit exc-GST fields if available
                     const exGst =
@@ -4301,7 +4302,7 @@ The Treemarkables Team`;
                     <div className="space-y-3 md:space-y-4">
                       {/* ETA Notification Banner */}
                       {mode === "edit" &&
-                        form.watch("etaNotificationRequested") && (
+                        formData.etaNotificationRequested && (
                           <div className="flex items-start gap-2 px-3 py-2 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950">
                             <Bell className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
                             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
@@ -4678,7 +4679,7 @@ The Treemarkables Team`;
                                                 <Check
                                                   className={cn(
                                                     "mr-2 h-4 w-4",
-                                                    form.watch("customerId") ===
+                                                    formData.customerId ===
                                                       customer.id
                                                       ? "opacity-100"
                                                       : "opacity-0",
@@ -4764,11 +4765,11 @@ The Treemarkables Team`;
                             </div>
 
                             {/* Row 3: Address */}
-                            {form.watch("address") && (
+                            {formData.address && (
                               <div className="flex items-center gap-1.5 text-xs text-gray-500">
                                 <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
                                 <span className="truncate">
-                                  {form.watch("address")}
+                                  {formData.address}
                                 </span>
                               </div>
                             )}
@@ -5038,7 +5039,7 @@ The Treemarkables Team`;
                                             <Check
                                               className={cn(
                                                 "mr-2 h-4 w-4",
-                                                form.watch("customerId") ===
+                                                formData.customerId ===
                                                   customer.id
                                                   ? "opacity-100"
                                                   : "opacity-0",
@@ -5150,7 +5151,7 @@ The Treemarkables Team`;
                                         className={cn(
                                           "w-full justify-between h-10",
                                           !field.value &&
-                                            !form.watch("newCustomerName") &&
+                                            !formData.newCustomerName &&
                                             "text-muted-foreground",
                                         )}
                                       >
@@ -5158,8 +5159,8 @@ The Treemarkables Team`;
                                           ? customers.find(
                                               (c) => c.id === field.value,
                                             )?.name
-                                          : form.watch("newCustomerName")
-                                            ? form.watch("newCustomerName")
+                                          : formData.newCustomerName
+                                            ? formData.newCustomerName
                                             : "Select or enter customer..."}
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                       </Button>
@@ -5409,9 +5410,7 @@ The Treemarkables Team`;
                                                   <Check
                                                     className={cn(
                                                       "mr-2 h-4 w-4",
-                                                      form.watch(
-                                                        "customerId",
-                                                      ) === customer.id
+                                                      formData.customerId === customer.id
                                                         ? "opacity-100"
                                                         : "opacity-0",
                                                     )}
@@ -5915,8 +5914,8 @@ The Treemarkables Team`;
                         </div>
 
                         {/* Show New Customer Fields When Creating */}
-                        {form.watch("isNewCustomer") &&
-                          form.watch("newCustomerName") && (
+                        {formData.isNewCustomer &&
+                          formData.newCustomerName && (
                             <div className="space-y-3">
                               <div className="grid grid-cols-2 gap-3">
                                 <FormField
@@ -6120,7 +6119,7 @@ The Treemarkables Team`;
                             />
 
                             {/* Unsuccessful Reason - Only show when status is unsuccessful */}
-                            {form.watch("status") === "unsuccessful" && (
+                            {formData.status === "unsuccessful" && (
                               <div className="mt-3 space-y-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
                                 <FormField
                                   control={form.control}
@@ -6869,7 +6868,7 @@ The Treemarkables Team`;
 
                                     // Calculate from line items (these are typically exc GST unit prices)
                                     const lineItems =
-                                      form.watch("lineItems") || [];
+                                      formData.lineItems || [];
                                     let totalExcGst = lineItems.reduce(
                                       (sum: number, item: any) => {
                                         const itemTotal =
@@ -6941,8 +6940,8 @@ The Treemarkables Team`;
                                 onClick={() => {
                                   const desc =
                                     formLoadedJobId === editingJob?.id
-                                      ? form.watch("description") || ""
-                                      : form.watch("description") ||
+                                      ? formData.description || ""
+                                      : formData.description ||
                                         editingJob?.description ||
                                         "";
                                   setDescriptionDraft(desc);
@@ -6957,8 +6956,8 @@ The Treemarkables Team`;
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
                                   {(formLoadedJobId === editingJob?.id
-                                    ? form.watch("description")
-                                    : form.watch("description") ||
+                                    ? formData.description
+                                    : formData.description ||
                                       editingJob?.description) || (
                                     <span className="text-gray-400 italic">
                                       Click to add a job description...
@@ -7343,7 +7342,7 @@ The Treemarkables Team`;
                                       {...field}
                                       className="h-9 text-base md:text-sm"
                                       placeholder="Billing Address"
-                                      disabled={form.watch("sameAsJobAddress")}
+                                      disabled={formData.sameAsJobAddress}
                                     />
                                   </FormControl>
                                 </FormItem>
@@ -8258,10 +8257,10 @@ The Treemarkables Team`;
                           <div></div> {/* Left side spacer */}
                           <div className="space-y-2 text-sm">
                             {(() => {
-                              const lineItems = form.watch("lineItems") || [];
+                              const lineItems = formData.lineItems || [];
                               const gstRate = 0.15; // 15% GST for New Zealand
                               const paidAmount = parseFloat(
-                                form.watch("paidAmount") || "0",
+                                formData.paidAmount || "0",
                               );
 
                               // Calculate totals by checking each line item's priceIncludesTax flag
@@ -8929,10 +8928,10 @@ The Treemarkables Team`;
           customerId={selectedCustomer?.id}
           mode={editingProposalId ? "edit" : "create"}
           proposalId={editingProposalId}
-          jobDescription={form.watch("description") || ""}
+          jobDescription={formData.description || ""}
           lineItems={formData?.lineItems || []}
           customEmail={
-            form.watch("jobContactEmail") ||
+            formData.jobContactEmail ||
             editingJob?.jobContactEmail ||
             undefined
           }
