@@ -32,6 +32,7 @@ import {
   FileDown,
   Package,
   User,
+  Calendar,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -106,6 +107,7 @@ export function InvoiceBuilder({
   const [editableEmail, setEditableEmail] = useState("");
   const [editableDescription, setEditableDescription] = useState("");
   const [editableNotes, setEditableNotes] = useState("");
+  const [customDueDate, setCustomDueDate] = useState<string>("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
 
   // Fetch proposals for this job
@@ -268,6 +270,17 @@ export function InvoiceBuilder({
     setEditableContactName(existingInvoiceContactName || contactName);
     setEditableEmail(customer.email || "");
 
+    // Initialise the due date: prefer existing invoice's due date, else default from settings
+    const existingDue = existingInvoices.length > 0 ? existingInvoices[0]?.dueDate : null;
+    if (existingDue) {
+      setCustomDueDate(new Date(existingDue).toISOString().split("T")[0]);
+    } else {
+      const defaultDays = (businessSettings as any)?.data?.invoicePaymentDays ?? 7;
+      const d = new Date();
+      d.setDate(d.getDate() + defaultDays);
+      setCustomDueDate(d.toISOString().split("T")[0]);
+    }
+
     // Get proposals and quotes
     const proposals = proposalsResponse?.data || [];
     const quotes = quotesResponse?.data || [];
@@ -395,6 +408,7 @@ export function InvoiceBuilder({
       setEditableAddress("");
       setEditableContactName("");
       setEditableEmail("");
+      setCustomDueDate("");
       setInitializedJobId(null);
     }
   }, [isOpen]);
@@ -616,7 +630,7 @@ export function InvoiceBuilder({
           customData: {
             address: editableAddress,
             contactName: editableContactName || undefined,
-            dueDate: new Date(Date.now() + invoicePaymentDays * 24 * 60 * 60 * 1000)
+            dueDate: customDueDate || new Date(Date.now() + invoicePaymentDays * 24 * 60 * 60 * 1000)
               .toISOString()
               .split("T")[0],
             notes: editableNotes,
@@ -740,6 +754,7 @@ export function InvoiceBuilder({
         amount: subtotal.toString(),
         description: editableDescription,
         notes: editableNotes,
+        ...(customDueDate ? { dueDate: customDueDate } : {}),
       };
 
       console.log("📤 Sending update with data:", updateData);
@@ -1070,6 +1085,21 @@ export function InvoiceBuilder({
                     placeholder="Enter customer email"
                     className="bg-white"
                     data-testid="input-invoice-email"
+                  />
+                </div>
+
+                {/* Due Date */}
+                <div className="space-y-2">
+                  <Label className="flex items-center gap-2 text-sm font-medium">
+                    <Calendar className="h-4 w-4 text-blue-600" />
+                    Due Date
+                  </Label>
+                  <Input
+                    type="date"
+                    value={customDueDate}
+                    onChange={(e) => setCustomDueDate(e.target.value)}
+                    className="bg-white"
+                    data-testid="input-invoice-due-date"
                   />
                 </div>
 

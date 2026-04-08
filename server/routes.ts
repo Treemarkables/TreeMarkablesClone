@@ -6947,9 +6947,21 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   app.patch('/api/invoices/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      
+
+      // Pre-process date strings into Date objects before Zod validation
+      const processedBody = { ...req.body };
+      if (typeof processedBody.dueDate === 'string' && processedBody.dueDate) {
+        processedBody.dueDate = new Date(processedBody.dueDate);
+      }
+      if (typeof processedBody.issueDate === 'string' && processedBody.issueDate) {
+        processedBody.issueDate = new Date(processedBody.issueDate);
+      }
+      if (typeof processedBody.paidAt === 'string' && processedBody.paidAt) {
+        processedBody.paidAt = new Date(processedBody.paidAt);
+      }
+
       // Validate request body with Zod schema
-      const validationResult = schema.updateInvoiceSchema.safeParse(req.body);
+      const validationResult = schema.updateInvoiceSchema.safeParse(processedBody);
       if (!validationResult.success) {
         return res.status(400).json({ 
           success: false, 
