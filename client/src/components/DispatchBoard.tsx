@@ -695,18 +695,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     queryKey: [JOBS_QUERY_KEY],
   });
 
-  // Debug logging for jobs data
-  useEffect(() => {
-    console.log("🔍 DispatchBoard - Jobs Data:", {
-      isLoading: jobsLoading,
-      hasError: !!jobsError,
-      error: jobsError,
-      dataExists: !!jobsData,
-      jobCount: jobsData?.data?.length || 0,
-      rawData: jobsData,
-    });
-  }, [jobsData, jobsLoading, jobsError]);
-
   // Check for pending job data from conversations on mount
   useEffect(() => {
     const pendingData = localStorage.getItem("pendingJobData");
@@ -3266,22 +3254,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
       </div>
 
-      {/* Modal version for mobile only - renders as Dialog on screens < 1024px */}
-      <div className="lg:hidden">
-        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
-          <GlobalJobCard
-            isOpen={showGlobalJobCard}
-            mode={globalJobCardMode}
-            jobId={jobToEdit?.jobId || jobToEdit?.id}
-            initialData={initialJobData}
-            onClose={() => {
-              setShowGlobalJobCard(false);
-              setJobToEdit(null);
-              setInitialJobData(null);
-            }}
-          />
-        </JobCardErrorBoundary>
-      </div>
+      {/* Modal version for mobile only - only mounted when a job is open, hidden on lg+ screens */}
+      {showGlobalJobCard && (
+        <div className="lg:hidden">
+          <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
+            <GlobalJobCard
+              isOpen={true}
+              mode={globalJobCardMode}
+              jobId={jobToEdit?.jobId || jobToEdit?.id}
+              initialData={initialJobData}
+              onClose={() => {
+                setShowGlobalJobCard(false);
+                setJobToEdit(null);
+                setInitialJobData(null);
+              }}
+            />
+          </JobCardErrorBoundary>
+        </div>
+      )}
 
       {/* Create Lead from Message Dialog */}
       <CreateLeadFromMessageDialog
