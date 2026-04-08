@@ -26,6 +26,20 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
     this.setState({ errorInfo: errorInfo.componentStack });
+
+    try {
+      fetch('/api/client-errors', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack,
+          url: window.location.href,
+          userAgent: navigator.userAgent,
+        }),
+      }).catch(() => {});
+    } catch (_) {}
   }
 
   handleReload = () => {
@@ -89,7 +103,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </Button>
             </div>
 
-            {process.env.NODE_ENV === 'development' && this.state.error && (
+            {this.state.error && (
               <div className="mt-6 text-left bg-gray-100 rounded p-3 text-xs overflow-auto max-h-32">
                 <p className="font-mono text-red-600">{this.state.error.message}</p>
               </div>
