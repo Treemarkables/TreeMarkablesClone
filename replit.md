@@ -72,6 +72,7 @@ Fields like `jobContactEmail` and `billingContactEmail` have special protection 
 5. **Client — auto-save failure**: Toast notification shown listing which fields weren't saved; `changedFieldsRef` preserved for retry
 6. **Server — RC6 early guard**: In the PUT route, any empty `jobContactEmail` or `billingContactEmail` is stripped from `processedBody` BEFORE Zod validation, so Zod can never accidentally allow an empty value through
 7. **Server — existing safeguard**: Post-validation check preserves non-empty DB values if the request tries to overwrite with empty (defense-in-depth)
+8. **RC12 — Stable Form key**: `<Form key={jobId || createdJobId || internalMode}>` replaces the previous `key={editingJob?.id || internalMode}`. `editingJob?.id` can briefly go null during a React Query refetch cycle, toggling the key between "edit" and the UUID on every refetch, causing "Maximum update depth exceeded" for any job. The new key uses stable props/state that never change during the card's lifecycle.
 
 ### Proposal Email Extraction
 `EmailComposerModal` receives `customEmail` prop with the live form value for `jobContactEmail`, so proposal/quote emails are always pre-populated from the most current form state, even if the cache is stale.

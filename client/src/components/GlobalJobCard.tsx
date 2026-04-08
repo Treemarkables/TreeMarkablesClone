@@ -319,10 +319,11 @@ export function GlobalJobCard({
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
     // shouldUnregister: false (default) — stale-data prevention is handled by
-    // the Form key={editingJob?.id || internalMode} which re-mounts the entire
-    // form when switching jobs. Using true caused field register/unregister
-    // cycles on tab switches that, combined with useWatch(), triggered
-    // "Maximum update depth exceeded" crashes.
+    // the Form key={jobId || createdJobId || internalMode} which re-mounts the
+    // form when switching jobs. Using editingJob?.id as the key caused an
+    // infinite remount loop because editingJob can briefly go null during a
+    // React Query refetch cycle, toggling the key between "edit" and the UUID
+    // 50+ times and triggering "Maximum update depth exceeded".
     defaultValues: {
       title: "",
       description: "",
@@ -4370,7 +4371,7 @@ The Treemarkables Team`;
 
         {/* Main Content Area */}
         <div className="flex-1 flex min-h-0 min-w-0">
-          <Form {...form} key={editingJob?.id || internalMode}>
+          <Form {...form} key={jobId || createdJobId || internalMode}>
             <form
               onSubmit={form.handleSubmit((data) => {
                 console.log("Form submitted:", data);
