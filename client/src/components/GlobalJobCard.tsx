@@ -310,12 +310,19 @@ export function GlobalJobCard({
     enabled: isOpen,
   });
 
-  const customers: Customer[] = (customersData as any)?.data || [];
+  const customers: Customer[] = useMemo(
+    () => (customersData as any)?.data || [],
+    [customersData],
+  );
 
   // Form setup
   const form = useForm<GlobalJobCardFormData>({
     resolver: zodResolver(globalJobCardSchema),
-    shouldUnregister: true, // Clear form state on unmount to prevent stale data
+    // shouldUnregister: false (default) — stale-data prevention is handled by
+    // the Form key={editingJob?.id || internalMode} which re-mounts the entire
+    // form when switching jobs. Using true caused field register/unregister
+    // cycles on tab switches that, combined with useWatch(), triggered
+    // "Maximum update depth exceeded" crashes.
     defaultValues: {
       title: "",
       description: "",
@@ -444,28 +451,51 @@ export function GlobalJobCard({
     }
   }, [mode, isOpen, checklistTemplatesData]);
 
-  // When opening an existing job in edit mode, sync its saved checklist items into local state.
-  // Uses ref guards to prevent infinite re-renders.
+  // RC10 FIX: When opening an existing job in edit mode, sync its saved checklist items into
+  // local state. Previously this ran after every render (no dep array) using ref guards, which
+  // caused "Maximum update depth exceeded" for jobs where both the job checklist AND the initial
+  // React state are empty []: setChecklist([]) produced a new array reference each render, which
+  // React treated as a state change, triggering another render, repeating indefinitely.
+  //
+  // The fix: proper deps [jobId, mode, checklistTemplatesData] so the effect only fires when the
+  // JOB changes — not every render. React Strict Mode still fires it twice (Pass 1 + Pass 2), but
+  // refs persist between those passes, so Step 1 only executes once and Step 2 (template fallback)
+  // only executes in the Strict Mode second pass when needed. After the effect stabilises, no more
+  // setState calls are made, and the 50-update limit is never approached.
   const syncedJobIdRef = useRef<string | null>(null);
   const templateFallbackAppliedRef = useRef<string | null>(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // editingJob is declared later in the file but is safe to access here at runtime —
+    // effect callbacks run after render, so all hooks (including editingJob useMemo) are
+    // already evaluated by the time this function executes.
+    if (mode !== "edit" || !(editingJob as any)?.id) return;
+    const job = editingJob as any;
 
-    // Step 1: When job changes, sync its stored checklist (runs once per job)
-    if (editingJob.id !== syncedJobIdRef.current) {
-      syncedJobIdRef.current = editingJob.id;
-      templateFallbackAppliedRef.current = null; // reset fallback for this new job
-      const jobChecklist = Array.isArray(editingJob.checklist)
-        ? (editingJob.checklist as ChecklistItem[])
+    // Step 1: When the job changes, sync its stored checklist (runs once per job via ref guard).
+    // In Strict Mode, both Pass 1 and Pass 2 see the same jobId, so only Pass 1 enters Step 1.
+    if (job.id !== syncedJobIdRef.current) {
+      syncedJobIdRef.current = job.id;
+      const jobChecklist = Array.isArray(job.checklist)
+        ? (job.checklist as ChecklistItem[])
         : [];
-      setChecklist(jobChecklist);
+      // If the job already has checklist items, mark template fallback as done to prevent
+      // Strict Mode Pass 2 from overriding them.
+      templateFallbackAppliedRef.current = jobChecklist.length > 0 ? job.id : null;
+      // Only call setState if there are actual items OR if we need to clear a previous job's items.
+      // Avoid setChecklist([]) when checklist is already [] — that creates a new array reference
+      // which React treats as a state change, causing an unnecessary re-render.
+      if (jobChecklist.length > 0 || checklist.length > 0) {
+        setChecklist(jobChecklist);
+      }
       return;
     }
 
-    // Step 2: Job is already synced but checklist is empty — try template fallback (once per job)
+    // Step 2: Job is already synced but checklist is still empty — try template fallback (once
+    // per job). In Strict Mode, this fires in Pass 2 for jobs with no checklist items.
     if (
       checklist.length === 0 &&
-      templateFallbackAppliedRef.current !== editingJob.id
+      templateFallbackAppliedRef.current !== job.id
     ) {
       const templateItems: ChecklistItem[] = (
         (checklistTemplatesData as any)?.data ?? []
@@ -475,11 +505,15 @@ export function GlobalJobCard({
         completed: false,
       }));
       if (templateItems.length > 0) {
-        templateFallbackAppliedRef.current = editingJob.id;
+        templateFallbackAppliedRef.current = job.id;
         setChecklist(templateItems);
       }
     }
-  });
+  // jobId is the canonical dep for "which job is open". checklistTemplatesData changes when
+  // template data loads. mode guards against running in create mode. checklist is intentionally
+  // excluded: we read it only in Step 2 for a one-time fallback check; including it would cause
+  // the effect to re-run whenever the checklist changes (defeating the purpose of the fallback).
+  }, [jobId, mode, checklistTemplatesData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save state to prevent double-clicking
   const [isSaving, setIsSaving] = useState(false);
@@ -930,33 +964,10 @@ export function GlobalJobCard({
     const effectiveMode = createdJobId ? "edit" : internalMode;
     const effectiveJobId = createdJobId || jobId;
 
-    console.log("🔍 editingJob useMemo:", {
-      effectiveMode,
-      effectiveJobId,
-      jobPropExists: !!job,
-      specificJobExists: !!specificJob,
-      conditionCheck: effectiveMode === "edit" && (effectiveJobId || job?.id),
-    });
-
     if (effectiveMode === "edit" && (effectiveJobId || job?.id)) {
       // Use job prop if provided, otherwise use the specific job fetched by ID
-      const result = job || specificJob;
-      console.log("EditingJob useMemo result:", {
-        mode,
-        internalMode,
-        createdJobId,
-        effectiveMode,
-        effectiveJobId,
-        jobId,
-        jobProp: !!job,
-        specificJobExists: !!specificJob,
-        result: !!result,
-        resultId: result?.id,
-        resultDescription: result?.description,
-      });
-      return result;
+      return job || specificJob;
     }
-    console.log("🔍 editingJob returning null - condition not met");
     return null;
   }, [mode, internalMode, createdJobId, jobId, job, specificJob]);
 
@@ -1340,7 +1351,15 @@ export function GlobalJobCard({
         etaNotificationRequested:
           (editingJob as any).etaNotificationRequested ?? false,
       };
+      // RC9 FIX: Wrap form.reset with isResettingRef so the auto-save watch subscription
+      // ignores field-change callbacks fired during reset. Without this, fields that differ
+      // from their default values (e.g. etaNotificationRequested=true vs default false)
+      // are mistakenly treated as user edits, triggering a deferred auto-save that
+      // invalidates the job query, flickers editingJob to null, changes the key prop,
+      // and causes an infinite unmount/remount loop ("Maximum update depth exceeded").
+      isResettingRef.current = true;
       form.reset(resetData);
+      isResettingRef.current = false;
       setFormLoadedJobId(editingJob.id);
       originalLoadedDataRef.current = { ...resetData };
 
@@ -1489,6 +1508,7 @@ export function GlobalJobCard({
       "equipment",
       "internalNotes",
       "customerConfirmed",
+      "etaNotificationRequested",
     ]),
   );
 
