@@ -1373,6 +1373,22 @@ export function GlobalJobCard({
       // Longer timeout prevents auto-save trigger when cache refreshes
       setTimeout(() => {
         isLoadingDataRef.current = false;
+
+        // RC11 DEFENSIVE: Strip any fields that are not in the auto-save whitelist
+        // from changedFieldsRef. This catches fields (like etaNotificationRequested)
+        // that may have slipped through the isResettingRef guard during form.reset()
+        // due to React Hook Form's internal async/flushSync callback timing in React 18.
+        // Without this, those fields would trigger a spurious deferred auto-save, which
+        // then invalidates the job query, causes another form.reset(), and crashes.
+        for (const field of Array.from(changedFieldsRef.current)) {
+          if (!autoSaveFieldsRef.current.has(field)) {
+            changedFieldsRef.current.delete(field);
+          }
+        }
+        if (changedFieldsRef.current.size === 0) {
+          hasUserChangedRef.current = false;
+        }
+
         // RC3 FIX: If the user typed something during the loading window (tracked in changedFieldsRef),
         // trigger a deferred auto-save now that the loading guard has cleared
         if (hasUserChangedRef.current && changedFieldsRef.current.size > 0) {
@@ -1508,7 +1524,10 @@ export function GlobalJobCard({
       "equipment",
       "internalNotes",
       "customerConfirmed",
-      "etaNotificationRequested",
+      // NOTE: etaNotificationRequested is intentionally excluded from auto-save.
+      // It's saved immediately via direct apiRequest on click (see ETA toggle handler)
+      // to prevent it from being tracked during form.reset() and triggering a
+      // deferred auto-save loop ("Maximum update depth exceeded" crash).
     ]),
   );
 
@@ -6490,44 +6509,62 @@ The Treemarkables Team`;
                         )}
 
                         {/* ETA Notification Requested Toggle */}
+                        {/* Saved immediately via direct apiRequest (NOT via debounced auto-save)
+                            to prevent it from triggering a deferred auto-save loop on form.reset().
+                            etaNotificationRequested is intentionally excluded from autoSaveFieldsRef. */}
                         {mode === "edit" && (
                           <FormField
                             control={form.control}
                             name="etaNotificationRequested"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <div
-                                    className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer select-none transition-colors ${
-                                      field.value
-                                        ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
-                                        : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"
-                                    }`}
-                                    onClick={() => field.onChange(!field.value)}
-                                  >
-                                    <Bell
-                                      className={`h-4 w-4 flex-shrink-0 ${field.value ? "text-amber-600" : "text-gray-400"}`}
-                                    />
-                                    <span
-                                      className={`text-sm font-medium leading-none ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
+                            render={({ field }) => {
+                              const handleToggle = async (newValue: boolean) => {
+                                field.onChange(newValue); // update form state for UI only
+                                if (editingJob?.id) {
+                                  try {
+                                    await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
+                                      etaNotificationRequested: newValue,
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+                                  } catch {
+                                    field.onChange(!newValue); // revert on failure
+                                  }
+                                }
+                              };
+                              return (
+                                <FormItem>
+                                  <FormControl>
+                                    <div
+                                      className={`flex items-center gap-2 p-2 rounded-md border cursor-pointer select-none transition-colors ${
+                                        field.value
+                                          ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
+                                          : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"
+                                      }`}
+                                      onClick={() => handleToggle(!field.value)}
                                     >
-                                      {field.value
-                                        ? "Customer wants ETA notification"
-                                        : "Notify customer of arrival time"}
-                                    </span>
-                                    <Checkbox
-                                      checked={!!field.value}
-                                      onCheckedChange={(checked) =>
-                                        field.onChange(checked === true)
-                                      }
-                                      onClick={(e) => e.stopPropagation()}
-                                      className="ml-auto"
-                                      data-testid="checkbox-eta-notification"
-                                    />
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            )}
+                                      <Bell
+                                        className={`h-4 w-4 flex-shrink-0 ${field.value ? "text-amber-600" : "text-gray-400"}`}
+                                      />
+                                      <span
+                                        className={`text-sm font-medium leading-none ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
+                                      >
+                                        {field.value
+                                          ? "Customer wants ETA notification"
+                                          : "Notify customer of arrival time"}
+                                      </span>
+                                      <Checkbox
+                                        checked={!!field.value}
+                                        onCheckedChange={(checked) =>
+                                          handleToggle(checked === true)
+                                        }
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="ml-auto"
+                                        data-testid="checkbox-eta-notification"
+                                      />
+                                    </div>
+                                  </FormControl>
+                                </FormItem>
+                              );
+                            }}
                           />
                         )}
 
