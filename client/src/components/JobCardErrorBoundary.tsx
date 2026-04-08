@@ -1,4 +1,4 @@
-import { Component, ReactNode } from 'react';
+import { Component, ReactNode, createElement, Fragment } from 'react';
 import { Button } from '@/components/ui/button';
 import { AlertTriangle, RefreshCw, X } from 'lucide-react';
 
@@ -10,14 +10,15 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
-  componentStack: string;
   resetKey: number;
 }
 
 export class JobCardErrorBoundary extends Component<Props, State> {
+  private capturedComponentStack: string = '';
+
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null, componentStack: '', resetKey: 0 };
+    this.state = { hasError: false, error: null, resetKey: 0 };
   }
 
   static getDerivedStateFromError(error: Error): Partial<State> {
@@ -25,21 +26,23 @@ export class JobCardErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: { componentStack: string }) {
-    const stack = errorInfo.componentStack || '';
-    this.setState({ componentStack: stack });
+    // IMPORTANT: Do NOT call setState here — calling setState in componentDidCatch
+    // triggers another render cycle, which causes an infinite loop when the error
+    // is itself a "Maximum update depth exceeded" error.
+    this.capturedComponentStack = errorInfo.componentStack || '';
 
-    // Save to localStorage so it survives a page reload and can be inspected later
+    // Persist to localStorage for diagnosis
     try {
       localStorage.setItem('lastJobCardCrash', JSON.stringify({
         message: error.message,
         stack: error.stack?.substring(0, 2000),
-        componentStack: stack.substring(0, 3000),
+        componentStack: this.capturedComponentStack.substring(0, 3000),
         url: window.location.href,
         timestamp: new Date().toISOString(),
       }));
     } catch (_) {}
 
-    // Also attempt server-side logging
+    // Fire-and-forget server log
     try {
       fetch('/api/client-errors', {
         method: 'POST',
@@ -47,7 +50,7 @@ export class JobCardErrorBoundary extends Component<Props, State> {
         body: JSON.stringify({
           message: error.message,
           stack: error.stack,
-          componentStack: stack,
+          componentStack: this.capturedComponentStack,
           url: window.location.href,
           userAgent: navigator.userAgent,
           context: 'JobCardErrorBoundary',
@@ -57,22 +60,30 @@ export class JobCardErrorBoundary extends Component<Props, State> {
   }
 
   handleRetry = () => {
-    // Increment resetKey to force full remount of the job card tree
+    this.capturedComponentStack = '';
+    // Increment resetKey so we get a fresh Fragment with a different key,
+    // which forces React to fully unmount and remount the children.
     this.setState(prev => ({
       hasError: false,
       error: null,
-      componentStack: '',
       resetKey: prev.resetKey + 1,
     }));
   };
 
   handleClose = () => {
-    this.setState({ hasError: false, error: null, componentStack: '', resetKey: this.state.resetKey + 1 });
+    this.capturedComponentStack = '';
+    this.setState(prev => ({ hasError: false, error: null, resetKey: prev.resetKey + 1 }));
     this.props.onClose?.();
   };
 
   render() {
     if (this.state.hasError) {
+      const stack = this.capturedComponentStack
+        .split('\n')
+        .filter(l => l.trim())
+        .slice(0, 8)
+        .join('\n');
+
       return (
         <div className="flex flex-col items-center justify-center p-8 bg-white rounded-lg border border-red-100 m-4 text-center gap-4">
           <div className="w-12 h-12 bg-orange-100 rounded-full flex items-center justify-center">
@@ -99,8 +110,7 @@ export class JobCardErrorBoundary extends Component<Props, State> {
               <summary className="text-xs text-gray-400 cursor-pointer">Technical details</summary>
               <pre className="text-xs text-red-500 mt-2 overflow-auto max-h-32 bg-gray-50 p-2 rounded whitespace-pre-wrap">
                 {this.state.error.message}
-                {'\n\n'}
-                {this.state.componentStack.substring(0, 800)}
+                {stack ? `\n\n${stack}` : ''}
               </pre>
             </details>
           )}
@@ -108,11 +118,8 @@ export class JobCardErrorBoundary extends Component<Props, State> {
       );
     }
 
-    // Use resetKey to force full remount after a retry — clears all internal state
-    return (
-      <div key={this.state.resetKey} style={{ display: 'contents' }}>
-        {this.props.children}
-      </div>
-    );
+    // Use a keyed Fragment to force full child remount on retry.
+    // This avoids adding any DOM nodes that could interfere with child component layout.
+    return createElement(Fragment, { key: this.state.resetKey }, this.props.children);
   }
 }
