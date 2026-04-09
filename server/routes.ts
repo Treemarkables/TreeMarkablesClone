@@ -21636,8 +21636,9 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         const job = await storage.getJob(pj.jobId);
         if (!job) continue;
 
-        // Set the scheduled date and start time on the job
-        const scheduledDate = new Date(targetDate + 'T' + (pj.proposedStartTime || '08:00') + ':00.000Z');
+        // Set the scheduled date — store as date-only (no time component) matching the job form pattern.
+        // Actual start/end wall-clock times are kept in scheduledStartTime/scheduledEndTime strings.
+        const scheduledDate = new Date(targetDate);
         const updated = await storage.updateJob(pj.jobId, {
           scheduledDate,
           scheduledStartTime: pj.proposedStartTime || '08:00',
@@ -21650,11 +21651,13 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         // Create a pending customer notification draft
         const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
         if (customer) {
-          const nzDate = new Date(scheduledDate).toLocaleDateString('en-NZ', {
+          const nzDate = new Date(targetDate).toLocaleDateString('en-NZ', {
             weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Pacific/Auckland',
           });
-          const nzTime = pj.proposedStartTime || '8:00am';
-          const message = `Hi ${customer.name}, just confirming your tree service job is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+          const nzTime = pj.proposedStartTime || '8:00';
+          const serviceType = job.serviceType || 'tree service';
+          const address = job.address ? ` at ${job.address}` : '';
+          const message = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
 
           const draft = await storage.createPendingOutboundMessage({
             jobId: job.id,
