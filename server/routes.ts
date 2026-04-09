@@ -21413,8 +21413,26 @@ Return a valid JSON object only (no markdown) with this EXACT structure:
   "revenueTarget": number
 }`;
 
+      // Find any already-scheduled jobs for this date so GPT knows who's busy
+      const proposeDayStart = new Date(targetDate + 'T00:00:00.000Z');
+      const proposeDayEnd = new Date(targetDate + 'T23:59:59.999Z');
+      const alreadyScheduledToday = allJobs.filter(j => {
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        return d >= proposeDayStart && d <= proposeDayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+      }).map(j => ({
+        jobNumber: j.jobNumber,
+        title: j.title || 'existing job',
+        assignedTeam: j.assignedTeam || [],
+        startTime: j.scheduledStartTime || '08:00',
+        endTime: j.scheduledEndTime || '17:00',
+      }));
+
       const userPrompt = `Target date: ${targetDate}
 Daily revenue target: $${dailyTarget} NZD
+
+Already scheduled jobs for this date (staff NOT available during these slots):
+${alreadyScheduledToday.length > 0 ? JSON.stringify(alreadyScheduledToday, null, 2) : 'None'}
 
 Available unscheduled work orders (${jobSummaries.length} jobs):
 ${JSON.stringify(jobSummaries, null, 2)}
@@ -21428,7 +21446,7 @@ ${JSON.stringify(equipSummaries, null, 2)}
 Equipment→Licence requirements:
 ${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => e.licenceRequired).map(e => [e.name, e.licenceRequired])), null, 2)}
 
-Generate 3 ranked schedule alternatives as specified. Each alternative must have different job selections or different crew assignments. For each alternative, verify licence requirements and flag any conflicts.`;
+Generate 3 ranked schedule alternatives as specified. Each alternative must have different job selections or different crew assignments. Respect existing bookings — do not assign staff already scheduled. For each alternative, verify licence requirements and flag any conflicts.`;
 
       const aiResponse = await openai.chat.completions.create({
         model: 'gpt-4o',
@@ -21514,6 +21532,33 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         const [h, m] = t.split(':').map(Number);
         return h * 60 + (m || 0);
       };
+
+      // Pre-populate time slots with already-scheduled jobs for the target date
+      // This prevents confirming proposals that conflict with existing bookings
+      const proposedJobIds = new Set(proposedJobs.map((pj: { jobId?: string }) => pj.jobId));
+      const allJobsForDate = await storage.getAllJobs({ limit: 999999 });
+      const dayStart = new Date(targetDate + 'T00:00:00.000Z');
+      const dayEnd = new Date(targetDate + 'T23:59:59.999Z');
+      const existingDayJobs = allJobsForDate.filter(j => {
+        if (proposedJobIds.has(j.id)) return false; // Skip jobs in this proposal
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        return d >= dayStart && d <= dayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+      });
+      for (const ej of existingDayJobs) {
+        const existStart = ej.scheduledStartTime || '08:00';
+        const existEnd = ej.scheduledEndTime || '17:00';
+        const ejLabel = `existing Job #${ej.jobNumber}`;
+        // Pre-populate staff time slots from existing scheduled jobs
+        const existingTeam = ej.assignedTeam;
+        if (Array.isArray(existingTeam)) {
+          for (const sid of existingTeam) {
+            if (typeof sid !== 'string') continue;
+            if (!staffTimeSlots[sid]) staffTimeSlots[sid] = [];
+            staffTimeSlots[sid].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
+          }
+        }
+      }
 
       for (const pj of proposedJobs) {
         if (!pj.jobId) continue;
@@ -21646,29 +21691,35 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
           const serviceType = job.serviceType || 'tree service';
           const address = job.address ? ` at ${job.address}` : '';
 
-          // Try to find a confirmation SMS template from the template library
-          let message: string;
+          const hasPhone = !!(customer.phone || customer.mobile);
+          const channel: 'sms' | 'email' = hasPhone ? 'sms' : 'email';
+          const interpolate = (tmpl: string) => tmpl
+            .replace(/\{\{customerName\}\}/gi, customer.name)
+            .replace(/\{\{serviceType\}\}/gi, serviceType)
+            .replace(/\{\{jobTitle\}\}/gi, job.title || serviceType)
+            .replace(/\{\{address\}\}/gi, job.address || '')
+            .replace(/\{\{date\}\}/gi, nzDate)
+            .replace(/\{\{time\}\}/gi, nzTime)
+            .replace(/\{\{jobNumber\}\}/gi, job.jobNumber?.toString() || '');
+
+          const fallbackMessage = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+
+          // Try to find a template from the template library (channel-aware)
+          let message: string = fallbackMessage;
           try {
-            const allTemplates = await storage.getAllSmsTemplates();
-            const confirmTemplate = allTemplates.find(t =>
-              t.isActive && t.category === 'confirmation' && t.isDefault
-            ) || allTemplates.find(t =>
-              t.isActive && t.category === 'confirmation'
-            );
-            if (confirmTemplate) {
-              message = confirmTemplate.message
-                .replace(/\{\{customerName\}\}/gi, customer.name)
-                .replace(/\{\{serviceType\}\}/gi, serviceType)
-                .replace(/\{\{jobTitle\}\}/gi, job.title || serviceType)
-                .replace(/\{\{address\}\}/gi, job.address || '')
-                .replace(/\{\{date\}\}/gi, nzDate)
-                .replace(/\{\{time\}\}/gi, nzTime)
-                .replace(/\{\{jobNumber\}\}/gi, job.jobNumber?.toString() || '');
+            if (channel === 'sms') {
+              const allSmsTemplates = await storage.getAllSmsTemplates();
+              const t = allSmsTemplates.find(t => t.isActive && t.category === 'confirmation' && t.isDefault)
+                || allSmsTemplates.find(t => t.isActive && t.category === 'confirmation');
+              if (t) message = interpolate(t.message);
             } else {
-              message = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+              const allEmailTemplates = await storage.getAllEmailTemplates();
+              const t = allEmailTemplates.find(t => t.isActive && t.category === 'confirmation' && t.isDefault)
+                || allEmailTemplates.find(t => t.isActive && t.category === 'confirmation');
+              if (t) message = interpolate(t.textContent || t.htmlContent.replace(/<[^>]*>/g, ' ').trim());
             }
           } catch {
-            message = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+            // Keep fallback message
           }
 
           const draft = await storage.createPendingOutboundMessage({
@@ -21678,7 +21729,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
             recipientPhone: customer.phone || customer.mobile || undefined,
             recipientEmail: job.jobContactEmail || customer.email || undefined,
             message,
-            channel: (customer.phone || customer.mobile) ? 'sms' : 'email',
+            channel,
             status: 'pending',
             proposalNumber: job.jobNumber,
           });
