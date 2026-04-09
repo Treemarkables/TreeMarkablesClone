@@ -5998,101 +5998,83 @@ The Treemarkables Team`;
                             )}
                         </div>
 
-                        {/* Customer Confirmed Toggle */}
+                        {/* Customer Confirmed + ETA Notification — side by side */}
                         {mode === "edit" && (
-                          <FormField
-                            control={form.control}
-                            name="customerConfirmed"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <div className="flex items-center gap-2 p-2 rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                    <Checkbox
-                                      id="customer-confirmed"
-                                      checked={!!field.value}
-                                      onCheckedChange={(checked) =>
-                                        field.onChange(checked === true)
-                                      }
-                                      data-testid="checkbox-customer-confirmed"
-                                    />
-                                    <label
-                                      htmlFor="customer-confirmed"
-                                      className="text-sm font-medium text-green-800 dark:text-green-200 leading-none cursor-pointer select-none"
-                                    >
-                                      Customer confirmed this booking
-                                    </label>
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        )}
-
-                        {/* ETA Notification Requested Toggle */}
-                        {/* Saved immediately via direct apiRequest (NOT via debounced auto-save)
-                            to prevent it from triggering a deferred auto-save loop on form.reset().
-                            etaNotificationRequested is intentionally excluded from autoSaveFieldsRef. */}
-                        {mode === "edit" && (
-                          <FormField
-                            control={form.control}
-                            name="etaNotificationRequested"
-                            render={({ field }) => {
-                              const handleToggle = async (newValue: boolean) => {
-                                field.onChange(newValue); // update form state for UI only
-                                if (editingJob?.id) {
-                                  try {
-                                    await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
-                                      etaNotificationRequested: newValue,
-                                    });
-                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-                                  } catch {
-                                    field.onChange(!newValue); // revert on failure
-                                  }
-                                }
-                              };
-                              return (
-                                <FormItem>
+                          <div className="flex gap-2">
+                            <FormField
+                              control={form.control}
+                              name="customerConfirmed"
+                              render={({ field }) => (
+                                <FormItem className="flex-1">
                                   <FormControl>
-                                    {/* RC13 FIX: onClick moved OFF the outer div and onto Bell + span only.
-                                        Radix UI Checkbox dispatches synthetic click events on its hidden
-                                        <input> which bubble up through a parent div onClick, causing
-                                        handleToggle to fire twice (once from onCheckedChange, once from
-                                        the bubbled synthetic click). By moving onClick to the Bell icon
-                                        and label text only (siblings of Checkbox, not parents), Radix
-                                        internal events can never reach these handlers. */}
-                                    <div
-                                      className={`flex items-center gap-2 p-2 rounded-md border select-none transition-colors ${
-                                        field.value
-                                          ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
-                                          : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"
-                                      }`}
-                                    >
-                                      <Bell
-                                        className={`h-4 w-4 flex-shrink-0 cursor-pointer ${field.value ? "text-amber-600" : "text-gray-400"}`}
-                                        onClick={() => handleToggle(!field.value)}
-                                      />
-                                      <span
-                                        className={`text-sm font-medium leading-none cursor-pointer flex-1 ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
-                                        onClick={() => handleToggle(!field.value)}
-                                      >
-                                        {field.value
-                                          ? "Customer wants ETA notification"
-                                          : "Notify customer of arrival time"}
-                                      </span>
+                                    <div className={`flex items-center gap-2 p-2.5 rounded-md border select-none transition-colors cursor-pointer ${field.value ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
                                       <Checkbox
+                                        id="customer-confirmed"
                                         checked={!!field.value}
                                         onCheckedChange={(checked) =>
-                                          handleToggle(checked === true)
+                                          field.onChange(checked === true)
                                         }
-                                        className="ml-auto"
-                                        data-testid="checkbox-eta-notification"
+                                        data-testid="checkbox-customer-confirmed"
                                       />
+                                      <label
+                                        htmlFor="customer-confirmed"
+                                        className={`text-sm font-medium leading-tight cursor-pointer select-none ${field.value ? "text-green-800 dark:text-green-200" : "text-gray-600 dark:text-gray-400"}`}
+                                      >
+                                        Customer confirmed
+                                      </label>
                                     </div>
                                   </FormControl>
                                 </FormItem>
-                              );
-                            }}
-                          />
+                              )}
+                            />
+
+                            {/* ETA Notification Requested Toggle */}
+                            {/* Saved immediately via direct apiRequest (NOT via debounced auto-save)
+                                to prevent it from triggering a deferred auto-save loop on form.reset().
+                                etaNotificationRequested is intentionally excluded from autoSaveFieldsRef. */}
+                            <FormField
+                              control={form.control}
+                              name="etaNotificationRequested"
+                              render={({ field }) => {
+                                const handleToggle = async (newValue: boolean) => {
+                                  field.onChange(newValue);
+                                  if (editingJob?.id) {
+                                    try {
+                                      await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
+                                        etaNotificationRequested: newValue,
+                                      });
+                                      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+                                    } catch {
+                                      field.onChange(!newValue);
+                                    }
+                                  }
+                                };
+                                return (
+                                  <FormItem className="flex-1">
+                                    <FormControl>
+                                      {/* RC13 FIX: onClick on span only (not outer div) to prevent
+                                          Radix synthetic click bubbling causing double-toggle. */}
+                                      <div className={`flex items-center gap-2 p-2.5 rounded-md border select-none transition-colors ${field.value ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
+                                        <Checkbox
+                                          checked={!!field.value}
+                                          onCheckedChange={(checked) =>
+                                            handleToggle(checked === true)
+                                          }
+                                          data-testid="checkbox-eta-notification"
+                                        />
+                                        <span
+                                          className={`text-sm font-medium leading-tight cursor-pointer flex-1 ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
+                                          onClick={() => handleToggle(!field.value)}
+                                        >
+                                          Notify on arrival
+                                        </span>
+                                      </div>
+                                    </FormControl>
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          </div>
                         )}
 
                         {/* ServiceM8-Style Gear List Card - show in both create and edit modes */}
