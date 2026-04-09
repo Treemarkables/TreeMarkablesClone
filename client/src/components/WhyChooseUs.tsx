@@ -22,10 +22,10 @@ const whyCards = [
 ];
 
 const steps = [
-  { number: 1, icon: ScanSearch, title: "On-Site Assessment", description: "We assess access, risk and scope.", color: "#2563eb", bg: "#eff6ff" },
-  { number: 2, icon: ReceiptText, title: "Clear Plan & Quote", description: "No hidden fees. All clear upfront.", color: "#d97706", bg: "#fffbeb" },
-  { number: 3, icon: Axe, title: "Controlled Removal", description: "Skilled crew, right gear, precise work.", color: "#dc2626", bg: "#fef2f2" },
-  { number: 4, icon: Sparkles, title: "Thorough Clean-Up", description: "Your property left tidy and safe to use.", color: "#0891b2", bg: "#ecfeff" },
+  { number: 1, icon: ScanSearch, title: "On-Site Assessment", description: "We come to you and walk the site — checking access, overhead hazards, ground conditions, and what gear is needed. No guessing from photos.", color: "#2563eb", bg: "#eff6ff" },
+  { number: 2, icon: ReceiptText, title: "Clear Plan & Quote", description: "You get a straight, itemised quote before anything starts. We explain exactly what's included, the timeline, and any site-specific considerations.", color: "#d97706", bg: "#fffbeb" },
+  { number: 3, icon: Axe, title: "Controlled Removal", description: "Our qualified crew uses the right equipment for the job — from hand tools to elevated work platforms — ensuring safe, precise removal every time.", color: "#dc2626", bg: "#fef2f2" },
+  { number: 4, icon: Sparkles, title: "Thorough Clean-Up", description: "All timber, branches and green waste are cleared from your property. We rake, blow down and leave the area clean — ready for you to use straight away.", color: "#0891b2", bg: "#ecfeff" },
 ];
 
 const trustBadges = ["5+ Years Experience", "Fully Insured", "Local Gisborne Crew", "Fast Response"];
