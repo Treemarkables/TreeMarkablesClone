@@ -21319,21 +21319,9 @@ If you cannot find a value, use null. Do not guess.`
         storage.getAllJobs({ limit: 999999 }),
       ]);
 
-      // Get unscheduled work orders (status = work_order or scheduled but no scheduledDate matching the target)
-      const dayStart = new Date(targetDate + 'T00:00:00.000Z');
-      const dayEnd = new Date(targetDate + 'T23:59:59.999Z');
-
-      const unscheduledJobs = allJobs.filter(j => {
-        if (j.status === 'completed' || j.status === 'unsuccessful' || j.status === 'lead') return false;
-        if (j.status === 'work_order') return true; // Work orders awaiting scheduling
-        // Also include quotes that are accepted/scheduled but not yet assigned to this date
-        if (j.status === 'scheduled' && j.scheduledDate) {
-          const d = new Date(j.scheduledDate);
-          return d < dayStart || d > dayEnd; // scheduled but not on target date
-        }
-        if (j.status === 'quote') return true; // quotes can be proposed
-        return false;
-      });
+      // Get unscheduled work orders only (status === 'work_order')
+      // Already-scheduled jobs are excluded to avoid double-booking or re-confirming them.
+      const unscheduledJobs = allJobs.filter(j => j.status === 'work_order');
 
       const activeStaff = allEmployees.filter(e => e.isActive && e.status === 'active');
       const availableEquipment = allEquipment.filter(e => e.isActive && e.status === 'available');
@@ -21657,7 +21645,31 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
           const nzTime = pj.proposedStartTime || '8:00';
           const serviceType = job.serviceType || 'tree service';
           const address = job.address ? ` at ${job.address}` : '';
-          const message = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+
+          // Try to find a confirmation SMS template from the template library
+          let message: string;
+          try {
+            const allTemplates = await storage.getAllSmsTemplates();
+            const confirmTemplate = allTemplates.find(t =>
+              t.isActive && t.category === 'confirmation' && t.isDefault
+            ) || allTemplates.find(t =>
+              t.isActive && t.category === 'confirmation'
+            );
+            if (confirmTemplate) {
+              message = confirmTemplate.message
+                .replace(/\{\{customerName\}\}/gi, customer.name)
+                .replace(/\{\{serviceType\}\}/gi, serviceType)
+                .replace(/\{\{jobTitle\}\}/gi, job.title || serviceType)
+                .replace(/\{\{address\}\}/gi, job.address || '')
+                .replace(/\{\{date\}\}/gi, nzDate)
+                .replace(/\{\{time\}\}/gi, nzTime)
+                .replace(/\{\{jobNumber\}\}/gi, job.jobNumber?.toString() || '');
+            } else {
+              message = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+            }
+          } catch {
+            message = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+          }
 
           const draft = await storage.createPendingOutboundMessage({
             jobId: job.id,
