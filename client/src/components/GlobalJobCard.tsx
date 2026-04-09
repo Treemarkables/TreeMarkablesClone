@@ -3461,10 +3461,37 @@ The Treemarkables Team`;
         className="border-b border-gray-200 bg-white px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg"
         style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
       >
-        <div className="flex items-center justify-between gap-2 sm:gap-4">
-          {/* Left: Job Title, Status, Price & Payment Badge — stacked to prevent truncation */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 relative">
+          {/* Centred status badge — absolutely positioned so it floats in the middle of the header */}
+          {currentStatus && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <Badge
+                className={`pointer-events-auto text-xs whitespace-nowrap rounded-full ${
+                  currentStatus === "completed"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : currentStatus === "work_order"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : currentStatus === "quote"
+                        ? "bg-orange-500 hover:bg-orange-600 text-white"
+                        : currentStatus === "lead"
+                          ? "bg-cyan-600 hover:bg-cyan-700 text-white"
+                          : currentStatus === "scheduled"
+                            ? "bg-blue-600 hover:bg-blue-700 text-white"
+                            : currentStatus === "unsuccessful"
+                              ? "bg-red-600 hover:bg-red-700 text-white"
+                              : "bg-gray-600 hover:bg-gray-700 text-white"
+                }`}
+                data-testid="badge-job-status"
+              >
+                {currentStatus.charAt(0).toUpperCase() +
+                  currentStatus.slice(1)}
+              </Badge>
+            </div>
+          )}
+
+          {/* Left: Job Title, Price & Payment Badge — stacked to prevent truncation */}
           <div className="flex flex-col justify-center flex-1 min-w-0">
-            {/* Row 1: Job number + status badge */}
+            {/* Row 1: Job number only */}
             <div className="flex items-center gap-1 sm:gap-2">
               <h1
                 className="text-base sm:text-xl md:text-2xl font-bold text-gray-900 whitespace-nowrap tracking-tight"
@@ -3474,29 +3501,6 @@ The Treemarkables Team`;
                   ? "New Job"
                   : `Job ${editingJob?.jobNumber || ""}`}
               </h1>
-              {currentStatus && (
-                <Badge
-                  className={`text-xs whitespace-nowrap rounded-full ${
-                    currentStatus === "completed"
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : currentStatus === "work_order"
-                        ? "bg-blue-600 hover:bg-blue-700 text-white"
-                        : currentStatus === "quote"
-                          ? "bg-orange-500 hover:bg-orange-600 text-white"
-                          : currentStatus === "lead"
-                            ? "bg-cyan-600 hover:bg-cyan-700 text-white"
-                            : currentStatus === "scheduled"
-                              ? "bg-blue-600 hover:bg-blue-700 text-white"
-                              : currentStatus === "unsuccessful"
-                                ? "bg-red-600 hover:bg-red-700 text-white"
-                                : "bg-gray-600 hover:bg-gray-700 text-white"
-                  }`}
-                  data-testid="badge-job-status"
-                >
-                  {currentStatus.charAt(0).toUpperCase() +
-                    currentStatus.slice(1)}
-                </Badge>
-              )}
             </div>
             {/* Row 2: Price + Payment status badge (only rendered when there's something to show) */}
             {mode === "edit" &&
