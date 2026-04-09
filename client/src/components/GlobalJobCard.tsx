@@ -8208,8 +8208,8 @@ The Treemarkables Team`;
             onClick={() => setIsPhotoCaptureOpen(true)}
             data-testid="toolbar-btn-photo"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-              <Camera className="h-5 w-5 text-white" strokeWidth={2.5} />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+              <Camera className="h-6 w-6 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">Photo</span>
           </button>
@@ -8221,8 +8221,8 @@ The Treemarkables Team`;
             onClick={() => setIsSMSComposerOpen(true)}
             data-testid="toolbar-btn-sms"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-              <MessageSquare className="h-5 w-5 text-white" strokeWidth={2.5} />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+              <MessageSquare className="h-6 w-6 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">SMS</span>
           </button>
@@ -8234,26 +8234,10 @@ The Treemarkables Team`;
             onClick={handleEmailClick}
             data-testid="toolbar-btn-email"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
-              <Mail className="h-5 w-5 text-white" strokeWidth={2.5} />
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
+              <Mail className="h-6 w-6 text-white" strokeWidth={2.5} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">Email</span>
-          </button>
-
-          {/* Diary (Note) */}
-          <button
-            type="button"
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
-            onClick={() => {
-              setSidebarTab("diary");
-              setActiveTab("diary");
-            }}
-            data-testid="toolbar-btn-diary"
-          >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-              <BookOpen className="h-5 w-5 text-white" strokeWidth={2.5} />
-            </div>
-            <span className="text-[10px] text-gray-500 font-medium">Diary</span>
           </button>
 
           {/* More */}
@@ -8263,8 +8247,8 @@ The Treemarkables Team`;
             onClick={() => setShowMoreActionsSheet(true)}
             data-testid="toolbar-btn-more"
           >
-            <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center">
-              <MoreHorizontal className="h-5 w-5 text-gray-600" strokeWidth={2.5} />
+            <div className="w-12 h-12 rounded-xl bg-gray-200 flex items-center justify-center">
+              <MoreHorizontal className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">More</span>
           </button>
