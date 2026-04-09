@@ -3465,7 +3465,7 @@ The Treemarkables Team`;
           {/* Left: Job Title, Status, Price & Payment Badge — stacked to prevent truncation */}
           <div className="flex flex-col justify-center flex-1 min-w-0">
             {/* Row 1: Job number + status badge */}
-            <div className="flex items-center gap-1 sm:gap-2 justify-center">
+            <div className="flex items-center gap-1 sm:gap-2">
               <h1
                 className="text-base sm:text-xl md:text-2xl font-bold text-gray-900 whitespace-nowrap tracking-tight"
                 data-testid="text-job-title"
