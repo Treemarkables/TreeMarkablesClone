@@ -157,12 +157,32 @@ After the app launches and you log in, check the Replit server logs for:
 
 ## Step 7 — Keep the app in sync
 
-After web app changes:
+After pulling new web code changes from Replit, run the sync helper:
+```bash
+./scripts/ios-sync.sh
+```
+
+Or manually:
 ```bash
 npm run build
 npx cap sync ios
 ```
 Then rebuild in Xcode (⌘R).
+
+---
+
+## Step 7b — Firebase Push Notifications (FCM)
+
+The app uses Firebase Cloud Messaging for push notifications (job alerts, quote acceptances, etc.).
+
+### Get your GoogleService-Info.plist
+1. Go to [Firebase Console](https://console.firebase.google.com) → your project
+2. Project Settings → Your apps → iOS app (Bundle ID: `com.treemarkables.app`)
+3. If no iOS app exists, click **Add app** → iOS → enter `com.treemarkables.app`
+4. Download **`GoogleService-Info.plist`**
+5. In Xcode: drag `GoogleService-Info.plist` into the `App` group (tick "Copy items if needed" + add to `App` target)
+
+> Without this file, push notifications (job bookings, quote alerts, etc.) will not work on the device.
 
 ---
 
