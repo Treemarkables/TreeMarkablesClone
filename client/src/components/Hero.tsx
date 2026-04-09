@@ -12,7 +12,7 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative mt-20 min-h-[420px] lg:min-h-[560px] flex items-start">
+    <section className="relative min-h-[420px] lg:min-h-[560px] flex items-start">
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
@@ -23,7 +23,7 @@ export default function Hero() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/40 to-black/10"></div>
       </div>
       {/* Content */}
-      <div className="relative z-10 max-w-6xl mx-auto px-6 pt-16 md:pt-20">
+      <div className="relative z-10 max-w-6xl mx-auto px-6 pt-24">
         <div className="max-w-3xl">
           <h1
             className="text-white mb-6 font-extrabold leading-tight tracking-tight"

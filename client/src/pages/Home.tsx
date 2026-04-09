@@ -69,7 +69,7 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-background">
+    <div>
       <SEO 
         title="Tree Removal & Arborist Services Gisborne | Treemarkables"
         description="Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast. Get a free quote today."
