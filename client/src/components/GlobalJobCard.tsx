@@ -4479,15 +4479,6 @@ The Treemarkables Team`;
                                 )}
                             </div>
 
-                            {/* Row 3: Address */}
-                            {watchedAddress && (
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">
-                                  {watchedAddress}
-                                </span>
-                              </div>
-                            )}
                           </div>
 
                         </div>

@@ -3125,7 +3125,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                         {/* Row 3: Description snippet */}
                         {job.description && (
-                          <p className="text-sm text-gray-500 line-clamp-1 mb-2">
+                          <p className="text-sm text-gray-500 line-clamp-3 mb-2">
                             {job.description}
                           </p>
                         )}
