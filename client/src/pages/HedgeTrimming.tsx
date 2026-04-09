@@ -132,7 +132,7 @@ export default function HedgeTrimming() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
+    <div className="min-h-screen bg-background pt-20">
       <SEO 
         title="Hedge Trimming Gisborne – Expert Shaping & Care"
         description="Keep your hedges neat year‑round. We trim, shape and maintain hedges for homes and coastal properties in Gisborne and surrounding areas. Request a quote."

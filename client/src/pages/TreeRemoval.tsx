@@ -84,7 +84,7 @@ export default function TreeRemoval() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
+    <div className="min-h-screen bg-background pt-20">
       <SEO 
         title="Tree Removal Gisborne – Safe, Certified & 24/7"
         description="Need a dangerous or unwanted tree removed? Our certified arborists provide safe tree removal for homes and farms in Gisborne and Wairoa. Contact us for competitive prices."
