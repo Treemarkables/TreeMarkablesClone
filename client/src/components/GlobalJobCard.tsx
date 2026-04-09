@@ -5445,7 +5445,7 @@ The Treemarkables Team`;
                                             editingJob?.description) && (
                                           <div
                                             ref={descriptionTextareaRef}
-                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
+                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-[18]"
                                             onClick={() => {
                                               setDescriptionDraft(
                                                 formLoadedJobId ===
@@ -6633,7 +6633,7 @@ The Treemarkables Team`;
                                   </span>
                                   <Edit3 className="h-3 w-3 text-gray-400" />
                                 </div>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[120px]">
                                   {(formLoadedJobId === editingJob?.id
                                     ? watchedDescription
                                     : watchedDescription ||
