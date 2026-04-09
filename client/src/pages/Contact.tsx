@@ -144,9 +144,9 @@ export default function Contact() {
       />
       <Header />
 
-      <main className="flex-1">
+      <main className="flex-1 pt-72">
         {/* Hero Section */}
-        <section className="py-12 bg-gradient-to-br from-primary/10 to-primary/5">
+        <section className="pb-12 bg-gradient-to-br from-primary/10 to-primary/5">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="text-center">
               <div className="flex justify-center mb-4">
