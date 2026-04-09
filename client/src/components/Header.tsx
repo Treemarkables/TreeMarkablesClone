@@ -72,13 +72,14 @@ export default function Header() {
         <div className="flex items-center justify-between h-full">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center hover-elevate group h-full" data-testid="link-home">
+          <Link href="/" className="flex items-center gap-3 hover-elevate group h-full" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-52 w-auto object-contain transition-all duration-200"
+              className="h-16 w-auto object-contain transition-all duration-200"
               data-testid="logo-image"
             />
+            <span className="text-[#39FF14] font-bold text-2xl tracking-widest uppercase hidden sm:block" style={{ fontFamily: 'TT Norms Pro, Inter, sans-serif' }}>TREEMARKABLES</span>
           </Link>
 
           {/* Navigation - Centered */}
