@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import Header from "@/components/Header";
 import Hero from "@/components/Hero";
+import FloatingReviews from "@/components/FloatingReviews";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import ServicesOffered from "@/components/ServicesOffered";
 import CTASection from "@/components/CTASection";
@@ -80,6 +81,7 @@ export default function Home() {
         structuredData={structuredData}
       />
       <Header />
+      <FloatingReviews />
       <Hero />
       <ServicesOffered />
       <WhyChooseUs />
