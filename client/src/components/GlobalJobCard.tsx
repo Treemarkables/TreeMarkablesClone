@@ -5408,61 +5408,26 @@ The Treemarkables Team`;
                                 name="description"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <div
-                                      className="flex items-center justify-between cursor-pointer"
-                                      onClick={() => {
-                                        setDescriptionDraft(
-                                          formLoadedJobId === editingJob?.id
-                                            ? field.value || ""
-                                            : field.value ||
-                                                editingJob?.description ||
-                                                "",
-                                        );
-                                        setDescriptionPopupOpen(true);
-                                      }}
-                                    >
+                                    <div className="flex items-center justify-between mb-2">
                                       <span className="text-blue-600 font-medium flex items-center gap-2">
                                         <MessageSquare className="h-4 w-4" />
                                         Job Description
                                       </span>
-                                      <ChevronDown className="h-4 w-4 text-gray-400" />
                                     </div>
                                     <FormControl>
-                                      <>
-                                        <input type="hidden" {...field} />
-                                        {(formLoadedJobId === editingJob?.id
-                                          ? field.value
-                                          : field.value ||
-                                            editingJob?.description) && (
-                                          <div
-                                            ref={descriptionTextareaRef}
-                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-[18]"
-                                            onClick={() => {
-                                              setDescriptionDraft(
-                                                formLoadedJobId ===
-                                                  editingJob?.id
-                                                  ? field.value || ""
-                                                  : field.value ||
-                                                      editingJob?.description ||
-                                                      "",
-                                              );
-                                              setDescriptionPopupOpen(true);
-                                            }}
-                                            data-testid="div-description-display"
-                                          >
-                                            <LinkifyMultiline
-                                              text={
-                                                formLoadedJobId ===
-                                                editingJob?.id
-                                                  ? field.value || ""
-                                                  : field.value ||
-                                                    editingJob?.description ||
-                                                    ""
-                                              }
-                                            />
-                                          </div>
-                                        )}
-                                      </>
+                                      <Textarea
+                                        {...field}
+                                        value={
+                                          formLoadedJobId === editingJob?.id
+                                            ? field.value || ""
+                                            : field.value ||
+                                              editingJob?.description ||
+                                              ""
+                                        }
+                                        className="min-h-[150px] text-sm text-gray-600 resize-none border-gray-200"
+                                        placeholder="Add a job description..."
+                                        data-testid="textarea-job-description"
+                                      />
                                     </FormControl>
                                   </FormItem>
                                 )}
