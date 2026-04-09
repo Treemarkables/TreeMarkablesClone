@@ -117,44 +117,44 @@ export default function WhyChooseUs() {
       </section>
 
       {/* ── Bottom: How We Do Every Job ── */}
-      <section id="process" className="py-8 bg-muted/30">
+      <section id="process" className="py-4 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           {/* Heading */}
-          <div className="text-center mb-6">
+          <div className="text-center mb-4">
             <h2
-              className="font-extrabold text-foreground mb-3"
-              style={{ fontSize: "clamp(24px, 4vw, 42px)", fontFamily: "'TT Norms Pro', sans-serif" }}
+              className="font-extrabold text-foreground mb-2"
+              style={{ fontSize: "clamp(26px, 4vw, 44px)", fontFamily: "'TT Norms Pro', sans-serif" }}
             >
               How We Do Every Job
             </h2>
-            <p className="text-muted-foreground" style={{ fontSize: "clamp(15px, 1.6vw, 18px)" }}>
+            <p className="text-muted-foreground text-lg">
               Tight, efficient jobs ending with <strong>zero loose ends.</strong>
             </p>
           </div>
 
           {/* Steps */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
             {steps.map((step) => {
               const Icon = step.icon;
               return (
                 <div
                   key={step.number}
-                  className="bg-background rounded-xl p-4 shadow-sm border border-border/50"
+                  className="bg-background rounded-xl p-5 shadow-sm border border-border/50"
                   data-testid={`card-process-${step.number - 1}`}
                 >
                   <div
-                    className="w-10 h-10 rounded-lg flex items-center justify-center mb-3"
+                    className="w-12 h-12 rounded-lg flex items-center justify-center mb-3"
                     style={{ background: step.bg }}
                   >
-                    <Icon className="h-5 w-5" style={{ color: step.color }} data-testid={`icon-process-${step.number - 1}`} />
+                    <Icon className="h-6 w-6" style={{ color: step.color }} data-testid={`icon-process-${step.number - 1}`} />
                   </div>
-                  <p className="text-base font-bold mb-1" style={{ color: "#39FF14" }}>
+                  <p className="text-lg font-bold mb-1" style={{ color: "#39FF14" }}>
                     {step.number}
                   </p>
-                  <h3 className="text-lg font-bold text-foreground mb-1.5" data-testid={`title-process-${step.number - 1}`}>
+                  <h3 className="text-xl font-bold text-foreground mb-1.5" data-testid={`title-process-${step.number - 1}`}>
                     {step.title}
                   </h3>
-                  <p className="text-base text-muted-foreground leading-relaxed" data-testid={`description-process-${step.number - 1}`}>
+                  <p className="text-lg text-muted-foreground leading-relaxed" data-testid={`description-process-${step.number - 1}`}>
                     {step.description}
                   </p>
                 </div>
@@ -163,7 +163,7 @@ export default function WhyChooseUs() {
           </div>
 
           {/* Trust badges */}
-          <div className="flex flex-wrap justify-center gap-6">
+          <div className="flex flex-wrap justify-center gap-6 pb-2">
             {trustBadges.map((badge) => (
               <div key={badge} className="flex items-center gap-2 text-base font-bold text-muted-foreground">
                 <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#39FF14" }} />
