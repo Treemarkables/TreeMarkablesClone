@@ -21299,15 +21299,15 @@ If you cannot find a value, use null. Do not guess.`
       // Build equipment licenceRequired map
       const equipLicenceMap: Record<string, string | null> = {};
       for (const eq of allEquipment) {
-        equipLicenceMap[eq.id] = (eq as any).licenceRequired || null;
-        equipLicenceMap[eq.name] = (eq as any).licenceRequired || null;
+        equipLicenceMap[eq.id] = eq.licenceRequired || null;
+        equipLicenceMap[eq.name] = eq.licenceRequired || null;
       }
 
       // Build staff licences map
       const staffLicenceMap: Record<string, string[]> = {};
       for (const emp of allEmployees) {
         staffLicenceMap[emp.id] = [
-          ...((emp as any).licences || []),
+          ...(emp.licences || []),
           ...(emp.certifications || []),
         ];
       }
@@ -21335,7 +21335,7 @@ If you cannot find a value, use null. Do not guess.`
         id: e.id,
         name: e.name,
         type: e.type,
-        licenceRequired: (e as any).licenceRequired || null,
+        licenceRequired: e.licenceRequired || null,
       }));
 
       const systemPrompt = `You are an expert tree service business scheduling assistant. Your job is to propose an optimal day schedule that:
@@ -21384,7 +21384,7 @@ Available equipment (${equipSummaries.length} items):
 ${JSON.stringify(equipSummaries, null, 2)}
 
 Equipment→Licence requirements:
-${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => (e as any).licenceRequired).map(e => [e.name, (e as any).licenceRequired])), null, 2)}
+${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => e.licenceRequired).map(e => [e.name, e.licenceRequired])), null, 2)}
 
 Propose a schedule that hits the revenue target. Assign realistic start and end times starting from 07:00. Check licence requirements for each piece of equipment on each job. Flag any conflicts clearly.`;
 
@@ -21420,13 +21420,111 @@ Propose a schedule that hits the revenue target. Assign realistic start and end 
     }
   });
 
-  // POST /api/scheduling/confirm — confirm a proposed schedule (set scheduledDate on each job)
+  // POST /api/scheduling/confirm — confirm a proposed schedule with server-side constraint re-check
   app.post('/api/scheduling/confirm', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { targetDate, proposedJobs } = req.body;
       if (!targetDate || !Array.isArray(proposedJobs)) {
         return res.status(400).json({ success: false, message: 'targetDate and proposedJobs are required' });
       }
+
+      // === SERVER-SIDE CONSTRAINT VALIDATION ===
+      const [allEmployeesForValidation, allEquipmentForValidation] = await Promise.all([
+        storage.getAllEmployees(),
+        storage.getAllEquipment(),
+      ]);
+
+      const employeeMap: Record<string, typeof allEmployeesForValidation[0]> = {};
+      for (const emp of allEmployeesForValidation) employeeMap[emp.id] = emp;
+
+      const equipmentMap: Record<string, typeof allEquipmentForValidation[0]> = {};
+      for (const eq of allEquipmentForValidation) {
+        equipmentMap[eq.id] = eq;
+        equipmentMap[eq.name] = eq;
+      }
+
+      const validationErrors: string[] = [];
+
+      // Track staff time slots for double-booking detection
+      const staffTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
+
+      const timeToMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + (m || 0);
+      };
+
+      for (const pj of proposedJobs) {
+        if (!pj.jobId) continue;
+
+        const assignedStaffIds: string[] = pj.assignedStaffIds || [];
+        const equipmentNeeded: string[] = pj.equipmentNeeded || [];
+        const startTime: string = pj.proposedStartTime || '08:00';
+        const endTime: string = pj.proposedEndTime || '17:00';
+        const jobLabel = pj.title || pj.jobId;
+
+        // 1. Validate that assigned staff members exist and are active
+        for (const staffId of assignedStaffIds) {
+          const emp = employeeMap[staffId];
+          if (!emp) {
+            validationErrors.push(`Job "${jobLabel}": Staff ID ${staffId} not found`);
+            continue;
+          }
+          if (!emp.isActive) {
+            validationErrors.push(`Job "${jobLabel}": Staff member ${emp.firstName} ${emp.lastName} is not active`);
+          }
+
+          // 2. Check for time-slot double-booking
+          if (!staffTimeSlots[staffId]) staffTimeSlots[staffId] = [];
+          const startMins = timeToMinutes(startTime);
+          const endMins = timeToMinutes(endTime);
+          for (const slot of staffTimeSlots[staffId]) {
+            const existingStart = timeToMinutes(slot.start);
+            const existingEnd = timeToMinutes(slot.end);
+            if (startMins < existingEnd && endMins > existingStart) {
+              validationErrors.push(
+                `Double-booking: ${emp.firstName} ${emp.lastName} is assigned to both "${jobLabel}" (${startTime}–${endTime}) and "${slot.jobTitle}" (${slot.start}–${slot.end})`
+              );
+            }
+          }
+          staffTimeSlots[staffId].push({ start: startTime, end: endTime, jobTitle: jobLabel });
+        }
+
+        // 3. Validate licence requirements for equipment
+        const staffLicences = new Set<string>();
+        for (const staffId of assignedStaffIds) {
+          const emp = employeeMap[staffId];
+          if (!emp) continue;
+          for (const lic of (emp.licences || [])) staffLicences.add(lic.toLowerCase());
+          for (const cert of (emp.certifications || [])) staffLicences.add(cert.toLowerCase());
+        }
+
+        for (const equipName of equipmentNeeded) {
+          const eq = equipmentMap[equipName];
+          if (!eq) continue;
+          const required = eq.licenceRequired;
+          if (required && required.trim() !== '') {
+            const requiredLower = required.toLowerCase();
+            const hasLicence = Array.from(staffLicences).some(l =>
+              l.includes(requiredLower) || requiredLower.includes(l)
+            );
+            if (!hasLicence) {
+              validationErrors.push(
+                `Job "${jobLabel}": Equipment "${equipName}" requires "${required}" but no assigned crew member holds this licence`
+              );
+            }
+          }
+        }
+      }
+
+      // If hard validation errors exist, block confirmation
+      if (validationErrors.length > 0) {
+        return res.status(422).json({
+          success: false,
+          message: 'Schedule validation failed — constraint violations detected',
+          validationErrors,
+        });
+      }
+      // === END VALIDATION ===
 
       const updatedJobs = [];
       const draftMessages = [];

@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { format, addDays } from "date-fns";
 import {
   Bot, Calendar, CheckCircle2, XCircle, AlertTriangle,
-  DollarSign, Users, Wrench, RefreshCw, ArrowRight, ChevronRight, Shield
+  DollarSign, Users, Wrench, RefreshCw, ArrowRight, ChevronRight, Shield, Clock
 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -49,6 +49,9 @@ export default function AIDispatchScheduler() {
   const [overrideTarget, setOverrideTarget] = useState("");
   const [proposal, setProposal] = useState<ScheduleProposal | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  // Editable times: maps jobId → { start, end } — owner can adjust before confirming
+  const [editedTimes, setEditedTimes] = useState<Record<string, { start: string; end: string }>>({});
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const { data: settingsData } = useQuery<{ success: boolean; data: { dailyRevenueTarget?: string } }>({
     queryKey: ["/api/business-settings"],
@@ -65,6 +68,8 @@ export default function AIDispatchScheduler() {
       if (data.success) {
         setProposal(data.data);
         setConfirmed(false);
+        setEditedTimes({});
+        setValidationErrors([]);
       } else {
         toast({ title: data.message || "Failed to generate proposal", variant: "destructive" });
       }
@@ -74,19 +79,41 @@ export default function AIDispatchScheduler() {
     },
   });
 
+  const updateJobTime = (jobId: string, field: "start" | "end", value: string) => {
+    setEditedTimes(prev => ({
+      ...prev,
+      [jobId]: {
+        start: prev[jobId]?.start ?? (proposal?.proposedJobs.find(j => j.jobId === jobId)?.proposedStartTime ?? "08:00"),
+        end: prev[jobId]?.end ?? (proposal?.proposedJobs.find(j => j.jobId === jobId)?.proposedEndTime ?? "17:00"),
+        [field]: value,
+      },
+    }));
+  };
+
   const confirmMutation = useMutation({
-    mutationFn: () =>
-      apiRequest("POST", "/api/scheduling/confirm", {
+    mutationFn: () => {
+      // Merge any owner-edited times into the proposed jobs before sending
+      const mergedJobs = (proposal?.proposedJobs ?? []).map(pj => ({
+        ...pj,
+        proposedStartTime: editedTimes[pj.jobId]?.start ?? pj.proposedStartTime,
+        proposedEndTime: editedTimes[pj.jobId]?.end ?? pj.proposedEndTime,
+      }));
+      return apiRequest("POST", "/api/scheduling/confirm", {
         targetDate: proposal?.targetDate,
-        proposedJobs: proposal?.proposedJobs,
-      }).then(r => r.json()),
+        proposedJobs: mergedJobs,
+      }).then(r => r.json());
+    },
     onSuccess: (data) => {
       if (data.success) {
         setConfirmed(true);
+        setValidationErrors([]);
         toast({
           title: `Schedule confirmed for ${format(new Date(targetDate), "EEEE dd MMM")}`,
           description: `${data.data.updatedJobs} jobs scheduled, ${data.data.draftMessages} customer messages queued for approval`,
         });
+      } else if (data.validationErrors?.length) {
+        setValidationErrors(data.validationErrors);
+        toast({ title: "Constraint violations — review errors below", variant: "destructive" });
       } else {
         toast({ title: data.message || "Failed to confirm schedule", variant: "destructive" });
       }
@@ -217,7 +244,30 @@ export default function AIDispatchScheduler() {
             </CardContent>
           </Card>
 
-          {/* Conflicts */}
+          {/* Server-side validation errors (from confirm endpoint) */}
+          {validationErrors.length > 0 && (
+            <Card className="border-red-300 bg-red-50">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm text-red-700 flex items-center gap-2">
+                  <XCircle className="w-4 h-4" />
+                  Schedule Not Saved — Constraint Violations ({validationErrors.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <p className="text-xs text-red-600 mb-2">Fix the issues below, adjust start/end times, or re-propose a new schedule.</p>
+                <ul className="space-y-1">
+                  {validationErrors.map((e, i) => (
+                    <li key={i} className="text-sm text-red-700 flex items-start gap-2">
+                      <AlertTriangle className="w-3 h-3 mt-1 flex-shrink-0" />
+                      {e}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* AI-detected conflicts */}
           {proposal.conflicts && proposal.conflicts.length > 0 && (
             <Card className="border-red-200 bg-red-50">
               <CardHeader className="pb-2">
@@ -255,10 +305,25 @@ export default function AIDispatchScheduler() {
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">{job.address}</p>
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Badge variant="outline" className="text-xs">
-                        {job.proposedStartTime} – {job.proposedEndTime}
-                      </Badge>
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="w-3 h-3" />
+                        <input
+                          type="time"
+                          value={editedTimes[job.jobId]?.start ?? job.proposedStartTime}
+                          onChange={e => updateJobTime(job.jobId, "start", e.target.value)}
+                          className="border rounded px-1 py-0.5 text-xs bg-background text-foreground w-20"
+                          title="Start time"
+                        />
+                        <span>–</span>
+                        <input
+                          type="time"
+                          value={editedTimes[job.jobId]?.end ?? job.proposedEndTime}
+                          onChange={e => updateJobTime(job.jobId, "end", e.target.value)}
+                          className="border rounded px-1 py-0.5 text-xs bg-background text-foreground w-20"
+                          title="End time"
+                        />
+                      </div>
                       <span className="font-bold text-sm text-green-700">
                         ${job.revenue.toLocaleString("en-NZ", { maximumFractionDigits: 0 })}
                       </span>
