@@ -21424,6 +21424,7 @@ Return a valid JSON object only (no markdown) with this EXACT structure:
         jobNumber: j.jobNumber,
         title: j.title || 'existing job',
         assignedTeam: j.assignedTeam || [],
+        equipmentIds: j.equipment || [],
         startTime: j.scheduledStartTime || '08:00',
         endTime: j.scheduledEndTime || '17:00',
       }));
@@ -21431,7 +21432,7 @@ Return a valid JSON object only (no markdown) with this EXACT structure:
       const userPrompt = `Target date: ${targetDate}
 Daily revenue target: $${dailyTarget} NZD
 
-Already scheduled jobs for this date (staff NOT available during these slots):
+Already scheduled jobs for this date (staff AND equipment NOT available during these slots):
 ${alreadyScheduledToday.length > 0 ? JSON.stringify(alreadyScheduledToday, null, 2) : 'None'}
 
 Available unscheduled work orders (${jobSummaries.length} jobs):
@@ -21528,6 +21529,9 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const staffTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
       const equipmentTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
 
+      // Collect resolved equipment IDs per proposed job (for persisting to jobs.equipment on confirm)
+      const resolvedEquipmentByJob: Record<string, string[]> = {};
+
       const timeToMinutes = (t: string) => {
         const [h, m] = t.split(':').map(Number);
         return h * 60 + (m || 0);
@@ -21556,6 +21560,15 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
             if (typeof sid !== 'string') continue;
             if (!staffTimeSlots[sid]) staffTimeSlots[sid] = [];
             staffTimeSlots[sid].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
+          }
+        }
+        // Pre-populate equipment time slots from existing scheduled jobs (uses jobs.equipment field)
+        const existingEquipment = ej.equipment;
+        if (Array.isArray(existingEquipment)) {
+          for (const eqId of existingEquipment) {
+            if (typeof eqId !== 'string') continue;
+            if (!equipmentTimeSlots[eqId]) equipmentTimeSlots[eqId] = [];
+            equipmentTimeSlots[eqId].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
           }
         }
       }
@@ -21605,9 +21618,16 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
           for (const cert of (emp.certifications || [])) staffLicences.add(cert.toLowerCase());
         }
 
+        if (!resolvedEquipmentByJob[pj.jobId]) resolvedEquipmentByJob[pj.jobId] = [];
+
         for (const equipName of equipmentNeeded) {
           const eq = equipmentMap[equipName];
           if (!eq) continue;
+
+          // Collect resolved equipment ID for job persistence
+          if (eq.id && !resolvedEquipmentByJob[pj.jobId].includes(eq.id)) {
+            resolvedEquipmentByJob[pj.jobId].push(eq.id);
+          }
 
           // 4. Check equipment is active/available
           if (!eq.isActive) {
@@ -21672,12 +21692,14 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         // Set the scheduled date — store as date-only (no time component) matching the job form pattern.
         // Actual start/end wall-clock times are kept in scheduledStartTime/scheduledEndTime strings.
         const scheduledDate = new Date(targetDate);
+        const equipsForJob = resolvedEquipmentByJob[pj.jobId] || [];
         const updated = await storage.updateJob(pj.jobId, {
           scheduledDate,
           scheduledStartTime: pj.proposedStartTime || '08:00',
           scheduledEndTime: pj.proposedEndTime || '17:00',
           assignedTeam: pj.assignedStaffIds || [],
           status: 'scheduled',
+          ...(equipsForJob.length > 0 ? { equipment: equipsForJob } : {}),
         });
         updatedJobs.push(updated);
 
