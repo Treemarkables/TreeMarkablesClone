@@ -46,6 +46,19 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 
+const TEMPLATE_CATEGORIES: { value: string; label: string; description: string }[] = [
+  { value: "confirmation", label: "Job Scheduling Confirmation", description: "Used by AI Smart Dispatch when confirming scheduled jobs" },
+  { value: "quote", label: "Quote / Proposal", description: "Sending quotes or proposals to customers" },
+  { value: "invoice", label: "Invoice", description: "Invoice delivery and payment requests" },
+  { value: "job_status", label: "Job Status Update", description: "Notifying customers of job progress" },
+  { value: "reminder", label: "Reminder", description: "Follow-up and reminder messages" },
+  { value: "welcome", label: "Welcome", description: "New customer welcome messages" },
+  { value: "custom_message", label: "Other", description: "General purpose templates" },
+];
+
+const categoryLabel = (value: string) =>
+  TEMPLATE_CATEGORIES.find(c => c.value === value)?.label ?? value;
+
 // Form schemas
 const emailTemplateSchema = z.object({
   name: z.string().min(1, "Template name is required"),
@@ -378,9 +391,9 @@ export default function CommunicationTemplates() {
                   data-testid={`card-email-template-${template.id}`}
                 >
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
                       <span>{template.name}</span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -399,6 +412,11 @@ export default function CommunicationTemplates() {
                         </Button>
                       </div>
                     </CardTitle>
+                    {template.category && (
+                      <Badge variant="secondary" className="w-fit text-xs">
+                        {categoryLabel(template.category)}
+                      </Badge>
+                    )}
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-2">
@@ -464,9 +482,9 @@ export default function CommunicationTemplates() {
                   data-testid={`card-sms-template-${template.id}`}
                 >
                   <CardHeader>
-                    <CardTitle className="text-base flex items-center justify-between">
+                    <CardTitle className="text-base flex items-center justify-between gap-2 flex-wrap">
                       <span>{template.name}</span>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 items-center">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -485,6 +503,11 @@ export default function CommunicationTemplates() {
                         </Button>
                       </div>
                     </CardTitle>
+                    {template.category && (
+                      <Badge variant="secondary" className="w-fit text-xs">
+                        {categoryLabel(template.category)}
+                      </Badge>
+                    )}
                   </CardHeader>
                   <CardContent>
                     <p className="text-sm line-clamp-3">{template.message}</p>
@@ -534,6 +557,33 @@ export default function CommunicationTemplates() {
                           data-testid="input-template-name"
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={emailForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-email-category">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TEMPLATE_CATEGORIES.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        {TEMPLATE_CATEGORIES.find(c => c.value === field.value)?.description}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -639,6 +689,33 @@ export default function CommunicationTemplates() {
                           data-testid="input-template-name"
                         />
                       </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={smsForm.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-sms-category">
+                            <SelectValue placeholder="Select a category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {TEMPLATE_CATEGORIES.map(cat => (
+                            <SelectItem key={cat.value} value={cat.value}>
+                              {cat.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription className="text-xs">
+                        {TEMPLATE_CATEGORIES.find(c => c.value === field.value)?.description}
+                      </FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}
