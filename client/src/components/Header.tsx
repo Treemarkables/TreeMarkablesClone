@@ -67,7 +67,7 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm h-20" style={{ position: 'fixed', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
+    <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm h-20 overflow-hidden" style={{ position: 'fixed', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full">
         <div className="flex items-center justify-between h-full">
           
@@ -76,7 +76,7 @@ export default function Header() {
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-full w-auto object-contain"
+              className="h-40 w-auto object-contain"
               data-testid="logo-image"
             />
           </Link>
