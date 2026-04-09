@@ -7,6 +7,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AIAssistantChat } from "@/components/AIAssistantChat";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
 import TreeRemoval from "@/pages/TreeRemoval";
@@ -923,11 +924,13 @@ function App() {
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <AuthProvider>
-            <ScrollToTop />
-            <Toaster />
-            <InstallPrompt />
-            <AuthenticatedOverlays />
-            <Router />
+            <TwilioCallProvider>
+              <ScrollToTop />
+              <Toaster />
+              <InstallPrompt />
+              <AuthenticatedOverlays />
+              <Router />
+            </TwilioCallProvider>
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>

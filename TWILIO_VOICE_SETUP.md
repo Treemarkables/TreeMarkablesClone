@@ -17,8 +17,19 @@ If you don't answer within 20 seconds, it plays a voicemail greeting and records
 
 - Active Twilio account with a NZ phone number
 - `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER` configured as secrets
-- `HERO_PHONE_NUMBER` secret set to your real phone number (e.g. `+6421XXXXXXX`)
+- `HERO_PHONE_NUMBER` secret set to your real phone number — optional if using the iOS app
 - `OPENAI_API_KEY` configured
+
+### For iOS Native App (recommended)
+
+The iOS Capacitor app receives calls via PushKit/CallKit — calls ring even when the app is backgrounded or the screen is locked.
+
+Additional secrets required:
+- `TWILIO_API_KEY` — API Key SID (starts with `SK`). Create at Twilio Console → API Keys → Create Standard.
+- `TWILIO_API_SECRET` — The secret shown once at creation time.
+- `TWILIO_CLIENT_IDENTITY` — Optional; defaults to `treemarkables-owner`.
+
+See `IOS_BUILD_GUIDE.md` for the full Xcode build and TestFlight distribution walkthrough.
 
 ## How Calls Reach Twilio
 

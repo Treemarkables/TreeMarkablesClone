@@ -85,7 +85,8 @@ Fields like `jobContactEmail` and `billingContactEmail` have special protection 
 - **AI/ML**: OpenAI (Whisper API for transcription & GPT-5 for extraction)
 - **Accounting**: Xero (`xero-node` SDK)
 - **Address Autocomplete**: Addy Solutions (NZ address API)
-- **Telephony**: Twilio
+- **Telephony**: Twilio (call recording, Whisper transcription, Twilio Voice SDK for iOS CallKit)
+- **Native iOS**: Capacitor (`@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`) — `capacitor.config.ts` at project root; native Swift plugin in `ios-native/`; build guide in `IOS_BUILD_GUIDE.md`
 - **Marketing**: Meta Marketing API (for Facebook/Instagram), Mailchimp Marketing API
 - **Notifications**: Firebase Cloud Messaging
 - **Timezone**: date-fns-tz
