@@ -76,37 +76,37 @@ export default function WhyChooseUs() {
               return (
                 <div
                   key={index}
-                  className="bg-white rounded-2xl p-6 flex flex-col gap-4"
+                  className="bg-white rounded-2xl p-4 flex flex-col gap-2"
                   data-testid={`card-feature-${index}`}
                 >
                   <div
-                    className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
                     style={{ background: "#e8fce8", border: "1px solid #39FF14" }}
                   >
-                    <Icon className="h-6 w-6" style={{ color: "#1a7a1a" }} data-testid={`icon-feature-${index}`} />
+                    <Icon className="h-5 w-5" style={{ color: "#1a7a1a" }} data-testid={`icon-feature-${index}`} />
                   </div>
                   <h3
-                    className="text-xl font-bold text-gray-900"
+                    className="text-lg font-bold text-gray-900"
                     data-testid={`title-feature-${index}`}
                   >
                     {card.title}
                   </h3>
-                  <p className="text-gray-600 leading-relaxed flex-1" data-testid={`description-feature-${index}`}>
+                  <p className="text-gray-600 leading-relaxed flex-1 text-sm" data-testid={`description-feature-${index}`}>
                     {card.description}
                   </p>
                   {card.showStars && (
-                    <div className="flex items-center gap-2 mt-auto pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
                       <div className="flex">
                         {[...Array(5)].map((_, i) => (
-                          <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          <Star key={i} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                         ))}
                       </div>
                       <span className="text-xs text-gray-500 font-medium">90+ Five-Star Reviews</span>
                     </div>
                   )}
                   {!card.showStars && (
-                    <div className="mt-auto pt-2 border-t border-gray-100">
-                      <div className="h-1 w-12 rounded-full" style={{ background: "#39FF14" }} />
+                    <div className="pt-2 border-t border-gray-100">
+                      <div className="h-1 w-10 rounded-full" style={{ background: "#39FF14" }} />
                     </div>
                   )}
                 </div>
