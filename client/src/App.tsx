@@ -526,7 +526,12 @@ function Router() {
   }, [setLocation]);
   
   // On native Capacitor app, skip public website and go straight to login
+  // Authenticated users hitting '/' go straight to the dispatch board (handles PWA launches,
+  // back-button presses and any other navigation that lands on the root URL)
   if (location === '/') {
+    if (!isLoading && isAuthenticated) {
+      return <Redirect to="/dispatch" />;
+    }
     const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
     if (isNative) {
       return <Redirect to="/login" />;
