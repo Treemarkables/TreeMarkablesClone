@@ -28,7 +28,7 @@ const steps = [
   { number: 4, icon: Sparkles, title: "Thorough Clean-Up", description: "All timber, branches and green waste are cleared from your property. We rake, blow down and leave the area clean — ready for you to use straight away.", color: "#0891b2", bg: "#ecfeff" },
 ];
 
-const trustBadges = ["5+ Years Experience", "Fully Insured", "Local Gisborne Crew", "Fast Response"];
+const trustBadges = ["18+ Years Experience", "Fully Insured", "Local Gisborne Crew", "Fast Response"];
 
 export default function WhyChooseUs() {
   return (
