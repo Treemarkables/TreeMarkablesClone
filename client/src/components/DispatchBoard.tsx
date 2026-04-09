@@ -530,18 +530,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   });
   const templates = templatesResponse?.data || [];
 
-  // Fetch daily revenue progress for the selected date
-  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
-  const { data: revenueData } = useQuery<{
-    success: boolean;
-    data: { scheduledRevenue: number; dailyTarget: number; percentComplete: number; jobCount: number; belowTarget: boolean };
-  }>({
-    queryKey: ["/api/scheduling/revenue", selectedDateStr],
-    queryFn: () => fetch(`/api/scheduling/revenue/${selectedDateStr}`, { credentials: "include" }).then(r => r.json()),
-    staleTime: 30000,
-  });
-  const revenueInfo = revenueData?.data;
-
   // Handle template selection and auto-populate form
   const handleTemplateSelection = (templateId: string) => {
     setSelectedTemplate(templateId);
@@ -618,6 +606,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     today.setHours(0, 0, 0, 0); // Start of day
     return today;
   });
+
+  // Fetch daily revenue progress for the selected date (moved here so selectedDate is in scope)
+  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+  const { data: revenueData } = useQuery<{
+    success: boolean;
+    data: { scheduledRevenue: number; dailyTarget: number; percentComplete: number; jobCount: number; belowTarget: boolean };
+  }>({
+    queryKey: ["/api/scheduling/revenue", selectedDateStr],
+    queryFn: () => fetch(`/api/scheduling/revenue/${selectedDateStr}`, { credentials: "include" }).then(r => r.json()),
+    staleTime: 30000,
+  });
+  const revenueInfo = revenueData?.data;
+
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState<string>("");
