@@ -21759,11 +21759,16 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         }
 
         // Log to job diary
+        const crewNames = (pj.assignedStaffNames || []).join(', ') || 'unassigned';
+        const diaryContent = `Job scheduled for ${targetDate} at ${pj.proposedStartTime || '08:00'} via AI Smart Dispatch. Crew: ${crewNames}`;
         await storage.createJobDiaryEntry({
           jobId: pj.jobId,
           entryType: 'note',
           title: 'AI Smart Dispatch scheduled',
-          content: `Job scheduled for ${targetDate} at ${pj.proposedStartTime || '08:00'} via AI Dispatch. Crew: ${(pj.assignedStaffNames || []).join(', ')}`,
+          description: diaryContent,
+          content: diaryContent,
+          authorName: 'AI Smart Dispatch',
+          authorRole: 'manager',
           metadata: { source: 'ai_dispatch', targetDate, assignedStaff: pj.assignedStaffIds },
         });
       }
