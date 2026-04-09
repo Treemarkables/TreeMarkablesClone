@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   Card,
   CardContent,
@@ -18,26 +18,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { useLocation } from "wouter";
 import {
   Mail,
   MessageSquare,
   Bell,
   Settings,
   Activity,
-  CheckCircle,
-  Clock,
-  AlertTriangle,
-  Users,
   BarChart3,
   TrendingUp,
   Send,
@@ -48,84 +35,58 @@ import {
   Play,
   Pause,
   Search,
-  Link2,
-  ExternalLink,
+  User,
   Loader2,
+  CheckCircle,
+  Clock,
 } from "lucide-react";
-import type { CallRecord } from "@shared/schema";
+import type { Call, Customer } from "@shared/schema";
 
 export default function CommunicationsManagement() {
   const [activeTab, setActiveTab] = useState("calls");
   const [callSearchQuery, setCallSearchQuery] = useState("");
   const [callDirectionFilter, setCallDirectionFilter] = useState<string>("all");
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
-  const [linkCallDialogOpen, setLinkCallDialogOpen] = useState(false);
-  const [selectedCallForLinking, setSelectedCallForLinking] =
-    useState<CallRecord | null>(null);
-  const [selectedJobId, setSelectedJobId] = useState<string>("");
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const [expandedTranscript, setExpandedTranscript] = useState<string | null>(null);
+  const [, navigate] = useLocation();
 
   const { data: callsResponse, isLoading: isLoadingCalls } = useQuery<{
     success: boolean;
-    data: CallRecord[];
+    data: Call[];
   }>({
     queryKey: ["/api/calls"],
     enabled: activeTab === "calls",
   });
 
-  const callRecords = callsResponse?.data;
-
-  const { data: jobsData } = useQuery<{ success: boolean; data: any[] }>({
-    queryKey: ["/api/jobs"],
-    enabled: linkCallDialogOpen,
+  const { data: customersResponse } = useQuery<{
+    success: boolean;
+    data: Customer[];
+  }>({
+    queryKey: ["/api/customers"],
+    enabled: activeTab === "calls",
   });
 
-  const linkCallToJobMutation = useMutation({
-    mutationFn: async ({
-      callId,
-      jobId,
-    }: {
-      callId: string;
-      jobId: string;
-    }) => {
-      return await apiRequest("PATCH", `/api/calls/${callId}`, { jobId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
-      setLinkCallDialogOpen(false);
-      setSelectedCallForLinking(null);
-      setSelectedJobId("");
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to link call to job",
-        variant: "destructive",
-      });
-    },
+  const calls = callsResponse?.data ?? [];
+  const customers = customersResponse?.data ?? [];
+
+  const getCustomerName = (customerId: string | null | undefined) => {
+    if (!customerId) return null;
+    return customers.find((c) => c.id === customerId)?.name ?? null;
+  };
+
+  const filteredCalls = calls.filter((call) => {
+    const customerName = getCustomerName(call.customerId);
+    const matchesSearch =
+      !callSearchQuery ||
+      call.phoneNumber?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
+      customerName?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
+      call.transcriptText?.toLowerCase().includes(callSearchQuery.toLowerCase());
+
+    const matchesDirection =
+      callDirectionFilter === "all" || call.direction === callDirectionFilter;
+
+    return matchesSearch && matchesDirection;
   });
-
-  const filteredCalls =
-    callRecords?.filter((call) => {
-      const matchesSearch =
-        !callSearchQuery ||
-        call.fromNumber
-          ?.toLowerCase()
-          .includes(callSearchQuery.toLowerCase()) ||
-        call.toNumber?.toLowerCase().includes(callSearchQuery.toLowerCase()) ||
-        call.callerName
-          ?.toLowerCase()
-          .includes(callSearchQuery.toLowerCase()) ||
-        call.transcription
-          ?.toLowerCase()
-          .includes(callSearchQuery.toLowerCase());
-
-      const matchesDirection =
-        callDirectionFilter === "all" || call.direction === callDirectionFilter;
-
-      return matchesSearch && matchesDirection;
-    }) || [];
 
   const formatDuration = (seconds?: number | null) => {
     if (!seconds) return "0:00";
@@ -447,115 +408,123 @@ export default function CommunicationsManagement() {
               ) : filteredCalls.length === 0 ? (
                 <div className="text-center py-8">
                   <Phone className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-medium mb-2">No call records</h3>
+                  <h3 className="text-lg font-medium mb-2">No call records yet</h3>
                   <p className="text-muted-foreground">
-                    No call recordings found.
+                    Recorded calls will appear here once customers start calling.
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredCalls.map((call) => (
-                    <div
-                      key={call.id}
-                      className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 border rounded-lg hover-elevate"
-                    >
-                      <div className="flex-shrink-0">
-                        {call.direction === "inbound" ? (
-                          <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
-                            <PhoneIncoming className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  {filteredCalls.map((call) => {
+                    const customerName = getCustomerName(call.customerId);
+                    const isPlaying = playingCallId === call.id;
+                    const isTranscriptOpen = expandedTranscript === call.id;
+                    return (
+                      <div
+                        key={call.id}
+                        className="flex flex-col gap-3 p-4 border rounded-lg"
+                      >
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <div className="flex-shrink-0">
+                            {call.direction === "inbound" ? (
+                              <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+                                <PhoneIncoming className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                              </div>
+                            ) : (
+                              <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
+                                <PhoneOutgoing className="w-5 h-5 text-green-600 dark:text-green-400" />
+                              </div>
+                            )}
                           </div>
-                        ) : (
-                          <div className="w-10 h-10 bg-green-100 dark:bg-green-900 rounded-full flex items-center justify-center">
-                            <PhoneOutgoing className="w-5 h-5 text-green-600 dark:text-green-400" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <h4 className="text-sm font-medium">
-                            {call.callerName ||
-                              (call.direction === "inbound"
-                                ? call.fromNumber
-                                : call.toNumber)}
-                          </h4>
-                          <Badge variant="outline" className="text-xs">
-                            {call.direction === "inbound"
-                              ? "Incoming"
-                              : "Outgoing"}
-                          </Badge>
-                          {call.sentiment && (
-                            <Badge
-                              className={
-                                call.sentiment === "positive"
-                                  ? "bg-green-500"
-                                  : call.sentiment === "negative"
-                                    ? "bg-red-500"
-                                    : "bg-gray-500"
-                              }
-                            >
-                              {call.sentiment}
-                            </Badge>
-                          )}
-                          {call.jobId && (
-                            <Badge variant="secondary" className="text-xs">
-                              Linked to Job
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground">
-                          {call.direction === "inbound"
-                            ? `From: ${call.fromNumber}`
-                            : `To: ${call.toNumber}`}
-                          {" • "}Duration: {formatDuration(call.duration)}
-                        </p>
-                        {call.transcriptionSummary && (
-                          <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                            {call.transcriptionSummary}
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
-                        <p className="text-xs text-muted-foreground">
-                          {formatCallTime(call.callStartedAt || call.createdAt)}
-                        </p>
-                        <div className="flex gap-2">
-                          {call.recordingUrl && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                setPlayingCallId(
-                                  playingCallId === call.id ? null : call.id,
-                                )
-                              }
-                              data-testid={`button-play-call-${call.id}`}
-                            >
-                              {playingCallId === call.id ? (
-                                <Pause className="w-4 h-4 mr-1" />
-                              ) : (
-                                <Play className="w-4 h-4 mr-1" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2 mb-1">
+                              <h4 className="text-sm font-medium">
+                                {customerName ?? call.phoneNumber}
+                              </h4>
+                              {customerName && (
+                                <span className="text-xs text-muted-foreground">{call.phoneNumber}</span>
                               )}
-                              {playingCallId === call.id ? "Pause" : "Play"}
-                            </Button>
-                          )}
-                          {!call.jobId && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedCallForLinking(call);
-                                setLinkCallDialogOpen(true);
-                              }}
-                              data-testid={`button-link-call-${call.id}`}
-                            >
-                              <Link2 className="w-4 h-4 mr-1" />
-                              Link
-                            </Button>
-                          )}
+                              <Badge variant="outline" className="text-xs">
+                                {call.direction === "inbound" ? "Incoming" : "Outgoing"}
+                              </Badge>
+                              {call.sentiment && (
+                                <Badge
+                                  className={
+                                    call.sentiment === "positive"
+                                      ? "bg-green-500"
+                                      : call.sentiment === "negative"
+                                        ? "bg-red-500"
+                                        : "bg-gray-500"
+                                  }
+                                >
+                                  {call.sentiment}
+                                </Badge>
+                              )}
+                              {call.customerId && (
+                                <Badge variant="secondary" className="text-xs">
+                                  Customer linked
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm text-muted-foreground">
+                              Duration: {formatDuration(call.duration)}
+                              {call.status && ` • ${call.status}`}
+                            </p>
+                            {call.summary && (
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                {call.summary}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex flex-col items-end gap-2 w-full sm:w-auto">
+                            <p className="text-xs text-muted-foreground">
+                              {formatCallTime(call.createdAt)}
+                            </p>
+                            <div className="flex flex-wrap gap-2 justify-end">
+                              {call.recordingUrl && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setPlayingCallId(isPlaying ? null : call.id)
+                                  }
+                                  data-testid={`button-play-call-${call.id}`}
+                                >
+                                  {isPlaying ? (
+                                    <Pause className="w-4 h-4 mr-1" />
+                                  ) : (
+                                    <Play className="w-4 h-4 mr-1" />
+                                  )}
+                                  {isPlaying ? "Pause" : "Play"}
+                                </Button>
+                              )}
+                              {call.transcriptText && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setExpandedTranscript(isTranscriptOpen ? null : call.id)
+                                  }
+                                  data-testid={`button-transcript-${call.id}`}
+                                >
+                                  {isTranscriptOpen ? "Hide" : "Transcript"}
+                                </Button>
+                              )}
+                              {call.customerId && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => navigate(`/customers`)}
+                                  data-testid={`button-view-customer-${call.id}`}
+                                >
+                                  <User className="w-4 h-4 mr-1" />
+                                  Customer
+                                </Button>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                      {playingCallId === call.id && call.recordingUrl && (
-                        <div className="w-full mt-3">
+                        {isPlaying && call.recordingUrl && (
                           <audio
                             controls
                             autoPlay
@@ -563,76 +532,23 @@ export default function CommunicationsManagement() {
                             src={call.recordingUrl}
                             onEnded={() => setPlayingCallId(null)}
                           />
-                          {call.transcription && (
-                            <div className="mt-3 p-3 bg-muted rounded-lg">
-                              <h5 className="text-sm font-medium mb-1">
-                                Transcription
-                              </h5>
-                              <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                                {call.transcription}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                        )}
+                        {isTranscriptOpen && call.transcriptText && (
+                          <div className="p-3 bg-muted rounded-lg">
+                            <h5 className="text-sm font-medium mb-1">Transcript</h5>
+                            <p className="text-sm text-muted-foreground whitespace-pre-wrap">
+                              {call.transcriptText}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
         </TabsContent>
-
-        {/* Link Call Dialog */}
-        <Dialog open={linkCallDialogOpen} onOpenChange={setLinkCallDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Link Call to Job</DialogTitle>
-              <DialogDescription>
-                Select a job to link this call recording to
-              </DialogDescription>
-            </DialogHeader>
-            <div className="py-4">
-              <Select value={selectedJobId} onValueChange={setSelectedJobId}>
-                <SelectTrigger data-testid="select-job-to-link">
-                  <SelectValue placeholder="Select a job..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {jobsData?.data?.map((job: any) => (
-                    <SelectItem key={job.id} value={job.id}>
-                      #{job.jobNumber} - {job.customerName || job.address}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setLinkCallDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (selectedCallForLinking && selectedJobId) {
-                    linkCallToJobMutation.mutate({
-                      callId: selectedCallForLinking.id,
-                      jobId: selectedJobId,
-                    });
-                  }
-                }}
-                disabled={!selectedJobId || linkCallToJobMutation.isPending}
-                data-testid="button-confirm-link-call"
-              >
-                {linkCallToJobMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : null}
-                Link Call
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
 
         {/* Templates Tab */}
         <TabsContent value="templates" className="space-y-6">
