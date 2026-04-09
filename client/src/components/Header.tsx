@@ -72,7 +72,7 @@ export default function Header() {
         <div className="flex items-center justify-between h-full">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center hover-elevate h-full py-2" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate h-full" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
