@@ -4490,72 +4490,6 @@ The Treemarkables Team`;
                             )}
                           </div>
 
-                          {/* Action Buttons Row */}
-                          <div className="grid grid-cols-2 gap-2 mt-4">
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-green-500 hover:bg-green-600 text-white rounded-full"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleCallClick();
-                              }}
-                              data-testid="button-servicem8-call"
-                            >
-                              <Phone className="h-4 w-4 mr-1.5" />
-                              Call
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-full"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setIsSMSComposerOpen(true);
-                              }}
-                              data-testid="button-servicem8-message"
-                            >
-                              <MessageSquare className="h-4 w-4 mr-1.5" />
-                              Message
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-full"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                const address = form.getValues("address");
-                                if (address) {
-                                  window.open(
-                                    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`,
-                                    "_blank",
-                                  );
-                                }
-                              }}
-                              data-testid="button-servicem8-navigate"
-                            >
-                              <MapPin className="h-4 w-4 mr-1.5" />
-                              Navigate
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-full relative"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setIsPhotoCaptureOpen(true);
-                              }}
-                              data-testid="button-servicem8-photos"
-                            >
-                              <Camera className="h-4 w-4 mr-1.5" />
-                              Photos
-                              {pendingPhotos.length > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                  {pendingPhotos.length}
-                                </span>
-                              )}
-                            </Button>
-                          </div>
                         </div>
                       )}
 
@@ -8431,236 +8365,238 @@ The Treemarkables Team`;
               <SheetTitle className="text-base font-semibold text-center">Actions</SheetTitle>
             </SheetHeader>
           </div>
-          <div className="overflow-y-auto flex-1" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-            {/* Speech to Quote */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                setSpeechToQuoteContext("full");
-                setIsSpeechToQuoteOpen(true);
-              }}
-              data-testid="more-sheet-speech-to-quote"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
-                <Mic className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Speech to Quote</span>
-            </button>
+          <div className="overflow-y-auto flex-1 p-4" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+            <div className="grid grid-cols-4 gap-3">
+              {/* Speech to Quote */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  setSpeechToQuoteContext("full");
+                  setIsSpeechToQuoteOpen(true);
+                }}
+                data-testid="more-sheet-speech-to-quote"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
+                  <Mic className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Speech to Quote</span>
+              </button>
 
-            {/* Schedule */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                handleScheduleClick();
-              }}
-              data-testid="more-sheet-schedule"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center flex-shrink-0">
-                <Calendar className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Schedule</span>
-            </button>
+              {/* Schedule */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleScheduleClick();
+                }}
+                data-testid="more-sheet-schedule"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center">
+                  <Calendar className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Schedule</span>
+              </button>
 
-            {/* Call */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                handleCallClick();
-              }}
-              data-testid="more-sheet-call"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center flex-shrink-0">
-                <Phone className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Call</span>
-            </button>
+              {/* Call */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleCallClick();
+                }}
+                data-testid="more-sheet-call"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center">
+                  <Phone className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Call</span>
+              </button>
 
-            {/* Quote */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={!editingJob?.id || mode === "create"}
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                handleQuoteClick();
-              }}
-              data-testid="more-sheet-quote"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
-                <Receipt className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Quote</span>
-            </button>
+              {/* Quote */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleQuoteClick();
+                }}
+                data-testid="more-sheet-quote"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+                  <Receipt className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Quote</span>
+              </button>
 
-            {/* Invoice */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={!editingJob?.id || mode === "create"}
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                handleInvoiceClick();
-              }}
-              data-testid="more-sheet-invoice"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center flex-shrink-0">
-                <CreditCard className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Invoice</span>
-            </button>
+              {/* Invoice */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleInvoiceClick();
+                }}
+                data-testid="more-sheet-invoice"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
+                  <CreditCard className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Invoice</span>
+              </button>
 
-            {/* Proposal */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={!selectedCustomer?.id}
-              onClick={async () => {
-                setShowMoreActionsSheet(false);
-                if (mode === "edit" && editingJob?.id) {
-                  try {
-                    const formData = form.getValues();
-                    await updateJobMutation.mutateAsync(formData);
-                  } catch (error) {
-                    toast({
-                      title: "Save Failed",
-                      description: "Please resolve any errors before creating a proposal",
-                      variant: "destructive",
-                    });
-                    return;
+              {/* Proposal */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={!selectedCustomer?.id}
+                onClick={async () => {
+                  setShowMoreActionsSheet(false);
+                  if (mode === "edit" && editingJob?.id) {
+                    try {
+                      const formData = form.getValues();
+                      await updateJobMutation.mutateAsync(formData);
+                    } catch (error) {
+                      toast({
+                        title: "Save Failed",
+                        description: "Please resolve any errors before creating a proposal",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                   }
-                }
-                const existingProposal = jobProposalResponse?.data?.[0];
-                if (existingProposal) {
-                  setEditingProposalId(existingProposal.id);
-                }
-                setIsProposalBuilderOpen(true);
-              }}
-              data-testid="more-sheet-proposal"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center flex-shrink-0">
-                <Presentation className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Proposal</span>
-            </button>
+                  const existingProposal = jobProposalResponse?.data?.[0];
+                  if (existingProposal) {
+                    setEditingProposalId(existingProposal.id);
+                  }
+                  setIsProposalBuilderOpen(true);
+                }}
+                data-testid="more-sheet-proposal"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center">
+                  <Presentation className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Proposal</span>
+              </button>
 
-            {/* Time Tracking */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={!editingJob?.id || mode === "create"}
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                setIsTimeTrackingOpen(true);
-              }}
-              data-testid="more-sheet-time-tracking"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center flex-shrink-0">
-                <Clock className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Time Tracking</span>
-            </button>
-
-            {/* Profit Tracker */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={!editingJob?.id || mode === "create"}
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                setIsProfitTrackerOpen(true);
-              }}
-              data-testid="more-sheet-profit-tracker"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center flex-shrink-0">
-                <DollarSign className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Profit Tracker</span>
-            </button>
-
-            {/* Queue Job */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={!editingJob?.id || mode === "create"}
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                handleQueueClick();
-              }}
-              data-testid="more-sheet-queue-job"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center flex-shrink-0">
-                <ListOrdered className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">Queue Job</span>
-            </button>
-
-            {/* Send to Xero */}
-            <button
-              type="button"
-              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-              disabled={
-                !editingJob?.id ||
-                mode === "create" ||
-                editingJob?.status !== "completed" ||
-                editingJob?.xeroStatus === "sent" ||
-                sendToXeroMutation.isPending
-              }
-              onClick={() => {
-                setShowMoreActionsSheet(false);
-                sendToXeroMutation.mutate();
-              }}
-              data-testid="more-sheet-send-xero"
-            >
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center flex-shrink-0">
-                <FileText className="h-6 w-6 text-white" strokeWidth={2.5} />
-              </div>
-              <span className="font-medium text-sm">
-                {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
-              </span>
-            </button>
-
-            {/* Re-send to Xero (conditional) */}
-            {editingJob?.xeroStatus === "sent" && (
+              {/* Time Tracking */}
               <button
                 type="button"
-                className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
-                disabled={resetXeroSyncMutation.isPending}
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  setShowXeroResetConfirm(true);
+                  setIsTimeTrackingOpen(true);
                 }}
-                data-testid="more-sheet-resend-xero"
+                data-testid="more-sheet-time-tracking"
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
-                  <RotateCcw className="h-6 w-6 text-white" strokeWidth={2.5} />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
+                  <Clock className="h-7 w-7 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="font-medium text-sm">Re-send to Xero</span>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Time Tracking</span>
               </button>
-            )}
 
-            {/* Request Review (conditional on completed status) */}
-            {editingJob?.status === "completed" && (
+              {/* Profit Tracker */}
               <button
                 type="button"
-                className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
-                  handleRequestReviewClick();
+                  setIsProfitTrackerOpen(true);
                 }}
-                data-testid="more-sheet-request-review"
+                data-testid="more-sheet-profit-tracker"
               >
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center flex-shrink-0">
-                  <Star className="h-6 w-6 text-white" strokeWidth={2.5} />
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
+                  <DollarSign className="h-7 w-7 text-white" strokeWidth={2.5} />
                 </div>
-                <span className="font-medium text-sm">Request Review</span>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Profit Tracker</span>
               </button>
-            )}
+
+              {/* Queue Job */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleQueueClick();
+                }}
+                data-testid="more-sheet-queue-job"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center">
+                  <ListOrdered className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Queue Job</span>
+              </button>
+
+              {/* Send to Xero */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                disabled={
+                  !editingJob?.id ||
+                  mode === "create" ||
+                  editingJob?.status !== "completed" ||
+                  editingJob?.xeroStatus === "sent" ||
+                  sendToXeroMutation.isPending
+                }
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  sendToXeroMutation.mutate();
+                }}
+                data-testid="more-sheet-send-xero"
+              >
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center">
+                  <FileText className="h-7 w-7 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">
+                  {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
+                </span>
+              </button>
+
+              {/* Re-send to Xero (conditional) */}
+              {editingJob?.xeroStatus === "sent" && (
+                <button
+                  type="button"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                  disabled={resetXeroSyncMutation.isPending}
+                  onClick={() => {
+                    setShowMoreActionsSheet(false);
+                    setShowXeroResetConfirm(true);
+                  }}
+                  data-testid="more-sheet-resend-xero"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+                    <RotateCcw className="h-7 w-7 text-white" strokeWidth={2.5} />
+                  </div>
+                  <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Re-send to Xero</span>
+                </button>
+              )}
+
+              {/* Request Review (conditional on completed status) */}
+              {editingJob?.status === "completed" && (
+                <button
+                  type="button"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                  onClick={() => {
+                    setShowMoreActionsSheet(false);
+                    handleRequestReviewClick();
+                  }}
+                  data-testid="more-sheet-request-review"
+                >
+                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
+                    <Star className="h-7 w-7 text-white" strokeWidth={2.5} />
+                  </div>
+                  <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Request Review</span>
+                </button>
+              )}
+            </div>
           </div>
         </SheetContent>
       </Sheet>
