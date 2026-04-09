@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
+const logoUrl = "/treemarkables-logo.png";
 
 interface QuoteViewerProps {}
 

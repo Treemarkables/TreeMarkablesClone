@@ -7,8 +7,8 @@ import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import heroImage from "@assets/tree_pruning_hero.jpg";
-import philosophyVideo from "@assets/tree_philosophy_video.mov";
+const heroImage = "/tree-removal-real.png";
+const philosophyVideo = "";
 
 export default function TreeRemoval() {
   // Add Google tag event script for form submission tracking
