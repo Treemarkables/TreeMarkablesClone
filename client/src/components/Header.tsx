@@ -79,7 +79,7 @@ export default function Header() {
               className="h-20 w-auto object-contain transition-all duration-200"
               data-testid="logo-image"
             />
-            <span className="text-[#39FF14] font-extrabold text-4xl tracking-widest uppercase hidden sm:block" style={{ fontFamily: '"TT Norms Pro", Inter, sans-serif' }}>TREEMARKABLES</span>
+            <span className="text-[#39FF14] font-extrabold text-4xl hidden sm:block" style={{ fontFamily: "'TT Norms Pro', sans-serif", letterSpacing: '-0.01em' }}>TREEMARKABLES</span>
           </Link>
 
           {/* Navigation - Centered */}
