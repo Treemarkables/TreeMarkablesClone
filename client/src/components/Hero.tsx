@@ -12,7 +12,7 @@ export default function Hero() {
   };
 
   return (
-    <section className="relative min-h-[420px] lg:min-h-[560px] flex items-start">
+    <section className="relative mt-20 min-h-[420px] lg:min-h-[560px] flex items-start">
       {/* Background Image with Overlay */}
       <div className="absolute inset-0 z-0">
         <img 
