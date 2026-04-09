@@ -7453,24 +7453,25 @@ The Treemarkables Team`;
                             )}
                           />
 
-                          <div className="grid grid-cols-1 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="billingAddress"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Billing Address"
-                                      disabled={watchedSameAsJobAddress}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
+                          {!watchedSameAsJobAddress && (
+                            <div className="grid grid-cols-1 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="billingAddress"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        className="h-9 text-base md:text-sm"
+                                        placeholder="Billing Address"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
 
