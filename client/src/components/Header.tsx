@@ -8,7 +8,7 @@ import {
 import { Phone, Mail, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-const logoImage = "/treemarkables-logo-green.png";
+import logoImage from "@assets/logo-11_1775755479888.png";
 
 // Declare gtag and gtag_report_conversion for TypeScript
 declare global {
@@ -72,14 +72,13 @@ export default function Header() {
         <div className="flex items-center justify-between h-full">
           
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center gap-3 hover-elevate group h-full" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate h-full py-2" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-20 w-auto object-contain transition-all duration-200"
+              className="h-full w-auto object-contain"
               data-testid="logo-image"
             />
-            <span className="text-[#39FF14] font-extrabold text-4xl hidden sm:block" style={{ fontFamily: "'TT Norms Pro', sans-serif", letterSpacing: '-0.01em' }}>TREEMARKABLES</span>
           </Link>
 
           {/* Navigation - Centered */}
