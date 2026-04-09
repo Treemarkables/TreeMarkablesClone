@@ -1,4 +1,4 @@
-import { Target, MessageSquare, ClipboardList, FileText, Truck, Leaf, Check, Star } from "lucide-react";
+import { Target, MessageSquare, ClipboardList, ScanSearch, ReceiptText, Axe, Sparkles, Check, Star } from "lucide-react";
 
 const whyCards = [
   {
@@ -22,10 +22,10 @@ const whyCards = [
 ];
 
 const steps = [
-  { number: 1, icon: ClipboardList, title: "On-Site Assessment", description: "We assess access, risk and scope." },
-  { number: 2, icon: FileText, title: "Clear Plan & Quote", description: "No hidden fees. All clear upfront." },
-  { number: 3, icon: Truck, title: "Controlled Removal", description: "Skilled crew, right gear, precise work." },
-  { number: 4, icon: Leaf, title: "Thorough Clean-Up", description: "Your property left tidy and safe to use." },
+  { number: 1, icon: ScanSearch, title: "On-Site Assessment", description: "We assess access, risk and scope." },
+  { number: 2, icon: ReceiptText, title: "Clear Plan & Quote", description: "No hidden fees. All clear upfront." },
+  { number: 3, icon: Axe, title: "Controlled Removal", description: "Skilled crew, right gear, precise work." },
+  { number: 4, icon: Sparkles, title: "Thorough Clean-Up", description: "Your property left tidy and safe to use." },
 ];
 
 const trustBadges = ["5+ Years Experience", "Fully Insured", "Local Gisborne Crew", "Fast Response"];
