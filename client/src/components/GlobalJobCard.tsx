@@ -5287,39 +5287,6 @@ The Treemarkables Team`;
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                            <div className="flex items-center justify-end mb-3 gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={() => {
-                                  setSpeechToQuoteContext("job-description");
-                                  setIsSpeechToQuoteOpen(true);
-                                }}
-                                data-testid="button-speech-job-description"
-                              >
-                                <Mic className="h-4 w-4 mr-1" />
-                                <span className="text-xs">Voice</span>
-                              </Button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setChecklistCollapsed((c) => !c);
-                                }}
-                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
-                              >
-                                <List className="h-3 w-3" />
-                                Checklist
-                                {checklist.length > 0
-                                  ? ` (${checklist.length})`
-                                  : ""}
-                                <ChevronDown
-                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
-                                />
-                              </button>
-                            </div>
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                               <div className="space-y-2 mb-3">
@@ -5413,6 +5380,18 @@ The Treemarkables Team`;
                                         <MessageSquare className="h-4 w-4" />
                                         Job Description
                                       </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSpeechToQuoteContext("job-description");
+                                          setIsSpeechToQuoteOpen(true);
+                                        }}
+                                        className="flex items-center gap-1 text-xs font-medium text-purple-600 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                        data-testid="button-speech-job-description"
+                                      >
+                                        <Mic className="h-3 w-3" />
+                                        Voice
+                                      </button>
                                     </div>
                                     <FormControl>
                                       <Textarea
@@ -6080,13 +6059,32 @@ The Treemarkables Team`;
                         {/* ServiceM8-Style Gear List Card - show in both create and edit modes */}
                         {allEquipment.length > 0 && (
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none space-y-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                                <Package className="h-4 w-4 text-gray-600" />
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                                  <Package className="h-4 w-4 text-gray-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">
+                                  Gear List
+                                </h3>
                               </div>
-                              <h3 className="font-bold text-gray-900">
-                                Gear List
-                              </h3>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setChecklistCollapsed((c) => !c);
+                                }}
+                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                              >
+                                <List className="h-3 w-3" />
+                                Checklist
+                                {checklist.length > 0
+                                  ? ` (${checklist.length})`
+                                  : ""}
+                                <ChevronDown
+                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
+                                />
+                              </button>
                             </div>
 
                             {/* Multi-select button for equipment */}
