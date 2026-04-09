@@ -66,6 +66,8 @@ import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
 import ActivityDashboard from "@/pages/ActivityDashboard";
 import MulchDrops from "@/pages/MulchDrops";
+import EquipmentRegister from "@/pages/EquipmentRegister";
+import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import DailyBriefing from "@/pages/DailyBriefing";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import TimeTracking from "@/pages/TimeTracking";
@@ -887,6 +889,22 @@ function Router() {
         <SidebarLayout>
           <JHARiskControlTemplates />
         </SidebarLayout>
+      </Route>
+
+      <Route path="/settings/equipment-register">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <EquipmentRegister />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/ai-scheduler">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <AIDispatchScheduler />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
 
       <Route path="/settings/checklist-template">

@@ -21217,6 +21217,291 @@ If you cannot find a value, use null. Do not guess.`
     }
   });
 
+  // ========================================
+  // AI SMART DISPATCH SCHEDULING
+  // ========================================
+
+  // GET /api/scheduling/revenue/:date — daily revenue summary for dispatch board
+  app.get('/api/scheduling/revenue/:date', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { date } = req.params;
+      const dayStart = new Date(date + 'T00:00:00.000Z');
+      const dayEnd = new Date(date + 'T23:59:59.999Z');
+
+      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
+      const settings = await storage.getBusinessSettings();
+      const dailyTarget = Number(settings.dailyRevenueTarget) || 3500;
+
+      const dayJobs = allJobs.filter(j => {
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        return d >= dayStart && d <= dayEnd && j.status !== 'completed' && j.status !== 'unsuccessful';
+      });
+
+      const scheduledRevenue = dayJobs.reduce((sum: number, j: any) => {
+        if (j.subtotal && Number(j.subtotal) > 0) return sum + Number(j.subtotal);
+        if (j.totalAmount && Number(j.totalAmount) > 0) return sum + Number(j.totalAmount);
+        return sum;
+      }, 0);
+
+      return res.json({
+        success: true,
+        data: {
+          date,
+          scheduledRevenue,
+          dailyTarget,
+          percentComplete: dailyTarget > 0 ? Math.round((scheduledRevenue / dailyTarget) * 100) : 0,
+          jobCount: dayJobs.length,
+          belowTarget: scheduledRevenue < dailyTarget,
+        },
+      });
+    } catch (error) {
+      console.error('[AI Dispatch] Revenue summary error:', error);
+      return res.status(500).json({ success: false, message: 'Error fetching revenue summary' });
+    }
+  });
+
+  // POST /api/scheduling/propose — AI scheduling engine
+  app.post('/api/scheduling/propose', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { targetDate, revenueTarget: overrideTarget } = req.body;
+      if (!targetDate) return res.status(400).json({ success: false, message: 'targetDate is required' });
+
+      const settings = await storage.getBusinessSettings();
+      const dailyTarget = overrideTarget || Number(settings.dailyRevenueTarget) || 3500;
+
+      // Fetch all the data needed for constraint checking
+      const [allEmployees, allEquipment, { jobs: allJobs }] = await Promise.all([
+        storage.getAllEmployees(),
+        storage.getAllEquipment(),
+        storage.getAllJobs({ limit: 999999 }),
+      ]);
+
+      // Get unscheduled work orders (status = work_order or scheduled but no scheduledDate matching the target)
+      const dayStart = new Date(targetDate + 'T00:00:00.000Z');
+      const dayEnd = new Date(targetDate + 'T23:59:59.999Z');
+
+      const unscheduledJobs = allJobs.filter(j => {
+        if (j.status === 'completed' || j.status === 'unsuccessful' || j.status === 'lead') return false;
+        if (j.status === 'work_order') return true; // Work orders awaiting scheduling
+        // Also include quotes that are accepted/scheduled but not yet assigned to this date
+        if (j.status === 'scheduled' && j.scheduledDate) {
+          const d = new Date(j.scheduledDate);
+          return d < dayStart || d > dayEnd; // scheduled but not on target date
+        }
+        if (j.status === 'quote') return true; // quotes can be proposed
+        return false;
+      });
+
+      const activeStaff = allEmployees.filter(e => e.isActive && e.status === 'active');
+      const availableEquipment = allEquipment.filter(e => e.isActive && e.status === 'available');
+
+      // Build equipment licenceRequired map
+      const equipLicenceMap: Record<string, string | null> = {};
+      for (const eq of allEquipment) {
+        equipLicenceMap[eq.id] = (eq as any).licenceRequired || null;
+        equipLicenceMap[eq.name] = (eq as any).licenceRequired || null;
+      }
+
+      // Build staff licences map
+      const staffLicenceMap: Record<string, string[]> = {};
+      for (const emp of allEmployees) {
+        staffLicenceMap[emp.id] = [
+          ...((emp as any).licences || []),
+          ...(emp.certifications || []),
+        ];
+      }
+
+      // Build proposals using OpenAI GPT
+      const jobSummaries = unscheduledJobs.slice(0, 30).map(j => ({
+        id: j.id,
+        jobNumber: j.jobNumber,
+        title: j.title || 'Tree service',
+        address: j.address,
+        status: j.status,
+        revenue: Number(j.subtotal || j.totalAmount || 0),
+        estimatedDuration: j.estimatedDuration || 4,
+        equipment: j.equipment || [],
+      }));
+
+      const staffSummaries = activeStaff.map(e => ({
+        id: e.id,
+        name: `${e.firstName} ${e.lastName}`,
+        position: e.position,
+        licences: staffLicenceMap[e.id] || [],
+      }));
+
+      const equipSummaries = availableEquipment.map(e => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        licenceRequired: (e as any).licenceRequired || null,
+      }));
+
+      const systemPrompt = `You are an expert tree service business scheduling assistant. Your job is to propose an optimal day schedule that:
+1. Reaches or exceeds the daily revenue target
+2. Assigns appropriate crew members based on their licences/tickets
+3. Ensures required equipment licences are held by at least one crew member assigned to each job
+4. Minimises conflicts (no double-booking of staff or equipment)
+5. Orders jobs geographically to minimise travel time
+
+Return a valid JSON object only (no markdown) with this structure:
+{
+  "proposedJobs": [
+    {
+      "jobId": "string",
+      "jobNumber": "string",
+      "title": "string",
+      "address": "string",
+      "revenue": number,
+      "estimatedDuration": number,
+      "proposedStartTime": "08:00",
+      "proposedEndTime": "12:00",
+      "assignedStaffIds": ["staffId1"],
+      "assignedStaffNames": ["Name 1"],
+      "equipmentNeeded": ["equipment name"],
+      "licenceMatches": [{"equipment": "EWP", "licence": "EWP Ticket", "heldBy": "Staff Name"}],
+      "conflicts": []
+    }
+  ],
+  "totalRevenue": number,
+  "revenueTarget": number,
+  "meetsTarget": boolean,
+  "summaryNote": "Brief explanation of the proposed schedule",
+  "conflicts": ["Any overall conflicts with plain English explanation"]
+}`;
+
+      const userPrompt = `Target date: ${targetDate}
+Daily revenue target: $${dailyTarget} NZD
+
+Available unscheduled work orders (${jobSummaries.length} jobs):
+${JSON.stringify(jobSummaries, null, 2)}
+
+Available staff (${staffSummaries.length} people):
+${JSON.stringify(staffSummaries, null, 2)}
+
+Available equipment (${equipSummaries.length} items):
+${JSON.stringify(equipSummaries, null, 2)}
+
+Equipment→Licence requirements:
+${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => (e as any).licenceRequired).map(e => [e.name, (e as any).licenceRequired])), null, 2)}
+
+Propose a schedule that hits the revenue target. Assign realistic start and end times starting from 07:00. Check licence requirements for each piece of equipment on each job. Flag any conflicts clearly.`;
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      const proposalText = aiResponse.choices[0].message.content || '{}';
+      let proposal;
+      try {
+        proposal = JSON.parse(proposalText);
+      } catch {
+        proposal = { error: 'Failed to parse AI response', raw: proposalText };
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          ...proposal,
+          revenueTarget: dailyTarget,
+          targetDate,
+          generatedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('[AI Dispatch] Propose error:', error);
+      return res.status(500).json({ success: false, message: 'Error generating schedule proposal' });
+    }
+  });
+
+  // POST /api/scheduling/confirm — confirm a proposed schedule (set scheduledDate on each job)
+  app.post('/api/scheduling/confirm', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { targetDate, proposedJobs } = req.body;
+      if (!targetDate || !Array.isArray(proposedJobs)) {
+        return res.status(400).json({ success: false, message: 'targetDate and proposedJobs are required' });
+      }
+
+      const updatedJobs = [];
+      const draftMessages = [];
+
+      for (const pj of proposedJobs) {
+        if (!pj.jobId) continue;
+        const job = await storage.getJob(pj.jobId);
+        if (!job) continue;
+
+        // Set the scheduled date and start time on the job
+        const scheduledDate = new Date(targetDate + 'T' + (pj.proposedStartTime || '08:00') + ':00.000Z');
+        const updated = await storage.updateJob(pj.jobId, {
+          scheduledDate,
+          scheduledStartTime: pj.proposedStartTime || '08:00',
+          scheduledEndTime: pj.proposedEndTime || '17:00',
+          assignedTeam: pj.assignedStaffIds || [],
+          status: 'scheduled',
+        });
+        updatedJobs.push(updated);
+
+        // Create a pending customer notification draft
+        const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+        if (customer) {
+          const nzDate = new Date(scheduledDate).toLocaleDateString('en-NZ', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Pacific/Auckland',
+          });
+          const nzTime = pj.proposedStartTime || '8:00am';
+          const message = `Hi ${customer.name}, just confirming your tree service job is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+
+          const draft = await storage.createPendingOutboundMessage({
+            jobId: job.id,
+            customerId: customer.id,
+            recipientName: customer.name,
+            recipientPhone: customer.phone || customer.mobile || undefined,
+            recipientEmail: job.jobContactEmail || customer.email || undefined,
+            message,
+            channel: (customer.phone || customer.mobile) ? 'sms' : 'email',
+            status: 'pending',
+            proposalNumber: job.jobNumber,
+          });
+          draftMessages.push(draft);
+        }
+
+        // Log to job diary
+        await storage.createJobDiaryEntry({
+          jobId: pj.jobId,
+          entryType: 'note',
+          title: 'AI Smart Dispatch scheduled',
+          content: `Job scheduled for ${targetDate} at ${pj.proposedStartTime || '08:00'} via AI Dispatch. Crew: ${(pj.assignedStaffNames || []).join(', ')}`,
+          metadata: { source: 'ai_dispatch', targetDate, assignedStaff: pj.assignedStaffIds },
+        });
+      }
+
+      // Create notification for pending messages
+      if (draftMessages.length > 0) {
+        await storage.createNotification({
+          title: `${draftMessages.length} customer confirmation${draftMessages.length > 1 ? 's' : ''} ready to send`,
+          message: `AI Dispatch created ${draftMessages.length} draft confirmation message${draftMessages.length > 1 ? 's' : ''} for your approval`,
+          type: 'holding_message_pending',
+          priority: 'medium',
+          isRead: false,
+          actionUrl: '/communications?tab=pending',
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { updatedJobs: updatedJobs.length, draftMessages: draftMessages.length },
+      });
+    } catch (error) {
+      console.error('[AI Dispatch] Confirm error:', error);
+      return res.status(500).json({ success: false, message: 'Error confirming schedule' });
+    }
+  });
+
   const httpServer = createServer(app);
 
   return httpServer;
