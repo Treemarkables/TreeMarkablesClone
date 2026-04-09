@@ -198,6 +198,7 @@ function StaffFormDialog({
       hireDate: "",
       certifications: [],
       skills: [],
+      licences: [],
     },
   });
 
@@ -613,7 +614,7 @@ function StaffFormDialog({
             <div className="space-y-2">
               <FormLabel>Licences &amp; Tickets</FormLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {form.watch("licences").map((lic) => (
+                {(form.watch("licences") ?? []).map((lic) => (
                   <Badge
                     key={lic}
                     className="cursor-pointer bg-amber-100 text-amber-800 border border-amber-300 hover:bg-destructive hover:text-destructive-foreground"
@@ -630,7 +631,7 @@ function StaffFormDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {NZ_LICENCES.filter(
-                    (lic) => !form.watch("licences").includes(lic),
+                    (lic) => !(form.watch("licences") ?? []).includes(lic),
                   ).map((lic) => (
                     <SelectItem key={lic} value={lic}>
                       {lic}
