@@ -141,7 +141,7 @@ export default function TreePruning() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-72">
+    <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
       <SEO 
         title="Tree Pruning Gisborne – Qualified Arborists"
         description="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."

@@ -10,7 +10,7 @@ export default function PrivacyPolicy() {
         description="Privacy Policy for Treemarkables tree removal services. Learn how we collect, use, and protect your personal information under the New Zealand Privacy Act 2020."
       />
       <Header />
-      <main className="flex-1 pt-72 pb-12">
+      <main className="flex-1 py-12">
         <div className="max-w-3xl mx-auto px-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
           <p className="text-sm text-gray-500 mb-8">Effective Date: 11 February 2026</p>
