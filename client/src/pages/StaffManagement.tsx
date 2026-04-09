@@ -221,7 +221,7 @@ function StaffFormDialog({
           notes: staff.notes || "",
           hireDate: staff.hireDate || "",
           certifications: staff.certifications || [],
-          licences: (staff as any).licences || [],
+          licences: staff.licences || [],
           skills: staff.skills || [],
         });
       } else {

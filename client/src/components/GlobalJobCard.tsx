@@ -2141,6 +2141,12 @@ export function GlobalJobCard({
     ? (equipmentData as any).data
     : [];
 
+  // Build a map of equipment name → licenceRequired for inline job card inference
+  const equipmentLicenceMap: Record<string, string | null> = {};
+  for (const eq of allEquipment) {
+    if (eq.name) equipmentLicenceMap[eq.name] = eq.licenceRequired || null;
+  }
+
   // Create proposal mutation
   const createProposalMutation = useMutation({
     mutationFn: async () => {
@@ -6736,6 +6742,7 @@ The Treemarkables Team`;
                                     key={item.id}
                                     variant="secondary"
                                     className="h-6 text-xs bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer flex items-center gap-1"
+                                    title={equipmentLicenceMap[item.equipment] ? `Requires: ${equipmentLicenceMap[item.equipment]}` : undefined}
                                     onClick={() => {
                                       const currentList =
                                         mode === "edit"
@@ -6785,6 +6792,11 @@ The Treemarkables Team`;
                                     }}
                                   >
                                     {item.equipment}
+                                    {equipmentLicenceMap[item.equipment] && (
+                                      <span className="text-[9px] text-orange-600 font-medium ml-0.5 hidden sm:inline">
+                                        ·{equipmentLicenceMap[item.equipment]}
+                                      </span>
+                                    )}
                                     <X className="w-3 h-3" />
                                   </Badge>
                                 ))}
