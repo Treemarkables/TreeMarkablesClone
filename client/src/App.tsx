@@ -195,14 +195,16 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
     <div className="flex min-h-screen w-full">
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
         <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          {/* Mobile header - sidebar toggle, refresh, and actions */}
-          <header className="md:hidden flex items-center justify-between px-2 border-b bg-white" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          {/* Mobile header - sidebar toggle, logo, and actions */}
+          <header className="md:hidden relative flex items-center justify-between px-2 py-1 border-b bg-white">
             <div className="flex items-center gap-2">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
                 className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
               />
             </div>
+            {/* Treemarkables logo - centre */}
+            <img src="/treemarkables-logo-green.png" alt="Treemarkables" className="h-8 object-contain absolute left-1/2 -translate-x-1/2" />
             
             <div className="flex items-center gap-2">
               {/* Notifications Bell - Mobile */}
