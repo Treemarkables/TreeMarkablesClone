@@ -523,8 +523,12 @@ function Router() {
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [setLocation]);
   
-  // Render Home directly at / with no redirect — better for SEO (no "Page with redirect" in Search Console)
+  // On native Capacitor app, skip public website and go straight to login
   if (location === '/') {
+    const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
+    if (isNative) {
+      return <Redirect to="/login" />;
+    }
     return <Home />;
   }
   
