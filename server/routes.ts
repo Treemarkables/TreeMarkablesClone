@@ -16491,6 +16491,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // Update (edit) a pending message
   app.patch('/api/pending-messages/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      const existing = await storage.getPendingOutboundMessage(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Message not found' });
+      if (existing.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending messages can be edited' });
       const { message } = req.body;
       const updated = await storage.updatePendingOutboundMessage(req.params.id, { message });
       res.json({ success: true, data: updated });
@@ -16526,7 +16529,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         sent = true;
       }
 
-      // Mark as sent
+      // Only mark as sent and log if a transport actually succeeded
+      if (!sent) {
+        return res.status(422).json({
+          success: false,
+          message: 'No deliverable channel: message has no phone number or email address. Please edit the message details and try again.',
+        });
+      }
+
       const updated = await storage.updatePendingOutboundMessage(req.params.id, {
         status: 'sent',
         sentAt: new Date(),
@@ -16557,6 +16567,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   // Reject (dismiss) a pending message
   app.post('/api/pending-messages/:id/reject', requireAdmin, async (req: Request, res: Response) => {
     try {
+      const existing = await storage.getPendingOutboundMessage(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Message not found' });
+      if (existing.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending messages can be dismissed' });
       const updated = await storage.updatePendingOutboundMessage(req.params.id, { status: 'rejected' });
       res.json({ success: true, data: updated });
     } catch (error) {
