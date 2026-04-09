@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { AIAssistantChat } from "@/components/AIAssistantChat";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import Login from "@/pages/Login";
@@ -76,7 +75,7 @@ import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import Reconciliation from "@/pages/Reconciliation";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Bot } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -210,22 +209,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {/* Notifications Bell - Mobile */}
               {isAdmin && <NotificationBell />}
               
-              {/* Ask AI Button - Mobile */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
-                    data-testid="button-ask-ai-mobile"
-                    className="text-primary"
-                  >
-                    <Bot className="h-5 w-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Ask AI</p></TooltipContent>
-              </Tooltip>
-              
               {/* Refresh Button - Mobile */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -338,22 +321,6 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             <div className="flex items-center gap-2">
               {/* Notifications Bell */}
               <NotificationBell />
-              
-              {/* Ask AI Button - Desktop */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
-                    data-testid="button-ask-ai"
-                    className="text-primary"
-                  >
-                    <Bot className="h-5 w-5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Ask AI</p></TooltipContent>
-              </Tooltip>
               
               {/* Refresh Button - Desktop */}
               <Tooltip>
@@ -938,11 +905,6 @@ function Router() {
   );
 }
 
-function AuthenticatedOverlays() {
-  const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) return null;
-  return <AIAssistantChat />;
-}
 
 function App() {
   // Initialize Firebase on app startup for push notifications
@@ -964,7 +926,6 @@ function App() {
               <ScrollToTop />
               <Toaster />
               <InstallPrompt />
-              <AuthenticatedOverlays />
               <Router />
             </TwilioCallProvider>
           </AuthProvider>
