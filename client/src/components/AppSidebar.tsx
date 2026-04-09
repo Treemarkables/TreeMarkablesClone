@@ -28,7 +28,8 @@ import {
   PhoneCall,
   Package,
   Leaf,
-  GitMerge
+  GitMerge,
+  Bot
 } from "lucide-react";
 import {
   Sidebar,
@@ -207,6 +208,20 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
+
+              {/* AI Smart Dispatch - Admin only */}
+              {!isCrew && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/ai-scheduler"}>
+                    <Link href="/ai-scheduler" onClick={handleLinkClick} data-testid="link-ai-scheduler">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-600">
+                        <Bot className="h-4 w-4" />
+                      </span>
+                      <span>AI Smart Dispatch</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
               
               {filteredDashboardItems.map((item) => (
                 <SidebarMenuItem key={item.value}>

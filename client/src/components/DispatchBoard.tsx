@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -528,6 +529,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     queryKey: ["/api/job-templates"],
   });
   const templates = templatesResponse?.data || [];
+
+  // Fetch daily revenue progress for the selected date
+  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
+  const { data: revenueData } = useQuery<{
+    success: boolean;
+    data: { scheduledRevenue: number; dailyTarget: number; percentComplete: number; jobCount: number; belowTarget: boolean };
+  }>({
+    queryKey: ["/api/scheduling/revenue", selectedDateStr],
+    queryFn: () => fetch(`/api/scheduling/revenue/${selectedDateStr}`, { credentials: "include" }).then(r => r.json()),
+    staleTime: 30000,
+  });
+  const revenueInfo = revenueData?.data;
 
   // Handle template selection and auto-populate form
   const handleTemplateSelection = (templateId: string) => {
@@ -2247,6 +2260,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 "All upcoming jobs"}
                             </div>
                           </div>
+
                           <div className="flex gap-1 flex-shrink-0">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -2286,6 +2300,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Button>
                           </div>
                         </div>
+
+                        {/* Daily Revenue Progress Bar */}
+                        {revenueInfo && (
+                          <div className="mt-2 space-y-1" data-testid="revenue-progress-bar">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className={revenueInfo.belowTarget ? "text-amber-600 font-medium" : "text-green-700 font-medium"}>
+                                ${revenueInfo.scheduledRevenue.toLocaleString("en-NZ", { maximumFractionDigits: 0 })} scheduled
+                              </span>
+                              <span className="text-muted-foreground">
+                                target ${revenueInfo.dailyTarget.toLocaleString("en-NZ", { maximumFractionDigits: 0 })} · {revenueInfo.percentComplete}%
+                              </span>
+                            </div>
+                            <Progress
+                              value={Math.min(100, revenueInfo.percentComplete)}
+                              className={`h-1.5 ${revenueInfo.belowTarget ? "[&>div]:bg-amber-400" : "[&>div]:bg-green-500"}`}
+                            />
+                          </div>
+                        )}
 
                         {/* Status Filter Tabs - Desktop */}
                         <div className="flex gap-1 mt-2">

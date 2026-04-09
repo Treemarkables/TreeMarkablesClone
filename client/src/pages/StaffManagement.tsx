@@ -93,6 +93,19 @@ const COMMON_CERTIFICATIONS = [
   "Commercial Driver License",
 ];
 
+const NZ_LICENCES = [
+  "EWP Ticket (Elevated Work Platform)",
+  "Class 2 Heavy Motor Vehicle Licence",
+  "Class 4 Heavy Motor Vehicle Licence",
+  "Class 5 Heavy Motor Vehicle Licence",
+  "Chainsaw Unit Standard (US6377)",
+  "Competent Person Certificate (Arboriculture)",
+  "NZQA Level 4 Arboriculture",
+  "Crane Licence (Dogman / Rigger)",
+  "Forklift Licence",
+  "First Aid Certificate",
+];
+
 const COMMON_SKILLS = [
   "Tree Climbing",
   "Chainsaw Operation",
@@ -125,6 +138,7 @@ const staffFormSchema = z.object({
   notes: z.string().optional(),
   hireDate: z.string().optional(),
   certifications: z.array(z.string()).default([]),
+  licences: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
 });
 
@@ -143,6 +157,7 @@ interface StaffMember {
   hourlyRate?: string;
   chargeOutRate?: string;
   certifications: string[];
+  licences: string[];
   skills: string[];
   emergencyContact?: string;
   emergencyContactPhone?: string;
@@ -206,6 +221,7 @@ function StaffFormDialog({
           notes: staff.notes || "",
           hireDate: staff.hireDate || "",
           certifications: staff.certifications || [],
+          licences: (staff as any).licences || [],
           skills: staff.skills || [],
         });
       } else {
@@ -225,6 +241,7 @@ function StaffFormDialog({
           notes: "",
           hireDate: "",
           certifications: [],
+          licences: [],
           skills: [],
         });
       }
@@ -249,6 +266,18 @@ function StaffFormDialog({
       "certifications",
       current.filter((c) => c !== cert),
     );
+  };
+
+  const addLicence = (lic: string) => {
+    const current = form.getValues("licences");
+    if (!current.includes(lic)) {
+      form.setValue("licences", [...current, lic]);
+    }
+  };
+
+  const removeLicence = (lic: string) => {
+    const current = form.getValues("licences");
+    form.setValue("licences", current.filter((l) => l !== lic));
   };
 
   const addSkill = (skill: string) => {
@@ -574,6 +603,37 @@ function StaffFormDialog({
                   ).map((cert) => (
                     <SelectItem key={cert} value={cert}>
                       {cert}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Licences & Tickets */}
+            <div className="space-y-2">
+              <FormLabel>Licences &amp; Tickets</FormLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {form.watch("licences").map((lic) => (
+                  <Badge
+                    key={lic}
+                    className="cursor-pointer bg-amber-100 text-amber-800 border border-amber-300 hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => removeLicence(lic)}
+                    data-testid={`badge-licence-${lic.replace(/\s+/g, "-").toLowerCase()}`}
+                  >
+                    {lic} ×
+                  </Badge>
+                ))}
+              </div>
+              <Select onValueChange={addLicence}>
+                <SelectTrigger data-testid="select-licences">
+                  <SelectValue placeholder="Add licence or ticket..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {NZ_LICENCES.filter(
+                    (lic) => !form.watch("licences").includes(lic),
+                  ).map((lic) => (
+                    <SelectItem key={lic} value={lic}>
+                      {lic}
                     </SelectItem>
                   ))}
                 </SelectContent>

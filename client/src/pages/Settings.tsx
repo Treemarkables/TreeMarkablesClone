@@ -24,7 +24,8 @@ import {
   MessageSquare,
   ClipboardCheck,
   AlertTriangle,
-  ShieldCheck
+  ShieldCheck,
+  Wrench
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -142,6 +143,14 @@ const settingsOptions = [
     icon: ShieldCheck,
     color: "bg-emerald-100 text-emerald-600",
     path: "/settings/jha-risk-controls"
+  },
+  {
+    id: "equipment-register",
+    title: "Equipment Register",
+    description: "Assign licence requirements to equipment for AI Smart Dispatch",
+    icon: Wrench,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/equipment-register"
   }
 ];
 

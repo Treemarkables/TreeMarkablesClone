@@ -1049,6 +1049,9 @@ export const businessSettings = pgTable("business_settings", {
   // Analytics Defaults
   defaultGrossMarginPct: decimal("default_gross_margin_pct", { precision: 5, scale: 2 }).notNull().default("0"),
 
+  // AI Dispatch Settings
+  dailyRevenueTarget: decimal("daily_revenue_target", { precision: 10, scale: 2 }).default("3500"),
+
   // Invoice Settings
   invoicePaymentDays: integer("invoice_payment_days").default(7),
 
@@ -1246,6 +1249,7 @@ export const employees = pgTable("employees", {
   status: text("status").notNull().default("active"), // active, inactive, on_leave
   skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
   certifications: text("certifications").array().default([]), // ISA, CTSP, etc.
+  licences: text("licences").array().default([]), // EWP Ticket, Class 2 Licence, Chainsaw Unit Standard, etc.
   skills: text("skills").array().default([]), // chainsaw, bucket_truck, climbing, etc.
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }), // Internal cost rate
   chargeOutRate: decimal("charge_out_rate", { precision: 10, scale: 2 }), // Rate billed to customers
@@ -1608,6 +1612,9 @@ export const equipment = pgTable("equipment", {
   
   // Inspection template assignment
   defaultInspectionTemplateId: varchar("default_inspection_template_id"),
+  
+  // Licence/ticket required to operate this equipment
+  licenceRequired: text("licence_required"), // e.g. "EWP Ticket", "Class 2 Licence", "Chainsaw Unit Standard"
   
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
