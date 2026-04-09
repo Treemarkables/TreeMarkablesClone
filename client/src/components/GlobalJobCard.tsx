@@ -6301,39 +6301,6 @@ The Treemarkables Team`;
                         {/* Desktop Job Scope - below Gear List */}
                         <div className="hidden md:block">
                           <div className="space-y-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={() => {
-                                  setSpeechToQuoteContext("job-description");
-                                  setIsSpeechToQuoteOpen(true);
-                                }}
-                                data-testid="button-speech-job-description-desktop"
-                              >
-                                <Mic className="h-4 w-4 mr-1" />
-                                <span className="text-xs">Voice</span>
-                              </Button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setChecklistCollapsed((c) => !c);
-                                }}
-                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
-                              >
-                                <List className="h-3 w-3" />
-                                Checklist
-                                {checklist.length > 0
-                                  ? ` (${checklist.length})`
-                                  : ""}
-                                <ChevronDown
-                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
-                                />
-                              </button>
-                            </div>
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                               <div className="space-y-2">
@@ -6567,7 +6534,19 @@ The Treemarkables Team`;
                                   <span className="text-xs text-gray-500 font-medium">
                                     Job Description
                                   </span>
-                                  <Edit3 className="h-3 w-3 text-gray-400" />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSpeechToQuoteContext("job-description");
+                                      setIsSpeechToQuoteOpen(true);
+                                    }}
+                                    className="flex items-center gap-1 text-xs font-medium text-purple-600 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                    data-testid="button-speech-job-description-desktop"
+                                  >
+                                    <Mic className="h-3 w-3" />
+                                    Voice
+                                  </button>
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[120px]">
                                   {(formLoadedJobId === editingJob?.id
