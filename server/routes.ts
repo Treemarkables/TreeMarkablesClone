@@ -6144,7 +6144,43 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
-  // TwiML: answer the call → dial owner's real phone while recording
+  // Generate a Twilio Access Token for the iOS Capacitor app (Twilio Voice SDK)
+  // Requires TWILIO_API_KEY (SK...) and TWILIO_API_SECRET to be set as secrets.
+  // Create them at: Twilio Console → Account → API Keys & Tokens → Create API Key (Standard).
+  app.post('/api/twilio/token', async (req: Request, res: Response) => {
+    try {
+      if (!(req as any).session?.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const apiKey = process.env.TWILIO_API_KEY;
+      const apiSecret = process.env.TWILIO_API_SECRET;
+      if (!accountSid || !apiKey || !apiSecret) {
+        return res.status(503).json({
+          success: false,
+          message: 'Twilio API Key not configured. Set TWILIO_API_KEY and TWILIO_API_SECRET secrets.',
+        });
+      }
+      const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      const AccessToken = (twilio as any).jwt.AccessToken;
+      const VoiceGrant = AccessToken.VoiceGrant;
+      const voiceGrant = new VoiceGrant({ incomingAllow: true });
+      const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
+        identity: clientIdentity,
+        ttl: 3600,
+      });
+      accessToken.addGrant(voiceGrant);
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity}`);
+      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity });
+    } catch (error: any) {
+      console.error('❌ Error generating Twilio token:', error);
+      return res.status(500).json({ success: false, message: 'Failed to generate token' });
+    }
+  });
+
+  // TwiML: answer the call → ring the iOS Capacitor app (Twilio Client) AND owner's phone simultaneously.
+  // First to answer wins. Records the entire conversation.
+  // iOS app receives the call via PushKit/CallKit even when backgrounded.
   app.post('/api/webhooks/twilio-answer', (req: Request, res: Response) => {
     // Validate Twilio signature to prevent spoofed requests
     if (!validateTwilioSignature(req)) {
@@ -6153,8 +6189,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
 
     const ownerPhone = process.env.HERO_PHONE_NUMBER;
-    if (!ownerPhone) {
-      console.error('❌ HERO_PHONE_NUMBER not set - cannot forward call');
+    const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+    const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
+
+    // Must have at least one destination — Client app OR phone number
+    if (!hasClient && !ownerPhone) {
+      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or HERO_PHONE_NUMBER)');
       res.type('text/xml');
       return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -6166,7 +6206,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
-    console.log(`📞 Twilio answer webhook — forwarding to ${ownerPhone}, baseUrl: ${baseUrl}`);
+    // Build the list of Dial targets
+    const clientTarget = hasClient ? `    <Client>${clientIdentity}</Client>` : '';
+    const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
+
+    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}`);
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -6178,7 +6222,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     timeout="20"
     action="${baseUrl}/api/webhooks/twilio-no-answer"
   >
-    <Number>${ownerPhone}</Number>
+${clientTarget}
+${phoneTarget}
   </Dial>
 </Response>`);
   });

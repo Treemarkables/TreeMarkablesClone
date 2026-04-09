@@ -1,0 +1,17 @@
+# Add these lines inside the `target 'App'` block in your ios/App/Podfile
+# (after running `npx cap add ios`)
+#
+# Example Podfile structure:
+#
+# target 'App' do
+#   capacitor_pods
+#   # ADD THESE LINES:
+#   pod 'TwilioVoice', '~> 6.12'
+# end
+#
+# After editing the Podfile, run:
+#   cd ios/App && pod install
+#
+# Then open App.xcworkspace (NOT App.xcodeproj) in Xcode.
+
+pod 'TwilioVoice', '~> 6.12'
