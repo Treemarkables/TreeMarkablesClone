@@ -21238,7 +21238,7 @@ If you cannot find a value, use null. Do not guess.`
         return d >= dayStart && d <= dayEnd && j.status !== 'completed' && j.status !== 'unsuccessful';
       });
 
-      const scheduledRevenue = dayJobs.reduce((sum: number, j: any) => {
+      const scheduledRevenue = dayJobs.reduce((sum, j) => {
         if (j.subtotal && Number(j.subtotal) > 0) return sum + Number(j.subtotal);
         if (j.totalAmount && Number(j.totalAmount) > 0) return sum + Number(j.totalAmount);
         return sum;
@@ -21338,37 +21338,49 @@ If you cannot find a value, use null. Do not guess.`
         licenceRequired: e.licenceRequired || null,
       }));
 
-      const systemPrompt = `You are an expert tree service business scheduling assistant. Your job is to propose an optimal day schedule that:
-1. Reaches or exceeds the daily revenue target
-2. Assigns appropriate crew members based on their licences/tickets
-3. Ensures required equipment licences are held by at least one crew member assigned to each job
-4. Minimises conflicts (no double-booking of staff or equipment)
-5. Orders jobs geographically to minimise travel time
+      const systemPrompt = `You are an expert tree service business scheduling assistant. Your job is to propose MULTIPLE RANKED schedule alternatives for the day, each prioritising a different optimisation goal:
 
-Return a valid JSON object only (no markdown) with this structure:
+Alternative 1 (rank 1): "Maximum Revenue" — pick the combination of jobs that maximises total revenue, even if it means a heavier workload.
+Alternative 2 (rank 2): "Balanced Crew" — distribute work evenly across crew, favouring jobs matched well to available staff licences.
+Alternative 3 (rank 3): "Quick Wins" — prioritise shorter jobs that can definitely be completed in the day, minimising risk.
+
+Rules for ALL alternatives:
+- Assign crew based on their licences/tickets matching equipment requirements
+- No double-booking of staff or equipment across jobs in the same alternative
+- Assign realistic start and end times starting from 07:00
+- Check equipment licence requirements — at least one crew member must hold the required licence
+- Flag any conflicts clearly
+
+Return a valid JSON object only (no markdown) with this EXACT structure:
 {
-  "proposedJobs": [
+  "alternatives": [
     {
-      "jobId": "string",
-      "jobNumber": "string",
-      "title": "string",
-      "address": "string",
-      "revenue": number,
-      "estimatedDuration": number,
-      "proposedStartTime": "08:00",
-      "proposedEndTime": "12:00",
-      "assignedStaffIds": ["staffId1"],
-      "assignedStaffNames": ["Name 1"],
-      "equipmentNeeded": ["equipment name"],
-      "licenceMatches": [{"equipment": "EWP", "licence": "EWP Ticket", "heldBy": "Staff Name"}],
-      "conflicts": []
+      "rank": 1,
+      "label": "Maximum Revenue",
+      "summaryNote": "Brief explanation",
+      "totalRevenue": number,
+      "meetsTarget": boolean,
+      "conflicts": ["Any overall conflicts"],
+      "proposedJobs": [
+        {
+          "jobId": "string",
+          "jobNumber": "string",
+          "title": "string",
+          "address": "string",
+          "revenue": number,
+          "estimatedDuration": number,
+          "proposedStartTime": "08:00",
+          "proposedEndTime": "12:00",
+          "assignedStaffIds": ["staffId1"],
+          "assignedStaffNames": ["Name 1"],
+          "equipmentNeeded": ["equipment name"],
+          "licenceMatches": [{"equipment": "EWP", "licence": "EWP Ticket", "heldBy": "Staff Name"}],
+          "conflicts": []
+        }
+      ]
     }
   ],
-  "totalRevenue": number,
-  "revenueTarget": number,
-  "meetsTarget": boolean,
-  "summaryNote": "Brief explanation of the proposed schedule",
-  "conflicts": ["Any overall conflicts with plain English explanation"]
+  "revenueTarget": number
 }`;
 
       const userPrompt = `Target date: ${targetDate}
@@ -21386,7 +21398,7 @@ ${JSON.stringify(equipSummaries, null, 2)}
 Equipment→Licence requirements:
 ${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => e.licenceRequired).map(e => [e.name, e.licenceRequired])), null, 2)}
 
-Propose a schedule that hits the revenue target. Assign realistic start and end times starting from 07:00. Check licence requirements for each piece of equipment on each job. Flag any conflicts clearly.`;
+Generate 3 ranked schedule alternatives as specified. Each alternative must have different job selections or different crew assignments. For each alternative, verify licence requirements and flag any conflicts.`;
 
       const aiResponse = await openai.chat.completions.create({
         model: 'gpt-4o',
@@ -21398,17 +21410,36 @@ Propose a schedule that hits the revenue target. Assign realistic start and end 
       });
 
       const proposalText = aiResponse.choices[0].message.content || '{}';
-      let proposal;
+      let rawProposal: { alternatives?: Array<{ rank: number; label: string; summaryNote: string; totalRevenue: number; meetsTarget: boolean; conflicts: string[]; proposedJobs: unknown[] }>; revenueTarget?: number; proposedJobs?: unknown[] };
       try {
-        proposal = JSON.parse(proposalText);
+        rawProposal = JSON.parse(proposalText);
       } catch {
-        proposal = { error: 'Failed to parse AI response', raw: proposalText };
+        rawProposal = {};
+      }
+
+      // Normalise: support both legacy single-proposal and new ranked-alternatives format
+      const alternatives = rawProposal.alternatives && rawProposal.alternatives.length > 0
+        ? rawProposal.alternatives
+        : rawProposal.proposedJobs
+          ? [{ rank: 1, label: 'Proposed Schedule', summaryNote: '', totalRevenue: 0, meetsTarget: false, conflicts: [], proposedJobs: rawProposal.proposedJobs }]
+          : [];
+
+      // Notify that schedule alternatives are ready for review
+      if (alternatives.length > 0) {
+        await storage.createNotification({
+          title: `AI Dispatch: ${alternatives.length} schedule alternatives ready`,
+          message: `${alternatives.length} ranked schedule proposals generated for ${targetDate}. Review and confirm your preferred option.`,
+          type: 'schedule_proposal_ready',
+          priority: 'medium',
+          isRead: false,
+          actionUrl: '/ai-scheduler',
+        }).catch(() => { /* non-critical */ });
       }
 
       return res.json({
         success: true,
         data: {
-          ...proposal,
+          alternatives,
           revenueTarget: dailyTarget,
           targetDate,
           generatedAt: new Date().toISOString(),
@@ -21445,8 +21476,9 @@ Propose a schedule that hits the revenue target. Assign realistic start and end 
 
       const validationErrors: string[] = [];
 
-      // Track staff time slots for double-booking detection
+      // Track staff and equipment time slots for double-booking detection
       const staffTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
+      const equipmentTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
 
       const timeToMinutes = (t: string) => {
         const [h, m] = t.split(':').map(Number);
@@ -21501,6 +21533,32 @@ Propose a schedule that hits the revenue target. Assign realistic start and end 
         for (const equipName of equipmentNeeded) {
           const eq = equipmentMap[equipName];
           if (!eq) continue;
+
+          // 4. Check equipment is active/available
+          if (!eq.isActive) {
+            validationErrors.push(`Job "${jobLabel}": Equipment "${equipName}" is not active`);
+          }
+          if (eq.status && eq.status !== 'available' && eq.status !== 'in_use') {
+            validationErrors.push(`Job "${jobLabel}": Equipment "${equipName}" has status "${eq.status}" and may not be available`);
+          }
+
+          // 5. Check equipment double-booking (time overlap across jobs)
+          const equipKey = eq.id || equipName;
+          if (!equipmentTimeSlots[equipKey]) equipmentTimeSlots[equipKey] = [];
+          const startMins = timeToMinutes(startTime);
+          const endMins = timeToMinutes(endTime);
+          for (const slot of equipmentTimeSlots[equipKey]) {
+            const existingStart = timeToMinutes(slot.start);
+            const existingEnd = timeToMinutes(slot.end);
+            if (startMins < existingEnd && endMins > existingStart) {
+              validationErrors.push(
+                `Equipment double-booking: "${equipName}" is assigned to both "${jobLabel}" (${startTime}–${endTime}) and "${slot.jobTitle}" (${slot.start}–${slot.end})`
+              );
+            }
+          }
+          equipmentTimeSlots[equipKey].push({ start: startTime, end: endTime, jobTitle: jobLabel });
+
+          // 6. Validate licence requirements for equipment
           const required = eq.licenceRequired;
           if (required && required.trim() !== '') {
             const requiredLower = required.toLowerCase();
