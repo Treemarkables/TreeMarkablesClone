@@ -1,8 +1,12 @@
 import Foundation
+import UIKit
+import AVFoundation
 import Capacitor
 import TwilioVoice
 import PushKit
 import CallKit
+
+// MARK: - Capacitor Plugin Declaration
 
 @objc(TwilioVoicePlugin)
 public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
@@ -17,6 +21,10 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "mute", returnType: CAPPluginReturnPromise),
     ]
 
+    // MARK: - Stored Properties (strongly retained)
+
+    /// Retained reference to PKPushRegistry — must be a stored property or callbacks stop.
+    private var voipRegistry: PKPushRegistry?
     private var callKitProvider: CXProvider?
     private var callKitCallController = CXCallController()
     private var activeCall: Call?
@@ -24,13 +32,14 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     private var callUUID: UUID?
     private var accessToken: String?
     private var deviceToken: Data?
-    private var voipRegistry: PKPushRegistry?
 
     // MARK: - Plugin Lifecycle
 
     public override func load() {
         super.load()
-        setupCallKit()
+        DispatchQueue.main.async {
+            self.setupCallKit()
+        }
     }
 
     // MARK: - Plugin Methods (called from JavaScript)
@@ -102,8 +111,9 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         config.maximumCallsPerCallGroup = 1
         config.includesCallsInRecents = true
         config.supportsVideo = false
-        if let icon = UIImage(named: "AppIcon") {
-            config.iconTemplateImageData = icon.pngData()
+        // Use app icon if available
+        if let iconImage = UIImage(named: "AppIcon") {
+            config.iconTemplateImageData = iconImage.pngData()
         }
         callKitProvider = CXProvider(configuration: config)
         callKitProvider?.setDelegate(self, queue: nil)
@@ -112,9 +122,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - VoIP Push Registration
 
     private func registerForVoIPPush() {
-        voipRegistry = PKPushRegistry(queue: DispatchQueue.main)
-        voipRegistry?.delegate = self
-        voipRegistry?.desiredPushTypes = [.voIP]
+        // Assign to stored property so the registry — and therefore the delegate
+        // callbacks — remain alive for the lifetime of the plugin instance.
+        let registry = PKPushRegistry(queue: DispatchQueue.main)
+        registry.delegate = self
+        registry.desiredPushTypes = [.voIP]
+        self.voipRegistry = registry
     }
 
     // MARK: - Incoming Call Presentation
@@ -132,7 +145,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
 
         callKitProvider?.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error = error {
-                NSLog("CallKit incoming call error: \(error)")
+                NSLog("[TwilioVoice] CallKit incoming call error: \(error)")
             }
         }
 
@@ -145,31 +158,43 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
 }
 
 // MARK: - PKPushRegistryDelegate
+// Self-contained VoIP push handling — no AppDelegate changes needed.
 
 extension TwilioVoicePlugin: PKPushRegistryDelegate {
-    public func pushRegistry(_ registry: PKPushRegistry, didUpdate pushCredentials: PKPushCredentials, for type: PKPushType) {
+    public func pushRegistry(
+        _ registry: PKPushRegistry,
+        didUpdate pushCredentials: PKPushCredentials,
+        for type: PKPushType
+    ) {
         guard type == .voIP, let token = self.accessToken else { return }
         let deviceToken = pushCredentials.token
         self.deviceToken = deviceToken
 
         TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
             if let error = error {
-                NSLog("Twilio registration error: \(error)")
+                NSLog("[TwilioVoice] Registration error: \(error)")
                 self.notifyListeners("registrationError", data: ["message": error.localizedDescription])
             } else {
-                let tokenHex = deviceToken.map { String(format: "%02x", $0) }.joined()
-                self.notifyListeners("registered", data: ["deviceToken": tokenHex])
+                let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+                NSLog("[TwilioVoice] Registered — device token: \(hex.prefix(8))...")
+                self.notifyListeners("registered", data: ["deviceToken": hex])
             }
         }
     }
 
-    public func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
+    public func pushRegistry(
+        _ registry: PKPushRegistry,
+        didInvalidatePushTokenFor type: PKPushType
+    ) {
         guard type == .voIP,
               let token = self.accessToken,
               let deviceToken = self.deviceToken else { return }
         TwilioVoiceSDK.unregister(accessToken: token, deviceToken: deviceToken) { _ in }
     }
 
+    /// iOS 13+ requires CallKit to be notified of the incoming call BEFORE this
+    /// method returns. TwilioVoiceSDK.handleNotification is designed to call
+    /// `callInviteReceived` synchronously on the delegate for exactly this reason.
     public func pushRegistry(
         _ registry: PKPushRegistry,
         didReceiveIncomingPushWith payload: PKPushPayload,
@@ -180,7 +205,11 @@ extension TwilioVoicePlugin: PKPushRegistryDelegate {
             completion()
             return
         }
-        TwilioVoiceSDK.handleNotification(payload.dictionaryPayload, delegate: self, delegateQueue: nil)
+        TwilioVoiceSDK.handleNotification(
+            payload.dictionaryPayload,
+            delegate: self,
+            delegateQueue: nil
+        )
         completion()
     }
 }
@@ -192,7 +221,10 @@ extension TwilioVoicePlugin: NotificationDelegate {
         reportIncomingCall(from: callInvite)
     }
 
-    public func cancelledCallInviteReceived(cancelledCallInvite: CancelledCallInvite, error: Error?) {
+    public func cancelledCallInviteReceived(
+        cancelledCallInvite: CancelledCallInvite,
+        error: Error?
+    ) {
         guard let uuid = self.callUUID else { return }
         callKitProvider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         self.callInvite = nil

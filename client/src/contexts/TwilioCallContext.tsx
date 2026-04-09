@@ -6,8 +6,8 @@ import {
   ReactNode,
 } from "react";
 import { Capacitor } from "@capacitor/core";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
-import { Button } from "@/components/ui/button";
 import { Phone, PhoneOff, PhoneMissed } from "lucide-react";
 
 export type CallState =
@@ -48,6 +48,12 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const queryClient = useQueryClient();
+
+  // Invalidate /api/calls after a call ends so Communications page refreshes.
+  const refreshCallHistory = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
+  }, [queryClient]);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
     setCallInfo({ from: data.from, callSid: data.callSid });
@@ -64,26 +70,29 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
 
   const handleCallEnded = useCallback(() => {
     setCallState("ended");
+    refreshCallHistory();
     setTimeout(() => {
       setCallState("idle");
       setCallInfo(null);
       setIsMuted(false);
     }, 2000);
-  }, []);
+  }, [refreshCallHistory]);
 
   const handleCallDisconnected = useCallback(() => {
     setCallState("ended");
+    refreshCallHistory();
     setTimeout(() => {
       setCallState("idle");
       setCallInfo(null);
       setIsMuted(false);
     }, 2000);
-  }, []);
+  }, [refreshCallHistory]);
 
   const handleCallCancelled = useCallback(() => {
     setCallState("idle");
     setCallInfo(null);
-  }, []);
+    refreshCallHistory();
+  }, [refreshCallHistory]);
 
   const handleCallFailed = useCallback(() => {
     setCallState("idle");

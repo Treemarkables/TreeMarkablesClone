@@ -24,7 +24,12 @@ iOS wakes the app → CallKit shows native call screen
 You answer → voice connected through Twilio
     ↓
 Call recorded → Whisper transcribed → Job auto-created
+    ↓
+Communications page refreshes automatically
 ```
+
+The `TwilioVoicePlugin` is self-contained — it handles PushKit registration
+internally. No AppDelegate changes are needed.
 
 ---
 
@@ -87,8 +92,10 @@ Copy the pre-built native plugin into the Xcode project:
 ```bash
 cp ios-native/TwilioVoicePlugin.swift ios/App/App/
 cp ios-native/TwilioVoicePlugin.m ios/App/App/
-cp ios-native/AppDelegate+Twilio.swift ios/App/App/
 ```
+
+> **Note:** Do NOT copy `AppDelegate+Twilio.swift` — it is documentation only.
+> The plugin manages PushKit registration internally. No AppDelegate changes needed.
 
 ---
 
@@ -141,7 +148,7 @@ Still in **Signing & Capabilities**, click **+ Capability** and add:
   - `Remote notifications`
 - **Push Notifications**
 
-### 6c — Entitlements
+### 6c — Verify entitlements
 
 Xcode will create `App.entitlements` automatically. Verify it contains:
 
@@ -154,27 +161,7 @@ If it doesn't, add it manually.
 
 ---
 
-## Step 7 — Update AppDelegate.swift
-
-Open `ios/App/App/AppDelegate.swift` and add to the imports at the top:
-
-```swift
-import PushKit
-```
-
-Then add this line inside `application(_:didFinishLaunchingWithOptions:)`:
-
-```swift
-func application(_ application: UIApplication, didFinishLaunchingWithOptions ...) -> Bool {
-    // ... existing Capacitor code ...
-    self.setupVoIPPush()  // ADD THIS LINE
-    return true
-}
-```
-
----
-
-## Step 8 — Build and run on device
+## Step 7 — Build and run on device
 
 1. Connect your iPhone via USB
 2. Select your device from the target dropdown in Xcode
@@ -184,21 +171,39 @@ func application(_ application: UIApplication, didFinishLaunchingWithOptions ...
 
 ### Verify the plugin registers
 
-After the app launches, look for in the Xcode console:
+After the app launches and you log in, watch the Replit server logs for:
 
 ```
 🔑 Twilio access token issued for identity: treemarkables-owner
-[TwilioVoice] registered — deviceToken: abc123...
+```
+
+And in the Xcode console:
+
+```
+[TwilioVoice] Registered — device token: abc12345...
 ```
 
 ---
 
-## Step 9 — Test an incoming call
+## Step 8 — Test an incoming call
 
 1. Call your Twilio number from any phone
-2. Your iPhone should show the native CallKit screen (even from lock screen)
+2. Your iPhone shows the native CallKit screen (even from lock screen)
 3. Answer it — you should hear the caller
-4. Hang up — check the Communications tab in the app for the recording
+4. Hang up — check the Communications tab; the call log refreshes automatically
+
+---
+
+## Step 9 — Keep web builds up to date
+
+After making changes to the web app:
+
+```bash
+npm run build
+npx cap sync ios
+```
+
+Then rebuild in Xcode.
 
 ---
 
@@ -234,21 +239,7 @@ After the app launches, look for in the Xcode console:
 | `TWILIO_API_KEY` | Twilio Console → API Keys → Create Standard | **New — required for iOS** |
 | `TWILIO_API_SECRET` | Twilio Console → API Keys (shown once at creation) | **New — required for iOS** |
 | `TWILIO_CLIENT_IDENTITY` | Set to any string (default: `treemarkables-owner`) | Optional |
-| `HERO_PHONE_NUMBER` | Your real NZ mobile number (+64...) | Optional (fallback) |
-
----
-
-## Twilio Console — Register TwiML App (optional, for outgoing calls)
-
-If you want to make outgoing calls FROM the app (not just receive):
-
-1. Twilio Console → **Voice → TwiML Apps → Create**
-2. Name: `Treemarkables`
-3. Request URL: `https://your-app.replit.app/api/webhooks/twilio-outgoing`
-4. Copy the SID → add to Replit Secrets as `TWILIO_TWIML_APP_SID`
-5. Update the token endpoint to include this SID in the VoiceGrant
-
-Outgoing calls are not implemented by default — contact your developer to add them.
+| `HERO_PHONE_NUMBER` | Your real NZ mobile number (+64...) | Optional (fallback while transitioning) |
 
 ---
 
@@ -256,21 +247,26 @@ Outgoing calls are not implemented by default — contact your developer to add 
 
 **CallKit screen doesn't appear**
 - Make sure the app has been launched at least once after install
-- Check that VoIP background mode capability is added
-- Verify `com.apple.developer.pushkit.unrestricted-voip` is in entitlements
+- Check that VoIP background mode capability is added in Xcode
+- Verify `com.apple.developer.pushkit.unrestricted-voip` is in the entitlements file
 
 **Token fetch fails (503)**
 - Set `TWILIO_API_KEY` and `TWILIO_API_SECRET` in Replit Secrets
 - Restart the deployed app after adding secrets
 
 **Call connects but no audio**
-- Make sure `Audio, AirPlay, Picture in Picture` background mode is enabled
-- Check the `provider(_:didActivate:)` CallKit delegate is being called
+- Make sure `Audio, AirPlay, Picture in Picture` background mode is enabled in Xcode
+- The `provider(_:didActivate:)` CallKit delegate routes audio through Twilio
 
 **Build fails: TwilioVoice module not found**
 - Run `pod install` inside `ios/App/`
-- Open `App.xcworkspace` (not `.xcodeproj`)
+- Always open `App.xcworkspace` (not `.xcodeproj`)
 
 **Podfile issue: 'TwilioVoice' not found**
 - Check you're on CocoaPods 1.11+: `pod --version`
 - Try: `pod repo update` then `pod install` again
+
+**[TwilioVoice] Registration error / no delegate callbacks**
+- Ensure `register()` was called from JS with a valid token
+- Token endpoint returns 503 if API Key secrets are not set
+- Token endpoint returns 401 if not logged in — log in first

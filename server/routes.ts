@@ -6149,7 +6149,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   // Create them at: Twilio Console → Account → API Keys & Tokens → Create API Key (Standard).
   app.post('/api/twilio/token', async (req: Request, res: Response) => {
     try {
-      if (!(req as any).session?.employeeId) {
+      if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
@@ -6162,8 +6162,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
       const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
-      const AccessToken = (twilio as any).jwt.AccessToken;
-      const VoiceGrant = AccessToken.VoiceGrant;
+      const { AccessToken } = twilio.jwt;
+      const { VoiceGrant } = AccessToken;
       const voiceGrant = new VoiceGrant({ incomingAllow: true });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
