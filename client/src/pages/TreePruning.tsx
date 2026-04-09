@@ -7,7 +7,7 @@ import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, Map
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import heroImage from "@assets/tree_pruning_hero.jpg";
+const heroImage = "/tree-pruning.jpg";
 
 interface Review {
   id: string;

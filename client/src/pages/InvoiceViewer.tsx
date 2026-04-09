@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Receipt, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
-import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
+const logoUrl = "/treemarkables-logo.png";
 
 interface InvoiceViewerProps {}
 

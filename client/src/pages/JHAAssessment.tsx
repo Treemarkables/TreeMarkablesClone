@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import jhaHeaderImage from "@assets/generated_images/JHA_Risk_Assessment_Header_017c01a5.png";
+const jhaHeaderImage = "/treemarkables-logo.png";
 
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({

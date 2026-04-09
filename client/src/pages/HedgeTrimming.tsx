@@ -7,7 +7,7 @@ import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, Map
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import heroBackground from "@assets/hedge_trimming_hero.jpg";
+const heroBackground = "/hedge-trimming.jpg";
 
 const reviews = [
   {
