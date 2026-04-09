@@ -6380,7 +6380,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                 // Check both phone and mobile fields to avoid creating duplicate customers
                 customer = customers.find(c =>
                   (c.phone && normalizePhone(c.phone) === callerPhone) ||
-                  ((c as any).mobile && normalizePhone((c as any).mobile) === callerPhone)
+                  (c.mobile && normalizePhone(c.mobile) === callerPhone)
                 );
                 
                 if (!customer && jobData.customerName) {
