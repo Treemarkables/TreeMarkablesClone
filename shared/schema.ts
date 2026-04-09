@@ -3387,5 +3387,34 @@ export const insertAssistantMessageSchema = createInsertSchema(assistantMessages
 export type AssistantMessage = typeof assistantMessages.$inferSelect;
 export type InsertAssistantMessage = z.infer<typeof insertAssistantMessageSchema>;
 
+// ========================================
+// PENDING OUTBOUND MESSAGES
+// Draft customer messages awaiting owner approval before sending
+// ========================================
+export const pendingOutboundMessages = pgTable("pending_outbound_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  proposalId: varchar("proposal_id"),
+  proposalNumber: text("proposal_number"),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  message: text("message").notNull(),
+  channel: text("channel").notNull().default('sms'), // 'sms' or 'email'
+  status: text("status").notNull().default('pending'), // 'pending', 'approved', 'rejected', 'sent'
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPendingOutboundMessageSchema = createInsertSchema(pendingOutboundMessages).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+
+export type PendingOutboundMessage = typeof pendingOutboundMessages.$inferSelect;
+export type InsertPendingOutboundMessage = z.infer<typeof insertPendingOutboundMessageSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

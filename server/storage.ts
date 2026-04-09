@@ -427,6 +427,12 @@ export interface IStorage {
   markNotificationSent(id: string): Promise<void>;
   markNotificationFailed(id: string, error: string): Promise<void>;
 
+  // Pending Outbound Messages (holding messages awaiting owner approval)
+  createPendingOutboundMessage(msg: schema.InsertPendingOutboundMessage): Promise<schema.PendingOutboundMessage>;
+  getPendingOutboundMessages(status?: string): Promise<schema.PendingOutboundMessage[]>;
+  getPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined>;
+  updatePendingOutboundMessage(id: string, updates: Partial<schema.PendingOutboundMessage>): Promise<schema.PendingOutboundMessage>;
+
   // Employee Management
   createEmployee(employee: InsertEmployee): Promise<Employee>;
   getEmployee(id: string): Promise<Employee | undefined>;
@@ -3916,6 +3922,36 @@ class DatabaseStorage implements IStorage {
         error
       })
       .where(eq(schema.notificationQueue.id, id));
+  }
+
+  // Pending Outbound Messages
+  async createPendingOutboundMessage(msg: schema.InsertPendingOutboundMessage): Promise<schema.PendingOutboundMessage> {
+    const [created] = await db.insert(schema.pendingOutboundMessages).values(msg).returning();
+    return created;
+  }
+
+  async getPendingOutboundMessages(status?: string): Promise<schema.PendingOutboundMessage[]> {
+    if (status) {
+      return await db.select().from(schema.pendingOutboundMessages)
+        .where(eq(schema.pendingOutboundMessages.status, status))
+        .orderBy(desc(schema.pendingOutboundMessages.createdAt));
+    }
+    return await db.select().from(schema.pendingOutboundMessages)
+      .orderBy(desc(schema.pendingOutboundMessages.createdAt));
+  }
+
+  async getPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined> {
+    const [msg] = await db.select().from(schema.pendingOutboundMessages)
+      .where(eq(schema.pendingOutboundMessages.id, id));
+    return msg || undefined;
+  }
+
+  async updatePendingOutboundMessage(id: string, updates: Partial<schema.PendingOutboundMessage>): Promise<schema.PendingOutboundMessage> {
+    const [updated] = await db.update(schema.pendingOutboundMessages)
+      .set(updates)
+      .where(eq(schema.pendingOutboundMessages.id, id))
+      .returning();
+    return updated;
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {

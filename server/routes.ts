@@ -16390,6 +16390,39 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
       await storage.createNotification(notificationData);
 
+      // Create a pending holding message draft for the owner to approve
+      const firstName = customer?.name?.split(' ')[0] || 'there';
+      const phone = customer?.mobile || customer?.phone;
+      const email = customer?.email;
+      const channel = phone ? 'sms' : (email ? 'email' : 'sms');
+      const holdingMsg = `Hey ${firstName}, thanks for accepting our proposal. We'll be in touch within 24 hours to get your job scheduled.`;
+
+      const pendingMsg = await storage.createPendingOutboundMessage({
+        jobId: job.id,
+        customerId: proposal.customerId || undefined,
+        proposalId: id,
+        proposalNumber: proposal.proposalNumber,
+        recipientName: customer?.name || undefined,
+        recipientPhone: phone || undefined,
+        recipientEmail: email || undefined,
+        message: holdingMsg,
+        channel,
+        status: 'pending',
+      });
+
+      // Notify owner that the holding message needs approval
+      await storage.createNotification({
+        title: 'Holding message awaiting approval',
+        message: `A holding message to ${customer?.name || 'the customer'} is ready to send — tap to review and approve.`,
+        type: 'holding_message_pending',
+        priority: 'high',
+        isRead: false,
+        jobId: job.id,
+        customerId: proposal.customerId || undefined,
+        actionUrl: '/communications?tab=pending',
+        metadata: { pendingMessageId: pendingMsg.id }
+      });
+
       // Create diary entry for the job to record the acceptance
       if (job?.id) {
         await storage.createJobDiaryEntry({
@@ -16436,6 +16469,99 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         success: false,
         message: 'Error deleting proposal'
       });
+    }
+  });
+
+  // ==========================================
+  // PENDING OUTBOUND MESSAGES
+  // ==========================================
+
+  // List pending outbound messages
+  app.get('/api/pending-messages', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const messages = await storage.getPendingOutboundMessages(status);
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('Error fetching pending messages:', error);
+      res.status(500).json({ success: false, message: 'Error fetching pending messages' });
+    }
+  });
+
+  // Update (edit) a pending message
+  app.patch('/api/pending-messages/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { message } = req.body;
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, { message });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating pending message:', error);
+      res.status(500).json({ success: false, message: 'Error updating pending message' });
+    }
+  });
+
+  // Approve and send a pending message
+  app.post('/api/pending-messages/:id/approve', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const msg = await storage.getPendingOutboundMessage(req.params.id);
+      if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
+      if (msg.status !== 'pending') return res.status(400).json({ success: false, message: 'Message is not pending' });
+
+      // Send via SMS or email
+      let sent = false;
+      if (msg.channel === 'sms' && msg.recipientPhone) {
+        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+        sent = true;
+      } else if (msg.channel === 'email' && msg.recipientEmail) {
+        await emailService.sendEmail({
+          to: msg.recipientEmail,
+          subject: 'Update from Treemarkables',
+          html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
+          text: msg.message,
+        });
+        sent = true;
+      } else if (msg.recipientPhone) {
+        // Fallback to SMS if phone available
+        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+        sent = true;
+      }
+
+      // Mark as sent
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, {
+        status: 'sent',
+        sentAt: new Date(),
+      });
+
+      // Log to job diary
+      if (msg.jobId) {
+        await storage.createJobDiaryEntry({
+          jobId: msg.jobId,
+          entryType: 'sms',
+          title: 'Holding message sent to customer',
+          content: msg.message,
+          metadata: {
+            channel: msg.channel,
+            recipientName: msg.recipientName,
+            eventType: 'holding_message_sent',
+          },
+        });
+      }
+
+      res.json({ success: true, data: updated, sent });
+    } catch (error) {
+      console.error('Error approving pending message:', error);
+      res.status(500).json({ success: false, message: 'Error approving pending message' });
+    }
+  });
+
+  // Reject (dismiss) a pending message
+  app.post('/api/pending-messages/:id/reject', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, { status: 'rejected' });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error rejecting pending message:', error);
+      res.status(500).json({ success: false, message: 'Error rejecting pending message' });
     }
   });
 
