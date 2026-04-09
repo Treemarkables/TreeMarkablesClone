@@ -166,7 +166,7 @@ export default function BlogPost() {
     return (
       <div className="min-h-screen bg-background">
         <Header />
-        <div className="pt-32 pb-16 text-center">
+        <div className="pt-72 pb-16 text-center">
           <h1 className="text-4xl font-bold text-foreground mb-4">Post Not Found</h1>
           <p className="text-muted-foreground mb-8">The blog post you're looking for doesn't exist.</p>
           <Button asChild>
@@ -223,7 +223,7 @@ export default function BlogPost() {
       <Header />
       
       {/* Back to Blog */}
-      <div className="pt-32 pb-8">
+      <div className="pt-72 pb-8">
         <div className="max-w-4xl mx-auto px-6">
           <Button variant="ghost" size="sm" asChild>
             <Link href="/blog" data-testid="button-back-to-blog">
