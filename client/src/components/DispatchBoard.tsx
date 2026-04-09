@@ -2785,38 +2785,51 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         {/* Mobile Layout: ServiceM8-style job cards */}
         <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
           {/* Header with Create Buttons */}
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center justify-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateLead}
-              data-testid="create-lead-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              New Lead
-            </Button>
-            <span className="text-white/60">·</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateJob}
-              data-testid="create-quote-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              Quote
-            </Button>
-            <span className="text-white/60">·</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateJob}
-              data-testid="create-job-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              Job
-            </Button>
-            <span className="text-white/60">·</span>
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center justify-center gap-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  data-testid="create-new-button-mobile"
+                  className="text-white hover:bg-white/20 text-sm font-medium"
+                >
+                  <Plus className="h-4 w-4 mr-1" />
+                  New
+                  <ChevronDown className="h-3 w-3 ml-1" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="center">
+                <DropdownMenuItem
+                  onClick={handleCreateLead}
+                  data-testid="create-lead-button-mobile"
+                >
+                  Lead
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setJobToEdit(null);
+                    setInitialJobData({ status: "quote" });
+                    setGlobalJobCardMode("create");
+                    setShowGlobalJobCard(true);
+                  }}
+                  data-testid="create-quote-button-mobile"
+                >
+                  Quote
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    setJobToEdit(null);
+                    setInitialJobData({ status: "invoiced" });
+                    setGlobalJobCardMode("create");
+                    setShowGlobalJobCard(true);
+                  }}
+                  data-testid="create-invoice-button-mobile"
+                >
+                  Invoice
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="sm"
