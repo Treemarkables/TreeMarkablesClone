@@ -33,12 +33,12 @@ import {
   Calculator,
   Target,
   MoreHorizontal,
+
   UserCircle,
   Edit3,
   Image as ImageIcon,
   Package,
   Search,
-  Menu,
   Camera,
   AlertCircle,
   ChevronsUpDown,
@@ -61,6 +61,8 @@ import {
   Crown,
   Lock,
   Bell,
+  BookOpen,
+  ListOrdered,
 } from "lucide-react";
 import {
   MdEmail,
@@ -104,6 +106,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -278,7 +286,7 @@ export function GlobalJobCard({
   const [newChecklistItem, setNewChecklistItem] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [sidebarTab, setSidebarTab] = useState("details");
-  const [showMobileActions, setShowMobileActions] = useState(false);
+  const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
@@ -3566,235 +3574,6 @@ The Treemarkables Team`;
 
           {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Actions Menu - Mobile only (hidden in inline/split-screen mode) */}
-            {!renderInline && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden h-7 w-7 text-gray-600 hover:bg-gray-100"
-                    data-testid="button-actions-menu-mobile"
-                  >
-                    <Menu className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSpeechToQuoteContext("full");
-                      setIsSpeechToQuoteOpen(true);
-                    }}
-                    data-testid="menu-item-speech-to-quote-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 shadow-md mr-3">
-                      <Mic className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Speech to Quote</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleEmailClick}
-                    data-testid="menu-item-email-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 shadow-md mr-3">
-                      <Mail className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Email</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsSMSComposerOpen(true)}
-                    data-testid="menu-item-sms-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-green-600 shadow-md mr-3">
-                      <MessageSquare
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">SMS</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleCallClick}
-                    data-testid="menu-item-call-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-md mr-3">
-                      <Phone className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Call</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleScheduleClick}
-                    data-testid="menu-item-schedule-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-md mr-3">
-                      <Calendar
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Schedule</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleQuoteClick}
-                    data-testid="menu-item-quote-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-md mr-3">
-                      <Receipt
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Quote</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleInvoiceClick}
-                    data-testid="menu-item-invoice-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-md mr-3">
-                      <CreditCard
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Invoice</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={async () => {
-                      if (!selectedCustomer?.id) {
-                        toast({
-                          title: "Customer Required",
-                          description:
-                            "Please select a customer before creating a proposal.",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-
-                      // Save job first to ensure address/description changes are persisted
-                      if (mode === "edit" && editingJob?.id) {
-                        try {
-                          const formData = form.getValues();
-                          await updateJobMutation.mutateAsync(formData);
-                        } catch (error) {
-                          toast({
-                            title: "Save Failed",
-                            description:
-                              "Please resolve any errors before creating a proposal",
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-                      }
-
-                      // Check if there's an existing proposal and load it
-                      const existingProposal = jobProposalResponse?.data?.[0];
-                      if (existingProposal) {
-                        setEditingProposalId(existingProposal.id);
-                      }
-                      setIsProposalBuilderOpen(true);
-                    }}
-                    data-testid="menu-item-proposal-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-pink-400 to-pink-600 shadow-md mr-3">
-                      <Presentation
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Proposal</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setIsTimeTrackingOpen(true)}
-                    data-testid="menu-item-time-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 shadow-md mr-3">
-                      <Clock className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Time Tracking</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsProfitTrackerOpen(true)}
-                    data-testid="menu-item-profit-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 shadow-md mr-3">
-                      <DollarSign
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Profit Tracker</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsPhotoCaptureOpen(true)}
-                    data-testid="menu-item-camera-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-violet-400 to-violet-600 shadow-md mr-3">
-                      <Camera
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Camera</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => sendToXeroMutation.mutate()}
-                    disabled={
-                      !editingJob?.id ||
-                      mode === "create" ||
-                      editingJob?.status !== "completed" ||
-                      editingJob?.xeroStatus === "sent" ||
-                      sendToXeroMutation.isPending
-                    }
-                    data-testid="menu-item-send-xero-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 shadow-md mr-3">
-                      <FileText
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">
-                      {sendToXeroMutation.isPending
-                        ? "Sending..."
-                        : editingJob?.xeroStatus === "sent"
-                          ? "Sent to Xero"
-                          : "Send to Xero"}
-                    </span>
-                  </DropdownMenuItem>
-                  {editingJob?.xeroStatus === "sent" && (
-                    <DropdownMenuItem
-                      onClick={() => setShowXeroResetConfirm(true)}
-                      disabled={resetXeroSyncMutation.isPending}
-                      className="py-3"
-                    >
-                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-md mr-3">
-                        <RotateCcw
-                          className="h-6 w-6 text-white"
-                          strokeWidth={2.5}
-                        />
-                      </div>
-                      <span className="font-medium">Re-send to Xero</span>
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
 
             {/* Close button - Mobile only (hidden in inline mode) */}
             <Button
@@ -4063,167 +3842,11 @@ The Treemarkables Team`;
             </DropdownMenu>
           </div>
 
-          {/* Mobile: Essential Actions Dropdown */}
-          <div className="md:hidden flex items-center gap-1">
-            <DropdownMenu
-              open={showMobileActions}
-              onOpenChange={setShowMobileActions}
-            >
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-11 px-3 text-xs"
-                  data-testid="button-mobile-actions"
-                >
-                  <Menu className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onClick={handleEmailClick}
-                  data-testid="menu-item-email-mobile"
-                >
-                  <Mail className="w-4 h-4 mr-2" />
-                  Email
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsSMSComposerOpen(true)}
-                  data-testid="menu-item-sms-mobile"
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  SMS
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleCallClick}
-                  data-testid="menu-item-call-mobile"
-                >
-                  <Phone className="w-4 h-4 mr-2" />
-                  Call
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleScheduleClick}
-                  data-testid="menu-item-schedule-mobile"
-                >
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleQuoteClick}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-quote-mobile"
-                >
-                  <Receipt className="w-4 h-4 mr-2" />
-                  Quote
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleInvoiceClick}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-invoice-mobile"
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Invoice
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={async () => {
-                    // Save job first to ensure address/description changes are persisted
-                    if (mode === "edit" && editingJob?.id) {
-                      try {
-                        const formData = form.getValues();
-                        await updateJobMutation.mutateAsync(formData);
-                      } catch (error) {
-                        toast({
-                          title: "Save Failed",
-                          description:
-                            "Please resolve any errors before creating a proposal",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                    }
-
-                    // Check if there's an existing proposal and load it
-                    const existingProposal = jobProposalResponse?.data?.[0];
-                    if (existingProposal) {
-                      setEditingProposalId(existingProposal.id);
-                    }
-                    setIsProposalBuilderOpen(true);
-                  }}
-                  disabled={!selectedCustomer?.id}
-                  data-testid="menu-item-proposal-mobile"
-                >
-                  <Presentation className="w-4 h-4 mr-2" />
-                  Proposal
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setIsTimeTrackingOpen(true)}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-time-mobile"
-                >
-                  <Clock className="w-4 h-4 mr-2" />
-                  Time Tracking
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsProfitTrackerOpen(true)}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-profit-mobile"
-                >
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  Profit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsPhotoCaptureOpen(true)}
-                  data-testid="menu-item-camera-mobile"
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  Camera
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => sendToXeroMutation.mutate()}
-                  disabled={
-                    !editingJob?.id ||
-                    mode === "create" ||
-                    editingJob?.status !== "completed" ||
-                    editingJob?.xeroStatus === "sent" ||
-                    sendToXeroMutation.isPending
-                  }
-                  data-testid="menu-item-send-xero-mobile"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  {sendToXeroMutation.isPending
-                    ? "Sending..."
-                    : editingJob?.xeroStatus === "sent"
-                      ? "Sent to Xero"
-                      : "Send to Xero"}
-                </DropdownMenuItem>
-                {editingJob?.xeroStatus === "sent" && (
-                  <DropdownMenuItem
-                    onClick={() => setShowXeroResetConfirm(true)}
-                    disabled={resetXeroSyncMutation.isPending}
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2 text-amber-600" />
-                    Re-send to Xero
-                  </DropdownMenuItem>
-                )}
-                {editingJob?.status === "completed" && (
-                  <DropdownMenuItem
-                    onClick={handleRequestReviewClick}
-                    data-testid="menu-item-request-review-mobile"
-                  >
-                    <Star className="w-4 h-4 mr-2" />
-                    Request Review
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </div>
       </div>
 
       {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden pb-16 md:pb-0">
         {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
         <div className="border-b md:border-b-0 md:border-r flex md:flex-col md:w-16 flex-shrink-0 bg-white border-gray-200">
           <button
@@ -8723,6 +8346,324 @@ The Treemarkables Team`;
           </Form>
         </div>
       </div>
+
+      {/* Mobile Fixed Bottom Action Toolbar - ServiceM8 style */}
+      {!renderInline && (
+        <div className="md:hidden flex-shrink-0 bg-white border-t border-gray-200 flex items-stretch sticky bottom-0 z-50 safe-area-inset-bottom"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          {/* Photo */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            onClick={() => setIsPhotoCaptureOpen(true)}
+            data-testid="toolbar-btn-photo"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+              <Camera className="h-5 w-5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-[10px] text-gray-500 font-medium">Photo</span>
+          </button>
+
+          {/* SMS */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            onClick={() => setIsSMSComposerOpen(true)}
+            data-testid="toolbar-btn-sms"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
+              <MessageSquare className="h-5 w-5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-[10px] text-gray-500 font-medium">SMS</span>
+          </button>
+
+          {/* Email */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            onClick={handleEmailClick}
+            data-testid="toolbar-btn-email"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
+              <Mail className="h-5 w-5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-[10px] text-gray-500 font-medium">Email</span>
+          </button>
+
+          {/* Diary (Note) */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            onClick={() => {
+              setSidebarTab("diary");
+              setActiveTab("diary");
+            }}
+            data-testid="toolbar-btn-diary"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+              <BookOpen className="h-5 w-5 text-white" strokeWidth={2.5} />
+            </div>
+            <span className="text-[10px] text-gray-500 font-medium">Diary</span>
+          </button>
+
+          {/* More */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            onClick={() => setShowMoreActionsSheet(true)}
+            data-testid="toolbar-btn-more"
+          >
+            <div className="w-9 h-9 rounded-xl bg-gray-200 flex items-center justify-center">
+              <MoreHorizontal className="h-5 w-5 text-gray-600" strokeWidth={2.5} />
+            </div>
+            <span className="text-[10px] text-gray-500 font-medium">More</span>
+          </button>
+        </div>
+      )}
+
+      {/* More Actions Bottom Sheet Modal */}
+      <Sheet open={showMoreActionsSheet} onOpenChange={setShowMoreActionsSheet}>
+        <SheetContent side="bottom" className="p-0 rounded-t-2xl max-h-[75vh] flex flex-col">
+          <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex-shrink-0">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+            <SheetHeader>
+              <SheetTitle className="text-base font-semibold text-center">Actions</SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className="overflow-y-auto flex-1" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+            {/* Speech to Quote */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                setSpeechToQuoteContext("full");
+                setIsSpeechToQuoteOpen(true);
+              }}
+              data-testid="more-sheet-speech-to-quote"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <Mic className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Speech to Quote</span>
+            </button>
+
+            {/* Schedule */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                handleScheduleClick();
+              }}
+              data-testid="more-sheet-schedule"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center flex-shrink-0">
+                <Calendar className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Schedule</span>
+            </button>
+
+            {/* Call */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                handleCallClick();
+              }}
+              data-testid="more-sheet-call"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center flex-shrink-0">
+                <Phone className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Call</span>
+            </button>
+
+            {/* Quote */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={!editingJob?.id || mode === "create"}
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                handleQuoteClick();
+              }}
+              data-testid="more-sheet-quote"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
+                <Receipt className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Quote</span>
+            </button>
+
+            {/* Invoice */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={!editingJob?.id || mode === "create"}
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                handleInvoiceClick();
+              }}
+              data-testid="more-sheet-invoice"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center flex-shrink-0">
+                <CreditCard className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Invoice</span>
+            </button>
+
+            {/* Proposal */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={!selectedCustomer?.id}
+              onClick={async () => {
+                setShowMoreActionsSheet(false);
+                if (mode === "edit" && editingJob?.id) {
+                  try {
+                    const formData = form.getValues();
+                    await updateJobMutation.mutateAsync(formData);
+                  } catch (error) {
+                    toast({
+                      title: "Save Failed",
+                      description: "Please resolve any errors before creating a proposal",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                }
+                const existingProposal = jobProposalResponse?.data?.[0];
+                if (existingProposal) {
+                  setEditingProposalId(existingProposal.id);
+                }
+                setIsProposalBuilderOpen(true);
+              }}
+              data-testid="more-sheet-proposal"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center flex-shrink-0">
+                <Presentation className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Proposal</span>
+            </button>
+
+            {/* Time Tracking */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={!editingJob?.id || mode === "create"}
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                setIsTimeTrackingOpen(true);
+              }}
+              data-testid="more-sheet-time-tracking"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center flex-shrink-0">
+                <Clock className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Time Tracking</span>
+            </button>
+
+            {/* Profit Tracker */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={!editingJob?.id || mode === "create"}
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                setIsProfitTrackerOpen(true);
+              }}
+              data-testid="more-sheet-profit-tracker"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center flex-shrink-0">
+                <DollarSign className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Profit Tracker</span>
+            </button>
+
+            {/* Queue Job */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={!editingJob?.id || mode === "create"}
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                handleQueueClick();
+              }}
+              data-testid="more-sheet-queue-job"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center flex-shrink-0">
+                <ListOrdered className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">Queue Job</span>
+            </button>
+
+            {/* Send to Xero */}
+            <button
+              type="button"
+              className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+              disabled={
+                !editingJob?.id ||
+                mode === "create" ||
+                editingJob?.status !== "completed" ||
+                editingJob?.xeroStatus === "sent" ||
+                sendToXeroMutation.isPending
+              }
+              onClick={() => {
+                setShowMoreActionsSheet(false);
+                sendToXeroMutation.mutate();
+              }}
+              data-testid="more-sheet-send-xero"
+            >
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center flex-shrink-0">
+                <FileText className="h-6 w-6 text-white" strokeWidth={2.5} />
+              </div>
+              <span className="font-medium text-sm">
+                {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
+              </span>
+            </button>
+
+            {/* Re-send to Xero (conditional) */}
+            {editingJob?.xeroStatus === "sent" && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left disabled:opacity-40"
+                disabled={resetXeroSyncMutation.isPending}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  setShowXeroResetConfirm(true);
+                }}
+                data-testid="more-sheet-resend-xero"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center flex-shrink-0">
+                  <RotateCcw className="h-6 w-6 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="font-medium text-sm">Re-send to Xero</span>
+              </button>
+            )}
+
+            {/* Request Review (conditional on completed status) */}
+            {editingJob?.status === "completed" && (
+              <button
+                type="button"
+                className="w-full flex items-center gap-3 px-4 py-3 active:bg-gray-100 transition-colors text-left"
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleRequestReviewClick();
+                }}
+                data-testid="more-sheet-request-review"
+              >
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center flex-shrink-0">
+                  <Star className="h-6 w-6 text-white" strokeWidth={2.5} />
+                </div>
+                <span className="font-medium text-sm">Request Review</span>
+              </button>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
 
       {/* Email Composer Modal */}
       {isEmailComposerOpen && (
