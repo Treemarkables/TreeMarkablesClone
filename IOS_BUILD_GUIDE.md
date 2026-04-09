@@ -28,8 +28,34 @@ Call recorded → Whisper transcribed → Job auto-created
 Communications page refreshes automatically
 ```
 
-The `TwilioVoicePlugin` is self-contained — it handles PushKit registration
-internally. No AppDelegate changes are needed.
+**`TwilioVoicePlugin.swift`** is self-contained — PushKit registration is managed
+internally via a stored `PKPushRegistry` property. No changes to AppDelegate are needed.
+
+---
+
+## Quick Start (Automated)
+
+A single shell script handles everything:
+
+```bash
+# On your Mac with Xcode 15+ and CocoaPods installed:
+git clone <your-repo-url> treemarkables
+cd treemarkables
+npm install
+chmod +x scripts/ios-setup.sh
+./scripts/ios-setup.sh
+```
+
+The script will:
+1. Build the web app
+2. Create the iOS Capacitor project (`npx cap add ios`)
+3. Copy `TwilioVoicePlugin.swift` and `TwilioVoicePlugin.m` into `ios/App/App/`
+4. Apply `App.entitlements` with the VoIP push entitlement
+5. Patch `Info.plist` with `voip`, `audio`, and `remote-notification` background modes
+6. Add `pod 'TwilioVoice', '~> 6.12'` to the Podfile
+7. Run `pod install`
+
+After the script, finish the 3 manual Xcode steps below.
 
 ---
 
@@ -43,189 +69,110 @@ internally. No AppDelegate changes are needed.
 
 ---
 
-## Step 1 — Twilio API Key Setup
-
-Before building, create a Twilio API Key:
+## Step 1 — Twilio API Key Setup (do this first)
 
 1. Go to [Twilio Console → API Keys](https://console.twilio.com/us1/account/keys-credentials/api-keys)
-2. Click **Create API Key**
-3. Name it `Treemarkables iOS App`, type: **Standard**
-4. Copy the **SID** (starts with `SK`) → add to Replit Secrets as `TWILIO_API_KEY`
-5. Copy the **Secret** → add to Replit Secrets as `TWILIO_API_SECRET`
+2. Click **Create API Key** → Name: `Treemarkables iOS App`, type: **Standard**
+3. Copy the **SID** (starts with `SK`) → add to Replit Secrets as `TWILIO_API_KEY`
+4. Copy the **Secret** → add to Replit Secrets as `TWILIO_API_SECRET`
 
-The app will NOT register for calls without these secrets.
-
----
-
-## Step 2 — Clone and prepare
-
-On your Mac:
-
-```bash
-git clone <your-replit-repo-url> treemarkables
-cd treemarkables
-npm install
-```
-
-Build the web app first (Capacitor packages it into the native app):
-
-```bash
-npm run build
-```
+The app will NOT register for calls without these two secrets.
 
 ---
 
-## Step 3 — Add iOS platform
+## Step 2 — Run the setup script
 
 ```bash
-npx cap add ios
+./scripts/ios-setup.sh
 ```
 
-This creates the `ios/` folder with a full Xcode project.
+If it fails partway through, it is safe to re-run — all steps are idempotent.
 
 ---
 
-## Step 4 — Copy Twilio Voice plugin
-
-Copy the pre-built native plugin into the Xcode project:
-
-```bash
-cp ios-native/TwilioVoicePlugin.swift ios/App/App/
-cp ios-native/TwilioVoicePlugin.m ios/App/App/
-```
-
-> **Note:** Do NOT copy `AppDelegate+Twilio.swift` — it is documentation only.
-> The plugin manages PushKit registration internally. No AppDelegate changes needed.
-
----
-
-## Step 5 — Add Twilio Voice SDK via CocoaPods
-
-Edit `ios/App/Podfile`. Find the `target 'App' do` section and add:
-
-```ruby
-target 'App' do
-  capacitor_pods
-  # Add this line:
-  pod 'TwilioVoice', '~> 6.12'
-end
-```
-
-Then install:
-
-```bash
-cd ios/App
-pod install
-cd ../..
-```
-
-> **Important:** After `pod install`, always open `App.xcworkspace` (NOT `App.xcodeproj`)
-
----
-
-## Step 6 — Open in Xcode and configure
+## Step 3 — Open in Xcode
 
 ```bash
 npx cap open ios
 ```
 
-This opens `ios/App/App.xcworkspace` in Xcode.
+> Always open `App.xcworkspace` (NOT `App.xcodeproj`)
 
-### 6a — Signing
+---
 
-1. Select the `App` target
+## Step 4 — Signing & Capabilities (3 manual steps in Xcode)
+
+### 4a — Signing
+1. Select the `App` target in the left panel
 2. Go to **Signing & Capabilities** tab
 3. Set your **Team** (your Apple Developer account)
 4. Set **Bundle Identifier** to `com.treemarkables.app`
-5. Let Xcode automatically manage provisioning
+5. Leave **Automatically manage signing** checked
 
-### 6b — Add capabilities
+### 4b — Add capabilities
+Click **+ Capability** and add these two:
 
-Still in **Signing & Capabilities**, click **+ Capability** and add:
-- **Background Modes** → check:
-  - `Voice over IP`
-  - `Audio, AirPlay, and Picture in Picture`
-  - `Remote notifications`
-- **Push Notifications**
+**Push Notifications** ← click Add
 
-### 6c — Verify entitlements
+**Background Modes** ← click Add, then check:
+- `Voice over IP`
+- `Audio, AirPlay, and Picture in Picture`
+- `Remote notifications`
 
-Xcode will create `App.entitlements` automatically. Verify it contains:
-
+### 4c — Verify entitlements
+Open `ios/App/App/App.entitlements` and confirm it contains:
 ```xml
 <key>com.apple.developer.pushkit.unrestricted-voip</key>
 <true/>
 ```
-
-If it doesn't, add it manually.
+The setup script creates this file. If the file exists but is missing the key,
+add it manually or re-run `scripts/ios-setup.sh`.
 
 ---
 
-## Step 7 — Build and run on device
+## Step 5 — Build and run on device
 
 1. Connect your iPhone via USB
 2. Select your device from the target dropdown in Xcode
 3. Press **Run** (⌘R)
-4. First time: trust the developer profile on your iPhone:
-   - Settings → General → VPN & Device Management → [your Apple ID] → Trust
+4. First run: trust the profile on iPhone → Settings → General → VPN & Device Management → [your Apple ID] → Trust
 
-### Verify the plugin registers
+### Verify registration
 
-After the app launches and you log in, watch the Replit server logs for:
-
+After the app launches and you log in, check the Replit server logs for:
 ```
 🔑 Twilio access token issued for identity: treemarkables-owner
 ```
 
-And in the Xcode console:
-
-```
-[TwilioVoice] Registered — device token: abc12345...
-```
-
 ---
 
-## Step 8 — Test an incoming call
+## Step 6 — Test an incoming call
 
 1. Call your Twilio number from any phone
 2. Your iPhone shows the native CallKit screen (even from lock screen)
-3. Answer it — you should hear the caller
-4. Hang up — check the Communications tab; the call log refreshes automatically
+3. Answer — you should hear the caller
+4. Hang up — Communications tab refreshes automatically showing the new call
 
 ---
 
-## Step 9 — Keep web builds up to date
+## Step 7 — Keep the app in sync
 
-After making changes to the web app:
-
+After web app changes:
 ```bash
 npm run build
 npx cap sync ios
 ```
-
-Then rebuild in Xcode.
+Then rebuild in Xcode (⌘R).
 
 ---
 
-## Step 10 — Distribute via TestFlight
-
-### Archive the build
+## Step 8 — TestFlight distribution
 
 1. In Xcode: **Product → Archive**
-2. The Organizer window opens automatically
-
-### Upload to App Store Connect
-
-1. Click **Distribute App** → **App Store Connect** → **Upload**
-2. Follow the prompts (leave all defaults)
-
-### Create TestFlight build
-
-1. Go to [App Store Connect](https://appstoreconnect.apple.com)
-2. Your app → **TestFlight** tab
-3. Wait for processing (~10 minutes)
-4. Add yourself as an internal tester
-5. You'll receive an email invite → install via TestFlight app
+2. Click **Distribute App** → **App Store Connect** → **Upload**
+3. Go to [App Store Connect](https://appstoreconnect.apple.com) → TestFlight
+4. Wait ~10 minutes for processing
+5. Add yourself as internal tester → install via TestFlight app
 
 ---
 
@@ -236,37 +183,30 @@ Then rebuild in Xcode.
 | `TWILIO_ACCOUNT_SID` | Twilio Console → Account Info | Yes |
 | `TWILIO_AUTH_TOKEN` | Twilio Console → Account Info | Yes |
 | `TWILIO_PHONE_NUMBER` | Twilio Console → Phone Numbers | Yes |
-| `TWILIO_API_KEY` | Twilio Console → API Keys → Create Standard | **New — required for iOS** |
-| `TWILIO_API_SECRET` | Twilio Console → API Keys (shown once at creation) | **New — required for iOS** |
-| `TWILIO_CLIENT_IDENTITY` | Set to any string (default: `treemarkables-owner`) | Optional |
-| `HERO_PHONE_NUMBER` | Your real NZ mobile number (+64...) | Optional (fallback while transitioning) |
+| `TWILIO_API_KEY` | Twilio Console → API Keys → Create Standard | **iOS required** |
+| `TWILIO_API_SECRET` | Shown once at API Key creation | **iOS required** |
+| `TWILIO_CLIENT_IDENTITY` | Any string (default: `treemarkables-owner`) | Optional |
+| `HERO_PHONE_NUMBER` | Your real NZ mobile (+64...) | Optional fallback |
 
 ---
 
 ## Troubleshooting
 
 **CallKit screen doesn't appear**
-- Make sure the app has been launched at least once after install
-- Check that VoIP background mode capability is added in Xcode
-- Verify `com.apple.developer.pushkit.unrestricted-voip` is in the entitlements file
+- App must be launched at least once after install before VoIP push works
+- Check that VoIP background mode capability is in Xcode
+- Verify `com.apple.developer.pushkit.unrestricted-voip` is in entitlements
 
 **Token fetch fails (503)**
 - Set `TWILIO_API_KEY` and `TWILIO_API_SECRET` in Replit Secrets
 - Restart the deployed app after adding secrets
 
 **Call connects but no audio**
-- Make sure `Audio, AirPlay, Picture in Picture` background mode is enabled in Xcode
-- The `provider(_:didActivate:)` CallKit delegate routes audio through Twilio
+- Ensure `Audio, AirPlay, Picture in Picture` background mode is checked in Xcode
 
 **Build fails: TwilioVoice module not found**
 - Run `pod install` inside `ios/App/`
-- Always open `App.xcworkspace` (not `.xcodeproj`)
+- Open `App.xcworkspace` not `.xcodeproj`
 
-**Podfile issue: 'TwilioVoice' not found**
-- Check you're on CocoaPods 1.11+: `pod --version`
-- Try: `pod repo update` then `pod install` again
-
-**[TwilioVoice] Registration error / no delegate callbacks**
-- Ensure `register()` was called from JS with a valid token
-- Token endpoint returns 503 if API Key secrets are not set
-- Token endpoint returns 401 if not logged in — log in first
+**Setup script fails on pod install**
+- Run `pod repo update` then re-run `./scripts/ios-setup.sh`
