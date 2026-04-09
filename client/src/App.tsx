@@ -527,9 +527,18 @@ function Router() {
   
   // On native Capacitor app, skip public website and go straight to login
   // Authenticated users hitting '/' go straight to the dispatch board (handles PWA launches,
-  // back-button presses and any other navigation that lands on the root URL)
+  // back-button presses, iframe restarts, and any other navigation that lands on the root URL)
   if (location === '/') {
-    if (!isLoading && isAuthenticated) {
+    // While we're still checking auth, show a neutral spinner rather than flashing the public
+    // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+    if (isAuthenticated) {
       return <Redirect to="/dispatch" />;
     }
     const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
