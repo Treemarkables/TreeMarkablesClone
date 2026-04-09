@@ -16495,7 +16495,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (!existing) return res.status(404).json({ success: false, message: 'Message not found' });
       if (existing.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending messages can be edited' });
       const { message } = req.body;
-      const updated = await storage.updatePendingOutboundMessage(req.params.id, { message });
+      if (!message || !message.trim()) {
+        return res.status(400).json({ success: false, message: 'Message cannot be blank' });
+      }
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, { message: message.trim() });
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error updating pending message:', error);
@@ -16546,7 +16549,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (msg.jobId) {
         await storage.createJobDiaryEntry({
           jobId: msg.jobId,
-          entryType: 'sms',
+          entryType: msg.channel === 'email' ? 'email' : 'sms',
           title: 'Holding message sent to customer',
           content: msg.message,
           metadata: {

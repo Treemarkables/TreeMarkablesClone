@@ -348,7 +348,7 @@ export default function CommunicationsManagement() {
                             disabled={approveMutation.isPending || editingMessageId === msg.id}
                           >
                             {approveMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Send className="w-3 h-3 mr-1" />}
-                            Send
+                            Approve
                           </Button>
                           <Button
                             size="sm"
@@ -367,7 +367,7 @@ export default function CommunicationsManagement() {
                             disabled={rejectMutation.isPending}
                           >
                             <X className="w-3 h-3 mr-1" />
-                            Dismiss
+                            Reject
                           </Button>
                           {msg.jobId && (
                             <Button size="sm" variant="ghost" onClick={() => navigate(`/jobs/${msg.jobId}`)}>
