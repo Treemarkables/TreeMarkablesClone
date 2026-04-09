@@ -117,10 +117,10 @@ export default function WhyChooseUs() {
       </section>
 
       {/* ── Bottom: How We Do Every Job ── */}
-      <section id="process" className="py-16 bg-muted/30">
+      <section id="process" className="py-8 bg-muted/30">
         <div className="max-w-6xl mx-auto px-6">
           {/* Heading */}
-          <div className="text-center mb-10">
+          <div className="text-center mb-6">
             <h2
               className="font-extrabold text-foreground mb-3"
               style={{ fontSize: "clamp(24px, 4vw, 42px)", fontFamily: "'TT Norms Pro', sans-serif" }}
@@ -133,23 +133,23 @@ export default function WhyChooseUs() {
           </div>
 
           {/* Steps */}
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {steps.map((step) => {
               const Icon = step.icon;
               return (
                 <div
                   key={step.number}
-                  className="bg-background rounded-2xl p-5 shadow-sm border border-border/50"
+                  className="bg-background rounded-xl p-4 shadow-sm border border-border/50"
                   data-testid={`card-process-${step.number - 1}`}
                 >
-                  <Icon className="h-7 w-7 text-muted-foreground mb-4" data-testid={`icon-process-${step.number - 1}`} />
-                  <p className="text-sm font-bold mb-1" style={{ color: "#39FF14" }}>
+                  <Icon className="h-6 w-6 text-muted-foreground mb-3" data-testid={`icon-process-${step.number - 1}`} />
+                  <p className="text-base font-bold mb-1" style={{ color: "#39FF14" }}>
                     {step.number}
                   </p>
-                  <h3 className="font-bold text-foreground mb-2" data-testid={`title-process-${step.number - 1}`}>
+                  <h3 className="text-lg font-bold text-foreground mb-1.5" data-testid={`title-process-${step.number - 1}`}>
                     {step.title}
                   </h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid={`description-process-${step.number - 1}`}>
+                  <p className="text-base text-muted-foreground leading-relaxed" data-testid={`description-process-${step.number - 1}`}>
                     {step.description}
                   </p>
                 </div>
@@ -160,7 +160,7 @@ export default function WhyChooseUs() {
           {/* Trust badges */}
           <div className="flex flex-wrap justify-center gap-6">
             {trustBadges.map((badge) => (
-              <div key={badge} className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <div key={badge} className="flex items-center gap-2 text-base font-bold text-muted-foreground">
                 <Check className="h-4 w-4 flex-shrink-0" style={{ color: "#39FF14" }} />
                 {badge}
               </div>
