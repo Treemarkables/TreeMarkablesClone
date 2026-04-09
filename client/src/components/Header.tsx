@@ -8,7 +8,7 @@ import {
 import { Phone, Mail, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-const logoImage = "/treemarkables-logo.png";
+const logoImage = "/treemarkables-logo-green.png";
 
 // Declare gtag and gtag_report_conversion for TypeScript
 declare global {
