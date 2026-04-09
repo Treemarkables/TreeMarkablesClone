@@ -6094,6 +6094,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           // Update job's lastActivityAt to trigger activity indicator and sorting
           await storage.updateJob(recentJob.id, { lastActivityAt: new Date() });
           console.log(`✅ SMS logged to job #${recentJob.jobNumber} diary`);
+
+          // Detect reschedule intent → alert dispatcher to re-propose a time slot
+          const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
+          if (rescheduleKeywords.test(Body)) {
+            await storage.createNotification({
+              title: `Reschedule requested — Job #${recentJob.jobNumber}`,
+              message: `Customer ${customer.name} may be requesting a new time slot for Job #${recentJob.jobNumber} via SMS. Consider re-proposing via AI Smart Dispatch.`,
+              type: 'reschedule_request',
+              priority: 'high',
+              isRead: false,
+              actionUrl: '/ai-scheduler',
+              jobId: recentJob.id,
+            }).catch(() => { /* non-critical */ });
+          }
         } else {
           console.log(`⚠️ No jobs found for customer ${customer.name}`);
         }
@@ -11616,6 +11630,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       if (typeof rawBody.defaultGrossMarginPct === 'number') {
         rawBody.defaultGrossMarginPct = String(rawBody.defaultGrossMarginPct);
       }
+      if (typeof rawBody.dailyRevenueTarget === 'number') {
+        rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
+      }
 
       const validationResult = updateBusinessSettingsSchema.safeParse(rawBody);
       if (!validationResult.success) {
@@ -13451,6 +13468,18 @@ Transcription: ${transcriptText}`;
             jobId: job.id,
             metadata: { emailAddress: actualFromEmail || actualFrom }
           });
+          // Detect reschedule intent → alert dispatcher to re-propose a time slot
+          const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
+          if (rescheduleKeywords.test(cleanedBody)) {
+            await notificationHelper.createNotification({
+              type: 'reschedule_request',
+              title: `Reschedule requested — Job #${job.jobNumber}`,
+              message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+              jobId: job.id,
+              metadata: { emailAddress: actualFromEmail || actualFrom, trigger: 'email_reply' },
+              actionUrl: '/ai-scheduler',
+            });
+          }
         } catch (notifError) {
           console.error('Failed to create email reply notification:', notifError);
         }
@@ -13510,6 +13539,19 @@ Transcription: ${transcriptText}`;
             
             await storage.createNotification(notificationData);
             console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+            // Detect reschedule intent → alert dispatcher to re-propose a time slot
+            const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
+            if (rescheduleKeywords.test(cleanedBody)) {
+              await storage.createNotification({
+                title: `Reschedule requested — Job #${job.jobNumber}`,
+                message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+                type: 'reschedule_request',
+                priority: 'high',
+                isRead: false,
+                actionUrl: '/ai-scheduler',
+                jobId: job.id,
+              });
+            }
           } catch (notifError) {
             console.error('Error creating email reply notification:', notifError);
             // Don't fail the request if notification creation fails
@@ -21560,8 +21602,10 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
 
           // 6. Validate licence requirements for equipment
           const required = eq.licenceRequired;
-          if (required && required.trim() !== '') {
-            const requiredLower = required.toLowerCase();
+          // Sentinel values that mean "no licence required"
+          const NO_LICENCE_SENTINELS = new Set(['none', 'none required', 'n/a', 'na', 'not required', 'no requirement', 'any', '']);
+          if (required && !NO_LICENCE_SENTINELS.has(required.trim().toLowerCase())) {
+            const requiredLower = required.trim().toLowerCase();
             const hasLicence = Array.from(staffLicences).some(l =>
               l.includes(requiredLower) || requiredLower.includes(l)
             );
