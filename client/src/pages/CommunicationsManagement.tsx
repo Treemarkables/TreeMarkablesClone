@@ -74,36 +74,50 @@ export default function CommunicationsManagement() {
   const pendingCount = pendingMessages.filter(m => m.status === 'pending').length;
 
   const approveMutation = useMutation({
-    mutationFn: (id: string) => apiRequest('POST', `/api/pending-messages/${id}/approve`, {}),
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('POST', `/api/pending-messages/${id}/approve`, {});
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to send');
+      return json;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pending-messages"] });
       toast({ title: "Message sent", description: "The holding message has been sent to the customer." });
     },
-    onError: () => {
-      toast({ title: "Failed to send", description: "Could not send the message.", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Could not send", description: err.message, variant: "destructive" });
     },
   });
 
   const rejectMutation = useMutation({
-    mutationFn: (id: string) => apiRequest('POST', `/api/pending-messages/${id}/reject`, {}),
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('POST', `/api/pending-messages/${id}/reject`, {});
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to dismiss');
+      return json;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pending-messages"] });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Could not dismiss the message.", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
 
   const editMutation = useMutation({
-    mutationFn: ({ id, message }: { id: string; message: string }) =>
-      apiRequest('PATCH', `/api/pending-messages/${id}`, { message }),
+    mutationFn: async ({ id, message }: { id: string; message: string }) => {
+      const res = await apiRequest('PATCH', `/api/pending-messages/${id}`, { message });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to save edit');
+      return json;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/pending-messages"] });
       setEditingMessageId(null);
       setEditingText("");
     },
-    onError: () => {
-      toast({ title: "Error", description: "Could not save the edit.", variant: "destructive" });
+    onError: (err: Error) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     },
   });
 
