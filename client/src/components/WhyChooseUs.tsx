@@ -22,10 +22,10 @@ const whyCards = [
 ];
 
 const steps = [
-  { number: 1, icon: ScanSearch, title: "On-Site Assessment", description: "We assess access, risk and scope." },
-  { number: 2, icon: ReceiptText, title: "Clear Plan & Quote", description: "No hidden fees. All clear upfront." },
-  { number: 3, icon: Axe, title: "Controlled Removal", description: "Skilled crew, right gear, precise work." },
-  { number: 4, icon: Sparkles, title: "Thorough Clean-Up", description: "Your property left tidy and safe to use." },
+  { number: 1, icon: ScanSearch, title: "On-Site Assessment", description: "We assess access, risk and scope.", color: "#2563eb", bg: "#eff6ff" },
+  { number: 2, icon: ReceiptText, title: "Clear Plan & Quote", description: "No hidden fees. All clear upfront.", color: "#d97706", bg: "#fffbeb" },
+  { number: 3, icon: Axe, title: "Controlled Removal", description: "Skilled crew, right gear, precise work.", color: "#dc2626", bg: "#fef2f2" },
+  { number: 4, icon: Sparkles, title: "Thorough Clean-Up", description: "Your property left tidy and safe to use.", color: "#0891b2", bg: "#ecfeff" },
 ];
 
 const trustBadges = ["5+ Years Experience", "Fully Insured", "Local Gisborne Crew", "Fast Response"];
@@ -142,7 +142,12 @@ export default function WhyChooseUs() {
                   className="bg-background rounded-xl p-4 shadow-sm border border-border/50"
                   data-testid={`card-process-${step.number - 1}`}
                 >
-                  <Icon className="h-6 w-6 text-muted-foreground mb-3" data-testid={`icon-process-${step.number - 1}`} />
+                  <div
+                    className="w-10 h-10 rounded-lg flex items-center justify-center mb-3"
+                    style={{ background: step.bg }}
+                  >
+                    <Icon className="h-5 w-5" style={{ color: step.color }} data-testid={`icon-process-${step.number - 1}`} />
+                  </div>
                   <p className="text-base font-bold mb-1" style={{ color: "#39FF14" }}>
                     {step.number}
                   </p>
