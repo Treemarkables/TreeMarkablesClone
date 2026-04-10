@@ -3111,12 +3111,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 Confirmed
                               </Badge>
                             )}
-                            {job.etaNotificationRequested && (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
-                                <Bell className="h-3 w-3 mr-1" />
-                                Notify ETA
-                              </Badge>
-                            )}
                             <Badge
                               className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}
                             >
@@ -3204,81 +3198,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               data-testid={`message-button-${job.id}`}
                             >
                               <MessageSquare className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              title={
-                                job.inQueue
-                                  ? "Remove from Queue"
-                                  : "Add to Queue"
-                              }
-                              className={
-                                job.inQueue
-                                  ? "border-amber-300 bg-amber-50 rounded-lg"
-                                  : "rounded-lg"
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (job.inQueue) {
-                                  queueJobMutation.mutate({
-                                    id: job.id,
-                                    inQueue: false,
-                                    queueReason: null,
-                                  });
-                                } else {
-                                  setQueueTargetJob(job);
-                                  setQueueReasonInput("");
-                                  setShowQueueDialog(true);
-                                }
-                              }}
-                            >
-                              <Inbox
-                                className={`h-4 w-4 ${job.inQueue ? "text-amber-600" : "text-gray-500"}`}
-                              />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              title={
-                                job.customerConfirmed
-                                  ? "Mark as Unconfirmed"
-                                  : "Mark as Confirmed"
-                              }
-                              className={
-                                job.customerConfirmed
-                                  ? "border-green-300 bg-green-50 rounded-lg"
-                                  : "rounded-lg"
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmJobMutation.mutate({
-                                  id: job.id,
-                                  customerConfirmed: !job.customerConfirmed,
-                                });
-                              }}
-                            >
-                              <Check
-                                className={`h-4 w-4 ${job.customerConfirmed ? "text-green-600" : "text-gray-500"}`}
-                              />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              title="Archive job (remove from board)"
-                              className="rounded-lg hover:border-red-300 hover:bg-red-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (
-                                  window.confirm(
-                                    "Archive this job? It will be removed from the board and staff schedule.",
-                                  )
-                                ) {
-                                  archiveJobQuickMutation.mutate(job.id);
-                                }
-                              }}
-                            >
-                              <X className="h-4 w-4 text-gray-500" />
                             </Button>
                           </div>
                         </div>
