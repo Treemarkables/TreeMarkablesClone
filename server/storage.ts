@@ -3757,9 +3757,11 @@ class DatabaseStorage implements IStorage {
   }
   async getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]> {
     let query = db.select().from(schema.notifications);
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      query = query.where(eq(schema.notifications.userId, userId)) as any;
+      conditions.push(eq(schema.notifications.userId, userId));
     }
+    query = query.where(and(...conditions)) as any;
     if (limit) {
       query = query.limit(limit) as any;
     }
@@ -3797,7 +3799,7 @@ class DatabaseStorage implements IStorage {
     );
   }
   async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
-    const conditions = [eq(schema.notifications.isRead, false)];
+    const conditions = [eq(schema.notifications.isRead, false), eq(schema.notifications.archived, false)];
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
@@ -3825,35 +3827,42 @@ class DatabaseStorage implements IStorage {
     return updatedNotification;
   }
   async markAllNotificationsAsRead(userId?: string): Promise<void> {
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      await db.update(schema.notifications)
-        .set({ isRead: true, readAt: new Date() })
-        .where(eq(schema.notifications.userId, userId));
-    } else {
-      await db.update(schema.notifications)
-        .set({ isRead: true, readAt: new Date() });
+      conditions.push(eq(schema.notifications.userId, userId));
     }
+    await db.update(schema.notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(and(...conditions));
   }
   async deleteNotification(id: string): Promise<void> {
-    await db.delete(schema.notifications).where(eq(schema.notifications.id, id));
+    // Archive instead of delete — keeps the record for reminder de-dup so the
+    // same reminder isn't immediately recreated on the next hourly check.
+    await db.update(schema.notifications)
+      .set({ archived: true })
+      .where(eq(schema.notifications.id, id));
   }
   async deleteAllNotifications(userId?: string): Promise<void> {
+    // Archive instead of delete — keeps records for reminder de-dup so the
+    // same reminders aren't immediately recreated on the next hourly check.
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      await db.delete(schema.notifications).where(eq(schema.notifications.userId, userId));
-    } else {
-      await db.delete(schema.notifications);
+      conditions.push(eq(schema.notifications.userId, userId));
     }
+    await db.update(schema.notifications)
+      .set({ archived: true })
+      .where(and(...conditions));
   }
   async getNotificationSummary(userId?: string): Promise<NotificationSummary> {
-    // Get all notifications for the user (or all if no userId)
-    let query = db.select().from(schema.notifications);
-    
-    // Only add where clause if userId is provided
+    // Get all non-archived notifications for the user (or all if no userId)
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      query = query.where(eq(schema.notifications.userId, userId)) as any;
+      conditions.push(eq(schema.notifications.userId, userId));
     }
-    
-    const rawNotifications = await query.orderBy(desc(schema.notifications.createdAt));
+    const rawNotifications = await db.select()
+      .from(schema.notifications)
+      .where(and(...conditions))
+      .orderBy(desc(schema.notifications.createdAt));
     
     // Filter out notifications for completed jobs
     const allNotifications = await this.filterCompletedJobNotifications(rawNotifications);
