@@ -371,6 +371,27 @@ export function NotificationBell() {
     },
   });
 
+  // Helper to optimistically zero out the summary badge
+  const optimisticClearSummary = (clearTotal = false) => {
+    queryClient.setQueryData(["/api/notifications/summary"], (old: any) => {
+      if (!old?.data) return old;
+      return {
+        ...old,
+        data: {
+          ...old.data,
+          unread: 0,
+          ...(clearTotal ? { total: 0, recent: [] } : {}),
+        },
+      };
+    });
+    if (clearTotal) {
+      queryClient.setQueryData(["/api/notifications"], (old: any) => {
+        if (!old?.data) return old;
+        return { ...old, data: [] };
+      });
+    }
+  };
+
   // Mark all as read mutation
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
@@ -378,7 +399,26 @@ export function NotificationBell() {
         userId: undefined,
       });
     },
-    onSuccess: () => {
+    onMutate: () => {
+      optimisticClearSummary(false);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/notifications/summary"],
+      });
+    },
+  });
+
+  // Delete ALL notifications mutation
+  const deleteAllNotificationsMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", "/api/notifications");
+    },
+    onMutate: () => {
+      optimisticClearSummary(true);
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/notifications/summary"],
@@ -633,6 +673,19 @@ export function NotificationBell() {
                   >
                     <Check className="h-3 w-3 mr-1" />
                     Mark all read
+                  </Button>
+                )}
+                {summary.total > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => deleteAllNotificationsMutation.mutate()}
+                    disabled={deleteAllNotificationsMutation.isPending}
+                    className="text-xs text-destructive hover:text-destructive"
+                    data-testid="button-delete-all-notifications"
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" />
+                    Clear all
                   </Button>
                 )}
               </div>

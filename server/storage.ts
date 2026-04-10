@@ -418,6 +418,7 @@ export interface IStorage {
   markNotificationAsRead(id: string): Promise<Notification>;
   markAllNotificationsAsRead(userId?: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
+  deleteAllNotifications(userId?: string): Promise<void>;
   getNotificationSummary(userId?: string): Promise<NotificationSummary>;
   deleteExpiredNotifications(): Promise<void>;
 
@@ -3835,6 +3836,13 @@ class DatabaseStorage implements IStorage {
   }
   async deleteNotification(id: string): Promise<void> {
     await db.delete(schema.notifications).where(eq(schema.notifications.id, id));
+  }
+  async deleteAllNotifications(userId?: string): Promise<void> {
+    if (userId) {
+      await db.delete(schema.notifications).where(eq(schema.notifications.userId, userId));
+    } else {
+      await db.delete(schema.notifications);
+    }
   }
   async getNotificationSummary(userId?: string): Promise<NotificationSummary> {
     // Get all notifications for the user (or all if no userId)

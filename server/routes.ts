@@ -9053,7 +9053,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  // Delete notification
+  // Delete ALL notifications
+  app.delete('/api/notifications', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.userId as string | undefined;
+      await storage.deleteAllNotifications(userId);
+      res.json({ success: true, message: 'All notifications deleted' });
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+      res.status(500).json({ success: false, message: 'Error deleting notifications' });
+    }
+  });
+
   app.delete('/api/notifications/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
