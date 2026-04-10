@@ -20560,6 +20560,57 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Native iOS FCM token registration (bypasses session auth using webhook secret)
+  // Called directly by Swift code in the Capacitor app
+  app.post("/api/notifications/register-native-fcm-token", async (req, res) => {
+    try {
+      const webhookSecret = req.headers['x-webhook-secret'];
+      const expectedSecret = process.env.HERO_WEBHOOK_SECRET;
+      if (!expectedSecret || webhookSecret !== expectedSecret) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      const { token, employeeId, deviceInfo } = req.body;
+      if (!token || !employeeId) {
+        return res.status(400).json({ success: false, message: 'token and employeeId are required' });
+      }
+
+      // Verify employee exists
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+      }
+
+      // Check if token already exists
+      const existingToken = await storage.getFcmTokenByToken(token);
+      if (existingToken) {
+        await storage.markFcmTokenAsUsed(token);
+        console.log(`✅ Native FCM token already registered for employee ${employeeId}`);
+        return res.json({ success: true, message: 'Token already registered' });
+      }
+
+      // Create new token
+      await storage.createFcmToken({
+        employeeId,
+        token,
+        deviceInfo: deviceInfo || 'iOS Native',
+        isActive: true
+      });
+
+      // Create default notification preferences if they don't exist
+      const existingPrefs = await storage.getNotificationPreferences(employeeId);
+      if (!existingPrefs) {
+        await storage.createNotificationPreferences({ employeeId });
+      }
+
+      console.log(`✅ Native FCM token registered for employee ${employeeId} (${employee.name})`);
+      res.json({ success: true, message: 'Native token registered successfully' });
+    } catch (error) {
+      console.error('Error registering native FCM token:', error);
+      res.status(500).json({ success: false, message: 'Failed to register token' });
+    }
+  });
+
   // Get notification preferences
   app.get("/api/notifications/preferences", async (req, res) => {
     try {
