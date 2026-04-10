@@ -617,11 +617,11 @@ export function NotificationBell() {
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-22 w-22"
+          className="relative h-16 w-16"
           data-testid="button-notifications"
         >
           <Bell
-            className={`h-12 w-12 fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? "animate-pulse" : ""}`}
+            className={`h-16 w-16 fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? "animate-pulse" : ""}`}
           />
           {summary.unread > 0 && (
             <>

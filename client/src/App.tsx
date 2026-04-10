@@ -201,16 +201,16 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             className="md:hidden flex items-center justify-between px-2 py-1 border-b bg-white"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.25rem)" }}
           >
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
                 className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
               />
+              {/* Notifications Bell - Mobile (left side, away from refresh) */}
+              {isAdmin && <NotificationBell />}
             </div>
             
             <div className="flex items-center gap-2">
-              {/* Notifications Bell - Mobile */}
-              {isAdmin && <NotificationBell />}
               
               {/* Refresh Button - Mobile */}
               <Tooltip>
