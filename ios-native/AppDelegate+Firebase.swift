@@ -135,6 +135,27 @@ extension NotificationHandler: MessagingDelegate {
     }
 }
 
+// Capacitor uses ApplicationDelegateProxy which can block Firebase's automatic
+// APNs token swizzling. This extension manually forwards the APNs device token
+// to Firebase Messaging so it can exchange it for an FCM token.
+extension AppDelegate {
+
+    func application(
+        _ application: UIApplication,
+        didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
+    ) {
+        print("✅ APNs device token received (\(deviceToken.count) bytes) — forwarding to Firebase")
+        Messaging.messaging().apnsToken = deviceToken
+    }
+
+    func application(
+        _ application: UIApplication,
+        didFailToRegisterForRemoteNotificationsWithError error: Error
+    ) {
+        print("⚠️ APNs registration failed: \(error.localizedDescription)")
+    }
+}
+
 extension NotificationHandler: UNUserNotificationCenterDelegate {
 
     func userNotificationCenter(
