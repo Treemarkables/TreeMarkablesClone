@@ -122,6 +122,14 @@
     </script>
     -->
     
+    <!-- iOS Capacitor FCM bridge: capture native token before React mounts -->
+    <script>
+      window.__pendingNativeFcmToken = null;
+      window.addEventListener('nativeFcmToken', function(e) {
+        window.__pendingNativeFcmToken = e.detail || null;
+        console.log('[FCM] Native token captured early:', e.detail ? e.detail.substring(0, 20) + '...' : 'none');
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
