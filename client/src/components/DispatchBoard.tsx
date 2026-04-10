@@ -2920,7 +2920,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>
 
           {/* Status Filter Tabs - Mobile */}
-          <div className="px-4 py-2 bg-white border-b flex gap-1.5">
+          <div className="px-4 py-2 bg-white border-b flex gap-1.5 overflow-x-auto">
             {STATUS_TAB_FILTERS.map((tab) => (
               <button
                 key={tab.value}
@@ -2941,8 +2941,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>{/* end header group */}
 
           {/* Jobs List - scrollable area */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="divide-y divide-gray-100">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
                 const total = calculateJobTotal(job);
@@ -3048,11 +3048,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
                     onClick={() => handleEditJob(job)}
                     data-testid={`job-card-${job.id}`}
                   >
-                    <div className="flex items-start gap-3 p-4">
+                    <div className="flex items-start gap-3 p-4 min-w-0 overflow-hidden">
                       {/* Customer Avatar - Large Circle */}
                       <div className="relative flex-shrink-0">
                         <CustomerAvatar
