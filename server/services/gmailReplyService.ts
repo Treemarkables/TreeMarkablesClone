@@ -432,20 +432,30 @@ class GmailReplyService {
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
         
         // Create notification for email reply so it appears in notification bell
+        // De-dup: skip if an email_reply notification for this job was already created in the last 24h
+        // (includes archived records so the guard survives a "Clear all")
         try {
           const { storage } = await import('../storage.js');
-          const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
-          
-          await storage.createNotification({
-            title: `📧 Email Reply from ${customer.name}`,
-            message: emailPreview || `Re: ${email.subject}`,
-            type: 'email_reply',
-            priority: 'medium',
-            jobId: job.id,
-            customerId: job.customerId,
-            actionUrl: `/dispatch?job=${job.id}`
-          });
-          console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
+          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+          const jobAlreadyNotified = recentNotifs.some(
+            (n) => n.type === 'email_reply' && n.jobId === job.id
+          );
+          if (!jobAlreadyNotified) {
+            const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
+            await storage.createNotification({
+              title: `📧 Email Reply from ${customer.name}`,
+              message: emailPreview || `Re: ${email.subject}`,
+              type: 'email_reply',
+              priority: 'medium',
+              jobId: job.id,
+              customerId: job.customerId,
+              actionUrl: `/dispatch?job=${job.id}`
+            });
+            console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
+          } else {
+            console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber}`);
+          }
         } catch (notifError) {
           console.error('Error creating email reply notification:', notifError);
         }
