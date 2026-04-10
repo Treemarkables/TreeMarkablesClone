@@ -2783,7 +2783,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
 
         {/* Mobile Layout: ServiceM8-style job cards */}
-        <div className="lg:hidden flex flex-col flex-1 min-h-0 bg-gray-50">
+        <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-x-hidden bg-gray-50">
           {/* Header group — flex-shrink-0 keeps it pinned at top while job list scrolls below */}
           <div className="flex-shrink-0 z-50">
           {/* Header with Create Buttons */}
@@ -3106,7 +3106,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
                             {job.inQueue && (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs max-w-[8rem] truncate">
                                 {job.queueReason || "Queued"}
                               </Badge>
                             )}
@@ -3141,7 +3141,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                         {/* Row 3: Description snippet */}
                         {job.description && (
-                          <p className="text-sm text-gray-500 line-clamp-3 mb-2">
+                          <p className="text-sm text-gray-500 line-clamp-3 mb-2 break-words overflow-hidden">
                             {job.description}
                           </p>
                         )}
