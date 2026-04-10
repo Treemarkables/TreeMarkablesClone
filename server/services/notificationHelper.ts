@@ -291,7 +291,50 @@ export async function findExistingOpenConversation(contact: string): Promise<any
 }
 
 /**
- * Create notification bell entry for new conversation
+ * Notify admins about an inbound SMS reply from a known customer
+ */
+export async function notifyCustomerSmsReply(customerName: string, messageBody: string, jobNumber?: string) {
+  try {
+    const title = jobNumber
+      ? `SMS from ${customerName} — Job #${jobNumber}`
+      : `SMS from ${customerName}`;
+    const body = messageBody.slice(0, 120) + (messageBody.length > 120 ? '…' : '');
+    return await pushToAdminsWithCustomerMessages({
+      title,
+      body,
+      clickAction: '/conversations',
+      data: { type: 'sms_reply', customerName, jobNumber: jobNumber || '' },
+    });
+  } catch (error) {
+    console.error('Error notifying SMS reply:', error);
+    return 0;
+  }
+}
+
+/**
+ * Send a push notification to all admin employees who have customerMessages enabled
+ */
+async function pushToAdminsWithCustomerMessages(options: NotificationOptions) {
+  try {
+    const employees = await storage.getAllEmployees();
+    const admins = employees.filter(emp => emp.role === 'admin');
+    let sent = 0;
+    for (const admin of admins) {
+      const prefs = await storage.getNotificationPreferences(admin.id);
+      if (prefs?.customerMessages !== false) {
+        const result = await notifyEmployee(admin.id, options);
+        if (result) sent++;
+      }
+    }
+    return sent;
+  } catch (error) {
+    console.error('Error pushing to admins:', error);
+    return 0;
+  }
+}
+
+/**
+ * Create notification bell entry for new conversation AND send push notification
  * Call this after successfully creating a conversation from real channels (not seed data)
  */
 export async function createConversationNotification(conversation: { 
@@ -314,10 +357,79 @@ export async function createConversationNotification(conversation: {
         serviceType: conversation.serviceType
       }
     });
-    console.log(`✅ Created notification bell entry for new conversation: ${conversation.id} (${conversation.source})`);
+
+    const sourceLabel = conversation.source === 'email' ? 'Email' :
+                        conversation.source === 'sms' ? 'SMS' :
+                        conversation.source === 'phone' ? 'Call' :
+                        conversation.source || 'Message';
+
+    await pushToAdminsWithCustomerMessages({
+      title: `New ${sourceLabel} Inquiry`,
+      body: conversation.title || 'New customer inquiry received',
+      clickAction: `/conversation/${conversation.id}`,
+      data: {
+        type: 'new_conversation',
+        conversationId: conversation.id,
+        source: conversation.source || '',
+      },
+    });
+
+    console.log(`✅ Created notification bell + push for new conversation: ${conversation.id} (${conversation.source})`);
     return true;
   } catch (error) {
     console.error('Error creating conversation notification:', error);
+    return false;
+  }
+}
+
+/**
+ * Send push notification for a reply received on an existing conversation
+ * Call this when a customer replies via email, SMS, or any channel
+ */
+export async function notifyConversationReply(conversation: {
+  id: string;
+  title: string | null;
+  source: string | null;
+  customerName?: string | null;
+}, replyPreview?: string) {
+  try {
+    const sourceLabel = conversation.source === 'email' ? 'Email' :
+                        conversation.source === 'sms' ? 'SMS' :
+                        conversation.source === 'phone' ? 'Call' :
+                        conversation.source || 'Message';
+
+    const senderName = conversation.customerName || conversation.title || 'Customer';
+    const bodyText = replyPreview
+      ? `${senderName}: ${replyPreview.slice(0, 100)}${replyPreview.length > 100 ? '…' : ''}`
+      : `${senderName} replied via ${sourceLabel}`;
+
+    await storage.createNotification({
+      title: `${sourceLabel} reply from ${senderName}`,
+      message: bodyText,
+      type: 'new_conversation',
+      priority: 'medium',
+      actionUrl: `/conversation/${conversation.id}`,
+      metadata: {
+        conversationId: conversation.id,
+        source: conversation.source,
+      }
+    });
+
+    const sent = await pushToAdminsWithCustomerMessages({
+      title: `${sourceLabel} Reply — ${senderName}`,
+      body: bodyText,
+      clickAction: `/conversation/${conversation.id}`,
+      data: {
+        type: 'conversation_reply',
+        conversationId: conversation.id,
+        source: conversation.source || '',
+      },
+    });
+
+    console.log(`✅ Sent conversation reply push to ${sent} admin(s): ${conversation.id}`);
+    return true;
+  } catch (error) {
+    console.error('Error sending conversation reply notification:', error);
     return false;
   }
 }
