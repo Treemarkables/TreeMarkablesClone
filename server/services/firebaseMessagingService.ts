@@ -21,6 +21,23 @@ class FirebaseMessagingService {
       // Parse the service account JSON
       const serviceAccountData = JSON.parse(serviceAccount);
 
+      // Fix common issue: private_key newlines double-escaped when pasted into secrets
+      if (serviceAccountData.private_key && serviceAccountData.private_key.includes('\\n')) {
+        serviceAccountData.private_key = serviceAccountData.private_key.replace(/\\n/g, '\n');
+      }
+
+      // Debug: log key format info (no sensitive data)
+      const pk = serviceAccountData.private_key || '';
+      console.log('🔑 Firebase key debug:', {
+        clientEmail: serviceAccountData.client_email,
+        projectId: serviceAccountData.project_id,
+        keyType: serviceAccountData.type,
+        keyStartsWith: pk.substring(0, 40),
+        hasActualNewlines: pk.includes('\n'),
+        hasEscapedNewlines: pk.includes('\\n'),
+        keyLength: pk.length,
+      });
+
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccountData),
       });
