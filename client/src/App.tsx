@@ -193,9 +193,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   };
   
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-screen overflow-hidden w-full">
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
             className="md:hidden flex items-center justify-between px-2 py-1 border-b bg-white"
