@@ -3105,11 +3105,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
-                            {job.inQueue && (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs max-w-[8rem] truncate">
-                                {job.queueReason || "Queued"}
-                              </Badge>
-                            )}
                             {job.customerConfirmed && (
                               <Badge className="bg-green-100 text-green-700 border-0 text-xs">
                                 <Check className="h-3 w-3 mr-1" />
@@ -3138,6 +3133,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Badge>
                           </div>
                         </div>
+
+                        {/* Queue reason row — own line so it never blocks the address */}
+                        {job.inQueue && job.queueReason && (
+                          <div className="mb-1.5">
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              {job.queueReason}
+                            </Badge>
+                          </div>
+                        )}
 
                         {/* Row 3: Description snippet */}
                         {job.description && (
