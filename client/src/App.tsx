@@ -440,7 +440,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             </div>
           </header>
           <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col pb-20 md:pb-0 md:pt-6" style={{ paddingBottom: 'max(5rem, calc(env(safe-area-inset-bottom) + 2rem))' }}>
-            <div className="flex-1 min-h-0 flex flex-col md:pb-0">
+            <div className="h-full flex flex-col md:pb-0">
               {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
             </div>
           </main>
