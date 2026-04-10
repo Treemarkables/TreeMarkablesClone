@@ -194,7 +194,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
 
   // Bridge for iOS Capacitor: the native Swift layer injects the FCM token
   // into the WKWebView via evaluateJavaScript dispatching 'nativeFcmToken'.
-  // We listen here (post-auth) and register the token with the server.
+  // index.html captures it early into window.__pendingNativeFcmToken so it
+  // is never lost even if React hasn't mounted yet. We drain it here once
+  // the authenticated layout is ready, and keep listening for future refreshes.
   useEffect(() => {
     const registerNativeToken = async (token: string) => {
       try {
@@ -203,7 +205,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ token, platform: 'ios' }),
+          body: JSON.stringify({ token, deviceInfo: 'iOS Capacitor' }),
         });
         const data = await res.json();
         if (data.success) {
@@ -216,6 +218,14 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       }
     };
 
+    // Drain any token captured before React mounted
+    const pending = (window as Window & { __pendingNativeFcmToken?: string }).__pendingNativeFcmToken;
+    if (pending) {
+      (window as Window & { __pendingNativeFcmToken?: string }).__pendingNativeFcmToken = undefined;
+      registerNativeToken(pending);
+    }
+
+    // Keep listening for future token refreshes (Firebase rotates tokens occasionally)
     const handler = (e: Event) => {
       const token = (e as CustomEvent<string>).detail;
       if (token) registerNativeToken(token);
