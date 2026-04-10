@@ -2783,9 +2783,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
 
         {/* Mobile Layout: ServiceM8-style job cards */}
-        <div className="lg:hidden flex flex-col bg-gray-50">
-          {/* Sticky header group — blue bar + search + filter tabs stay visible while jobs list scrolls */}
-          <div className="sticky top-0 z-50">
+        <div className="lg:hidden flex flex-col flex-1 min-h-0 bg-gray-50">
+          {/* Header group — flex-shrink-0 keeps it pinned at top while job list scrolls below */}
+          <div className="flex-shrink-0 z-50">
           {/* Header with Create Buttons */}
           <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center justify-center gap-3">
             <DropdownMenu>
@@ -2938,10 +2938,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </button>
             ))}
           </div>
-          </div>{/* end sticky header group */}
+          </div>{/* end header group */}
 
-          {/* Jobs List - ServiceM8 Style */}
-          <div>
+          {/* Jobs List - scrollable area */}
+          <div className="flex-1 overflow-y-auto">
             <div className="divide-y divide-gray-100">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
