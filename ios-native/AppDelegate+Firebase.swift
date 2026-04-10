@@ -49,7 +49,7 @@ private enum NativeTokenRegistration {
     static let serverURL = "https://b1b82713-81e2-4cd2-b004-e7f1a6680937-00-c7s3o0favocw.spock.replit.dev"
 
     // ⚠️  FILL THIS IN — paste the value of HERO_WEBHOOK_SECRET from Replit Secrets.
-    static let webhookSecret = "REPLACE_WITH_HERO_WEBHOOK_SECRET"
+    static let webhookSecret = "TreemarkablesHero2026SecureWebhook"
 
     // Owner's employee UUID (correct for the Treemarkables production database).
     static let ownerEmployeeId = "7e093425-0023-4069-ae7a-8127656116a8"
