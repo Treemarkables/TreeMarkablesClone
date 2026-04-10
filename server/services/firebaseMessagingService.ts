@@ -54,7 +54,6 @@ class FirebaseMessagingService {
         notification: {
           title: notification.title,
           body: notification.body,
-          icon: notification.icon || '/icon-192.png',
         },
         data: notification.data || {},
         webpush: notification.clickAction ? {

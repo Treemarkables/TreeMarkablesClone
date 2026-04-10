@@ -20605,7 +20605,14 @@ Transcription: ${transcriptText}`;
   // Test notification endpoint (for debugging)
   app.post("/api/notifications/test", async (req, res) => {
     try {
-      const employeeId = req.session.employeeId;
+      const { adminSecret, targetEmployeeId } = req.body;
+      let employeeId = req.session.employeeId;
+
+      // Allow server-side admin trigger with webhook secret
+      if (!employeeId && adminSecret && adminSecret === process.env.HERO_WEBHOOK_SECRET) {
+        employeeId = targetEmployeeId;
+      }
+
       if (!employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
