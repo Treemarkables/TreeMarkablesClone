@@ -393,6 +393,20 @@ export async function notifyConversationReply(conversation: {
   customerName?: string | null;
 }, replyPreview?: string) {
   try {
+    // De-dup: skip if a notification for this conversation was already created in the last 24h.
+    // Uses getNotificationsCreatedSince which includes archived records, so the guard
+    // survives a "Clear all" and prevents the bell from immediately re-lighting.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentNotifications = await storage.getNotificationsCreatedSince(since);
+    const targetUrl = `/conversation/${conversation.id}`;
+    const alreadyNotified = recentNotifications.some(
+      (n) => n.type === 'new_conversation' && n.actionUrl === targetUrl
+    );
+    if (alreadyNotified) {
+      console.log(`✅ Skipping duplicate conversation reply notification for: ${conversation.id}`);
+      return true;
+    }
+
     const sourceLabel = conversation.source === 'email' ? 'Email' :
                         conversation.source === 'sms' ? 'SMS' :
                         conversation.source === 'phone' ? 'Call' :

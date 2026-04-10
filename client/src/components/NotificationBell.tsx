@@ -675,7 +675,7 @@ export function NotificationBell() {
                     Mark all read
                   </Button>
                 )}
-                {summary.total > 0 && (
+                {(summary.total > 0 || notifications.length > 0) && (
                   <Button
                     variant="ghost"
                     size="sm"
