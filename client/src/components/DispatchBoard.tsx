@@ -623,6 +623,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isDeepSearchActive, setIsDeepSearchActive] = useState<boolean>(false);
+  const [showMobileSearch, setShowMobileSearch] = useState<boolean>(false);
   const [deepSearchResults, setDeepSearchResults] = useState<JobAssignment[]>(
     [],
   );
@@ -2786,157 +2787,168 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-x-hidden bg-gray-50">
           {/* Header group — flex-shrink-0 keeps it pinned at top while job list scrolls below */}
           <div className="flex-shrink-0 z-50">
-          {/* Header with Create Buttons */}
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center justify-center gap-3">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  data-testid="create-new-button-mobile"
-                  className="text-white hover:bg-white/20 text-sm font-medium"
-                >
-                  <Plus className="h-4 w-4 mr-1" />
-                  New
-                  <ChevronDown className="h-3 w-3 ml-1" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="center">
-                <DropdownMenuItem
-                  onClick={handleCreateLead}
-                  data-testid="create-lead-button-mobile"
-                >
-                  Lead
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setJobToEdit(null);
-                    setInitialJobData({ status: "quote" });
-                    setGlobalJobCardMode("create");
-                    setShowGlobalJobCard(true);
-                  }}
-                  data-testid="create-quote-button-mobile"
-                >
-                  Quote
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    setJobToEdit(null);
-                    setInitialJobData({ status: "invoiced" });
-                    setGlobalJobCardMode("create");
-                    setShowGlobalJobCard(true);
-                  }}
-                  data-testid="create-invoice-button-mobile"
-                >
-                  Invoice
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCreateFromMessageDialog(true)}
-              data-testid="paste-message-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Paste
-            </Button>
-          </div>
-
-          {/* Search Bar */}
-          <div className="px-4 py-3 bg-white border-b">
+          {/* Compact Blue Banner: actions + filters + search */}
+          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-3 pt-3 pb-2 flex flex-col gap-2">
+            {/* Row 1: New | Paste | spacer | Search icon */}
             <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (!e.target.value.trim()) {
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    data-testid="create-new-button-mobile"
+                    className="text-white hover:bg-white/20 text-sm font-medium"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    New
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem
+                    onClick={handleCreateLead}
+                    data-testid="create-lead-button-mobile"
+                  >
+                    Lead
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setJobToEdit(null);
+                      setInitialJobData({ status: "quote" });
+                      setGlobalJobCardMode("create");
+                      setShowGlobalJobCard(true);
+                    }}
+                    data-testid="create-quote-button-mobile"
+                  >
+                    Quote
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      setJobToEdit(null);
+                      setInitialJobData({ status: "invoiced" });
+                      setGlobalJobCardMode("create");
+                      setShowGlobalJobCard(true);
+                    }}
+                    data-testid="create-invoice-button-mobile"
+                  >
+                    Invoice
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowCreateFromMessageDialog(true)}
+                data-testid="paste-message-button-mobile"
+                className="text-white hover:bg-white/20 text-sm font-medium"
+              >
+                <MessageSquare className="h-4 w-4 mr-1" />
+                Paste
+              </Button>
+              <div className="flex-1" />
+              <Button
+                size="icon"
+                variant="ghost"
+                className="text-white hover:bg-white/20 rounded-full shrink-0"
+                onClick={() => {
+                  setShowMobileSearch((prev) => {
+                    if (prev) {
+                      setSearchQuery("");
                       setIsDeepSearchActive(false);
                       setDeepSearchResults([]);
                     }
-                  }}
-                  className="pl-10 pr-10 h-11 text-base bg-gray-50 border-gray-200 rounded-xl"
-                  data-testid="mobile-job-search-input"
-                />
-                {searchQuery && !isDeepSearchActive && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                    onClick={() => setSearchQuery("")}
-                    data-testid="btn-clear-search-mobile"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+                    return !prev;
+                  });
+                }}
+                data-testid="mobile-search-toggle"
+              >
+                {showMobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+              </Button>
+            </div>
+
+            {/* Row 2: Search input (when active) or filter chips */}
+            {showMobileSearch ? (
+              <div className="flex flex-col gap-1 pb-1">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60 pointer-events-none" />
+                    <Input
+                      autoFocus
+                      placeholder="Search jobs..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        if (!e.target.value.trim()) {
+                          setIsDeepSearchActive(false);
+                          setDeepSearchResults([]);
+                        }
+                      }}
+                      className="pl-9 pr-9 h-9 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/60 rounded-xl focus-visible:ring-white/40"
+                      data-testid="mobile-job-search-input"
+                    />
+                    {searchQuery && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-white/80 hover:bg-white/20"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setIsDeepSearchActive(false);
+                          setDeepSearchResults([]);
+                        }}
+                        data-testid="btn-clear-search-mobile"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {searchQuery.trim() && !isDeepSearchActive && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-white hover:bg-white/20 shrink-0 h-9 px-3"
+                      onClick={() => performDeepSearch(searchQuery)}
+                      disabled={isDeepSearchLoading}
+                      data-testid="btn-deep-search-mobile"
+                    >
+                      {isDeepSearchLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Search className="h-3.5 w-3.5 mr-1" />
+                          Deep
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
                 {isDeepSearchActive && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 text-blue-600"
-                    onClick={() => {
-                      setIsDeepSearchActive(false);
-                      setDeepSearchResults([]);
-                      setSearchQuery("");
-                    }}
-                    data-testid="btn-clear-deep-search-mobile"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 text-xs text-white/80 bg-white/10 px-2 py-1 rounded">
+                    <SearchX className="h-3 w-3" />
+                    {deepSearchResults.length} results found
+                  </div>
                 )}
               </div>
-              {/* Deep Search Button - Mobile */}
-              {searchQuery.trim() && !isDeepSearchActive && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-11 px-3 shrink-0"
-                  onClick={() => performDeepSearch(searchQuery)}
-                  disabled={isDeepSearchLoading}
-                  data-testid="btn-deep-search-mobile"
-                >
-                  {isDeepSearchLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-1" />
-                      Deep
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-            {/* Deep Search Status - Mobile */}
-            {isDeepSearchActive && (
-              <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-2">
-                <SearchX className="h-3 w-3" />
-                {deepSearchResults.length} results found
+            ) : (
+              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                {STATUS_TAB_FILTERS.map((tab) => (
+                  <button
+                    key={tab.value}
+                    onClick={() =>
+                      setJobFilter(jobFilter === tab.value ? "all" : tab.value)
+                    }
+                    className={`shrink-0 text-xs py-1 px-3 rounded-full font-medium transition-colors ${
+                      jobFilter === tab.value
+                        ? "bg-white text-blue-600"
+                        : "bg-white/20 text-white"
+                    }`}
+                    data-testid={`mobile-filter-tab-${tab.value}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
             )}
-          </div>
-
-          {/* Status Filter Tabs - Mobile */}
-          <div className="px-4 py-2 bg-white border-b flex gap-1.5 overflow-x-auto">
-            {STATUS_TAB_FILTERS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() =>
-                  setJobFilter(jobFilter === tab.value ? "all" : tab.value)
-                }
-                className={`flex-1 text-xs py-1.5 px-1 rounded-md font-medium transition-colors ${
-                  jobFilter === tab.value
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}
-                data-testid={`mobile-filter-tab-${tab.value}`}
-              >
-                {tab.label}
-              </button>
-            ))}
           </div>
           </div>{/* end header group */}
 
