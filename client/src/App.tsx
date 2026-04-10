@@ -191,6 +191,39 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
     
     setTimeout(() => setIsRefreshing(false), 500);
   };
+
+  // Bridge for iOS Capacitor: the native Swift layer injects the FCM token
+  // into the WKWebView via evaluateJavaScript dispatching 'nativeFcmToken'.
+  // We listen here (post-auth) and register the token with the server.
+  useEffect(() => {
+    const registerNativeToken = async (token: string) => {
+      try {
+        console.log('📱 Registering native iOS FCM token with server...');
+        const res = await fetch('/api/notifications/register-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ token, platform: 'ios' }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          console.log('✅ Native iOS FCM token registered successfully');
+        } else {
+          console.warn('⚠️ FCM token registration failed:', data.message);
+        }
+      } catch (err) {
+        console.error('❌ Error registering native FCM token:', err);
+      }
+    };
+
+    const handler = (e: Event) => {
+      const token = (e as CustomEvent<string>).detail;
+      if (token) registerNativeToken(token);
+    };
+
+    window.addEventListener('nativeFcmToken', handler);
+    return () => window.removeEventListener('nativeFcmToken', handler);
+  }, []);
   
   return (
     <div className="flex h-screen overflow-hidden w-full">

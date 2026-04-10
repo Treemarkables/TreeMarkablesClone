@@ -32,6 +32,7 @@
 // ───────────────────────────────────────────────────────────────────────────
 
 import UIKit
+import WebKit
 import FirebaseCore
 import FirebaseMessaging
 import UserNotifications
@@ -58,13 +59,68 @@ enum FirebaseSetup {
 final class NotificationHandler: NSObject {
     static let shared = NotificationHandler()
     private override init() {}
+
+    // Inject the FCM token into the Capacitor WKWebView so the web layer
+    // can register it with the server. Retries for up to 5 seconds to
+    // handle the case where the WebView isn't fully loaded yet on launch.
+    func bridgeTokenToWebView(_ token: String, attempt: Int = 0) {
+        guard attempt < 10 else {
+            print("⚠️ FCM bridge: WebView not found after 10 attempts")
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0 : 0.5)) {
+            guard let webView = self.findCapacitorWebView() else {
+                self.bridgeTokenToWebView(token, attempt: attempt + 1)
+                return
+            }
+
+            // Escape the token (FCM tokens are alphanumeric+symbols, no quotes)
+            let js = """
+            window.dispatchEvent(new CustomEvent('nativeFcmToken', { detail: '\(token)' }));
+            """
+            webView.evaluateJavaScript(js) { _, error in
+                if let error = error {
+                    print("⚠️ FCM bridge JS error: \(error)")
+                } else {
+                    print("✅ FCM token bridged to WebView")
+                }
+            }
+        }
+    }
+
+    // Recursively search the view hierarchy for a WKWebView
+    private func findCapacitorWebView() -> WKWebView? {
+        guard let windowScene = UIApplication.shared.connectedScenes
+            .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController else {
+            return nil
+        }
+        return findWebView(in: rootVC.view)
+    }
+
+    private func findWebView(in view: UIView) -> WKWebView? {
+        if let webView = view as? WKWebView { return webView }
+        for subview in view.subviews {
+            if let found = findWebView(in: subview) { return found }
+        }
+        return nil
+    }
 }
 
 extension NotificationHandler: MessagingDelegate {
 
     func messaging(_ messaging: Messaging, didReceiveRegistrationToken fcmToken: String?) {
         guard let token = fcmToken else { return }
-        print("✅ FCM token: \(token.prefix(30))...")
+        print("✅ FCM token received: \(token.prefix(30))...")
+
+        // Store for retrieval after WebView loads
+        UserDefaults.standard.set(token, forKey: "pendingFcmToken")
+
+        // Bridge immediately (and retry if WebView isn't ready yet)
+        bridgeTokenToWebView(token)
+
+        // Also post to NotificationCenter for any internal listeners
         NotificationCenter.default.post(
             name: Notification.Name("FCMTokenReceived"),
             object: nil,
