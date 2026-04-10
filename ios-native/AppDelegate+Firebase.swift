@@ -75,15 +75,21 @@ final class NotificationHandler: NSObject {
                 return
             }
 
-            // Escape the token (FCM tokens are alphanumeric+symbols, no quotes)
+            // Store in localStorage AND dispatch the event so both the
+            // early-capture listener (index.html) and any mounted React
+            // listener will receive it, even across page reloads.
             let js = """
-            window.dispatchEvent(new CustomEvent('nativeFcmToken', { detail: '\(token)' }));
+            (function() {
+              try { localStorage.setItem('__nativeFcmToken', '\(token)'); } catch(e) {}
+              window.__pendingNativeFcmToken = '\(token)';
+              window.dispatchEvent(new CustomEvent('nativeFcmToken', { detail: '\(token)' }));
+            })();
             """
             webView.evaluateJavaScript(js) { _, error in
                 if let error = error {
                     print("⚠️ FCM bridge JS error: \(error)")
                 } else {
-                    print("✅ FCM token bridged to WebView")
+                    print("✅ FCM token bridged to WebView (event + localStorage)")
                 }
             }
         }
