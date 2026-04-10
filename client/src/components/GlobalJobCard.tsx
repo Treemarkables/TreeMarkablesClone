@@ -3422,7 +3422,10 @@ The Treemarkables Team`;
           loadingContent
         ) : (
           <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-            <DialogContent className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+            <DialogContent
+              className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
+              style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+            >
               {loadingContent}
             </DialogContent>
           </Dialog>
@@ -3459,7 +3462,6 @@ The Treemarkables Team`;
       {/* ServiceM8-style Header - White with colored status badge */}
       <div
         className="border-b border-gray-200 bg-white px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg"
-        style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
       >
         <div className="flex items-center justify-between gap-2 sm:gap-4 relative">
           {/* Centred status badge — absolutely positioned so it floats in the middle of the header */}
@@ -9453,7 +9455,10 @@ The Treemarkables Team`;
       ) : (
         // Dialog rendering for mobile and standalone use
         <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-          <DialogContent className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+          <DialogContent
+            className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+          >
             {jobCardContent}
           </DialogContent>
         </Dialog>
