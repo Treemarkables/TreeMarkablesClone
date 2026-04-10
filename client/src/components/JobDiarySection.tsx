@@ -1610,12 +1610,17 @@ export function JobDiarySection({
                           }`}
                         >
                           {/* Email tracking for sent emails */}
-                          {isSent &&
-                          entry.type === "email" &&
-                          entry.metadata?.sendgridMessageId ? (
-                            <EmailActivity
-                              messageId={entry.metadata.sendgridMessageId}
-                            />
+                          {isSent && entry.type === "email" ? (
+                            entry.metadata?.sendgridMessageId ? (
+                              <EmailActivity
+                                messageId={entry.metadata.sendgridMessageId}
+                              />
+                            ) : (
+                              <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                <CheckCircle className="h-2.5 w-2.5" />
+                                <span>Sent</span>
+                              </div>
+                            )
                           ) : (
                             <div />
                           )}
