@@ -218,11 +218,21 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
       }
     };
 
-    // Drain any token captured before React mounted
-    const pending = (window as Window & { __pendingNativeFcmToken?: string }).__pendingNativeFcmToken;
-    if (pending) {
-      (window as Window & { __pendingNativeFcmToken?: string }).__pendingNativeFcmToken = undefined;
-      registerNativeToken(pending);
+    // Drain any token captured before React mounted (window global)
+    const w = window as Window & { __pendingNativeFcmToken?: string };
+    const fromWindow = w.__pendingNativeFcmToken;
+    if (fromWindow) {
+      w.__pendingNativeFcmToken = undefined;
+      registerNativeToken(fromWindow);
+    } else {
+      // Fallback: token stored in localStorage by the Swift bridge
+      try {
+        const fromStorage = localStorage.getItem('__nativeFcmToken');
+        if (fromStorage) {
+          localStorage.removeItem('__nativeFcmToken');
+          registerNativeToken(fromStorage);
+        }
+      } catch (_) {}
     }
 
     // Keep listening for future token refreshes (Firebase rotates tokens occasionally)
