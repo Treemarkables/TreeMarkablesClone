@@ -497,6 +497,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   data-testid="button-tab-settings"
                   onClick={() => {
                     onTabChange("settings");
+                    setLocation("/settings");
                     if (isMobile) {
                       setOpenMobile(false);
                     }

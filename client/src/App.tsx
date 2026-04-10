@@ -159,6 +159,13 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [dispatchDate, setDispatchDate] = useState(new Date());
+
+  // Sync activeTab highlight with the current URL
+  useEffect(() => {
+    if (location.startsWith("/settings")) {
+      setActiveTab("settings");
+    }
+  }, [location]);
   
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
