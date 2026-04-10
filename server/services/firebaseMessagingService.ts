@@ -1,40 +1,34 @@
-// Firebase Cloud Messaging service using FCM v1 HTTP API directly
-// Uses google-auth-library for OAuth 2.0 token exchange (proven to work)
-import { GoogleAuth } from 'google-auth-library';
+// Firebase Cloud Messaging service using Firebase Admin SDK
+import admin from 'firebase-admin';
 
 class FirebaseMessagingService {
-  private auth: GoogleAuth | null = null;
-  private projectId: string | null = null;
+  private initialized = false;
 
-  private getAuth(): { auth: GoogleAuth; projectId: string } | null {
-    if (this.auth && this.projectId) {
-      return { auth: this.auth, projectId: this.projectId };
-    }
+  private init(): boolean {
+    if (this.initialized) return true;
 
     const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
     if (!serviceAccountStr) {
       console.warn('⚠️  Firebase service account not configured - push notifications disabled');
-      return null;
+      return false;
     }
 
     try {
       const sa = JSON.parse(serviceAccountStr);
-
-      // Fix double-escaped newlines when pasted into Replit secrets
       if (sa.private_key && sa.private_key.includes('\\n')) {
         sa.private_key = sa.private_key.replace(/\\n/g, '\n');
       }
 
-      this.auth = new GoogleAuth({
-        credentials: sa,
-        scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
-      });
-      this.projectId = sa.project_id;
-      console.log('✅ Firebase FCM service initialized for project:', this.projectId);
-      return { auth: this.auth, projectId: this.projectId! };
+      if (!admin.apps.length) {
+        admin.initializeApp({ credential: admin.credential.cert(sa) });
+      }
+
+      this.initialized = true;
+      console.log('✅ Firebase Admin SDK initialized for project:', sa.project_id);
+      return true;
     } catch (error) {
-      console.error('❌ Error initializing Firebase FCM service:', error);
-      return null;
+      console.error('❌ Error initializing Firebase Admin SDK:', error);
+      return false;
     }
   }
 
@@ -45,71 +39,41 @@ class FirebaseMessagingService {
     clickAction?: string;
     data?: Record<string, string>;
   }): Promise<boolean> {
-    const authCtx = this.getAuth();
-    if (!authCtx) return false;
+    if (!this.init()) return false;
 
     try {
-      // Use getClient().getRequestHeaders() — the correct TypeScript API for getting auth headers
-      const client = await authCtx.auth.getClient();
-      const authHeaders = await client.getRequestHeaders();
-
-      if (!authHeaders.Authorization) {
-        console.error('❌ Could not obtain FCM auth headers');
-        return false;
-      }
-      const messageData: Record<string, string> = {
-        ...(notification.data || {}),
-        ...(notification.clickAction ? { clickAction: notification.clickAction } : {}),
+      const message: admin.messaging.Message = {
+        token,
+        notification: {
+          title: notification.title,
+          body: notification.body,
+        },
+        data: notification.data || {},
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { sound: 'default', badge: 1 } },
+        },
+        android: {
+          priority: 'high',
+          notification: { sound: 'default' },
+        },
       };
 
-      const body = JSON.stringify({
-        message: {
-          token,
-          notification: {
-            title: notification.title,
-            body: notification.body,
-          },
-          data: messageData,
-        },
-      });
+      const result = await admin.messaging().send(message);
+      console.log('✅ FCM notification sent:', result);
+      return true;
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
 
-      const response = await fetch(
-        `https://fcm.googleapis.com/v1/projects/${authCtx.projectId}/messages:send`,
-        {
-          method: 'POST',
-          headers: {
-            ...authHeaders,
-            'Content-Type': 'application/json',
-          },
-          body,
-        }
-      );
-
-      const result = await response.json() as any;
-
-      if (response.ok) {
-        console.log('✅ FCM notification sent:', result.name);
-        return true;
-      }
-
-      const errCode = result?.error?.status || result?.error?.code || response.status;
-      const errMsg = result?.error?.message || 'Unknown error';
-
-      // Stale/deregistered tokens — treat as silent failure
       if (
-        errCode === 'NOT_FOUND' ||
-        errCode === 'UNREGISTERED' ||
-        errMsg.includes('not a valid FCM registration token') ||
-        errMsg.includes('NotRegistered')
+        err.code === 'messaging/registration-token-not-registered' ||
+        err.code === 'messaging/invalid-registration-token'
       ) {
         console.log('❌ FCM token no longer valid (stale/deregistered):', token.substring(0, 20) + '...');
         return false;
       }
 
-      console.error('❌ FCM send failed:', errCode, errMsg);
-      return false;
-    } catch (error) {
-      console.error('❌ Error sending FCM notification:', error);
+      console.error('❌ FCM send failed:', err.code, err.message);
       return false;
     }
   }
