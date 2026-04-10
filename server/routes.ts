@@ -1614,6 +1614,10 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           console.log(`✅ Created new conversation for contact form submission: ${conversation.id}`);
         } else {
           console.log(`✅ Found existing open conversation for ${email}, adding message to: ${conversation.id}`);
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: name },
+            message.trim()
+          );
         }
 
         // Create initial message in the conversation with contact details
@@ -6094,6 +6098,17 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           // Update job's lastActivityAt to trigger activity indicator and sorting
           await storage.updateJob(recentJob.id, { lastActivityAt: new Date() });
           console.log(`✅ SMS logged to job #${recentJob.jobNumber} diary`);
+
+          // Push notification to admins about SMS reply
+          try {
+            await notificationHelper.notifyCustomerSmsReply(
+              customer.name,
+              Body,
+              recentJob.jobNumber?.toString()
+            );
+          } catch (pushErr) {
+            console.error('Error sending SMS reply push notification:', pushErr);
+          }
 
           // Detect reschedule intent → alert dispatcher to re-propose a time slot
           const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
@@ -13644,6 +13659,10 @@ Transcription: ${transcriptText}`;
           console.log(`✅ Created new conversation for email from ${actualFromEmail}: ${conversation.id}`);
         } else {
           console.log(`✅ Found existing open conversation for ${actualFromEmail}, adding message to: ${conversation.id}`);
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'email', customerName: actualFromName || actualFromEmail },
+            cleanedBody
+          );
         }
         
         // Create message in conversation
@@ -13865,6 +13884,10 @@ Transcription: ${transcriptText}`;
                   conversation.title = senderName;
                 }
                 console.log(`✅ Found existing open conversation for Facebook user ${senderId}, adding message to: ${conversation.id}`);
+                await notificationHelper.notifyConversationReply(
+                  { id: conversation.id, title: conversation.title, source: 'social', customerName: senderName },
+                  messageData.text
+                );
               } else {
                 // Create new conversation if none exists for this sender
                 conversation = await storage.createConversation({

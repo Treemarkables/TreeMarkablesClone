@@ -332,6 +332,10 @@ class GmailReplyService {
           
           if (conversation) {
             console.log(`📧 ✅ Found existing conversation for ${email.from}: ${conversation.id}`);
+            await notificationHelper.notifyConversationReply(
+              { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
+              cleanedBody
+            );
           } else {
             // Create new conversation for this lead
             console.log(`📧 Creating new conversation for lead: ${email.from}`);
@@ -488,6 +492,10 @@ class GmailReplyService {
           console.log(`📧 ✅ Created new conversation for email reply: ${conversation.id}`);
         } else {
           console.log(`📧 ✅ Found existing open conversation for ${email.from}, adding message to: ${conversation.id}`);
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
+            cleanedBody
+          );
         }
         
         // Create conversation message with optional job info
