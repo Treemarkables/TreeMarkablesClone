@@ -3852,7 +3852,7 @@ The Treemarkables Team`;
       </div>
 
       {/* ServiceM8-style Layout: Left Sidebar + Two Panel Content */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden pb-16 md:pb-0">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 max-w-full overflow-x-hidden">
         {/* Horizontal Tabs on Mobile, Left Sidebar on Desktop */}
         <div className="border-b md:border-b-0 md:border-r flex md:flex-col md:w-16 flex-shrink-0 bg-white border-gray-200">
           <button
