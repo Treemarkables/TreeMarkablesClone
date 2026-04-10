@@ -750,6 +750,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       invoiceDataType: typeof req.body?.invoiceData
     });
   });
+
+  // Dev-only bypass login for automated testing
+  if (process.env.NODE_ENV === 'development') {
+    app.post('/api/auth/dev-test-login', async (req: Request, res: Response) => {
+      const employee = await storage.getEmployee('admin-test-001');
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Test user not found' });
+      }
+      (req.session as any).userId = employee.id;
+      (req.session as any).userRole = employee.role;
+      req.session.save(() => {
+        res.json({ success: true, data: { id: employee.id, role: employee.role } });
+      });
+    });
+  }
   
   // ========================================
   // XERO INTEGRATION ROUTES
