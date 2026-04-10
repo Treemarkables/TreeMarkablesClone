@@ -308,14 +308,16 @@ export function GlobalJobCard({
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ["/api/customers"],
     enabled: isOpen,
-    staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
-    refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
+    staleTime: 3 * 60 * 1000, // 3 minutes — customers rarely change while actively editing a job card
+    refetchOnWindowFocus: false,
   });
 
   // Must be declared BEFORE the useEffect at line ~236 that uses it in its dependency array
   const { data: checklistTemplatesData } = useQuery({
     queryKey: ["/api/checklist-templates"],
     enabled: isOpen,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const customers: Customer[] = useMemo(
@@ -717,6 +719,8 @@ export function GlobalJobCard({
   const { data: employeesData } = useQuery({
     queryKey: ["/api/employees"],
     enabled: isOpen || isSchedulingModalOpen,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
@@ -1422,7 +1426,7 @@ export function GlobalJobCard({
               isResettingRef.current = false;
               hasUserChangedRef.current = false;
               changedFieldsRef.current.clear();
-              queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+              queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob?.id] });
             })
             .catch((err) => {
               console.error("❌ Deferred auto-save failed:", err);
@@ -1633,7 +1637,9 @@ export function GlobalJobCard({
             const updated = { ...jobData, ...changedData };
             return old?.data ? { ...old, data: updated } : updated;
           });
-          queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+          // Only invalidate the specific job — not the full list — to avoid forcing
+          // the dispatch board (125+ jobs) to refetch on every 1.5-second auto-save.
+          queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
         } catch (error) {
           console.error("❌ Auto-save failed:", error);
           // RC5 FIX: Show toast so user knows their changes weren't saved.

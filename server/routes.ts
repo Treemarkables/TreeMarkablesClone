@@ -6206,16 +6206,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
       const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       const { AccessToken } = twilio.jwt;
       const { VoiceGrant } = AccessToken;
-      const voiceGrant = new VoiceGrant({ incomingAllow: true });
+      const voiceGrant = new VoiceGrant({
+        incomingAllow: true,
+        ...(twimlAppSid ? { outgoingApplicationSid: twimlAppSid } : {}),
+      });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
         ttl: 3600,
       });
       accessToken.addGrant(voiceGrant);
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity}`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity });
+      if (!twimlAppSid) {
+        console.warn('⚠️  TWILIO_TWIML_APP_SID not set — outgoing calls from the iOS app will not work. Create a TwiML App in the Twilio Console and set this secret.');
+      }
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (outgoing: ${twimlAppSid ? 'enabled' : 'disabled'})`);
+      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, outgoingEnabled: !!twimlAppSid });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
