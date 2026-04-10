@@ -1158,6 +1158,7 @@ export const notifications = pgTable("notifications", {
   expiresAt: timestamp("expires_at"), // Optional expiration date
   createdAt: timestamp("created_at").defaultNow().notNull(),
   readAt: timestamp("read_at"), // When notification was read
+  archived: boolean("archived").default(false).notNull(), // Archived (hidden) but kept for de-dup
 });
 
 // Notification Insert Schema
@@ -1165,6 +1166,7 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   id: true,
   createdAt: true,
   readAt: true,
+  archived: true,
 });
 
 // Notification Update Schema (for marking as read, etc.)
