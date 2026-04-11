@@ -8238,7 +8238,7 @@ The Treemarkables Team`;
             onClick={() => setIsPhotoCaptureOpen(true)}
             data-testid="toolbar-btn-photo"
           >
-            <CameraIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
+            <CameraIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">Photo</span>
           </button>
 
@@ -8249,7 +8249,7 @@ The Treemarkables Team`;
             onClick={() => setIsSMSComposerOpen(true)}
             data-testid="toolbar-btn-sms"
           >
-            <SMSIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
+            <SMSIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">SMS</span>
           </button>
 
@@ -8260,7 +8260,7 @@ The Treemarkables Team`;
             onClick={handleEmailClick}
             data-testid="toolbar-btn-email"
           >
-            <EmailIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
+            <EmailIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">Email</span>
           </button>
 
@@ -8271,7 +8271,7 @@ The Treemarkables Team`;
             onClick={() => setShowMoreActionsSheet(true)}
             data-testid="toolbar-btn-more"
           >
-            <MoreDotsIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
+            <MoreDotsIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">More</span>
           </button>
         </div>
@@ -8299,7 +8299,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-speech-to-quote"
               >
-                <SpeechToQuoteIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <SpeechToQuoteIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Speech to Quote</span>
               </button>
 
@@ -8313,7 +8313,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-schedule"
               >
-                <ScheduleIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <ScheduleIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Schedule</span>
               </button>
 
@@ -8327,7 +8327,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-call"
               >
-                <CallIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <CallIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Call</span>
               </button>
 
@@ -8342,7 +8342,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-quote"
               >
-                <QuoteIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <QuoteIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Quote</span>
               </button>
 
@@ -8357,7 +8357,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-invoice"
               >
-                <InvoiceIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <InvoiceIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Invoice</span>
               </button>
 
@@ -8389,7 +8389,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-proposal"
               >
-                <ProposalIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <ProposalIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Proposal</span>
               </button>
 
@@ -8404,7 +8404,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-time-tracking"
               >
-                <TimeTrackingIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <TimeTrackingIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Time Tracking</span>
               </button>
 
@@ -8419,7 +8419,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-profit-tracker"
               >
-                <ProfitTrackerIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <ProfitTrackerIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Profit Tracker</span>
               </button>
 
@@ -8434,7 +8434,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-queue-job"
               >
-                <QueueJobIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <QueueJobIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Queue Job</span>
               </button>
 
@@ -8455,7 +8455,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-send-xero"
               >
-                <SendToXeroIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                <SendToXeroIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">
                   {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
                 </span>
@@ -8473,7 +8473,7 @@ The Treemarkables Team`;
                   }}
                   data-testid="more-sheet-resend-xero"
                 >
-                  <ResendXeroIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                  <ResendXeroIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                   <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Re-send to Xero</span>
                 </button>
               )}
@@ -8489,7 +8489,7 @@ The Treemarkables Team`;
                   }}
                   data-testid="more-sheet-request-review"
                 >
-                  <RequestReviewIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
+                  <RequestReviewIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                   <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Request Review</span>
                 </button>
               )}
