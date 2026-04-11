@@ -188,9 +188,24 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
         <CardContent className="p-3 sm:p-4">
           {orderedVisibleIds.map(sectionId => {
             switch (sectionId) {
-              case 'header':
+              case 'header': {
+                const hdrBg = (template as { headerColor?: string }).headerColor || "#ffffff";
+                const isLight = (() => {
+                  const hex = hdrBg.replace("#", "");
+                  const r = parseInt(hex.substring(0,2),16);
+                  const g = parseInt(hex.substring(2,4),16);
+                  const b = parseInt(hex.substring(4,6),16);
+                  return (r*299 + g*587 + b*114) / 1000 > 128;
+                })();
+                const textPrimary = isLight ? "#000000" : "#ffffff";
+                const textSecondary = isLight ? "#4b5563" : "#d1d5db";
                 return (
-                  <div key="header" className="border-b-[3px] border-black pb-5 mb-8">
+                  <div
+                    key="header"
+                    className="mb-8 rounded-sm overflow-hidden"
+                    style={{ backgroundColor: hdrBg }}
+                  >
+                    <div className="px-4 py-4">
                     {template.logoAlignment === "center" ? (
                       <div className="flex flex-col items-center gap-3 text-center">
                         <img
@@ -200,8 +215,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           className="w-auto object-contain"
                         />
                         <div>
-                          <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
-                          <p className="text-xs text-gray-600 mt-1">
+                          <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{invoice.invoiceNumber}</h1>
+                          <p className="text-xs mt-1" style={{ color: textSecondary }}>
                             {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                           </p>
                         </div>
@@ -217,15 +232,17 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           />
                         </div>
                         <div className={`flex-1 ${template.logoAlignment === "right" ? "text-left" : "text-right"}`}>
-                          <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
-                          <p className="text-xs text-gray-600 mt-1">
+                          <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{invoice.invoiceNumber}</h1>
+                          <p className="text-xs mt-1" style={{ color: textSecondary }}>
                             {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                           </p>
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 );
+              }
 
               case 'billTo':
                 return (

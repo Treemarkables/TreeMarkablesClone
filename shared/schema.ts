@@ -2610,6 +2610,7 @@ export const documentTemplates = pgTable("document_templates", {
   logoUrl: text("logo_url"), // Path to logo file
   logoSize: integer("logo_size").default(40), // Logo height in px (20-200)
   logoAlignment: text("logo_alignment").default("left"), // 'left' | 'center' | 'right'
+  headerColor: text("header_color").default("#ffffff"), // Header background colour
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

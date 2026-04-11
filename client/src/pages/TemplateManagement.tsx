@@ -112,6 +112,7 @@ const templateFormSchema = z.object({
   paymentTerms: z.string().default("Payment due within 7 days"),
   primaryColor: z.string().default("#f97316"),
   secondaryColor: z.string().default("#3b82f6"),
+  headerColor: z.string().default("#ffffff"),
   logoUrl: z.string().nullable().optional(),
   logoSize: z.number().min(20).max(200).default(40),
   logoAlignment: z.enum(["left", "center", "right"]).default("left"),
@@ -148,6 +149,7 @@ export default function TemplateManagement() {
       paymentTerms: "Payment due within 7 days",
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
+      headerColor: "#ffffff",
       logoUrl: null,
       logoSize: 40,
       logoAlignment: "left",
@@ -290,6 +292,7 @@ export default function TemplateManagement() {
     paymentTerms: watchedValues.paymentTerms || "Payment due within 7 days",
     primaryColor: watchedValues.primaryColor || "#f97316",
     secondaryColor: watchedValues.secondaryColor || "#3b82f6",
+    headerColor: watchedValues.headerColor || "#ffffff",
     headerLayout: null,
     footerText: null,
     logoUrl: watchedValues.logoUrl || null,
@@ -326,6 +329,7 @@ export default function TemplateManagement() {
       paymentTerms: template.paymentTerms || "Payment due within 7 days",
       primaryColor: template.primaryColor || "#f97316",
       secondaryColor: template.secondaryColor || "#3b82f6",
+      headerColor: (template.headerColor as string) || "#ffffff",
       logoUrl: template.logoUrl || null,
       logoSize: template.logoSize ?? 40,
       logoAlignment: (template.logoAlignment as "left" | "center" | "right") ?? "left",
@@ -350,6 +354,7 @@ export default function TemplateManagement() {
       paymentTerms: "Payment due within 7 days",
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
+      headerColor: "#ffffff",
       logoUrl: null,
       logoSize: 40,
       logoAlignment: "left",
@@ -797,6 +802,33 @@ export default function TemplateManagement() {
 
                   <TabsContent value="styling" className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
+                      <FormField
+                        control={form.control}
+                        name="headerColor"
+                        render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel>Header Background Color</FormLabel>
+                            <FormControl>
+                              <div className="flex gap-2">
+                                <Input
+                                  type="color"
+                                  {...field}
+                                  value={field.value || "#ffffff"}
+                                  className="w-20"
+                                  data-testid="input-header-color"
+                                />
+                                <Input
+                                  {...field}
+                                  value={field.value || "#ffffff"}
+                                  placeholder="#ffffff"
+                                  data-testid="input-header-color-text"
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <FormField
                         control={form.control}
                         name="primaryColor"
