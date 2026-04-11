@@ -17,13 +17,14 @@ const getStatusColors = (status?: string): { bg: string; text: string } => {
     case 'completed':
       return { bg: "bg-green-100", text: "text-green-700" };
     case 'work_order':
-    case 'scheduled':
       return { bg: "bg-blue-100", text: "text-blue-700" };
+    case 'scheduled':
+      return { bg: "bg-green-100", text: "text-green-700" };
     case 'quote':
       return { bg: "bg-orange-100", text: "text-orange-700" };
     case 'lead':
     case 'inquiry':
-      return { bg: "bg-cyan-100", text: "text-cyan-700" };
+      return { bg: "bg-emerald-100", text: "text-emerald-700" };
     case 'unsuccessful':
       return { bg: "bg-red-100", text: "text-red-700" };
     default:

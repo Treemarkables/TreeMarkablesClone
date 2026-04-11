@@ -642,36 +642,36 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       value: "lead",
       label: "Lead",
       Icon: UserCog,
-      pill: "bg-amber-100 text-amber-700",
-      pillActive: "bg-amber-400 text-amber-900",
+      pill: "bg-emerald-100 text-emerald-700",
+      pillActive: "bg-emerald-400 text-emerald-900",
     },
     {
       value: "queue",
       label: "Queue",
       Icon: Inbox,
-      pill: "bg-sky-100 text-sky-700",
-      pillActive: "bg-sky-400 text-sky-900",
+      pill: "bg-amber-100 text-amber-700",
+      pillActive: "bg-amber-400 text-amber-900",
     },
     {
       value: "quote",
       label: "Quote",
       Icon: CircleDollarSign,
-      pill: "bg-purple-100 text-purple-700",
-      pillActive: "bg-purple-400 text-purple-900",
+      pill: "bg-orange-100 text-orange-700",
+      pillActive: "bg-orange-400 text-orange-900",
     },
     {
       value: "work_order",
       label: "W/O",
       Icon: Wrench,
-      pill: "bg-green-100 text-green-700",
-      pillActive: "bg-green-400 text-green-900",
+      pill: "bg-blue-100 text-blue-700",
+      pillActive: "bg-blue-400 text-blue-900",
     },
     {
       value: "scheduled",
       label: "Scheduled",
       Icon: CalendarCheck,
-      pill: "bg-gray-100 text-gray-600",
-      pillActive: "bg-gray-400 text-gray-900",
+      pill: "bg-green-100 text-green-700",
+      pillActive: "bg-green-400 text-green-900",
     },
   ];
 
@@ -2460,15 +2460,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 case "quote":
                                   return {
                                     label: "Quote",
-                                    bg: "bg-blue-100",
-                                    text: "text-blue-700",
+                                    bg: "bg-orange-100",
+                                    text: "text-orange-700",
                                     icon: "≡",
                                   };
                                 case "work_order":
                                   return {
                                     label: "Work Order",
-                                    bg: "bg-orange-100",
-                                    text: "text-orange-700",
+                                    bg: "bg-blue-100",
+                                    text: "text-blue-700",
                                     icon: "≡",
                                   };
                                 case "scheduled":
@@ -3009,15 +3009,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     case "quote":
                       return {
                         label: "Quote",
-                        bg: "bg-blue-100",
-                        text: "text-blue-700",
+                        bg: "bg-orange-100",
+                        text: "text-orange-700",
                         icon: "≡",
                       };
                     case "work_order":
                       return {
                         label: "Work Order",
-                        bg: "bg-orange-100",
-                        text: "text-orange-700",
+                        bg: "bg-blue-100",
+                        text: "text-blue-700",
                         icon: "≡",
                       };
                     case "scheduled":
