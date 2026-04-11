@@ -308,7 +308,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                       <p><span className="font-medium text-black">Due Date:</span> {format(dueDate, 'dd MMM yyyy')}</p>
                       <p><span className="font-medium text-black">Bank:</span> ANZ</p>
                       <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>
-                      <p><span className="font-medium text-black">Account Name:</span> Treemarkables LTD</p>
+                      <p><span className="font-medium text-black">Account Name:</span> {template.companyName || 'Treemarkables LTD'}</p>
+                      {template.paymentTerms && (
+                        <p><span className="font-medium text-black">Terms:</span> {template.paymentTerms}</p>
+                      )}
                     </div>
                   </div>
                 );
@@ -317,10 +320,14 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 return (
                   <div key="footer" className="mt-4 pt-3 border-t border-gray-200 text-center">
                     <p className="text-xs text-gray-500 break-words">
-                      Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
+                      {template.companyName || 'Treemarkables LTD'}
+                      {template.companyAddress ? ` | ${template.companyAddress.replace(/\n/g, ', ')}` : ' | 213 Stanley Road, Gisborne'}
+                      {template.companyPhone ? ` | Phone: ${template.companyPhone}` : ' | Phone: 027 216 6882'}
+                      {template.companyEmail ? ` | Email: ${template.companyEmail}` : ' | Email: quotes@treemarkables.nz'}
                     </p>
                     <p className="text-xs text-gray-500 mt-1">
-                      GST Number: 131-047-592 &nbsp;·&nbsp; Payment terms: 7 days
+                      {template.gstNumber ? `GST Number: ${template.gstNumber}` : 'GST Number: 131-047-592'}
+                      {template.paymentTerms ? ` · ${template.paymentTerms}` : ' · Payment terms: 7 days'}
                     </p>
                   </div>
                 );
