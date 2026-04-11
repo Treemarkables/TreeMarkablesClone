@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import express from "express";
+import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
 import { randomUUID, randomBytes } from 'crypto';
@@ -967,6 +968,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
   });
+
+  // ── Server-Sent Events ────────────────────────────────────────────────────
+  // Clients connect here and receive real-time invalidation signals.
+  app.get('/api/sse', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    // Keep-alive ping every 25 seconds to prevent proxy timeouts
+    const ping = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch { clearInterval(ping); }
+    }, 25000);
+    addClient(res);
+    req.on('close', () => {
+      clearInterval(ping);
+      removeClient(res);
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   // SEO routes - serve sitemap.xml and robots.txt
   app.get('/sitemap.xml', (req: Request, res: Response) => {
@@ -2026,6 +2047,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const customer = await storage.createCustomer(validation.data);
+      broadcast(['/api/customers']);
       res.json({ success: true, data: customer });
     } catch (error) {
       console.error('Error creating customer:', error);
@@ -2105,6 +2127,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const customer = await storage.updateCustomer(req.params.id, updates.data);
+      broadcast(['/api/customers']);
       res.json({ success: true, data: customer });
     } catch (error) {
       console.error('Error updating customer:', error);
@@ -2441,6 +2464,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const lead = await storage.createPipelineLead(validation.data);
+      broadcast(['/api/pipeline-leads']);
       res.json({ success: true, data: lead });
     } catch (error) {
       console.error('Error creating pipeline lead:', error);
@@ -2491,6 +2515,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const lead = await storage.updatePipelineLead(req.params.id, updates.data);
+      broadcast(['/api/pipeline-leads']);
       res.json({ success: true, data: lead });
     } catch (error) {
       console.error('Error updating pipeline lead:', error);
@@ -3203,6 +3228,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         // Don't fail job creation if promo image fails
       }
 
+      broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error creating job:', error);
@@ -4222,6 +4248,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error patching job:', error);
@@ -4389,6 +4416,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.error('Error creating diary notification:', error);
       }
       
+      broadcast(['/api/jobs/' + jobId + '/diary', '/api/jobs']);
       res.json({ success: true, data: entry });
     } catch (error) {
       console.error('Error creating job diary entry:', error);
@@ -6146,6 +6174,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       
       // Respond to Twilio with TwiML (required)
+      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
       res.type('text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
       
