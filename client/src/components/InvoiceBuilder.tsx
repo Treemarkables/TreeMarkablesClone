@@ -612,15 +612,6 @@ export function InvoiceBuilder({
     }
 
     const filledLineItems = lineItems.filter((item) => item.description.trim());
-    if (filledLineItems.length === 0) {
-      isCreatingRef.current = false;
-      toast({
-        title: "Line Items Required",
-        description: "Please add at least one line item with a description.",
-        variant: "destructive",
-      });
-      return null;
-    }
 
     setIsCreating(true);
 
@@ -734,14 +725,6 @@ export function InvoiceBuilder({
     }
 
     const filledItems = lineItems.filter((item) => item.description.trim());
-    if (filledItems.length === 0) {
-      toast({
-        title: "Line Items Required",
-        description: "Please add at least one line item with a description.",
-        variant: "destructive",
-      });
-      return null;
-    }
 
     setIsCreating(true);
 
