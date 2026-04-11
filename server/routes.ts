@@ -95,6 +95,20 @@ import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
+// Image upload configuration for logos (memory storage, images only)
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed (PNG, JPG, WebP, SVG)'));
+    }
+  }
+});
+
 // Configure multer for file uploads
 // CSV file upload configuration
 const csvUpload = multer({ 
@@ -11280,7 +11294,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   });
 
   // Upload logo for templates
-  app.post('/api/templates/upload-logo', upload.single('logo'), async (req: Request, res: Response) => {
+  app.post('/api/templates/upload-logo', logoUpload.single('logo'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
