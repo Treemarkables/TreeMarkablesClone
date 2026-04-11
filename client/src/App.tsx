@@ -269,13 +269,13 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
-            className="md:hidden flex items-center justify-between px-2 py-1 border-b bg-white"
+            className="md:hidden flex items-center justify-between px-2 py-1 border-b bg-[#4A90D9]"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.25rem)" }}
           >
             <div className="flex items-center gap-3">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
-                className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
+                className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-white hover:[&>svg]:text-white/80 [&>svg]:stroke-[2.5]"
               />
               {/* Notifications Bell - Mobile (left side, away from refresh) */}
               {isAdmin && <NotificationBell />}
@@ -479,8 +479,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           
           {/* Desktop header - full menu */}
-          <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+          <header className="hidden md:flex items-center justify-between p-2 border-b bg-[#4A90D9]">
+            <SidebarTrigger data-testid="button-sidebar-toggle" className="[&>svg]:text-white" />
             
             <div className="flex items-center gap-2">
               {/* Notifications Bell */}
@@ -498,7 +498,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       setDispatchSearchOpen(!dispatchSearchOpen);
                     }}
                     data-testid="desktop-search-toggle"
-                    className="text-black"
+                    className="text-white"
                   >
                     <Search className="h-5 w-5" />
                   </Button>
@@ -507,7 +507,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="sm"
-                        className={`gap-1.5 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                        className={`gap-1.5 ${dispatchFilter !== "all" ? "text-white font-bold" : "text-white"}`}
                         data-testid="desktop-filter-dropdown-trigger"
                       >
                         <Filter className="h-4 w-4" />
@@ -535,7 +535,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     size="sm"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     data-testid="paste-message-button-desktop"
-                    className="text-black gap-1.5"
+                    className="text-white gap-1.5"
                   >
                     <MessageSquare className="h-4 w-4" />
                     Paste
@@ -546,7 +546,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         variant="ghost"
                         size="sm"
                         data-testid="create-new-button-desktop"
-                        className="text-black gap-1.5"
+                        className="text-white gap-1.5"
                       >
                         <Plus className="h-4 w-4" />
                         New
@@ -584,6 +584,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       onClick={handleRefresh}
                       disabled={isRefreshing}
                       data-testid="button-desktop-refresh"
+                      className="text-white"
                     >
                       <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
                     </Button>
@@ -601,7 +602,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   size="sm"
                   onClick={logout}
                   data-testid="button-crew-logout"
-                  className="flex items-center gap-1"
+                  className="flex items-center gap-1 text-white"
                 >
                   <LogOut className="h-8 w-8" />
                   Logout
@@ -612,7 +613,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="flex items-center gap-1" data-testid="button-account-dropdown">
+                  <Button variant="ghost" className="flex items-center gap-1 text-white" data-testid="button-account-dropdown">
                     Account
                     <ChevronDown className="h-16 w-16" />
                   </Button>
