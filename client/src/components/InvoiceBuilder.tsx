@@ -256,19 +256,32 @@ export function InvoiceBuilder({
       console.log("⚠️ No existing invoices found for this job");
     }
 
-    // Set address, contact name, and email - use billing address if available
+    // Set address, contact name, and email
+    // Billing overrides set on the job's Billing tab take priority over raw customer/contact fields
     setEditableAddress(
       job.billingAddress || job.address || customer.address || "",
     );
-    // Build contact name from job contact or existing invoice
-    const contactName =
+    // Build contact name: prefer billing name override, then existing invoice name, then job contact name
+    const jobContactName =
       job.jobContactFirstName && job.jobContactLastName
         ? `${job.jobContactFirstName} ${job.jobContactLastName}`
         : job.jobContactFirstName || job.jobContactLastName || "";
     const existingInvoiceContactName =
       existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
-    setEditableContactName(existingInvoiceContactName || contactName);
-    setEditableEmail(customer.email || "");
+    setEditableContactName(
+      job.billingNameOverride ||
+      existingInvoiceContactName ||
+      jobContactName ||
+      customer.name ||
+      "",
+    );
+    // Email: prefer billing contact email override, then existing invoice email, then customer email
+    setEditableEmail(
+      job.billingContactEmail ||
+      (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
+      customer.email ||
+      "",
+    );
 
     // Initialise the due date: prefer existing invoice's due date, else default from settings
     const existingDue = existingInvoices.length > 0 ? existingInvoices[0]?.dueDate : null;
@@ -1061,31 +1074,37 @@ export function InvoiceBuilder({
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <User className="h-4 w-4 text-blue-600" />
-                    Contact Name (optional)
+                    Billing Name
                   </Label>
                   <Input
                     value={editableContactName}
                     onChange={(e) => setEditableContactName(e.target.value)}
-                    placeholder="e.g., Sam Frasier"
+                    placeholder="e.g., Gisborne District Council"
                     className="bg-white"
                     data-testid="input-invoice-contact-name"
                   />
+                  <p className="text-xs text-gray-500">
+                    Pre-filled from the Billing Name Override on the Billing tab. Edit here for this invoice only.
+                  </p>
                 </div>
 
                 {/* Email */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <Mail className="h-4 w-4 text-blue-600" />
-                    Customer Email
+                    Billing Email
                   </Label>
                   <Input
                     type="email"
                     value={editableEmail}
                     onChange={(e) => setEditableEmail(e.target.value)}
-                    placeholder="Enter customer email"
+                    placeholder="Enter billing email address"
                     className="bg-white"
                     data-testid="input-invoice-email"
                   />
+                  <p className="text-xs text-gray-500">
+                    Pre-filled from the Billing Email override on the Billing tab. Edit here for this invoice only.
+                  </p>
                 </div>
 
                 {/* Due Date */}
