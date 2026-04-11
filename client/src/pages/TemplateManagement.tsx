@@ -528,49 +528,29 @@ export default function TemplateManagement() {
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
-                    {/* Logo upload */}
-                    <div className="space-y-2">
+                    {/* Logo upload + live size preview */}
+                    <div className="space-y-3">
                       <label className="text-sm font-medium">Company Logo</label>
-                      <div className="flex items-center gap-3">
-                        <div className="h-14 w-28 rounded-md border border-dashed border-input flex items-center justify-center bg-muted/30 overflow-hidden flex-shrink-0">
-                          {watchedValues.logoUrl ? (
-                            <img src={watchedValues.logoUrl} alt="Logo" className="max-h-12 max-w-full object-contain p-1" />
-                          ) : (
-                            <span className="text-xs text-muted-foreground text-center px-1">No logo</span>
-                          )}
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          <input
-                            ref={logoInputRef}
-                            type="file"
-                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                            className="hidden"
-                            onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); }}
+
+                      {/* Live preview box — height tracks the slider */}
+                      <div
+                        className="w-full rounded-md border border-dashed border-input bg-muted/30 flex items-center justify-center overflow-hidden transition-all"
+                        style={{ minHeight: 56, height: (watchedValues.logoSize ?? 40) + 24 }}
+                      >
+                        {watchedValues.logoUrl ? (
+                          <img
+                            src={watchedValues.logoUrl}
+                            alt="Logo"
+                            style={{ height: watchedValues.logoSize ?? 40 }}
+                            className="w-auto object-contain"
                           />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={logoUploading}
-                            onClick={() => logoInputRef.current?.click()}
-                          >
-                            {logoUploading ? "Uploading..." : watchedValues.logoUrl ? "Change Logo" : "Upload Logo"}
-                          </Button>
-                          {watchedValues.logoUrl && (
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => form.setValue("logoUrl", null)}
-                            >
-                              Remove
-                            </Button>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground self-end">PNG, JPG, SVG or WebP</p>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Upload a logo to preview it here</span>
+                        )}
                       </div>
-                      {/* Logo size slider */}
-                      <div className="space-y-1 pt-1">
+
+                      {/* Size slider */}
+                      <div className="space-y-1">
                         <div className="flex items-center justify-between">
                           <label className="text-xs text-muted-foreground">Logo size</label>
                           <span className="text-xs font-medium tabular-nums">{watchedValues.logoSize ?? 40}px</span>
@@ -580,13 +560,44 @@ export default function TemplateManagement() {
                           max={120}
                           step={4}
                           value={[watchedValues.logoSize ?? 40]}
-                          onValueChange={([v]) => form.setValue("logoSize", v)}
+                          onValueChange={([v]) => form.setValue("logoSize", v, { shouldDirty: true, shouldTouch: true })}
                           className="w-full"
                         />
                         <div className="flex justify-between text-[10px] text-muted-foreground">
                           <span>Small</span>
                           <span>Large</span>
                         </div>
+                      </div>
+
+                      {/* Upload / remove buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <input
+                          ref={logoInputRef}
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={logoUploading}
+                          onClick={() => logoInputRef.current?.click()}
+                        >
+                          {logoUploading ? "Uploading..." : watchedValues.logoUrl ? "Change Logo" : "Upload Logo"}
+                        </Button>
+                        {watchedValues.logoUrl && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => form.setValue("logoUrl", null, { shouldDirty: true })}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground">PNG, JPG, SVG or WebP</span>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
