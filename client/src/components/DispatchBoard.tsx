@@ -2968,20 +2968,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 Confirmed
                               </Badge>
                             )}
-                            <Badge
-                              className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}
-                            >
-                              {statusBadge.dot && (
-                                <span
-                                  className="w-2 h-2 rounded-full mr-1.5"
-                                  style={{ backgroundColor: "currentColor" }}
-                                />
-                              )}
-                              {statusBadge.icon && (
-                                <span className="mr-1">{statusBadge.icon}</span>
-                              )}
-                              {statusBadge.label}
-                            </Badge>
                           </div>
                         </div>
 
