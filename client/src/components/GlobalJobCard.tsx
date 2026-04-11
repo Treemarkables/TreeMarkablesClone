@@ -76,6 +76,24 @@ import {
   MdCameraAlt,
   MdMoreHoriz,
 } from "react-icons/md";
+import {
+  CameraIcon,
+  SMSIcon,
+  EmailIcon,
+  MoreDotsIcon,
+  SpeechToQuoteIcon,
+  ScheduleIcon,
+  CallIcon,
+  QuoteIcon,
+  InvoiceIcon,
+  ProposalIcon,
+  TimeTrackingIcon,
+  ProfitTrackerIcon,
+  QueueJobIcon,
+  SendToXeroIcon,
+  ResendXeroIcon,
+  RequestReviewIcon,
+} from "./ActionIcons";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
@@ -8220,7 +8238,7 @@ The Treemarkables Team`;
             onClick={() => setIsPhotoCaptureOpen(true)}
             data-testid="toolbar-btn-photo"
           >
-            <Camera className="h-7 w-7 text-green-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.75} />
+            <CameraIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">Photo</span>
           </button>
 
@@ -8231,7 +8249,7 @@ The Treemarkables Team`;
             onClick={() => setIsSMSComposerOpen(true)}
             data-testid="toolbar-btn-sms"
           >
-            <MessageSquare className="h-7 w-7 text-teal-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.75} />
+            <SMSIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">SMS</span>
           </button>
 
@@ -8242,7 +8260,7 @@ The Treemarkables Team`;
             onClick={handleEmailClick}
             data-testid="toolbar-btn-email"
           >
-            <Mail className="h-7 w-7 text-blue-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.75} />
+            <EmailIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">Email</span>
           </button>
 
@@ -8253,7 +8271,7 @@ The Treemarkables Team`;
             onClick={() => setShowMoreActionsSheet(true)}
             data-testid="toolbar-btn-more"
           >
-            <MoreHorizontal className="h-7 w-7 text-slate-400 group-active:scale-90 transition-transform duration-100" strokeWidth={1.75} />
+            <MoreDotsIcon className="h-12 w-12 group-active:scale-90 transition-transform duration-100" />
             <span className="text-[10px] text-gray-500 font-medium">More</span>
           </button>
         </div>
@@ -8281,7 +8299,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-speech-to-quote"
               >
-                <Mic className="h-9 w-9 text-violet-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <SpeechToQuoteIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Speech to Quote</span>
               </button>
 
@@ -8295,7 +8313,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-schedule"
               >
-                <Calendar className="h-9 w-9 text-indigo-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <ScheduleIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Schedule</span>
               </button>
 
@@ -8309,7 +8327,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-call"
               >
-                <Phone className="h-9 w-9 text-green-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <CallIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Call</span>
               </button>
 
@@ -8324,7 +8342,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-quote"
               >
-                <Receipt className="h-9 w-9 text-amber-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <QuoteIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Quote</span>
               </button>
 
@@ -8339,7 +8357,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-invoice"
               >
-                <CreditCard className="h-9 w-9 text-emerald-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <InvoiceIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Invoice</span>
               </button>
 
@@ -8371,7 +8389,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-proposal"
               >
-                <Presentation className="h-9 w-9 text-rose-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <ProposalIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Proposal</span>
               </button>
 
@@ -8386,7 +8404,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-time-tracking"
               >
-                <Clock className="h-9 w-9 text-orange-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <TimeTrackingIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Time Tracking</span>
               </button>
 
@@ -8401,7 +8419,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-profit-tracker"
               >
-                <DollarSign className="h-9 w-9 text-cyan-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <ProfitTrackerIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Profit Tracker</span>
               </button>
 
@@ -8416,7 +8434,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-queue-job"
               >
-                <ListOrdered className="h-9 w-9 text-purple-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <QueueJobIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Queue Job</span>
               </button>
 
@@ -8437,7 +8455,7 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-send-xero"
               >
-                <FileText className="h-9 w-9 text-slate-400 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                <SendToXeroIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">
                   {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
                 </span>
@@ -8455,7 +8473,7 @@ The Treemarkables Team`;
                   }}
                   data-testid="more-sheet-resend-xero"
                 >
-                  <RotateCcw className="h-9 w-9 text-amber-500 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                  <ResendXeroIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                   <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Re-send to Xero</span>
                 </button>
               )}
@@ -8471,7 +8489,7 @@ The Treemarkables Team`;
                   }}
                   data-testid="more-sheet-request-review"
                 >
-                  <Star className="h-9 w-9 text-yellow-400 group-active:scale-90 transition-transform duration-100" strokeWidth={1.5} />
+                  <RequestReviewIcon className="h-16 w-16 group-active:scale-90 transition-transform duration-100" />
                   <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Request Review</span>
                 </button>
               )}
