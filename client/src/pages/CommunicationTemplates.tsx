@@ -96,12 +96,14 @@ const VARIABLE_GROUPS = [
   },
 ];
 
-function substituteVariables(text: string, job: any, customer: any): string {
+function substituteVariables(text: string, job: any, customer: any, settings?: any): string {
   if (!text) return "";
   const customerName = customer?.name || "Valued Customer";
   const firstName = customerName.split(" ")[0] || customerName;
   const phone = customer?.phone || job?.jobContactPhone || "";
   const address = job?.address || "123 Example St";
+  const companyName = settings?.businessName || settings?.companyName || "Treemarkables LTD";
+  const companyPhone = settings?.phone || settings?.companyPhone || "027 216 6882";
   return text
     .replace(/\{customerName\}/g, customerName)
     .replace(/\{firstName\}/g, firstName)
@@ -116,8 +118,8 @@ function substituteVariables(text: string, job: any, customer: any): string {
     .replace(/\{jobDescription\}/g, job?.description || "")
     .replace(/\{scheduledDate\}/g, job?.scheduledDate || "")
     .replace(/\{totalAmount\}/g, job?.totalAmount ? `$${job.totalAmount}` : "")
-    .replace(/\{companyName\}/g, "Treemarkables LTD")
-    .replace(/\{companyPhone\}/g, "027 216 6882");
+    .replace(/\{companyName\}/g, companyName)
+    .replace(/\{companyPhone\}/g, companyPhone);
 }
 
 const emailTemplateSchema = z.object({
@@ -199,6 +201,12 @@ export default function CommunicationTemplates() {
     queryKey: ["/api/sms-templates"],
     select: (response: any) => response.data || [],
   });
+
+  // Fetch business settings for company variable substitution
+  const { data: businessSettingsData } = useQuery({
+    queryKey: ["/api/business-settings"],
+  });
+  const businessSettings: any = (businessSettingsData as any)?.data || (businessSettingsData as any) || null;
 
   // Fetch jobs for preview
   const { data: jobsData } = useQuery({
@@ -397,8 +405,8 @@ export default function CommunicationTemplates() {
     const isEmail = activeTab === "email";
     const rawSubject = isEmail ? watchedSubject : "";
     const rawBody = isEmail ? watchedBody : watchedSmsBody;
-    const renderedSubject = substituteVariables(rawSubject, previewJob, previewCustomer);
-    const renderedBody = substituteVariables(rawBody, previewJob, previewCustomer);
+    const renderedSubject = substituteVariables(rawSubject, previewJob, previewCustomer, businessSettings);
+    const renderedBody = substituteVariables(rawBody, previewJob, previewCustomer, businessSettings);
 
     return (
       <div className="flex flex-col h-full gap-3">
