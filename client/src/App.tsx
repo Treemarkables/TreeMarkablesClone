@@ -75,8 +75,8 @@ import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import Reconciliation from "@/pages/Reconciliation";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter } from "lucide-react";
-import { useJobFilter, DISPATCH_STATUS_FILTERS } from "@/lib/dispatchHeaderStore";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X } from "lucide-react";
+import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -174,6 +174,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
   const [dispatchFilter, setDispatchFilter] = useJobFilter();
+  const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
+
+  // Close search strip when leaving dispatch page
+  useEffect(() => {
+    if (!isDispatchPage) setDispatchSearchOpen(false);
+  }, [isDispatchPage]);
 
   // Fetch jobs data for dispatch header
   const { data: jobsResponse } = useQuery<{ success: boolean; data: any[] }>({
@@ -351,23 +357,38 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 </>
               )}
 
-              {/* Refresh Button - Mobile */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    data-testid="button-mobile-refresh"
-                  >
-                    <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Refresh all data</p>
-                </TooltipContent>
-              </Tooltip>
+              {/* Search toggle (dispatch page) or Refresh (other pages) — Mobile */}
+              {isDispatchPage ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (dispatchSearchOpen) setDispatchSearchOpen(false);
+                    else setDispatchSearchOpen(true);
+                  }}
+                  data-testid="mobile-search-toggle"
+                  className="text-muted-foreground"
+                >
+                  {dispatchSearchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      data-testid="button-mobile-refresh"
+                    >
+                      <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh all data</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
