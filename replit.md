@@ -43,7 +43,7 @@ This application is a comprehensive business management platform for Treemarkabl
 - **Customer & Sales**: Lead Management (with analytics), Customer Management, Quote Management (including speech-to-quote, Twilio voice auto-quote generation, and presentation method tracking for conversion analysis), Interactive Proposal Option Selection (customers can click to select pricing choices before accepting), VIP Membership system (manually assigned crown badge, member-since date, discount %, visible in customer list, job card, and ProposalBuilder).
 - **Communication Tracking**: Gmail email reply capture, SMS reply capture, automatic job diary entries for all customer communications.
 - **Operational Efficiency**: Crew and Equipment Management, Route Optimization, Weather Integration, Photo Documentation, NZ timezone utilities.
-- **Reporting & Analytics**: Business Analytics (lead source tracking, job estimation accuracy, quote presentation conversion rates), Invoice Management, Safety Reporting, Service-level margin tracking, Crew Efficiency (Xero Payroll integration).
+- **Reporting & Analytics**: Business Analytics (lead source tracking, job estimation accuracy, quote presentation conversion rates), Invoice Management, Safety Reporting, Service-level margin tracking, Crew Efficiency reporting.
 - **Marketing Automation**: Marketing Planner, automated review posting, campaign scheduling, performance analytics, Mailchimp integration for customer sync.
 - **Push Notifications**: Firebase Cloud Messaging for real-time alerts (job assignments, schedule changes, new leads, invoice payments, quote acceptances) with user preference management.
 - **Customer Notifications**: User-controlled job booking notifications via sendClientNotification checkbox.
@@ -88,9 +88,8 @@ Fields like `jobContactEmail` and `billingContactEmail` have special protection 
 - **Email**: Resend (for sending), Gmail IMAP (for receiving/reply capture), `imap`, `mailparser`
 - **SMS**: SMS Everyone NZ
 - **AI/ML**: OpenAI (Whisper API for transcription & GPT-5 for extraction)
-- **Accounting**: Xero (`xero-node` SDK)
 - **Address Autocomplete**: Addy Solutions (NZ address API)
-- **Telephony**: Twilio (call recording, Whisper transcription, Twilio Voice SDK for iOS CallKit)
+- **Telephony**: Twilio (call recording, Whisper transcription, Twilio Voice SDK for iOS CallKit). Call flow: customers ring the owner's personal mobile → carrier forwards to the Twilio number → Twilio records, transcribes, and optionally rings the iOS app via SDK. Customers never interact with Twilio directly.
 - **Native iOS**: Capacitor (`@capacitor/core`, `@capacitor/cli`, `@capacitor/ios`) — `capacitor.config.ts` at project root; native Swift plugin in `ios-native/`; build guide in `IOS_BUILD_GUIDE.md`
 - **Marketing**: Meta Marketing API (for Facebook/Instagram), Mailchimp Marketing API
 - **Notifications**: Firebase Cloud Messaging
