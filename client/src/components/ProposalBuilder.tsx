@@ -206,7 +206,7 @@ export function ProposalBuilder({
   const [sections, setSections] = useState<ProposalSectionData[]>([
     {
       id: "section-1",
-      title: "Tree Removal Services",
+      title: "Job Description",
       description: "",
       photos: [],
       lineItems: [],
@@ -284,7 +284,7 @@ export function ProposalBuilder({
       // Build the initial section
       const initialSection: ProposalSectionData = {
         id: "section-1",
-        title: job.serviceType || "Tree Removal Services",
+        title: job.serviceType || "Job Description",
         description: descriptionValue,
         photos: [],
         lineItems: job.lineItems

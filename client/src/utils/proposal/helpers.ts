@@ -59,7 +59,7 @@ export const calculateProposalTotals = (sections: ProposalSection[], taxRate: nu
 export const createInitialSectionFromJob = (job: any): ProposalSection => {
   return {
     id: 'section-1',
-    title: job.serviceType || 'Tree Removal Services',
+    title: job.serviceType || 'Job Description',
     description: job.description || '',
     photos: [],
     lineItems: job.lineItems ? job.lineItems.map((item: any, index: number) => ({
