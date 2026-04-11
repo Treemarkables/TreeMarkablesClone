@@ -237,7 +237,7 @@ func application(_ application: UIApplication,
 | `TWILIO_API_KEY` | Twilio Console → API Keys → Create Standard | **iOS required** |
 | `TWILIO_API_SECRET` | Shown once at API Key creation | **iOS required** |
 | `TWILIO_CLIENT_IDENTITY` | Any string (default: `treemarkables-owner`) | Optional |
-| `HERO_PHONE_NUMBER` | Your real NZ mobile (+64...) | Optional fallback |
+| `OWNER_PHONE_NUMBER` | Your personal NZ mobile (+64...) — Twilio calls this back to connect you to the recorded call | Required for call recording |
 
 ---
 

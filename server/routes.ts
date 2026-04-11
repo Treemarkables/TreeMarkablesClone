@@ -6157,10 +6157,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   });
 
   // ----------------------------------------
-  // TWILIO LIVE CALL RECORDING — OPTION 2
-  // Caller rings owner's real number → carrier forwards here →
-  // Twilio dials HERO_PHONE_NUMBER while recording → on no-answer, takes voicemail.
-  // Configure in Twilio console: "A CALL COMES IN" → Webhook → this URL.
+  // TWILIO LIVE CALL RECORDING
+  // Caller rings owner's personal mobile → carrier unconditionally forwards here →
+  // Twilio dials OWNER_PHONE_NUMBER while recording → on no-answer, takes voicemail.
+  // Configure in Twilio console: "A CALL COMES IN" → Webhook → /api/webhooks/twilio-answer
   // ----------------------------------------
 
   // Serve recordings from persistent Object Storage
@@ -6239,13 +6239,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       return res.status(403).send('Forbidden');
     }
 
-    const ownerPhone = process.env.HERO_PHONE_NUMBER;
+    const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
     const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
     const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
 
     // Must have at least one destination — Client app OR phone number
     if (!hasClient && !ownerPhone) {
-      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or HERO_PHONE_NUMBER)');
+      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
       res.type('text/xml');
       return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
