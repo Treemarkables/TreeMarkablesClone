@@ -638,41 +638,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [jobFilter, setJobFilter] = useState<string>("all");
 
   const STATUS_TAB_FILTERS = [
-    {
-      value: "lead",
-      label: "Lead",
-      Icon: UserCog,
-      pill: "bg-emerald-100 text-[#1877F2]",
-      pillActive: "bg-emerald-400 text-white",
-    },
-    {
-      value: "queue",
-      label: "Queue",
-      Icon: Inbox,
-      pill: "bg-amber-100 text-[#1877F2]",
-      pillActive: "bg-amber-400 text-white",
-    },
-    {
-      value: "quote",
-      label: "Quote",
-      Icon: CircleDollarSign,
-      pill: "bg-orange-100 text-[#1877F2]",
-      pillActive: "bg-orange-400 text-white",
-    },
-    {
-      value: "work_order",
-      label: "W/O",
-      Icon: Wrench,
-      pill: "bg-blue-100 text-[#1877F2]",
-      pillActive: "bg-blue-400 text-white",
-    },
-    {
-      value: "scheduled",
-      label: "Scheduled",
-      Icon: CalendarCheck,
-      pill: "bg-green-100 text-[#1877F2]",
-      pillActive: "bg-green-400 text-white",
-    },
+    { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "queue",      label: "Queue",     Icon: Inbox,           pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "quote",      label: "Quote",     Icon: CircleDollarSign,pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "work_order", label: "W/O",       Icon: Wrench,          pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "scheduled",  label: "Scheduled", Icon: CalendarCheck,   pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
   ];
 
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
@@ -2286,15 +2256,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       style={{ pointerEvents: "auto" }}
                     >
                       <CardHeader className="flex-shrink-0 border-b pb-3">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="min-w-0 shrink-0">
                             <CardTitle className="text-base">
                               {filterMeta[jobFilter]?.title ?? "Active Jobs"}
                             </CardTitle>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {filterMeta[jobFilter]?.subtitle ??
-                                "All upcoming jobs"}
-                            </div>
+                          </div>
+
+                          {/* Status filter pills — same row as New/Paste */}
+                          <div className="flex gap-1 flex-1 flex-wrap">
+                            {STATUS_TAB_FILTERS.map((tab) => (
+                              <button
+                                key={tab.value}
+                                onClick={() => setJobFilter(jobFilter === tab.value ? "all" : tab.value)}
+                                className={`text-xs py-1 px-3 rounded-full font-medium transition-colors ${
+                                  jobFilter === tab.value ? tab.pillActive : tab.pill
+                                }`}
+                                data-testid={`desktop-filter-tab-${tab.value}`}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
                           </div>
 
                           <div className="flex gap-1 flex-shrink-0">
@@ -2354,29 +2336,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             />
                           </div>
                         )}
-
-                        {/* Status Filter Tabs - Desktop */}
-                        <div className="flex gap-1.5 mt-2">
-                          {STATUS_TAB_FILTERS.map((tab) => (
-                            <button
-                              key={tab.value}
-                              onClick={() =>
-                                setJobFilter(
-                                  jobFilter === tab.value ? "all" : tab.value,
-                                )
-                              }
-                              className={`flex-1 flex items-center justify-center gap-1 text-xs py-1 px-1 rounded-full font-medium transition-colors ${
-                                jobFilter === tab.value
-                                  ? tab.pillActive
-                                  : tab.pill
-                              }`}
-                              data-testid={`desktop-filter-tab-${tab.value}`}
-                            >
-                              <tab.Icon className="h-3 w-3 shrink-0" />
-                              {tab.label}
-                            </button>
-                          ))}
-                        </div>
 
                         {/* Search Input - Desktop */}
                         <div className="mt-3 relative">
@@ -2824,7 +2783,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="flex-shrink-0 z-50">
           {/* Clean white header: actions + filters + search */}
           <div className="bg-background border-b px-3 pt-3 pb-2 flex flex-col gap-2">
-            {/* Row 1: New | Paste | spacer | Search icon */}
+            {/* Row 1: New | Paste | pills | Search icon */}
             <div className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2832,7 +2791,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     variant="outline"
                     size="sm"
                     data-testid="create-new-button-mobile"
-                    className="text-green-700 border-green-300 bg-green-50 text-sm font-medium"
+                    className="text-green-700 border-green-300 bg-green-50 text-sm font-medium shrink-0"
                   >
                     <Plus className="h-4 w-4 mr-1 text-green-600" />
                     New
@@ -2880,7 +2839,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
                 Paste
               </Button>
-              <div className="flex-1" />
+              {/* Pills inline — scrollable */}
+              <div className="flex-1 flex gap-1 overflow-x-auto no-scrollbar">
+                {STATUS_TAB_FILTERS.map((tab) => (
+                  <button
+                    key={tab.value}
+                    onClick={() => setJobFilter(jobFilter === tab.value ? "all" : tab.value)}
+                    className={`shrink-0 text-xs py-1 px-3 rounded-full font-medium transition-colors ${
+                      jobFilter === tab.value ? tab.pillActive : tab.pill
+                    }`}
+                    data-testid={`mobile-filter-tab-${tab.value}`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
               <Button
                 size="icon"
                 variant="ghost"
@@ -2901,7 +2874,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </Button>
             </div>
 
-            {/* Row 2: Search input (when active) or filter chips */}
+            {/* Row 2: Search input (when active) */}
             {showMobileSearch ? (
               <div className="flex flex-col gap-1 pb-1">
                 <div className="flex items-center gap-2">
@@ -2964,27 +2937,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   </div>
                 )}
               </div>
-            ) : (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
-                {STATUS_TAB_FILTERS.map((tab) => (
-                  <button
-                    key={tab.value}
-                    onClick={() =>
-                      setJobFilter(jobFilter === tab.value ? "all" : tab.value)
-                    }
-                    className={`shrink-0 flex items-center gap-1 text-xs py-1 px-3 rounded-full font-medium transition-colors ${
-                      jobFilter === tab.value
-                        ? tab.pillActive
-                        : tab.pill
-                    }`}
-                    data-testid={`mobile-filter-tab-${tab.value}`}
-                  >
-                    <tab.Icon className="h-3 w-3 shrink-0" />
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-            )}
+            ) : null}
           </div>
           </div>{/* end header group */}
 
