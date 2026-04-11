@@ -196,6 +196,19 @@ export default function TemplateManagement() {
     },
   });
 
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const response = await apiRequest("PUT", `/api/templates/${id}`, { isActive });
+      return response.json();
+    },
+    onSuccess: () => {
+      refetch();
+    },
+    onError: () => {
+      toast({ title: "Error updating template status", variant: "destructive" });
+    },
+  });
+
   const form = useForm<TemplateFormData>({
     resolver: zodResolver(templateFormSchema),
     defaultValues: {
@@ -991,13 +1004,19 @@ export default function TemplateManagement() {
                         <span className="font-medium">Company:</span>
                         <span>{template.companyName}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-medium">Status:</span>
-                        <Badge
-                          variant={template.isActive ? "default" : "secondary"}
-                        >
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium text-muted-foreground">Status:</span>
+                        <Switch
+                          checked={template.isActive}
+                          disabled={toggleActiveMutation.isPending}
+                          onCheckedChange={(checked) =>
+                            toggleActiveMutation.mutate({ id: template.id, isActive: checked })
+                          }
+                          data-testid={`switch-template-active-${template.id}`}
+                        />
+                        <span className={template.isActive ? "text-foreground" : "text-muted-foreground"}>
                           {template.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        </span>
                       </div>
                       <div className="flex justify-between items-center pt-2">
                         <div className="flex gap-1">
