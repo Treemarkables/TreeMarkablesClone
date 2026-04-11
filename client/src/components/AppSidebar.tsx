@@ -162,8 +162,8 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
     }
   };
 
-  // Filter items based on role - crew can only see All Jobs and Safety
-  const allowedCrewItems = ['jobs', 'safety'];
+  // Filter items based on role - crew can only see All Jobs
+  const allowedCrewItems = ['jobs'];
   const filteredDashboardItems = isAdmin ? dashboardItems : dashboardItems.filter(item => allowedCrewItems.includes(item.value));
 
   return (
