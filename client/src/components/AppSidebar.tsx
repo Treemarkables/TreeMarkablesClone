@@ -16,7 +16,6 @@ import {
   FileText,
   Layout,
   Briefcase,
-  Upload,
   BookOpen,
   Shield,
   LogOut,
@@ -76,27 +75,6 @@ const dashboardItems = [
     value: "pipeline",
     isTab: false
   },
-  {
-    title: "Job Import",
-    url: "/job-dashboard",
-    icon: Upload,
-    value: "job-import",
-    isTab: true
-  },
-  {
-    title: "Analytics",
-    url: "/job-dashboard", 
-    icon: BarChart3,
-    value: "analytics",
-    isTab: true
-  },
-  {
-    title: "Safety",
-    url: "/job-dashboard",
-    icon: Shield,
-    value: "safety",
-    isTab: true
-  }
 ];
 
 // Business management items
