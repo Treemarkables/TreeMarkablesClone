@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -450,9 +451,25 @@ export default function CommunicationTemplates() {
             )}
             <div>
               {isEmail && <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Body</p>}
-              <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-sans">
-                {renderedBody || <span className="text-muted-foreground italic">Start typing your template…</span>}
-              </pre>
+              {isEmail ? (
+                renderedBody ? (
+                  <div
+                    className="text-sm text-gray-800"
+                    dangerouslySetInnerHTML={{
+                      __html: DOMPurify.sanitize(renderedBody.replace(/\n/g, "<br />"), {
+                        ALLOWED_TAGS: ["b", "i", "strong", "em", "br", "p", "ul", "ol", "li", "a", "span", "div"],
+                        ALLOWED_ATTR: ["href", "target", "style"],
+                      }),
+                    }}
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Start typing your template…</p>
+                )
+              ) : (
+                <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-sans">
+                  {renderedBody || <span className="text-muted-foreground italic">Start typing your template…</span>}
+                </pre>
+              )}
             </div>
           </div>
         </div>

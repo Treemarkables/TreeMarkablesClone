@@ -292,7 +292,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
               <Button
                 variant="outline"
                 size="sm"
-                className="hidden sm:flex"
                 onClick={async () => {
                   if (!proposalId) return;
                   try {
