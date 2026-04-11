@@ -2875,16 +2875,17 @@ class DatabaseStorage implements IStorage {
     const rejectedStatuses = ['unsuccessful'];
     
     // Filter jobs that have quote presentation method set
+    // Include both 'lead' and 'quote' status — the presentation method is set during the quoting process
     const jobsWithMethod = filteredJobs.filter(j => 
       (j as any).quotePresentationMethod && 
-      (j.status !== 'lead' && j.status !== 'archived')
+      j.status !== 'archived'
     );
     
     // On-site quotes analytics
     const onSiteJobs = jobsWithMethod.filter(j => (j as any).quotePresentationMethod === 'on_site');
     const onSiteAccepted = onSiteJobs.filter(j => acceptedStatuses.includes(j.status || ''));
     const onSiteRejected = onSiteJobs.filter(j => rejectedStatuses.includes(j.status || ''));
-    const onSitePending = onSiteJobs.filter(j => j.status === 'quote');
+    const onSitePending = onSiteJobs.filter(j => j.status === 'quote' || j.status === 'lead');
     const onSiteTotal = onSiteAccepted.length + onSiteRejected.length;
     const onSiteAcceptanceRate = onSiteTotal > 0 ? (onSiteAccepted.length / onSiteTotal) * 100 : 0;
     
@@ -2892,7 +2893,7 @@ class DatabaseStorage implements IStorage {
     const sentLaterJobs = jobsWithMethod.filter(j => (j as any).quotePresentationMethod === 'sent_later');
     const sentLaterAccepted = sentLaterJobs.filter(j => acceptedStatuses.includes(j.status || ''));
     const sentLaterRejected = sentLaterJobs.filter(j => rejectedStatuses.includes(j.status || ''));
-    const sentLaterPending = sentLaterJobs.filter(j => j.status === 'quote');
+    const sentLaterPending = sentLaterJobs.filter(j => j.status === 'quote' || j.status === 'lead');
     const sentLaterTotal = sentLaterAccepted.length + sentLaterRejected.length;
     const sentLaterAcceptanceRate = sentLaterTotal > 0 ? (sentLaterAccepted.length / sentLaterTotal) * 100 : 0;
     
@@ -3369,8 +3370,8 @@ class DatabaseStorage implements IStorage {
       if (toDate) {
         conditions.push(sql`${schema.jobs.createdAt} <= ${toDate}`);
       }
-      // Only include jobs that have had a quote (not leads or archived)
-      conditions.push(sql`${schema.jobs.status} NOT IN ('lead', 'archived')`);
+      // Exclude only archived jobs — lead and quote status are both valid quoting stages
+      conditions.push(sql`${schema.jobs.status} NOT IN ('archived')`);
 
       // Get all jobs with optional date filtering
       const jobs = await db
@@ -3388,7 +3389,7 @@ class DatabaseStorage implements IStorage {
       // Status definitions for conversion tracking
       const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
       const rejectedStatuses = ['unsuccessful'];
-      const pendingStatuses = ['quote'];
+      const pendingStatuses = ['quote', 'lead'];
 
       // Group jobs by presentation method
       const methodStats = new Map<string, {
