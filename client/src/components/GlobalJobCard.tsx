@@ -8242,6 +8242,17 @@ The Treemarkables Team`;
             <span className="text-[10px] text-gray-500 font-medium">Photo</span>
           </button>
 
+          {/* Call */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 group"
+            onClick={handleCallClick}
+            data-testid="toolbar-btn-call"
+          >
+            <CallIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
+            <span className="text-[10px] text-gray-500 font-medium">Call</span>
+          </button>
+
           {/* SMS */}
           <button
             type="button"
@@ -8315,20 +8326,6 @@ The Treemarkables Team`;
               >
                 <ScheduleIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Schedule</span>
-              </button>
-
-              {/* Call */}
-              <button
-                type="button"
-                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors group"
-                onClick={() => {
-                  setShowMoreActionsSheet(false);
-                  handleCallClick();
-                }}
-                data-testid="more-sheet-call"
-              >
-                <CallIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
-                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Call</span>
               </button>
 
               {/* Quote */}
