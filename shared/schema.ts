@@ -214,6 +214,7 @@ export const customers = pgTable("customers", {
   isVipMember: boolean("is_vip_member").default(false),
   vipMemberSince: timestamp("vip_member_since"),
   vipDiscountPercent: decimal("vip_discount_percent", { precision: 5, scale: 2 }),
+  invoiceCcEmail: text("invoice_cc_email"), // Auto-CC this address on every invoice email
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

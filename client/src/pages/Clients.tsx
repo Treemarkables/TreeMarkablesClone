@@ -70,6 +70,7 @@ interface ApiResponse<T> {
 const editCustomerSchema = z.object({
   name: z.string().min(1, "Name is required"),
   email: z.string().optional().or(z.literal("")),
+  invoiceCcEmail: z.string().optional().or(z.literal("")),
   phone: z.string().optional().or(z.literal("")),
   mobile: z.string().optional().or(z.literal("")),
   address: z.string().optional().or(z.literal("")),
@@ -175,6 +176,7 @@ export default function Clients() {
     defaultValues: {
       name: "",
       email: "",
+      invoiceCcEmail: "",
       phone: "",
       mobile: "",
       address: "",
@@ -319,6 +321,7 @@ export default function Clients() {
     editForm.reset({
       name: customer.name,
       email: customer.email || "",
+      invoiceCcEmail: customer.invoiceCcEmail || "",
       phone: customer.phone || "",
       mobile: customer.mobile || "",
       address: customer.address || "",
@@ -895,6 +898,24 @@ export default function Clients() {
                     <FormControl>
                       <Input
                         placeholder="Enter email address"
+                        type="email"
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={editForm.control}
+                name="invoiceCcEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Invoice CC Email</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Auto-CC on all invoice emails (optional)"
                         type="email"
                         {...field}
                       />
