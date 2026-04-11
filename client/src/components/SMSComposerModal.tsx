@@ -107,7 +107,13 @@ export function SMSComposerModal({
   // Only auto-generate message for invoice context
   useEffect(() => {
     if (isOpen && invoiceData && customer) {
-      const defaultMessage = `Hi ${customer.name || "there"}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
+      // Prefer job contact first name, fall back to customer name
+      const recipientFirstName =
+        job?.jobContactFirstName ||
+        customer.firstName ||
+        customer.name?.split(" ")[0] ||
+        "there";
+      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
       form.setValue("message", defaultMessage);
       setCharacterCount(defaultMessage.length);
     }
@@ -149,13 +155,22 @@ export function SMSComposerModal({
     if (template) {
       let message = template.message || "";
 
-      // Get contact name - use job contact if available, otherwise customer
-      const contactName =
-        job?.jobContactFirstName && job?.jobContactLastName
-          ? `${job.jobContactFirstName} ${job.jobContactLastName}`
-          : customer?.name || "";
+      // Get contact name — prefer job contact fields, fall back to customer record
+      let contactName = "";
+      if (job?.jobContactFirstName && job?.jobContactLastName) {
+        contactName = `${job.jobContactFirstName} ${job.jobContactLastName}`;
+      } else if (job?.jobContactFirstName) {
+        contactName = job.jobContactFirstName;
+      } else if (customer?.firstName && customer?.lastName) {
+        contactName = `${customer.firstName} ${customer.lastName}`;
+      } else if (customer?.name) {
+        contactName = customer.name;
+      }
       const firstName =
-        job?.jobContactFirstName || customer?.name?.split(" ")[0] || "";
+        job?.jobContactFirstName ||
+        customer?.firstName ||
+        customer?.name?.split(" ")[0] ||
+        "";
 
       // Replace placeholders with actual values (support both snake_case and camelCase formats)
       message = message.replace(/\{customer_name\}/gi, contactName);

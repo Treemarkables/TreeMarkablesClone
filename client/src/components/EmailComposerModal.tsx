@@ -300,9 +300,11 @@ export function EmailComposerModal({
             customer.email ||
             customer.jobContactEmail);
 
-      // Extract first name from customer data
+      // Extract first name — prefer job contact fields, fall back to customer record
       let firstName = "there";
-      if (customer.firstName) {
+      if (job?.jobContactFirstName) {
+        firstName = job.jobContactFirstName;
+      } else if (customer.firstName) {
         firstName = customer.firstName;
       } else if (customer.name) {
         // If name is stored as "LastName, FirstName", extract first name
@@ -317,9 +319,16 @@ export function EmailComposerModal({
       }
 
       // Also keep full name for other templates that might need it
+      // Prefer job contact fields, fall back to customer record
       let customerName = "Valued Customer";
-      if (customer.firstName && customer.lastName) {
+      if (job?.jobContactFirstName && job?.jobContactLastName) {
+        customerName = `${job.jobContactFirstName} ${job.jobContactLastName}`.trim();
+      } else if (job?.jobContactFirstName) {
+        customerName = job.jobContactFirstName;
+      } else if (customer.firstName && customer.lastName) {
         customerName = `${customer.firstName} ${customer.lastName}`.trim();
+      } else if (customer.firstName) {
+        customerName = customer.firstName;
       } else if (customer.name) {
         customerName = customer.name;
       }
@@ -682,9 +691,11 @@ export function EmailComposerModal({
     const template = EMAIL_TEMPLATES.find((t) => t.id === templateId);
     if (!template) return;
 
-    // Extract first name
+    // Extract first name — prefer job contact fields, fall back to customer record
     let firstName = "there";
-    if (customer?.firstName) {
+    if (job?.jobContactFirstName) {
+      firstName = job.jobContactFirstName;
+    } else if (customer?.firstName) {
       firstName = customer.firstName;
     } else if (customer?.name) {
       if (customer.name.includes(",")) {
@@ -695,9 +706,19 @@ export function EmailComposerModal({
       }
     }
 
-    const customerName =
-      customer?.name ||
-      `${customer?.firstName || ""} ${customer?.lastName || ""}`.trim();
+    // Full name — prefer job contact fields, fall back to customer record
+    let customerName = "Valued Customer";
+    if (job?.jobContactFirstName && job?.jobContactLastName) {
+      customerName = `${job.jobContactFirstName} ${job.jobContactLastName}`.trim();
+    } else if (job?.jobContactFirstName) {
+      customerName = job.jobContactFirstName;
+    } else if (customer?.firstName && customer?.lastName) {
+      customerName = `${customer.firstName} ${customer.lastName}`.trim();
+    } else if (customer?.firstName) {
+      customerName = customer.firstName;
+    } else if (customer?.name) {
+      customerName = customer.name;
+    }
 
     // Use current domain for links (works in both dev and production)
     const baseUrl = window.location.origin;
