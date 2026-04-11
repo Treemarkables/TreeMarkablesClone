@@ -3829,6 +3829,14 @@ The Treemarkables Team`;
                   Email
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  disabled={!editingJob?.id || mode === "create"}
+                  onClick={() => handleInvoiceClick()}
+                  data-testid="more-menu-invoice"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Invoice
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   disabled={!selectedCustomer?.id}
                   onClick={async () => {
                     if (!selectedCustomer?.id) return;
