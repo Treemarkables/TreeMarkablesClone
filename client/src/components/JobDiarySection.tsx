@@ -942,20 +942,26 @@ export function JobDiarySection({
       (entry.title + " " + entry.content).match(/INV-\d{4}-\d{2}-\d{6}/i) ||
       (entry.title + " " + entry.content).match(/INV-[\d-]+/i);
 
-    // Also check metadata for invoice info
+    // Also check plain "Invoice NNNN created" pattern and metadata
+    const plainInvoiceCreatedMatch = (entry.title + " " + entry.content).match(/invoice\s+(\d+)\s+created/i);
+
     if (
+      entry.metadata?.invoiceId ||
+      entry.metadata?.action === "invoice_created" ||
       entry.metadata?.documentType === "invoice" ||
       invoiceMatch ||
+      plainInvoiceCreatedMatch ||
       content.includes("invoice sent") ||
       content.includes("invoice created")
     ) {
-      // If we found an invoice number in content, use it; otherwise check metadata; otherwise use a placeholder
       const invoiceNumber = invoiceMatch
         ? invoiceMatch[0]
-        : entry.metadata?.invoiceNumber ||
-          entry.metadata?.documentNumber ||
-          "latest";
-      return { type: "invoice", number: invoiceNumber };
+        : plainInvoiceCreatedMatch
+          ? plainInvoiceCreatedMatch[1]
+          : entry.metadata?.invoiceNumber ||
+            entry.metadata?.documentNumber ||
+            "latest";
+      return { type: "invoice", number: invoiceNumber, invoiceId: entry.metadata?.invoiceId };
     }
 
     // Check for proposal
