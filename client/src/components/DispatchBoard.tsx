@@ -3192,62 +3192,25 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </p>
                         )}
 
-                        {/* Row 4: Action indicators + Call/Message buttons */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {job.priority === "urgent" && (
-                              <Badge className="bg-orange-500 text-white text-xs border-0">
-                                <Zap className="h-3 w-3 mr-1" />
-                                Urgent
-                              </Badge>
-                            )}
-                            {job.scheduledEndDate ? (
-                              <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
-                                {format(new Date(job.startTime), "MMM d")} –{" "}
-                                {format(
-                                  new Date(job.scheduledEndDate),
-                                  "MMM d",
-                                )}
-                              </Badge>
-                            ) : job.startTime ? (
-                              <span className="flex items-center gap-1 text-xs text-gray-500">
-                                <Calendar className="h-3 w-3" />
-                                {format(new Date(job.startTime), "MMM d")}
-                              </span>
-                            ) : null}
-                          </div>
-
-                          {/* Call & Message & Queue Buttons */}
-                          <div className="flex items-center gap-2">
-                            {hasPhone && (
-                              <Button
-                                size="icon"
-                                variant="default"
-                                className="bg-green-500 rounded-lg"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.location.href = `tel:${job.jobContactPhone || job.jobContactMobile || job.customerPhone || job.phone}`;
-                                }}
-                                data-testid={`call-button-${job.id}`}
-                              >
-                                <Phone className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              size="icon"
-                              variant="default"
-                              className="bg-blue-500 rounded-lg"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (hasPhone) {
-                                  window.location.href = `sms:${job.customerPhone || job.phone}`;
-                                }
-                              }}
-                              data-testid={`message-button-${job.id}`}
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
-                          </div>
+                        {/* Row 4: Action indicators */}
+                        <div className="flex items-center gap-2">
+                          {job.priority === "urgent" && (
+                            <Badge className="bg-orange-500 text-white text-xs border-0">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Urgent
+                            </Badge>
+                          )}
+                          {job.scheduledEndDate ? (
+                            <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
+                              {format(new Date(job.startTime), "MMM d")} –{" "}
+                              {format(new Date(job.scheduledEndDate), "MMM d")}
+                            </Badge>
+                          ) : job.startTime ? (
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(job.startTime), "MMM d")}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                     </div>
