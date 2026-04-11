@@ -2031,7 +2031,7 @@ export function JobDiarySection({
                                 <img
                                   src={entry.photoUrl}
                                   alt="Job photo"
-                                  className="w-24 h-24 object-cover rounded-lg cursor-pointer hover-elevate"
+                                  className="max-w-full h-auto max-h-64 rounded-lg cursor-pointer hover-elevate object-contain"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     const photoIndex = allPhotos.indexOf(
