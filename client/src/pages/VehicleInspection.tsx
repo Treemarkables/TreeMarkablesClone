@@ -70,9 +70,9 @@ export default function VehicleInspection() {
   const { data: vehiclesData } = useQuery({
     queryKey: ["/api/equipment"],
   });
-  const vehicles = Array.isArray((vehiclesData as any)?.data)
+  const vehicles = (Array.isArray((vehiclesData as any)?.data)
     ? (vehiclesData as any).data
-    : [];
+    : []).filter((v: any) => v.requiresPreStart === true);
 
   // Fetch templates
   const { data: templatesData } = useQuery({
