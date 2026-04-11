@@ -482,11 +482,12 @@ export default function TemplateManagement() {
                 </div>
 
                 <Tabs defaultValue="company" className="w-full">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="company">Company Info</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="company">Company</TabsTrigger>
                     <TabsTrigger value="styling">Styling</TabsTrigger>
                     <TabsTrigger value="terms">Terms</TabsTrigger>
                     <TabsTrigger value="sections">Sections</TabsTrigger>
+                    <TabsTrigger value="preview">Preview</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
@@ -702,6 +703,31 @@ export default function TemplateManagement() {
                       ))}
                     </div>
                   </TabsContent>
+
+                  <TabsContent value="preview" className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
+                      <Badge variant="secondary" className="text-xs">Sample data</Badge>
+                    </div>
+                    <div className="overflow-hidden rounded-md border bg-white">
+                      <div
+                        style={{ transformOrigin: "top left", transform: "scale(0.65)", width: "153.8%", pointerEvents: "none" }}
+                        className="select-none"
+                      >
+                        <InvoiceTemplate
+                          template={previewTemplate as any}
+                          invoice={MOCK_INVOICE}
+                          customer={MOCK_CUSTOMER as any}
+                          lineItems={MOCK_LINE_ITEMS}
+                          description="Tree removal and stump grinding at the property. All debris removed and site left clean."
+                          jobAddress="45 Palm Drive, Gisborne"
+                          billingName="Jane Smith"
+                          sectionConfig={sections}
+                        />
+                      </div>
+                    </div>
+                  </TabsContent>
                 </Tabs>
 
                 <div className="flex justify-end gap-2 pt-4">
@@ -729,8 +755,8 @@ export default function TemplateManagement() {
             </Form>
               </div>{/* end form panel */}
 
-              {/* Live preview panel */}
-              <div className="hidden lg:flex flex-1 flex-col overflow-y-auto bg-muted/30 p-5 gap-3">
+              {/* Live preview panel — only on very wide screens; smaller screens use the Preview tab */}
+              <div className="hidden xl:flex flex-1 flex-col overflow-y-auto bg-muted/30 p-5 gap-3">
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <Eye className="h-4 w-4 text-muted-foreground" />
                   <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
