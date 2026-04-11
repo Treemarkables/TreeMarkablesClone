@@ -391,6 +391,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_alignment TEXT NOT NULL DEFAULT 'left'
       `);
       log("✅ Schema migration: document_templates.logo_alignment ready", "startup");
+
+      // Add header_color to document_templates
+      await pool.query(`
+        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS header_color TEXT NOT NULL DEFAULT '#ffffff'
+      `);
+      log("✅ Schema migration: document_templates.header_color ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }
