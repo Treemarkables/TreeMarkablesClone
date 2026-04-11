@@ -79,6 +79,7 @@ import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, C
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useSSE } from "@/hooks/useSSE";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ScrollToTop component to reset scroll position on navigation
@@ -154,6 +155,8 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
+  // Live push: invalidate queries instantly when server broadcasts a change
+  useSSE();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();

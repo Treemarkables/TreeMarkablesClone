@@ -3,6 +3,7 @@ import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, notifications, conversations, conversationMessages } from '@shared/schema';
 import { eq, or, sql, desc } from 'drizzle-orm';
 import { fromZonedTime } from 'date-fns-tz';
+import { broadcast } from '../sseManager';
 
 const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute (60 seconds)
 let pollingIntervalId: NodeJS.Timeout | null = null;
@@ -176,6 +177,7 @@ async function processSMSReplies() {
         }
 
         console.log(`📱 ✅ Stored SMS reply as diary entry and notification in job #${matchedJob.jobNumber}`);
+        broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
 
         // Also add SMS reply to conversations if there's an active conversation with this phone
         try {
