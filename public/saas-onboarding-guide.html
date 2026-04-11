@@ -604,7 +604,7 @@
         <tbody>
           <tr><td>Account type</td><td>Twilio main account or subaccount (recommended: one subaccount per subscriber)</td></tr>
           <tr><td>Who creates</td><td>Platform owner (you) — create a Twilio subaccount under your main account</td></tr>
-          <tr><td>Credentials needed</td><td><code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_API_KEY</code>, <code>TWILIO_API_SECRET</code>, <code>TWILIO_PHONE_NUMBER</code>, <code>TWILIO_TWIML_APP_SID</code></td></tr>
+          <tr><td>Credentials needed</td><td><code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_API_KEY</code>, <code>TWILIO_API_KEY_SECRET</code>, <code>TWILIO_PHONE_NUMBER</code>, <code>TWILIO_TWIML_APP_SID</code></td></tr>
           <tr><td>NZ phone number cost</td><td>~$2.50 USD/month for a local NZ number</td></tr>
           <tr><td>Voice call cost</td><td>~$0.013 USD/minute to receive calls</td></tr>
           <tr><td>Call recording</td><td>Included — stored in Twilio for 90 days by default</td></tr>
@@ -1195,7 +1195,7 @@
         <tr><td>TWILIO_ACCOUNT_SID</td><td>Twilio subaccount SID (starts with AC)</td><td>Owner (per subscriber)</td></tr>
         <tr><td>TWILIO_AUTH_TOKEN</td><td>Twilio subaccount auth token (use API Key instead for production)</td><td>Owner (per subscriber)</td></tr>
         <tr><td>TWILIO_API_KEY</td><td>Twilio API Key SID (starts with SK) — preferred over Auth Token</td><td>Owner (per subscriber)</td></tr>
-        <tr><td>TWILIO_API_SECRET</td><td>Twilio API Key Secret</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>TWILIO_API_KEY_SECRET</td><td>Twilio API Key Secret (used in twilioClient.ts for authentication)</td><td>Owner (per subscriber)</td></tr>
         <tr><td>TWILIO_PHONE_NUMBER</td><td>The Twilio NZ phone number (e.g. <code>+6499999999</code>)</td><td>Owner (per subscriber)</td></tr>
         <tr><td>TWILIO_TWIML_APP_SID</td><td>TwiML App SID for voice SDK (starts with AP)</td><td>Owner (per subscriber)</td></tr>
         <tr><td>HERO_WEBHOOK_SECRET</td><td>Secret for validating Twilio webhook signatures</td><td>Owner (per subscriber)</td></tr>
@@ -1326,7 +1326,7 @@
     <thead><tr><th>Integration</th><th>Expiry / Renewal</th><th>Action required</th></tr></thead>
     <tbody>
       <tr><td><strong>Xero</strong></td><td>Token expires every 30 min — auto-refreshed</td><td>No action. If scopes change in Xero Developer Portal, manually hit "Refresh Token" in platform Settings → Xero.</td></tr>
-      <tr><td><strong>Twilio API Key</strong></td><td>Never expires (unless manually rotated)</td><td>Rotate annually as security best practice. Update <code>TWILIO_API_KEY</code> and <code>TWILIO_API_SECRET</code>.</td></tr>
+      <tr><td><strong>Twilio API Key</strong></td><td>Never expires (unless manually rotated)</td><td>Rotate annually as security best practice. Update <code>TWILIO_API_KEY</code> and <code>TWILIO_API_KEY_SECRET</code>.</td></tr>
       <tr><td><strong>Gmail App Password</strong></td><td>Never expires (unless 2FA is disabled or manually revoked)</td><td>If subscriber changes their Google password or disables 2FA, a new App Password must be generated.</td></tr>
       <tr><td><strong>Facebook Page Token</strong></td><td>Expires in 60 days (short-lived) or never (long-lived System User token)</td><td>Set calendar reminder at 50 days to regenerate if using standard long-lived token. Switch to System User token for never-expiring tokens.</td></tr>
       <tr><td><strong>OpenAI API Key</strong></td><td>Never expires</td><td>Monitor spending via OpenAI dashboard. Rotate if compromised.</td></tr>
