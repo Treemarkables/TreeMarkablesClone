@@ -450,20 +450,9 @@ export default function CommunicationTemplates() {
             )}
             <div>
               {isEmail && <p className="text-[10px] text-muted-foreground font-medium mb-0.5">Body</p>}
-              {isEmail ? (
-                renderedBody ? (
-                  <div
-                    className="text-sm text-gray-800 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: renderedBody.replace(/\n/g, "<br />") }}
-                  />
-                ) : (
-                  <p className="text-sm text-muted-foreground italic">Start typing your template…</p>
-                )
-              ) : (
-                <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-sans">
-                  {renderedBody || <span className="text-muted-foreground italic">Start typing your template…</span>}
-                </pre>
-              )}
+              <pre className="text-sm text-gray-800 whitespace-pre-wrap break-words font-sans">
+                {renderedBody || <span className="text-muted-foreground italic">Start typing your template…</span>}
+              </pre>
             </div>
           </div>
         </div>
