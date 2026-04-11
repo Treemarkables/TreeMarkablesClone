@@ -132,6 +132,28 @@ export default function TemplateManagement() {
   const resizeStartYRef = useRef(0);
   const resizeStartSizeRef = useRef(0);
 
+  const form = useForm<TemplateFormData>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: {
+      name: "",
+      type: "quote",
+      description: "",
+      isDefault: false,
+      isActive: true,
+      companyName: "Treemarkables LTD",
+      companyAddress: "Hauroa rd\nGisborne, 4010",
+      companyEmail: "quotes@treemarkables.nz",
+      companyPhone: "027 216 6882",
+      gstNumber: "131-047-592-GST004",
+      paymentTerms: "Payment due within 7 days",
+      primaryColor: "#f97316",
+      secondaryColor: "#3b82f6",
+      logoUrl: null,
+      logoSize: 40,
+      logoAlignment: "left",
+    },
+  });
+
   const handleLogoDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const onMouseMove = (ev: MouseEvent) => {
@@ -247,28 +269,6 @@ export default function TemplateManagement() {
     },
     onError: () => {
       toast({ title: "Error updating template status", variant: "destructive" });
-    },
-  });
-
-  const form = useForm<TemplateFormData>({
-    resolver: zodResolver(templateFormSchema),
-    defaultValues: {
-      name: "",
-      type: "quote",
-      description: "",
-      isDefault: false,
-      isActive: true,
-      companyName: "Treemarkables LTD",
-      companyAddress: "Hauroa rd\nGisborne, 4010",
-      companyEmail: "quotes@treemarkables.nz",
-      companyPhone: "027 216 6882",
-      gstNumber: "131-047-592-GST004",
-      paymentTerms: "Payment due within 7 days",
-      primaryColor: "#f97316",
-      secondaryColor: "#3b82f6",
-      logoUrl: null,
-      logoSize: 40,
-      logoAlignment: "left",
     },
   });
 
