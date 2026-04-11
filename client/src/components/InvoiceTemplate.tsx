@@ -90,6 +90,17 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     ? sectionConfig.filter(s => s.visible).map(s => s.id)
     : DEFAULT_SECTION_ORDER;
 
+  // Build a label lookup so custom section names appear on the invoice
+  const sectionLabel: Record<string, string> = {
+    billTo: "Bill To",
+    description: "Description",
+    lineItems: "Services & Pricing",
+    payment: "Payment Information",
+  };
+  if (sectionConfig) {
+    sectionConfig.forEach(s => { sectionLabel[s.id] = s.label; });
+  }
+
   // Calculate totals
   const lineItemSubtotal = lineItems.reduce((sum, item) => {
     const itemTotal = item.total || item.amount;
@@ -201,7 +212,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               case 'billTo':
                 return (
                   <div key="billTo" className="mb-4">
-                    <h2 className="text-xs font-semibold text-black mb-2">Bill To</h2>
+                    <h2 className="text-xs font-semibold text-black mb-2">{sectionLabel['billTo']}</h2>
                     <div>
                       <p className="font-semibold text-black text-xs mb-1" data-testid="text-customer-name">
                         {billingName || customer?.name || 'Customer'}
@@ -232,7 +243,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 if (!description && !invoice.notes) return null;
                 return (
                   <div key="description" className="mb-4">
-                    <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
+                    <h2 className="text-xs font-semibold text-black mb-2">{sectionLabel['description']}</h2>
                     <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
                       <LinkifiedText text={description || invoice.notes || ''} />
                     </div>
@@ -243,7 +254,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                 if (!hasLineItems) return null;
                 return (
                   <div key="lineItems" className="mb-4">
-                    <h2 className="text-xs font-semibold text-black mb-2">Services & Pricing</h2>
+                    <h2 className="text-xs font-semibold text-black mb-2">{sectionLabel['lineItems']}</h2>
                     <div className="w-full overflow-x-auto">
                       <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                         <thead className="bg-gray-50">
@@ -303,7 +314,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               case 'payment':
                 return (
                   <div key="payment" className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-                    <h3 className="text-xs font-semibold text-black mb-2">Payment Information</h3>
+                    <h3 className="text-xs font-semibold text-black mb-2">{sectionLabel['payment']}</h3>
                     <div className="text-xs text-gray-600 space-y-1">
                       <p><span className="font-medium text-black">Due Date:</span> {format(dueDate, 'dd MMM yyyy')}</p>
                       <p><span className="font-medium text-black">Bank:</span> ANZ</p>

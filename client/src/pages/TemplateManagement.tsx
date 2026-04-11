@@ -303,6 +303,12 @@ export default function TemplateManagement() {
     );
   };
 
+  const renameSection = (index: number, label: string) => {
+    setSections(prev =>
+      prev.map((s, i) => (i === index ? { ...s, label } : s))
+    );
+  };
+
   const filteredTemplates = templates.filter(
     (template: DocumentTemplate) =>
       selectedType === "all" || template.type === selectedType,
@@ -654,7 +660,7 @@ export default function TemplateManagement() {
 
                   <TabsContent value="sections" className="space-y-3">
                     <p className="text-sm text-muted-foreground">
-                      Toggle sections on or off, and use the arrows to reorder them on the document.
+                      Click any section name to rename it. Toggle sections on or off, and use the arrows to reorder them on the document.
                       Locked sections (like the header and totals) cannot be hidden.
                     </p>
                     <div className="space-y-2" data-testid="section-list">
@@ -667,7 +673,13 @@ export default function TemplateManagement() {
                           data-testid={`section-row-${section.id}`}
                         >
                           <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                          <span className="flex-1 text-sm font-medium">{section.label}</span>
+                          <input
+                            className="flex-1 text-sm font-medium bg-transparent border-0 outline-none focus:bg-background focus:border focus:border-input focus:rounded focus:px-2 focus:py-0.5 transition-all min-w-0"
+                            value={section.label}
+                            onChange={e => renameSection(index, e.target.value)}
+                            placeholder="Section name"
+                            aria-label={`Rename ${section.label} section`}
+                          />
                           {section.locked && (
                             <Badge variant="secondary" className="text-xs">Always on</Badge>
                           )}
