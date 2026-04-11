@@ -1026,7 +1026,7 @@ export default function MetricsDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 overflow-x-hidden w-full max-w-full">
+    <div className="min-h-screen bg-white overflow-x-hidden w-full max-w-full">
       {/* CEO Overview Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
         <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
