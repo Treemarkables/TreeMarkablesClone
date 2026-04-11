@@ -267,6 +267,8 @@ export function EmailComposerModal({
         });
       }
       if (proposalData) {
+        // URL returns application/pdf (binary). Smart Attachments intentionally
+        // attach the PDF — use ?format=html on the endpoint if HTML is ever needed.
         attachmentsList.push({
           name: `Treemarkables LTD Proposal ${proposalData.proposalNumber || "PROP-" + job.jobNumber}`,
           type: "proposal",

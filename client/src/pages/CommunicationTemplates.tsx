@@ -858,7 +858,7 @@ export default function CommunicationTemplates() {
                 type="submit"
                 form="template-form"
                 disabled={saveEmailTemplateMutation.isPending || saveSmsTemplateMutation.isPending}
-                data-testid="button-save-email-template"
+                data-testid={activeTab === "email" ? "button-save-email-template" : "button-save-sms-template"}
               >
                 {(saveEmailTemplateMutation.isPending || saveSmsTemplateMutation.isPending)
                   ? "Saving…" : "Save Template"}
