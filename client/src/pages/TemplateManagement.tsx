@@ -598,8 +598,8 @@ export default function TemplateManagement() {
                       {/* Header strip — drag logo left/center/right, drag corner to resize */}
                       <div
                         ref={headerStripRef}
-                        className="relative w-full rounded-md border bg-white overflow-hidden select-none"
-                        style={{ height: Math.max(72, (watchedValues.logoSize ?? 40) + 32) }}
+                        className="relative w-full rounded-md border bg-white overflow-visible select-none"
+                        style={{ height: 80 }}
                       >
                         {/* Zone dividers */}
                         <div className="absolute inset-0 flex pointer-events-none">
