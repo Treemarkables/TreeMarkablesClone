@@ -485,23 +485,61 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {/* Notifications Bell */}
               <NotificationBell />
               
-              {/* Refresh Button - Desktop */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
+              {/* Dispatch action buttons (desktop) or Refresh — same slot */}
+              {isDispatchPage ? (
+                <>
+                  <Button
+                    variant="ghost"
                     size="icon"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    data-testid="button-desktop-refresh"
+                    onClick={() => {
+                      const input = document.querySelector<HTMLInputElement>('[data-testid="desktop-job-search-input"]');
+                      if (input) { input.focus(); input.select(); }
+                      setDispatchSearchOpen(!dispatchSearchOpen);
+                    }}
+                    data-testid="desktop-search-toggle"
+                    className="text-black"
                   >
-                    <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <Search className="h-5 w-5" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Refresh all data</p>
-                </TooltipContent>
-              </Tooltip>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    data-testid="paste-message-button-desktop"
+                    className="text-black gap-1.5"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    Paste
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
+                    data-testid="create-wo-button-desktop"
+                    className="text-black gap-1.5"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Work Order
+                  </Button>
+                </>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      data-testid="button-desktop-refresh"
+                    >
+                      <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh all data</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
@@ -580,81 +618,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               </DropdownMenu>
               )}
               
-              {/* Dispatch controls — only shown on /dispatch (desktop) */}
-              {isDispatchPage && (
-                <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        data-testid="create-new-button-desktop"
-                        className="text-green-700 border-green-300 bg-green-50 text-sm font-medium shrink-0"
-                      >
-                        <Plus className="h-4 w-4 mr-1 text-green-600" />
-                        New
-                        <ChevronDown className="h-3 w-3 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-lead"))}
-                        data-testid="create-lead-button-desktop"
-                      >
-                        Lead
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
-                        data-testid="create-wo-button-desktop"
-                      >
-                        Work Order
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
-                    data-testid="paste-message-button-desktop"
-                    className="text-orange-600 border-orange-300 bg-orange-50 text-sm font-medium shrink-0"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
-                    Paste
-                  </Button>
-
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={`shrink-0 text-sm font-medium ${dispatchFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
-                        data-testid="desktop-filter-dropdown-trigger"
-                      >
-                        <Filter className="h-3.5 w-3.5 mr-1" />
-                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
-                        <ChevronDown className="h-3 w-3 ml-1" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="desktop-filter-all">
-                        All
-                      </DropdownMenuItem>
-                      {DISPATCH_STATUS_FILTERS.map(tab => (
-                        <DropdownMenuItem
-                          key={tab.value}
-                          onClick={() => setDispatchFilter(tab.value)}
-                          data-testid={`desktop-filter-tab-${tab.value}`}
-                        >
-                          {tab.label}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-
-              {/* Global New Job Button — hidden on dispatch (controls above replace it) */}
+              {/* Global New Job Button — hidden on dispatch */}
               {!isDispatchPage && (
               <Button 
                 size="sm" 
