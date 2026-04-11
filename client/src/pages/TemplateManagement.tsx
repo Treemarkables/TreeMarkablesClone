@@ -48,6 +48,33 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import type { DocumentTemplate, InsertDocumentTemplate, InvoiceSectionConfig } from "@shared/schema";
+import { InvoiceTemplate } from "@/components/InvoiceTemplate";
+
+const MOCK_INVOICE = {
+  id: "preview",
+  invoiceNumber: "INV-0042",
+  customerId: "preview",
+  amount: 1500,
+  status: "draft" as const,
+  dueDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+  issueDate: new Date().toISOString(),
+  notes: "Tree removal and stump grinding at the property.",
+};
+
+const MOCK_CUSTOMER = {
+  id: "preview",
+  name: "Jane Smith",
+  email: "jane@example.com",
+  address: "45 Palm Drive, Gisborne",
+  phone: "021 555 0123",
+  createdAt: new Date().toISOString(),
+};
+
+const MOCK_LINE_ITEMS = [
+  { id: "1", description: "Tree Removal (Large Totara)", quantity: 1, unitPrice: 800, total: 800 },
+  { id: "2", description: "Stump Grinding", quantity: 2, unitPrice: 200, total: 400 },
+  { id: "3", description: "Site Cleanup & Green Waste Disposal", quantity: 1, unitPrice: 300, total: 300 },
+];
 
 const DEFAULT_SECTIONS: InvoiceSectionConfig[] = [
   { id: "header",      label: "Header & Logo",          visible: true, locked: true },
@@ -183,6 +210,32 @@ export default function TemplateManagement() {
     },
   });
 
+  const watchedValues = form.watch();
+
+  // Build a live preview template from the current form state + sections
+  const previewTemplate = {
+    id: "preview",
+    name: watchedValues.name || "Preview Template",
+    type: watchedValues.type || "invoice",
+    description: watchedValues.description || null,
+    isDefault: watchedValues.isDefault ?? false,
+    isActive: watchedValues.isActive ?? true,
+    companyName: watchedValues.companyName || "Treemarkables LTD",
+    companyAddress: watchedValues.companyAddress || "213 Stanley Road, Gisborne",
+    companyEmail: watchedValues.companyEmail || "quotes@treemarkables.nz",
+    companyPhone: watchedValues.companyPhone || "027 216 6882",
+    gstNumber: watchedValues.gstNumber || "131-047-592",
+    paymentTerms: watchedValues.paymentTerms || "Payment due within 7 days",
+    primaryColor: watchedValues.primaryColor || "#f97316",
+    secondaryColor: watchedValues.secondaryColor || "#3b82f6",
+    headerLayout: null,
+    footerText: null,
+    logoUrl: null,
+    sectionConfig: sections,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
   const onSubmit = (data: TemplateFormData) => {
     const payload = { ...data, sectionConfig: sections };
     if (editingTemplate) {
@@ -305,12 +358,16 @@ export default function TemplateManagement() {
               Create Template
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-[95vw] w-full max-h-[95vh] p-0 overflow-hidden flex flex-col">
+            <DialogHeader className="px-6 pt-5 pb-3 border-b flex-shrink-0">
               <DialogTitle>
                 {editingTemplate ? "Edit Template" : "Create New Template"}
               </DialogTitle>
             </DialogHeader>
+            {/* Split pane: form left, preview right */}
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {/* Form panel */}
+              <div className="w-full lg:w-[420px] flex-shrink-0 overflow-y-auto border-r px-6 py-4">
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
@@ -670,6 +727,32 @@ export default function TemplateManagement() {
                 </div>
               </form>
             </Form>
+              </div>{/* end form panel */}
+
+              {/* Live preview panel */}
+              <div className="hidden lg:flex flex-1 flex-col overflow-y-auto bg-muted/30 p-5 gap-3">
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
+                  <Badge variant="secondary" className="text-xs">Sample data</Badge>
+                </div>
+                <div
+                  style={{ transformOrigin: "top left", transform: "scale(0.72)", width: "138.9%", pointerEvents: "none" }}
+                  className="select-none"
+                >
+                  <InvoiceTemplate
+                    template={previewTemplate as any}
+                    invoice={MOCK_INVOICE}
+                    customer={MOCK_CUSTOMER as any}
+                    lineItems={MOCK_LINE_ITEMS}
+                    description="Tree removal and stump grinding at the property. All debris removed and site left clean."
+                    jobAddress="45 Palm Drive, Gisborne"
+                    billingName="Jane Smith"
+                    sectionConfig={sections}
+                  />
+                </div>
+              </div>
+            </div>{/* end split pane */}
           </DialogContent>
         </Dialog>
       </div>
