@@ -233,9 +233,9 @@ export function AdvancedDispatchBoard({
 
   // Get customer name with enhanced display logic
   const getCustomerName = (customerId: string, jobData?: any) => {
-    // Return placeholder if customers data hasn't loaded yet
+    // Return empty string while customers data is loading
     if (!customersData || customersLoading) {
-      return "Loading...";
+      return "";
     }
 
     const customer = (customersData as any)?.data?.find(
