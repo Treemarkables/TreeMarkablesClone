@@ -1,4 +1,4 @@
-import { useJobFilter } from "@/lib/dispatchHeaderStore";
+import { useJobFilter, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -628,7 +628,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isDeepSearchActive, setIsDeepSearchActive] = useState<boolean>(false);
-  const [showMobileSearch, setShowMobileSearch] = useState<boolean>(false);
+  const [showMobileSearch, setShowMobileSearch] = useDispatchSearchOpen();
   const [deepSearchResults, setDeepSearchResults] = useState<JobAssignment[]>(
     [],
   );
@@ -2730,28 +2730,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
           {/* Search strip — pinned below main header */}
           <div className="flex-shrink-0 z-50">
+          {showMobileSearch && (
           <div className="bg-background border-b px-3 py-1 flex flex-col gap-1">
-            <div className="flex items-center justify-end">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="text-muted-foreground"
-                onClick={() => {
-                  setShowMobileSearch((prev) => {
-                    if (prev) {
-                      setSearchQuery("");
-                      setIsDeepSearchActive(false);
-                      setDeepSearchResults([]);
-                    }
-                    return !prev;
-                  });
-                }}
-                data-testid="mobile-search-toggle"
-              >
-                {showMobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
-              </Button>
-            </div>
-            {showMobileSearch ? (
               <div className="flex flex-col gap-1 pb-1">
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
@@ -2813,8 +2793,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   </div>
                 )}
               </div>
-            ) : null}
           </div>
+          )}
           </div>{/* end header group */}
 
           {/* Jobs List - scrollable area */}
