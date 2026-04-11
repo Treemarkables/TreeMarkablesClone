@@ -290,13 +290,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="icon"
                         data-testid="create-new-button-mobile"
-                        className="text-green-700 border-green-300 bg-green-50 text-sm font-medium shrink-0"
+                        className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0"
                       >
-                        <Plus className="h-4 w-4 mr-1 text-green-600" />
-                        New
-                        <ChevronDown className="h-3 w-3 ml-1" />
+                        <Plus className="h-5 w-5 text-green-700" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -323,13 +321,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
 
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     data-testid="paste-message-button-mobile"
-                    className="text-orange-600 border-orange-300 bg-orange-50 text-sm font-medium shrink-0"
+                    className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0"
                   >
-                    <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
-                    Paste
+                    <MessageSquare className="h-5 w-5 text-orange-600" />
                   </Button>
 
                   <DropdownMenu>
