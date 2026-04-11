@@ -6833,7 +6833,7 @@ The Treemarkables Team`;
                                     <Input
                                       {...field}
                                       className="h-9 text-base md:text-sm"
-                                      placeholder="Mobile (02x...)"
+                                      placeholder="Mobile"
                                       onChange={(e) => {
                                         const val = e.target.value;
                                         field.onChange(val);
