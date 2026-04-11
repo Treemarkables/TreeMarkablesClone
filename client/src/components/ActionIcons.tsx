@@ -57,12 +57,12 @@ export function SMSIcon({ className }: IconProps) {
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="sms-body" x1="6" y1="10" x2="58" y2="52" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#2dd4bf" />
-          <stop offset="50%" stopColor="#0d9488" />
-          <stop offset="100%" stopColor="#134e4a" />
+          <stop offset="0%" stopColor="#7dd3fc" />
+          <stop offset="50%" stopColor="#38bdf8" />
+          <stop offset="100%" stopColor="#0284c7" />
         </linearGradient>
         <linearGradient id="sms-shine" x1="6" y1="10" x2="30" y2="26" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.28" />
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.36" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
@@ -71,11 +71,11 @@ export function SMSIcon({ className }: IconProps) {
       {/* Top shine */}
       <path d="M8 12 Q8 8 12 8 L52 8 Q56 8 56 12 L56 22 Q30 22 8 22 Z" fill="url(#sms-shine)" />
       {/* Message dots */}
-      <circle cx="22" cy="26" r="3.5" fill="white" opacity="0.9" />
-      <circle cx="32" cy="26" r="3.5" fill="white" opacity="0.9" />
-      <circle cx="42" cy="26" r="3.5" fill="white" opacity="0.9" />
+      <circle cx="22" cy="26" r="3.5" fill="white" opacity="0.95" />
+      <circle cx="32" cy="26" r="3.5" fill="white" opacity="0.95" />
+      <circle cx="42" cy="26" r="3.5" fill="white" opacity="0.95" />
       {/* Subtle inner lines */}
-      <line x1="16" y1="17" x2="48" y2="17" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.18" />
+      <line x1="16" y1="17" x2="48" y2="17" stroke="white" strokeWidth="1" strokeLinecap="round" opacity="0.22" />
     </svg>
   );
 }
@@ -85,33 +85,30 @@ export function EmailIcon({ className }: IconProps) {
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
         <linearGradient id="em-body" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#60a5fa" />
-          <stop offset="50%" stopColor="#2563eb" />
-          <stop offset="100%" stopColor="#1e3a8a" />
+          <stop offset="0%" stopColor="#ffffff" />
+          <stop offset="100%" stopColor="#f1f5f9" />
         </linearGradient>
-        <linearGradient id="em-flap" x1="6" y1="14" x2="58" y2="32" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#93c5fd" />
-          <stop offset="100%" stopColor="#3b82f6" />
+        <linearGradient id="em-flap" x1="6" y1="14" x2="58" y2="36" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#f87171" />
+          <stop offset="55%" stopColor="#dc2626" />
+          <stop offset="100%" stopColor="#991b1b" />
         </linearGradient>
-        <linearGradient id="em-shine" x1="6" y1="14" x2="28" y2="28" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.30" />
+        <linearGradient id="em-shine" x1="6" y1="14" x2="32" y2="26" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* Envelope body */}
-      <rect x="6" y="14" width="52" height="38" rx="6" fill="url(#em-body)" />
-      {/* Flap fold — V crease */}
+      {/* Envelope body — white */}
+      <rect x="6" y="14" width="52" height="38" rx="6" fill="url(#em-body)" stroke="#e2e8f0" strokeWidth="1" />
+      {/* Flap fold — red V */}
       <path d="M6 14 L32 34 L58 14 Z" fill="url(#em-flap)" />
-      {/* White inner card */}
-      <rect x="14" y="28" width="36" height="18" rx="3" fill="white" opacity="0.18" />
-      {/* White lines on card */}
-      <line x1="18" y1="34" x2="46" y2="34" stroke="white" strokeWidth="1.2" strokeLinecap="round" opacity="0.45" />
-      <line x1="18" y1="38" x2="40" y2="38" stroke="white" strokeWidth="1.2" strokeLinecap="round" opacity="0.35" />
-      <line x1="18" y1="42" x2="36" y2="42" stroke="white" strokeWidth="1.2" strokeLinecap="round" opacity="0.25" />
       {/* Shine on flap */}
       <path d="M6 14 L32 34 L58 14 Z" fill="url(#em-shine)" />
-      {/* Seal dot */}
-      <circle cx="32" cy="34" r="4" fill="white" opacity="0.22" />
+      {/* Red ruled lines on body */}
+      <line x1="16" y1="38" x2="48" y2="38" stroke="#dc2626" strokeWidth="1.2" strokeLinecap="round" opacity="0.30" />
+      <line x1="16" y1="43" x2="42" y2="43" stroke="#dc2626" strokeWidth="1.2" strokeLinecap="round" opacity="0.20" />
+      {/* Seal circle at crease point */}
+      <circle cx="32" cy="34" r="3.5" fill="#dc2626" opacity="0.20" />
     </svg>
   );
 }
@@ -229,29 +226,29 @@ export function CallIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="call-body" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+        <linearGradient id="call-bg" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#4ade80" />
-          <stop offset="50%" stopColor="#16a34a" />
+          <stop offset="55%" stopColor="#16a34a" />
           <stop offset="100%" stopColor="#14532d" />
         </linearGradient>
-        <linearGradient id="call-bg" cx="50%" cy="50%" r="50%" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="64" y2="64">
-          <stop offset="0%" stopColor="#dcfce7" />
-          <stop offset="100%" stopColor="#bbf7d0" />
+        <linearGradient id="call-shine" x1="4" y1="4" x2="32" y2="28" gradientUnits="userSpaceOnUse">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.30" />
+          <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
-        <radialGradient id="call-glow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="#bbf7d0" stopOpacity="0.5" />
-          <stop offset="100%" stopColor="#bbf7d0" stopOpacity="0" />
-        </radialGradient>
       </defs>
-      {/* Glow disc */}
-      <circle cx="32" cy="32" r="28" fill="url(#call-glow)" />
-      {/* Phone handset shape */}
-      <path d="M16 12 C14 12 12 14 12 16 L12 22 C12 24 13.5 25.5 15.5 25.5 C20 25.5 24.5 26.5 28 29 C31.5 31.5 34 35 35.5 39.5 C36 41.5 37.5 43 39.5 43 L46 43 C48 43 50 41 50 39 L50 33 C50 31 48.5 29.5 46.5 29.5 C43.5 29.5 40.5 28.5 38 27 C38 27 35 24.5 33 21.5 C31 18.5 30 15.5 30 12.5 C30 10.5 28 9 26 9 L20 9 C18 9 16 10 16 12 Z" fill="url(#call-body)" />
-      {/* Highlight arc on handset */}
-      <path d="M18 13 C17 13 16 14 16 15 L16 20 C16 21 17 22 18 22 C21 22 24 23 26.5 24.5" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" opacity="0.45" />
-      {/* Signal rings */}
-      <path d="M42 10 Q50 18 42 26" fill="none" stroke="#4ade80" strokeWidth="2.5" strokeLinecap="round" opacity="0.7" />
-      <path d="M46 7 Q57 17 46 30" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" opacity="0.45" />
+      {/* iOS-style rounded square background */}
+      <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#call-bg)" />
+      {/* Shine overlay */}
+      <rect x="4" y="4" width="56" height="28" rx="14" fill="url(#call-shine)" />
+      {/* White phone handset — classic telephone receiver path */}
+      <path
+        d="M20 17 C18 17 16 19 16 21 L16 26 C16 27.5 17 28.5 18.5 29 C22 30 25.5 31.5 28.5 34.5 C31.5 37.5 33 41 34 44.5 C34.5 46 35.5 47 37 47 L42 47 C44 47 46 45 46 43 L46 38 C46 36.5 45 35.5 43.5 35 C41 34.5 38.5 33.5 36.5 32"
+        fill="none"
+        stroke="white"
+        strokeWidth="4.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </svg>
   );
 }
