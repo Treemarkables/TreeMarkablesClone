@@ -67,7 +67,7 @@ const VARIABLE_GROUPS = [
     vars: [
       { token: "{customerName}", hint: "Full name" },
       { token: "{firstName}", hint: "First name" },
-      { token: "{phone}", hint: "Phone number" },
+      { token: "{customerPhone}", hint: "Phone number" },
       { token: "{email}", hint: "Email address" },
     ],
   },
@@ -75,7 +75,7 @@ const VARIABLE_GROUPS = [
     label: "Job",
     vars: [
       { token: "{jobNumber}", hint: "Job #" },
-      { token: "{address}", hint: "Job address" },
+      { token: "{jobAddress}", hint: "Job address" },
       { token: "{jobDescription}", hint: "Description" },
       { token: "{scheduledDate}", hint: "Scheduled date" },
     ],
@@ -99,13 +99,19 @@ function substituteVariables(text: string, job: any, customer: any): string {
   if (!text) return "";
   const customerName = customer?.name || "Valued Customer";
   const firstName = customerName.split(" ")[0] || customerName;
+  const phone = customer?.phone || job?.jobContactPhone || "";
+  const address = job?.address || "123 Example St";
   return text
     .replace(/\{customerName\}/g, customerName)
     .replace(/\{firstName\}/g, firstName)
-    .replace(/\{phone\}/g, customer?.phone || job?.jobContactPhone || "")
+    // Canonical new tokens
+    .replace(/\{customerPhone\}/g, phone)
+    .replace(/\{jobAddress\}/g, address)
+    // Legacy aliases kept for backward compat
+    .replace(/\{phone\}/g, phone)
+    .replace(/\{address\}/g, address)
     .replace(/\{email\}/g, customer?.email || job?.jobContactEmail || "")
     .replace(/\{jobNumber\}/g, job?.jobNumber || "JOB-001")
-    .replace(/\{address\}/g, job?.address || "123 Example St")
     .replace(/\{jobDescription\}/g, job?.description || "")
     .replace(/\{scheduledDate\}/g, job?.scheduledDate || "")
     .replace(/\{totalAmount\}/g, job?.totalAmount ? `$${job.totalAmount}` : "")
