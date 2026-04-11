@@ -196,7 +196,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         <SidebarGroup>
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu className="font-normal">
+            <SidebarMenu className="font-normal text-[16px]">
               {/* Dispatch Board - Available to both crew and admin - TOP OF MENU */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"}>
