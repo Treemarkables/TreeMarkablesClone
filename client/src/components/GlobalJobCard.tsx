@@ -3824,6 +3824,32 @@ The Treemarkables Team`;
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleEmailClick}>
+                  <MdEmail className="w-4 h-4 mr-2" />
+                  Email
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!selectedCustomer?.id}
+                  onClick={async () => {
+                    if (!selectedCustomer?.id) return;
+                    if (mode === "edit" && editingJob?.id) {
+                      try {
+                        await updateJobMutation.mutateAsync(form.getValues());
+                      } catch {
+                        toast({ title: "Save Failed", description: "Please resolve any errors before creating a proposal", variant: "destructive" });
+                        return;
+                      }
+                    }
+                    const existingProposal = jobProposalResponse?.data?.[0];
+                    if (existingProposal) setEditingProposalId(existingProposal.id);
+                    setIsProposalBuilderOpen(true);
+                  }}
+                  data-testid="more-menu-proposal"
+                >
+                  <Presentation className="w-4 h-4 mr-2" />
+                  Proposal
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handlePrintClick}>
                   <Printer className="w-4 h-4 mr-2" />
                   Print
