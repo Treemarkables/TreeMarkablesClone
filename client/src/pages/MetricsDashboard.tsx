@@ -414,24 +414,32 @@ export default function MetricsDashboard() {
         const todayStr = today.toISOString().split("T")[0];
         return { from: todayStr, to: todayStr };
       }
-      case "mon-fri": {
-        const dayOfWeek = today.getDay();
-        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      case "7": {
+        // This Week: Monday of the current week → today
+        const dow = today.getDay(); // 0=Sun, 1=Mon … 6=Sat
+        const diffToMonday = dow === 0 ? -6 : 1 - dow;
         const monday = new Date(today);
         monday.setDate(today.getDate() + diffToMonday);
-        const friday = new Date(monday);
-        friday.setDate(monday.getDate() + 4);
         return {
           from: monday.toISOString().split("T")[0],
-          to: friday.toISOString().split("T")[0],
-        };
-      }
-      case "7":
-        fromDate.setDate(today.getDate() - 7);
-        return {
-          from: fromDate.toISOString().split("T")[0],
           to: today.toISOString().split("T")[0],
         };
+      }
+      case "mon-fri": {
+        // Last Week: previous Monday → previous Sunday
+        const dow = today.getDay(); // 0=Sun
+        const diffToThisMonday = dow === 0 ? -6 : 1 - dow;
+        const thisMonday = new Date(today);
+        thisMonday.setDate(today.getDate() + diffToThisMonday);
+        const lastMonday = new Date(thisMonday);
+        lastMonday.setDate(thisMonday.getDate() - 7);
+        const lastSunday = new Date(thisMonday);
+        lastSunday.setDate(thisMonday.getDate() - 1);
+        return {
+          from: lastMonday.toISOString().split("T")[0],
+          to: lastSunday.toISOString().split("T")[0],
+        };
+      }
       case "30":
         fromDate.setDate(today.getDate() - 30);
         return {
