@@ -2263,21 +2263,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </CardTitle>
                           </div>
 
-                          {/* Status filter pills — same row as New/Paste */}
-                          <div className="flex gap-1 flex-1 flex-wrap">
-                            {STATUS_TAB_FILTERS.map((tab) => (
-                              <button
-                                key={tab.value}
-                                onClick={() => setJobFilter(jobFilter === tab.value ? "all" : tab.value)}
-                                className={`text-xs py-1 px-3 rounded-full font-medium transition-colors ${
-                                  jobFilter === tab.value ? tab.pillActive : tab.pill
-                                }`}
-                                data-testid={`desktop-filter-tab-${tab.value}`}
+                          {/* Status filter dropdown */}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className={`h-7 text-xs font-medium ${jobFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
+                                data-testid="desktop-filter-dropdown-trigger"
                               >
-                                {tab.label}
-                              </button>
-                            ))}
-                          </div>
+                                {STATUS_TAB_FILTERS.find(t => t.value === jobFilter)?.label ?? "All Jobs"}
+                                <ChevronDown className="h-3 w-3 ml-1" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem onClick={() => setJobFilter("all")} data-testid="desktop-filter-all">
+                                All Jobs
+                              </DropdownMenuItem>
+                              {STATUS_TAB_FILTERS.map(tab => (
+                                <DropdownMenuItem
+                                  key={tab.value}
+                                  onClick={() => setJobFilter(tab.value)}
+                                  data-testid={`desktop-filter-tab-${tab.value}`}
+                                >
+                                  {tab.label}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <div className="flex-1" />
 
                           <div className="flex gap-1 flex-shrink-0">
                             <DropdownMenu>
@@ -2839,21 +2853,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
                 Paste
               </Button>
-              {/* Pills inline — scrollable */}
-              <div className="flex-1 flex gap-1 overflow-x-auto no-scrollbar">
-                {STATUS_TAB_FILTERS.map((tab) => (
-                  <button
-                    key={tab.value}
-                    onClick={() => setJobFilter(jobFilter === tab.value ? "all" : tab.value)}
-                    className={`shrink-0 text-xs py-1 px-3 rounded-full font-medium transition-colors ${
-                      jobFilter === tab.value ? tab.pillActive : tab.pill
-                    }`}
-                    data-testid={`mobile-filter-tab-${tab.value}`}
+              {/* Status filter dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={`shrink-0 text-sm font-medium ${jobFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
+                    data-testid="mobile-filter-dropdown-trigger"
                   >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+                    {STATUS_TAB_FILTERS.find(t => t.value === jobFilter)?.label ?? "All"}
+                    <ChevronDown className="h-3 w-3 ml-1" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  <DropdownMenuItem onClick={() => setJobFilter("all")} data-testid="mobile-filter-all">
+                    All
+                  </DropdownMenuItem>
+                  {STATUS_TAB_FILTERS.map(tab => (
+                    <DropdownMenuItem
+                      key={tab.value}
+                      onClick={() => setJobFilter(tab.value)}
+                      data-testid={`mobile-filter-tab-${tab.value}`}
+                    >
+                      {tab.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <div className="flex-1" />
               <Button
                 size="icon"
                 variant="ghost"
