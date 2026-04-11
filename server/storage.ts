@@ -2531,9 +2531,9 @@ class DatabaseStorage implements IStorage {
     
     const averageQuoteValue = quotesWithValue > 0 ? totalQuoteValue / quotesWithValue : 0;
     
-    // Calculate total revenue from COMPLETED JOBS (by completion date or scheduled date)
-    // Use invoice amounts linked to completed jobs, since job.totalAmount is often not populated
-    let completedJobsForRevenue = allJobs.filter(job => job.status === 'completed');
+    // Calculate total revenue from COMPLETED or INVOICED JOBS (by completion date or scheduled date).
+    // 'invoiced' is the natural next status after 'completed', so both must be included.
+    let completedJobsForRevenue = allJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     if (fromDate || toDate) {
       completedJobsForRevenue = completedJobsForRevenue.filter(job => {
         // Use completedDate if available, otherwise fall back to scheduledDate, then createdAt
@@ -2562,7 +2562,7 @@ class DatabaseStorage implements IStorage {
         totalRevenue += parseFloat(job.totalAmount?.toString() || '0');
       }
     }
-    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
     // Still track invoices for the count display
     let filteredInvoices = allInvoices.filter(inv => inv.status !== 'cancelled');
@@ -2648,10 +2648,12 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all completed jobs and invoices
+    // Get all completed jobs and invoices.
+    // Both 'completed' and 'invoiced' statuses represent finished work:
+    // a job moves to 'invoiced' once an invoice is sent, so it must be counted too.
     const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 });
     const allInvoices = await this.getAllInvoices();
-    const completedJobs = allJobs.filter(job => job.status === 'completed');
+    const completedJobs = allJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
     // Filter by date range if provided.
     // Use COALESCE(completedDate, scheduledDate, createdAt) so that completed jobs without
@@ -2992,17 +2994,17 @@ class DatabaseStorage implements IStorage {
         .from(schema.jobs)
         .where(and(...jobConditions));
 
-      const completedJobsInRange = jobs.filter(j => j.status === 'completed');
+      const completedJobsInRange = jobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
 
       // ── All-time margin pass ──────────────────────────────────────────────
-      // Gross margin is a historical benchmark: fetch ALL completed jobs (no date
+      // Gross margin is a historical benchmark: fetch ALL completed/invoiced jobs (no date
       // filter) so that the margin column is always populated regardless of which
       // date window the user is viewing. Counts/revenue still use the date window.
       const allCompletedJobs = await db
         .select()
         .from(schema.jobs)
         .where(and(
-          sql`${schema.jobs.status} = 'completed'`,
+          sql`${schema.jobs.status} IN ('completed', 'invoiced')`,
           sql`${schema.jobs.status} != 'archived'`
         ));
 
