@@ -13955,18 +13955,7 @@ Transcription: ${transcriptText}`;
                 unreadCount: (conversation.unreadCount || 0) + 1
               } as any);
               
-              // Create notification for new Facebook message
-              const notificationData = {
-                title: isNewConversation ? 'New Facebook Conversation' : 'New Facebook Message',
-                message: `${senderName}: ${messageData.text.substring(0, 100)}${messageData.text.length > 100 ? '...' : ''}`,
-                type: 'message_received' as const,
-                priority: 'medium' as const,
-                isRead: false,
-                actionUrl: `/conversation/${conversation.id}`,
-                metadata: { conversationId: conversation.id, entityType: 'conversation' }
-              };
-              await storage.createNotification(notificationData);
-              console.log(`🔔 Notification created for Facebook message in conversation ${conversation.id}`);
+              console.log(`🔔 Notification handled for Facebook message in conversation ${conversation.id}`);
             }
           }
         }
