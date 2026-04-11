@@ -16697,7 +16697,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Generate proposal as PDF (default) or HTML (legacy Smart Attachments, ?format=html)
+  // GET /api/proposals/:id/pdf
+  // Returns a proposal document. Known consumers (all audited 2026-04-11):
+  //   1. ProposalViewer — Download PDF button (frontend blob download)
+  //   2. ProposalBuilder — onDownload in preview dialog (frontend blob download)
+  //   3. EmailComposerModal — Smart Attachments URL (stored in attachments array
+  //      and sent as email attachment via Resend — PDF is the correct format here)
+  // Default: application/pdf (binary, PDFKit-generated, branded layout)
+  // Legacy HTML: append ?format=html to receive a plain HTML summary instead.
   app.get('/api/proposals/:id/pdf', async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(req.params.id);
