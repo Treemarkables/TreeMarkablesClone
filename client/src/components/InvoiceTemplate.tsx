@@ -211,7 +211,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                         <img
                           src={template.logoUrl || "/treemarkables-logo.webp"}
                           alt={template.companyName || "Treemarkables"}
-                          style={{ height: `${template.logoSize ?? 40}px`, maxHeight: 64 }}
+                          style={{ height: `${template.logoSize ?? 40}px` }}
                           className="w-auto object-contain flex-shrink-0"
                         />
                         <div>
@@ -227,7 +227,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                           <img
                             src={template.logoUrl || "/treemarkables-logo.webp"}
                             alt={template.companyName || "Treemarkables"}
-                            style={{ height: `${template.logoSize ?? 40}px`, maxHeight: 64 }}
+                            style={{ height: `${template.logoSize ?? 40}px` }}
                             className="w-auto object-contain"
                           />
                         </div>
