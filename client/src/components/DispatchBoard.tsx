@@ -1,3 +1,4 @@
+import { useJobFilter } from "@/lib/dispatchHeaderStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -635,7 +636,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     useState<boolean>(false);
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
-  const [jobFilter, setJobFilter] = useState<string>("all");
+  const [jobFilter, setJobFilter] = useJobFilter();
 
   const STATUS_TAB_FILTERS = [
     { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
@@ -862,6 +863,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     window.addEventListener("popstate", handleUrlChange);
     window.addEventListener("dispatch-new-job", handleNewJobEvent);
 
+    const handleNewLeadEvent = () => handleCreateLead();
+    const handlePasteEvent = () => setShowCreateFromMessageDialog(true);
+    window.addEventListener("dispatch-new-lead", handleNewLeadEvent);
+    window.addEventListener("dispatch-paste", handlePasteEvent);
+
     return () => {
       window.removeEventListener(
         "notification-navigation",
@@ -869,6 +875,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       );
       window.removeEventListener("popstate", handleUrlChange);
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
+      window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
+      window.removeEventListener("dispatch-paste", handlePasteEvent);
     };
   }, [jobsData, location]); // Re-run when jobs data loads OR location changes
 
@@ -2256,82 +2264,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       style={{ pointerEvents: "auto" }}
                     >
                       <CardHeader className="flex-shrink-0 border-b pb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <div className="min-w-0 shrink-0">
-                            <CardTitle className="text-base">
-                              {filterMeta[jobFilter]?.title ?? "Active Jobs"}
-                            </CardTitle>
-                          </div>
-
-                          {/* Status filter dropdown */}
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className={`h-7 text-xs font-medium ${jobFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
-                                data-testid="desktop-filter-dropdown-trigger"
-                              >
-                                {STATUS_TAB_FILTERS.find(t => t.value === jobFilter)?.label ?? "All Jobs"}
-                                <ChevronDown className="h-3 w-3 ml-1" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem onClick={() => setJobFilter("all")} data-testid="desktop-filter-all">
-                                All Jobs
-                              </DropdownMenuItem>
-                              {STATUS_TAB_FILTERS.map(tab => (
-                                <DropdownMenuItem
-                                  key={tab.value}
-                                  onClick={() => setJobFilter(tab.value)}
-                                  data-testid={`desktop-filter-tab-${tab.value}`}
-                                >
-                                  {tab.label}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                          <div className="flex-1" />
-
-                          <div className="flex gap-1 flex-shrink-0">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  data-testid="create-job-button"
-                                  className="h-7"
-                                >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  New
-                                  <ChevronDown className="h-3 w-3 ml-1" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleCreateJob}>
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  New Job
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleCreateLead}>
-                                  <UserPlus className="h-4 w-4 mr-2" />
-                                  New Lead
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setShowCreateFromMessageDialog(true)
-                              }
-                              data-testid="paste-message-button"
-                              className="h-7"
-                            >
-                              <MessageSquare className="h-4 w-4 mr-1" />
-                              Paste
-                            </Button>
-                          </div>
-                        </div>
+                        <CardTitle className="text-base">
+                          {filterMeta[jobFilter]?.title ?? "Active Jobs"}
+                        </CardTitle>
 
                         {/* Daily Revenue Progress Bar */}
                         {revenueInfo && (
@@ -2793,99 +2728,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         {/* Mobile Layout: ServiceM8-style job cards */}
         <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
-          {/* Header group — flex-shrink-0 keeps it pinned at top while job list scrolls below */}
+          {/* Search strip — pinned below main header */}
           <div className="flex-shrink-0 z-50">
-          {/* Clean white header: actions + filters + search */}
-          <div className="bg-background border-b px-3 pt-3 pb-2 flex flex-col gap-2">
-            {/* Row 1: New | Paste | pills | Search icon */}
-            <div className="flex items-center gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    data-testid="create-new-button-mobile"
-                    className="text-green-700 border-green-300 bg-green-50 text-sm font-medium shrink-0"
-                  >
-                    <Plus className="h-4 w-4 mr-1 text-green-600" />
-                    New
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onClick={handleCreateLead}
-                    data-testid="create-lead-button-mobile"
-                  >
-                    Lead
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setJobToEdit(null);
-                      setInitialJobData({ status: "quote" });
-                      setGlobalJobCardMode("create");
-                      setShowGlobalJobCard(true);
-                    }}
-                    data-testid="create-quote-button-mobile"
-                  >
-                    Quote
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setJobToEdit(null);
-                      setInitialJobData({ status: "invoiced" });
-                      setGlobalJobCardMode("create");
-                      setShowGlobalJobCard(true);
-                    }}
-                    data-testid="create-invoice-button-mobile"
-                  >
-                    Invoice
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowCreateFromMessageDialog(true)}
-                data-testid="paste-message-button-mobile"
-                className="text-orange-600 border-orange-300 bg-orange-50 text-sm font-medium"
-              >
-                <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
-                Paste
-              </Button>
-              {/* Status filter dropdown */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={`shrink-0 text-sm font-medium ${jobFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
-                    data-testid="mobile-filter-dropdown-trigger"
-                  >
-                    {STATUS_TAB_FILTERS.find(t => t.value === jobFilter)?.label ?? "All"}
-                    <ChevronDown className="h-3 w-3 ml-1" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setJobFilter("all")} data-testid="mobile-filter-all">
-                    All
-                  </DropdownMenuItem>
-                  {STATUS_TAB_FILTERS.map(tab => (
-                    <DropdownMenuItem
-                      key={tab.value}
-                      onClick={() => setJobFilter(tab.value)}
-                      data-testid={`mobile-filter-tab-${tab.value}`}
-                    >
-                      {tab.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <div className="flex-1" />
+          <div className="bg-background border-b px-3 py-1 flex flex-col gap-1">
+            <div className="flex items-center justify-end">
               <Button
                 size="icon"
                 variant="ghost"
-                className="text-muted-foreground shrink-0"
+                className="text-muted-foreground"
                 onClick={() => {
                   setShowMobileSearch((prev) => {
                     if (prev) {
@@ -2901,8 +2751,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 {showMobileSearch ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
               </Button>
             </div>
-
-            {/* Row 2: Search input (when active) */}
             {showMobileSearch ? (
               <div className="flex flex-col gap-1 pb-1">
                 <div className="flex items-center gap-2">

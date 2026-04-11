@@ -75,7 +75,8 @@ import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import Reconciliation from "@/pages/Reconciliation";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter } from "lucide-react";
+import { useJobFilter, DISPATCH_STATUS_FILTERS } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
@@ -172,7 +173,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
   
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
-  
+  const [dispatchFilter, setDispatchFilter] = useJobFilter();
+
   // Fetch jobs data for dispatch header
   const { data: jobsResponse } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/jobs'],
@@ -274,7 +276,81 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             </div>
             
             <div className="flex items-center gap-2">
-              
+
+              {/* Dispatch controls — only shown on /dispatch */}
+              {isDispatchPage && (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="create-new-button-mobile"
+                        className="text-green-700 border-green-300 bg-green-50 text-sm font-medium shrink-0"
+                      >
+                        <Plus className="h-4 w-4 mr-1 text-green-600" />
+                        New
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-lead"))}
+                        data-testid="create-lead-button-mobile"
+                      >
+                        Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
+                        data-testid="create-wo-button-mobile"
+                      >
+                        Work Order
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    data-testid="paste-message-button-mobile"
+                    className="text-orange-600 border-orange-300 bg-orange-50 text-sm font-medium shrink-0"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
+                    Paste
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`shrink-0 text-sm font-medium ${dispatchFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
+                        data-testid="mobile-filter-dropdown-trigger"
+                      >
+                        <Filter className="h-3.5 w-3.5 mr-1" />
+                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="mobile-filter-all">
+                        All
+                      </DropdownMenuItem>
+                      {DISPATCH_STATUS_FILTERS.map(tab => (
+                        <DropdownMenuItem
+                          key={tab.value}
+                          onClick={() => setDispatchFilter(tab.value)}
+                          data-testid={`mobile-filter-tab-${tab.value}`}
+                        >
+                          {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+
               {/* Refresh Button - Mobile */}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -483,16 +559,86 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               </DropdownMenu>
               )}
               
-              {/* Global New Job Button */}
+              {/* Dispatch controls — only shown on /dispatch (desktop) */}
+              {isDispatchPage && (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        data-testid="create-new-button-desktop"
+                        className="text-green-700 border-green-300 bg-green-50 text-sm font-medium shrink-0"
+                      >
+                        <Plus className="h-4 w-4 mr-1 text-green-600" />
+                        New
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-lead"))}
+                        data-testid="create-lead-button-desktop"
+                      >
+                        Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
+                        data-testid="create-wo-button-desktop"
+                      >
+                        Work Order
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    data-testid="paste-message-button-desktop"
+                    className="text-orange-600 border-orange-300 bg-orange-50 text-sm font-medium shrink-0"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
+                    Paste
+                  </Button>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className={`shrink-0 text-sm font-medium ${dispatchFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
+                        data-testid="desktop-filter-dropdown-trigger"
+                      >
+                        <Filter className="h-3.5 w-3.5 mr-1" />
+                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
+                        <ChevronDown className="h-3 w-3 ml-1" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="desktop-filter-all">
+                        All
+                      </DropdownMenuItem>
+                      {DISPATCH_STATUS_FILTERS.map(tab => (
+                        <DropdownMenuItem
+                          key={tab.value}
+                          onClick={() => setDispatchFilter(tab.value)}
+                          data-testid={`desktop-filter-tab-${tab.value}`}
+                        >
+                          {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+
+              {/* Global New Job Button — hidden on dispatch (controls above replace it) */}
+              {!isDispatchPage && (
               <Button 
                 size="sm" 
                 onClick={() => {
-                  if (location === '/dispatch') {
-                    // Already on dispatch — fire a custom event so DispatchBoard opens create flow immediately
-                    window.dispatchEvent(new CustomEvent('dispatch-new-job'));
-                  } else {
-                    setLocation('/dispatch?newJob=true');
-                  }
+                  setLocation('/dispatch?newJob=true');
                 }}
                 data-testid="global-new-job-btn"
                 className="bg-amber-500 hover:bg-amber-600 text-white"
@@ -500,6 +646,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 <Plus className="h-8 w-8 mr-1" />
                 New Job
               </Button>
+              )}
             </div>
           </header>
           <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
