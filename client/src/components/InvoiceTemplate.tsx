@@ -203,16 +203,16 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                   <div
                     key="header"
                     className="mb-8 rounded-sm overflow-hidden"
-                    style={{ backgroundColor: hdrBg }}
+                    style={{ backgroundColor: hdrBg, height: 80 }}
                   >
-                    <div className="px-4 py-4">
+                    <div className="h-full px-4 flex items-center">
                     {template.logoAlignment === "center" ? (
-                      <div className="flex flex-col items-center gap-3 text-center">
+                      <div className="w-full flex items-center justify-center gap-3 text-center">
                         <img
                           src={template.logoUrl || "/treemarkables-logo.webp"}
                           alt={template.companyName || "Treemarkables"}
-                          style={{ height: `${template.logoSize ?? 40}px` }}
-                          className="w-auto object-contain"
+                          style={{ height: `${template.logoSize ?? 40}px`, maxHeight: 64 }}
+                          className="w-auto object-contain flex-shrink-0"
                         />
                         <div>
                           <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{invoice.invoiceNumber}</h1>
@@ -222,12 +222,12 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                         </div>
                       </div>
                     ) : (
-                      <div className={`flex items-start justify-between gap-3 ${template.logoAlignment === "right" ? "flex-row-reverse" : "flex-row"}`}>
+                      <div className={`w-full flex items-center justify-between gap-3 ${template.logoAlignment === "right" ? "flex-row-reverse" : "flex-row"}`}>
                         <div className="flex-shrink-0">
                           <img
                             src={template.logoUrl || "/treemarkables-logo.webp"}
                             alt={template.companyName || "Treemarkables"}
-                            style={{ height: `${template.logoSize ?? 40}px` }}
+                            style={{ height: `${template.logoSize ?? 40}px`, maxHeight: 64 }}
                             className="w-auto object-contain"
                           />
                         </div>
