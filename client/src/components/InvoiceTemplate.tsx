@@ -196,7 +196,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                         <img
                           src={template.logoUrl || "/treemarkables-logo.webp"}
                           alt={template.companyName || "Treemarkables"}
-                          className="h-10 w-auto object-contain"
+                          style={{ height: `${template.logoSize ?? 40}px` }}
+                          className="w-auto object-contain"
                         />
                       </div>
                       <div className="flex-1 text-left sm:text-right">
