@@ -8,18 +8,18 @@ interface CustomerAvatarProps {
 }
 
 const getStatusColors = (status?: string): { bg: string; text: string } => {
-  if (!status) return { bg: "bg-purple-100", text: "text-purple-800" };
+  if (!status) return { bg: "bg-purple-200", text: "text-purple-800" };
 
   switch (status.toLowerCase().replace(/\s+/g, '_')) {
-    case 'completed':   return { bg: "bg-green-100",  text: "text-green-800" };
-    case 'work_order':  return { bg: "bg-blue-100",   text: "text-blue-800" };
-    case 'scheduled':   return { bg: "bg-green-100",  text: "text-green-800" };
-    case 'quote':       return { bg: "bg-orange-100", text: "text-orange-800" };
-    case 'invoiced':    return { bg: "bg-violet-100", text: "text-violet-800" };
+    case 'completed':   return { bg: "bg-green-200",  text: "text-green-800" };
+    case 'work_order':  return { bg: "bg-blue-200",   text: "text-blue-800" };
+    case 'scheduled':   return { bg: "bg-green-200",  text: "text-green-800" };
+    case 'quote':       return { bg: "bg-orange-200", text: "text-orange-800" };
+    case 'invoiced':    return { bg: "bg-violet-200", text: "text-violet-800" };
     case 'lead':
-    case 'inquiry':     return { bg: "bg-emerald-100",text: "text-emerald-800" };
-    case 'unsuccessful':return { bg: "bg-red-100",    text: "text-red-800" };
-    default:            return { bg: "bg-purple-100", text: "text-purple-800" };
+    case 'inquiry':     return { bg: "bg-emerald-200",text: "text-emerald-800" };
+    case 'unsuccessful':return { bg: "bg-red-200",    text: "text-red-800" };
+    default:            return { bg: "bg-purple-200", text: "text-purple-800" };
   }
 };
 
