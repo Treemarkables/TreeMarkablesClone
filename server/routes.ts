@@ -16697,7 +16697,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Generate proposal as a real PDF using PDFKit
+  // Generate proposal as PDF (default) or HTML (legacy Smart Attachments, ?format=html)
   app.get('/api/proposals/:id/pdf', async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(req.params.id);
@@ -16743,6 +16743,28 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
+
+      // Legacy HTML format (used by Smart Attachments feature)
+      if (req.query.format === 'html') {
+        let htmlItems = '';
+        for (const section of sections) {
+          const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+          if (items.length === 0) continue;
+          htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
+          htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+          items.forEach((item: any) => {
+            const p = parseFloat(item.totalPrice || '0');
+            htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
+          });
+          htmlItems += '</table>';
+        }
+        const gstFmt = `$${gst.toFixed(2)}`;
+        const totalFmt = `$${total.toFixed(2)}`;
+        const subtotalFmt = `$${subtotal.toFixed(2)}`;
+        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Proposal ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">Treemarkables Proposal</h1><p><strong>Proposal #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">Treemarkables LTD | info@treemarkables.co.nz | 027 216 6882</p></body></html>`;
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(html);
+      }
 
       // Build PDF using PDFKit
       const PDFDoc = (await import('pdfkit')).default;
@@ -16839,6 +16861,39 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         doc.fontSize(11).font('Helvetica-Bold').fillColor('#111827')
           .text('Total (inc. GST)', tX, doc.y, { width: vW - 70 });
         doc.fillColor('#f97316').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+
+        // Acceptance section
+        doc.moveDown(1.5);
+        doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+        doc.moveDown(0.8);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
+        doc.moveDown(0.4);
+        doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+          .text('By signing below, you agree to the scope of works and pricing outlined in this proposal.', { width: pageW });
+        doc.moveDown(1.2);
+
+        // Signature line
+        const sigY = doc.y;
+        doc.moveTo(50, sigY + 20).lineTo(280, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+        doc.moveTo(320, sigY + 20).lineTo(550, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+        doc.fontSize(8).fillColor('#9ca3af')
+          .text('Customer Signature', 50, sigY + 24, { width: 230 })
+          .text('Date', 320, sigY + 24, { width: 230 });
+
+        // Print name line
+        doc.moveDown(2.5);
+        const nameY = doc.y;
+        doc.moveTo(50, nameY + 20).lineTo(280, nameY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+        doc.fontSize(8).fillColor('#9ca3af').text('Print Name', 50, nameY + 24, { width: 230 });
+
+        // Status banner (if already accepted)
+        if (proposal.status === 'accepted') {
+          doc.moveDown(1);
+          doc.rect(50, doc.y, pageW, 28).fill('#dcfce7');
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d')
+            .text('This proposal has been accepted', 50, doc.y - 20, { width: pageW, align: 'center' });
+          doc.moveDown(0.5);
+        }
 
         // Footer
         const footerY = doc.page.height - 70;
