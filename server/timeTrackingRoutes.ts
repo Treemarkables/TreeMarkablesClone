@@ -504,37 +504,48 @@ export function setupTimeTrackingRoutes(app: any) {
         });
       }
 
+      // Fetch Labour catalogue items to find charge-up rates by employee name
+      const labourItems = await storage.getMaterialsByCategory('Labour');
+
+      // Helper: find "[Name] charge up rate" item for a given first name
+      const findChargeUpRate = (firstName: string) => {
+        const needle = firstName.toLowerCase();
+        return labourItems.find((item) => {
+          const n = item.name.toLowerCase();
+          return n.includes(needle) && (n.includes('charge up') || n.includes('charge-up') || n.includes('chargeup'));
+        });
+      };
+
       // Group entries by employee, summing hours
-      const grouped: Record<string, { employeeName: string; totalHours: number; rate: number }> = {};
+      const grouped: Record<string, { employeeName: string; firstName: string; totalHours: number; fallbackRate: number }> = {};
       for (const entry of rawEntries) {
         const key = entry.employeeId;
         const hours = parseFloat(String(entry.hours)) || 0;
         const rate = parseFloat(String(entry.rate)) || 0;
         if (!grouped[key]) {
-          // Look up employee name
           const employee = await storage.getEmployee(entry.employeeId);
+          const firstName = employee?.firstName || '';
           const employeeName = employee
             ? `${employee.firstName} ${employee.lastName}`
             : entry.employeeId;
-          grouped[key] = {
-            employeeName,
-            totalHours: 0,
-            rate,
-          };
+          grouped[key] = { employeeName, firstName, totalHours: 0, fallbackRate: rate };
         }
         grouped[key].totalHours += hours;
-        // Use the highest rate if multiple rates exist
-        if (rate > grouped[key].rate) grouped[key].rate = rate;
+        if (rate > grouped[key].fallbackRate) grouped[key].fallbackRate = rate;
       }
 
-      // Build new line items from grouped data
+      // Build new line items — use charge-up rate item name + price from catalogue
       const newLineItems = Object.values(grouped).map((g) => {
         const hours = Math.round(g.totalHours * 100) / 100;
-        const rate = g.rate;
+        const chargeUpItem = findChargeUpRate(g.firstName);
+        const rate = chargeUpItem
+          ? parseFloat(String(chargeUpItem.price))
+          : g.fallbackRate;
+        const description = chargeUpItem ? chargeUpItem.name : `Labour – ${g.employeeName}`;
         const total = Math.round(hours * rate * 100) / 100;
         return {
           id: crypto.randomUUID(),
-          description: `Labour – ${g.employeeName} · ${hours}h @ $${rate.toFixed(2)}/h`,
+          description,
           quantity: hours,
           unitPrice: rate,
           total,
@@ -545,7 +556,7 @@ export function setupTimeTrackingRoutes(app: any) {
           priceExGst: rate,
           totalExGst: total,
           taxRate: 15,
-          itemCode: 'Labour',
+          itemCode: chargeUpItem?.itemNumber || 'Labour',
         };
       });
 
