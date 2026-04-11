@@ -27,6 +27,7 @@ import {
   Trash2,
   Users,
   Search,
+  Receipt,
 } from "lucide-react";
 
 interface TimeEntry {
@@ -284,6 +285,29 @@ export function RecordedTimeModal({
       toast({
         title: "Error",
         description: "Failed to delete time entry",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Convert saved time entries to job line items
+  const timeToLineItemsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/jobs/${jobId}/time-to-line-items`, {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", jobId] });
+      toast({
+        title: "Labour added to job",
+        description: data?.message || "Time entries have been added as line items.",
+      });
+      onClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add time entries to invoice",
         variant: "destructive",
       });
     },
@@ -631,10 +655,21 @@ export function RecordedTimeModal({
           {/* Existing Saved Entries */}
           {existingEntries.length > 0 && (
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-emerald-50 border-b border-emerald-200 px-1.5 py-1">
+              <div className="bg-emerald-50 border-b border-emerald-200 px-1.5 py-1 flex items-center justify-between gap-2">
                 <h4 className="font-medium text-emerald-900 text-xs">
                   Saved Today ({existingEntries.length})
                 </h4>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => timeToLineItemsMutation.mutate()}
+                  disabled={timeToLineItemsMutation.isPending}
+                  className="h-7 text-xs px-2 gap-1"
+                  data-testid="button-bill-time-to-invoice"
+                >
+                  <Receipt className="h-3 w-3" />
+                  {timeToLineItemsMutation.isPending ? "Adding…" : "Add to Invoice"}
+                </Button>
               </div>
 
               <div className="divide-y divide-gray-100">
@@ -652,25 +687,25 @@ export function RecordedTimeModal({
                         </div>
                       </div>
                       <div>
-                        <div className="text-[8px] text-gray-500">Pay Rate</div>
+                        <div className="text-[8px] text-gray-500">Charge-Out Rate</div>
                         <div className="text-[10px]">
                           {(() => {
-                            const staff = employees.find(
-                              (e: any) => e.id === entry.employeeId,
-                            );
-                            const rate = staff?.hourlyRate
-                              ? parseFloat(staff.hourlyRate)
-                              : 0;
-                            return rate > 0
-                              ? `$${rate.toFixed(2)}/hr`
-                              : "Not set";
+                            const rate = parseFloat(String(entry.rate || 0));
+                            return rate > 0 ? `$${rate.toFixed(2)}/hr` : "Not set";
                           })()}
                         </div>
                       </div>
                       <div>
-                        <div className="text-[8px] text-gray-500">Time</div>
+                        <div className="text-[8px] text-gray-500">Time · Total</div>
                         <div className="text-[10px] font-medium">
                           {formatDuration(entry.hours)}
+                          {(() => {
+                            const rate = parseFloat(String(entry.rate || 0));
+                            const hours = parseFloat(String(entry.hours || 0));
+                            return rate > 0 && hours > 0
+                              ? ` · $${(hours * rate).toFixed(2)}`
+                              : "";
+                          })()}
                         </div>
                       </div>
                     </div>
