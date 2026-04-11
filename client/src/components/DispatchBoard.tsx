@@ -71,6 +71,10 @@ import {
   ChevronDown,
   UserPlus,
   Bell,
+  UserCog,
+  CircleDollarSign,
+  Wrench,
+  CalendarCheck,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -634,11 +638,41 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [jobFilter, setJobFilter] = useState<string>("all");
 
   const STATUS_TAB_FILTERS = [
-    { value: "lead", label: "Lead" },
-    { value: "queue", label: "Queue" },
-    { value: "quote", label: "Quote" },
-    { value: "work_order", label: "W/O" },
-    { value: "scheduled", label: "Scheduled" },
+    {
+      value: "lead",
+      label: "Lead",
+      Icon: UserCog,
+      pill: "bg-amber-100 text-amber-700",
+      pillActive: "bg-amber-400 text-amber-900",
+    },
+    {
+      value: "queue",
+      label: "Queue",
+      Icon: Inbox,
+      pill: "bg-sky-100 text-sky-700",
+      pillActive: "bg-sky-400 text-sky-900",
+    },
+    {
+      value: "quote",
+      label: "Quote",
+      Icon: CircleDollarSign,
+      pill: "bg-purple-100 text-purple-700",
+      pillActive: "bg-purple-400 text-purple-900",
+    },
+    {
+      value: "work_order",
+      label: "W/O",
+      Icon: Wrench,
+      pill: "bg-green-100 text-green-700",
+      pillActive: "bg-green-400 text-green-900",
+    },
+    {
+      value: "scheduled",
+      label: "Scheduled",
+      Icon: CalendarCheck,
+      pill: "bg-gray-100 text-gray-600",
+      pillActive: "bg-gray-400 text-gray-900",
+    },
   ];
 
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
@@ -2322,7 +2356,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         )}
 
                         {/* Status Filter Tabs - Desktop */}
-                        <div className="flex gap-1 mt-2">
+                        <div className="flex gap-1.5 mt-2">
                           {STATUS_TAB_FILTERS.map((tab) => (
                             <button
                               key={tab.value}
@@ -2331,13 +2365,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                   jobFilter === tab.value ? "all" : tab.value,
                                 )
                               }
-                              className={`flex-1 text-xs py-1 px-1 rounded-md font-medium transition-colors ${
+                              className={`flex-1 flex items-center justify-center gap-1 text-xs py-1 px-1 rounded-full font-medium transition-colors ${
                                 jobFilter === tab.value
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground hover:bg-muted/70"
+                                  ? tab.pillActive
+                                  : tab.pill
                               }`}
                               data-testid={`desktop-filter-tab-${tab.value}`}
                             >
+                              <tab.Icon className="h-3 w-3 shrink-0" />
                               {tab.label}
                             </button>
                           ))}
@@ -2787,19 +2822,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
           {/* Header group — flex-shrink-0 keeps it pinned at top while job list scrolls below */}
           <div className="flex-shrink-0 z-50">
-          {/* Compact Blue Banner: actions + filters + search */}
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-3 pt-3 pb-2 flex flex-col gap-2">
+          {/* Clean white header: actions + filters + search */}
+          <div className="bg-background border-b px-3 pt-3 pb-2 flex flex-col gap-2">
             {/* Row 1: New | Paste | spacer | Search icon */}
             <div className="flex items-center gap-2">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="sm"
                     data-testid="create-new-button-mobile"
-                    className="text-white hover:bg-white/20 text-sm font-medium"
+                    className="text-green-700 border-green-300 text-sm font-medium"
                   >
-                    <Plus className="h-4 w-4 mr-1" />
+                    <Plus className="h-4 w-4 mr-1 text-green-600" />
                     New
                     <ChevronDown className="h-3 w-3 ml-1" />
                   </Button>
@@ -2836,20 +2871,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </DropdownMenuContent>
               </DropdownMenu>
               <Button
-                variant="ghost"
+                variant="outline"
                 size="sm"
                 onClick={() => setShowCreateFromMessageDialog(true)}
                 data-testid="paste-message-button-mobile"
-                className="text-white hover:bg-white/20 text-sm font-medium"
+                className="text-orange-600 border-orange-300 text-sm font-medium"
               >
-                <MessageSquare className="h-4 w-4 mr-1" />
+                <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
                 Paste
               </Button>
               <div className="flex-1" />
               <Button
                 size="icon"
                 variant="ghost"
-                className="text-white hover:bg-white/20 rounded-full shrink-0"
+                className="text-muted-foreground shrink-0"
                 onClick={() => {
                   setShowMobileSearch((prev) => {
                     if (prev) {
@@ -2871,7 +2906,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               <div className="flex flex-col gap-1 pb-1">
                 <div className="flex items-center gap-2">
                   <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/60 pointer-events-none" />
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                     <Input
                       autoFocus
                       placeholder="Search jobs..."
@@ -2883,14 +2918,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           setDeepSearchResults([]);
                         }
                       }}
-                      className="pl-9 pr-9 h-9 text-sm bg-white/20 border-white/30 text-white placeholder:text-white/60 rounded-xl focus-visible:ring-white/40"
+                      className="pl-9 pr-9 h-9 text-sm rounded-xl"
                       data-testid="mobile-job-search-input"
                     />
                     {searchQuery && (
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-white/80 hover:bg-white/20"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
                         onClick={() => {
                           setSearchQuery("");
                           setIsDeepSearchActive(false);
@@ -2905,8 +2940,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   {searchQuery.trim() && !isDeepSearchActive && (
                     <Button
                       size="sm"
-                      variant="ghost"
-                      className="text-white hover:bg-white/20 shrink-0 h-9 px-3"
+                      variant="outline"
+                      className="shrink-0 h-9 px-3"
                       onClick={() => performDeepSearch(searchQuery)}
                       disabled={isDeepSearchLoading}
                       data-testid="btn-deep-search-mobile"
@@ -2923,7 +2958,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   )}
                 </div>
                 {isDeepSearchActive && (
-                  <div className="flex items-center gap-1 text-xs text-white/80 bg-white/10 px-2 py-1 rounded">
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                     <SearchX className="h-3 w-3" />
                     {deepSearchResults.length} results found
                   </div>
@@ -2937,13 +2972,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     onClick={() =>
                       setJobFilter(jobFilter === tab.value ? "all" : tab.value)
                     }
-                    className={`shrink-0 text-xs py-1 px-3 rounded-full font-medium transition-colors ${
+                    className={`shrink-0 flex items-center gap-1 text-xs py-1 px-3 rounded-full font-medium transition-colors ${
                       jobFilter === tab.value
-                        ? "bg-white text-blue-600"
-                        : "bg-white/20 text-white"
+                        ? tab.pillActive
+                        : tab.pill
                     }`}
                     data-testid={`mobile-filter-tab-${tab.value}`}
                   >
+                    <tab.Icon className="h-3 w-3 shrink-0" />
                     {tab.label}
                   </button>
                 ))}
