@@ -2832,7 +2832,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     variant="outline"
                     size="sm"
                     data-testid="create-new-button-mobile"
-                    className="text-green-700 border-green-300 text-sm font-medium"
+                    className="text-green-700 border-green-300 bg-green-50 text-sm font-medium"
                   >
                     <Plus className="h-4 w-4 mr-1 text-green-600" />
                     New
@@ -2875,7 +2875,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 size="sm"
                 onClick={() => setShowCreateFromMessageDialog(true)}
                 data-testid="paste-message-button-mobile"
-                className="text-orange-600 border-orange-300 text-sm font-medium"
+                className="text-orange-600 border-orange-300 bg-orange-50 text-sm font-medium"
               >
                 <MessageSquare className="h-4 w-4 mr-1 text-orange-500" />
                 Paste
