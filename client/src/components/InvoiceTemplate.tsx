@@ -4,8 +4,12 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { format, addDays } from 'date-fns';
 import { Download, Mail, Copy, CreditCard, MessageSquare } from 'lucide-react';
-import type { DocumentTemplate, Customer } from '@shared/schema';
+import type { DocumentTemplate, Customer, InvoiceSectionConfig } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
+
+const DEFAULT_SECTION_ORDER = [
+  'header', 'billTo', 'description', 'lineItems', 'totals', 'payment', 'footer'
+];
 
 interface InvoiceLineItem {
   id: string;
@@ -49,6 +53,7 @@ interface InvoiceTemplateProps {
   contactName?: string;
   billingName?: string;
   jobNumber?: number;
+  sectionConfig?: InvoiceSectionConfig[];
   onEmail?: () => void;
   onSms?: () => void;
   onDownload?: () => void;
@@ -69,6 +74,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   contactName,
   billingName,
   jobNumber,
+  sectionConfig,
   onEmail,
   onSms,
   onDownload,
@@ -78,6 +84,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   // Use contact name from prop, invoice, or empty string
   const displayContactName = contactName || invoice.contactName || '';
   const [isLoading, setIsLoading] = useState(false);
+
+  // Build an ordered list of section IDs that are visible
+  const orderedVisibleIds: string[] = sectionConfig
+    ? sectionConfig.filter(s => s.visible).map(s => s.id)
+    : DEFAULT_SECTION_ORDER;
 
   // Calculate totals
   const lineItemSubtotal = lineItems.reduce((sum, item) => {
@@ -164,149 +175,160 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
       <Card className="shadow-lg overflow-hidden">
         <CardContent className="p-3 sm:p-4">
-          {/* Header with Logo */}
-          <div className="border-b-[3px] border-black pb-5 mb-8">
-            <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
-              {/* Logo */}
-              <div className="flex-shrink-0">
-                <img 
-                  src="/treemarkables-logo.webp" 
-                  alt="Treemarkables" 
-                  className="h-10 w-auto object-contain"
-                />
-              </div>
-              
-              {/* Invoice Details */}
-              <div className="flex-1 text-left sm:text-right">
-                <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
-                <p className="text-xs text-gray-600 mt-1">
-                  {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
-                </p>
-              </div>
-            </div>
-          </div>
+          {orderedVisibleIds.map(sectionId => {
+            switch (sectionId) {
+              case 'header':
+                return (
+                  <div key="header" className="border-b-[3px] border-black pb-5 mb-8">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
+                      <div className="flex-shrink-0">
+                        <img
+                          src="/treemarkables-logo.webp"
+                          alt="Treemarkables"
+                          className="h-10 w-auto object-contain"
+                        />
+                      </div>
+                      <div className="flex-1 text-left sm:text-right">
+                        <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
+                        <p className="text-xs text-gray-600 mt-1">
+                          {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
 
-          {/* Bill To */}
-          <div className="mb-4">
-            <h2 className="text-xs font-semibold text-black mb-2">Bill To</h2>
-            <div>
-              <p className="font-semibold text-black text-xs mb-1" data-testid="text-customer-name">
-                {billingName || customer?.name || 'Customer'}
-              </p>
-              {(jobAddress || customer?.address) && (
-                <p className="text-xs text-gray-600 mb-1">{jobAddress || customer.address}</p>
-              )}
-              {billingName && customer?.name && billingName !== customer.name && (
-                <p className="text-xs text-gray-600 mb-1">
-                  <span className="mr-1">c/o</span>{customer.name}
-                </p>
-              )}
-              {displayContactName && (!billingName || displayContactName !== customer?.name) && (
-                <p className="text-xs text-gray-600 mb-1">
-                  <span className="mr-1">c/o</span>{displayContactName}
-                </p>
-              )}
-              {customer?.email && (
-                <p className="text-xs text-gray-600">
-                  <span className="mr-1">✉</span>{customer.email}
-                </p>
-              )}
-            </div>
-          </div>
+              case 'billTo':
+                return (
+                  <div key="billTo" className="mb-4">
+                    <h2 className="text-xs font-semibold text-black mb-2">Bill To</h2>
+                    <div>
+                      <p className="font-semibold text-black text-xs mb-1" data-testid="text-customer-name">
+                        {billingName || customer?.name || 'Customer'}
+                      </p>
+                      {(jobAddress || customer?.address) && (
+                        <p className="text-xs text-gray-600 mb-1">{jobAddress || customer?.address}</p>
+                      )}
+                      {billingName && customer?.name && billingName !== customer.name && (
+                        <p className="text-xs text-gray-600 mb-1">
+                          <span className="mr-1">c/o</span>{customer.name}
+                        </p>
+                      )}
+                      {displayContactName && (!billingName || displayContactName !== customer?.name) && (
+                        <p className="text-xs text-gray-600 mb-1">
+                          <span className="mr-1">c/o</span>{displayContactName}
+                        </p>
+                      )}
+                      {customer?.email && (
+                        <p className="text-xs text-gray-600">
+                          <span className="mr-1">✉</span>{customer.email}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
 
-          {/* Description */}
-          {(description || invoice.notes) && (
-            <div className="mb-4">
-              <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
-              <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
-                <LinkifiedText text={description || invoice.notes || ''} />
-              </div>
-            </div>
-          )}
+              case 'description':
+                if (!description && !invoice.notes) return null;
+                return (
+                  <div key="description" className="mb-4">
+                    <h2 className="text-xs font-semibold text-black mb-2">Description</h2>
+                    <div className="text-xs text-gray-700 whitespace-pre-wrap" data-testid="text-invoice-description">
+                      <LinkifiedText text={description || invoice.notes || ''} />
+                    </div>
+                  </div>
+                );
 
-          {/* Line Items Table */}
-          {hasLineItems && (
-            <div className="mb-4">
-              <h2 className="text-xs font-semibold text-black mb-2">Services & Pricing</h2>
-              <div className="w-full overflow-x-auto">
-                <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900">Service</th>
-                      <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900 w-16">Qty</th>
-                      <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900 w-20">Rate</th>
-                      <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900 w-20">Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.map((item, index) => {
-                      const qty = item.quantity || 1;
-                      const rate = item.unitPrice || item.rate || 0;
-                      const itemTotal = item.total || item.amount || (qty * rate);
-                      
-                      return (
-                        <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
-                          <td className="border border-gray-200 px-2 py-2 text-xs text-gray-900">
-                            <LinkifiedText text={item.description} />
-                          </td>
-                          <td className="border border-gray-200 px-2 py-2 text-xs text-center text-gray-900">
-                            {qty}
-                          </td>
-                          <td className="border border-gray-200 px-2 py-2 text-xs text-right text-gray-900">
-                            {formatCurrency(rate)}
-                          </td>
-                          <td className="border border-gray-200 px-2 py-2 text-xs text-right font-medium text-gray-900">
-                            {formatCurrency(typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal)}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+              case 'lineItems':
+                if (!hasLineItems) return null;
+                return (
+                  <div key="lineItems" className="mb-4">
+                    <h2 className="text-xs font-semibold text-black mb-2">Services & Pricing</h2>
+                    <div className="w-full overflow-x-auto">
+                      <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900">Service</th>
+                            <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900 w-16">Qty</th>
+                            <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900 w-20">Rate</th>
+                            <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900 w-20">Price</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lineItems.map((item, index) => {
+                            const qty = item.quantity || 1;
+                            const rate = item.unitPrice || item.rate || 0;
+                            const itemTotal = item.total || item.amount || (qty * rate);
+                            return (
+                              <tr key={item.id} className="even:bg-gray-50" data-testid={`row-line-item-${index}`}>
+                                <td className="border border-gray-200 px-2 py-2 text-xs text-gray-900">
+                                  <LinkifiedText text={item.description} />
+                                </td>
+                                <td className="border border-gray-200 px-2 py-2 text-xs text-center text-gray-900">{qty}</td>
+                                <td className="border border-gray-200 px-2 py-2 text-xs text-right text-gray-900">{formatCurrency(rate)}</td>
+                                <td className="border border-gray-200 px-2 py-2 text-xs text-right font-medium text-gray-900">
+                                  {formatCurrency(typeof itemTotal === 'string' ? parseFloat(itemTotal) : itemTotal)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
 
-          {/* Totals */}
-          <div className="pt-3 border-t border-gray-200">
-            <div className="flex justify-end">
-              <div className="w-full max-w-sm space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-gray-600">Subtotal (excl GST):</span>
-                  <span className="text-black" data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
-                </div>
-                <div className="flex justify-between text-xs border-b border-gray-200 pb-1">
-                  <span className="text-gray-600">GST (15%):</span>
-                  <span className="text-black" data-testid="text-gst-amount">{formatCurrency(gstAmount)}</span>
-                </div>
-                <div className="flex justify-between pt-2">
-                  <span className="text-sm font-bold text-black">Total Amount:</span>
-                  <span className="text-sm font-bold text-black" data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
-                </div>
-              </div>
-            </div>
-          </div>
+              case 'totals':
+                return (
+                  <div key="totals" className="pt-3 border-t border-gray-200">
+                    <div className="flex justify-end">
+                      <div className="w-full max-w-sm space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-600">Subtotal (excl GST):</span>
+                          <span className="text-black" data-testid="text-subtotal">{formatCurrency(subtotal)}</span>
+                        </div>
+                        <div className="flex justify-between text-xs border-b border-gray-200 pb-1">
+                          <span className="text-gray-600">GST (15%):</span>
+                          <span className="text-black" data-testid="text-gst-amount">{formatCurrency(gstAmount)}</span>
+                        </div>
+                        <div className="flex justify-between pt-2">
+                          <span className="text-sm font-bold text-black">Total Amount:</span>
+                          <span className="text-sm font-bold text-black" data-testid="text-total-amount">{formatCurrency(totalAmount)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
 
-          {/* Payment Information */}
-          <div className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-            <h3 className="text-xs font-semibold text-black mb-2">Payment Information</h3>
-            <div className="text-xs text-gray-600 space-y-1">
-              <p><span className="font-medium text-black">Due Date:</span> {format(dueDate, 'dd MMM yyyy')}</p>
-              <p><span className="font-medium text-black">Bank:</span> ANZ</p>
-              <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>
-              <p><span className="font-medium text-black">Account Name:</span> Treemarkables LTD</p>
-            </div>
-          </div>
+              case 'payment':
+                return (
+                  <div key="payment" className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                    <h3 className="text-xs font-semibold text-black mb-2">Payment Information</h3>
+                    <div className="text-xs text-gray-600 space-y-1">
+                      <p><span className="font-medium text-black">Due Date:</span> {format(dueDate, 'dd MMM yyyy')}</p>
+                      <p><span className="font-medium text-black">Bank:</span> ANZ</p>
+                      <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>
+                      <p><span className="font-medium text-black">Account Name:</span> Treemarkables LTD</p>
+                    </div>
+                  </div>
+                );
 
-          {/* Business Footer */}
-          <div className="mt-4 pt-3 border-t border-gray-200 text-center">
-            <p className="text-xs text-gray-500 break-words">
-              Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              GST Number: 131-047-592 &nbsp;·&nbsp; Payment terms: 7 days
-            </p>
-          </div>
+              case 'footer':
+                return (
+                  <div key="footer" className="mt-4 pt-3 border-t border-gray-200 text-center">
+                    <p className="text-xs text-gray-500 break-words">
+                      Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz
+                    </p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      GST Number: 131-047-592 &nbsp;·&nbsp; Payment terms: 7 days
+                    </p>
+                  </div>
+                );
+
+              default:
+                return null;
+            }
+          })}
         </CardContent>
       </Card>
     </div>

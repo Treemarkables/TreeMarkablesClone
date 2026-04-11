@@ -42,9 +42,33 @@ import {
   FileText,
   Receipt,
   DollarSign,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { DocumentTemplate, InsertDocumentTemplate } from "@shared/schema";
+import type { DocumentTemplate, InsertDocumentTemplate, InvoiceSectionConfig } from "@shared/schema";
+
+const DEFAULT_SECTIONS: InvoiceSectionConfig[] = [
+  { id: "header",      label: "Header & Logo",          visible: true, locked: true },
+  { id: "billTo",      label: "Bill To",                visible: true, locked: false },
+  { id: "description", label: "Description / Notes",    visible: true, locked: false },
+  { id: "lineItems",   label: "Services & Line Items",  visible: true, locked: false },
+  { id: "totals",      label: "Totals & GST",           visible: true, locked: true },
+  { id: "payment",     label: "Payment Information",    visible: true, locked: false },
+  { id: "footer",      label: "Business Footer",        visible: true, locked: false },
+];
+
+function normaliseSections(raw: unknown): InvoiceSectionConfig[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_SECTIONS.map(s => ({ ...s }));
+  // Merge saved sections with defaults so new sections are appended
+  const savedIds = (raw as InvoiceSectionConfig[]).map(s => s.id);
+  const merged = [
+    ...(raw as InvoiceSectionConfig[]),
+    ...DEFAULT_SECTIONS.filter(d => !savedIds.includes(d.id)),
+  ];
+  return merged;
+}
 
 const templateFormSchema = z.object({
   name: z.string().min(1, "Template name is required"),
@@ -71,6 +95,9 @@ export default function TemplateManagement() {
   const [editingTemplate, setEditingTemplate] =
     useState<DocumentTemplate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [sections, setSections] = useState<InvoiceSectionConfig[]>(() =>
+    DEFAULT_SECTIONS.map(s => ({ ...s }))
+  );
 
   // Fetch all templates
   const {
@@ -157,15 +184,17 @@ export default function TemplateManagement() {
   });
 
   const onSubmit = (data: TemplateFormData) => {
+    const payload = { ...data, sectionConfig: sections };
     if (editingTemplate) {
-      updateTemplateMutation.mutate({ id: editingTemplate.id, data });
+      updateTemplateMutation.mutate({ id: editingTemplate.id, data: payload });
     } else {
-      createTemplateMutation.mutate(data);
+      createTemplateMutation.mutate(payload as TemplateFormData);
     }
   };
 
   const handleEdit = (template: DocumentTemplate) => {
     setEditingTemplate(template);
+    setSections(normaliseSections(template.sectionConfig));
     form.reset({
       name: template.name,
       type: template.type as "quote" | "proposal" | "invoice",
@@ -186,6 +215,7 @@ export default function TemplateManagement() {
 
   const handleCreate = () => {
     setEditingTemplate(null);
+    setSections(DEFAULT_SECTIONS.map(s => ({ ...s })));
     form.reset({
       name: "",
       type: "quote",
@@ -202,6 +232,22 @@ export default function TemplateManagement() {
       secondaryColor: "#3b82f6",
     });
     setIsDialogOpen(true);
+  };
+
+  const moveSection = (index: number, direction: -1 | 1) => {
+    const next = index + direction;
+    if (next < 0 || next >= sections.length) return;
+    setSections(prev => {
+      const arr = [...prev];
+      [arr[index], arr[next]] = [arr[next], arr[index]];
+      return arr;
+    });
+  };
+
+  const toggleSection = (index: number) => {
+    setSections(prev =>
+      prev.map((s, i) => (i === index ? { ...s, visible: !s.visible } : s))
+    );
   };
 
   const filteredTemplates = templates.filter(
@@ -379,10 +425,11 @@ export default function TemplateManagement() {
                 </div>
 
                 <Tabs defaultValue="company" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="company">Company Info</TabsTrigger>
                     <TabsTrigger value="styling">Styling</TabsTrigger>
                     <TabsTrigger value="terms">Terms</TabsTrigger>
+                    <TabsTrigger value="sections">Sections</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
@@ -545,6 +592,58 @@ export default function TemplateManagement() {
                         </FormItem>
                       )}
                     />
+                  </TabsContent>
+
+                  <TabsContent value="sections" className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Toggle sections on or off, and use the arrows to reorder them on the document.
+                      Locked sections (like the header and totals) cannot be hidden.
+                    </p>
+                    <div className="space-y-2" data-testid="section-list">
+                      {sections.map((section, index) => (
+                        <div
+                          key={section.id}
+                          className={`flex items-center gap-3 p-3 rounded-md border ${
+                            section.visible ? "bg-card" : "bg-muted/40 opacity-60"
+                          }`}
+                          data-testid={`section-row-${section.id}`}
+                        >
+                          <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <span className="flex-1 text-sm font-medium">{section.label}</span>
+                          {section.locked && (
+                            <Badge variant="secondary" className="text-xs">Always on</Badge>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              disabled={index === 0}
+                              onClick={() => moveSection(index, -1)}
+                              data-testid={`button-section-up-${section.id}`}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              disabled={index === sections.length - 1}
+                              onClick={() => moveSection(index, 1)}
+                              data-testid={`button-section-down-${section.id}`}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                            <Switch
+                              checked={section.visible}
+                              disabled={section.locked}
+                              onCheckedChange={() => toggleSection(index)}
+                              data-testid={`switch-section-${section.id}`}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </TabsContent>
                 </Tabs>
 
