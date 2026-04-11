@@ -1599,13 +1599,16 @@ export function JobDiarySection({
                           </div>
                         </div>
                         {/* Content */}
-                        <div className="px-3 py-2 min-w-0 overflow-hidden">
+                        <div
+                          className={`px-3 py-2 min-w-0 overflow-hidden ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                          onClick={isClickable ? handleEntryClick : undefined}
+                        >
                           <p
                             className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full ${
                               isSent
                                 ? "text-gray-700 dark:text-gray-300"
                                 : "text-purple-900 dark:text-purple-100"
-                            }`}
+                            } ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
                             style={{ wordBreak: "break-word" }}
                           >
                             {messageText}
