@@ -371,7 +371,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {/* Section Photos */}
               {(section.photos || []).length > 0 && (
                 <div className="mb-4 sm:mb-6">
-                  <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Documentation</h4>
                   <div className="grid grid-cols-4 md:grid-cols-4 gap-1 sm:gap-1.5">
                     {(section.photos || []).map((photo, photoIndex) => (
                       <div 
@@ -505,13 +504,12 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {/* Section Line Items */}
               {(section.lineItems || []).length > 0 && (
                 <div className="mb-4 sm:mb-6">
-                  <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Services & Pricing</h4>
                   <div className="w-full overflow-x-auto">
                     <div className="inline-block min-w-full align-middle">
                       <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Service</th>
+                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Line Item</th>
                             <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900">Qty</th>
                             <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden sm:table-cell">Rate</th>
                             <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Price</th>
