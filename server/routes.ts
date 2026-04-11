@@ -16697,7 +16697,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Get proposal as HTML (for Smart Attachments)
+  // Generate proposal as a real PDF using PDFKit
   app.get('/api/proposals/:id/pdf', async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(req.params.id);
@@ -16718,10 +16718,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const sections = await storage.getProposalSectionsByProposal(req.params.id);
       const lineItems = await storage.getProposalLineItemsByProposal(req.params.id);
       
-      console.log(`📄 Generating proposal HTML for ${req.params.id}`);
-      console.log(`📋 Found ${sections.length} sections`);
-      console.log(`📝 Found ${lineItems.length} line items`);
-      
+      console.log(`📄 Generating proposal PDF for ${req.params.id} (${sections.length} sections, ${lineItems.length} line items)`);
+
       // Group line items by section
       const sectionLineItems = new Map<string, any[]>();
       for (const item of lineItems) {
@@ -16733,10 +16731,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         }
       }
 
-      // Calculate totals
+      // Calculate totals (only selected items)
       let subtotal = 0;
       for (const item of lineItems) {
-        if (item.selected) {
+        if (item.selected !== false) {
           subtotal += parseFloat(item.totalPrice || '0');
         }
       }
@@ -16746,197 +16744,122 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const customerName = customer?.name || 'Valued Customer';
       const proposalNumber = proposal.proposalNumber || 'N/A';
 
-      // Build line items HTML
-      let lineItemsHtml = '';
-      if (sections.length > 0 && sectionLineItems.size > 0) {
-        for (const section of sections) {
-          const items = sectionLineItems.get(section.id) || [];
-          if (items.length > 0) {
-            lineItemsHtml += `<div style="margin-bottom: 20px;">`;
-            lineItemsHtml += `<h3 style="color: #374151; margin: 0 0 10px 0;">${section.title}</h3>`;
-            lineItemsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
-            lineItemsHtml += `
-              <thead>
-                <tr style="background: #f9fafb;">
-                  <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb;">Service</th>
-                  <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb;">Qty</th>
-                  <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e5e7eb;">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-            `;
-            
-            for (const item of items) {
-              if (item.selected) {
-                const itemPrice = parseFloat(item.totalPrice || '0');
-                lineItemsHtml += `
-                  <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${item.description}</td>
-                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f3f4f6;">${item.quantity} ${item.unit}</td>
-                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f3f4f6;">$${itemPrice.toFixed(2)}</td>
-                  </tr>
-                `;
-              }
-            }
-            lineItemsHtml += '</tbody></table></div>';
-          }
+      // Build PDF using PDFKit
+      const PDFDoc = (await import('pdfkit')).default;
+      const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
+        const doc = new PDFDoc({ size: 'A4', margin: 50 });
+        const chunks: Buffer[] = [];
+        doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
+        doc.on('end', () => resolve(Buffer.concat(chunks)));
+        doc.on('error', reject);
+
+        const fmtCurrency = (n: number) =>
+          new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(n);
+        const fmtDate = (d: any) =>
+          d ? new Date(d).toLocaleDateString('en-NZ', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+        const pageW = doc.page.width - 100;
+
+        // Header bar
+        doc.rect(0, 0, doc.page.width, 90).fill('#f97316');
+        try { doc.image('client/public/treemarkables-logo.png', 50, 15, { height: 55 }); } catch { /* no logo */ }
+        doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
+          .text('PROPOSAL', doc.page.width - 200, 20, { width: 150, align: 'right' });
+        doc.fontSize(10).font('Helvetica')
+          .text(`#${proposalNumber}`, doc.page.width - 200, 43, { width: 150, align: 'right' });
+        if (proposal.expiresAt) {
+          doc.fontSize(8).text(`Valid until: ${fmtDate(proposal.expiresAt)}`, doc.page.width - 200, 58, { width: 150, align: 'right' });
         }
-      }
 
-      const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Proposal ${proposalNumber}</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-      background: #f9fafb;
-    }
-    .header {
-      background: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #6366f1 100%);
-      color: white;
-      padding: 30px;
-      border-radius: 8px 8px 0 0;
-      margin-bottom: 0;
-    }
-    .header h1 {
-      margin: 0 0 5px 0;
-      font-size: 32px;
-    }
-    .header p {
-      margin: 0;
-      opacity: 0.9;
-    }
-    .proposal-info {
-      background: white;
-      padding: 20px 30px;
-      border-left: 4px solid #f59e0b;
-      margin-bottom: 20px;
-    }
-    .proposal-number {
-      background: white;
-      padding: 10px 15px;
-      border-radius: 6px;
-      display: inline-block;
-      font-size: 14px;
-      font-weight: bold;
-      color: #374151;
-      margin-top: 10px;
-    }
-    .proposal-number span {
-      color: #f59e0b;
-    }
-    .content {
-      background: white;
-      padding: 30px;
-      border-radius: 0 0 8px 8px;
-    }
-    .section-title {
-      color: #374151;
-      font-size: 24px;
-      margin: 0 0 15px 0;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #e5e7eb;
-    }
-    .customer-name {
-      font-size: 20px;
-      color: #1f2937;
-      margin-bottom: 20px;
-    }
-    .totals-table {
-      width: 100%;
-      margin-top: 30px;
-      border-top: 2px solid #e5e7eb;
-      padding-top: 15px;
-    }
-    .totals-table tr td:first-child {
-      text-align: right;
-      padding: 8px;
-      color: #6b7280;
-    }
-    .totals-table tr td:last-child {
-      text-align: right;
-      padding: 8px;
-      font-weight: bold;
-      width: 150px;
-    }
-    .total-row {
-      border-top: 2px solid #374151;
-      font-size: 18px;
-    }
-    .total-row td {
-      padding-top: 15px !important;
-      color: #374151 !important;
-    }
-    .total-amount {
-      color: #f59e0b !important;
-      font-size: 20px !important;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #e5e7eb;
-      color: #6b7280;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>Treemarkables</h1>
-    <p>Professional Tree Services</p>
-    <p>📞 +64 6 867 1234</p>
-    <p>📍 Gisborne, New Zealand</p>
-    <div class="proposal-number">
-      PROPOSAL Number: <span>${proposalNumber}</span><br>
-      Date: <span>${new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-    </div>
-  </div>
+        // Customer block
+        doc.fillColor('#111827').fontSize(12).font('Helvetica-Bold').text('Prepared for:', 50, 110);
+        doc.fontSize(14).text(customerName, 50, 128);
+        if (customer?.address) doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text(customer.address, 50, 147);
 
-  <div class="content">
-    <h2 class="section-title">Proposal For</h2>
-    <div class="customer-name">${customerName}</div>
+        // Proposal description
+        if (proposal.description) {
+          doc.moveDown(3).fillColor('#374151').fontSize(10).font('Helvetica')
+            .text(proposal.description, { width: pageW });
+        }
 
-    ${lineItemsHtml}
+        // Separator
+        const sepY = Math.max(doc.y + 12, 200);
+        doc.moveTo(50, sepY).lineTo(50 + pageW, sepY).lineWidth(1).strokeColor('#e5e7eb').stroke();
+        doc.y = sepY + 10;
 
-    <table class="totals-table">
-      <tr>
-        <td>Subtotal (excl GST):</td>
-        <td>$${subtotal.toFixed(2)}</td>
-      </tr>
-      <tr>
-        <td>GST (15%):</td>
-        <td>$${gst.toFixed(2)}</td>
-      </tr>
-      <tr class="total-row">
-        <td>Total (inc GST):</td>
-        <td class="total-amount">$${total.toFixed(2)}</td>
-      </tr>
-    </table>
+        // Line items per section
+        for (const section of sections) {
+          const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+          if (items.length === 0) continue;
 
-    <div class="footer">
-      <p>Treemarkables LTD - Qualified Arborists</p>
-      <p>Email: info@treemarkables.co.nz | Phone: 0272166882</p>
-    </div>
-  </div>
-</body>
-</html>
-      `;
+          doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, { width: pageW });
+          doc.moveDown(0.3);
 
-      res.setHeader('Content-Type', 'text/html');
-      res.send(htmlContent);
+          // Table header
+          const col = { desc: 50, qty: 360, unit: 405, price: 450, total: 495 };
+          doc.fontSize(8).font('Helvetica-Bold').fillColor('#6b7280');
+          doc.text('Description', col.desc, doc.y, { width: 300 });
+          doc.text('Qty', col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+          doc.text('Unit', col.unit, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+          doc.text('Total', col.total, doc.y - doc.currentLineHeight(), { width: 50, align: 'right' });
+          doc.moveDown(0.3);
+          doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#d1d5db').stroke();
+          doc.moveDown(0.3);
+
+          for (const item of items) {
+            const itemTotal = parseFloat(item.totalPrice || '0');
+            const rowY = doc.y;
+            doc.fontSize(9).font('Helvetica').fillColor('#111827')
+              .text(item.description || '', col.desc, rowY, { width: 300 });
+            const rowH = doc.y - rowY;
+            doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
+            doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
+            doc.text(fmtCurrency(itemTotal), col.total, rowY, { width: 50, align: 'right' });
+            doc.y = rowY + Math.max(rowH, 14) + 2;
+          }
+
+          doc.moveDown(0.5);
+        }
+
+        // Totals block
+        doc.moveDown(0.5);
+        doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+        doc.moveDown(0.5);
+
+        const tX = 370;
+        const vW = 50 + pageW - tX;
+        doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+          .text('Subtotal (excl. GST)', tX, doc.y, { width: vW - 70, align: 'left' });
+        doc.fillColor('#111827').text(fmtCurrency(subtotal), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+        doc.moveDown(0.4);
+        doc.fillColor('#6b7280').text('GST (15%)', tX, doc.y, { width: vW - 70 });
+        doc.fillColor('#111827').text(fmtCurrency(gst), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+        doc.moveDown(0.4);
+        doc.moveTo(tX, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+        doc.moveDown(0.3);
+        doc.fontSize(11).font('Helvetica-Bold').fillColor('#111827')
+          .text('Total (inc. GST)', tX, doc.y, { width: vW - 70 });
+        doc.fillColor('#f97316').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+
+        // Footer
+        const footerY = doc.page.height - 70;
+        doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+        doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+          .text('Treemarkables LTD — Qualified Arborists', 50, footerY + 8, { width: pageW, align: 'center' });
+        doc.text('info@treemarkables.co.nz | 027 216 6882', 50, footerY + 20, { width: pageW, align: 'center' });
+
+        doc.end();
+      });
+
+
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="Proposal-${proposalNumber}.pdf"`);
+      res.send(pdfBuffer);
     } catch (error) {
-      console.error('Error generating proposal HTML:', error);
+      console.error('Error generating proposal PDF:', error);
       res.status(500).json({
         success: false,
-        message: 'Error generating proposal'
+        message: 'Error generating proposal PDF'
       });
     }
   });
