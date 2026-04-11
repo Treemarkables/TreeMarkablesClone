@@ -560,9 +560,13 @@ export function setupTimeTrackingRoutes(app: any) {
         };
       });
 
-      // Merge with existing line items
+      // Replace any existing charge-up rate line items (remove old ones, add fresh)
       const existingLineItems: any[] = Array.isArray(job.lineItems) ? job.lineItems : [];
-      const mergedLineItems = [...existingLineItems, ...newLineItems];
+      const nonLabourItems = existingLineItems.filter((item: any) => {
+        const desc = (item.description || '').toLowerCase();
+        return !(desc.includes('charge up') || desc.includes('charge-up') || desc.includes('chargeup') || desc.includes('labour –'));
+      });
+      const mergedLineItems = [...nonLabourItems, ...newLineItems];
 
       // Recalculate total
       const subtotal = mergedLineItems.reduce((sum: number, item: any) => {

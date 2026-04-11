@@ -611,10 +611,8 @@ export function InvoiceBuilder({
       return null;
     }
 
-    if (
-      lineItems.length === 0 ||
-      lineItems.every((item) => !item.description.trim())
-    ) {
+    const filledLineItems = lineItems.filter((item) => item.description.trim());
+    if (filledLineItems.length === 0) {
       isCreatingRef.current = false;
       toast({
         title: "Line Items Required",
@@ -627,7 +625,7 @@ export function InvoiceBuilder({
     setIsCreating(true);
 
     try {
-      const formattedLineItems = lineItems.map((item) => ({
+      const formattedLineItems = filledLineItems.map((item) => ({
         description: item.description,
         quantity: item.quantity,
         rate: item.unitPrice,
@@ -735,10 +733,8 @@ export function InvoiceBuilder({
       return null;
     }
 
-    if (
-      lineItems.length === 0 ||
-      lineItems.every((item) => !item.description.trim())
-    ) {
+    const filledItems = lineItems.filter((item) => item.description.trim());
+    if (filledItems.length === 0) {
       toast({
         title: "Line Items Required",
         description: "Please add at least one line item with a description.",
@@ -753,7 +749,7 @@ export function InvoiceBuilder({
       console.log("🔄 Updating invoice:", existingInvoiceId);
 
       // Format line items for database (using rate/amount instead of unitPrice/total)
-      const formattedLineItems = lineItems.map((item) => ({
+      const formattedLineItems = filledItems.map((item) => ({
         description: item.description,
         quantity: item.quantity.toString(),
         rate: item.unitPrice,
@@ -761,7 +757,7 @@ export function InvoiceBuilder({
       }));
 
       // Calculate new amount from line items
-      const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+      const subtotal = filledItems.reduce((sum, item) => sum + item.total, 0);
 
       const updateData = {
         address: editableAddress,
