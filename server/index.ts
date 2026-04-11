@@ -379,6 +379,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS invoice_payment_days INTEGER NOT NULL DEFAULT 7
       `);
       log("✅ Schema migration: business_settings.invoice_payment_days ready", "startup");
+
+      // Add logo_size to document_templates
+      await pool.query(`
+        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_size INTEGER NOT NULL DEFAULT 40
+      `);
+      log("✅ Schema migration: document_templates.logo_size ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

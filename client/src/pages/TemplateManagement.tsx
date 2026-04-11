@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Slider } from "@/components/ui/slider";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -112,6 +113,7 @@ const templateFormSchema = z.object({
   primaryColor: z.string().default("#f97316"),
   secondaryColor: z.string().default("#3b82f6"),
   logoUrl: z.string().nullable().optional(),
+  logoSize: z.number().min(20).max(120).default(40),
 });
 
 type TemplateFormData = z.infer<typeof templateFormSchema>;
@@ -211,6 +213,7 @@ export default function TemplateManagement() {
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
       logoUrl: null,
+      logoSize: 40,
     },
   });
 
@@ -235,6 +238,7 @@ export default function TemplateManagement() {
     headerLayout: null,
     footerText: null,
     logoUrl: watchedValues.logoUrl || null,
+    logoSize: watchedValues.logoSize ?? 40,
     sectionConfig: sections,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -267,6 +271,7 @@ export default function TemplateManagement() {
       primaryColor: template.primaryColor || "#f97316",
       secondaryColor: template.secondaryColor || "#3b82f6",
       logoUrl: template.logoUrl || null,
+      logoSize: template.logoSize ?? 40,
     });
     setIsDialogOpen(true);
   };
@@ -289,6 +294,7 @@ export default function TemplateManagement() {
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
       logoUrl: null,
+      logoSize: 40,
     });
     setIsDialogOpen(true);
   };
@@ -562,6 +568,25 @@ export default function TemplateManagement() {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground self-end">PNG, JPG, SVG or WebP</p>
+                      </div>
+                      {/* Logo size slider */}
+                      <div className="space-y-1 pt-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs text-muted-foreground">Logo size</label>
+                          <span className="text-xs font-medium tabular-nums">{watchedValues.logoSize ?? 40}px</span>
+                        </div>
+                        <Slider
+                          min={20}
+                          max={120}
+                          step={4}
+                          value={[watchedValues.logoSize ?? 40]}
+                          onValueChange={([v]) => form.setValue("logoSize", v)}
+                          className="w-full"
+                        />
+                        <div className="flex justify-between text-[10px] text-muted-foreground">
+                          <span>Small</span>
+                          <span>Large</span>
+                        </div>
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
