@@ -289,7 +289,30 @@ export default function ProposalViewer({}: ProposalViewerProps) {
                 <Mail className="w-4 h-4 mr-2" />
                 Email
               </Button>
-              <Button variant="outline" size="sm" className="hidden sm:flex">
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden sm:flex"
+                onClick={async () => {
+                  if (!proposalId) return;
+                  try {
+                    const actualId = proposal?.id || proposalId;
+                    const res = await fetch(`/api/proposals/${actualId}/pdf`);
+                    if (!res.ok) throw new Error("Failed to generate PDF");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `Proposal-${proposal?.proposalNumber || actualId}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    toast({ title: "Download failed", description: "Could not generate PDF. Please try again.", variant: "destructive" });
+                  }
+                }}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Download PDF
               </Button>
