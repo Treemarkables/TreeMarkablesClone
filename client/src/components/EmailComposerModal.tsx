@@ -63,6 +63,7 @@ interface EmailComposerModalProps {
   proposalData?: any;
   templateType?: "invoice" | "quote" | "proposal";
   customEmail?: string;
+  defaultCc?: string;
 }
 
 interface EmailTemplate {
@@ -83,6 +84,7 @@ export function EmailComposerModal({
   proposalData,
   templateType,
   customEmail,
+  defaultCc,
 }: EmailComposerModalProps) {
   // Safe amount formatter - handles strings, numbers, null, undefined
   const formatAmount = (value: any): string => {
@@ -421,7 +423,7 @@ export function EmailComposerModal({
 
       setEmailData({
         to: billingEmail || "",
-        cc: "",
+        cc: defaultCc || "",
         subject: populatedSubject,
         body: populatedBody,
         selectedTemplate: template.id,
@@ -463,6 +465,7 @@ export function EmailComposerModal({
     templateType,
     hasInitialized,
     jobInvoice,
+    defaultCc,
   ]);
 
   // When job invoice loads asynchronously (after init ran), auto-attach if the active template needs it

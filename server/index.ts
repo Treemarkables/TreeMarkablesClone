@@ -403,6 +403,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE equipment ADD COLUMN IF NOT EXISTS requires_pre_start BOOLEAN NOT NULL DEFAULT false
       `);
       log("✅ Schema migration: equipment.requires_pre_start ready", "startup");
+
+      // Add invoice_cc_email to customers for auto-CC on invoice emails
+      await pool.query(`
+        ALTER TABLE customers ADD COLUMN IF NOT EXISTS invoice_cc_email TEXT
+      `);
+      log("✅ Schema migration: customers.invoice_cc_email ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

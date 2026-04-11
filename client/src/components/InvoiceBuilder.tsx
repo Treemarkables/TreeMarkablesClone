@@ -1676,6 +1676,7 @@ export function InvoiceBuilder({
           customEmail={editableEmail}
           invoiceData={createdInvoice}
           templateType="invoice"
+          defaultCc={customer?.invoiceCcEmail || undefined}
         />
       )}
 
