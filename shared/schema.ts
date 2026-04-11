@@ -2601,6 +2601,8 @@ export const documentTemplates = pgTable("document_templates", {
   headerLayout: jsonb("header_layout"), // Logo position, company info layout
   footerText: text("footer_text"),
   paymentTerms: text("payment_terms").default("Payment due within 7 days"),
+  // Section visibility and ordering config (invoice/quote/proposal)
+  sectionConfig: jsonb("section_config"),
   
   // Template Styling
   primaryColor: text("primary_color").default("#f97316"), // Orange from Treemarkables brand
@@ -2773,6 +2775,14 @@ export const insertGeneratedDocumentPhotoSchema = createInsertSchema(generatedDo
   id: true,
   createdAt: true,
 });
+
+// Section config type for invoice/quote/proposal templates
+export interface InvoiceSectionConfig {
+  id: string;
+  label: string;
+  visible: boolean;
+  locked: boolean; // if true, cannot be hidden
+}
 
 // TypeScript Types
 export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;

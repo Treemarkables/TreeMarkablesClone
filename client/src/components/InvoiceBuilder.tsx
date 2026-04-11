@@ -40,7 +40,7 @@ import { InvoiceTemplate } from "@/components/InvoiceTemplate";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { DocumentTemplate, Customer, Job } from "@shared/schema";
+import type { DocumentTemplate, Customer, Job, InvoiceSectionConfig } from "@shared/schema";
 
 interface InvoiceBuilderProps {
   isOpen: boolean;
@@ -1672,6 +1672,7 @@ export function InvoiceBuilder({
                     template={invoiceTemplate}
                     lineItems={lineItems}
                     description={editableDescription}
+                    sectionConfig={Array.isArray(invoiceTemplate.sectionConfig) ? invoiceTemplate.sectionConfig as InvoiceSectionConfig[] : undefined}
                   />
                 </div>
               </div>
