@@ -2784,7 +2784,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
 
         {/* Mobile Layout: ServiceM8-style job cards */}
-        <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-x-hidden bg-gray-50">
+        <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
           {/* Header group — flex-shrink-0 keeps it pinned at top while job list scrolls below */}
           <div className="flex-shrink-0 z-50">
           {/* Compact Blue Banner: actions + filters + search */}
@@ -2953,7 +2953,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </div>{/* end header group */}
 
           {/* Jobs List - scrollable area */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain">
             <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
