@@ -3017,7 +3017,25 @@ export function ProposalBuilder({
                       initializeSmsForm();
                       setShowSmsDialog(true);
                     }}
-                    onDownload={() => console.log("Download proposal")}
+                    onDownload={async () => {
+                      const pid = draftProposalId || proposalId;
+                      if (!pid) return;
+                      try {
+                        const res = await fetch(`/api/proposals/${pid}/pdf`);
+                        if (!res.ok) throw new Error("PDF failed");
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `Proposal-${pid}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      } catch {
+                        toast({ title: "Download failed", description: "Could not generate PDF.", variant: "destructive" });
+                      }
+                    }}
                     onCopy={() => console.log("Copy proposal")}
                   />
                 );
