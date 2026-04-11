@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -111,6 +111,7 @@ const templateFormSchema = z.object({
   paymentTerms: z.string().default("Payment due within 7 days"),
   primaryColor: z.string().default("#f97316"),
   secondaryColor: z.string().default("#3b82f6"),
+  logoUrl: z.string().nullable().optional(),
 });
 
 type TemplateFormData = z.infer<typeof templateFormSchema>;
@@ -122,6 +123,8 @@ export default function TemplateManagement() {
   const [editingTemplate, setEditingTemplate] =
     useState<DocumentTemplate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [sections, setSections] = useState<InvoiceSectionConfig[]>(() =>
     DEFAULT_SECTIONS.map(s => ({ ...s }))
   );
@@ -207,6 +210,7 @@ export default function TemplateManagement() {
       paymentTerms: "Payment due within 7 days",
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
+      logoUrl: null,
     },
   });
 
@@ -230,7 +234,7 @@ export default function TemplateManagement() {
     secondaryColor: watchedValues.secondaryColor || "#3b82f6",
     headerLayout: null,
     footerText: null,
-    logoUrl: null,
+    logoUrl: watchedValues.logoUrl || null,
     sectionConfig: sections,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -262,6 +266,7 @@ export default function TemplateManagement() {
       paymentTerms: template.paymentTerms || "Payment due within 7 days",
       primaryColor: template.primaryColor || "#f97316",
       secondaryColor: template.secondaryColor || "#3b82f6",
+      logoUrl: template.logoUrl || null,
     });
     setIsDialogOpen(true);
   };
@@ -283,6 +288,7 @@ export default function TemplateManagement() {
       paymentTerms: "Payment due within 7 days",
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
+      logoUrl: null,
     });
     setIsDialogOpen(true);
   };
@@ -307,6 +313,25 @@ export default function TemplateManagement() {
     setSections(prev =>
       prev.map((s, i) => (i === index ? { ...s, label } : s))
     );
+  };
+
+  const handleLogoUpload = async (file: File) => {
+    setLogoUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("logo", file);
+      const res = await fetch("/api/templates/upload-logo", { method: "POST", body: formData });
+      const data = await res.json();
+      if (data.success) {
+        form.setValue("logoUrl", data.url);
+      } else {
+        toast({ title: "Logo upload failed", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Logo upload failed", variant: "destructive" });
+    } finally {
+      setLogoUploading(false);
+    }
   };
 
   const filteredTemplates = templates.filter(
@@ -497,6 +522,48 @@ export default function TemplateManagement() {
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
+                    {/* Logo upload */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium">Company Logo</label>
+                      <div className="flex items-center gap-3">
+                        <div className="h-14 w-28 rounded-md border border-dashed border-input flex items-center justify-center bg-muted/30 overflow-hidden flex-shrink-0">
+                          {watchedValues.logoUrl ? (
+                            <img src={watchedValues.logoUrl} alt="Logo" className="max-h-12 max-w-full object-contain p-1" />
+                          ) : (
+                            <span className="text-xs text-muted-foreground text-center px-1">No logo</span>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          <input
+                            ref={logoInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                            className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={logoUploading}
+                            onClick={() => logoInputRef.current?.click()}
+                          >
+                            {logoUploading ? "Uploading..." : watchedValues.logoUrl ? "Change Logo" : "Upload Logo"}
+                          </Button>
+                          {watchedValues.logoUrl && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => form.setValue("logoUrl", null)}
+                            >
+                              Remove
+                            </Button>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground self-end">PNG, JPG, SVG or WebP</p>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
