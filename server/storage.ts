@@ -2533,13 +2533,25 @@ class DatabaseStorage implements IStorage {
     
     // Calculate total revenue from COMPLETED or INVOICED JOBS (by completion date or scheduled date).
     // 'invoiced' is the natural next status after 'completed', so both must be included.
+    // Build an invoice-date map so invoiced jobs are anchored to their invoice date, not their
+    // scheduled/created date — this ensures jobs invoiced this week appear in "This Week" even
+    // if they were originally scheduled in a prior week.
+    const invoiceDateForJob = new Map<string, Date>();
+    for (const inv of allInvoices) {
+      if (inv.status !== 'cancelled' && inv.jobId && inv.issueDate) {
+        const d = new Date(inv.issueDate);
+        const existing = invoiceDateForJob.get(inv.jobId);
+        if (!existing || d > existing) invoiceDateForJob.set(inv.jobId, d);
+      }
+    }
     let completedJobsForRevenue = allJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     if (fromDate || toDate) {
       completedJobsForRevenue = completedJobsForRevenue.filter(job => {
-        // Use completedDate if available, otherwise fall back to scheduledDate, then createdAt
-        const jobDate = job.completedDate ? new Date(job.completedDate) :
-                        job.scheduledDate ? new Date(job.scheduledDate) :
-                        job.createdAt ? new Date(job.createdAt) : null;
+        // Priority: completedDate → invoice issueDate → scheduledDate → createdAt
+        const jobDate = job.completedDate     ? new Date(job.completedDate) :
+                        invoiceDateForJob.get(job.id) ||
+                        (job.scheduledDate    ? new Date(job.scheduledDate) :
+                        job.createdAt         ? new Date(job.createdAt) : null);
         if (!jobDate) return false;
         if (fromDate && jobDate < fromDate) return false;
         if (toDate && jobDate > toDate) return false;
@@ -2655,30 +2667,40 @@ class DatabaseStorage implements IStorage {
     const allInvoices = await this.getAllInvoices();
     const completedJobs = allJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
-    // Filter by date range if provided.
-    // Use COALESCE(completedDate, scheduledDate, createdAt) so that completed jobs without
-    // a completedDate stamp are still included when their scheduledDate/createdAt falls in range.
-    let filteredJobs = completedJobs;
-    if (fromDate || toDate) {
-      filteredJobs = completedJobs.filter(job => {
-        const jobDate = job.completedDate ? new Date(job.completedDate) :
-                        job.scheduledDate ? new Date(job.scheduledDate) :
-                        job.createdAt    ? new Date(job.createdAt)    : null;
-        if (!jobDate) return false;
-        if (fromDate && jobDate < fromDate) return false;
-        if (toDate && jobDate > toDate) return false;
-        return true;
-      });
-    }
-    
-    // Create a map of job IDs to invoice amounts (non-cancelled invoices only)
+    // Build maps from job ID → invoice data (used for both date filtering and revenue totals)
     const jobInvoiceMap = new Map<string, number>();
+    const jobInvoiceDateMap = new Map<string, Date>(); // most recent invoice issue date per job
     for (const invoice of allInvoices) {
       if (invoice.status !== 'cancelled' && invoice.jobId) {
         const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
         const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
         jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+        // Track the invoice issue date so we can use it as a date anchor for filtering
+        if (invoice.issueDate) {
+          const iDate = new Date(invoice.issueDate);
+          const existing = jobInvoiceDateMap.get(invoice.jobId);
+          if (!existing || iDate > existing) {
+            jobInvoiceDateMap.set(invoice.jobId, iDate);
+          }
+        }
       }
+    }
+
+    // Filter by date range if provided.
+    // Priority: completedDate → invoice issueDate (for invoiced jobs) → scheduledDate → createdAt
+    // Using invoice issueDate ensures jobs invoiced this week appear even if scheduled earlier.
+    let filteredJobs = completedJobs;
+    if (fromDate || toDate) {
+      filteredJobs = completedJobs.filter(job => {
+        const jobDate = job.completedDate        ? new Date(job.completedDate) :
+                        jobInvoiceDateMap.get(job.id) ||
+                        (job.scheduledDate       ? new Date(job.scheduledDate) :
+                        job.createdAt            ? new Date(job.createdAt)    : null);
+        if (!jobDate) return false;
+        if (fromDate && jobDate < fromDate) return false;
+        if (toDate && jobDate > toDate) return false;
+        return true;
+      });
     }
     
     // Calculate totals for ALL jobs (for revenue/job count)
