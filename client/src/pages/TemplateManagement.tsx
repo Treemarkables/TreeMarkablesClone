@@ -710,22 +710,17 @@ export default function TemplateManagement() {
                       <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
                       <Badge variant="secondary" className="text-xs">Sample data</Badge>
                     </div>
-                    <div className="overflow-hidden rounded-md border bg-white">
-                      <div
-                        style={{ transformOrigin: "top left", transform: "scale(0.65)", width: "153.8%", pointerEvents: "none" }}
-                        className="select-none"
-                      >
-                        <InvoiceTemplate
-                          template={previewTemplate as any}
-                          invoice={MOCK_INVOICE}
-                          customer={MOCK_CUSTOMER as any}
-                          lineItems={MOCK_LINE_ITEMS}
-                          description="Tree removal and stump grinding at the property. All debris removed and site left clean."
-                          jobAddress="45 Palm Drive, Gisborne"
-                          billingName="Jane Smith"
-                          sectionConfig={sections}
-                        />
-                      </div>
+                    <div className="overflow-y-auto rounded-md border" style={{ maxHeight: "55vh" }}>
+                      <InvoiceTemplate
+                        template={previewTemplate as any}
+                        invoice={MOCK_INVOICE}
+                        customer={MOCK_CUSTOMER as any}
+                        lineItems={MOCK_LINE_ITEMS}
+                        description="Tree removal and stump grinding at the property. All debris removed and site left clean."
+                        jobAddress="45 Palm Drive, Gisborne"
+                        billingName="Jane Smith"
+                        sectionConfig={sections}
+                      />
                     </div>
                   </TabsContent>
                 </Tabs>
