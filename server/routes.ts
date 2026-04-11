@@ -1026,6 +1026,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Public route: SaaS subscriber onboarding guide (no auth required)
+  app.get('/onboarding-guide', (req: Request, res: Response) => {
+    try {
+      const pdfPath = path.join(process.cwd(), 'public', 'saas-onboarding-guide.pdf');
+      const htmlPath = path.join(process.cwd(), 'public', 'saas-onboarding-guide.html');
+
+      if (fs.existsSync(pdfPath)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename="Treemarkables-SaaS-Onboarding-Guide.pdf"');
+        res.sendFile(pdfPath);
+      } else if (fs.existsSync(htmlPath)) {
+        res.setHeader('Content-Type', 'text/html');
+        res.sendFile(htmlPath);
+      } else {
+        res.status(404).json({ success: false, message: 'Onboarding guide not found' });
+      }
+    } catch (error) {
+      console.error('Error serving onboarding guide:', error);
+      res.status(500).json({ success: false, message: 'Error serving onboarding guide' });
+    }
+  });
+
   app.get('/robots.txt', (req: Request, res: Response) => {
     try {
       const robotsPath = path.join(process.cwd(), 'robots.txt');
