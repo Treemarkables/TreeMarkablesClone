@@ -385,6 +385,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_size INTEGER NOT NULL DEFAULT 40
       `);
       log("✅ Schema migration: document_templates.logo_size ready", "startup");
+
+      // Add logo_alignment to document_templates
+      await pool.query(`
+        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_alignment TEXT NOT NULL DEFAULT 'left'
+      `);
+      log("✅ Schema migration: document_templates.logo_alignment ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

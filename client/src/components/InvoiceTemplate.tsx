@@ -191,22 +191,39 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
               case 'header':
                 return (
                   <div key="header" className="border-b-[3px] border-black pb-5 mb-8">
-                    <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
-                      <div className="flex-shrink-0">
+                    {template.logoAlignment === "center" ? (
+                      <div className="flex flex-col items-center gap-3 text-center">
                         <img
                           src={template.logoUrl || "/treemarkables-logo.webp"}
                           alt={template.companyName || "Treemarkables"}
                           style={{ height: `${template.logoSize ?? 40}px` }}
                           className="w-auto object-contain"
                         />
+                        <div>
+                          <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 text-left sm:text-right">
-                        <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
-                        <p className="text-xs text-gray-600 mt-1">
-                          {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
-                        </p>
+                    ) : (
+                      <div className={`flex items-start justify-between gap-3 ${template.logoAlignment === "right" ? "flex-row-reverse" : "flex-row"}`}>
+                        <div className="flex-shrink-0">
+                          <img
+                            src={template.logoUrl || "/treemarkables-logo.webp"}
+                            alt={template.companyName || "Treemarkables"}
+                            style={{ height: `${template.logoSize ?? 40}px` }}
+                            className="w-auto object-contain"
+                          />
+                        </div>
+                        <div className={`flex-1 ${template.logoAlignment === "right" ? "text-left" : "text-right"}`}>
+                          <h1 className="text-base font-bold text-black">Invoice #{invoice.invoiceNumber}</h1>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                          </p>
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 );
 
