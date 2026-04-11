@@ -11279,6 +11279,28 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Upload logo for templates
+  app.post('/api/templates/upload-logo', upload.single('logo'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+      const ext = req.file.mimetype === 'image/png' ? '.png'
+        : req.file.mimetype === 'image/jpeg' ? '.jpg'
+        : req.file.mimetype === 'image/webp' ? '.webp'
+        : req.file.mimetype === 'image/svg+xml' ? '.svg'
+        : '.png';
+      const filename = `logo-${Date.now()}${ext}`;
+      const dest = path.join(__dirname, '..', 'client', 'public', 'logos', filename);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, req.file.buffer);
+      res.json({ success: true, url: `/logos/${filename}` });
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      res.status(500).json({ success: false, message: 'Error uploading logo' });
+    }
+  });
+
   // Get default template for type
   app.get('/api/templates/default/:type', async (req: Request, res: Response) => {
     try {

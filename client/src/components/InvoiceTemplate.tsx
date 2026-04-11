@@ -194,8 +194,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     <div className="flex flex-col sm:flex-row items-start sm:items-start justify-between gap-3 sm:gap-4">
                       <div className="flex-shrink-0">
                         <img
-                          src="/treemarkables-logo.webp"
-                          alt="Treemarkables"
+                          src={template.logoUrl || "/treemarkables-logo.webp"}
+                          alt={template.companyName || "Treemarkables"}
                           className="h-10 w-auto object-contain"
                         />
                       </div>
