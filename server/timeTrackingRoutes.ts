@@ -484,5 +484,92 @@ export function setupTimeTrackingRoutes(app: any) {
     }
   });
 
+  // POST /api/jobs/:id/time-to-line-items
+  // Converts all saved time entries for a job into job line items billed at charge-out rate
+  app.post('/api/jobs/:id/time-to-line-items', async (req: Request, res: Response) => {
+    try {
+      const { id: jobId } = req.params;
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Get all time entries for the job
+      const entries = await timeTrackingService.getJobTimeEntries(jobId);
+      if (!entries || entries.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No time entries found for this job'
+        });
+      }
+
+      // Group entries by employee, summing hours
+      const grouped: Record<string, { employeeName: string; totalHours: number; rate: number; lineItemName: string }> = {};
+      for (const entry of entries) {
+        const key = entry.employeeId;
+        const hours = parseFloat(String(entry.hours)) || 0;
+        const rate = parseFloat(String(entry.rate)) || 0;
+        if (!grouped[key]) {
+          grouped[key] = {
+            employeeName: entry.employeeName,
+            totalHours: 0,
+            rate,
+            lineItemName: entry.lineItemName,
+          };
+        }
+        grouped[key].totalHours += hours;
+        // Use the highest rate if multiple rates exist (shouldn't normally differ)
+        if (rate > grouped[key].rate) grouped[key].rate = rate;
+      }
+
+      // Build new line items from grouped data
+      const newLineItems = Object.values(grouped).map((g) => {
+        const hours = Math.round(g.totalHours * 100) / 100;
+        const rate = g.rate;
+        const total = Math.round(hours * rate * 100) / 100;
+        return {
+          id: crypto.randomUUID(),
+          description: `Labour – ${g.employeeName} · ${hours}h @ $${rate.toFixed(2)}/h`,
+          quantity: hours,
+          unitPrice: rate,
+          total,
+          unitCost: 0,
+          totalCost: 0,
+          costExGst: 0,
+          markup: 0,
+          priceExGst: rate,
+          totalExGst: total,
+          taxRate: 15,
+          itemCode: g.lineItemName,
+        };
+      });
+
+      // Merge with existing line items
+      const existingLineItems: any[] = Array.isArray(job.lineItems) ? job.lineItems : [];
+      const mergedLineItems = [...existingLineItems, ...newLineItems];
+
+      // Recalculate total
+      const subtotal = mergedLineItems.reduce((sum: number, item: any) => {
+        return sum + (parseFloat(String(item.total || 0)) || 0);
+      }, 0);
+
+      await storage.updateJob(jobId, {
+        lineItems: mergedLineItems,
+        totalAmount: subtotal.toFixed(2),
+      } as any);
+
+      res.json({
+        success: true,
+        message: `Added ${newLineItems.length} labour line item(s) to the job`,
+        addedItems: newLineItems,
+        newTotal: subtotal,
+      });
+    } catch (error) {
+      console.error('Error converting time entries to line items:', error);
+      res.status(500).json({ success: false, message: 'Failed to convert time entries to line items' });
+    }
+  });
+
   console.log('⏰ Time tracking API routes registered');
 }
