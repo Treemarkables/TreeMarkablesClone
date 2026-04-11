@@ -495,9 +495,9 @@ export function setupTimeTrackingRoutes(app: any) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
-      // Get all time entries for the job
-      const entries = await timeTrackingService.getJobTimeEntries(jobId);
-      if (!entries || entries.length === 0) {
+      // Get all time entries for the job (uses the same storage method as the modal)
+      const rawEntries = await storage.getJobStaffTimeEntries(jobId);
+      if (!rawEntries || rawEntries.length === 0) {
         return res.status(400).json({
           success: false,
           message: 'No time entries found for this job'
@@ -505,21 +505,25 @@ export function setupTimeTrackingRoutes(app: any) {
       }
 
       // Group entries by employee, summing hours
-      const grouped: Record<string, { employeeName: string; totalHours: number; rate: number; lineItemName: string }> = {};
-      for (const entry of entries) {
+      const grouped: Record<string, { employeeName: string; totalHours: number; rate: number }> = {};
+      for (const entry of rawEntries) {
         const key = entry.employeeId;
         const hours = parseFloat(String(entry.hours)) || 0;
         const rate = parseFloat(String(entry.rate)) || 0;
         if (!grouped[key]) {
+          // Look up employee name
+          const employee = await storage.getEmployee(entry.employeeId);
+          const employeeName = employee
+            ? `${employee.firstName} ${employee.lastName}`
+            : entry.employeeId;
           grouped[key] = {
-            employeeName: entry.employeeName,
+            employeeName,
             totalHours: 0,
             rate,
-            lineItemName: entry.lineItemName,
           };
         }
         grouped[key].totalHours += hours;
-        // Use the highest rate if multiple rates exist (shouldn't normally differ)
+        // Use the highest rate if multiple rates exist
         if (rate > grouped[key].rate) grouped[key].rate = rate;
       }
 
@@ -541,7 +545,7 @@ export function setupTimeTrackingRoutes(app: any) {
           priceExGst: rate,
           totalExGst: total,
           taxRate: 15,
-          itemCode: g.lineItemName,
+          itemCode: 'Labour',
         };
       });
 
