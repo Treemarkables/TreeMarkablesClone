@@ -375,10 +375,36 @@ export function InvoiceBuilder({
       ];
     }
 
-    // Only set line items if no existing invoice (existing invoice line items were set earlier)
+    // If proposal/quote items are available, always prefer them over the existing invoice's items.
+    // This ensures the invoice is pre-filled with the accepted/sent quote without requiring
+    // the user to manually click "Import from Quote/Proposal".
+    const hasProposalOrQuoteItems = extractedItems.length > 0 &&
+      !(extractedItems.length === 1 &&
+        extractedItems[0].description === (job.description || "Tree service") &&
+        !proposal && !quote);
+
+    const existingItemsLookLikeProposalItems =
+      existingInvoices.length > 0 &&
+      existingInvoices[0].items &&
+      Array.isArray(existingInvoices[0].items) &&
+      existingInvoices[0].items.length > 0 &&
+      (proposal?.sections?.some((s: any) =>
+        s.lineItems?.some((li: any) =>
+          existingInvoices[0].items.some((ei: any) => ei.description === li.description)
+        )
+      ) || quote?.lineItems?.some((li: any) =>
+        existingInvoices[0].items.some((ei: any) => ei.description === li.description)
+      ));
+
     if (existingInvoices.length === 0) {
+      // New invoice — always set line items from proposal/quote/fallback
+      setLineItems(extractedItems);
+    } else if (hasProposalOrQuoteItems && !existingItemsLookLikeProposalItems) {
+      // Existing invoice but its items weren't sourced from the current proposal/quote —
+      // auto-import so the user doesn't have to click the button manually.
       setLineItems(extractedItems);
     }
+    // else: existing invoice already has proposal-sourced items, keep them as-is.
 
     // Set description from proposal/quote (only if no existing invoice)
     if (!existingInvoices.length) {
