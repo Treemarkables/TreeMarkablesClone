@@ -307,6 +307,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         Lead
                       </DropdownMenuItem>
                       <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-quote"))}
+                        data-testid="create-quote-button-mobile"
+                      >
+                        Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
                         onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
                         data-testid="create-wo-button-mobile"
                       >
@@ -511,16 +517,40 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     <MessageSquare className="h-4 w-4" />
                     Paste
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
-                    data-testid="create-wo-button-desktop"
-                    className="text-black gap-1.5"
-                  >
-                    <Plus className="h-4 w-4" />
-                    Work Order
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        data-testid="create-new-button-desktop"
+                        className="text-black gap-1.5"
+                      >
+                        <Plus className="h-4 w-4" />
+                        New
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-lead"))}
+                        data-testid="create-lead-button-desktop"
+                      >
+                        Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-quote"))}
+                        data-testid="create-quote-button-desktop"
+                      >
+                        Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
+                        data-testid="create-wo-button-desktop"
+                      >
+                        Work Order
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               ) : (
                 <Tooltip>

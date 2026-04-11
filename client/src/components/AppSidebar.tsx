@@ -341,7 +341,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           <SidebarGroup>
             <SidebarGroupLabel>Business Management</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="font-normal text-[16px]">
                 {businessItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   {item.isTab ? (
@@ -377,7 +377,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           <SidebarGroup>
             <SidebarGroupLabel>Operations & Analysis</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenu>
+              <SidebarMenu className="font-normal text-[16px]">
                 <SidebarMenuItem>
                   <SidebarMenuButton asChild isActive={location === "/calendar"}>
                     <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar">
@@ -485,7 +485,7 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border">
-        <SidebarMenu>
+        <SidebarMenu className="font-normal text-[16px]">
           {isAdmin && (
             <SidebarMenuItem>
               <SidebarMenuButton
