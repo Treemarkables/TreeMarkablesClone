@@ -287,6 +287,7 @@ export default function MetricsDashboard() {
     return new Intl.NumberFormat("en-NZ", {
       style: "currency",
       currency: "NZD",
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
