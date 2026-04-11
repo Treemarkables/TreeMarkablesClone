@@ -2946,16 +2946,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                         {/* Row 2: Location + Service Type with Icon + Status Badge */}
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+                          <div className="flex items-center gap-1.5 text-sm min-w-0">
                             <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">
-                              {suburb || "No location"}
+                            <span className="font-semibold text-gray-800 line-clamp-1">
+                              {job.address || "No location"}
                             </span>
                             {job.serviceType && (
                               <>
-                                <span className="text-gray-300">|</span>
+                                <span className="text-gray-300 flex-shrink-0">|</span>
                                 {getServiceTypeIcon()}
-                                <span className="truncate">
+                                <span className="truncate text-gray-500">
                                   {job.serviceType}
                                 </span>
                               </>
@@ -2980,12 +2980,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                         )}
 
-                        {/* Row 3: Description snippet */}
-                        {job.description && (
-                          <p className="text-sm text-gray-500 line-clamp-3 mb-2 break-words overflow-hidden">
-                            {job.description}
-                          </p>
-                        )}
+                        {/* Row 3: Description snippet — always 1 line for consistent card height */}
+                        <p className="text-sm text-gray-500 line-clamp-1 mb-2 min-h-5">
+                          {job.description || ""}
+                        </p>
 
                         {/* Row 4: Action indicators */}
                         <div className="flex items-center gap-2">
