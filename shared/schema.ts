@@ -1618,6 +1618,9 @@ export const equipment = pgTable("equipment", {
   // Licence/ticket required to operate this equipment
   licenceRequired: text("licence_required"), // e.g. "EWP Ticket", "Class 2 Licence", "Chainsaw Unit Standard"
   
+  // Whether this equipment requires a pre-start inspection (e.g. vehicles with motors)
+  requiresPreStart: boolean("requires_pre_start").notNull().default(false),
+  
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),

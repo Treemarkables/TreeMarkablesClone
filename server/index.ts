@@ -397,6 +397,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS header_color TEXT NOT NULL DEFAULT '#ffffff'
       `);
       log("✅ Schema migration: document_templates.header_color ready", "startup");
+
+      // Add requires_pre_start to equipment
+      await pool.query(`
+        ALTER TABLE equipment ADD COLUMN IF NOT EXISTS requires_pre_start BOOLEAN NOT NULL DEFAULT false
+      `);
+      log("✅ Schema migration: equipment.requires_pre_start ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

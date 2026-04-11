@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -61,6 +62,7 @@ const equipmentFormSchema = z.object({
   serialNumber: z.string().optional(),
   registrationNumber: z.string().optional(),
   defaultInspectionTemplateId: z.string().optional(),
+  requiresPreStart: z.boolean().default(false),
   notes: z.string().optional(),
 });
 
@@ -378,6 +380,7 @@ export default function Equipment() {
       serialNumber: equipment.serialNumber || '',
       registrationNumber: equipment.registrationNumber || '',
       defaultInspectionTemplateId: equipment.defaultInspectionTemplateId || '',
+      requiresPreStart: equipment.requiresPreStart ?? false,
       notes: equipment.notes || '',
     });
     setIsEditEquipmentOpen(true);
@@ -718,6 +721,26 @@ export default function Equipment() {
 
                 <FormField
                   control={form.control}
+                  name="requiresPreStart"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <FormLabel className="text-sm font-medium">Requires Pre-Start Inspection</FormLabel>
+                        <p className="text-xs text-muted-foreground">Enable for vehicles and powered machinery (trucks, chippers, grinders, etc.)</p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-requires-pre-start"
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
                   name="notes"
                   render={({ field }) => (
                     <FormItem>
@@ -951,6 +974,26 @@ export default function Equipment() {
                         </SelectContent>
                       </Select>
                       <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={editForm.control}
+                  name="requiresPreStart"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-lg border p-3">
+                      <div>
+                        <FormLabel className="text-sm font-medium">Requires Pre-Start Inspection</FormLabel>
+                        <p className="text-xs text-muted-foreground">Enable for vehicles and powered machinery (trucks, chippers, grinders, etc.)</p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          data-testid="switch-edit-requires-pre-start"
+                        />
+                      </FormControl>
                     </FormItem>
                   )}
                 />
