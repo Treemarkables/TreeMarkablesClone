@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "-nDj7IYpkCluVnRGq5nRU"
+uri = "file://public/saas-onboarding-guide.pdf"
+type = "pdf"
+title = "Treemarkables SaaS Onboarding Guide"

@@ -32,6 +32,9 @@ app.set('trust proxy', 1);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
+// Serve root-level public/ folder as static files (PDFs, guides, etc.)
+app.use(express.static(path.join(process.cwd(), 'public')));
+
 // Configure session middleware with PostgreSQL store for persistence across server restarts
 const PgSession = connectPgSimple(session);
 const isDevelopment = process.env.NODE_ENV === 'development';
