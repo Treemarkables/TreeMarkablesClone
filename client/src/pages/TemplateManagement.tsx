@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -113,7 +113,8 @@ const templateFormSchema = z.object({
   primaryColor: z.string().default("#f97316"),
   secondaryColor: z.string().default("#3b82f6"),
   logoUrl: z.string().nullable().optional(),
-  logoSize: z.number().min(20).max(120).default(40),
+  logoSize: z.number().min(20).max(200).default(40),
+  logoAlignment: z.enum(["left", "center", "right"]).default("left"),
 });
 
 type TemplateFormData = z.infer<typeof templateFormSchema>;
@@ -127,6 +128,46 @@ export default function TemplateManagement() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const headerStripRef = useRef<HTMLDivElement>(null);
+  const resizeStartYRef = useRef(0);
+  const resizeStartSizeRef = useRef(0);
+
+  const handleLogoDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!headerStripRef.current) return;
+      const rect = headerStripRef.current.getBoundingClientRect();
+      const x = ev.clientX - rect.left;
+      const third = rect.width / 3;
+      const next = x < third ? "left" : x < third * 2 ? "center" : "right";
+      form.setValue("logoAlignment", next as "left" | "center" | "right", { shouldDirty: true });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [form]);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeStartYRef.current = e.clientY;
+    resizeStartSizeRef.current = form.getValues("logoSize") ?? 40;
+    const onMouseMove = (ev: MouseEvent) => {
+      const delta = ev.clientY - resizeStartYRef.current;
+      const next = Math.min(200, Math.max(20, Math.round(resizeStartSizeRef.current + delta)));
+      form.setValue("logoSize", next, { shouldDirty: true });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  }, [form]);
+
   const [sections, setSections] = useState<InvoiceSectionConfig[]>(() =>
     DEFAULT_SECTIONS.map(s => ({ ...s }))
   );
@@ -227,6 +268,7 @@ export default function TemplateManagement() {
       secondaryColor: "#3b82f6",
       logoUrl: null,
       logoSize: 40,
+      logoAlignment: "left",
     },
   });
 
@@ -252,6 +294,7 @@ export default function TemplateManagement() {
     footerText: null,
     logoUrl: watchedValues.logoUrl || null,
     logoSize: watchedValues.logoSize ?? 40,
+    logoAlignment: watchedValues.logoAlignment ?? "left",
     sectionConfig: sections,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -285,6 +328,7 @@ export default function TemplateManagement() {
       secondaryColor: template.secondaryColor || "#3b82f6",
       logoUrl: template.logoUrl || null,
       logoSize: template.logoSize ?? 40,
+      logoAlignment: (template.logoAlignment as "left" | "center" | "right") ?? "left",
     });
     setIsDialogOpen(true);
   };
@@ -308,6 +352,7 @@ export default function TemplateManagement() {
       secondaryColor: "#3b82f6",
       logoUrl: null,
       logoSize: 40,
+      logoAlignment: "left",
     });
     setIsDialogOpen(true);
   };
@@ -541,46 +586,97 @@ export default function TemplateManagement() {
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
-                    {/* Logo upload + live size preview */}
+                    {/* Logo upload + interactive position & size editor */}
                     <div className="space-y-3">
                       <label className="text-sm font-medium">Company Logo</label>
 
-                      {/* Live preview box — height tracks the slider */}
+                      {/* Header strip — drag logo left/center/right, drag corner to resize */}
                       <div
-                        className="w-full rounded-md border border-dashed border-input bg-muted/30 flex items-center justify-center overflow-hidden transition-all"
-                        style={{ minHeight: 56, height: (watchedValues.logoSize ?? 40) + 24 }}
+                        ref={headerStripRef}
+                        className="relative w-full rounded-md border bg-white overflow-hidden select-none"
+                        style={{ height: Math.max(72, (watchedValues.logoSize ?? 40) + 32) }}
                       >
+                        {/* Zone dividers */}
+                        <div className="absolute inset-0 flex pointer-events-none">
+                          <div className="flex-1 border-r border-dashed border-gray-200" />
+                          <div className="flex-1 border-r border-dashed border-gray-200" />
+                          <div className="flex-1" />
+                        </div>
+                        {/* Zone labels */}
+                        <div className="absolute bottom-1 inset-x-0 flex text-[10px] text-gray-300 pointer-events-none">
+                          <div className="flex-1 text-center">left</div>
+                          <div className="flex-1 text-center">center</div>
+                          <div className="flex-1 text-center">right</div>
+                        </div>
+
                         {watchedValues.logoUrl ? (
-                          <img
-                            src={watchedValues.logoUrl}
-                            alt="Logo"
-                            style={{ height: watchedValues.logoSize ?? 40 }}
-                            className="w-auto object-contain"
-                          />
+                          <div
+                            className="absolute top-1/2 -translate-y-1/2"
+                            style={{
+                              ...(watchedValues.logoAlignment === "left"   ? { left: "12px" } :
+                                  watchedValues.logoAlignment === "center" ? { left: "50%", transform: "translateX(-50%) translateY(-50%)" } :
+                                                                             { right: "12px" }),
+                            }}
+                          >
+                            <div
+                              className="relative cursor-grab active:cursor-grabbing"
+                              onMouseDown={handleLogoDragStart}
+                            >
+                              <img
+                                src={watchedValues.logoUrl}
+                                alt="Logo"
+                                style={{ height: watchedValues.logoSize ?? 40 }}
+                                className="w-auto object-contain block"
+                                draggable={false}
+                              />
+                              {/* Corner resize handle */}
+                              <div
+                                className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-se-resize z-10 flex items-center justify-center shadow"
+                                onMouseDown={handleResizeStart}
+                                title="Drag to resize"
+                              >
+                                <svg width="8" height="8" viewBox="0 0 8 8" className="text-primary">
+                                  <path d="M1 7L7 1M4 7L7 4M7 7L7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                </svg>
+                              </div>
+                            </div>
+                          </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">Upload a logo to preview it here</span>
+                          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
+                            Upload a logo — then drag it to position
+                          </div>
                         )}
                       </div>
 
-                      {/* Size slider */}
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs text-muted-foreground">Logo size</label>
-                          <span className="text-xs font-medium tabular-nums">{watchedValues.logoSize ?? 40}px</span>
-                        </div>
-                        <Slider
-                          min={20}
-                          max={120}
-                          step={4}
-                          value={[watchedValues.logoSize ?? 40]}
-                          onValueChange={([v]) => form.setValue("logoSize", v, { shouldDirty: true, shouldTouch: true })}
-                          className="w-full"
-                        />
-                        <div className="flex justify-between text-[10px] text-muted-foreground">
-                          <span>Small</span>
-                          <span>Large</span>
-                        </div>
+                      {/* Alignment quick buttons */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Position:</span>
+                        {(["left", "center", "right"] as const).map(pos => (
+                          <Button
+                            key={pos}
+                            type="button"
+                            size="sm"
+                            variant={watchedValues.logoAlignment === pos ? "default" : "outline"}
+                            className="capitalize text-xs"
+                            onClick={() => form.setValue("logoAlignment", pos, { shouldDirty: true })}
+                          >
+                            {pos}
+                          </Button>
+                        ))}
+                        <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">
+                          {watchedValues.logoSize ?? 40}px
+                        </span>
                       </div>
+
+                      {/* Size slider (precision fallback) */}
+                      <Slider
+                        min={20}
+                        max={200}
+                        step={2}
+                        value={[watchedValues.logoSize ?? 40]}
+                        onValueChange={([v]) => form.setValue("logoSize", v, { shouldDirty: true, shouldTouch: true })}
+                        className="w-full"
+                      />
 
                       {/* Upload / remove buttons */}
                       <div className="flex items-center gap-2 flex-wrap">

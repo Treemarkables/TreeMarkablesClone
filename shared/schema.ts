@@ -2608,7 +2608,8 @@ export const documentTemplates = pgTable("document_templates", {
   primaryColor: text("primary_color").default("#f97316"), // Orange from Treemarkables brand
   secondaryColor: text("secondary_color").default("#3b82f6"), // Blue
   logoUrl: text("logo_url"), // Path to logo file
-  logoSize: integer("logo_size").default(40), // Logo height in px (20-120)
+  logoSize: integer("logo_size").default(40), // Logo height in px (20-200)
+  logoAlignment: text("logo_alignment").default("left"), // 'left' | 'center' | 'right'
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
