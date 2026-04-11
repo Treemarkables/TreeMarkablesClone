@@ -1384,7 +1384,7 @@ export function JobDiarySection({
                               key={photo.id}
                               className={`relative rounded-lg overflow-hidden cursor-pointer hover-elevate ${
                                 photos.length === 1
-                                  ? "aspect-video"
+                                  ? ""
                                   : photos.length === 3 && photoIndex === 0
                                     ? "row-span-2 aspect-square"
                                     : "aspect-square"
@@ -1399,7 +1399,11 @@ export function JobDiarySection({
                               <img
                                 src={photo.photoUrl}
                                 alt="Job photo"
-                                className="w-full h-full object-cover"
+                                className={
+                                  photos.length === 1
+                                    ? "w-full h-auto max-h-96 object-contain"
+                                    : "w-full h-full object-cover"
+                                }
                                 onError={(e) =>
                                   (e.currentTarget.style.display = "none")
                                 }
