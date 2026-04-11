@@ -8216,12 +8216,15 @@ The Treemarkables Team`;
           {/* Photo */}
           <button
             type="button"
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 group"
             onClick={() => setIsPhotoCaptureOpen(true)}
             data-testid="toolbar-btn-photo"
           >
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-              <Camera className="h-6 w-6 text-white" strokeWidth={2.5} />
+            <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-green-700/35 group-active:scale-90 transition-transform duration-100"
+              style={{ background: "linear-gradient(160deg, #4ade80 0%, #16a34a 55%, #14532d 100%)" }}
+            >
+              <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+              <Camera className="h-6 w-6 text-white relative z-10 drop-shadow" strokeWidth={2} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">Photo</span>
           </button>
@@ -8229,12 +8232,15 @@ The Treemarkables Team`;
           {/* SMS */}
           <button
             type="button"
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 group"
             onClick={() => setIsSMSComposerOpen(true)}
             data-testid="toolbar-btn-sms"
           >
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-green-400 to-green-600 flex items-center justify-center">
-              <MessageSquare className="h-6 w-6 text-white" strokeWidth={2.5} />
+            <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-teal-700/35 group-active:scale-90 transition-transform duration-100"
+              style={{ background: "linear-gradient(160deg, #2dd4bf 0%, #0d9488 55%, #134e4a 100%)" }}
+            >
+              <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+              <MessageSquare className="h-6 w-6 text-white relative z-10 drop-shadow" strokeWidth={2} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">SMS</span>
           </button>
@@ -8242,12 +8248,15 @@ The Treemarkables Team`;
           {/* Email */}
           <button
             type="button"
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 group"
             onClick={handleEmailClick}
             data-testid="toolbar-btn-email"
           >
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center">
-              <Mail className="h-6 w-6 text-white" strokeWidth={2.5} />
+            <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-blue-700/35 group-active:scale-90 transition-transform duration-100"
+              style={{ background: "linear-gradient(160deg, #60a5fa 0%, #2563eb 55%, #1e3a8a 100%)" }}
+            >
+              <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+              <Mail className="h-6 w-6 text-white relative z-10 drop-shadow" strokeWidth={2} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">Email</span>
           </button>
@@ -8255,12 +8264,15 @@ The Treemarkables Team`;
           {/* More */}
           <button
             type="button"
-            className="flex-1 flex flex-col items-center justify-center py-2 gap-0.5 active:bg-gray-100 transition-colors"
+            className="flex-1 flex flex-col items-center justify-center py-2.5 gap-1 group"
             onClick={() => setShowMoreActionsSheet(true)}
             data-testid="toolbar-btn-more"
           >
-            <div className="w-12 h-12 rounded-xl bg-gray-200 flex items-center justify-center">
-              <MoreHorizontal className="h-6 w-6 text-gray-600" strokeWidth={2.5} />
+            <div className="relative w-12 h-12 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-slate-700/30 group-active:scale-90 transition-transform duration-100"
+              style={{ background: "linear-gradient(160deg, #94a3b8 0%, #475569 55%, #1e293b 100%)" }}
+            >
+              <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+              <MoreHorizontal className="h-6 w-6 text-white relative z-10 drop-shadow" strokeWidth={2} />
             </div>
             <span className="text-[10px] text-gray-500 font-medium">More</span>
           </button>
@@ -8281,7 +8293,7 @@ The Treemarkables Team`;
               {/* Speech to Quote */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors group"
                 onClick={() => {
                   setShowMoreActionsSheet(false);
                   setSpeechToQuoteContext("full");
@@ -8289,8 +8301,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-speech-to-quote"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center">
-                  <Mic className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-violet-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #c084fc 0%, #9333ea 55%, #581c87 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <Mic className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Speech to Quote</span>
               </button>
@@ -8298,15 +8313,18 @@ The Treemarkables Team`;
               {/* Schedule */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors group"
                 onClick={() => {
                   setShowMoreActionsSheet(false);
                   handleScheduleClick();
                 }}
                 data-testid="more-sheet-schedule"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center">
-                  <Calendar className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-indigo-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #818cf8 0%, #4338ca 55%, #1e1b4b 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <Calendar className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Schedule</span>
               </button>
@@ -8314,15 +8332,18 @@ The Treemarkables Team`;
               {/* Call */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors group"
                 onClick={() => {
                   setShowMoreActionsSheet(false);
                   handleCallClick();
                 }}
                 data-testid="more-sheet-call"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-cyan-400 to-cyan-600 flex items-center justify-center">
-                  <Phone className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-green-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #4ade80 0%, #16a34a 55%, #14532d 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <Phone className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Call</span>
               </button>
@@ -8330,7 +8351,7 @@ The Treemarkables Team`;
               {/* Quote */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
@@ -8338,8 +8359,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-quote"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-                  <Receipt className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-amber-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #fbbf24 0%, #d97706 55%, #78350f 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <Receipt className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Quote</span>
               </button>
@@ -8347,7 +8371,7 @@ The Treemarkables Team`;
               {/* Invoice */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
@@ -8355,8 +8379,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-invoice"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center">
-                  <CreditCard className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-emerald-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #34d399 0%, #059669 55%, #064e3b 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <CreditCard className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Invoice</span>
               </button>
@@ -8364,7 +8391,7 @@ The Treemarkables Team`;
               {/* Proposal */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={!selectedCustomer?.id}
                 onClick={async () => {
                   setShowMoreActionsSheet(false);
@@ -8389,8 +8416,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-proposal"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-pink-400 to-pink-600 flex items-center justify-center">
-                  <Presentation className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-rose-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #fb7185 0%, #e11d48 55%, #881337 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <Presentation className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Proposal</span>
               </button>
@@ -8398,7 +8428,7 @@ The Treemarkables Team`;
               {/* Time Tracking */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
@@ -8406,8 +8436,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-time-tracking"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-                  <Clock className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-orange-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #fb923c 0%, #ea580c 55%, #7c2d12 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <Clock className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Time Tracking</span>
               </button>
@@ -8415,7 +8448,7 @@ The Treemarkables Team`;
               {/* Profit Tracker */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
@@ -8423,8 +8456,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-profit-tracker"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-400 to-teal-600 flex items-center justify-center">
-                  <DollarSign className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-cyan-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #22d3ee 0%, #0891b2 55%, #164e63 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <DollarSign className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Profit Tracker</span>
               </button>
@@ -8432,7 +8468,7 @@ The Treemarkables Team`;
               {/* Queue Job */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={!editingJob?.id || mode === "create"}
                 onClick={() => {
                   setShowMoreActionsSheet(false);
@@ -8440,8 +8476,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-queue-job"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-violet-400 to-violet-600 flex items-center justify-center">
-                  <ListOrdered className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-violet-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #a78bfa 0%, #7c3aed 55%, #3b0764 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <ListOrdered className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Queue Job</span>
               </button>
@@ -8449,7 +8488,7 @@ The Treemarkables Team`;
               {/* Send to Xero */}
               <button
                 type="button"
-                className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                 disabled={
                   !editingJob?.id ||
                   mode === "create" ||
@@ -8463,8 +8502,11 @@ The Treemarkables Team`;
                 }}
                 data-testid="more-sheet-send-xero"
               >
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-slate-400 to-slate-600 flex items-center justify-center">
-                  <FileText className="h-7 w-7 text-white" strokeWidth={2.5} />
+                <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-slate-700/35 group-active:scale-90 transition-transform duration-100"
+                  style={{ background: "linear-gradient(160deg, #94a3b8 0%, #475569 55%, #0f172a 100%)" }}
+                >
+                  <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                  <FileText className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                 </div>
                 <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">
                   {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
@@ -8475,7 +8517,7 @@ The Treemarkables Team`;
               {editingJob?.xeroStatus === "sent" && (
                 <button
                   type="button"
-                  className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors disabled:opacity-40"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                   disabled={resetXeroSyncMutation.isPending}
                   onClick={() => {
                     setShowMoreActionsSheet(false);
@@ -8483,8 +8525,11 @@ The Treemarkables Team`;
                   }}
                   data-testid="more-sheet-resend-xero"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-                    <RotateCcw className="h-7 w-7 text-white" strokeWidth={2.5} />
+                  <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-amber-700/35 group-active:scale-90 transition-transform duration-100"
+                    style={{ background: "linear-gradient(160deg, #fbbf24 0%, #d97706 55%, #78350f 100%)" }}
+                  >
+                    <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                    <RotateCcw className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                   </div>
                   <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Re-send to Xero</span>
                 </button>
@@ -8494,15 +8539,18 @@ The Treemarkables Team`;
               {editingJob?.status === "completed" && (
                 <button
                   type="button"
-                  className="flex flex-col items-center gap-1.5 p-2 rounded-xl active:bg-gray-100 transition-colors"
+                  className="flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors group"
                   onClick={() => {
                     setShowMoreActionsSheet(false);
                     handleRequestReviewClick();
                   }}
                   data-testid="more-sheet-request-review"
                 >
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-yellow-400 to-yellow-600 flex items-center justify-center">
-                    <Star className="h-7 w-7 text-white" strokeWidth={2.5} />
+                  <div className="relative w-14 h-14 rounded-2xl flex items-center justify-center overflow-hidden shadow-md shadow-yellow-600/35 group-active:scale-90 transition-transform duration-100"
+                    style={{ background: "linear-gradient(160deg, #facc15 0%, #ca8a04 55%, #713f12 100%)" }}
+                  >
+                    <div className="absolute inset-x-0 top-0 h-[45%] bg-gradient-to-b from-white/25 to-transparent pointer-events-none" />
+                    <Star className="h-7 w-7 text-white relative z-10 drop-shadow" strokeWidth={2} />
                   </div>
                   <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Request Review</span>
                 </button>
