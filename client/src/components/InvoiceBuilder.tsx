@@ -475,8 +475,11 @@ export function InvoiceBuilder({
 
   // Remove line item
   const removeLineItem = (id: string) => {
-    if (lineItems.length > 1) {
-      setLineItems(lineItems.filter((item) => item.id !== id));
+    const remaining = lineItems.filter((item) => item.id !== id);
+    if (remaining.length === 0) {
+      setLineItems([{ id: Math.random().toString(), description: "", quantity: 1, unitPrice: 0, total: 0, category: "other" }]);
+    } else {
+      setLineItems(remaining);
     }
   };
 
