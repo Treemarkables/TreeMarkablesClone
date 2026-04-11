@@ -335,14 +335,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
-                        variant="outline"
-                        size="sm"
-                        className={`shrink-0 text-sm font-medium ${dispatchFilter !== "all" ? "border-[#1877F2] bg-blue-50 text-[#1877F2]" : ""}`}
+                        variant="ghost"
+                        size="icon"
+                        className={dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}
                         data-testid="mobile-filter-dropdown-trigger"
                       >
-                        <Filter className="h-3.5 w-3.5 mr-1" />
-                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
-                        <ChevronDown className="h-3 w-3 ml-1" />
+                        <Filter className="h-5 w-5" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -507,6 +505,34 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   >
                     <Search className="h-5 w-5" />
                   </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`gap-1.5 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                        data-testid="desktop-filter-dropdown-trigger"
+                      >
+                        <Filter className="h-4 w-4" />
+                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="desktop-filter-all">
+                        All
+                      </DropdownMenuItem>
+                      {DISPATCH_STATUS_FILTERS.map(tab => (
+                        <DropdownMenuItem
+                          key={tab.value}
+                          onClick={() => setDispatchFilter(tab.value)}
+                          data-testid={`desktop-filter-tab-${tab.value}`}
+                        >
+                          {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                   <Button
                     variant="ghost"
                     size="sm"
