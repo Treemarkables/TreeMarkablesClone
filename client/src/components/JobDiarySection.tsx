@@ -775,8 +775,28 @@ export function JobDiarySection({
         });
       }
 
+      // Deduplicate: if two entries share the same messageId (e.g. a Gmail reply captured
+      // twice due to a polling race), keep only the first occurrence seen.
+      const seenMessageIds = new Set<string>();
+      const seenDbIds = new Set<string | number>();
+      const uniqueEntries = entries.filter(entry => {
+        // Dedup by DB id (catches any entry duplicated at source-merge level)
+        if (entry.id !== undefined && entry.id !== null) {
+          const idKey = String(entry.id);
+          if (seenDbIds.has(idKey)) return false;
+          seenDbIds.add(idKey);
+        }
+        // Dedup by email messageId in metadata (catches same email inserted twice in DB)
+        const msgId = entry.metadata?.messageId;
+        if (msgId) {
+          if (seenMessageIds.has(msgId)) return false;
+          seenMessageIds.add(msgId);
+        }
+        return true;
+      });
+
       // Sort by timestamp (newest first) — NaN-safe so invalid timestamps go to bottom
-      return entries.sort((a, b) => {
+      return uniqueEntries.sort((a, b) => {
         const ta = new Date(a.timestamp).getTime();
         const tb = new Date(b.timestamp).getTime();
         if (isNaN(tb) && isNaN(ta)) return 0;
