@@ -4,7 +4,7 @@ import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, MapPin, ChevronRight as ChevronRightSmall } from 'lucide-react';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import type { Job, Employee, Customer } from '@shared/schema';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 import { queryClient, apiRequest } from '@/lib/queryClient';
@@ -237,6 +237,26 @@ export default function StaffSchedule() {
     setSelectedDate(newDate);
   };
 
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
+
+  const handleSwipeTouchStart = (e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0) nextDay();
+      else previousDay();
+    }
+  };
+
   const allEmployeeJobData = useMemo(() => {
     return filteredEmployees.map(employee => {
       const employeeJobs = getEmployeeJobs(employee.id);
@@ -259,7 +279,11 @@ export default function StaffSchedule() {
   const totalRevenue = Array.from(uniqueJobTotals.values()).reduce((sum, v) => sum + v, 0);
 
   return (
-    <div className="h-full flex flex-col p-3 md:p-4 overflow-auto">
+    <div
+      className="h-full flex flex-col p-3 md:p-4 overflow-auto"
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
+    >
       {/* Date Heading + Nav inline */}
       <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
         <h2 className="text-lg md:text-xl font-bold" data-testid="text-current-date">
