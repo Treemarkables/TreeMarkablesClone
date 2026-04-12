@@ -17,7 +17,7 @@ const getStatusColors = (status?: string): { bg: string; text: string } => {
     case 'quote':       return { bg: "bg-orange-400", text: "text-orange-950" };
     case 'invoiced':    return { bg: "bg-violet-400", text: "text-violet-950" };
     case 'lead':
-    case 'inquiry':     return { bg: "bg-emerald-400",text: "text-emerald-950" };
+    case 'inquiry':     return { bg: "bg-yellow-400", text: "text-yellow-950" };
     case 'unsuccessful':return { bg: "bg-red-400",    text: "text-red-950" };
     default:            return { bg: "bg-purple-400", text: "text-purple-950" };
   }
