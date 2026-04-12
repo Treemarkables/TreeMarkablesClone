@@ -2958,6 +2958,38 @@ The Treemarkables Team`;
     }
   };
 
+  const unscheduleJob = async () => {
+    if (!editingJob?.id) return;
+    try {
+      await fetch(`/api/jobs/${editingJob.id}/staff-assignments`, { method: "DELETE" });
+      const res = await fetch(`/api/jobs/${editingJob.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduledDate: null,
+          scheduledEndDate: null,
+          scheduledStartTime: null,
+          scheduledEndTime: null,
+          assignedTo: [],
+          status: "work_order",
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to unschedule job");
+      form.setValue("status", "work_order");
+      changedFieldsRef.current.clear();
+      hasUserChangedRef.current = false;
+      form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
+      setIsSchedulingModalOpen(false);
+      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false });
+    } catch (error) {
+      console.error("Error unscheduling job:", error);
+      toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
+    }
+  };
+
   // Save button handlers
   const handleSave = async () => {
     console.log("🔴 SAVE BUTTON CLICKED");
@@ -9294,41 +9326,56 @@ The Treemarkables Team`;
               />
             </div>
           </div>
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsSchedulingModalOpen(false);
-                setSchedulingData({
-                  date: "",
-                  endDate: "",
-                  startTime: "",
-                  duration: "",
-                  day2Duration: "",
-                  assignedTo: [],
-                  notes: "",
-                  sendClientNotification: false,
-                });
-              }}
-              data-testid="btn-cancel-schedule"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={saveSchedule}
-              disabled={
-                !schedulingData.date ||
-                !schedulingData.startTime ||
-                !schedulingData.duration ||
-                schedulingData.assignedTo.length === 0
-              }
-              data-testid="btn-save-schedule"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Schedule {schedulingData.assignedTo.length} Staff Member
-              {schedulingData.assignedTo.length !== 1 ? "s" : ""}
-            </Button>
+          <div className="flex justify-between gap-2 pt-4 flex-wrap">
+            {/* Unschedule button — only shown when job already has a scheduled date */}
+            <div>
+              {editingJob?.scheduledDate && (
+                <Button
+                  variant="outline"
+                  onClick={unscheduleJob}
+                  data-testid="btn-unschedule"
+                  className="text-red-600 border-red-300"
+                >
+                  Unschedule
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsSchedulingModalOpen(false);
+                  setSchedulingData({
+                    date: "",
+                    endDate: "",
+                    startTime: "",
+                    duration: "",
+                    day2Duration: "",
+                    assignedTo: [],
+                    notes: "",
+                    sendClientNotification: false,
+                  });
+                }}
+                data-testid="btn-cancel-schedule"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveSchedule}
+                disabled={
+                  !schedulingData.date ||
+                  !schedulingData.startTime ||
+                  !schedulingData.duration ||
+                  schedulingData.assignedTo.length === 0
+                }
+                data-testid="btn-save-schedule"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Schedule {schedulingData.assignedTo.length} Staff Member
+                {schedulingData.assignedTo.length !== 1 ? "s" : ""}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
