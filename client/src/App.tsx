@@ -269,10 +269,10 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
-            className="md:hidden flex items-center justify-between px-2 py-1 border-b bg-white"
-            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.25rem)" }}
+            className="md:hidden flex items-center justify-between px-3 py-3 border-b bg-white"
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-5">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
                 className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
@@ -294,7 +294,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="create-new-button-mobile"
                         className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0"
                       >
-                        <Plus className="h-5 w-5 text-green-700" />
+                        <Plus className="h-6 w-6 text-green-700" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -326,7 +326,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     data-testid="paste-message-button-mobile"
                     className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0"
                   >
-                    <MessageSquare className="h-5 w-5 text-orange-600" />
+                    <MessageSquare className="h-6 w-6 text-orange-600" />
                   </Button>
 
                   <DropdownMenu>
@@ -337,7 +337,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         className={dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}
                         data-testid="mobile-filter-dropdown-trigger"
                       >
-                        <Filter className="h-5 w-5" />
+                        <Filter className="h-6 w-6" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -370,7 +370,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   data-testid="mobile-search-toggle"
                   className="text-muted-foreground"
                 >
-                  {dispatchSearchOpen ? <X className="h-5 w-5" /> : <Search className="h-5 w-5" />}
+                  {dispatchSearchOpen ? <X className="h-6 w-6" /> : <Search className="h-6 w-6" />}
                 </Button>
               ) : (
                 <Tooltip>
