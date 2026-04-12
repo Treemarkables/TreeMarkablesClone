@@ -25,7 +25,8 @@ import {
   ClipboardCheck,
   AlertTriangle,
   ShieldCheck,
-  Wrench
+  Wrench,
+  LayoutTemplate
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -151,6 +152,14 @@ const settingsOptions = [
     icon: Wrench,
     color: "bg-orange-100 text-orange-600",
     path: "/settings/equipment-register"
+  },
+  {
+    id: "invoice-builder",
+    title: "Invoice Builder",
+    description: "Drag-and-drop visual invoice layout builder",
+    icon: LayoutTemplate,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/invoice-builder"
   }
 ];
 

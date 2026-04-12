@@ -412,6 +412,12 @@ function startNotificationQueueWorker() {
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS invoice_cc_email TEXT
       `);
       log("✅ Schema migration: customers.invoice_cc_email ready", "startup");
+
+      // Add block_config to document_templates for visual invoice block builder
+      await pool.query(`
+        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS block_config JSONB
+      `);
+      log("✅ Schema migration: document_templates.block_config ready", "startup");
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }

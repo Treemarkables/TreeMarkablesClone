@@ -70,6 +70,7 @@ import EquipmentRegister from "@/pages/EquipmentRegister";
 import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import DailyBriefing from "@/pages/DailyBriefing";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
+import InvoiceBuilderPage from "@/pages/InvoiceBuilderPage";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import UnlinkedCalls from "@/pages/UnlinkedCalls";
@@ -1142,6 +1143,14 @@ function Router() {
         <SidebarLayout>
           <ChecklistTemplatePage />
         </SidebarLayout>
+      </Route>
+
+      <Route path="/settings/invoice-builder">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <InvoiceBuilderPage />
+          </SidebarLayout>
+        </ProtectedRoute>
       </Route>
       
       <Route path="/developer">
