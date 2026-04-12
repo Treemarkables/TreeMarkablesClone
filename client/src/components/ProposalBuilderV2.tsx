@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
@@ -167,13 +168,13 @@ function calcTotals(blocks: WysiwygBlock[]) {
 function AddBlockButton({ onAdd }: { onAdd: (type: BlockType) => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center justify-center my-1 group/add">
-      <div className="flex-1 h-px bg-gray-200 opacity-0 group-hover/add:opacity-100 transition-opacity" />
+    <div className="flex items-center justify-center my-2">
+      <div className="flex-1 h-px bg-gray-200" />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full border border-gray-300 text-gray-400 text-xs hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors opacity-0 group-hover/add:opacity-100 mx-2"
+            className="flex items-center gap-1 px-3 py-1 rounded-full border border-dashed border-gray-300 text-gray-400 text-xs hover:border-blue-400 hover:text-blue-500 hover:bg-blue-50 transition-colors mx-2"
           >
             <Plus className="w-3 h-3" /> Add block
           </button>
@@ -202,7 +203,7 @@ function AddBlockButton({ onAdd }: { onAdd: (type: BlockType) => void }) {
           </button>
         </PopoverContent>
       </Popover>
-      <div className="flex-1 h-px bg-gray-200 opacity-0 group-hover/add:opacity-100 transition-opacity" />
+      <div className="flex-1 h-px bg-gray-200" />
     </div>
   );
 }
@@ -1377,6 +1378,20 @@ export function ProposalBuilderV2({
   const gstNumber = (template?.gstNumber as string) || "";
   const logoUrl = (template?.logoUrl as string) || LOGO_URL;
 
+  // Logo sizing — stored on the proposal template, editable inline
+  const [logoSize, setLogoSize] = useState<number>((template?.logoSize as number) ?? 80);
+  const [logoPopoverOpen, setLogoPopoverOpen] = useState(false);
+  useEffect(() => {
+    if (template?.logoSize != null) setLogoSize(template.logoSize as number);
+  }, [template?.logoSize]);
+  const saveLogoSizeMutation = useMutation({
+    mutationFn: (size: number) => {
+      const tplId = (template as { id?: string } | null)?.id;
+      if (!tplId) return Promise.resolve();
+      return apiRequest("PUT", `/api/templates/${tplId}`, { logoSize: size });
+    },
+  });
+
   const proposalDate = new Date();
   const proposalNum = draftId ? `#${draftId.slice(-6).toUpperCase()}` : "#—";
 
@@ -1505,7 +1520,40 @@ export function ProposalBuilderV2({
               {/* Document Header */}
               <div className="flex items-start justify-between px-6 sm:px-10 py-6 sm:py-8 border-b border-gray-200">
                 <div>
-                  <img src={logoUrl} alt="Company Logo" className="h-16 sm:h-20 w-auto object-contain" />
+                  <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        title="Click to resize logo"
+                        className="block group relative focus:outline-none"
+                      >
+                        <img
+                          src={logoUrl}
+                          alt="Company Logo"
+                          style={{ height: logoSize }}
+                          className="w-auto object-contain transition-opacity group-hover:opacity-80"
+                        />
+                        <span className="absolute -bottom-5 left-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
+                          Click to resize
+                        </span>
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-3" align="start">
+                      <p className="text-xs font-medium text-muted-foreground mb-2">Logo size: {logoSize}px</p>
+                      <Slider
+                        min={30}
+                        max={180}
+                        step={5}
+                        value={[logoSize]}
+                        onValueChange={([v]) => setLogoSize(v)}
+                        onValueCommit={([v]) => saveLogoSizeMutation.mutate(v)}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                        <span>30px</span><span>180px</span>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 <div className="text-right text-xs sm:text-sm text-gray-600 space-y-0.5">
                   {companyAddress && <p>{companyAddress}</p>}
