@@ -692,6 +692,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   );
   const [queueReasonInput, setQueueReasonInput] = useState<string>("");
   const isCreatingLeadJobRef = useRef(false);
+
+  // Swipe-to-navigate refs
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
+
+  const handleSwipeTouchStart = (e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0) {
+        setSelectedDate(d => addDays(d, 1));
+      } else {
+        setSelectedDate(d => subDays(d, 1));
+      }
+    }
+  };
+
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [jobToSchedule, setJobToSchedule] = useState<JobAssignment | null>(
     null,
@@ -2732,7 +2757,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
 
         {/* Mobile Layout: ServiceM8-style job cards */}
-        <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
+        <div
+          className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50"
+          onTouchStart={handleSwipeTouchStart}
+          onTouchEnd={handleSwipeTouchEnd}
+        >
           {/* Search strip — pinned below main header */}
           <div className="flex-shrink-0 z-50">
           {showMobileSearch && (
