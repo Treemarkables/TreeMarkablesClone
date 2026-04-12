@@ -97,7 +97,7 @@ import {
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
-import { ProposalBuilder } from "./ProposalBuilder";
+import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { StaffTimeManager } from "./StaffTimeManager";
@@ -8864,7 +8864,7 @@ The Treemarkables Team`;
 
       {/* Proposal Builder */}
       {isProposalBuilderOpen && (
-        <ProposalBuilder
+        <ProposalBuilderV2
           isOpen={isProposalBuilderOpen}
           onClose={() => {
             setIsProposalBuilderOpen(false);
