@@ -483,6 +483,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Data queries with date filtering
@@ -500,6 +501,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const {
@@ -516,6 +518,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Revenue breakdown query - fetches list of jobs that make up the revenue
@@ -612,6 +615,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   // Quote Method Analytics - on-site vs sent-later acceptance rates
@@ -653,6 +657,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   const { data: leadSourceData, isLoading: leadSourceLoading } = useQuery<
@@ -667,6 +672,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: quotePresentationData, isLoading: quotePresentationLoading } =
@@ -684,6 +690,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   const { data: manHoursMetrics, isLoading: manHoursLoading } =
@@ -697,6 +704,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   // Service Performance query
@@ -707,6 +715,7 @@ export default function MetricsDashboard() {
         fetch("/api/analytics/service-performance")
           .then((res) => res.json())
           .then((res) => res.data),
+      staleTime: 5 * 60 * 1000,
     });
 
   // Unsuccessful Jobs Analytics query
@@ -744,6 +753,7 @@ export default function MetricsDashboard() {
         fetch("/api/analytics/unsuccessful-jobs")
           .then((res) => res.json())
           .then((res) => res.data),
+      staleTime: 5 * 60 * 1000,
     });
 
   // Xero Profit & Loss query
@@ -1017,22 +1027,8 @@ export default function MetricsDashboard() {
   const estimatedStaleValue =
     staleQuotesCount * (revenueStats?.averageJobValue || 0);
 
-  // Only show full-page spinner on the very first load (no data yet at all).
-  // When switching date ranges, keep existing data visible while new data fetches.
-  const hasInitialData =
-    dashboardStats !== undefined ||
-    revenueStats !== undefined ||
-    quoteAnalytics !== undefined;
-
   // Show a subtle inline indicator when re-fetching after a date range change
-  const isRefreshing = (statsFetching || revenueFetching) && hasInitialData;
-  if (!hasInitialData && (statsLoading || revenueLoading || quotesLoading)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
+  const isRefreshing = statsFetching || revenueFetching;
 
   return (
     <div className="min-h-screen bg-white overflow-x-hidden w-full max-w-full">
@@ -1063,8 +1059,8 @@ export default function MetricsDashboard() {
               size="icon"
               onClick={() => window.location.reload()}
             >
-              <Loader2
-                className={`h-4 w-4 ${isExporting ? "animate-spin" : ""}`}
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
               />
             </Button>
           </div>
