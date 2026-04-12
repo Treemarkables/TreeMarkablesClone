@@ -2607,6 +2607,8 @@ export const documentTemplates = pgTable("document_templates", {
   paymentTerms: text("payment_terms").default("Payment due within 7 days"),
   // Section visibility and ordering config (invoice/quote/proposal)
   sectionConfig: jsonb("section_config"),
+  // Block-based visual builder config (replaces sectionConfig for invoice templates)
+  blockConfig: jsonb("block_config"),
   
   // Template Styling
   primaryColor: text("primary_color").default("#f97316"), // Orange from Treemarkables brand
@@ -2790,6 +2792,135 @@ export interface InvoiceSectionConfig {
   visible: boolean;
   locked: boolean; // if true, cannot be hidden
 }
+
+// =====================================
+// INVOICE BLOCK BUILDER TYPES
+// =====================================
+
+export type InvoiceBlockType =
+  | 'header'
+  | 'companyInfo'
+  | 'billTo'
+  | 'invoiceMeta'
+  | 'jobDescription'
+  | 'lineItems'
+  | 'totals'
+  | 'payment'
+  | 'divider'
+  | 'customText'
+  | 'footer';
+
+export interface InvoiceBlockConfigHeader {
+  logoAlignment: 'left' | 'center' | 'right';
+  headerColor: string;
+  showCompanyName: boolean;
+}
+
+export interface InvoiceBlockConfigCompanyInfo {
+  showName: boolean;
+  showAddress: boolean;
+  showPhone: boolean;
+  showEmail: boolean;
+  showGST: boolean;
+}
+
+export interface InvoiceBlockConfigBillTo {
+  label: string;
+  showEmail: boolean;
+  showAddress: boolean;
+}
+
+export interface InvoiceBlockConfigInvoiceMeta {
+  showInvoiceNumber: boolean;
+  showIssueDate: boolean;
+  showDueDate: boolean;
+  showJobNumber: boolean;
+  labelInvoice: string;
+  labelIssueDate: string;
+  labelDueDate: string;
+}
+
+export interface InvoiceBlockConfigJobDescription {
+  label: string;
+}
+
+export interface InvoiceBlockConfigLineItems {
+  labelDescription: string;
+  labelQty: string;
+  labelRate: string;
+  labelAmount: string;
+  showQty: boolean;
+  showRate: boolean;
+}
+
+export interface InvoiceBlockConfigTotals {
+  showSubtotal: boolean;
+  showGST: boolean;
+  labelSubtotal: string;
+  labelGST: string;
+  labelTotal: string;
+}
+
+export interface InvoiceBlockConfigPayment {
+  label: string;
+  showBank: boolean;
+  showAccountNumber: boolean;
+  showAccountName: boolean;
+  showDueDate: boolean;
+  showTerms: boolean;
+}
+
+export interface InvoiceBlockConfigDivider {
+  color: string;
+  thickness: number; // px
+}
+
+export interface InvoiceBlockConfigCustomText {
+  text: string;
+  fontSize: 'xs' | 'sm' | 'base';
+  align: 'left' | 'center' | 'right';
+}
+
+export interface InvoiceBlockConfigFooter {
+  showCompanyName: boolean;
+  showAddress: boolean;
+  showPhone: boolean;
+  showEmail: boolean;
+  showGST: boolean;
+  showPaymentTerms: boolean;
+}
+
+export type InvoiceBlockConfig =
+  | InvoiceBlockConfigHeader
+  | InvoiceBlockConfigCompanyInfo
+  | InvoiceBlockConfigBillTo
+  | InvoiceBlockConfigInvoiceMeta
+  | InvoiceBlockConfigJobDescription
+  | InvoiceBlockConfigLineItems
+  | InvoiceBlockConfigTotals
+  | InvoiceBlockConfigPayment
+  | InvoiceBlockConfigDivider
+  | InvoiceBlockConfigCustomText
+  | InvoiceBlockConfigFooter;
+
+export interface InvoiceBlock {
+  id: string;
+  type: InvoiceBlockType;
+  visible: boolean;
+  config: InvoiceBlockConfig;
+}
+
+export const DEFAULT_INVOICE_BLOCKS: InvoiceBlock[] = [
+  { id: 'header', type: 'header', visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
+  { id: 'companyInfo', type: 'companyInfo', visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
+  { id: 'invoiceMeta', type: 'invoiceMeta', visible: true, config: { showInvoiceNumber: true, showIssueDate: true, showDueDate: true, showJobNumber: true, labelInvoice: 'Invoice #', labelIssueDate: 'Issue Date', labelDueDate: 'Due Date' } },
+  { id: 'billTo', type: 'billTo', visible: true, config: { label: 'Bill To', showEmail: true, showAddress: true } },
+  { id: 'jobDescription', type: 'jobDescription', visible: true, config: { label: 'Description' } },
+  { id: 'lineItems', type: 'lineItems', visible: true, config: { labelDescription: 'Service', labelQty: 'Qty', labelRate: 'Rate', labelAmount: 'Price', showQty: true, showRate: true } },
+  { id: 'totals', type: 'totals', visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
+  { id: 'payment', type: 'payment', visible: true, config: { label: 'Payment Information', showBank: true, showAccountNumber: true, showAccountName: true, showDueDate: true, showTerms: true } },
+  { id: 'footer', type: 'footer', visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: true } },
+];
 
 // TypeScript Types
 export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;
