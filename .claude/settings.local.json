@@ -5,7 +5,8 @@
       "Bash(node -e ':*)",
       "Bash(ls *.env)",
       "Bash(ls .env*)",
-      "Bash(ls /home/runner/workspace/server/db*)"
+      "Bash(ls /home/runner/workspace/server/db*)",
+      "Bash(python3:*)"
     ]
   }
 }
