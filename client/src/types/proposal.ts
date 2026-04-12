@@ -23,6 +23,7 @@ export interface LineItem {
   choices: LineItemChoice[];
   selectedChoiceId?: string;
   fixedPrice?: number;
+  priceIncludesTax?: boolean;
 }
 
 export interface UploadedPhoto {
@@ -33,6 +34,7 @@ export interface UploadedPhoto {
   category: string;
   notes?: string;
   capturedAt: string;
+  thumbnailUrl?: string;
 }
 
 export interface ProposalSection {
