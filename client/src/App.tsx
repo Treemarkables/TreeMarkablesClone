@@ -282,7 +282,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             {/* Spacer: pushes action buttons to the right, away from the bell */}
             <div className="flex-1" />
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
 
               {/* Dispatch controls — only shown on /dispatch */}
               {isDispatchPage && (
