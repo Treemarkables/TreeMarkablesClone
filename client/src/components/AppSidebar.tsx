@@ -94,6 +94,13 @@ const businessItems = [
     isTab: false
   },
   {
+    title: "Invoice Builder",
+    url: "/settings/invoice-builder",
+    icon: FileText,
+    value: "invoice-builder",
+    isTab: false
+  },
+  {
     title: "Equipment",
     url: "/equipment",
     icon: Package,

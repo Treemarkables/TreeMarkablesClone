@@ -592,7 +592,8 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 async function generateInvoicePDFBuffer(
   invoiceData: any,
   job?: any,
-  customer?: any
+  customer?: any,
+  template?: any
 ): Promise<Buffer> {
   const PDFDocument = (await import('pdfkit')).default;
 
@@ -614,133 +615,192 @@ async function generateInvoicePDFBuffer(
     const formatCurrency = (num: number) =>
       new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
 
-    // Logo
-    try {
-      doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
-    } catch {
-      // logo optional — continue without it
-    }
-
-    // Invoice header
-    const billingName = job?.billingNameOverride || customer?.name || 'Customer';
-    doc.fontSize(12).font('Helvetica-Bold').text(
-      `Invoice #${invoiceData.invoiceNumber}`, 350, 45, { align: 'right', width: 205 }
-    );
-    doc.fontSize(9).font('Helvetica').text(
-      `${billingName} - ${formatDate(invoiceData.issueDate) || formatDate(new Date())}`,
-      350, doc.y, { align: 'right', width: 205 }
-    );
-
-    doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
-
-    // Bill To
-    doc.y = 100;
-    doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
-    doc.moveDown(0.3);
-    doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
-    if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
-      doc.moveDown(0.2);
-      doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
-      doc.fillColor('#000000');
-    }
-    doc.moveDown(0.2);
-    if (invoiceData.address || job?.address) {
-      doc.fontSize(8).font('Helvetica').fillColor('#666666')
-        .text(invoiceData.address || job?.address || '', 40, doc.y);
-      doc.moveDown(0.2);
-    }
-    if (customer?.email) {
-      doc.fontSize(8).fillColor('#666666').text(customer.email, 40, doc.y);
-      doc.moveDown(0.2);
-    }
-    doc.fillColor('#000000');
-    doc.moveDown(0.5);
-
-    // Description
-    doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
-    doc.moveDown(0.3);
+    // Determine block order/visibility from template.block_config (if available)
+    const blockConfig: Array<{ type: string; visible: boolean; order: number; config: Record<string, unknown> }> =
+      template?.block_config && Array.isArray(template.block_config) && template.block_config.length > 0
+        ? [...template.block_config].sort((a: { order: number }, b: { order: number }) => a.order - b.order)
+        : [];
 
     // Support both DB (.items) and frontend (.lineItems) field names
     const lineItems: any[] = invoiceData.items || invoiceData.lineItems || [];
     const hasLineItems = lineItems.length > 0;
 
-    if (job?.description) {
-      doc.fontSize(8).font('Helvetica').fillColor('#333333')
-        .text(job.description, 40, doc.y, { width: 515 });
-      doc.fillColor('#000000');
-      doc.moveDown(0.3);
-    }
-
-    if (invoiceData.notes) {
-      doc.fontSize(8).font('Helvetica').fillColor('#333333')
-        .text(invoiceData.notes, 40, doc.y, { width: 515 });
-      doc.fillColor('#000000');
-      doc.moveDown(0.3);
-    }
-
+    // Pre-calculate totals
     let subtotal = 0;
     if (hasLineItems) {
       lineItems.forEach((item: any) => {
         const raw = item.total ?? item.amount ?? 0;
-        const total = typeof raw === 'string' ? parseFloat(raw) : raw;
-        subtotal += total;
-        doc.fontSize(8).font('Helvetica').fillColor('#000000')
-          .text(item.description || '', 40, doc.y, { width: 515 });
-        doc.moveDown(0.2);
+        subtotal += typeof raw === 'string' ? parseFloat(raw) : raw;
       });
     } else {
       const raw = invoiceData.amount ?? 0;
       subtotal = typeof raw === 'string' ? parseFloat(raw) : raw;
     }
-
-    doc.moveDown(0.5);
-
-    // Totals
     const gstAmount = subtotal * 0.15;
     const totalAmount = subtotal + gstAmount;
 
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-    doc.moveDown(0.5);
+    const billingName = job?.billingNameOverride || customer?.name || 'Customer';
 
-    const totalsX = 380;
-    const valuesX = 470;
+    // Determine render order: if block_config exists use it, otherwise use default order
+    const defaultOrder = ['header', 'companyInfo', 'invoiceMeta', 'billTo', 'jobDescription', 'lineItems', 'totals', 'payment', 'footer'];
+    const renderOrder = blockConfig.length > 0
+      ? blockConfig.filter(b => b.visible).map(b => b.type)
+      : defaultOrder;
 
-    doc.fontSize(8).font('Helvetica').fillColor('#666666');
-    doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
-    doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-    doc.moveDown(0.3);
+    for (const sectionType of renderOrder) {
+      switch (sectionType) {
+        case 'header': {
+          try {
+            doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
+          } catch {
+            // logo optional
+          }
+          doc.fontSize(12).font('Helvetica-Bold').text(
+            `Invoice #${invoiceData.invoiceNumber}`, 350, 45, { align: 'right', width: 205 }
+          );
+          doc.fontSize(9).font('Helvetica').text(
+            `${billingName} - ${formatDate(invoiceData.issueDate) || formatDate(new Date())}`,
+            350, doc.y, { align: 'right', width: 205 }
+          );
+          doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
+          doc.y = 100;
+          break;
+        }
+        case 'companyInfo': {
+          const companyName = template?.company_name || 'Treemarkables LTD';
+          const companyAddress = template?.company_address || '213 Stanley Road, Gisborne';
+          const companyPhone = template?.company_phone || '027 216 6882';
+          const companyEmail = template?.company_email || 'quotes@treemarkables.nz';
+          doc.fontSize(8).font('Helvetica').fillColor('#333333')
+            .text(`${companyName}  |  ${companyAddress}  |  Ph: ${companyPhone}  |  ${companyEmail}`, 40, doc.y, { width: 515 });
+          doc.fillColor('#000000').moveDown(0.5);
+          break;
+        }
+        case 'invoiceMeta': {
+          const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
+          const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
+          doc.fontSize(8).font('Helvetica').fillColor('#666666')
+            .text(`Issue Date: ${issueDate}`, 40, doc.y);
+          if (dueDate) {
+            doc.moveDown(0.2).text(`Due Date: ${dueDate}`, 40, doc.y);
+          }
+          doc.fillColor('#000000').moveDown(0.5);
+          break;
+        }
+        case 'billTo': {
+          doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
+          doc.moveDown(0.3);
+          doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
+          if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
+            doc.moveDown(0.2);
+            doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
+            doc.fillColor('#000000');
+          }
+          doc.moveDown(0.2);
+          if (invoiceData.address || job?.address) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .text(invoiceData.address || job?.address || '', 40, doc.y);
+            doc.moveDown(0.2);
+          }
+          if (customer?.email) {
+            doc.fontSize(8).fillColor('#666666').text(customer.email, 40, doc.y);
+            doc.moveDown(0.2);
+          }
+          doc.fillColor('#000000').moveDown(0.5);
+          break;
+        }
+        case 'jobDescription': {
+          const description = job?.description || invoiceData.notes;
+          if (description) {
+            doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
+            doc.moveDown(0.3);
+            doc.fontSize(8).font('Helvetica').fillColor('#333333')
+              .text(description, 40, doc.y, { width: 515 });
+            doc.fillColor('#000000').moveDown(0.5);
+          }
+          break;
+        }
+        case 'lineItems': {
+          if (hasLineItems) {
+            lineItems.forEach((item: any) => {
+              const raw = item.total ?? item.amount ?? 0;
+              const itemTotal = typeof raw === 'string' ? parseFloat(raw) : raw;
+              doc.fontSize(8).font('Helvetica').fillColor('#000000')
+                .text(item.description || '', 40, doc.y, { width: 400 });
+              doc.text(formatCurrency(itemTotal), 440, doc.y - doc.currentLineHeight(), { align: 'right', width: 115 });
+              doc.moveDown(0.2);
+            });
+            doc.moveDown(0.3);
+          }
+          break;
+        }
+        case 'totals': {
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+          doc.moveDown(0.5);
+          const totalsX = 380;
+          const valuesX = 470;
+          doc.fontSize(8).font('Helvetica').fillColor('#666666');
+          doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
+          doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+          doc.moveDown(0.3);
+          doc.fillColor('#666666');
+          doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
+          doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+          doc.moveDown(0.5);
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+          doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
+          doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+          doc.moveDown(1);
+          break;
+        }
+        case 'payment': {
+          const boxY = doc.y;
+          doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
+          doc.fillColor('#000000');
+          doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
+          doc.fontSize(8).font('Helvetica');
+          doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
+          doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
+          doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
+          doc.fillColor('#000000');
+          doc.y = boxY + 70;
+          doc.moveDown(0.5);
+          break;
+        }
+        case 'divider': {
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+          doc.moveDown(0.5);
+          break;
+        }
+        case 'footer': {
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+          doc.moveDown(0.3);
+          const companyName = template?.company_name || 'Treemarkables LTD';
+          const companyAddress = template?.company_address || '213 Stanley Road, Gisborne';
+          const companyPhone = template?.company_phone || '027 216 6882';
+          const companyEmail = template?.company_email || 'quotes@treemarkables.nz';
+          doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
+            .text(
+              `${companyName} | ${companyAddress} | Phone: ${companyPhone} | Email: ${companyEmail}`,
+              40, doc.y, { align: 'center', width: 515 }
+            );
+          break;
+        }
+        default:
+          break;
+      }
+    }
 
-    doc.fillColor('#666666');
-    doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
-    doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-    doc.moveDown(0.5);
-
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-    doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
-    doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-    doc.moveDown(1);
-
-    // Payment box
-    const boxY = doc.y;
-    doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
-    doc.fillColor('#000000');
-    doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
-    doc.fontSize(8).font('Helvetica');
-    doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
-    doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
-    doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
-    doc.fillColor('#000000');
-    doc.y = boxY + 70;
-    doc.moveDown(0.5);
-
-    // Footer
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-    doc.moveDown(0.3);
-    doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
-      .text(
-        'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
-        40, doc.y, { align: 'center', width: 515 }
-      );
+    // If blockConfig was empty (legacy), ensure footer is always drawn at the bottom
+    if (blockConfig.length === 0) {
+      doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+      doc.moveDown(0.3);
+      doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
+        .text(
+          'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
+          40, doc.y, { align: 'center', width: 515 }
+        );
+    }
 
     doc.end();
   });

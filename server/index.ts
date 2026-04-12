@@ -418,6 +418,14 @@ function startNotificationQueueWorker() {
         ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS block_config JSONB
       `);
       log("✅ Schema migration: document_templates.block_config ready", "startup");
+
+      // Seed default block_config on invoice templates that don't have it yet
+      try {
+        const { seedDefaultBlockConfig } = await import('./seedTemplates');
+        await seedDefaultBlockConfig();
+      } catch (seedErr) {
+        log(`⚠️ Block config seed warning: ${(seedErr as Error).message}`, "startup");
+      }
     } catch (migErr) {
       log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
     }
