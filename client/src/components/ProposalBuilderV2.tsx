@@ -1380,9 +1380,14 @@ export function ProposalBuilderV2({
 
   // Logo sizing — stored on the proposal template, editable inline
   const [logoSize, setLogoSize] = useState<number>((template?.logoSize as number) ?? 80);
+  // committedLogoSize only updates on slider release — used for header height so it never jumps while dragging
+  const [committedLogoSize, setCommittedLogoSize] = useState<number>((template?.logoSize as number) ?? 80);
   const [logoPopoverOpen, setLogoPopoverOpen] = useState(false);
   useEffect(() => {
-    if (template?.logoSize != null) setLogoSize(template.logoSize as number);
+    if (template?.logoSize != null) {
+      setLogoSize(template.logoSize as number);
+      setCommittedLogoSize(template.logoSize as number);
+    }
   }, [template?.logoSize]);
   const saveLogoSizeMutation = useMutation({
     mutationFn: (size: number) => {
@@ -1517,8 +1522,8 @@ export function ProposalBuilderV2({
           <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
-              {/* Document Header — height tracks logo size so they always match */}
-              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ minHeight: logoSize + 32 }}>
+              {/* Document Header — height uses committed size only (not live drag) so it never jumps while sliding */}
+              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ minHeight: committedLogoSize + 32 }}>
                 {/* Logo container — width is generous, height matches logo */}
                 <div className="flex items-center" style={{ flexShrink: 0 }}>
                   <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
@@ -1547,7 +1552,7 @@ export function ProposalBuilderV2({
                         step={8}
                         value={[logoSize]}
                         onValueChange={([v]) => setLogoSize(v)}
-                        onValueCommit={([v]) => saveLogoSizeMutation.mutate(v)}
+                        onValueCommit={([v]) => { setCommittedLogoSize(v); saveLogoSizeMutation.mutate(v); }}
                         className="w-full"
                       />
                       <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
