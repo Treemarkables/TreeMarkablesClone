@@ -23,7 +23,6 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -42,9 +41,7 @@ import {
   ChevronLeft,
   Save,
   LayoutTemplate,
-  AlignLeft,
   AlignCenter,
-  AlignRight,
   Type,
   Table,
   FileText,
@@ -61,19 +58,10 @@ import type {
   DocumentTemplate,
   InvoiceBlock,
   InvoiceBlockType,
-  InvoiceBlockConfigHeader,
-  InvoiceBlockConfigCompanyInfo,
-  InvoiceBlockConfigBillTo,
-  InvoiceBlockConfigInvoiceMeta,
-  InvoiceBlockConfigJobDescription,
-  InvoiceBlockConfigLineItems,
-  InvoiceBlockConfigTotals,
-  InvoiceBlockConfigPayment,
-  InvoiceBlockConfigDivider,
-  InvoiceBlockConfigCustomText,
-  InvoiceBlockConfigFooter,
 } from '@shared/schema';
 import { DEFAULT_INVOICE_BLOCKS } from '@shared/schema';
+import { resolveCompanyInfo } from '@shared/invoiceBlockDefaults';
+import { renderInvoiceBlock, buildSampleContext } from '@/components/InvoiceBlockRenderer';
 
 // ─── Block metadata ────────────────────────────────────────────────────────────
 
@@ -192,156 +180,6 @@ const BLOCK_ICONS: Record<InvoiceBlockType, React.ElementType> = {
   customText: StickyNote,
   footer: AlignCenter,
 };
-
-// ─── Canvas Block Preview ──────────────────────────────────────────────────────
-
-function BlockPreview({ block, template }: { block: InvoiceBlock; template: DocumentTemplate }) {
-  switch (block.type) {
-    case 'header': {
-      const cfg = block.config as InvoiceBlockConfigHeader;
-      const bg = cfg.headerColor || '#ffffff';
-      const isLight = (() => {
-        const hex = bg.replace('#', '');
-        const r = parseInt(hex.substring(0, 2), 16);
-        const g = parseInt(hex.substring(2, 4), 16);
-        const b = parseInt(hex.substring(4, 6), 16);
-        return (r * 299 + g * 587 + b * 114) / 1000 > 128;
-      })();
-      const textCol = isLight ? '#111' : '#fff';
-      return (
-        <div className="rounded overflow-hidden" style={{ backgroundColor: bg, minHeight: 64 }}>
-          <div className="px-4 py-3 flex items-center gap-3" style={{ flexDirection: cfg.logoAlignment === 'right' ? 'row-reverse' : 'row', justifyContent: cfg.logoAlignment === 'center' ? 'center' : 'space-between' }}>
-            <img src="/logos/treemarkables-logo.png" alt="Logo" style={{ height: 36 }} className="object-contain" />
-            <div className={cfg.logoAlignment === 'center' ? 'text-center' : cfg.logoAlignment === 'right' ? 'text-left' : 'text-right'}>
-              <div className="font-bold text-sm" style={{ color: textCol }}>Invoice #INV-0001</div>
-              {cfg.showCompanyName && <div className="text-xs mt-0.5" style={{ color: isLight ? '#555' : '#ccc' }}>{template.companyName}</div>}
-            </div>
-          </div>
-        </div>
-      );
-    }
-    case 'companyInfo': {
-      const cfg = block.config as InvoiceBlockConfigCompanyInfo;
-      return (
-        <div className="text-xs space-y-0.5 text-gray-700">
-          {cfg.showName && <div className="font-semibold text-gray-900">{template.companyName || 'Treemarkables LTD'}</div>}
-          {cfg.showAddress && <div>{template.companyAddress || '213 Stanley Road, Gisborne'}</div>}
-          {cfg.showPhone && <div>Ph: {template.companyPhone || '027 216 6882'}</div>}
-          {cfg.showEmail && <div>{template.companyEmail || 'quotes@treemarkables.nz'}</div>}
-          {cfg.showGST && <div>GST: {template.gstNumber || '131-047-592'}</div>}
-        </div>
-      );
-    }
-    case 'billTo': {
-      const cfg = block.config as InvoiceBlockConfigBillTo;
-      return (
-        <div className="text-xs space-y-0.5">
-          <div className="font-semibold text-gray-800 text-xs mb-1">{cfg.label || 'Bill To'}</div>
-          <div className="font-semibold text-gray-900">Sample Customer</div>
-          {cfg.showAddress && <div className="text-gray-600">123 Sample Street, City</div>}
-          {cfg.showEmail && <div className="text-gray-600">customer@example.com</div>}
-        </div>
-      );
-    }
-    case 'invoiceMeta': {
-      const cfg = block.config as InvoiceBlockConfigInvoiceMeta;
-      return (
-        <div className="text-xs space-y-1">
-          {cfg.showInvoiceNumber && <div className="flex justify-between"><span className="text-gray-600">{cfg.labelInvoice || 'Invoice #'}</span><span className="font-medium">INV-0001</span></div>}
-          {cfg.showIssueDate && <div className="flex justify-between"><span className="text-gray-600">{cfg.labelIssueDate || 'Issue Date'}</span><span>01/01/2026</span></div>}
-          {cfg.showDueDate && <div className="flex justify-between"><span className="text-gray-600">{cfg.labelDueDate || 'Due Date'}</span><span>08/01/2026</span></div>}
-          {cfg.showJobNumber && <div className="flex justify-between"><span className="text-gray-600">Job #</span><span>1234</span></div>}
-        </div>
-      );
-    }
-    case 'jobDescription': {
-      const cfg = block.config as InvoiceBlockConfigJobDescription;
-      return (
-        <div className="text-xs">
-          <div className="font-semibold text-gray-800 mb-1">{cfg.label || 'Description'}</div>
-          <div className="text-gray-600 italic">Job description and notes will appear here...</div>
-        </div>
-      );
-    }
-    case 'lineItems': {
-      const cfg = block.config as InvoiceBlockConfigLineItems;
-      return (
-        <div className="text-xs overflow-hidden">
-          <table className="w-full border-collapse text-xs">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="text-left px-2 py-1 font-semibold border border-gray-200">{cfg.labelDescription || 'Service'}</th>
-                {cfg.showQty && <th className="px-2 py-1 font-semibold border border-gray-200 text-center w-12">{cfg.labelQty || 'Qty'}</th>}
-                {cfg.showRate && <th className="px-2 py-1 font-semibold border border-gray-200 text-right w-16">{cfg.labelRate || 'Rate'}</th>}
-                <th className="px-2 py-1 font-semibold border border-gray-200 text-right w-16">{cfg.labelAmount || 'Price'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td className="px-2 py-1 border border-gray-200 text-gray-700">Tree removal service</td>
-                {cfg.showQty && <td className="px-2 py-1 border border-gray-200 text-center text-gray-700">1</td>}
-                {cfg.showRate && <td className="px-2 py-1 border border-gray-200 text-right text-gray-700">$500.00</td>}
-                <td className="px-2 py-1 border border-gray-200 text-right text-gray-700">$500.00</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      );
-    }
-    case 'totals': {
-      const cfg = block.config as InvoiceBlockConfigTotals;
-      return (
-        <div className="text-xs space-y-1 flex flex-col items-end">
-          <div className="w-48 space-y-1">
-            {cfg.showSubtotal && <div className="flex justify-between"><span className="text-gray-600">{cfg.labelSubtotal || 'Subtotal'}:</span><span>$500.00</span></div>}
-            {cfg.showGST && <div className="flex justify-between"><span className="text-gray-600">{cfg.labelGST || 'GST (15%)'}:</span><span>$75.00</span></div>}
-            <div className="flex justify-between font-bold border-t border-gray-200 pt-1"><span>{cfg.labelTotal || 'Total Amount'}:</span><span>$575.00</span></div>
-          </div>
-        </div>
-      );
-    }
-    case 'payment': {
-      const cfg = block.config as InvoiceBlockConfigPayment;
-      return (
-        <div className="text-xs bg-gray-50 border border-gray-200 rounded p-2 space-y-0.5">
-          <div className="font-semibold text-gray-800 mb-1">{cfg.label || 'Payment Information'}</div>
-          {cfg.showDueDate && <div><span className="font-medium">Due:</span> 08/01/2026</div>}
-          {cfg.showBank && <div><span className="font-medium">Bank:</span> ANZ</div>}
-          {cfg.showAccountNumber && <div><span className="font-medium">Account:</span> 06-0637-0768850-00</div>}
-          {cfg.showAccountName && <div><span className="font-medium">Name:</span> {template.companyName || 'Treemarkables LTD'}</div>}
-          {cfg.showTerms && template.paymentTerms && <div><span className="font-medium">Terms:</span> {template.paymentTerms}</div>}
-        </div>
-      );
-    }
-    case 'divider': {
-      const cfg = block.config as InvoiceBlockConfigDivider;
-      return <hr style={{ borderColor: cfg.color || '#e5e7eb', borderTopWidth: cfg.thickness || 1 }} />;
-    }
-    case 'customText': {
-      const cfg = block.config as InvoiceBlockConfigCustomText;
-      const sizeMap = { xs: 'text-xs', sm: 'text-sm', base: 'text-base' };
-      const alignMap = { left: 'text-left', center: 'text-center', right: 'text-right' };
-      return <div className={`${sizeMap[cfg.fontSize] || 'text-sm'} ${alignMap[cfg.align] || 'text-left'} text-gray-700 whitespace-pre-wrap`}>{cfg.text || '...'}</div>;
-    }
-    case 'footer': {
-      const cfg = block.config as InvoiceBlockConfigFooter;
-      const parts: string[] = [];
-      if (cfg.showCompanyName) parts.push(template.companyName || 'Treemarkables LTD');
-      if (cfg.showAddress) parts.push(template.companyAddress?.replace(/\n/g, ', ') || '213 Stanley Road, Gisborne');
-      if (cfg.showPhone) parts.push(`Ph: ${template.companyPhone || '027 216 6882'}`);
-      if (cfg.showEmail) parts.push(template.companyEmail || 'quotes@treemarkables.nz');
-      return (
-        <div className="text-center text-xs text-gray-500 border-t border-gray-200 pt-2 space-y-0.5">
-          <div>{parts.join(' | ')}</div>
-          {cfg.showGST && <div>GST Number: {template.gstNumber || '131-047-592'}</div>}
-          {cfg.showPaymentTerms && template.paymentTerms && <div>{template.paymentTerms}</div>}
-        </div>
-      );
-    }
-    default:
-      return <div className="text-xs text-gray-400 italic">Unknown block type</div>;
-  }
-}
 
 // ─── Inspector Panel ───────────────────────────────────────────────────────────
 
@@ -549,7 +387,11 @@ function InspectorPanel({
   }
 }
 
-// ─── Sortable Canvas Card ──────────────────────────────────────────────────────
+// ─── Sortable Canvas Block (WYSIWYG) ──────────────────────────────────────────
+// Uses the shared renderInvoiceBlock() from InvoiceBlockRenderer.tsx so the
+// canvas matches the final invoice output exactly (no separate BlockPreview).
+
+const SAMPLE_CTX = buildSampleContext();
 
 function SortableCanvasBlock({
   block,
@@ -567,68 +409,68 @@ function SortableCanvasBlock({
   onToggleVisible: (id: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
+  const co = resolveCompanyInfo(template as unknown as Record<string, unknown>);
 
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.3 : 1,
   };
 
-  const Icon = BLOCK_ICONS[block.type];
+  const rendered = renderInvoiceBlock(block, template, SAMPLE_CTX, co);
 
   return (
     <div
       ref={setNodeRef}
       style={style}
       onClick={() => onSelect(block.id)}
-      className={`group relative rounded-md border-2 p-3 cursor-pointer transition-colors ${
-        selected
-          ? 'border-orange-400 bg-orange-50'
-          : 'border-gray-200 bg-white hover:border-orange-200'
-      } ${block.visible ? '' : 'opacity-50'}`}
+      className={`group relative cursor-pointer rounded-sm transition-all
+        ${selected ? 'ring-2 ring-orange-400' : 'hover:ring-1 hover:ring-orange-300'}
+        ${!block.visible ? 'opacity-40' : ''}
+      `}
       data-testid={`canvas-block-${block.type}`}
     >
-      <div className="flex items-start gap-2">
+      {/* Hover toolbar — stays in DOM (visibility toggle, not display) for layout stability */}
+      <div
+        className="absolute -top-8 left-0 flex items-center gap-1 bg-white border border-gray-200 rounded shadow-sm px-2 py-0.5 z-10 invisible group-hover:visible group-focus-within:visible"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div
           {...attributes}
           {...listeners}
-          className="flex-shrink-0 mt-0.5 text-gray-400 hover:text-gray-600 cursor-grab active:cursor-grabbing"
-          onClick={(e) => e.stopPropagation()}
+          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+          title="Drag to reorder"
         >
-          <GripVertical className="w-4 h-4" />
+          <GripVertical className="w-3.5 h-3.5" />
         </div>
+        <span className="text-xs text-gray-500 px-1 select-none">{BLOCK_LABELS[block.type]}</span>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => onToggleVisible(block.id)}
+          title={block.visible ? 'Hide block' : 'Show block'}
+          data-testid={`btn-toggle-${block.id}`}
+        >
+          {block.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
+        </Button>
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => onRemove(block.id)}
+          title="Remove block"
+          data-testid={`btn-remove-${block.id}`}
+        >
+          <X className="w-3.5 h-3.5 text-red-400" />
+        </Button>
+      </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 mb-2">
-            <Icon className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-            <span className="text-xs font-semibold text-gray-700">{BLOCK_LABELS[block.type]}</span>
-            {selected && <Badge className="text-xs ml-1 no-default-active-elevate">Selected</Badge>}
+      {/* True invoice content from shared renderer */}
+      <div className="pointer-events-none">
+        {rendered ?? (
+          <div className="text-xs text-gray-300 italic py-2 text-center border border-dashed border-gray-200 rounded">
+            {BLOCK_LABELS[block.type]}
           </div>
-          <div className="pointer-events-none">
-            <BlockPreview block={block} template={template} />
-          </div>
-        </div>
-
-        <div className="flex flex-col gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => onToggleVisible(block.id)}
-            title={block.visible ? 'Hide block' : 'Show block'}
-            data-testid={`btn-toggle-${block.id}`}
-          >
-            {block.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-          </Button>
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={() => onRemove(block.id)}
-            title="Remove block"
-            data-testid={`btn-remove-${block.id}`}
-          >
-            <X className="w-3.5 h-3.5 text-red-400" />
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   );
@@ -738,6 +580,14 @@ export default function InvoiceBuilderPage() {
     if (active.data.current?.type === 'palette') {
       const item = active.data.current?.paletteItem as PaletteItem;
       if (!item) return;
+
+      // Only create a block when dropped on the canvas drop zone or over a canvas block.
+      // Drops outside the canvas (over === null, or over.id is another palette item) are no-ops.
+      const isCanvasTarget =
+        over !== null &&
+        (String(over.id) === 'canvas-drop-zone' ||
+          effectiveBlocks.some((b) => b.id === String(over.id)));
+      if (!isCanvasTarget) return;
 
       const newBlockId = `${item.type}-${crypto.randomUUID().slice(0, 8)}`;
       const newBlock: InvoiceBlock = {
@@ -892,63 +742,66 @@ export default function InvoiceBuilderPage() {
           ))}
         </div>
 
-        {/* Center: Invoice Canvas */}
-        <div className="flex-1 overflow-y-auto bg-gray-100 p-4">
+        {/* Center: Invoice canvas — true WYSIWYG invoice surface */}
+        <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
           <div className="max-w-2xl mx-auto">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-1 mb-2">
-              <div className="text-xs text-gray-400 text-center py-1">Invoice Canvas — {effectiveBlocks.filter(b => b.visible).length} visible blocks</div>
+            <p className="text-xs text-gray-400 text-center mb-3 select-none">
+              Live preview — hover a block to drag or configure it
+            </p>
+
+            {/* White paper invoice surface */}
+            <div className="bg-white rounded-sm shadow border border-gray-200 px-8 py-8 relative">
+              <SortableContext
+                items={effectiveBlocks.map((b) => b.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <CanvasDropZone>
+                  {effectiveBlocks.map((block) => (
+                    <SortableCanvasBlock
+                      key={block.id}
+                      block={block}
+                      template={invoiceTemplate}
+                      selected={selectedId === block.id}
+                      onSelect={setSelectedId}
+                      onRemove={removeBlock}
+                      onToggleVisible={toggleVisible}
+                    />
+                  ))}
+                </CanvasDropZone>
+              </SortableContext>
+
+              {effectiveBlocks.length === 0 && (
+                <div className="border-2 border-dashed border-gray-200 rounded-lg p-12 text-center">
+                  <LayoutTemplate className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No blocks added yet</p>
+                  <p className="text-xs text-gray-400 mt-1">Drag a block from the palette or click +</p>
+                </div>
+              )}
             </div>
-
-            <SortableContext
-              items={effectiveBlocks.map((b) => b.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              <CanvasDropZone>
-                {effectiveBlocks.map((block) => (
-                  <SortableCanvasBlock
-                    key={block.id}
-                    block={block}
-                    template={invoiceTemplate}
-                    selected={selectedId === block.id}
-                    onSelect={setSelectedId}
-                    onRemove={removeBlock}
-                    onToggleVisible={toggleVisible}
-                  />
-                ))}
-              </CanvasDropZone>
-            </SortableContext>
-
-            <DragOverlay>
-              {activeDragId ? (
-                activeDragId.startsWith('palette-') ? (
-                  (() => {
-                    const paletteType = activeDragId.replace('palette-', '') as InvoiceBlockType;
-                    const Icon = BLOCK_ICONS[paletteType] ?? BLOCK_ICONS['header'];
-                    return (
-                      <div className="bg-white border-2 border-orange-400 rounded-md px-3 py-2 shadow-lg opacity-90 flex items-center gap-2">
-                        <Icon className="w-3.5 h-3.5 text-orange-500" />
-                        <span className="text-xs font-semibold text-orange-600">{BLOCK_LABELS[paletteType]}</span>
-                      </div>
-                    );
-                  })()
-                ) : (
-                  <div className="bg-white border-2 border-orange-400 rounded-md p-3 shadow-lg opacity-90">
-                    <div className="text-xs font-semibold text-orange-600">
-                      {BLOCK_LABELS[effectiveBlocks.find((b) => b.id === activeDragId)?.type ?? 'header']}
-                    </div>
-                  </div>
-                )
-              ) : null}
-            </DragOverlay>
-
-            {effectiveBlocks.length === 0 && (
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-                <LayoutTemplate className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No blocks added yet</p>
-                <p className="text-xs text-gray-400 mt-1">Click a block in the palette to add it</p>
-              </div>
-            )}
           </div>
+
+          <DragOverlay>
+            {activeDragId ? (
+              activeDragId.startsWith('palette-') ? (
+                (() => {
+                  const paletteType = activeDragId.replace('palette-', '') as InvoiceBlockType;
+                  const Icon = BLOCK_ICONS[paletteType] ?? BLOCK_ICONS['header'];
+                  return (
+                    <div className="bg-white border-2 border-orange-400 rounded-md px-3 py-2 shadow-lg opacity-90 flex items-center gap-2">
+                      <Icon className="w-3.5 h-3.5 text-orange-500" />
+                      <span className="text-xs font-semibold text-orange-600">{BLOCK_LABELS[paletteType]}</span>
+                    </div>
+                  );
+                })()
+              ) : (
+                <div className="bg-white border-2 border-orange-400 rounded-md p-3 shadow-lg opacity-90">
+                  <div className="text-xs font-semibold text-orange-600">
+                    {BLOCK_LABELS[effectiveBlocks.find((b) => b.id === activeDragId)?.type ?? 'header']}
+                  </div>
+                </div>
+              )
+            ) : null}
+          </DragOverlay>
         </div>
 
         {/* Right: Inspector */}
