@@ -928,6 +928,7 @@ export function ProposalBuilderV2({
   const { data: jobData } = useQuery({ queryKey: ["/api/jobs", jobId], enabled: !!jobId && isOpen });
   const { data: customerData } = useQuery({ queryKey: ["/api/customers", customerId], enabled: !!customerId && isOpen });
   const { data: diaryData } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen });
+  const { data: jobPhotosData } = useQuery({ queryKey: ["/api/jobs", jobId, "photos"], enabled: !!jobId && isOpen });
   const { data: existingData } = useQuery({
     queryKey: ["/api/proposals", proposalId],
     enabled: !!proposalId && mode === "edit" && isOpen,
@@ -950,14 +951,20 @@ export function ProposalBuilderV2({
     (materialsData as { data?: unknown[] })?.data || [];
 
   const diaryPhotos: string[] = (() => {
-    if (!(diaryData as { success?: boolean })?.success) return [];
-    const entries = (diaryData as { success: boolean; data: Array<{ photos?: string[]; photoUrl?: string }> }).data || [];
     const all: string[] = [];
-    entries.forEach((e) => {
-      if (e.photos) all.push(...e.photos);
-      if (e.photoUrl) all.push(e.photoUrl);
-    });
-    return [...new Set(all)];
+    // Diary entry photos
+    if ((diaryData as { success?: boolean })?.success) {
+      const entries = (diaryData as { success: boolean; data: Array<{ photos?: string[]; photoUrl?: string }> }).data || [];
+      entries.forEach((e) => {
+        if (e.photos) all.push(...e.photos);
+        if (e.photoUrl) all.push(e.photoUrl);
+      });
+    }
+    // Job before/after photos uploaded via job card
+    const jpd = jobPhotosData as { beforePhotos?: string[]; afterPhotos?: string[] } | null;
+    if (jpd?.beforePhotos) all.push(...jpd.beforePhotos);
+    if (jpd?.afterPhotos) all.push(...jpd.afterPhotos);
+    return [...new Set(all.filter(Boolean))];
   })();
 
   // ── Local state ────────────────────────────────────────────────────────────
