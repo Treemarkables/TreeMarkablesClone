@@ -107,10 +107,31 @@ export function CalendarGrid({
     durationHours: number;
   } | null>(null);
 
+  // Swipe-to-navigate refs
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
+
   const currentDate = externalDate || internalDate;
   const setCurrentDate = (date: Date) => {
     if (onDateChange) onDateChange(date);
     else setInternalDate(date);
+  };
+
+  const handleSwipeTouchStart = (e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0) goToNext();
+      else goToPrevious();
+    }
   };
 
   // ── Data fetching ──────────────────────────────────────────────────────────
@@ -572,6 +593,8 @@ export function CalendarGrid({
     <div
       className="w-full h-full flex flex-col"
       onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
     >
       {/* Navigation Header */}
       <div className="flex items-center justify-between p-4 border-b bg-white flex-shrink-0 flex-wrap gap-2">
