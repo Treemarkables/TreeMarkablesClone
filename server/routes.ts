@@ -663,8 +663,11 @@ async function generateInvoicePDFBuffer(
           let logoX = 40;
           if (logoAlign === 'center') logoX = 297 - 60;
           else if (logoAlign === 'right') logoX = 435;
+          const logoFilePath = co.logoUrl
+            ? path.join(__dirname, '..', 'client', 'public', co.logoUrl)
+            : path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
           try {
-            doc.image('client/public/treemarkables-logo.png', logoX, 35, { width: 120, height: 50, fit: [120, 50] });
+            doc.image(logoFilePath, logoX, 35, { width: 120, height: 50, fit: [120, 50] });
           } catch { /* logo optional */ }
           if (showCoName) {
             doc.fontSize(9).font('Helvetica').fillColor('#374151')
