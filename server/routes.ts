@@ -596,6 +596,8 @@ async function generateInvoicePDFBuffer(
   template?: any
 ): Promise<Buffer> {
   const PDFDocument = (await import('pdfkit')).default;
+  // Import shared rendering contract (resolves camelCase DB fields + defaults)
+  const { resolveCompanyInfo, resolveBlockConfig } = await import('../shared/invoiceBlockDefaults');
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -615,11 +617,11 @@ async function generateInvoicePDFBuffer(
     const formatCurrency = (num: number) =>
       new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
 
-    // Determine block order/visibility from template.block_config (if available)
-    const blockConfig: Array<{ type: string; visible: boolean; order: number; config: Record<string, unknown> }> =
-      template?.block_config && Array.isArray(template.block_config) && template.block_config.length > 0
-        ? [...template.block_config].sort((a: { order: number }, b: { order: number }) => a.order - b.order)
-        : [];
+    // Resolve company info via shared contract (camelCase field names, consistent defaults)
+    const co = resolveCompanyInfo(template);
+
+    // Resolve block config via shared contract (reads template.blockConfig in camelCase)
+    const blockConfig = resolveBlockConfig(template);
 
     // Support both DB (.items) and frontend (.lineItems) field names
     const lineItems: any[] = invoiceData.items || invoiceData.lineItems || [];
@@ -640,14 +642,18 @@ async function generateInvoicePDFBuffer(
     const totalAmount = subtotal + gstAmount;
 
     const billingName = job?.billingNameOverride || customer?.name || 'Customer';
+    const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
+    const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
-    // Determine render order: if block_config exists use it, otherwise use default order
+    // Determine render order: if blockConfig exists use it (preserving order + visibility),
+    // otherwise fall back to default order. This mirrors InvoiceTemplate.tsx logic exactly.
     const defaultOrder = ['header', 'companyInfo', 'invoiceMeta', 'billTo', 'jobDescription', 'lineItems', 'totals', 'payment', 'footer'];
-    const renderOrder = blockConfig.length > 0
-      ? blockConfig.filter(b => b.visible).map(b => b.type)
-      : defaultOrder;
+    type BlockEntry = { type: string; cfg: Record<string, unknown> };
+    const renderBlocks: BlockEntry[] = blockConfig.length > 0
+      ? blockConfig.filter(b => b.visible).map(b => ({ type: b.type, cfg: b.config || {} }))
+      : defaultOrder.map(type => ({ type, cfg: {} }));
 
-    for (const sectionType of renderOrder) {
+    for (const { type: sectionType, cfg } of renderBlocks) {
       switch (sectionType) {
         case 'header': {
           try {
@@ -659,7 +665,7 @@ async function generateInvoicePDFBuffer(
             `Invoice #${invoiceData.invoiceNumber}`, 350, 45, { align: 'right', width: 205 }
           );
           doc.fontSize(9).font('Helvetica').text(
-            `${billingName} - ${formatDate(invoiceData.issueDate) || formatDate(new Date())}`,
+            `${billingName} - ${issueDate}`,
             350, doc.y, { align: 'right', width: 205 }
           );
           doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
@@ -667,28 +673,48 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'companyInfo': {
-          const companyName = template?.company_name || 'Treemarkables LTD';
-          const companyAddress = template?.company_address || '213 Stanley Road, Gisborne';
-          const companyPhone = template?.company_phone || '027 216 6882';
-          const companyEmail = template?.company_email || 'quotes@treemarkables.nz';
-          doc.fontSize(8).font('Helvetica').fillColor('#333333')
-            .text(`${companyName}  |  ${companyAddress}  |  Ph: ${companyPhone}  |  ${companyEmail}`, 40, doc.y, { width: 515 });
-          doc.fillColor('#000000').moveDown(0.5);
+          // Uses per-block config toggles (showName, showAddress, etc.) — mirrors InvoiceTemplate.tsx
+          const parts: string[] = [];
+          if (cfg.showName !== false) parts.push(co.name);
+          if (cfg.showAddress !== false) parts.push(co.address);
+          if (cfg.showPhone !== false) parts.push(`Ph: ${co.phone}`);
+          if (cfg.showEmail !== false) parts.push(co.email);
+          if (cfg.showGST) parts.push(`GST: ${co.gstNumber}`);
+          if (parts.length > 0) {
+            doc.fontSize(8).font('Helvetica').fillColor('#333333')
+              .text(parts.join('  |  '), 40, doc.y, { width: 515 });
+            doc.fillColor('#000000').moveDown(0.5);
+          }
           break;
         }
         case 'invoiceMeta': {
-          const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
-          const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
-          doc.fontSize(8).font('Helvetica').fillColor('#666666')
-            .text(`Issue Date: ${issueDate}`, 40, doc.y);
-          if (dueDate) {
-            doc.moveDown(0.2).text(`Due Date: ${dueDate}`, 40, doc.y);
+          // Uses per-block config labels (labelInvoice, labelIssueDate, labelDueDate) — mirrors InvoiceTemplate.tsx
+          const showInvNum = cfg.showInvoiceNumber !== false;
+          const showIssue = cfg.showIssueDate !== false;
+          const showDue = cfg.showDueDate !== false && dueDate;
+          const labelInv = (cfg.labelInvoice as string) || 'Invoice #';
+          const labelIssue = (cfg.labelIssueDate as string) || 'Issue Date';
+          const labelDue = (cfg.labelDueDate as string) || 'Due Date';
+          const totalsX = 380;
+          if (showInvNum) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .text(`${labelInv}: ${invoiceData.invoiceNumber}`, 40, doc.y);
+          }
+          if (showIssue) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .moveDown(0.2).text(`${labelIssue}: ${issueDate}`, 40, doc.y);
+          }
+          if (showDue) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .moveDown(0.2).text(`${labelDue}: ${dueDate}`, 40, doc.y);
           }
           doc.fillColor('#000000').moveDown(0.5);
           break;
         }
         case 'billTo': {
-          doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
+          // Uses cfg.label, cfg.showAddress, cfg.showEmail — mirrors InvoiceTemplate.tsx
+          const label = (cfg.label as string) || 'Bill To';
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(label, 40, doc.y);
           doc.moveDown(0.3);
           doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
           if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
@@ -697,12 +723,12 @@ async function generateInvoicePDFBuffer(
             doc.fillColor('#000000');
           }
           doc.moveDown(0.2);
-          if (invoiceData.address || job?.address) {
+          if (cfg.showAddress !== false && (invoiceData.address || job?.address)) {
             doc.fontSize(8).font('Helvetica').fillColor('#666666')
               .text(invoiceData.address || job?.address || '', 40, doc.y);
             doc.moveDown(0.2);
           }
-          if (customer?.email) {
+          if (cfg.showEmail !== false && customer?.email) {
             doc.fontSize(8).fillColor('#666666').text(customer.email, 40, doc.y);
             doc.moveDown(0.2);
           }
@@ -710,9 +736,11 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'jobDescription': {
+          // Uses cfg.label — mirrors InvoiceTemplate.tsx
           const description = job?.description || invoiceData.notes;
           if (description) {
-            doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
+            const label = (cfg.label as string) || 'Description';
+            doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(label, 40, doc.y);
             doc.moveDown(0.3);
             doc.fontSize(8).font('Helvetica').fillColor('#333333')
               .text(description, 40, doc.y, { width: 515 });
@@ -721,13 +749,56 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'lineItems': {
+          // Uses cfg.labelDescription, cfg.showQty/Rate/Amount, column labels — mirrors InvoiceTemplate.tsx
           if (hasLineItems) {
+            const headerLabel = (cfg.labelDescription as string) || 'Services & Pricing';
+            const showQty = cfg.showQty !== false;
+            const showRate = cfg.showRate === true;
+            const labelQty = (cfg.labelQty as string) || 'Qty';
+            const labelRate = (cfg.labelRate as string) || 'Rate';
+            const labelAmount = (cfg.labelAmount as string) || 'Price';
+            doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(headerLabel, 40, doc.y);
+            doc.moveDown(0.3);
+            // Table header
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#666666');
+            let colX = 40;
+            doc.text('Description', colX, doc.y, { width: showQty ? 300 : 400 });
+            colX += showQty ? 300 : 400;
+            if (showQty) {
+              doc.text(labelQty, colX, doc.y - doc.currentLineHeight(), { width: 50, align: 'center' });
+              colX += 50;
+            }
+            if (showRate) {
+              doc.text(labelRate, colX, doc.y - doc.currentLineHeight(), { width: 65, align: 'right' });
+              colX += 65;
+            }
+            const amtWidth = 555 - colX;
+            doc.text(labelAmount, colX, doc.y - doc.currentLineHeight(), { align: 'right', width: amtWidth });
+            doc.moveDown(0.3);
+            doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.3).stroke('#cccccc');
+            doc.moveDown(0.2);
+            // Table rows
             lineItems.forEach((item: any) => {
               const raw = item.total ?? item.amount ?? 0;
               const itemTotal = typeof raw === 'string' ? parseFloat(raw) : raw;
+              const qty = item.quantity || 1;
+              const rate = item.unitPrice || item.rate || 0;
+              let rowColX = 40;
+              const descWidth = showQty ? 300 : 400;
               doc.fontSize(8).font('Helvetica').fillColor('#000000')
-                .text(item.description || '', 40, doc.y, { width: 400 });
-              doc.text(formatCurrency(itemTotal), 440, doc.y - doc.currentLineHeight(), { align: 'right', width: 115 });
+                .text(item.description || '', rowColX, doc.y, { width: descWidth });
+              const rowY = doc.y - doc.currentLineHeight();
+              rowColX += descWidth;
+              if (showQty) {
+                doc.text(String(qty), rowColX, rowY, { width: 50, align: 'center' });
+                rowColX += 50;
+              }
+              if (showRate) {
+                doc.text(formatCurrency(rate), rowColX, rowY, { width: 65, align: 'right' });
+                rowColX += 65;
+              }
+              const itemAmtWidth = 555 - rowColX;
+              doc.text(formatCurrency(itemTotal), rowColX, rowY, { align: 'right', width: itemAmtWidth });
               doc.moveDown(0.2);
             });
             doc.moveDown(0.3);
@@ -735,55 +806,101 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'totals': {
+          // Uses cfg.showSubtotal, cfg.showGST, label overrides — mirrors InvoiceTemplate.tsx
+          const showSubtotal = cfg.showSubtotal !== false;
+          const showGST = cfg.showGST !== false;
+          const labelSubtotal = (cfg.labelSubtotal as string) || 'Subtotal (excl GST)';
+          const labelGST = (cfg.labelGST as string) || 'GST (15%)';
+          const labelTotal = (cfg.labelTotal as string) || 'Total Amount';
           doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
           doc.moveDown(0.5);
           const totalsX = 380;
           const valuesX = 470;
-          doc.fontSize(8).font('Helvetica').fillColor('#666666');
-          doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
-          doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-          doc.moveDown(0.3);
-          doc.fillColor('#666666');
-          doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
-          doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-          doc.moveDown(0.5);
+          if (showSubtotal) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666');
+            doc.text(`${labelSubtotal}:`, totalsX, doc.y, { width: 135, align: 'left' });
+            doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            doc.moveDown(0.3);
+          }
+          if (showGST) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666');
+            doc.text(`${labelGST}:`, totalsX, doc.y, { width: 135, align: 'left' });
+            doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            doc.moveDown(0.5);
+          }
           doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-          doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
+          doc.text(`${labelTotal}:`, totalsX, doc.y, { width: 135, align: 'left' });
           doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
           doc.moveDown(1);
           break;
         }
         case 'payment': {
+          // Uses cfg.label, cfg.showDueDate/Bank/AccountNumber/AccountName/Terms — mirrors InvoiceTemplate.tsx
+          const label = (cfg.label as string) || 'Payment Information';
+          const showDueDateP = cfg.showDueDate !== false;
+          const showBank = cfg.showBank !== false;
+          const showAccNum = cfg.showAccountNumber !== false;
+          const showAccName = cfg.showAccountName !== false;
+          const showTerms = cfg.showTerms === true;
+          const payLines: string[] = [];
+          if (showDueDateP && dueDate) payLines.push(`Due Date: ${dueDate}`);
+          if (showBank) payLines.push('Bank: ANZ');
+          if (showAccNum) payLines.push('Account Number: 06 0637 0768850 00');
+          if (showAccName) payLines.push(`Account Name: ${co.name}`);
+          if (showTerms && co.paymentTerms) payLines.push(`Terms: ${co.paymentTerms}`);
+          const boxH = Math.max(60, 20 + payLines.length * 14);
           const boxY = doc.y;
-          doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
+          doc.rect(40, boxY, 515, boxH).fillAndStroke('#F3F4F6', '#E5E7EB');
           doc.fillColor('#000000');
-          doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
+          doc.fontSize(9).font('Helvetica-Bold').text(label, 50, boxY + 10);
           doc.fontSize(8).font('Helvetica');
-          doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
-          doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
-          doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
+          payLines.forEach((line, i) => {
+            doc.fillColor('#4B5563').text(line, 50, boxY + 25 + i * 14);
+          });
           doc.fillColor('#000000');
-          doc.y = boxY + 70;
+          doc.y = boxY + boxH + 5;
           doc.moveDown(0.5);
           break;
         }
         case 'divider': {
-          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+          // Uses cfg.color and cfg.thickness — mirrors InvoiceTemplate.tsx
+          const color = (cfg.color as string) || '#e5e7eb';
+          const thickness = typeof cfg.thickness === 'number' ? cfg.thickness : 0.5;
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(thickness).stroke(color);
           doc.moveDown(0.5);
           break;
         }
+        case 'customText': {
+          // Uses cfg.text, cfg.fontSize, cfg.align — mirrors InvoiceTemplate.tsx
+          const text = (cfg.text as string) || '';
+          if (text) {
+            const fontSize = cfg.fontSize === 'base' ? 10 : cfg.fontSize === 'sm' ? 8 : 7;
+            const align = (cfg.align as 'left' | 'center' | 'right') || 'left';
+            doc.fontSize(fontSize).font('Helvetica').fillColor('#374151')
+              .text(text, 40, doc.y, { width: 515, align });
+            doc.fillColor('#000000').moveDown(0.5);
+          }
+          break;
+        }
         case 'footer': {
+          // Uses cfg.showCompanyName/Address/Phone/Email/GST/PaymentTerms — mirrors InvoiceTemplate.tsx
+          const parts: string[] = [];
+          if (cfg.showCompanyName !== false) parts.push(co.name);
+          if (cfg.showAddress !== false) parts.push(co.address.replace(/\n/g, ', '));
+          if (cfg.showPhone !== false) parts.push(`Phone: ${co.phone}`);
+          if (cfg.showEmail !== false) parts.push(`Email: ${co.email}`);
           doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
           doc.moveDown(0.3);
-          const companyName = template?.company_name || 'Treemarkables LTD';
-          const companyAddress = template?.company_address || '213 Stanley Road, Gisborne';
-          const companyPhone = template?.company_phone || '027 216 6882';
-          const companyEmail = template?.company_email || 'quotes@treemarkables.nz';
-          doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
-            .text(
-              `${companyName} | ${companyAddress} | Phone: ${companyPhone} | Email: ${companyEmail}`,
-              40, doc.y, { align: 'center', width: 515 }
-            );
+          if (parts.length > 0) {
+            doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
+              .text(parts.join(' | '), 40, doc.y, { align: 'center', width: 515 });
+          }
+          if (cfg.showGST) {
+            doc.moveDown(0.2).text(`GST Number: ${co.gstNumber}`, 40, doc.y, { align: 'center', width: 515 });
+          }
+          if (cfg.showPaymentTerms && co.paymentTerms) {
+            doc.moveDown(0.2).text(co.paymentTerms, 40, doc.y, { align: 'center', width: 515 });
+          }
           break;
         }
         default:
@@ -791,13 +908,13 @@ async function generateInvoicePDFBuffer(
       }
     }
 
-    // If blockConfig was empty (legacy), ensure footer is always drawn at the bottom
+    // Legacy fallback: if no blockConfig, always add footer at the bottom
     if (blockConfig.length === 0) {
       doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
       doc.moveDown(0.3);
       doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
         .text(
-          'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
+          `${co.name} | ${co.address} | Phone: ${co.phone} | Email: ${co.email}`,
           40, doc.y, { align: 'center', width: 515 }
         );
     }

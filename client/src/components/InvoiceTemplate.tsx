@@ -19,6 +19,7 @@ import type {
   InvoiceBlockConfigCustomText,
 } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
+import { resolveCompanyInfo } from '@shared/invoiceBlockDefaults';
 
 const DEFAULT_SECTION_ORDER = [
   'header', 'billTo', 'description', 'lineItems', 'totals', 'payment', 'footer'
@@ -99,6 +100,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   // Use contact name from prop, invoice, or empty string
   const displayContactName = contactName || invoice.contactName || '';
   const [isLoading, setIsLoading] = useState(false);
+
+  // Shared company info contract — resolves camelCase template fields + defaults.
+  // Same resolveCompanyInfo function used by the server PDF generator (shared/invoiceBlockDefaults.ts).
+  const co = resolveCompanyInfo(template as unknown as Record<string, unknown>);
 
   // When blockConfig is provided, use it as the rendering source (new block-based renderer)
   // Otherwise fall back to legacy sectionConfig/DEFAULT_SECTION_ORDER
@@ -206,11 +211,11 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
             const cfg = block.config as InvoiceBlockConfigCompanyInfo;
             return (
               <div key={block.id} className="mb-4 text-xs space-y-0.5 text-gray-700">
-                {cfg.showName && <div className="font-semibold text-gray-900">{template.companyName || 'Treemarkables LTD'}</div>}
-                {cfg.showAddress && <div>{template.companyAddress || '213 Stanley Road, Gisborne'}</div>}
-                {cfg.showPhone && <div>Ph: {template.companyPhone || '027 216 6882'}</div>}
-                {cfg.showEmail && <div>{template.companyEmail || 'quotes@treemarkables.nz'}</div>}
-                {cfg.showGST && <div>GST: {template.gstNumber || '131-047-592'}</div>}
+                {cfg.showName && <div className="font-semibold text-gray-900">{co.name}</div>}
+                {cfg.showAddress && <div>{co.address}</div>}
+                {cfg.showPhone && <div>Ph: {co.phone}</div>}
+                {cfg.showEmail && <div>{co.email}</div>}
+                {cfg.showGST && <div>GST: {co.gstNumber}</div>}
               </div>
             );
           }
@@ -311,7 +316,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                   {cfg.showDueDate && <p><span className="font-medium text-black">Due Date:</span> {format(dueDate, 'dd MMM yyyy')}</p>}
                   {cfg.showBank && <p><span className="font-medium text-black">Bank:</span> ANZ</p>}
                   {cfg.showAccountNumber && <p><span className="font-medium text-black">Account Number:</span> 06 0637 0768850 00</p>}
-                  {cfg.showAccountName && <p><span className="font-medium text-black">Account Name:</span> {template.companyName || 'Treemarkables LTD'}</p>}
+                  {cfg.showAccountName && <p><span className="font-medium text-black">Account Name:</span> {co.name}</p>}
                   {cfg.showTerms && template.paymentTerms && <p><span className="font-medium text-black">Terms:</span> {template.paymentTerms}</p>}
                 </div>
               </div>
@@ -334,14 +339,14 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
           case 'footer': {
             const cfg = block.config as InvoiceBlockConfigFooter;
             const parts: string[] = [];
-            if (cfg.showCompanyName) parts.push(template.companyName || 'Treemarkables LTD');
-            if (cfg.showAddress) parts.push(template.companyAddress?.replace(/\n/g, ', ') || '213 Stanley Road, Gisborne');
-            if (cfg.showPhone) parts.push(`Phone: ${template.companyPhone || '027 216 6882'}`);
-            if (cfg.showEmail) parts.push(`Email: ${template.companyEmail || 'quotes@treemarkables.nz'}`);
+            if (cfg.showCompanyName) parts.push(co.name);
+            if (cfg.showAddress) parts.push(co.address.replace(/\n/g, ', '));
+            if (cfg.showPhone) parts.push(`Phone: ${co.phone}`);
+            if (cfg.showEmail) parts.push(`Email: ${co.email}`);
             return (
               <div key={block.id} className="mt-4 pt-3 border-t border-gray-200 text-center">
                 <p className="text-xs text-gray-500 break-words">{parts.join(' | ')}</p>
-                {cfg.showGST && <p className="text-xs text-gray-500 mt-1">GST Number: {template.gstNumber || '131-047-592'}</p>}
+                {cfg.showGST && <p className="text-xs text-gray-500 mt-1">GST Number: {co.gstNumber}</p>}
                 {cfg.showPaymentTerms && template.paymentTerms && <p className="text-xs text-gray-500 mt-1">{template.paymentTerms}</p>}
               </div>
             );
