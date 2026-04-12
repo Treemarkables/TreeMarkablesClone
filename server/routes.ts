@@ -645,8 +645,6 @@ async function generateInvoicePDFBuffer(
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
-    // Determine render order: if blockConfig exists use it (preserving order + visibility),
-    // otherwise fall back to default order. This mirrors InvoiceTemplate.tsx logic exactly.
     const defaultOrder = ['header', 'companyInfo', 'invoiceMeta', 'billTo', 'jobDescription', 'lineItems', 'totals', 'payment', 'footer'];
     type BlockEntry = { type: string; cfg: Record<string, unknown> };
     const renderBlocks: BlockEntry[] = blockConfig.length > 0
@@ -656,24 +654,31 @@ async function generateInvoicePDFBuffer(
     for (const { type: sectionType, cfg } of renderBlocks) {
       switch (sectionType) {
         case 'header': {
-          try {
-            doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
-          } catch {
-            // logo optional
+          const hdrColor = (cfg.headerColor as string) || '#ffffff';
+          const logoAlign = (cfg.logoAlignment as string) || 'left';
+          const showCoName = cfg.showCompanyName !== false;
+          if (hdrColor !== '#ffffff') {
+            doc.rect(40, 30, 515, 60).fill(hdrColor).fillColor('#000000');
           }
-          doc.fontSize(12).font('Helvetica-Bold').text(
-            `Invoice #${invoiceData.invoiceNumber}`, 350, 45, { align: 'right', width: 205 }
-          );
-          doc.fontSize(9).font('Helvetica').text(
-            `${billingName} - ${issueDate}`,
-            350, doc.y, { align: 'right', width: 205 }
-          );
-          doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
+          let logoX = 40;
+          if (logoAlign === 'center') logoX = 297 - 60;
+          else if (logoAlign === 'right') logoX = 435;
+          try {
+            doc.image('client/public/treemarkables-logo.png', logoX, 35, { width: 120, height: 50, fit: [120, 50] });
+          } catch { /* logo optional */ }
+          if (showCoName) {
+            doc.fontSize(9).font('Helvetica').fillColor('#374151')
+              .text(co.name, 40, 42, { align: 'right', width: 515 });
+          }
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000')
+            .text(`Invoice #${invoiceData.invoiceNumber}`, 350, showCoName ? 54 : 45, { align: 'right', width: 205 });
+          doc.fontSize(9).font('Helvetica').fillColor('#374151')
+            .text(`${billingName} – ${issueDate}`, 350, doc.y, { align: 'right', width: 205 });
+          doc.fillColor('#000000').moveTo(40, 90).lineTo(555, 90).lineWidth(1).stroke();
           doc.y = 100;
           break;
         }
         case 'companyInfo': {
-          // Uses per-block config toggles (showName, showAddress, etc.) — mirrors InvoiceTemplate.tsx
           const parts: string[] = [];
           if (cfg.showName !== false) parts.push(co.name);
           if (cfg.showAddress !== false) parts.push(co.address);
@@ -688,7 +693,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'invoiceMeta': {
-          // Uses per-block config labels (labelInvoice, labelIssueDate, labelDueDate) — mirrors InvoiceTemplate.tsx
+
           const showInvNum = cfg.showInvoiceNumber !== false;
           const showIssue = cfg.showIssueDate !== false;
           const showDue = cfg.showDueDate !== false && dueDate;
@@ -712,7 +717,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'billTo': {
-          // Uses cfg.label, cfg.showAddress, cfg.showEmail — mirrors InvoiceTemplate.tsx
+
           const label = (cfg.label as string) || 'Bill To';
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(label, 40, doc.y);
           doc.moveDown(0.3);
@@ -736,7 +741,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'jobDescription': {
-          // Uses cfg.label — mirrors InvoiceTemplate.tsx
+
           const description = job?.description || invoiceData.notes;
           if (description) {
             const label = (cfg.label as string) || 'Description';
@@ -749,7 +754,6 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'lineItems': {
-          // Uses cfg.labelDescription, cfg.showQty/Rate/Amount, column labels — mirrors InvoiceTemplate.tsx
           if (hasLineItems) {
             const headerLabel = (cfg.labelDescription as string) || 'Services & Pricing';
             const showQty = cfg.showQty !== false;
@@ -757,48 +761,42 @@ async function generateInvoicePDFBuffer(
             const labelQty = (cfg.labelQty as string) || 'Qty';
             const labelRate = (cfg.labelRate as string) || 'Rate';
             const labelAmount = (cfg.labelAmount as string) || 'Price';
+            const descColPct = typeof cfg.descColPct === 'number' ? cfg.descColPct : 60;
+            const tableW = 515;
+            const descW = Math.round(tableW * descColPct / 100);
+            const qtyW = showQty ? 40 : 0;
+            const rateW = showRate ? 60 : 0;
+            const amtW = tableW - descW - qtyW - rateW;
             doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(headerLabel, 40, doc.y);
             doc.moveDown(0.3);
-            // Table header
             doc.fontSize(7).font('Helvetica-Bold').fillColor('#666666');
-            let colX = 40;
-            doc.text('Description', colX, doc.y, { width: showQty ? 300 : 400 });
-            colX += showQty ? 300 : 400;
+            const startX = 40;
+            doc.text((cfg.labelDescription as string) || 'Description', startX, doc.y, { width: descW });
             if (showQty) {
-              doc.text(labelQty, colX, doc.y - doc.currentLineHeight(), { width: 50, align: 'center' });
-              colX += 50;
+              doc.text(labelQty, startX + descW, doc.y - doc.currentLineHeight(), { width: qtyW, align: 'center' });
             }
             if (showRate) {
-              doc.text(labelRate, colX, doc.y - doc.currentLineHeight(), { width: 65, align: 'right' });
-              colX += 65;
+              doc.text(labelRate, startX + descW + qtyW, doc.y - doc.currentLineHeight(), { width: rateW, align: 'right' });
             }
-            const amtWidth = 555 - colX;
-            doc.text(labelAmount, colX, doc.y - doc.currentLineHeight(), { align: 'right', width: amtWidth });
+            doc.text(labelAmount, startX + descW + qtyW + rateW, doc.y - doc.currentLineHeight(), { align: 'right', width: amtW });
             doc.moveDown(0.3);
             doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.3).stroke('#cccccc');
             doc.moveDown(0.2);
-            // Table rows
             lineItems.forEach((item: any) => {
               const raw = item.total ?? item.amount ?? 0;
               const itemTotal = typeof raw === 'string' ? parseFloat(raw) : raw;
               const qty = item.quantity || 1;
               const rate = item.unitPrice || item.rate || 0;
-              let rowColX = 40;
-              const descWidth = showQty ? 300 : 400;
+              const rowY = doc.y;
               doc.fontSize(8).font('Helvetica').fillColor('#000000')
-                .text(item.description || '', rowColX, doc.y, { width: descWidth });
-              const rowY = doc.y - doc.currentLineHeight();
-              rowColX += descWidth;
+                .text(item.description || '', startX, rowY, { width: descW });
               if (showQty) {
-                doc.text(String(qty), rowColX, rowY, { width: 50, align: 'center' });
-                rowColX += 50;
+                doc.text(String(qty), startX + descW, rowY, { width: qtyW, align: 'center' });
               }
               if (showRate) {
-                doc.text(formatCurrency(rate), rowColX, rowY, { width: 65, align: 'right' });
-                rowColX += 65;
+                doc.text(formatCurrency(rate), startX + descW + qtyW, rowY, { width: rateW, align: 'right' });
               }
-              const itemAmtWidth = 555 - rowColX;
-              doc.text(formatCurrency(itemTotal), rowColX, rowY, { align: 'right', width: itemAmtWidth });
+              doc.text(formatCurrency(itemTotal), startX + descW + qtyW + rateW, rowY, { align: 'right', width: amtW });
               doc.moveDown(0.2);
             });
             doc.moveDown(0.3);
@@ -806,7 +804,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'totals': {
-          // Uses cfg.showSubtotal, cfg.showGST, label overrides — mirrors InvoiceTemplate.tsx
+
           const showSubtotal = cfg.showSubtotal !== false;
           const showGST = cfg.showGST !== false;
           const labelSubtotal = (cfg.labelSubtotal as string) || 'Subtotal (excl GST)';
@@ -835,7 +833,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'payment': {
-          // Uses cfg.label, cfg.showDueDate/Bank/AccountNumber/AccountName/Terms — mirrors InvoiceTemplate.tsx
+
           const label = (cfg.label as string) || 'Payment Information';
           const showDueDateP = cfg.showDueDate !== false;
           const showBank = cfg.showBank !== false;
@@ -863,7 +861,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'divider': {
-          // Uses cfg.color and cfg.thickness — mirrors InvoiceTemplate.tsx
+
           const color = (cfg.color as string) || '#e5e7eb';
           const thickness = typeof cfg.thickness === 'number' ? cfg.thickness : 0.5;
           doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(thickness).stroke(color);
@@ -871,7 +869,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'customText': {
-          // Uses cfg.text, cfg.fontSize, cfg.align — mirrors InvoiceTemplate.tsx
+
           const text = (cfg.text as string) || '';
           if (text) {
             const fontSize = cfg.fontSize === 'base' ? 10 : cfg.fontSize === 'sm' ? 8 : 7;
@@ -883,7 +881,7 @@ async function generateInvoicePDFBuffer(
           break;
         }
         case 'footer': {
-          // Uses cfg.showCompanyName/Address/Phone/Email/GST/PaymentTerms — mirrors InvoiceTemplate.tsx
+
           const parts: string[] = [];
           if (cfg.showCompanyName !== false) parts.push(co.name);
           if (cfg.showAddress !== false) parts.push(co.address.replace(/\n/g, ', '));
@@ -906,17 +904,6 @@ async function generateInvoicePDFBuffer(
         default:
           break;
       }
-    }
-
-    // Legacy fallback: if no blockConfig, always add footer at the bottom
-    if (blockConfig.length === 0) {
-      doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-      doc.moveDown(0.3);
-      doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
-        .text(
-          `${co.name} | ${co.address} | Phone: ${co.phone} | Email: ${co.email}`,
-          40, doc.y, { align: 'center', width: 515 }
-        );
     }
 
     doc.end();

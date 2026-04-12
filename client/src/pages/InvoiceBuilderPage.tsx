@@ -293,6 +293,21 @@ function InspectorPanel({
           <Toggle label="Show Rate column" field="showRate" />
           <TextInput label="Rate column label" field="labelRate" placeholder="Rate" />
           <TextInput label="Amount column" field="labelAmount" placeholder="Price" />
+          <Separator />
+          <div className="space-y-1 py-1">
+            <Label className="text-sm">Description column width (%)</Label>
+            <div className="flex gap-2 items-center">
+              <input
+                type="range"
+                min={35}
+                max={80}
+                value={Number(cfg.descColPct ?? 60)}
+                onChange={(e) => set('descColPct', Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-sm w-8 text-right">{Number(cfg.descColPct ?? 60)}</span>
+            </div>
+          </div>
         </div>
       );
 
