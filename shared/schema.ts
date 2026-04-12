@@ -2906,20 +2906,21 @@ export type InvoiceBlockConfig =
 export interface InvoiceBlock {
   id: string;
   type: InvoiceBlockType;
+  order: number;
   visible: boolean;
   config: InvoiceBlockConfig;
 }
 
 export const DEFAULT_INVOICE_BLOCKS: InvoiceBlock[] = [
-  { id: 'header', type: 'header', visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
-  { id: 'companyInfo', type: 'companyInfo', visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
-  { id: 'invoiceMeta', type: 'invoiceMeta', visible: true, config: { showInvoiceNumber: true, showIssueDate: true, showDueDate: true, showJobNumber: true, labelInvoice: 'Invoice #', labelIssueDate: 'Issue Date', labelDueDate: 'Due Date' } },
-  { id: 'billTo', type: 'billTo', visible: true, config: { label: 'Bill To', showEmail: true, showAddress: true } },
-  { id: 'jobDescription', type: 'jobDescription', visible: true, config: { label: 'Description' } },
-  { id: 'lineItems', type: 'lineItems', visible: true, config: { labelDescription: 'Service', labelQty: 'Qty', labelRate: 'Rate', labelAmount: 'Price', showQty: true, showRate: true } },
-  { id: 'totals', type: 'totals', visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
-  { id: 'payment', type: 'payment', visible: true, config: { label: 'Payment Information', showBank: true, showAccountNumber: true, showAccountName: true, showDueDate: true, showTerms: true } },
-  { id: 'footer', type: 'footer', visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: true } },
+  { id: 'header-default', type: 'header', order: 0, visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
+  { id: 'companyInfo-default', type: 'companyInfo', order: 1, visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
+  { id: 'invoiceMeta-default', type: 'invoiceMeta', order: 2, visible: true, config: { showInvoiceNumber: true, showIssueDate: true, showDueDate: true, showJobNumber: true, labelInvoice: 'Invoice #', labelIssueDate: 'Issue Date', labelDueDate: 'Due Date' } },
+  { id: 'billTo-default', type: 'billTo', order: 3, visible: true, config: { label: 'Bill To', showEmail: true, showAddress: true } },
+  { id: 'jobDescription-default', type: 'jobDescription', order: 4, visible: true, config: { label: 'Description' } },
+  { id: 'lineItems-default', type: 'lineItems', order: 5, visible: true, config: { labelDescription: 'Service', labelQty: 'Qty', labelRate: 'Rate', labelAmount: 'Price', showQty: true, showRate: true } },
+  { id: 'totals-default', type: 'totals', order: 6, visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
+  { id: 'payment-default', type: 'payment', order: 7, visible: true, config: { label: 'Payment Information', showBank: true, showAccountNumber: true, showAccountName: true, showDueDate: true, showTerms: true } },
+  { id: 'footer-default', type: 'footer', order: 8, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: true } },
 ];
 
 // TypeScript Types

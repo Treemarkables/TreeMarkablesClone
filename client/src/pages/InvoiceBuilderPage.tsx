@@ -696,15 +696,17 @@ export default function InvoiceBuilderPage() {
         const oldIdx = cur.findIndex((b) => b.id === active.id);
         const newIdx = cur.findIndex((b) => b.id === over.id);
         if (oldIdx === -1 || newIdx === -1) return cur;
-        return arrayMove(cur, oldIdx, newIdx);
+        return arrayMove(cur, oldIdx, newIdx).map((b, i) => ({ ...b, order: i }));
       });
     }
   }, [effectiveBlocks]);
 
   const addBlock = useCallback((item: PaletteItem) => {
+    const cur = blocks ?? effectiveBlocks;
     const newBlock: InvoiceBlock = {
       id: `${item.type}-${crypto.randomUUID().slice(0, 8)}`,
       type: item.type,
+      order: cur.length,
       visible: true,
       config: item.defaultConfig as InvoiceBlock['config'],
     };
