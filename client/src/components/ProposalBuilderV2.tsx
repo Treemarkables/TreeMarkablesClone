@@ -1517,10 +1517,10 @@ export function ProposalBuilderV2({
           <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
-              {/* Document Header — fixed height so logo resize never shifts the header */}
-              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: 160 }}>
-                {/* Logo container — fixed dimensions, logo scales within it */}
-                <div className="flex items-center" style={{ width: 280, height: 144, flexShrink: 0 }}>
+              {/* Document Header — height tracks logo size so they always match */}
+              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ minHeight: logoSize + 32 }}>
+                {/* Logo container — width is generous, height matches logo */}
+                <div className="flex items-center" style={{ flexShrink: 0 }}>
                   <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
                     <PopoverTrigger asChild>
                       <button
@@ -1531,7 +1531,7 @@ export function ProposalBuilderV2({
                         <img
                           src={logoUrl}
                           alt="Company Logo"
-                          style={{ height: logoSize, maxHeight: 144, maxWidth: 280 }}
+                          style={{ height: logoSize, maxWidth: 480 }}
                           className="w-auto object-contain transition-opacity group-hover:opacity-80"
                         />
                         <span className="absolute -bottom-5 left-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
@@ -1543,8 +1543,8 @@ export function ProposalBuilderV2({
                       <p className="text-xs font-medium text-muted-foreground mb-2">Logo size: {logoSize}px</p>
                       <Slider
                         min={24}
-                        max={144}
-                        step={4}
+                        max={480}
+                        step={8}
                         value={[logoSize]}
                         onValueChange={([v]) => setLogoSize(v)}
                         onValueCommit={([v]) => saveLogoSizeMutation.mutate(v)}
