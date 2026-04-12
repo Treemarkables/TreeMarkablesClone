@@ -137,7 +137,11 @@ function draftTotal(draft: DraftLineItem): number {
 }
 
 function calcBlockSubtotal(block: WysiwygBlock): number {
-  return (block.lineItems || []).reduce((sum, i) => sum + (i.selected ? i.totalPrice : 0), 0);
+  return (block.lineItems || []).reduce((sum, i) => {
+    if (!i.selected) return sum;
+    // Normalize to ex-GST so section subtotal matches the overall totals basis
+    return sum + (i.priceIncludesTax ? i.totalPrice / 1.15 : i.totalPrice);
+  }, 0);
 }
 
 function calcTotals(blocks: WysiwygBlock[]) {
@@ -576,8 +580,15 @@ function LineItemsBlock({
   );
 
   const selectMaterial = (m: typeof materials[0]) => {
-    const cost = typeof m.price === "string" ? parseFloat(m.price as string) || 0 : m.price || 0;
-    setDraft((prev) => ({ ...prev, itemCode: m.itemNumber || "", description: m.name || "", costExGst: cost }));
+    // Catalogue price is the sell price (ex GST); cost = sell price, markup = 0
+    const sellPrice = typeof m.price === "string" ? parseFloat(m.price as string) || 0 : m.price || 0;
+    setDraft((prev) => ({
+      ...prev,
+      itemCode: m.itemNumber || "",
+      description: m.name || "",
+      costExGst: sellPrice,
+      markupPct: 0,
+    }));
     setMatSearch(m.name || "");
     setShowMats(false);
   };
@@ -1332,13 +1343,15 @@ export function ProposalBuilderV2({
       toast({ title: "Missing Information", description: "Please enter phone number and message.", variant: "destructive" });
       return;
     }
+    // Ensure draft is persisted before sending (same pattern as email) so proposalId/link is valid
+    const effectiveDraftId = await ensureDraftSaved();
     const resolvedCustomerId = (customer as { id?: string } | null)?.id || customerId;
     await sendSmsMutation.mutateAsync({
       to: smsForm.to,
       message: smsForm.message,
       jobId,
       customerId: resolvedCustomerId,
-      proposalId: draftId || undefined,
+      proposalId: effectiveDraftId || undefined,
     });
   };
 
