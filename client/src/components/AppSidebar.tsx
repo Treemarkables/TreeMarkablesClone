@@ -6,7 +6,6 @@ import {
   Users,
   Settings,
   Home,
-  Target,
   GitBranch,
   MessageSquare,
   Star,
@@ -16,7 +15,6 @@ import {
   FileText,
   Layout,
   Briefcase,
-  BookOpen,
   Shield,
   LogOut,
   ClipboardCheck,
@@ -28,7 +26,7 @@ import {
   Package,
   Leaf,
   GitMerge,
-  Bot
+  Bot,
 } from "lucide-react";
 import {
   Sidebar,
@@ -44,7 +42,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Link, useLocation, useRoute } from "wouter";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AppSidebarProps {
@@ -52,137 +49,75 @@ interface AppSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
-// Dashboard navigation items (tabs within JobDashboard)
 const dashboardItems = [
-  {
-    title: "Overview",
-    url: "/overview",
-    icon: Home,
-    value: "overview",
-    isTab: false
-  },
-  {
-    title: "All Jobs",
-    url: "/job-dashboard",
-    icon: Briefcase,
-    value: "jobs",
-    isTab: true
-  },
-  {
-    title: "Pipeline",
-    url: "/pipeline",
-    icon: GitBranch,
-    value: "pipeline",
-    isTab: false
-  },
+  { title: "Overview", url: "/overview", icon: Home, value: "overview", isTab: false },
+  { title: "All Jobs", url: "/job-dashboard", icon: Briefcase, value: "jobs", isTab: true },
+  { title: "Pipeline", url: "/pipeline", icon: GitBranch, value: "pipeline", isTab: false },
 ];
 
-// Business management items
 const businessItems = [
-  {
-    title: "Invoices",
-    url: "/invoices",
-    icon: FileText,
-    value: "invoices",
-    isTab: false
-  },
-  {
-    title: "Templates",
-    url: "/templates",
-    icon: Layout,
-    value: "templates",
-    isTab: false
-  },
-  {
-    title: "Invoice Builder",
-    url: "/settings/invoice-builder",
-    icon: FileText,
-    value: "invoice-builder",
-    isTab: false
-  },
-  {
-    title: "Equipment",
-    url: "/equipment",
-    icon: Package,
-    value: "equipment",
-    isTab: false
-  },
-  {
-    title: "Time Tracking",
-    url: "/time-tracking",
-    icon: Clock,
-    value: "time-tracking",
-    isTab: false
-  },
-  {
-    title: "Unlinked Calls",
-    url: "/unlinked-calls",
-    icon: PhoneCall,
-    value: "unlinked-calls",
-    isTab: false
-  },
-  {
-    title: "Integrations",
-    url: "/integrations",
-    icon: Plug,
-    value: "integrations",
-    isTab: false
-  },
-  {
-    title: "Xero Reconciliation",
-    url: "/reconciliation",
-    icon: GitMerge,
-    value: "reconciliation",
-    isTab: false
-  }
+  { title: "Invoices", url: "/invoices", icon: FileText, value: "invoices", isTab: false },
+  { title: "Templates", url: "/templates", icon: Layout, value: "templates", isTab: false },
+  { title: "Invoice Builder", url: "/settings/invoice-builder", icon: FileText, value: "invoice-builder", isTab: false },
+  { title: "Equipment", url: "/equipment", icon: Package, value: "equipment", isTab: false },
+  { title: "Time Tracking", url: "/time-tracking", icon: Clock, value: "time-tracking", isTab: false },
+  { title: "Unlinked Calls", url: "/unlinked-calls", icon: PhoneCall, value: "unlinked-calls", isTab: false },
+  { title: "Integrations", url: "/integrations", icon: Plug, value: "integrations", isTab: false },
+  { title: "Xero Reconciliation", url: "/reconciliation", icon: GitMerge, value: "reconciliation", isTab: false },
 ];
 
-export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
-  const [location, setLocation] = useLocation();
-  const { setOpen, setOpenMobile, isMobile } = useSidebar();
-  const { logout, currentUser, isAdmin, isCrew } = useAuth();
-  
-  // Close sidebar automatically on mobile when location changes
-  useEffect(() => {
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  }, [location, setOpenMobile, isMobile]);
-  
+function SidebarNavContent({
+  activeTab,
+  onTabChange,
+  isMobile,
+  setOpenMobile,
+  setOpen,
+  location,
+  setLocation,
+  isAdmin,
+  isCrew,
+  logout,
+}: {
+  activeTab: string;
+  onTabChange: (tab: string) => void;
+  isMobile: boolean;
+  setOpenMobile: (open: boolean) => void;
+  setOpen: (open: boolean) => void;
+  location: string;
+  setLocation: (path: string) => void;
+  isAdmin: boolean;
+  isCrew: boolean;
+  logout: () => void;
+}) {
+  const close = () => {
+    if (isMobile) setOpenMobile(false);
+  };
+
   const handleTabClick = (tabValue: string) => {
-    // If not on job dashboard, navigate there first
     if (location !== "/job-dashboard") {
       setLocation("/job-dashboard");
     }
-    // Set the tab
     onTabChange(tabValue);
-    // Close sidebar on mobile only
-    if (isMobile) {
-      setOpenMobile(false);
-    }
-  };
-  
-  const handleLinkClick = (e: React.MouseEvent) => {
-    // Close sidebar on mobile only for immediate feedback
-    if (isMobile) {
-      setOpenMobile(false);
-    }
+    close();
   };
 
-  // Filter items based on role - crew can only see All Jobs
-  const allowedCrewItems = ['jobs'];
-  const filteredDashboardItems = isAdmin ? dashboardItems : dashboardItems.filter(item => allowedCrewItems.includes(item.value));
+  const handleLinkClick = () => {
+    close();
+  };
+
+  const filteredDashboardItems = isAdmin
+    ? dashboardItems
+    : dashboardItems.filter((item) => item.value === "jobs");
 
   return (
-    <Sidebar>
-
+    <>
       <SidebarContent className="pt-safe pt-6 md:pt-0 font-light">
         {/* Core Dashboard */}
         <SidebarGroup>
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="font-normal text-[16px]">
-              {/* Dispatch Board - Available to both crew and admin - TOP OF MENU */}
+              {/* Dispatch Board */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"}>
                   <Link href="/dispatch" onClick={handleLinkClick} data-testid="link-dispatch">
@@ -207,127 +142,8 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
-              
+
               {filteredDashboardItems.map((item) => (
-                <SidebarMenuItem key={item.value}>
-                  {item.isTab ? (
-                    <SidebarMenuButton 
-                      isActive={activeTab === item.value && location === "/job-dashboard"}
-                      onClick={() => handleTabClick(item.value)}
-                      data-testid={`button-tab-${item.value}`}
-                    >
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <item.icon className="h-4 w-4" />
-                      </span>
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
-                  ) : (
-                    <SidebarMenuButton asChild isActive={location === item.url}>
-                      <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <item.icon className="h-4 w-4" />
-                        </span>
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  )}
-                </SidebarMenuItem>
-              ))}
-              
-              {/* Staff Schedule - Available to both crew and admin */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
-                  <Link href="/staff-schedule" onClick={handleLinkClick} data-testid="link-staff-schedule">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Users className="h-4 w-4" />
-                    </span>
-                    <span>Staff Schedule</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              {/* Vehicle Inspection - Available to both crew and admin */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection"}>
-                  <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <ClipboardCheck className="h-4 w-4" />
-                    </span>
-                    <span>Vehicle Inspection</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              {/* Inspection History - Available to both crew and admin */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection-history"}>
-                  <Link href="/vehicle-inspection-history" onClick={handleLinkClick} data-testid="link-inspection-history">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <HistoryIconLucide className="h-4 w-4" />
-                    </span>
-                    <span>Inspection History</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              {/* JHA Assessment - Available to both crew and admin */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/jha-assessment"}>
-                  <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Shield className="h-4 w-4" />
-                    </span>
-                    <span>JHA Assessment</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-              
-              {/* JHA History - Available to both crew and admin */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/jha-history"}>
-                  <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <HistoryIconLucide className="h-4 w-4" />
-                    </span>
-                    <span>JHA History</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Mulch Drops - Available to all users */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/mulch-drops"}>
-                  <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
-                      <Leaf className="h-4 w-4" />
-                    </span>
-                    <span>Mulch Drops</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Daily Briefing - Available to all users */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/daily-briefing"}>
-                  <Link href="/daily-briefing" onClick={handleLinkClick} data-testid="link-daily-briefing">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-700">
-                      <ClipboardList className="h-4 w-4" />
-                    </span>
-                    <span>Daily Briefing</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* Business Management - Admin only */}
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupLabel>Business Management</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu className="font-normal text-[16px]">
-                {businessItems.map((item) => (
                 <SidebarMenuItem key={item.value}>
                   {item.isTab ? (
                     <SidebarMenuButton
@@ -351,6 +167,112 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
                     </SidebarMenuButton>
                   )}
                 </SidebarMenuItem>
+              ))}
+
+              {/* Staff Schedule */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
+                  <Link href="/staff-schedule" onClick={handleLinkClick} data-testid="link-staff-schedule">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                      <Users className="h-4 w-4" />
+                    </span>
+                    <span>Staff Schedule</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Vehicle Inspection */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection"}>
+                  <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                      <ClipboardCheck className="h-4 w-4" />
+                    </span>
+                    <span>Vehicle Inspection</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Inspection History */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection-history"}>
+                  <Link href="/vehicle-inspection-history" onClick={handleLinkClick} data-testid="link-inspection-history">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                      <HistoryIconLucide className="h-4 w-4" />
+                    </span>
+                    <span>Inspection History</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* JHA Assessment */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/jha-assessment"}>
+                  <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                      <Shield className="h-4 w-4" />
+                    </span>
+                    <span>JHA Assessment</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* JHA History */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/jha-history"}>
+                  <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                      <HistoryIconLucide className="h-4 w-4" />
+                    </span>
+                    <span>JHA History</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Mulch Drops */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/mulch-drops"}>
+                  <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
+                      <Leaf className="h-4 w-4" />
+                    </span>
+                    <span>Mulch Drops</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Daily Briefing */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/daily-briefing"}>
+                  <Link href="/daily-briefing" onClick={handleLinkClick} data-testid="link-daily-briefing">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-700">
+                      <ClipboardList className="h-4 w-4" />
+                    </span>
+                    <span>Daily Briefing</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        {/* Business Management - Admin only */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel>Business Management</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="font-normal text-[16px]">
+                {businessItems.map((item) => (
+                  <SidebarMenuItem key={item.value}>
+                    <SidebarMenuButton asChild isActive={location === item.url}>
+                      <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                          <item.icon className="h-4 w-4" />
+                        </span>
+                        <span>{item.title}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 ))}
               </SidebarMenu>
             </SidebarGroupContent>
@@ -473,19 +395,14 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
         <SidebarMenu className="font-normal text-[16px]">
           {isAdmin && (
             <SidebarMenuItem>
-              <SidebarMenuButton
-                asChild
-                isActive={activeTab === "settings"}
-              >
-                <button 
-                  className="w-full justify-start" 
+              <SidebarMenuButton asChild isActive={location.startsWith("/settings")}>
+                <button
+                  className="w-full justify-start"
                   data-testid="button-tab-settings"
                   onClick={() => {
                     onTabChange("settings");
                     setLocation("/settings");
-                    if (isMobile) {
-                      setOpenMobile(false);
-                    }
+                    close();
                   }}
                 >
                   <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
@@ -498,14 +415,12 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           )}
           <SidebarMenuItem>
             <SidebarMenuButton asChild>
-              <button 
-                className="w-full justify-start" 
+              <button
+                className="w-full justify-start"
                 data-testid="button-logout"
                 onClick={() => {
                   logout();
-                  if (isMobile) {
-                    setOpenMobile(false);
-                  }
+                  close();
                 }}
               >
                 <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
@@ -517,6 +432,69 @@ export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarFooter>
+    </>
+  );
+}
+
+export function AppSidebar({ activeTab, onTabChange }: AppSidebarProps) {
+  const [location, setLocation] = useLocation();
+  const { setOpen, setOpenMobile, openMobile, isMobile } = useSidebar();
+  const { logout, currentUser, isAdmin, isCrew } = useAuth();
+
+  // Close sidebar automatically on mobile when location changes
+  useEffect(() => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [location, setOpenMobile, isMobile]);
+
+  const navProps = {
+    activeTab,
+    onTabChange,
+    isMobile,
+    setOpenMobile,
+    setOpen,
+    location,
+    setLocation,
+    isAdmin: !!isAdmin,
+    isCrew: !!isCrew,
+    logout,
+  };
+
+  // Mobile: render a custom fixed overlay drawer — bypasses Radix Sheet/portal entirely
+  if (isMobile) {
+    return (
+      <>
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 z-[200] bg-black/50 transition-opacity duration-300"
+          style={{
+            opacity: openMobile ? 1 : 0,
+            pointerEvents: openMobile ? "auto" : "none",
+          }}
+          onClick={() => setOpenMobile(false)}
+          aria-hidden="true"
+        />
+        {/* Drawer panel */}
+        <div
+          className="fixed inset-y-0 left-0 z-[201] flex flex-col w-72 bg-sidebar text-sidebar-foreground overflow-y-auto transition-transform duration-300 ease-in-out"
+          style={{
+            transform: openMobile ? "translateX(0)" : "translateX(-100%)",
+            paddingTop: "env(safe-area-inset-top, 0px)",
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+          aria-label="Navigation"
+        >
+          <SidebarNavContent {...navProps} />
+        </div>
+      </>
+    );
+  }
+
+  // Desktop: use the standard shadcn Sidebar component
+  return (
+    <Sidebar>
+      <SidebarNavContent {...navProps} />
     </Sidebar>
   );
 }
