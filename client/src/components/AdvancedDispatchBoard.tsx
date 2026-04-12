@@ -310,12 +310,12 @@ export function AdvancedDispatchBoard({
     switch (status) {
       case "lead":
         return {
-          bgColor: "bg-blue-50 border-blue-200",
-          textColor: "text-blue-700",
-          indicatorColor: "bg-blue-500",
+          bgColor: "bg-yellow-50 border-yellow-200",
+          textColor: "text-yellow-700",
+          indicatorColor: "bg-yellow-500",
           label: "Lead",
-          dotColor: "bg-blue-400",
-          hexColor: "#3b82f6",
+          dotColor: "bg-yellow-400",
+          hexColor: "#ca8a04",
         };
       case "quote":
         return {
