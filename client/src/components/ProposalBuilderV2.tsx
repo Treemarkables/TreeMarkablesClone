@@ -346,7 +346,7 @@ function DescriptionBlock({
         value={block.description}
         onChange={(e) => onUpdate({ description: e.target.value })}
         placeholder="Describe this section of work..."
-        className="min-h-[120px] resize-none border-0 p-0 focus-visible:ring-0 text-gray-700 text-sm leading-relaxed shadow-none"
+        className="min-h-[120px] resize-none border-0 p-0 focus-visible:ring-0 bg-transparent text-gray-700 text-sm leading-relaxed shadow-none"
       />
     </div>
   );
