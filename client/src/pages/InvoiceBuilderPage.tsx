@@ -5,11 +5,15 @@ import {
   DndContext,
   DragOverlay,
   closestCenter,
+  pointerWithin,
   PointerSensor,
   useSensor,
   useSensors,
+  useDraggable,
+  useDroppable,
   DragStartEvent,
   DragEndEvent,
+  CollisionDetection,
 } from '@dnd-kit/core';
 import {
   SortableContext,
@@ -630,6 +634,20 @@ function SortableCanvasBlock({
   );
 }
 
+// ─── Canvas Drop Zone ──────────────────────────────────────────────────────────
+
+function CanvasDropZone({ children }: { children: React.ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'canvas-drop-zone' });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`space-y-2 min-h-20 rounded-lg transition-colors ${isOver ? 'ring-2 ring-orange-300 bg-orange-50' : ''}`}
+    >
+      {children}
+    </div>
+  );
+}
+
 // ─── Palette Item ──────────────────────────────────────────────────────────────
 
 function PaletteCard({
@@ -639,12 +657,18 @@ function PaletteCard({
   item: PaletteItem;
   onAdd: (item: PaletteItem) => void;
 }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `palette-${item.type}`,
+    data: { type: 'palette', paletteItem: item },
+  });
+
   const Icon = item.icon;
   return (
-    <button
-      type="button"
-      onClick={() => onAdd(item)}
-      className="w-full text-left rounded-md border border-gray-200 bg-white p-2.5 hover-elevate active-elevate-2 transition-colors"
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={`w-full rounded-md border border-gray-200 bg-white p-2.5 cursor-grab active:cursor-grabbing transition-colors hover-elevate ${isDragging ? 'opacity-40 ring-2 ring-orange-400' : ''}`}
       data-testid={`palette-${item.type}`}
     >
       <div className="flex items-center gap-2">
@@ -655,9 +679,18 @@ function PaletteCard({
           <div className="text-xs font-semibold text-gray-800 leading-tight">{item.label}</div>
           <div className="text-xs text-gray-500 leading-tight truncate">{item.description}</div>
         </div>
-        <Plus className="w-3.5 h-3.5 text-gray-400 flex-shrink-0 ml-auto" />
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onAdd(item); }}
+          className="ml-auto flex-shrink-0 p-0.5"
+          title={`Add ${item.label}`}
+          data-testid={`palette-add-${item.type}`}
+        >
+          <Plus className="w-3.5 h-3.5 text-gray-400" />
+        </button>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -683,6 +716,16 @@ export default function InvoiceBuilderPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
+  // Custom collision detection: palette items use pointer-within (cross-zone),
+  // canvas blocks use closestCenter (sortable reorder).
+  const customCollisionDetection: CollisionDetection = useCallback((args) => {
+    if (args.active.data.current?.type === 'palette') {
+      const pw = pointerWithin(args);
+      return pw.length > 0 ? pw : closestCenter(args);
+    }
+    return closestCenter(args);
+  }, []);
+
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveDragId(String(event.active.id));
   }, []);
@@ -690,6 +733,35 @@ export default function InvoiceBuilderPage() {
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveDragId(null);
     const { active, over } = event;
+
+    // ── Palette → Canvas drop ─────────────────────────────────────────────────
+    if (active.data.current?.type === 'palette') {
+      const item = active.data.current?.paletteItem as PaletteItem;
+      if (!item) return;
+
+      const newBlockId = `${item.type}-${crypto.randomUUID().slice(0, 8)}`;
+      const newBlock: InvoiceBlock = {
+        id: newBlockId,
+        type: item.type,
+        order: 0,
+        visible: true,
+        config: item.defaultConfig as InvoiceBlock['config'],
+      };
+
+      setBlocks((prev) => {
+        const base = prev ?? effectiveBlocks;
+        // Insert after the block that was hovered, or at the end
+        const overIdx = over ? base.findIndex((b) => b.id === String(over.id)) : -1;
+        const insertIdx = overIdx >= 0 ? overIdx + 1 : base.length;
+        const updated = [...base.slice(0, insertIdx), newBlock, ...base.slice(insertIdx)];
+        return updated.map((b, i) => ({ ...b, order: i }));
+      });
+
+      setSelectedId(newBlockId);
+      return;
+    }
+
+    // ── Canvas → Canvas reorder ───────────────────────────────────────────────
     if (over && active.id !== over.id) {
       setBlocks((prev) => {
         const cur = prev ?? effectiveBlocks;
@@ -803,11 +875,18 @@ export default function InvoiceBuilderPage() {
         </div>
       </div>
 
-      {/* Three-column layout */}
+      {/* Three-column layout — DndContext wraps palette + canvas for cross-zone drops */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={customCollisionDetection}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
       <div className="flex flex-1 overflow-hidden">
         {/* Left: Block Palette */}
         <div className="w-52 flex-shrink-0 border-r bg-gray-50 overflow-y-auto p-3 space-y-1.5">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">Block Palette</div>
+          <p className="text-xs text-gray-400 px-1 mb-1">Drag onto canvas or click +</p>
           {PALETTE_ITEMS.map((item) => (
             <PaletteCard key={item.type} item={item} onAdd={addBlock} />
           ))}
@@ -820,41 +899,47 @@ export default function InvoiceBuilderPage() {
               <div className="text-xs text-gray-400 text-center py-1">Invoice Canvas — {effectiveBlocks.filter(b => b.visible).length} visible blocks</div>
             </div>
 
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
+            <SortableContext
+              items={effectiveBlocks.map((b) => b.id)}
+              strategy={verticalListSortingStrategy}
             >
-              <SortableContext
-                items={effectiveBlocks.map((b) => b.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                <div className="space-y-2">
-                  {effectiveBlocks.map((block) => (
-                    <SortableCanvasBlock
-                      key={block.id}
-                      block={block}
-                      template={invoiceTemplate}
-                      selected={selectedId === block.id}
-                      onSelect={setSelectedId}
-                      onRemove={removeBlock}
-                      onToggleVisible={toggleVisible}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
+              <CanvasDropZone>
+                {effectiveBlocks.map((block) => (
+                  <SortableCanvasBlock
+                    key={block.id}
+                    block={block}
+                    template={invoiceTemplate}
+                    selected={selectedId === block.id}
+                    onSelect={setSelectedId}
+                    onRemove={removeBlock}
+                    onToggleVisible={toggleVisible}
+                  />
+                ))}
+              </CanvasDropZone>
+            </SortableContext>
 
-              <DragOverlay>
-                {activeDragId ? (
+            <DragOverlay>
+              {activeDragId ? (
+                activeDragId.startsWith('palette-') ? (
+                  (() => {
+                    const paletteType = activeDragId.replace('palette-', '') as InvoiceBlockType;
+                    const Icon = BLOCK_ICONS[paletteType] ?? BLOCK_ICONS['header'];
+                    return (
+                      <div className="bg-white border-2 border-orange-400 rounded-md px-3 py-2 shadow-lg opacity-90 flex items-center gap-2">
+                        <Icon className="w-3.5 h-3.5 text-orange-500" />
+                        <span className="text-xs font-semibold text-orange-600">{BLOCK_LABELS[paletteType]}</span>
+                      </div>
+                    );
+                  })()
+                ) : (
                   <div className="bg-white border-2 border-orange-400 rounded-md p-3 shadow-lg opacity-90">
                     <div className="text-xs font-semibold text-orange-600">
                       {BLOCK_LABELS[effectiveBlocks.find((b) => b.id === activeDragId)?.type ?? 'header']}
                     </div>
                   </div>
-                ) : null}
-              </DragOverlay>
-            </DndContext>
+                )
+              ) : null}
+            </DragOverlay>
 
             {effectiveBlocks.length === 0 && (
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
@@ -893,6 +978,7 @@ export default function InvoiceBuilderPage() {
           )}
         </div>
       </div>
+      </DndContext>
     </div>
   );
 }

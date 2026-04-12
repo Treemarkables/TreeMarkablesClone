@@ -5813,7 +5813,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         try {
           const invoiceForPdf = invoice || validatedInvoiceData;
           console.log(`📄 Generating invoice PDF for email (invoice #${invoiceForPdf.invoiceNumber}, lineItems: ${(invoiceForPdf.items || invoiceForPdf.lineItems || []).length})`);
-          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer);
+          // Fetch invoice template for block-config-aware PDF rendering
+          const invoiceTemplateRows = await db.select().from(documentTemplates)
+            .where(eq(documentTemplates.type, 'invoice')).limit(1);
+          const invoiceTemplate = invoiceTemplateRows[0] || null;
+          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate);
           emailAttachments.push({
             content: pdfBuffer.toString('base64'),
             filename: `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`,
@@ -7312,8 +7316,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const customer = customerData[0] || null;
       const job = jobData[0] || null;
       
+      // Fetch invoice template for block-config-aware PDF rendering
+      const invoiceTemplateRows2 = await db.select().from(documentTemplates)
+        .where(eq(documentTemplates.type, 'invoice')).limit(1);
+      const invoiceTemplate2 = invoiceTemplateRows2[0] || null;
+      
       // Generate PDF using the shared helper (same code as email attachment)
-      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer);
+      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2);
 
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
