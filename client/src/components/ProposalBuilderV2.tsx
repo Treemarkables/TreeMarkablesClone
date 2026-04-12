@@ -17,6 +17,43 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 
+// Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
+interface SpeechRecognitionAlternative { readonly transcript: string; }
+interface SpeechRecognitionResult { readonly 0: SpeechRecognitionAlternative; }
+interface SpeechRecognitionResultList { readonly 0: SpeechRecognitionResult; }
+interface SpeechRecognitionEvent extends Event { readonly results: SpeechRecognitionResultList; }
+interface SpeechRecognitionInstance {
+  continuous: boolean;
+  interimResults: boolean;
+  onresult: ((e: SpeechRecognitionEvent) => void) | null;
+  onerror: (() => void) | null;
+  start: () => void;
+}
+interface BrowserSpeechRecognitionCtor { new(): SpeechRecognitionInstance; }
+type WindowWithSpeech = Window & {
+  SpeechRecognition?: BrowserSpeechRecognitionCtor;
+  webkitSpeechRecognition?: BrowserSpeechRecognitionCtor;
+};
+
+// Typed shape for the raw lineItems coming from the parent job form
+interface IncomingLineItemRaw {
+  id?: string;
+  description?: string;
+  name?: string;
+  quantity?: string | number;
+  unitPrice?: string | number;
+  price?: string | number;
+  costPrice?: string | number;
+  unit?: string;
+  category?: string;
+  itemCode?: string;
+  isOptional?: boolean;
+  pricingType?: PricingType;
+  choices?: LineItemChoice[];
+  priceIncludesTax?: boolean;
+  markupPct?: string | number;
+}
+
 const LOGO_URL = "/treemarkables-logo.webp";
 
 type BlockType = "description" | "photos" | "lineItems";
@@ -272,17 +309,16 @@ function DescriptionBlock({
   const { toast } = useToast();
 
   const startVoice = () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const w = window as any;
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
-    if (!SR) {
+    const w = window as WindowWithSpeech;
+    const SRCtor = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SRCtor) {
       toast({ title: "Not supported", description: "Speech recognition is not available in this browser.", variant: "destructive" });
       return;
     }
-    const rec = new SR();
+    const rec: SpeechRecognitionInstance = new SRCtor();
     rec.continuous = false;
     rec.interimResults = false;
-    rec.onresult = (e: { results: { 0: { 0: { transcript: string } } } }) => {
+    rec.onresult = (e: SpeechRecognitionEvent) => {
       const transcript = e.results[0][0].transcript;
       onUpdate({ description: block.description ? `${block.description}\n${transcript}` : transcript });
     };
@@ -876,7 +912,7 @@ export function ProposalBuilderV2({
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const { data: templateData } = useQuery({ queryKey: ["/api/templates/default/invoice"], enabled: isOpen });
+  const { data: templateData } = useQuery({ queryKey: ["/api/templates/default/proposal"], enabled: isOpen });
   const { data: jobData } = useQuery({ queryKey: ["/api/jobs", jobId], enabled: !!jobId && isOpen });
   const { data: customerData } = useQuery({ queryKey: ["/api/customers", customerId], enabled: !!customerId && isOpen });
   const { data: diaryData } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen });
@@ -1032,11 +1068,11 @@ export function ProposalBuilderV2({
 
     // Block 2: prefill line items from parent prop if available
     if (Array.isArray(incomingLineItems) && (incomingLineItems as unknown[]).length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const items: LineItem[] = (incomingLineItems as any[]).map((item: any, idx: number) => {
-        const unitPrice = parseFloat(item.unitPrice) || parseFloat(item.price) || 0;
-        const qty = parseFloat(item.quantity) || 1;
-        const costPrice = parseFloat(item.costPrice) || unitPrice;
+      const rawItems = incomingLineItems as IncomingLineItemRaw[];
+      const items: LineItem[] = rawItems.map((item, idx) => {
+        const unitPrice = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
+        const qty = parseFloat(String(item.quantity ?? 1)) || 1;
+        const costPrice = parseFloat(String(item.costPrice ?? 0)) || unitPrice;
         return {
           id: item.id || `prefill-${idx}`,
           description: item.description || item.name || "",
@@ -1047,11 +1083,11 @@ export function ProposalBuilderV2({
           category: item.category || item.itemCode || "",
           isOptional: item.isOptional || false,
           selected: true,
-          pricingType: (item.pricingType as LineItem["pricingType"]) || "normal",
+          pricingType: item.pricingType || "normal",
           choices: item.choices || [],
           priceIncludesTax: item.priceIncludesTax || false,
           costPrice,
-          markupPct: item.markupPct || 0,
+          markupPct: parseFloat(String(item.markupPct ?? 0)) || 0,
         };
       });
       builtBlocks.push({
@@ -1205,7 +1241,7 @@ export function ProposalBuilderV2({
       } catch {
         // handled in mutation
       }
-    }, 3000);
+    }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, proposalTitle, isOpen]);
@@ -1222,7 +1258,7 @@ export function ProposalBuilderV2({
   });
 
   const sendSmsMutation = useMutation({
-    mutationFn: async (d: { to: string; message: string; jobId?: string; customerId?: string }) => {
+    mutationFn: async (d: { to: string; message: string; jobId?: string; customerId?: string; proposalId?: string }) => {
       const res = await apiRequest("POST", "/api/communications/sms", d);
       return await res.json();
     },
@@ -1296,7 +1332,14 @@ export function ProposalBuilderV2({
       toast({ title: "Missing Information", description: "Please enter phone number and message.", variant: "destructive" });
       return;
     }
-    await sendSmsMutation.mutateAsync({ to: smsForm.to, message: smsForm.message, jobId, customerId: (customer as { id?: string } | null)?.id || customerId });
+    const resolvedCustomerId = (customer as { id?: string } | null)?.id || customerId;
+    await sendSmsMutation.mutateAsync({
+      to: smsForm.to,
+      message: smsForm.message,
+      jobId,
+      customerId: resolvedCustomerId,
+      proposalId: draftId || undefined,
+    });
   };
 
   const handleClose = async () => {
