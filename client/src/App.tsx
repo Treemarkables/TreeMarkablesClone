@@ -71,6 +71,7 @@ import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import DailyBriefing from "@/pages/DailyBriefing";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import InvoiceBuilderPage from "@/pages/InvoiceBuilderPage";
+import SettingsCompany from "@/pages/SettingsCompany";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import UnlinkedCalls from "@/pages/UnlinkedCalls";
@@ -1062,10 +1063,7 @@ function Router() {
       </Route>
       <Route path="/settings/company">
         <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Company Info"
-            description="Business details, contact information and branding"
-          />
+          <SettingsCompany />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">

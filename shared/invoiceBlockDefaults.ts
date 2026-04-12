@@ -11,6 +11,7 @@ export interface CompanyInfo {
   email: string;
   gstNumber: string;
   paymentTerms?: string;
+  logoUrl?: string;
 }
 
 /**
@@ -25,6 +26,7 @@ export function resolveCompanyInfo(template: Record<string, unknown> | null | un
     email: (template?.companyEmail as string | undefined) || 'quotes@treemarkables.nz',
     gstNumber: (template?.gstNumber as string | undefined) || '131-047-592',
     paymentTerms: (template?.paymentTerms as string | undefined) ?? undefined,
+    logoUrl: (template?.logoUrl as string | undefined) ?? undefined,
   };
 }
 
