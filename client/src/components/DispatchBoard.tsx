@@ -230,7 +230,7 @@ const staffColorPalette = [
   "bg-pink-500", // Pink
   "bg-indigo-500", // Indigo
   "bg-rose-500", // Rose
-  "bg-cyan-500", // Cyan
+  "bg-yellow-500", // Yellow
   "bg-amber-500", // Amber
   "bg-violet-500", // Violet
   "bg-lime-500", // Lime
@@ -1230,7 +1230,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getJobStatusColor = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || "";
     if (serviceType.includes("lead") || serviceType.includes("inquiry"))
-      return "bg-cyan-600";
+      return "bg-yellow-500";
     if (serviceType.includes("quote") || serviceType.includes("proposal"))
       return "bg-orange-600";
 
@@ -1252,7 +1252,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case "quote":
         return "bg-orange-600";
       case "lead":
-        return "bg-cyan-600";
+        return "bg-yellow-500";
       default:
         return "bg-gray-600";
     }
@@ -1262,7 +1262,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getJobStatusColorValue = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || "";
     if (serviceType.includes("lead") || serviceType.includes("inquiry"))
-      return "#06b6d4"; // cyan-500
+      return "#ca8a04"; // yellow-600
     if (serviceType.includes("quote") || serviceType.includes("proposal"))
       return "#f97316"; // orange-500
 
@@ -1285,7 +1285,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case "quote":
         return "#f97316"; // orange-500
       case "lead":
-        return "#06b6d4"; // cyan-500
+        return "#ca8a04"; // yellow-600
       default:
         return "#6b7280"; // gray-500
     }
