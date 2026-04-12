@@ -3,7 +3,8 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
@@ -272,10 +273,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
           >
-            <SidebarTrigger 
-              data-testid="button-sidebar-toggle" 
-              className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5] shrink-0"
-            />
+            <LogoSidebarTrigger size={44} />
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
             {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
 
@@ -481,7 +479,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           
           {/* Desktop header - full menu */}
           <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <LogoSidebarTrigger size={36} />
             
             <div className="flex items-center gap-2">
               {/* Notifications Bell */}

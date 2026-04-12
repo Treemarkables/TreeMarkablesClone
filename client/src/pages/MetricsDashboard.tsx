@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
@@ -1036,7 +1036,7 @@ export default function MetricsDashboard() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
         <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <LogoSidebarTrigger size={36} />
             <div className="flex items-center gap-2">
               <BarChart3 className="h-6 w-6 text-blue-600" />
               <h1 className="text-lg sm:text-xl font-bold text-gray-900">
