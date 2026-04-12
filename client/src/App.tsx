@@ -281,7 +281,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && <NotificationBell />}
             </div>
             
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
 
               {/* Dispatch controls — only shown on /dispatch */}
               {isDispatchPage && (
@@ -292,9 +292,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         variant="outline"
                         size="icon"
                         data-testid="create-new-button-mobile"
-                        className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0"
+                        className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0 h-12 w-12"
                       >
-                        <Plus className="h-6 w-6 text-green-700" />
+                        <Plus className="h-7 w-7 text-green-700" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -324,9 +324,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     size="icon"
                     onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
                     data-testid="paste-message-button-mobile"
-                    className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0"
+                    className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0 h-12 w-12"
                   >
-                    <MessageSquare className="h-6 w-6 text-orange-600" />
+                    <MessageSquare className="h-7 w-7 text-orange-600" />
                   </Button>
 
                   <DropdownMenu>
@@ -334,10 +334,10 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}
+                        className={`h-11 w-11 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
                         data-testid="mobile-filter-dropdown-trigger"
                       >
-                        <Filter className="h-6 w-6" />
+                        <Filter className="h-7 w-7" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -368,9 +368,9 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                     else setDispatchSearchOpen(true);
                   }}
                   data-testid="mobile-search-toggle"
-                  className="text-muted-foreground"
+                  className="text-muted-foreground h-11 w-11"
                 >
-                  {dispatchSearchOpen ? <X className="h-6 w-6" /> : <Search className="h-6 w-6" />}
+                  {dispatchSearchOpen ? <X className="h-7 w-7" /> : <Search className="h-7 w-7" />}
                 </Button>
               ) : (
                 <Tooltip>
