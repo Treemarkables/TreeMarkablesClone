@@ -2907,6 +2907,174 @@ export default function MetricsDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Revenue Goal Calculator */}
+          <div>
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-blue-600" />
+                    <CardTitle className="text-base font-semibold">Revenue Goal Calculator</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                    <Button
+                      variant={calcPeriod === "weekly" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => handlePeriodChange("weekly")}
+                      className="h-7 px-3 text-xs"
+                    >
+                      Weekly
+                    </Button>
+                    <Button
+                      variant={calcPeriod === "monthly" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => handlePeriodChange("monthly")}
+                      className="h-7 px-3 text-xs"
+                    >
+                      Monthly
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Change any field — the others update automatically.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Primary inputs row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Revenue Target */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Revenue Target
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        value={calcRevenueTarget}
+                        onChange={(e) => handleRevenueChange(Number(e.target.value) || 0)}
+                        className="pl-7 text-base font-semibold"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{calcPeriod === "weekly" ? "per week" : "per month"}</p>
+                  </div>
+
+                  {/* Avg Job Value */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Avg Job Value
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        value={calcAvgJobValue}
+                        onChange={(e) => handleAvgJobChange(Number(e.target.value) || 0)}
+                        className="pl-7 text-base font-semibold"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">exc. GST per job</p>
+                  </div>
+
+                  {/* Conversion Rate */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Quote Win Rate
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={calcConversionRate}
+                        onChange={(e) => handleConversionChange(Number(e.target.value) || 0)}
+                        className="pr-7 text-base font-semibold"
+                        min={0}
+                        max={100}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">quotes that become jobs</p>
+                  </div>
+                </div>
+
+                {/* Divider with arrow */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-dashed border-gray-200" />
+                  <span className="text-xs text-muted-foreground font-medium">you need</span>
+                  <div className="flex-1 border-t border-dashed border-gray-200" />
+                </div>
+
+                {/* Derived outputs row */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Jobs Needed */}
+                  <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-1">
+                    <label className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide">
+                      Jobs to Complete
+                    </label>
+                    <div className="flex items-baseline gap-1">
+                      <Input
+                        type="number"
+                        value={calcJobsNeeded}
+                        onChange={(e) => handleJobsChange(Number(e.target.value) || 0)}
+                        className="text-2xl font-bold text-blue-700 dark:text-blue-300 border-0 bg-transparent p-0 h-auto focus-visible:ring-0 w-full"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      = {formatCurrency(calcRevenueTarget)} ÷ {formatCurrency(calcAvgJobValue)}
+                    </p>
+                  </div>
+
+                  {/* Quotes Needed */}
+                  <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 space-y-1">
+                    <label className="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">
+                      Quotes to Send
+                    </label>
+                    <div className="flex items-baseline gap-1">
+                      <Input
+                        type="number"
+                        value={calcQuotesNeeded}
+                        onChange={(e) => handleQuotesChange(Number(e.target.value) || 0)}
+                        className="text-2xl font-bold text-orange-700 dark:text-orange-300 border-0 bg-transparent p-0 h-auto focus-visible:ring-0 w-full"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-orange-600 dark:text-orange-400">
+                      at {calcConversionRate}% win rate
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daily breakdown */}
+                <div className="bg-gray-50 dark:bg-muted/30 rounded-lg p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Daily breakdown (5-day week)</p>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-gray-900 dark:text-foreground">
+                        {formatCurrency(Math.round(calcRevenueTarget / (calcPeriod === "weekly" ? 5 : 22)))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">per day</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900 dark:text-foreground">
+                        {(calcJobsNeeded / (calcPeriod === "weekly" ? 5 : 22)).toFixed(1)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">jobs/day</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900 dark:text-foreground">
+                        {(calcQuotesNeeded / (calcPeriod === "weekly" ? 5 : 22)).toFixed(1)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">quotes/day</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
         </div>
       </div>
 
