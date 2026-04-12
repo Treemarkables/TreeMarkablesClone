@@ -269,17 +269,18 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
         <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
-            className="md:hidden flex items-center justify-between px-3 py-3 border-b bg-white"
+            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
           >
-            <div className="flex items-center gap-6">
-              <SidebarTrigger 
-                data-testid="button-sidebar-toggle" 
-                className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
-              />
-              {/* Notifications Bell - Mobile (left side, away from refresh) */}
-              {isAdmin && <NotificationBell />}
-            </div>
+            <SidebarTrigger 
+              data-testid="button-sidebar-toggle" 
+              className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5] shrink-0"
+            />
+            {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
+            {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
+
+            {/* Spacer: pushes action buttons to the right, away from the bell */}
+            <div className="flex-1" />
             
             <div className="flex items-center gap-4">
 
