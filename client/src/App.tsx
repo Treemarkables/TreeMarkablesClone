@@ -271,7 +271,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
             className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
-            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 1rem)" }}
           >
             <LogoSidebarTrigger size={44} />
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
