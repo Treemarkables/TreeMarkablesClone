@@ -10730,6 +10730,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Bulk delete all staff assignments for a job (used by Unschedule)
+  app.delete('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteJobStaffAssignmentsByJob(req.params.jobId);
+      res.json({ success: true, message: 'All staff assignments removed' });
+    } catch (error) {
+      console.error('Error bulk-deleting staff assignments:', error);
+      res.status(500).json({ success: false, message: 'Error removing staff assignments' });
+    }
+  });
+
   // ========================================
   // SCHEDULE EVENT MANAGEMENT ROUTES
   // ========================================
