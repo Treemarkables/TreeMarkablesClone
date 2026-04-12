@@ -12,10 +12,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import type { LineItem, LineItemChoice, UploadedPhoto } from "@/types/proposal";
+import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
 
 const LOGO_URL = "/treemarkables-logo.webp";
 
@@ -35,8 +35,9 @@ interface DraftLineItem {
   description: string;
   itemCode: string;
   quantity: number;
-  unitPrice: number;
-  pricingType: "normal" | "fixed" | "choice";
+  costExGst: number;
+  markupPct: number;
+  pricingType: PricingType;
   fixedPrice: number;
   isOptional: boolean;
   priceIncludesTax: boolean;
@@ -47,7 +48,8 @@ const defaultDraft = (): DraftLineItem => ({
   description: "",
   itemCode: "",
   quantity: 1,
-  unitPrice: 0,
+  costExGst: 0,
+  markupPct: 0,
   pricingType: "normal",
   fixedPrice: 0,
   isOptional: false,
@@ -74,21 +76,31 @@ function fmtNZD(amount: number): string {
   return new Intl.NumberFormat("en-NZ", { style: "currency", currency: "NZD" }).format(amount);
 }
 
-function inferBlockType(section: { description: string; photos: UploadedPhoto[]; lineItems: LineItem[] }): BlockType {
+function fmtPct(n: number): string {
+  return `${n > 0 ? "+" : ""}${n}%`;
+}
+
+function inferBlockType(section: {
+  description?: string;
+  photos?: UploadedPhoto[];
+  lineItems?: LineItem[];
+}): BlockType {
   if ((section.lineItems || []).length > 0) return "lineItems";
   if ((section.photos || []).length > 0) return "photos";
   return "description";
 }
 
-function calcLineItemPrice(item: Partial<DraftLineItem>): number {
-  if (item.pricingType === "fixed") return item.fixedPrice ?? 0;
-  return (item.quantity ?? 0) * (item.unitPrice ?? 0);
+function draftPriceExGst(draft: DraftLineItem): number {
+  if (draft.pricingType === "fixed") return draft.fixedPrice;
+  return draft.costExGst * (1 + draft.markupPct / 100);
+}
+
+function draftTotal(draft: DraftLineItem): number {
+  return draft.quantity * draftPriceExGst(draft);
 }
 
 function calcBlockSubtotal(block: WysiwygBlock): number {
-  return (block.lineItems || [])
-    .filter((i) => i.selected)
-    .reduce((sum, i) => sum + i.totalPrice, 0);
+  return (block.lineItems || []).reduce((sum, i) => sum + (i.selected ? i.totalPrice : 0), 0);
 }
 
 function calcTotals(blocks: WysiwygBlock[]) {
@@ -203,14 +215,33 @@ function BlockHeader({
   block,
   onTitleChange,
   onRemove,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  isDragOver,
 }: {
   block: WysiwygBlock;
   onTitleChange: (t: string) => void;
   onRemove: () => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  isDragOver: boolean;
 }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/80 rounded-t-md">
-      <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
+    <div
+      className={`flex items-center gap-2 px-3 py-2 border-b border-gray-100 bg-gray-50/80 rounded-t-md transition-colors ${isDragOver ? "bg-blue-50 border-blue-200" : ""}`}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div
+        className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-400 flex-shrink-0"
+        draggable
+        onDragStart={onDragStart}
+        title="Drag to reorder"
+      >
+        <GripVertical className="w-4 h-4" />
+      </div>
       <div className="flex-1 min-w-0">
         <InlineTitle value={block.title} onChange={onTitleChange} />
       </div>
@@ -297,7 +328,7 @@ function PhotoBlock({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [showDiary, setShowDiary] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selectedUrls, setSelectedUrls] = useState<string[]>([]);
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -345,16 +376,19 @@ function PhotoBlock({
   const removePhoto = (id: string) => onUpdate({ photos: block.photos.filter((p) => p.id !== id) });
 
   const addFromDiary = () => {
-    const newPhotos: UploadedPhoto[] = selected.map((url, i) => ({
-      id: `diary-${Date.now()}-${i}`,
-      url,
-      filename: url.split("/").pop() || "diary-photo",
-      type: "before",
-      category: "documentation",
-      capturedAt: new Date().toISOString(),
-    }));
+    const existing = new Set(block.photos.map((p) => p.url));
+    const newPhotos: UploadedPhoto[] = selectedUrls
+      .filter((url) => !existing.has(url))
+      .map((url, i) => ({
+        id: `diary-${Date.now()}-${i}`,
+        url,
+        filename: url.split("/").pop() || "diary-photo",
+        type: "before",
+        category: "documentation",
+        capturedAt: new Date().toISOString(),
+      }));
     onUpdate({ photos: [...block.photos, ...newPhotos] });
-    setSelected([]);
+    setSelectedUrls([]);
     setShowDiary(false);
   };
 
@@ -406,12 +440,12 @@ function PhotoBlock({
                 {diaryPhotos.map((url) => (
                   <div
                     key={url}
-                    onClick={() => setSelected((prev) => prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url])}
-                    className={`relative rounded cursor-pointer overflow-hidden border-2 ${selected.includes(url) ? "border-blue-500" : "border-transparent"}`}
+                    onClick={() => setSelectedUrls((prev) => prev.includes(url) ? prev.filter((u) => u !== url) : [...prev, url])}
+                    className={`relative rounded cursor-pointer overflow-hidden border-2 ${selectedUrls.includes(url) ? "border-blue-500" : "border-transparent"}`}
                     style={{ paddingBottom: "100%" }}
                   >
                     <img src={url} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                    {selected.includes(url) && (
+                    {selectedUrls.includes(url) && (
                       <div className="absolute inset-0 bg-blue-500/20 flex items-center justify-center">
                         <Check className="w-4 h-4 text-blue-600" />
                       </div>
@@ -419,13 +453,64 @@ function PhotoBlock({
                   </div>
                 ))}
               </div>
-              <Button type="button" size="sm" onClick={addFromDiary} disabled={selected.length === 0} className="w-full">
-                Add {selected.length > 0 ? `${selected.length} ` : ""}Photo{selected.length !== 1 ? "s" : ""}
+              <Button type="button" size="sm" onClick={addFromDiary} disabled={selectedUrls.length === 0} className="w-full">
+                Add {selectedUrls.length > 0 ? `${selectedUrls.length} ` : ""}Photo{selectedUrls.length !== 1 ? "s" : ""}
               </Button>
             </PopoverContent>
           </Popover>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Choice Editor ─────────────────────────────────────────────────────────────
+
+function ChoiceEditor({
+  choices,
+  onChange,
+}: {
+  choices: LineItemChoice[];
+  onChange: (c: LineItemChoice[]) => void;
+}) {
+  const add = () =>
+    onChange([...choices, { id: `c-${Date.now()}`, label: "", description: "", price: 0 }]);
+  const remove = (id: string) => onChange(choices.filter((c) => c.id !== id));
+  const update = (id: string, field: keyof LineItemChoice, value: string | number) =>
+    onChange(choices.map((c) => c.id === id ? { ...c, [field]: value } : c));
+
+  return (
+    <div className="mt-2">
+      <p className="text-xs text-gray-500 font-medium mb-1">Choices</p>
+      <div className="space-y-1">
+        {choices.map((c) => (
+          <div key={c.id} className="flex gap-1 items-center">
+            <Input
+              value={c.label}
+              onChange={(e) => update(c.id, "label", e.target.value)}
+              className="h-7 text-xs flex-1"
+              placeholder="Label"
+            />
+            <Input
+              type="number"
+              value={c.price}
+              onChange={(e) => update(c.id, "price", parseFloat(e.target.value) || 0)}
+              className="h-7 text-xs w-20"
+              placeholder="Price"
+            />
+            <button type="button" onClick={() => remove(c.id)} className="text-gray-400 hover:text-red-500">
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={add}
+        className="mt-1 text-xs text-blue-500 hover:text-blue-600 hover:underline"
+      >
+        + Add choice
+      </button>
     </div>
   );
 }
@@ -450,40 +535,57 @@ function LineItemsBlock({
 
   const subtotal = calcBlockSubtotal(block);
 
-  const filteredMats = materials.filter((m) =>
-    !matSearch || m.name?.toLowerCase().includes(matSearch.toLowerCase()) || m.itemNumber?.toString().includes(matSearch)
+  const filteredMats = materials.filter(
+    (m) => !matSearch || m.name?.toLowerCase().includes(matSearch.toLowerCase()) || String(m.itemNumber || "").includes(matSearch)
   );
 
   const selectMaterial = (m: typeof materials[0]) => {
-    setDraft((prev) => ({
-      ...prev,
-      itemCode: m.itemNumber || "",
-      description: m.name || "",
-      unitPrice: typeof m.price === "string" ? parseFloat(m.price as string) || 0 : m.price || 0,
-    }));
+    const cost = typeof m.price === "string" ? parseFloat(m.price as string) || 0 : m.price || 0;
+    setDraft((prev) => ({ ...prev, itemCode: m.itemNumber || "", description: m.name || "", costExGst: cost }));
     setMatSearch(m.name || "");
     setShowMats(false);
   };
 
+  const itemToEdit = (item: LineItem): DraftLineItem => ({
+    description: item.description,
+    itemCode: item.category || "",
+    quantity: item.quantity,
+    costExGst: item.costPrice ?? item.unitPrice,
+    markupPct: item.markupPct ?? 0,
+    pricingType: item.pricingType,
+    fixedPrice: item.fixedPrice || 0,
+    isOptional: item.isOptional,
+    priceIncludesTax: item.priceIncludesTax || false,
+    choices: item.choices || [],
+  });
+
+  const draftToItem = (d: DraftLineItem, existing?: LineItem): LineItem => {
+    const priceExGst = draftPriceExGst(d);
+    const total = d.pricingType === "choice"
+      ? (d.choices.find((c) => c.isDefault)?.price || d.choices[0]?.price || 0)
+      : draftTotal(d);
+    return {
+      id: existing?.id || `item-${Date.now()}`,
+      description: d.description,
+      quantity: d.quantity,
+      unitPrice: priceExGst,
+      totalPrice: total,
+      unit: existing?.unit || "each",
+      category: d.itemCode,
+      isOptional: d.isOptional,
+      selected: existing?.selected !== undefined ? existing.selected : true,
+      pricingType: d.pricingType,
+      choices: d.choices,
+      fixedPrice: d.pricingType === "fixed" ? d.fixedPrice : undefined,
+      priceIncludesTax: d.priceIncludesTax,
+      costPrice: d.costExGst,
+      markupPct: d.markupPct,
+    };
+  };
+
   const commitDraft = () => {
     if (!draft.description) return;
-    const totalPrice = calcLineItemPrice(draft);
-    const item: LineItem = {
-      id: `item-${Date.now()}`,
-      description: draft.description,
-      quantity: draft.quantity,
-      unitPrice: draft.unitPrice,
-      totalPrice,
-      unit: "each",
-      category: draft.itemCode,
-      isOptional: draft.isOptional,
-      selected: true,
-      pricingType: draft.pricingType,
-      choices: draft.choices,
-      fixedPrice: draft.pricingType === "fixed" ? draft.fixedPrice : undefined,
-      priceIncludesTax: draft.priceIncludesTax,
-    };
-    onUpdate({ lineItems: [...block.lineItems, item] });
+    onUpdate({ lineItems: [...block.lineItems, draftToItem(draft)] });
     setDraft(defaultDraft());
     setMatSearch("");
     setShowAdd(false);
@@ -493,114 +595,199 @@ function LineItemsBlock({
 
   const startEdit = (item: LineItem) => {
     setEditingId(item.id ?? null);
-    setEditDraft({
-      description: item.description,
-      itemCode: item.category || "",
-      quantity: item.quantity,
-      unitPrice: item.unitPrice,
-      pricingType: item.pricingType,
-      fixedPrice: item.fixedPrice || 0,
-      isOptional: item.isOptional,
-      priceIncludesTax: item.priceIncludesTax || false,
-      choices: item.choices || [],
-    });
+    setEditDraft(itemToEdit(item));
   };
 
   const commitEdit = () => {
     if (!editingId) return;
     onUpdate({
-      lineItems: block.lineItems.map((i) => {
-        if (i.id !== editingId) return i;
-        const totalPrice = calcLineItemPrice(editDraft);
-        return {
-          ...i,
-          description: editDraft.description,
-          category: editDraft.itemCode,
-          quantity: editDraft.quantity,
-          unitPrice: editDraft.unitPrice,
-          totalPrice,
-          pricingType: editDraft.pricingType,
-          fixedPrice: editDraft.pricingType === "fixed" ? editDraft.fixedPrice : undefined,
-          isOptional: editDraft.isOptional,
-          priceIncludesTax: editDraft.priceIncludesTax,
-        };
-      }),
+      lineItems: block.lineItems.map((i) => i.id !== editingId ? i : draftToItem(editDraft, i)),
     });
     setEditingId(null);
   };
 
+  // Shared row editor for add/edit
+  function RowEditor({
+    d,
+    setD,
+    onCommit,
+    onCancel,
+    matSearchVal,
+    setMatSearchVal,
+  }: {
+    d: DraftLineItem;
+    setD: (fn: (prev: DraftLineItem) => DraftLineItem) => void;
+    onCommit: () => void;
+    onCancel: () => void;
+    matSearchVal: string;
+    setMatSearchVal: (v: string) => void;
+  }) {
+    const priceEx = draftPriceExGst(d);
+    const total = draftTotal(d);
+    return (
+      <>
+        <tr className="bg-blue-50/60">
+          <td className="border border-gray-200 px-1 py-1">
+            <Input
+              value={d.itemCode}
+              onChange={(e) => setD((prev) => ({ ...prev, itemCode: e.target.value }))}
+              className="h-7 text-xs"
+              placeholder="Code"
+            />
+          </td>
+          <td className="border border-gray-200 px-1 py-1 relative">
+            <Input
+              value={matSearchVal || d.description}
+              onChange={(e) => {
+                setMatSearchVal(e.target.value);
+                setD((prev) => ({ ...prev, description: e.target.value }));
+                setShowMats(true);
+              }}
+              onFocus={() => setShowMats(true)}
+              className="h-7 text-xs"
+              placeholder="Description or catalogue search…"
+              autoFocus={!editingId}
+            />
+            {showMats && filteredMats.length > 0 && (
+              <div className="absolute top-full left-0 z-50 w-64 bg-white border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-0.5">
+                {filteredMats.slice(0, 20).map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => selectMaterial(m)}
+                    className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50 text-left"
+                  >
+                    <span className="font-medium">{m.name}</span>
+                    <span className="text-gray-400">
+                      ${typeof m.price === "number" ? m.price.toFixed(2) : parseFloat(m.price as string || "0").toFixed(2)}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </td>
+          <td className="border border-gray-200 px-1 py-1">
+            <Input
+              type="number"
+              value={d.quantity}
+              onChange={(e) => setD((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+              className="h-7 text-xs text-center"
+            />
+          </td>
+          <td className="border border-gray-200 px-1 py-1">
+            {d.pricingType === "fixed" ? (
+              <Input
+                type="number"
+                value={d.fixedPrice}
+                onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
+                className="h-7 text-xs text-right"
+                placeholder="Fixed"
+              />
+            ) : (
+              <Input
+                type="number"
+                value={d.costExGst}
+                onChange={(e) => setD((prev) => ({ ...prev, costExGst: parseFloat(e.target.value) || 0 }))}
+                className="h-7 text-xs text-right"
+                placeholder="Cost"
+              />
+            )}
+          </td>
+          <td className="border border-gray-200 px-1 py-1">
+            {d.pricingType !== "fixed" ? (
+              <div className="flex items-center">
+                <Input
+                  type="number"
+                  value={d.markupPct}
+                  onChange={(e) => setD((prev) => ({ ...prev, markupPct: parseFloat(e.target.value) || 0 }))}
+                  className="h-7 text-xs text-right"
+                  placeholder="0"
+                />
+                <span className="text-xs text-gray-500 ml-0.5">%</span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400 px-2">—</span>
+            )}
+          </td>
+          <td className="border border-gray-200 px-2 py-1 text-right text-xs text-gray-700">
+            {d.pricingType === "choice" ? "varies" : fmtNZD(priceEx)}
+          </td>
+          <td className="border border-gray-200 px-2 py-1 text-right text-xs font-medium">
+            {d.pricingType === "choice" ? "varies" : fmtNZD(total)}
+          </td>
+          <td className="border border-gray-200 px-1 py-1 align-top">
+            <div className="flex gap-1">
+              <button type="button" onClick={onCommit} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                <Check className="w-3.5 h-3.5" />
+              </button>
+              <button type="button" onClick={onCancel} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </td>
+        </tr>
+        {/* Pricing type selector */}
+        <tr className="bg-blue-50/40">
+          <td colSpan={8} className="border border-gray-200 px-2 py-1.5">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-gray-500">Pricing:</span>
+                <Select
+                  value={d.pricingType}
+                  onValueChange={(v) => setD((prev) => ({ ...prev, pricingType: v as PricingType }))}
+                >
+                  <SelectTrigger className="h-7 text-xs w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="fixed">Fixed</SelectItem>
+                    <SelectItem value="choice">Choice</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {d.pricingType === "choice" && (
+                <div className="flex-1">
+                  <ChoiceEditor
+                    choices={d.choices}
+                    onChange={(choices) => setD((prev) => ({ ...prev, choices }))}
+                  />
+                </div>
+              )}
+            </div>
+          </td>
+        </tr>
+      </>
+    );
+  }
+
   return (
     <div className="px-0 py-0 overflow-x-auto">
-      <table className="w-full border-collapse text-sm min-w-[600px]">
+      <table className="w-full border-collapse text-sm min-w-[640px]">
         <thead className="bg-green-50">
           <tr>
-            <th className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600 w-24">Item Code</th>
+            <th className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600 w-20">Item Code</th>
             <th className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600">Item Name</th>
             <th className="border border-gray-200 px-3 py-2 text-center text-xs font-semibold text-gray-600 w-12">Qty</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-28">Cost ex GST</th>
+            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Cost ex GST</th>
             <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-20">Markup</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-28">Price ex GST</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-28">Total ex GST</th>
+            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Price ex GST</th>
+            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Total ex GST</th>
             <th className="border border-gray-200 px-2 py-2 w-8" />
           </tr>
         </thead>
         <tbody>
           {block.lineItems.map((item) =>
             editingId === item.id ? (
-              <tr key={item.id} className="bg-blue-50">
-                <td className="border border-gray-200 px-1 py-1">
-                  <Input
-                    value={editDraft.itemCode}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, itemCode: e.target.value }))}
-                    className="h-8 text-xs"
-                    placeholder="Code"
-                  />
-                </td>
-                <td className="border border-gray-200 px-1 py-1">
-                  <Input
-                    value={editDraft.description}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, description: e.target.value }))}
-                    className="h-8 text-xs"
-                    placeholder="Description"
-                  />
-                </td>
-                <td className="border border-gray-200 px-1 py-1">
-                  <Input
-                    type="number"
-                    value={editDraft.quantity}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, quantity: parseFloat(e.target.value) || 0 }))}
-                    className="h-8 text-xs text-center"
-                  />
-                </td>
-                <td className="border border-gray-200 px-1 py-1" colSpan={2}>
-                  <Input
-                    type="number"
-                    value={editDraft.pricingType === "fixed" ? editDraft.fixedPrice : editDraft.unitPrice}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setEditDraft((d) => d.pricingType === "fixed" ? { ...d, fixedPrice: val } : { ...d, unitPrice: val });
-                    }}
-                    className="h-8 text-xs text-right"
-                    placeholder="Price"
-                  />
-                </td>
-                <td className="border border-gray-200 px-2 py-1 text-right text-xs text-gray-500">
-                  {fmtNZD(calcLineItemPrice(editDraft))}
-                </td>
-                <td className="border border-gray-200 px-2 py-1 text-right text-xs font-medium">
-                  {fmtNZD(calcLineItemPrice(editDraft))}
-                </td>
-                <td className="border border-gray-200 px-1 py-1">
-                  <div className="flex gap-1">
-                    <button type="button" onClick={commitEdit} className="p-1 text-green-600 hover:bg-green-50 rounded">
-                      <Check className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => setEditingId(null)} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
+              <RowEditor
+                key={item.id + "-edit"}
+                d={editDraft}
+                setD={(fn) => setEditDraft((prev) => fn(prev))}
+                onCommit={commitEdit}
+                onCancel={() => setEditingId(null)}
+                matSearchVal={matSearch}
+                setMatSearchVal={setMatSearch}
+              />
             ) : (
               <tr
                 key={item.id}
@@ -608,10 +795,16 @@ function LineItemsBlock({
                 onClick={() => startEdit(item)}
               >
                 <td className="border border-gray-200 px-3 py-2 text-xs text-gray-500">{item.category || "—"}</td>
-                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 font-medium">{item.description}</td>
+                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 font-medium">
+                  {item.description}
+                  {item.pricingType === "choice" && <span className="ml-1 text-xs text-blue-500">(choice)</span>}
+                  {item.isOptional && <span className="ml-1 text-xs text-gray-400">(optional)</span>}
+                </td>
                 <td className="border border-gray-200 px-3 py-2 text-center text-sm text-gray-700">{item.quantity}</td>
-                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-700">{fmtNZD(item.unitPrice)}</td>
-                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-400">—</td>
+                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">{fmtNZD(item.costPrice ?? item.unitPrice)}</td>
+                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">
+                  {item.markupPct ? fmtPct(item.markupPct) : "—"}
+                </td>
                 <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-700">{fmtNZD(item.unitPrice)}</td>
                 <td className="border border-gray-200 px-3 py-2 text-right text-sm font-semibold text-gray-900">{fmtNZD(item.totalPrice)}</td>
                 <td className="border border-gray-200 px-2 py-2">
@@ -629,79 +822,14 @@ function LineItemsBlock({
 
           {/* Search or Add New row */}
           {showAdd ? (
-            <tr className="bg-blue-50/60">
-              <td className="border border-gray-200 px-1 py-1">
-                <Input
-                  value={draft.itemCode}
-                  onChange={(e) => setDraft((d) => ({ ...d, itemCode: e.target.value }))}
-                  className="h-8 text-xs"
-                  placeholder="Code"
-                />
-              </td>
-              <td className="border border-gray-200 px-1 py-1 relative">
-                <Input
-                  value={matSearch || draft.description}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    setMatSearch(v);
-                    setDraft((d) => ({ ...d, description: v }));
-                    setShowMats(true);
-                  }}
-                  onFocus={() => setShowMats(true)}
-                  className="h-8 text-xs"
-                  placeholder="Description or search catalogue…"
-                  autoFocus
-                />
-                {showMats && filteredMats.length > 0 && (
-                  <div className="absolute top-full left-0 z-50 w-64 bg-white border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-0.5">
-                    {filteredMats.slice(0, 20).map((m) => (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => selectMaterial(m)}
-                        className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50 text-left"
-                      >
-                        <span className="font-medium">{m.name}</span>
-                        <span className="text-gray-400">${typeof m.price === "number" ? m.price.toFixed(2) : parseFloat(m.price as string || "0").toFixed(2)}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </td>
-              <td className="border border-gray-200 px-1 py-1">
-                <Input
-                  type="number"
-                  value={draft.quantity}
-                  onChange={(e) => setDraft((d) => ({ ...d, quantity: parseFloat(e.target.value) || 0 }))}
-                  className="h-8 text-xs text-center"
-                />
-              </td>
-              <td className="border border-gray-200 px-1 py-1" colSpan={2}>
-                <Input
-                  type="number"
-                  value={draft.unitPrice}
-                  onChange={(e) => setDraft((d) => ({ ...d, unitPrice: parseFloat(e.target.value) || 0 }))}
-                  className="h-8 text-xs text-right"
-                  placeholder="Price"
-                />
-              </td>
-              <td className="border border-gray-200 px-2 py-1 text-right text-xs text-gray-500">
-                {fmtNZD(calcLineItemPrice(draft))}
-              </td>
-              <td className="border border-gray-200 px-2 py-1 text-right text-xs font-medium">
-                {fmtNZD(calcLineItemPrice(draft))}
-              </td>
-              <td className="border border-gray-200 px-1 py-1">
-                <div className="flex gap-1">
-                  <button type="button" onClick={commitDraft} className="p-1 text-green-600 hover:bg-green-50 rounded">
-                    <Check className="w-3.5 h-3.5" />
-                  </button>
-                  <button type="button" onClick={() => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); }} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </td>
-            </tr>
+            <RowEditor
+              d={draft}
+              setD={(fn) => setDraft((prev) => fn(prev))}
+              onCommit={commitDraft}
+              onCancel={() => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); }}
+              matSearchVal={matSearch}
+              setMatSearchVal={setMatSearch}
+            />
           ) : (
             <tr>
               <td colSpan={8} className="border border-gray-200 px-3 py-2">
@@ -741,13 +869,14 @@ export function ProposalBuilderV2({
   onRequestJobSave,
   jobDescription,
   customEmail,
+  lineItems: incomingLineItems,
 }: ProposalBuilderV2Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const { data: templateData } = useQuery({ queryKey: ["/api/templates/default/proposal"], enabled: isOpen });
+  const { data: templateData } = useQuery({ queryKey: ["/api/templates/default/invoice"], enabled: isOpen });
   const { data: jobData } = useQuery({ queryKey: ["/api/jobs", jobId], enabled: !!jobId && isOpen });
   const { data: customerData } = useQuery({ queryKey: ["/api/customers", customerId], enabled: !!customerId && isOpen });
   const { data: diaryData } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen });
@@ -799,6 +928,9 @@ export function ProposalBuilderV2({
   const [showSettings, setShowSettings] = useState(false);
   const [emailForm, setEmailForm] = useState({ to: "", cc: "", subject: "", message: "" });
   const [smsForm, setSmsForm] = useState({ to: "", message: "" });
+  // Drag state
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
 
   const initCreateRef = useRef(false);
   const initEditRef = useRef<string | null>(null);
@@ -812,6 +944,9 @@ export function ProposalBuilderV2({
       setDraftId(null);
       setBlocks([]);
       setProposalTitle("Treemarkables Quote");
+      setDiscountAmount(0);
+      setDiscountType("fixed");
+      setValidUntil("");
     }
   }, [isOpen]);
 
@@ -852,6 +987,8 @@ export function ProposalBuilderV2({
           choices: (item.choices as LineItemChoice[]) || [],
           priceIncludesTax: (item.priceIncludesTax as boolean) || false,
           fixedPrice: item.fixedPrice ? parseFloat(item.fixedPrice as string) : undefined,
+          costPrice: item.costPrice ? parseFloat(item.costPrice as string) : undefined,
+          markupPct: item.markupPct ? parseFloat(item.markupPct as string) : undefined,
         }));
         return {
           id: s.id || `block-${idx}`,
@@ -867,32 +1004,72 @@ export function ProposalBuilderV2({
     }
   }, [existingData, mode, isOpen, proposalId]);
 
-  // Initialize from job data (create mode)
+  // Initialize from job data (create mode) — includes lineItems prefill from parent
   useEffect(() => {
-    if (!job || !isOpen || mode !== "create") return;
+    if (!isOpen || mode !== "create") return;
     if (initCreateRef.current) return;
+    // Wait for at least job data or confirm no job
+    if (jobId && !job) return;
     initCreateRef.current = true;
 
-    setProposalTitle((job.title as string) || "Treemarkables Quote");
+    setProposalTitle((job as { title?: string } | null)?.title || "Treemarkables Quote");
 
-    const includeDesc = (job.includeDescriptionInQuotesProposals as boolean) !== false;
-    const desc = includeDesc ? (jobDescription ?? (job.description as string) ?? "") : "";
+    const includeDesc = (job as { includeDescriptionInQuotesProposals?: boolean } | null)?.includeDescriptionInQuotesProposals !== false;
+    const desc = includeDesc ? (jobDescription ?? (job as { description?: string } | null)?.description ?? "") : "";
 
-    const initialBlock: WysiwygBlock = {
-      id: "block-1",
+    const builtBlocks: WysiwygBlock[] = [];
+
+    // Block 1: description
+    builtBlocks.push({
+      id: "block-desc",
       type: "description",
-      title: (job.serviceType as string) || "Job Description",
+      title: (job as { serviceType?: string } | null)?.serviceType || "Job Description",
       description: desc,
       photos: [],
       lineItems: [],
       sortOrder: 0,
-    };
+    });
+
+    // Block 2: prefill line items from parent prop if available
+    if (Array.isArray(incomingLineItems) && (incomingLineItems as unknown[]).length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const items: LineItem[] = (incomingLineItems as any[]).map((item: any, idx: number) => {
+        const unitPrice = parseFloat(item.unitPrice) || parseFloat(item.price) || 0;
+        const qty = parseFloat(item.quantity) || 1;
+        const costPrice = parseFloat(item.costPrice) || unitPrice;
+        return {
+          id: item.id || `prefill-${idx}`,
+          description: item.description || item.name || "",
+          quantity: qty,
+          unitPrice,
+          totalPrice: qty * unitPrice,
+          unit: item.unit || "each",
+          category: item.category || item.itemCode || "",
+          isOptional: item.isOptional || false,
+          selected: true,
+          pricingType: (item.pricingType as LineItem["pricingType"]) || "normal",
+          choices: item.choices || [],
+          priceIncludesTax: item.priceIncludesTax || false,
+          costPrice,
+          markupPct: item.markupPct || 0,
+        };
+      });
+      builtBlocks.push({
+        id: "block-lineitems",
+        type: "lineItems",
+        title: "Line Items",
+        description: "",
+        photos: [],
+        lineItems: items,
+        sortOrder: 1,
+      });
+    }
 
     setBlocks((cur) => {
       const hasContent = cur.some((b) => b.lineItems.length > 0 || b.photos.length > 0 || b.description);
-      return hasContent ? cur : [initialBlock];
+      return hasContent ? cur : builtBlocks;
     });
-  }, [job, isOpen, mode, jobDescription]);
+  }, [job, isOpen, mode, jobDescription, incomingLineItems, jobId]);
 
   // If mode=edit, pre-set draftId on open
   useEffect(() => {
@@ -913,7 +1090,7 @@ export function ProposalBuilderV2({
     };
     setBlocks((prev) => {
       const next = [...prev];
-      if (afterIndex !== undefined) next.splice(afterIndex + 1, 0, newBlock);
+      if (afterIndex !== undefined && afterIndex >= 0) next.splice(afterIndex + 1, 0, newBlock);
       else next.push(newBlock);
       return next.map((b, i) => ({ ...b, sortOrder: i }));
     });
@@ -933,6 +1110,23 @@ export function ProposalBuilderV2({
     setBlocks((prev) => prev.map((b) => b.id === id ? { ...b, ...updates } : b));
   }, []);
 
+  // ── Drag-to-reorder ────────────────────────────────────────────────────────
+
+  const handleDrop = useCallback((toId: string) => {
+    if (!draggingId || draggingId === toId) return;
+    setBlocks((prev) => {
+      const fromIdx = prev.findIndex((b) => b.id === draggingId);
+      const toIdx = prev.findIndex((b) => b.id === toId);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      return next.map((b, i) => ({ ...b, sortOrder: i }));
+    });
+    setDraggingId(null);
+    setDragOverId(null);
+  }, [draggingId]);
+
   // ── Totals ─────────────────────────────────────────────────────────────────
 
   const totals = calcTotals(blocks);
@@ -949,7 +1143,6 @@ export function ProposalBuilderV2({
     return {
       customerId: actualCustomerId,
       jobId: actualJobId,
-      proposalNumber: draftId ? undefined : `PROP-${Date.now()}`,
       title: proposalTitle,
       subtotal: subtotalAfterDiscount.toString(),
       gstAmount: gst.toString(),
@@ -970,7 +1163,7 @@ export function ProposalBuilderV2({
         sortOrder: b.sortOrder,
       })),
     };
-  }, [blocks, proposalTitle, customer, customerId, job, jobId, draftId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil]);
+  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil]);
 
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReturnType<typeof buildPayload>) => {
@@ -1014,6 +1207,7 @@ export function ProposalBuilderV2({
       }
     }, 3000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks, proposalTitle, isOpen]);
 
   // ── Email / SMS ────────────────────────────────────────────────────────────
@@ -1036,40 +1230,64 @@ export function ProposalBuilderV2({
     onError: (err: Error) => toast({ title: "SMS Failed", description: err.message || "Failed to send SMS", variant: "destructive" }),
   });
 
-  const initEmailForm = () => {
+  // Ensure job is saved before saving proposal
+  const ensureJobSaved = useCallback(async (): Promise<string | null> => {
+    if (onRequestJobSave && !jobId) {
+      try {
+        const savedJobId = await onRequestJobSave();
+        return savedJobId;
+      } catch {
+        toast({ title: "Job Save Failed", description: "Could not save the job before sending.", variant: "destructive" });
+        return null;
+      }
+    }
+    return jobId || null;
+  }, [onRequestJobSave, jobId, toast]);
+
+  const ensureDraftSaved = useCallback(async (): Promise<string | null> => {
+    if (draftId) return draftId;
+    const resolvedJobId = await ensureJobSaved();
+    if (onRequestJobSave && !resolvedJobId) return null;
+    setAutoSaveStatus("saving");
+    try {
+      const payload = buildPayload();
+      const res = await saveDraftMutation.mutateAsync({ ...payload, jobId: resolvedJobId || payload.jobId });
+      const id = res?.data?.id || res?.id;
+      if (id) {
+        setDraftId(id);
+        return id;
+      }
+    } catch {
+      toast({ title: "Save Failed", description: "Could not save proposal.", variant: "destructive" });
+    }
+    return null;
+  }, [draftId, ensureJobSaved, buildPayload, saveDraftMutation, onRequestJobSave, toast]);
+
+  const initEmailForm = useCallback(() => {
     const email = customEmail || (job as { jobContactEmail?: string } | null)?.jobContactEmail || (customer as { email?: string } | null)?.email || "";
     setEmailForm({ to: email, cc: "", subject: "Treemarkables Quote", message: "Thank you for your inquiry, we are pleased to provide you with the following proposal." });
-  };
+  }, [customEmail, job, customer]);
 
-  const initSmsForm = () => {
-    const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string; jobContactPhone?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
+  const initSmsForm = useCallback(() => {
+    const phone = (customer as { phone?: string } | null)?.phone || (job as { jobContactMobile?: string } | null)?.jobContactMobile || (job as { jobContactPhone?: string } | null)?.jobContactPhone || "";
     const name = (customer as { name?: string } | null)?.name || "Valued Customer";
     const first = name.split(" ")[0];
     const link = draftId ? `https://${window.location.host}/proposal/${draftId}` : "";
-    setSmsForm({ to: phone, message: link ? `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}. View: ${link}\nJules\nTreemarkables` : `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}.\nJules\nTreemarkables` });
-  };
+    setSmsForm({
+      to: phone,
+      message: link
+        ? `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}. View: ${link}\nJules\nTreemarkables`
+        : `Hi ${first}, your proposal is ready! Total: ${fmtNZD(grandTotal)}.\nJules\nTreemarkables`,
+    });
+  }, [customer, job, draftId, grandTotal]);
 
   const handleSendEmail = async () => {
     if (!emailForm.to.trim() || !emailForm.subject.trim()) {
       toast({ title: "Missing Information", description: "Please enter recipient email and subject.", variant: "destructive" });
       return;
     }
-    let effectiveDraftId = draftId;
-    if (!effectiveDraftId) {
-      setAutoSaveStatus("saving");
-      try {
-        const res = await saveDraftMutation.mutateAsync(buildPayload());
-        effectiveDraftId = res?.data?.id || res?.id || null;
-        if (effectiveDraftId) setDraftId(effectiveDraftId);
-      } catch {
-        toast({ title: "Save Failed", description: "Could not save proposal before sending.", variant: "destructive" });
-        return;
-      }
-    }
-    if (!effectiveDraftId) {
-      toast({ title: "Save Failed", description: "Could not save proposal before sending.", variant: "destructive" });
-      return;
-    }
+    const effectiveDraftId = await ensureDraftSaved();
+    if (!effectiveDraftId) return;
     await sendEmailMutation.mutateAsync({ proposalId: effectiveDraftId, to: emailForm.to, subject: emailForm.subject, message: emailForm.message, cc: emailForm.cc });
   };
 
@@ -1091,7 +1309,7 @@ export function ProposalBuilderV2({
 
   // ── VIP check ──────────────────────────────────────────────────────────────
 
-  const vip = (customer as { isVipMember?: boolean; name?: string; vipDiscountPercent?: string } | null);
+  const vip = customer as { isVipMember?: boolean; name?: string; vipDiscountPercent?: string } | null;
   const isVip = vip?.isVipMember;
 
   // ── Company/header data ────────────────────────────────────────────────────
@@ -1106,7 +1324,6 @@ export function ProposalBuilderV2({
   const proposalDate = new Date();
   const proposalNum = draftId ? `#${draftId.slice(-6).toUpperCase()}` : "#—";
 
-  // Customer display info
   const customerName = (customer as { name?: string } | null)?.name || (job as { clientName?: string } | null)?.clientName || "";
   const customerCompany = (customer as { company?: string } | null)?.company || "";
   const customerAddress = (job as { address?: string } | null)?.address || (customer as { address?: string } | null)?.address || "";
@@ -1136,7 +1353,6 @@ export function ProposalBuilderV2({
               </button>
             </div>
             <div className="flex items-center gap-2">
-              {/* Auto-save indicator */}
               {autoSaveStatus === "saving" && (
                 <div className="flex items-center gap-1 text-xs text-blue-500">
                   <div className="w-2.5 h-2.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -1148,7 +1364,6 @@ export function ProposalBuilderV2({
                   <Check className="w-3 h-3" /> Saved
                 </div>
               )}
-              {/* Settings popover */}
               <Popover open={showSettings} onOpenChange={setShowSettings}>
                 <PopoverTrigger asChild>
                   <button
@@ -1171,14 +1386,15 @@ export function ProposalBuilderV2({
                           className="h-8 text-sm"
                           placeholder="0"
                         />
-                        <select
-                          value={discountType}
-                          onChange={(e) => setDiscountType(e.target.value as "fixed" | "percentage")}
-                          className="h-8 border border-input rounded-md text-sm px-2"
-                        >
-                          <option value="fixed">$ Fixed</option>
-                          <option value="percentage">% Percent</option>
-                        </select>
+                        <Select value={discountType} onValueChange={(v) => setDiscountType(v as "fixed" | "percentage")}>
+                          <SelectTrigger className="h-8 w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fixed">$ Fixed</SelectItem>
+                            <SelectItem value="percentage">% Percent</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
                     <div>
@@ -1259,11 +1475,10 @@ export function ProposalBuilderV2({
 
               {/* Editable Proposal Title */}
               <div className="px-6 sm:px-10 py-4 border-b border-gray-100">
-                {/* Inline-edit for proposal title */}
                 <input
                   value={proposalTitle}
                   onChange={(e) => setProposalTitle(e.target.value)}
-                  className="text-2xl sm:text-3xl font-bold text-[#2a6e2e] w-full border-0 border-b-2 border-transparent focus:border-green-400 focus:outline-none bg-transparent"
+                  className="text-2xl sm:text-3xl font-bold text-orange-600 w-full border-0 border-b-2 border-transparent focus:border-orange-400 focus:outline-none bg-transparent"
                   placeholder="Proposal Title"
                 />
               </div>
@@ -1273,12 +1488,19 @@ export function ProposalBuilderV2({
                 <AddBlockButton onAdd={(type) => addBlock(type, -1)} />
 
                 {blocks.map((block, idx) => (
-                  <div key={block.id} className="mb-1">
-                    <div className="border border-gray-200 rounded-md overflow-hidden">
+                  <div
+                    key={block.id}
+                    className={`mb-1 transition-opacity ${draggingId === block.id ? "opacity-40" : ""}`}
+                  >
+                    <div className={`border rounded-md overflow-hidden ${dragOverId === block.id ? "border-blue-400" : "border-gray-200"}`}>
                       <BlockHeader
                         block={block}
                         onTitleChange={(t) => updateBlock(block.id, { title: t })}
                         onRemove={() => removeBlock(block.id)}
+                        onDragStart={() => setDraggingId(block.id)}
+                        onDragOver={(e) => { e.preventDefault(); setDragOverId(block.id); }}
+                        onDrop={(e) => { e.preventDefault(); handleDrop(block.id); }}
+                        isDragOver={dragOverId === block.id}
                       />
                       {block.type === "description" && (
                         <DescriptionBlock block={block} onUpdate={(u) => updateBlock(block.id, u)} />

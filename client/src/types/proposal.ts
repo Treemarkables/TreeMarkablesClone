@@ -24,6 +24,8 @@ export interface LineItem {
   selectedChoiceId?: string;
   fixedPrice?: number;
   priceIncludesTax?: boolean;
+  costPrice?: number;
+  markupPct?: number;
 }
 
 export interface UploadedPhoto {
