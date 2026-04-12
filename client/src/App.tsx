@@ -272,7 +272,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
             className="md:hidden flex items-center justify-between px-3 py-3 border-b bg-white"
             style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)" }}
           >
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-6">
               <SidebarTrigger 
                 data-testid="button-sidebar-toggle" 
                 className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
@@ -281,7 +281,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && <NotificationBell />}
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
 
               {/* Dispatch controls — only shown on /dispatch */}
               {isDispatchPage && (
