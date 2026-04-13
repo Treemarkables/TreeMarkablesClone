@@ -396,7 +396,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               {/* Section Photos */}
               {(section.photos || []).length > 0 && (
                 <div className="mb-3 sm:mb-4">
-                  <div className="grid grid-cols-4 md:grid-cols-4 gap-1 sm:gap-1.5">
+                  <div className="grid grid-cols-8 gap-1 sm:gap-1.5">
                     {(section.photos || []).map((photo, photoIndex) => (
                       <div 
                         key={photo.id} 

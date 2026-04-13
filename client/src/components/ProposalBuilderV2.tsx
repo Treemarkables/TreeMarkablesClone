@@ -399,7 +399,7 @@ function DescriptionBlock({
         rows={1}
         onChange={(e) => { onUpdate({ description: e.target.value }); autoResize(); }}
         placeholder="Describe this section of work..."
-        className="min-h-0 resize-none border-0 p-0 focus-visible:ring-0 bg-transparent text-gray-700 text-sm leading-relaxed shadow-none overflow-hidden"
+        className="min-h-0 resize-none border-0 p-0 focus-visible:ring-0 bg-transparent text-gray-700 text-sm leading-relaxed shadow-none overflow-hidden max-w-prose"
       />
     </div>
   );
@@ -489,7 +489,7 @@ function PhotoBlock({
   return (
     <div className="px-4 py-3">
       {block.photos.length > 0 && (
-        <div className="grid grid-cols-8 gap-1.5 mb-3">
+        <div className="grid grid-cols-12 gap-1 mb-3">
           {block.photos.map((photo) => (
             <div key={photo.id} className="relative group/photo rounded-md overflow-hidden bg-gray-100" style={{ paddingBottom: "100%" }}>
               <img
