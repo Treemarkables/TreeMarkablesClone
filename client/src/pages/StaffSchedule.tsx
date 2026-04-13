@@ -148,8 +148,21 @@ export default function StaffSchedule() {
   }, [dayJobs]);
 
   // Assignments for this date, keyed by employeeId → jobs[]
+  // Primary source: assignedTeam[] on each job (set via Dispatch Board / AI Dispatch)
+  // Secondary source: job_staff_assignments table (detailed scheduling records)
   const assignmentsByEmployee = useMemo(() => {
     const map = new Map<string, Job[]>();
+
+    // 1. Pull from job.assignedTeam (the primary assignment mechanism)
+    dayJobs.forEach(job => {
+      (job.assignedTeam ?? []).forEach((empId: string) => {
+        const list = map.get(empId) ?? [];
+        if (!list.find(j => j.id === job.id)) list.push(job);
+        map.set(empId, list);
+      });
+    });
+
+    // 2. Merge in any job_staff_assignments records (e.g. AI Dispatch detailed schedules)
     allAssignments.forEach((a: any) => {
       const job = jobMap.get(a.jobId);
       if (!job) return;
@@ -157,8 +170,9 @@ export default function StaffSchedule() {
       if (!list.find(j => j.id === job.id)) list.push(job);
       map.set(a.employeeId, list);
     });
+
     return map;
-  }, [allAssignments, jobMap]);
+  }, [dayJobs, allAssignments, jobMap]);
 
   // Summary stats
   const totalAssigned = useMemo(() => {
