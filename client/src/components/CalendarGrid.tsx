@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Check, GripVertical } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, GripVertical, MapPin } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   format,
@@ -52,7 +52,7 @@ const GANTT_STAFF_PALETTE = [
   { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
 ];
 const GANTT_COL_W = 148; // px — name column width (matches StaffSchedule)
-const GANTT_ROW_H = 120; // px — row height tall enough to read all job text
+const GANTT_ROW_H = 72;  // px — matches StaffSchedule default row height
 
 function ganttTimeToMins(t: string | undefined): number {
   if (!t) return 8 * 60;
@@ -89,6 +89,13 @@ function assignGanttLanes(jobs: { id: string; scheduledStartTime?: string; sched
 }
 function ganttInitials(emp: { firstName: string; lastName: string }): string {
   return `${(emp.firstName || ' ')[0]}${(emp.lastName || ' ')[0]}`.toUpperCase();
+}
+function ganttFormatTime(t: string | undefined): string {
+  if (!t) return '';
+  const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
 }
 
 interface Employee {
@@ -905,37 +912,40 @@ export function CalendarGrid({
                     {empDayJobs.map((job) => {
                       const startPct = ganttMinsToPercent(ganttTimeToMins(job.scheduledStartTime));
                       const endPct   = ganttMinsToPercent(ganttTimeToMins(job.scheduledEndTime));
+                      const blockW   = Math.max(2, endPct - startPct);
                       const { lane, totalLanes } = empGanttLanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
                       const ls = ganttLaneStyle(lane, totalLanes);
                       const c = getJobColor(job.id);
                       const custName = getCustomerName(job);
-                      const timeLabel = `${job.scheduledStartTime ?? ""}–${job.scheduledEndTime ?? ""}`;
+                      const timeLabel = `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`;
                       return (
                         <button
                           key={job.id}
                           onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
                           title={`${custName} — ${timeLabel}`}
-                          className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                           style={{
                             left: `${Math.max(0, startPct)}%`,
-                            width: `${Math.max(2, endPct - startPct)}%`,
+                            width: `${blockW}%`,
                             top: ls.top,
                             height: ls.height,
                             backgroundColor: c.bg,
                             borderLeft: `3px solid ${c.border}`,
-                            color: c.text,
                             minWidth: 32,
                           }}
                         >
-                          <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden gap-0.5">
-                            <span className="text-xs font-semibold leading-snug block truncate" style={{ color: c.text }}>
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                            <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
                               {custName}
                             </span>
-                            <span className="text-[11px] leading-snug block truncate" style={{ color: c.border }}>
-                              {timeLabel}
-                            </span>
-                            {job.address && (
-                              <span className="text-[11px] leading-snug truncate block" style={{ color: c.text, opacity: 0.75 }}>
+                            {blockW > 8 && (
+                              <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
+                                {timeLabel}
+                              </span>
+                            )}
+                            {blockW > 14 && job.address && (
+                              <span className="text-[9px] leading-tight flex items-center gap-0.5 truncate" style={{ color: c.text, opacity: 0.7 }}>
+                                <MapPin className="w-2 h-2 shrink-0" />
                                 {job.address.split(",")[0]}
                               </span>
                             )}
