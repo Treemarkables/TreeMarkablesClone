@@ -201,11 +201,9 @@ function SidebarNavContent({
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
                     <SidebarMenuButton isActive={vehicleActive} data-testid="collapsible-vehicle-inspection">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <ClipboardCheck className="h-4 w-4" />
-                      </span>
-                      <span>Vehicle Inspection</span>
-                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/vehicle-collapsible:rotate-90" />
+                      <ClipboardCheck className="h-4 w-4 shrink-0 text-blue-600" />
+                      <span className="truncate">Vehicle Inspection</span>
+                      <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/vehicle-collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
