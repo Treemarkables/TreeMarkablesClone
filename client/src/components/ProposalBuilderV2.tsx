@@ -312,6 +312,19 @@ function DescriptionBlock({
   onUpdate: (updates: Partial<WysiwygBlock>) => void;
 }) {
   const { toast } = useToast();
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const autoResize = () => {
+    const el = textareaRef.current;
+    if (el) {
+      el.style.height = "auto";
+      el.style.height = `${el.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    autoResize();
+  }, [block.description]);
 
   const startVoice = () => {
     const w = window as WindowWithSpeech;
@@ -343,10 +356,12 @@ function DescriptionBlock({
         </button>
       </div>
       <Textarea
+        ref={textareaRef}
         value={block.description}
-        onChange={(e) => onUpdate({ description: e.target.value })}
+        rows={1}
+        onChange={(e) => { onUpdate({ description: e.target.value }); autoResize(); }}
         placeholder="Describe this section of work..."
-        className="min-h-[120px] resize-none border-0 p-0 focus-visible:ring-0 bg-transparent text-gray-700 text-sm leading-relaxed shadow-none"
+        className="min-h-0 resize-none border-0 p-0 focus-visible:ring-0 bg-transparent text-gray-700 text-sm leading-relaxed shadow-none overflow-hidden"
       />
     </div>
   );
