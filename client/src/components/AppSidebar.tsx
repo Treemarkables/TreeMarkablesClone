@@ -1,28 +1,15 @@
 import { useEffect, useState } from "react";
 import {
   Calendar,
-  CalendarDays,
   BarChart3,
   Users,
   Settings,
   GitBranch,
-  MessageSquare,
-  Star,
-  Inbox,
-  Plug,
-  Workflow,
-  FileText,
-  Layout,
   Briefcase,
   Shield,
   LogOut,
   ClipboardCheck,
-  Megaphone,
-  Clock,
-  PhoneCall,
-  Package,
   Leaf,
-  GitMerge,
   Bot,
   ChevronRight,
 } from "lucide-react";
@@ -56,16 +43,6 @@ const dashboardItems = [
   { title: "Pipeline", url: "/pipeline", icon: GitBranch, value: "pipeline", isTab: false },
 ];
 
-const businessItems = [
-  { title: "Invoices", url: "/invoices", icon: FileText, value: "invoices", isTab: false },
-  { title: "Templates", url: "/templates", icon: Layout, value: "templates", isTab: false },
-  { title: "Invoice Builder", url: "/settings/invoice-builder", icon: FileText, value: "invoice-builder", isTab: false },
-  { title: "Equipment", url: "/equipment", icon: Package, value: "equipment", isTab: false },
-  { title: "Time Tracking", url: "/time-tracking", icon: Clock, value: "time-tracking", isTab: false },
-  { title: "Unlinked Calls", url: "/unlinked-calls", icon: PhoneCall, value: "unlinked-calls", isTab: false },
-  { title: "Integrations", url: "/integrations", icon: Plug, value: "integrations", isTab: false },
-  { title: "Xero Reconciliation", url: "/reconciliation", icon: GitMerge, value: "reconciliation", isTab: false },
-];
 
 function SidebarNavContent({
   activeTab,
@@ -92,9 +69,13 @@ function SidebarNavContent({
 }) {
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const jhaActive = location === "/jha-assessment" || location === "/jha-history";
+  const financeActive = ["/invoices", "/templates", "/settings/invoice-builder", "/equipment", "/time-tracking", "/unlinked-calls", "/integrations", "/reconciliation"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [jhaOpen, setJhaOpen] = useState(jhaActive);
+  const [financeOpen, setFinanceOpen] = useState(financeActive);
+  const [opsOpen, setOpsOpen] = useState(opsActive);
 
   useEffect(() => {
     if (vehicleActive) setVehicleOpen(true);
@@ -103,6 +84,14 @@ function SidebarNavContent({
   useEffect(() => {
     if (jhaActive) setJhaOpen(true);
   }, [jhaActive]);
+
+  useEffect(() => {
+    if (financeActive) setFinanceOpen(true);
+  }, [financeActive]);
+
+  useEffect(() => {
+    if (opsActive) setOpsOpen(true);
+  }, [opsActive]);
 
   const close = () => {
     if (isMobile) setOpenMobile(false);
@@ -275,135 +264,145 @@ function SidebarNavContent({
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {/* Business Management - Admin only */}
+        {/* Finance & Admin — collapsible, admin only */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Business Management</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="font-normal text-[16px]">
-                {businessItems.map((item) => (
-                  <SidebarMenuItem key={item.value}>
-                    <SidebarMenuButton asChild isActive={location === item.url}>
-                      <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
+                <Collapsible open={financeOpen} onOpenChange={setFinanceOpen} className="group/finance-collapsible">
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton isActive={financeActive} data-testid="collapsible-finance">
                         <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <item.icon className="h-4 w-4" />
+                          <Briefcase className="h-4 w-4" />
                         </span>
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
+                        <span>Finance & Admin</span>
+                        <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/finance-collapsible:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/invoices"}>
+                            <Link href="/invoices" onClick={handleLinkClick} data-testid="link-invoices"><span>Invoices</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/templates"}>
+                            <Link href="/templates" onClick={handleLinkClick} data-testid="link-templates"><span>Templates</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/settings/invoice-builder"}>
+                            <Link href="/settings/invoice-builder" onClick={handleLinkClick} data-testid="link-invoice-builder"><span>Invoice Builder</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/equipment"}>
+                            <Link href="/equipment" onClick={handleLinkClick} data-testid="link-equipment"><span>Equipment</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/time-tracking"}>
+                            <Link href="/time-tracking" onClick={handleLinkClick} data-testid="link-time-tracking"><span>Time Tracking</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/integrations"}>
+                            <Link href="/integrations" onClick={handleLinkClick} data-testid="link-integrations"><span>Integrations</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/reconciliation"}>
+                            <Link href="/reconciliation" onClick={handleLinkClick} data-testid="link-reconciliation"><span>Xero Reconciliation</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/unlinked-calls"}>
+                            <Link href="/unlinked-calls" onClick={handleLinkClick} data-testid="link-unlinked-calls"><span>Unlinked Calls</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
                   </SidebarMenuItem>
-                ))}
+                </Collapsible>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         )}
 
-        {/* Operations & Analysis - Admin only */}
+        {/* Operations & Analysis — collapsible, admin only */}
         {isAdmin && (
           <SidebarGroup>
-            <SidebarGroupLabel>Operations & Analysis</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu className="font-normal text-[16px]">
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/calendar"}>
-                    <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <CalendarDays className="h-4 w-4" />
-                      </span>
-                      <span>Calendar</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/workflows"}>
-                    <Link href="/workflows" onClick={handleLinkClick} data-testid="link-workflows">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Workflow className="h-4 w-4" />
-                      </span>
-                      <span>Workflows</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/opportunities"}>
-                    <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <MessageSquare className="h-4 w-4" />
-                      </span>
-                      <span>Conversations</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/follow-up-queue"}>
-                    <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <PhoneCall className="h-4 w-4" />
-                      </span>
-                      <span>Follow-up Queue</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/reputation"}>
-                    <Link href="/reputation" onClick={handleLinkClick} data-testid="link-reputation">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Star className="h-4 w-4" />
-                      </span>
-                      <span>Reputation</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/reviews"}>
-                    <Link href="/reviews" onClick={handleLinkClick} data-testid="link-reviews">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Star className="h-4 w-4 fill-current" />
-                      </span>
-                      <span>Reviews</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/marketing"}>
-                    <Link href="/marketing" onClick={handleLinkClick} data-testid="link-marketing">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Megaphone className="h-4 w-4" />
-                      </span>
-                      <span>Marketing Planner</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/inbox"}>
-                    <Link href="/inbox" onClick={handleLinkClick} data-testid="link-inbox">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Inbox className="h-4 w-4" />
-                      </span>
-                      <span>Inbox</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/communications"}>
-                    <Link href="/communications" onClick={handleLinkClick} data-testid="link-call-log">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <PhoneCall className="h-4 w-4" />
-                      </span>
-                      <span>Call Log</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/metrics"}>
-                    <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <BarChart3 className="h-4 w-4" />
-                      </span>
-                      <span>Metrics Dashboard</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
+                <Collapsible open={opsOpen} onOpenChange={setOpsOpen} className="group/ops-collapsible">
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton isActive={opsActive} data-testid="collapsible-ops">
+                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                          <BarChart3 className="h-4 w-4" />
+                        </span>
+                        <span>Operations & Analysis</span>
+                        <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/ops-collapsible:rotate-90" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/calendar"}>
+                            <Link href="/calendar" onClick={handleLinkClick} data-testid="link-calendar"><span>Calendar</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/workflows"}>
+                            <Link href="/workflows" onClick={handleLinkClick} data-testid="link-workflows"><span>Workflows</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/opportunities"}>
+                            <Link href="/opportunities" onClick={handleLinkClick} data-testid="link-opportunities"><span>Conversations</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/follow-up-queue"}>
+                            <Link href="/follow-up-queue" onClick={handleLinkClick} data-testid="link-follow-up-queue"><span>Follow-up Queue</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/reputation"}>
+                            <Link href="/reputation" onClick={handleLinkClick} data-testid="link-reputation"><span>Reputation</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/reviews"}>
+                            <Link href="/reviews" onClick={handleLinkClick} data-testid="link-reviews"><span>Reviews</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/marketing"}>
+                            <Link href="/marketing" onClick={handleLinkClick} data-testid="link-marketing"><span>Marketing Planner</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/inbox"}>
+                            <Link href="/inbox" onClick={handleLinkClick} data-testid="link-inbox"><span>Inbox</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/communications"}>
+                            <Link href="/communications" onClick={handleLinkClick} data-testid="link-call-log"><span>Call Log</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
+                            <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
