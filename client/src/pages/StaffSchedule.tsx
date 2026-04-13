@@ -97,22 +97,27 @@ export default function StaffSchedule() {
   const isTodaySelected = isToday(selectedDate);
 
   // ── Queries ──
-  const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
-    queryKey: ['/api/jobs?limit=10000'],
-    refetchInterval: 10_000,
+  // Use a date-scoped endpoint so we fetch only the few jobs for this day, not all 3500+
+  const { data: jobsData, isLoading: jobsLoading } = useQuery<{ success: boolean; data: Job[] }>({
+    queryKey: ['/api/jobs/for-date', dateStr],
+    queryFn: () => fetch(`/api/jobs/for-date?date=${dateStr}`).then(r => r.json()),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
   const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
     queryKey: ['/api/employees'],
   });
   const { data: assignmentsData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/staff-assignments'],
-    refetchInterval: 10_000,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
   const { data: customersData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/customers'],
   });
 
-  const allJobs        = jobsData?.data ?? [];
+  // dayJobs comes directly from the date-scoped API — no client-side filtering needed
+  const dayJobs        = jobsData?.data ?? [];
   const allEmployees   = employeesData?.data ?? [];
   const allAssignments = assignmentsData?.data ?? [];
   const allCustomers   = customersData?.data ?? [];
@@ -129,23 +134,6 @@ export default function StaffSchedule() {
       .filter(e => e.isActive && e.role !== 'admin')
       .sort((a, b) => `${a.firstName}`.localeCompare(`${b.firstName}`)),
     [allEmployees]
-  );
-
-  // Jobs for the selected date
-  // scheduledDate is stored as a UTC ISO timestamp (e.g. "2026-04-13T22:00:00.000Z")
-  // so we must convert to NZ local date before comparing against dateStr
-  const dayJobs = useMemo(() =>
-    allJobs.filter(j => {
-      if (!j.scheduledDate) return false;
-      if (j.status === 'archived' || j.status === 'unsuccessful') return false;
-      try {
-        const nzDate = formatInTimeZone(new Date(j.scheduledDate), NZ_TZ, 'yyyy-MM-dd');
-        return nzDate === dateStr;
-      } catch {
-        return false;
-      }
-    }),
-    [allJobs, dateStr]
   );
 
   const jobMap = useMemo(() => {
