@@ -246,6 +246,22 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+// Staff accent palette — same order used in StaffSchedule Gantt view
+const STAFF_PALETTE = [
+  { dot: '#3b82f6' }, // blue
+  { dot: '#10b981' }, // emerald
+  { dot: '#f97316' }, // orange
+  { dot: '#a855f7' }, // purple
+  { dot: '#ec4899' }, // pink
+  { dot: '#eab308' }, // yellow
+  { dot: '#14b8a6' }, // teal
+  { dot: '#ef4444' }, // red
+];
+
+function crewInitials(firstName?: string, lastName?: string) {
+  return `${(firstName ?? '')[0] ?? ''}${(lastName ?? '')[0] ?? ''}`.toUpperCase() || '?';
+}
+
 // Calculate total price from job data
 const calculateJobTotal = (job: any): number => {
   // Always use subtotal (exc GST) - never show inc GST prices
@@ -527,6 +543,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return employees
       .filter((emp) => emp.isActive === true) // Only show active employees
       .map((emp, index) => transformEmployeeToStaffMember(emp, index));
+  }, [employees]);
+
+  // Map employeeId → Employee for fast lookup in job cards
+  const employeeMap = useMemo(() => {
+    const m = new Map<string, Employee>();
+    employees.forEach(e => m.set(e.id, e));
+    return m;
+  }, [employees]);
+
+  // Map employeeId → palette colour (sorted crew, same order as StaffSchedule)
+  const crewPaletteMap = useMemo(() => {
+    const m = new Map<string, { dot: string }>();
+    const crew = employees
+      .filter(e => e.isActive && e.role !== 'admin')
+      .sort((a, b) => (a.firstName ?? '').localeCompare(b.firstName ?? ''));
+    crew.forEach((e, i) => m.set(e.id, STAFF_PALETTE[i % STAFF_PALETTE.length]));
+    return m;
   }, [employees]);
 
   // Fetch job templates for template selection
@@ -2447,6 +2480,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               <div
                                 key={job.id}
                                 className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                                style={(() => {
+                                  const firstId = job.assignedTeam?.[0];
+                                  const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
+                                  return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
+                                })()}
                                 draggable
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData("jobId", job.id);
@@ -2584,6 +2622,33 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       <p className="text-sm text-gray-500 line-clamp-3 mb-2">
                                         {job.description}
                                       </p>
+                                    )}
+
+                                    {/* Crew colour indicators */}
+                                    {job.assignedTeam && job.assignedTeam.length > 0 && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        {job.assignedTeam.slice(0, 5).map((empId: string) => {
+                                          const emp = employeeMap.get(empId);
+                                          const pal = crewPaletteMap.get(empId);
+                                          if (!pal) return null;
+                                          const label = emp ? `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() : empId;
+                                          return (
+                                            <div
+                                              key={empId}
+                                              title={label}
+                                              className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 ring-2 ring-white"
+                                              style={{ backgroundColor: pal.dot }}
+                                            >
+                                              {emp ? crewInitials(emp.firstName, emp.lastName) : '?'}
+                                            </div>
+                                          );
+                                        })}
+                                        <span className="text-xs text-gray-400 ml-0.5">
+                                          {job.assignedTeam.length === 1
+                                            ? (employeeMap.get(job.assignedTeam[0])?.firstName ?? 'Assigned')
+                                            : `${job.assignedTeam.length} crew`}
+                                        </span>
+                                      </div>
                                     )}
                                   </div>
 
@@ -2856,6 +2921,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   <div
                     key={job.id}
                     className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
+                    style={(() => {
+                      const firstId = job.assignedTeam?.[0];
+                      const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
+                      return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
+                    })()}
                     onClick={() => handleEditJob(job)}
                     data-testid={`job-card-${job.id}`}
                   >
@@ -2955,6 +3025,32 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </span>
                           ) : null}
                         </div>
+
+                        {/* Crew colour indicators */}
+                        {job.assignedTeam && job.assignedTeam.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            {job.assignedTeam.slice(0, 5).map((empId: string) => {
+                              const emp = employeeMap.get(empId);
+                              const pal = crewPaletteMap.get(empId);
+                              if (!pal) return null;
+                              return (
+                                <div
+                                  key={empId}
+                                  title={emp ? `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() : empId}
+                                  className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 ring-2 ring-white"
+                                  style={{ backgroundColor: pal.dot }}
+                                >
+                                  {emp ? crewInitials(emp.firstName, emp.lastName) : '?'}
+                                </div>
+                              );
+                            })}
+                            <span className="text-xs text-gray-400 ml-0.5">
+                              {job.assignedTeam.length === 1
+                                ? (employeeMap.get(job.assignedTeam[0])?.firstName ?? 'Assigned')
+                                : `${job.assignedTeam.length} crew`}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
