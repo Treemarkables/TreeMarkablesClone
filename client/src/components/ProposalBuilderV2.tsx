@@ -1529,7 +1529,7 @@ export function ProposalBuilderV2({
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
               {/* Document Header — height controlled by headerHeight state only */}
-              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0 }}>
+              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ minHeight: Math.max(headerHeight, logoSize + 24), flexShrink: 0 }}>
                 {/* Logo container — logo scales within fixed header */}
                 <div className="flex items-center h-full py-3" style={{ flexShrink: 0 }}>
                   <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
@@ -1542,7 +1542,7 @@ export function ProposalBuilderV2({
                         <img
                           src={logoUrl}
                           alt="Company Logo"
-                          style={{ height: Math.min(logoSize, headerHeight - 24), maxWidth: 400 }}
+                          style={{ height: logoSize, maxWidth: 600 }}
                           className="w-auto object-contain transition-all group-hover:opacity-80"
                         />
                         <span className="absolute -bottom-5 left-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
@@ -1570,9 +1570,9 @@ export function ProposalBuilderV2({
                         <p className="text-xs font-medium text-muted-foreground mb-2">Logo size: {logoSize}px</p>
                         <Slider
                           min={24}
-                          max={Math.max(24, headerHeight - 24)}
+                          max={1200}
                           step={4}
-                          value={[Math.min(logoSize, headerHeight - 24)]}
+                          value={[logoSize]}
                           onValueChange={([v]) => setLogoSize(v)}
                           onValueCommit={([v]) => saveLogoSizeMutation.mutate(v)}
                           className="w-full"
