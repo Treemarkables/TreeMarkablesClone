@@ -1060,6 +1060,7 @@ export function ProposalBuilderV2({
 
   const initCreateRef = useRef(false);
   const initEditRef = useRef<string | null>(null);
+  const editHasLineItemsRef = useRef(false);
 
   // ── Initialization guards ──────────────────────────────────────────────────
 
@@ -1067,6 +1068,7 @@ export function ProposalBuilderV2({
     if (!isOpen) {
       initCreateRef.current = false;
       initEditRef.current = null;
+      editHasLineItemsRef.current = false;
       setDraftId(null);
       setBlocks([]);
       setProposalTitle("Treemarkables Quote");
@@ -1076,14 +1078,24 @@ export function ProposalBuilderV2({
     }
   }, [isOpen]);
 
-  useEffect(() => { initEditRef.current = null; }, [proposalId]);
+  useEffect(() => { initEditRef.current = null; editHasLineItemsRef.current = false; }, [proposalId]);
 
   // Initialize from existing proposal (edit mode)
   useEffect(() => {
     if (!existingData || !(existingData as { success?: boolean }).success || mode !== "edit" || !isOpen) return;
     const key = `${proposalId}-${isOpen}`;
-    if (initEditRef.current === key) return;
+
+    // Check if incoming data has any line items
+    const incomingSections = Array.isArray((existingData as { data: Record<string, unknown> }).data?.sections)
+      ? ((existingData as { data: Record<string, unknown> }).data.sections as Array<{ lineItems?: unknown[] }>)
+      : [];
+    const incomingHasLineItems = incomingSections.some(s => (s.lineItems || []).length > 0);
+
+    // Guard: skip re-init if already loaded for this key, UNLESS the server now has
+    // line items that we missed on the first load (e.g. server just synthesised them from job data).
+    if (initEditRef.current === key && (editHasLineItemsRef.current || !incomingHasLineItems)) return;
     initEditRef.current = key;
+    if (incomingHasLineItems) editHasLineItemsRef.current = true;
 
     const p = (existingData as { data: Record<string, unknown> }).data;
     setProposalTitle((p.title as string) || "Treemarkables Quote");

@@ -16168,66 +16168,104 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           capturedAt: new Date().toISOString(),
         }));
 
+      // Helper: map raw job lineItems JSONB entries to the shape ProposalTemplate expects
+      const mapJobItems = (rawItems: any[]) =>
+        rawItems.map((item: any, i: number) => ({
+          id: item.id || `synth-item-${i}`,
+          description: item.description || item.name || '',
+          quantity: parseFloat(String(item.quantity ?? 1)) || 1,
+          unitPrice: parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0,
+          totalPrice: parseFloat(String(item.totalPrice ?? item.price ?? 0)) || 0,
+          unit: item.unit || 'each',
+          category: item.category || item.itemCode || '',
+          isOptional: item.isOptional || false,
+          selected: true,
+          pricingType: item.pricingType || 'normal',
+          choices: item.choices || [],
+          priceIncludesTax: item.priceIncludesTax || false,
+          fixedPrice: item.fixedPrice ? parseFloat(String(item.fixedPrice)) : undefined,
+          sortOrder: i,
+        }));
+
       let sectionsWithPhotosAndLineItems: any[];
 
-      if (sections.length === 0 && allLineItems.length === 0 && proposal.jobId) {
-        // Legacy proposal: no builder sections saved — synthesise from the job's lineItems JSONB
+      if (allLineItems.length === 0 && proposal.jobId) {
+        // No proposal_line_items saved yet — fall back to the job's lineItems JSONB
         const job = await storage.getJob(proposal.jobId);
-        const jobItems: any[] = Array.isArray((job as any)?.lineItems) ? (job as any).lineItems : [];
+        const rawJobItems: any[] = Array.isArray((job as any)?.lineItems) ? (job as any).lineItems : [];
+        const mappedJobItems = mapJobItems(rawJobItems);
 
-        const builtSections: any[] = [];
-
-        // Description section (use job description if available)
-        const desc = (job as any)?.description || '';
-        builtSections.push({
-          id: 'synth-desc',
-          title: (job as any)?.serviceType || 'Job Description',
-          description: desc,
-          photos: [],
-          lineItems: [],
-          sortOrder: 0,
-          sectionType: 'fixed',
-        });
-
-        // Line items section (if any)
-        if (jobItems.length > 0) {
-          const mappedItems = jobItems.map((item: any, i: number) => ({
-            id: item.id || `synth-item-${i}`,
-            description: item.description || item.name || '',
-            quantity: parseFloat(String(item.quantity ?? 1)) || 1,
-            unitPrice: parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0,
-            totalPrice: parseFloat(String(item.totalPrice ?? item.price ?? 0)) || 0,
-            unit: item.unit || 'each',
-            category: item.category || item.itemCode || '',
-            isOptional: item.isOptional || false,
-            selected: true,
-            pricingType: item.pricingType || 'normal',
-            choices: item.choices || [],
-            priceIncludesTax: item.priceIncludesTax || false,
-            fixedPrice: item.fixedPrice ? parseFloat(String(item.fixedPrice)) : undefined,
-            sortOrder: i,
-          }));
+        if (sections.length === 0) {
+          // No builder sections at all — synthesise everything from the job
+          const builtSections: any[] = [];
+          const desc = (job as any)?.description || '';
           builtSections.push({
-            id: 'synth-items',
-            title: 'Line Items',
-            description: '',
+            id: 'synth-desc',
+            title: (job as any)?.serviceType || 'Job Description',
+            description: desc,
             photos: [],
-            lineItems: mappedItems,
-            sortOrder: 1,
+            lineItems: [],
+            sortOrder: 0,
             sectionType: 'fixed',
           });
-        }
+          if (mappedJobItems.length > 0) {
+            builtSections.push({
+              id: 'synth-items',
+              title: 'Line Items',
+              description: '',
+              photos: [],
+              lineItems: mappedJobItems,
+              sortOrder: 1,
+              sectionType: 'fixed',
+            });
+          }
+          sectionsWithPhotosAndLineItems = builtSections;
+        } else {
+          // Sections exist but have no line items — inject job items into the first
+          // section whose title / type looks like a "line items" section.
+          let injected = false;
+          sectionsWithPhotosAndLineItems = sections.map((section, idx) => {
+            const normType = ((section as any).sectionType || '').toLowerCase();
+            const normTitle = (section.title || '').toLowerCase();
+            const isLineItemsSection =
+              normType === 'lineitems' || normType === 'pricing' ||
+              normTitle.includes('line item') || normTitle === 'items' ||
+              normTitle === 'pricing' || normTitle === 'services' || normTitle === 'quote';
 
-        sectionsWithPhotosAndLineItems = builtSections;
+            if (!injected && isLineItemsSection && mappedJobItems.length > 0) {
+              injected = true;
+              return {
+                ...section,
+                description: section.content || '',
+                photos: mapPhotos((section.images || []) as string[]),
+                lineItems: mappedJobItems,
+                sectionType: 'fixed',
+              };
+            }
+            return {
+              ...section,
+              description: section.content || '',
+              photos: mapPhotos((section.images || []) as string[]),
+              lineItems: [],
+              sectionType: normType === 'custom' ? 'fixed' : (normType || 'fixed'),
+            };
+          });
+
+          // Only synthesise a section if the proposal has no sections at all for line items
+          // (don't append one if the user intentionally removed the line-items block)
+        }
       } else {
-        // Normal path: builder-saved sections with line items
-        sectionsWithPhotosAndLineItems = sections.map(section => ({
-          ...section,
-          description: section.content || '',
-          photos: mapPhotos((section.images || []) as string[]),
-          lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id),
-          sectionType: (section as any).sectionType === 'custom' ? 'fixed' : ((section as any).sectionType || 'fixed'),
-        }));
+        // Normal path: builder-saved sections with their own line items
+        sectionsWithPhotosAndLineItems = sections.map(section => {
+          const normType = ((section as any).sectionType || '').toLowerCase();
+          return {
+            ...section,
+            description: section.content || '',
+            photos: mapPhotos((section.images || []) as string[]),
+            lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id),
+            sectionType: normType === 'custom' ? 'fixed' : (normType || 'fixed'),
+          };
+        });
       }
       
       res.json({
