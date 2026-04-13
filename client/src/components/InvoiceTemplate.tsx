@@ -2,7 +2,7 @@ import { useState, forwardRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { addDays } from 'date-fns';
+import { addDays, format } from 'date-fns';
 import { Download, Mail, Copy, CreditCard, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Customer, InvoiceSectionConfig, InvoiceBlock } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
