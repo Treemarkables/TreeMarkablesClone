@@ -278,56 +278,88 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       )}
 
       <Card className="shadow-lg">
-        {/* Header with Logo */}
-        <CardHeader className="p-4 sm:p-8 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
-          <div className="flex items-start justify-between gap-4">
+        {/* Header with Logo — compact, logo left, company contact info right */}
+        <CardHeader className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
+          <div className="flex items-center justify-between gap-4">
             {/* Left: Logo */}
             <div className="shrink-0">
               <img 
                 src={logoUrl} 
-                alt="Treemarkables Logo" 
-                className="h-16 sm:h-20 w-auto object-contain"
+                alt="Company Logo" 
+                className="h-20 sm:h-28 w-auto object-contain"
                 data-testid="img-company-logo"
               />
             </div>
 
-            {/* Right: Company details + Proposal info stacked */}
-            <div className="text-right flex flex-col gap-3">
-              {/* Company details block */}
-              <div className="text-right">
-                {template.companyName && (
-                  <p className="text-sm font-semibold text-gray-800">{template.companyName}</p>
-                )}
-                {template.companyAddress && (
-                  <p className="text-xs text-gray-500 mt-0.5">{template.companyAddress}</p>
-                )}
-                {template.companyPhone && (
-                  <p className="text-xs text-gray-500 mt-0.5">{template.companyPhone}</p>
-                )}
-                {template.companyEmail && (
-                  <p className="text-xs text-gray-500 mt-0.5">{template.companyEmail}</p>
-                )}
-                {template.gstNumber && (
-                  <p className="text-xs text-gray-400 mt-0.5">GST: {template.gstNumber}</p>
+            {/* Right: Company contact info only (no PROPOSAL info here) */}
+            <div className="text-right">
+              {template.companyAddress && (
+                <p className="text-sm text-gray-700">{template.companyAddress}</p>
+              )}
+              {template.companyPhone && (
+                <p className="text-sm text-gray-600 mt-0.5">{template.companyPhone}</p>
+              )}
+              {template.companyEmail && (
+                <p className="text-sm text-gray-600 mt-0.5">{template.companyEmail}</p>
+              )}
+              {template.gstNumber && (
+                <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
+              )}
+            </div>
+          </div>
+        </CardHeader>
+        
+        <CardContent className="p-0">
+          {/* Customer + Proposal Info Row — matches the builder layout */}
+          <div className="p-4 sm:p-6 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              {/* Left: Customer box */}
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4 flex-1 min-w-0">
+                {customer ? (
+                  <>
+                    <h4 className="font-semibold text-gray-900 text-sm sm:text-base break-words" data-testid="text-customer-name">
+                      {customer.name}
+                    </h4>
+                    {(job?.address || customer.address) && (
+                      <div className="flex items-start gap-2 text-gray-700 mt-2 text-sm">
+                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 mt-0.5" />
+                        <p className="break-words">
+                          {[
+                            job?.address || customer.address,
+                            job?.city || customer.city,
+                            job?.region || customer.region,
+                          ].filter(Boolean).join(', ')}
+                        </p>
+                      </div>
+                    )}
+                    {customer.email && (
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mt-1">
+                        <MailIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="break-all">{customer.email}</span>
+                      </div>
+                    )}
+                    {customer.phone && (
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mt-1">
+                        <Phone className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
+                        <span className="break-all">{customer.phone}</span>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">No customer selected</p>
                 )}
               </div>
 
-              {/* Divider */}
-              <div className="border-t border-orange-200" />
-
-              {/* Proposal number / date block */}
-              <div className="text-right">
-                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">PROPOSAL</h2>
-                <p className="text-sm text-gray-600" data-testid="text-proposal-number">
-                  #{proposal.proposalNumber}
+              {/* Right: Proposal reference info */}
+              <div className="text-right shrink-0">
+                <p className="text-base font-bold text-gray-900" data-testid="text-proposal-number">
+                  Proposal #{proposal.proposalNumber}
                 </p>
                 {job?.jobNumber && (
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    Job #{job.jobNumber}
-                  </p>
+                  <p className="text-sm text-gray-600 mt-0.5">Job #{job.jobNumber}</p>
                 )}
                 {proposal.createdAt && (
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-sm text-gray-500 mt-1">
                     {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
                   </p>
                 )}
@@ -339,50 +371,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               </div>
             </div>
           </div>
-        </CardHeader>
-        
-        <CardContent className="p-0">
-          {/* Customer Information */}
-          {customer && (
-            <div className="p-4 sm:p-8 border-b border-gray-200">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Proposal For</h3>
-              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
-                    <h4 className="font-semibold text-gray-900 text-sm sm:text-base break-words" data-testid="text-customer-name">
-                      {customer.name}
-                    </h4>
-                    {(job?.address || customer.address) && (
-                      <div className="flex items-start gap-2 text-gray-700 mt-2 text-sm sm:text-base">
-                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 mt-1" />
-                        <p className="break-words">
-                          {[
-                            job?.address || customer.address,
-                            job?.city || customer.city,
-                            job?.region || customer.region,
-                          ].filter(Boolean).join(', ')}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-1">
-                    {customer.email && (
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                        <MailIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                        <span className="break-all">{customer.email}</span>
-                      </div>
-                    )}
-                    {customer.phone && (
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                        <Phone className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
-                        <span className="break-all">{customer.phone}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Proposal Sections */}
           {sections.map((section, sectionIndex) => (
