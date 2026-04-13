@@ -28,37 +28,52 @@ const port = parseInt(process.env.PORT || '5000', 10);
 const isProduction = process.env.NODE_ENV !== 'development';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRODUCTION ONLY: Bind to the port IMMEDIATELY so the deployment health check
-// passes even while the Express app is still being assembled (routes, sessions…).
-// A switchable handler starts as a minimal "starting" response, then is atomically
-// swapped to the full Express app once it's ready.
+// PRODUCTION ONLY: Use the port already bound by launcher.js, OR bind it
+// ourselves as a fallback (e.g. direct `node dist/index.js` without launcher).
+//
+// launcher.js binds port 5000 in <100ms (before Node finishes parsing this
+// 1.4MB bundle). It sets global.__launcherServer and global.__launcherHandler.
+// When this code runs (~5-7s later) we simply reuse that server and swap the
+// handler from "starting" to the real Express app once it's ready.
 // ─────────────────────────────────────────────────────────────────────────────
 let productionHttpServer: http.Server | null = null;
+// currentHandler is only used in the direct (no-launcher) fallback path.
 let currentHandler: ((req: http.IncomingMessage, res: http.ServerResponse) => void) | null = null;
 
 if (isProduction) {
-  currentHandler = (_req, res) => {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'starting', env: process.env.NODE_ENV }));
-  };
+  const launcherServer = (global as any).__launcherServer as http.Server | undefined;
 
-  productionHttpServer = http.createServer((req, res) => {
-    if (currentHandler) currentHandler(req, res);
-  });
+  if (launcherServer) {
+    // ── Launcher path (normal production deployment) ──────────────────────
+    // The port is already bound and health checks are already returning 200.
+    productionHttpServer = launcherServer;
+    log(`Reusing launcher's pre-bound server on port ${port}`, "startup");
+  } else {
+    // ── Fallback: direct start without launcher ───────────────────────────
+    // Bind our own server with a switchable "starting" handler.
+    currentHandler = (_req, res) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ status: 'starting', env: process.env.NODE_ENV }));
+    };
 
-  productionHttpServer.listen(port, "0.0.0.0", () => {
-    log(`Port ${port} bound immediately — health checks will pass while app loads`, "startup");
-  });
+    productionHttpServer = http.createServer((req, res) => {
+      if (currentHandler) currentHandler(req, res);
+    });
 
-  productionHttpServer.on('error', (error: any) => {
-    if (error.code === 'EADDRINUSE') {
-      log(`Port ${port} is already in use`, "error");
-    } else {
-      log(`Server error: ${error.message}`, "error");
-    }
-    console.error('Server error details:', error);
-    process.exit(1);
-  });
+    productionHttpServer.listen(port, "0.0.0.0", () => {
+      log(`Port ${port} bound (direct start — no launcher)`, "startup");
+    });
+
+    productionHttpServer.on('error', (error: any) => {
+      if (error.code === 'EADDRINUSE') {
+        log(`Port ${port} is already in use`, "error");
+      } else {
+        log(`Server error: ${error.message}`, "error");
+      }
+      console.error('Server error details:', error);
+      process.exit(1);
+    });
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -440,8 +455,14 @@ function startNotificationQueueWorker() {
         throw error;
       }
 
-      // Switch the pre-bound productionHttpServer to use the full Express app
-      currentHandler = app as any;
+      // Switch the production server to use the full Express app.
+      // If the launcher pre-bound the port, update its global handler.
+      // If we bound the port ourselves (fallback), update currentHandler.
+      if ((global as any).__launcherHandler !== undefined) {
+        (global as any).__launcherHandler = app;
+      } else {
+        currentHandler = app as any;
+      }
       log(`Server fully initialised — Express app now active on port ${port}`, "startup");
       log(`Server ready to accept connections at http://0.0.0.0:${port}`, "startup");
 
