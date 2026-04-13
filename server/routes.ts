@@ -16144,37 +16144,91 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         });
       }
       
-      // Get proposal sections
-      const sections = await storage.getProposalSectionsByProposal(proposal.id);
-      
-      // Get all line items for this proposal
-      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+      // Get proposal sections and all line items in parallel
+      const [sections, allLineItems] = await Promise.all([
+        storage.getProposalSectionsByProposal(proposal.id),
+        storage.getProposalLineItemsByProposal(proposal.id),
+      ]);
       
       // Fetch choices for each line item
       const lineItemsWithChoices = await Promise.all(
         allLineItems.map(async (item) => {
           const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
-          return {
-            ...item,
-            choices: choices || []
-          };
+          return { ...item, choices: choices || [] };
         })
       );
-      
-      // Map images → photos, content → description, and attach line items with choices to each section
-      const sectionsWithPhotosAndLineItems = sections.map(section => ({
-        ...section,
-        description: section.content || '', // Map content to description for client compatibility
-        photos: (section.images || []).map((url: string) => ({
+
+      const mapPhotos = (images: string[]) =>
+        (images || []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,
           filename: url.split('/').pop() || 'photo',
           type: 'before' as const,
           category: 'documentation' as const,
           capturedAt: new Date().toISOString(),
-        })),
-        lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
-      }));
+        }));
+
+      let sectionsWithPhotosAndLineItems: any[];
+
+      if (sections.length === 0 && allLineItems.length === 0 && proposal.jobId) {
+        // Legacy proposal: no builder sections saved — synthesise from the job's lineItems JSONB
+        const job = await storage.getJob(proposal.jobId);
+        const jobItems: any[] = Array.isArray((job as any)?.lineItems) ? (job as any).lineItems : [];
+
+        const builtSections: any[] = [];
+
+        // Description section (use job description if available)
+        const desc = (job as any)?.description || '';
+        builtSections.push({
+          id: 'synth-desc',
+          title: (job as any)?.serviceType || 'Job Description',
+          description: desc,
+          photos: [],
+          lineItems: [],
+          sortOrder: 0,
+          sectionType: 'fixed',
+        });
+
+        // Line items section (if any)
+        if (jobItems.length > 0) {
+          const mappedItems = jobItems.map((item: any, i: number) => ({
+            id: item.id || `synth-item-${i}`,
+            description: item.description || item.name || '',
+            quantity: parseFloat(String(item.quantity ?? 1)) || 1,
+            unitPrice: parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0,
+            totalPrice: parseFloat(String(item.totalPrice ?? item.price ?? 0)) || 0,
+            unit: item.unit || 'each',
+            category: item.category || item.itemCode || '',
+            isOptional: item.isOptional || false,
+            selected: true,
+            pricingType: item.pricingType || 'normal',
+            choices: item.choices || [],
+            priceIncludesTax: item.priceIncludesTax || false,
+            fixedPrice: item.fixedPrice ? parseFloat(String(item.fixedPrice)) : undefined,
+            sortOrder: i,
+          }));
+          builtSections.push({
+            id: 'synth-items',
+            title: 'Line Items',
+            description: '',
+            photos: [],
+            lineItems: mappedItems,
+            sortOrder: 1,
+            sectionType: 'fixed',
+          });
+        }
+
+        sectionsWithPhotosAndLineItems = builtSections;
+      } else {
+        // Normal path: builder-saved sections with line items
+        sectionsWithPhotosAndLineItems = sections.map(section => ({
+          ...section,
+          description: section.content || '',
+          photos: mapPhotos((section.images || []) as string[]),
+          lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id),
+          sectionType: (section as any).sectionType === 'custom' ? 'fixed' : ((section as any).sectionType || 'fixed'),
+        }));
+      }
       
       res.json({
         success: true,
@@ -16227,7 +16281,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // Create section
           const createdSection = await storage.createProposalSection({
             proposalId: proposal.id,
-            sectionType: 'custom',
+            sectionType: section.sectionType || 'fixed',
             title: section.title || 'Untitled Section',
             content: section.description || '',
             images: section.photos?.map((p: any) => p.url) || [],
@@ -16381,7 +16435,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // Create section
           const createdSection = await storage.createProposalSection({
             proposalId: proposal.id,
-            sectionType: 'custom',
+            sectionType: section.sectionType || 'fixed',
             title: section.title || 'Untitled Section',
             content: section.description || '',
             images: section.photos?.map((p: any) => p.url) || [],
