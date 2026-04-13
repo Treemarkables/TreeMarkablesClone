@@ -1,472 +1,405 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
-
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, MapPin, ChevronRight as ChevronRightSmall } from 'lucide-react';
-import { useState, useMemo, useRef } from 'react';
-import type { Job, Employee, Customer } from '@shared/schema';
+import { useQuery } from '@tanstack/react-query';
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { addDays, format, isToday } from 'date-fns';
+import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import type { Job, Employee } from '@shared/schema';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
-import { queryClient, apiRequest } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const NZ_TZ = 'Pacific/Auckland';
+const TIMELINE_START_H = 6;   // 6 AM
+const TIMELINE_END_H   = 19;  // 7 PM
+const TIMELINE_HOURS   = TIMELINE_END_H - TIMELINE_START_H;
+const STAFF_COL_W      = 148; // px — fixed left column width
+
+const HOUR_LABELS = Array.from({ length: TIMELINE_HOURS + 1 }, (_, i) => {
+  const h = TIMELINE_START_H + i;
+  if (h === 12) return '12 PM';
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
+});
+
+// Staff accent colours (assigned by index)
+const STAFF_PALETTE = [
+  { dot: '#3b82f6', row: '#eff6ff', avatar: '#1e40af' }, // blue
+  { dot: '#10b981', row: '#f0fdf4', avatar: '#065f46' }, // emerald
+  { dot: '#f97316', row: '#fff7ed', avatar: '#9a3412' }, // orange
+  { dot: '#a855f7', row: '#faf5ff', avatar: '#6b21a8' }, // purple
+  { dot: '#ec4899', row: '#fdf2f8', avatar: '#9d174d' }, // pink
+  { dot: '#eab308', row: '#fefce8', avatar: '#713f12' }, // yellow
+  { dot: '#14b8a6', row: '#f0fdfa', avatar: '#134e4a' }, // teal
+  { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
+];
+
+// Job block colours by status
+const JOB_PALETTE: Record<string, { bg: string; border: string; text: string }> = {
+  lead:        { bg: '#fef9c3', border: '#ca8a04', text: '#713f12' },
+  quoted:      { bg: '#ffedd5', border: '#ea580c', text: '#7c2d12' },
+  scheduled:   { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' },
+  'in-progress':{ bg: '#d1fae5', border: '#059669', text: '#064e3b' },
+  completed:   { bg: '#f3f4f6', border: '#6b7280', text: '#1f2937' },
+  invoiced:    { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' },
+  paid:        { bg: '#dcfce7', border: '#16a34a', text: '#14532d' },
+};
+const JOB_PALETTE_DEFAULT = { bg: '#f0f9ff', border: '#0ea5e9', text: '#0c4a6e' };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeStrToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function minutesToPercent(minutes: number): number {
+  const start = TIMELINE_START_H * 60;
+  const total = TIMELINE_HOURS * 60;
+  return Math.max(0, Math.min(100, (minutes - start) / total * 100));
+}
+
+function jobColor(status: string) {
+  return JOB_PALETTE[status] ?? JOB_PALETTE_DEFAULT;
+}
+
+function initials(name: string) {
+  return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function nzDateStr(date: Date) {
+  return formatInTimeZone(date, NZ_TZ, 'yyyy-MM-dd');
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function StaffSchedule() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const now = new Date();
-    const nzNow = toZonedTime(now, 'Pacific/Auckland');
-    nzNow.setHours(0, 0, 0, 0);
-    return nzNow;
+    const now = toZonedTime(new Date(), NZ_TZ);
+    now.setHours(0, 0, 0, 0);
+    return now;
   });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
-  const { toast } = useToast();
 
+  // Current-time line position (refreshed every minute)
+  const [nowPercent, setNowPercent] = useState<number | null>(null);
+  useEffect(() => {
+    const calc = () => {
+      const now = toZonedTime(new Date(), NZ_TZ);
+      const mins = now.getHours() * 60 + now.getMinutes();
+      setNowPercent(minutesToPercent(mins));
+    };
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const dateStr = nzDateStr(selectedDate);
+  const isTodaySelected = isToday(selectedDate);
+
+  // ── Queries ──
   const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
     queryKey: ['/api/jobs?limit=10000'],
-    refetchInterval: 5000,
+    refetchInterval: 10_000,
   });
-
   const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
     queryKey: ['/api/employees'],
   });
-
-  const { data: customersData } = useQuery<{ success: boolean; data: Customer[] }>({
+  const { data: assignmentsData } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ['/api/staff-assignments'],
+    refetchInterval: 10_000,
+  });
+  const { data: customersData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/customers'],
   });
 
-  const { data: staffAssignmentsData } = useQuery<{ success: boolean; data: any[] }>({
-    queryKey: ['/api/staff-assignments'],
-    refetchInterval: 5000,
-  });
-
-  const jobs = jobsData?.data || [];
-  const employees = employeesData?.data || [];
-  const customers = customersData?.data || [];
-  const staffAssignments = staffAssignmentsData?.data || [];
+  const allJobs        = jobsData?.data ?? [];
+  const allEmployees   = employeesData?.data ?? [];
+  const allAssignments = assignmentsData?.data ?? [];
+  const allCustomers   = customersData?.data ?? [];
 
   const customerMap = useMemo(() => {
-    const map = new Map<string, string>();
-    customers.forEach(customer => {
-      map.set(customer.id, customer.name);
-    });
-    return map;
-  }, [customers]);
+    const m = new Map<string, string>();
+    allCustomers.forEach((c: any) => m.set(c.id, c.name));
+    return m;
+  }, [allCustomers]);
 
-  const getCustomerName = (job: Job) => {
-    if (job.customerId) {
-      return customerMap.get(job.customerId) || 'Unknown Customer';
-    }
-    return 'No Customer';
-  };
+  // Active crew (non-admin) sorted by first name
+  const crewMembers = useMemo(() =>
+    allEmployees
+      .filter(e => e.isActive && e.role !== 'admin')
+      .sort((a, b) => `${a.firstName}`.localeCompare(`${b.firstName}`)),
+    [allEmployees]
+  );
 
-  // Number of calendar days a job spans (minimum 1) — used to split revenue per day
-  const jobDayCount = (job: any): number => {
-    if (!job.scheduledDate || !job.scheduledEndDate) return 1;
-    const startNZ = formatInTimeZone(new Date(job.scheduledDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-    const endNZ = formatInTimeZone(new Date(job.scheduledEndDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-    if (endNZ <= startNZ) return 1;
-    const startMs = new Date(startNZ + 'T12:00:00Z').getTime();
-    const endMs = new Date(endNZ + 'T12:00:00Z').getTime();
-    return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
-  };
-
-  // Revenue attributed to one day of the job (exc-GST, split evenly across all scheduled days)
-  const calculateJobTotal = (job: any): number => {
-    let raw = 0;
-    if (job.subtotal && Number(job.subtotal) > 0) raw = Number(job.subtotal);
-    else if (job.totalAmount && Number(job.totalAmount) > 0) raw = Number(job.totalAmount);
-    else if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) raw = Number(job.totalIncludingGst) / 1.15;
-    else {
-      const lineItems = job.lineItems;
-      if (lineItems && Array.isArray(lineItems)) {
-        raw = lineItems.reduce((sum: number, item: any) => {
-          return sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
-        }, 0);
-      }
-    }
-    return raw / jobDayCount(job);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NZ', {
-      style: 'currency',
-      currency: 'NZD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  // Jobs for the selected date
+  const dayJobs = useMemo(() =>
+    allJobs.filter(j =>
+      j.scheduledDate === dateStr &&
+      j.status !== 'archived' &&
+      j.status !== 'unsuccessful'
+    ),
+    [allJobs, dateStr]
+  );
 
   const jobMap = useMemo(() => {
-    const map = new Map<string, Job>();
-    jobs.forEach(job => {
-      map.set(job.id, job);
+    const m = new Map<string, Job>();
+    dayJobs.forEach(j => m.set(j.id, j));
+    return m;
+  }, [dayJobs]);
+
+  // Assignments for this date, keyed by employeeId → jobs[]
+  const assignmentsByEmployee = useMemo(() => {
+    const map = new Map<string, Job[]>();
+    allAssignments.forEach((a: any) => {
+      const job = jobMap.get(a.jobId);
+      if (!job) return;
+      const list = map.get(a.employeeId) ?? [];
+      if (!list.find(j => j.id === job.id)) list.push(job);
+      map.set(a.employeeId, list);
     });
     return map;
-  }, [jobs]);
+  }, [allAssignments, jobMap]);
 
-  const getEmployeeJobs = (employeeId: string) => {
-    const selectedDateNZ = formatInTimeZone(selectedDate, 'Pacific/Auckland', 'yyyy-MM-dd');
-    const allEmployeeAssignments = staffAssignments.filter((a: any) => a.employeeId === employeeId);
+  // Summary stats
+  const totalAssigned = useMemo(() => {
+    let count = 0;
+    crewMembers.forEach(e => { count += (assignmentsByEmployee.get(e.id) ?? []).length; });
+    return count;
+  }, [crewMembers, assignmentsByEmployee]);
 
-    const directMatches = allEmployeeAssignments.filter((assignment: any) => {
-      const startTimeStr = assignment.startTime;
-      if (!startTimeStr) return false;
-      const assignmentDateNZ = formatInTimeZone(new Date(startTimeStr), 'Pacific/Auckland', 'yyyy-MM-dd');
-      return assignmentDateNZ === selectedDateNZ;
+  const navigate = (delta: number) => {
+    setSelectedDate(d => {
+      const next = addDays(d, delta);
+      return next;
     });
-
-    const includedJobIds = new Set(directMatches.map((a: any) => a.jobId));
-    const fallbackMatches: any[] = [];
-    const employeeJobIds = new Set(allEmployeeAssignments.map((a: any) => a.jobId));
-
-    for (const jobId of employeeJobIds) {
-      if (includedJobIds.has(jobId)) continue;
-      const job = jobMap.get(jobId as string);
-      if (!job?.scheduledDate || !(job as any).scheduledEndDate) continue;
-
-      const jobStartNZ = formatInTimeZone(new Date((job as any).scheduledDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-      const jobEndNZ = formatInTimeZone(new Date((job as any).scheduledEndDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-
-      if (selectedDateNZ >= jobStartNZ && selectedDateNZ <= jobEndNZ) {
-        const templateAssignment = allEmployeeAssignments.find((a: any) => a.jobId === jobId);
-        if (templateAssignment) {
-          fallbackMatches.push(templateAssignment);
-          includedJobIds.add(jobId as string);
-        }
-      }
-    }
-
-    const matchedAssignments = [...directMatches, ...fallbackMatches];
-
-    return matchedAssignments
-      .map((assignment: any) => {
-        const job = jobMap.get(assignment.jobId);
-        if (!job) return null;
-        // Hide archived or unsuccessful jobs from the schedule
-        if (job.status === 'archived' || job.status === 'unsuccessful') return null;
-        return { ...job, _assignmentStartTime: assignment.startTime };
-      })
-      .filter((job): job is Job & { _assignmentStartTime: string } => job !== null)
-      .sort((a, b) => new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime());
   };
 
-  const formatTime12Hour = (time24?: string) => {
-    if (!time24) return 'All day';
-    const [hours, minutes] = time24.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  };
-
-  const staffAccentColors = [
-    'bg-blue',
-    'bg-green',
-    'bg-purple',
-    'bg-orange',
-    'bg-pink',
-    'bg-teal',
-    'bg-yellow',
-    'bg-destructive',
-    'bg-primary',
-    'bg-blue',
-    'bg-green',
-    'bg-purple',
-    'bg-orange',
-    'bg-pink',
-    'bg-teal',
-    'bg-yellow',
-  ];
-
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(employee => {
-      const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-      const isAdmin = fullName.includes('admin');
-      const isActive = employee.isActive !== false;
-      return !isAdmin && isActive;
-    });
-  }, [employees]);
-
-  const getStaffAccentColor = (employeeId: string) => {
-    const index = filteredEmployees.findIndex(emp => emp.id === employeeId);
-    return staffAccentColors[index % staffAccentColors.length];
-  };
-
-  const handleJobClick = (job: Job) => {
+  const openJob = (job: Job) => {
     setSelectedJob(job);
     setShowJobCard(true);
   };
 
-  const removeAssignmentMutation = useMutation({
-    mutationFn: async ({ jobId, employeeId }: { jobId: string; employeeId: string }) => {
-      const assignments = staffAssignments.filter(
-        a => a.jobId === jobId && a.employeeId === employeeId
-      );
-      for (const assignment of assignments) {
-        await apiRequest('DELETE', `/api/staff-assignments/${assignment.id}`);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to remove job from schedule",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const handleRemoveJob = (e: React.MouseEvent, job: Job & { _assignmentStartTime?: string }, employeeId: string) => {
-    e.stopPropagation();
-    if (confirm('Remove this job from the schedule?')) {
-      removeAssignmentMutation.mutate({ jobId: job.id, employeeId });
-    }
-  };
-
-  const previousDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() - 1);
-    setSelectedDate(newDate);
-  };
-
-  const nextDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + 1);
-    setSelectedDate(newDate);
-  };
-
-  const swipeTouchStartX = useRef<number | null>(null);
-  const swipeTouchStartY = useRef<number | null>(null);
-
-  const handleSwipeTouchStart = (e: React.TouchEvent) => {
-    swipeTouchStartX.current = e.touches[0].clientX;
-    swipeTouchStartY.current = e.touches[0].clientY;
-  };
-
-  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
-    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
-    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
-    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
-    swipeTouchStartX.current = null;
-    swipeTouchStartY.current = null;
-    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
-      if (deltaX < 0) nextDay();
-      else previousDay();
-    }
-  };
-
-  const allEmployeeJobData = useMemo(() => {
-    return filteredEmployees.map(employee => {
-      const employeeJobs = getEmployeeJobs(employee.id);
-      const totalBooked = employeeJobs.reduce((sum, job) => sum + calculateJobTotal(job), 0);
-      return { employee, jobs: employeeJobs, totalBooked };
-    });
-  }, [filteredEmployees, staffAssignments, jobs, selectedDate, jobMap, customerMap]);
-
-  const uniqueJobIds = new Set<string>();
-  const uniqueJobTotals = new Map<string, number>();
-  allEmployeeJobData.forEach(({ jobs: empJobs }) => {
-    empJobs.forEach(job => {
-      if (!uniqueJobIds.has(job.id)) {
-        uniqueJobIds.add(job.id);
-        uniqueJobTotals.set(job.id, calculateJobTotal(job));
-      }
-    });
-  });
-  const totalJobs = uniqueJobIds.size;
-  const totalRevenue = Array.from(uniqueJobTotals.values()).reduce((sum, v) => sum + v, 0);
-
+  // ── Render ──
   return (
-    <div
-      className="h-full flex flex-col p-3 md:p-4 overflow-auto"
-      onTouchStart={handleSwipeTouchStart}
-      onTouchEnd={handleSwipeTouchEnd}
-    >
-      {/* Date Heading + Nav inline */}
-      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-        <h2 className="text-lg md:text-xl font-bold" data-testid="text-current-date">
-          {formatInTimeZone(selectedDate, 'Pacific/Auckland', 'EEEE, MMMM d, yyyy')}
-        </h2>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={previousDay}
-            data-testid="button-prev-day"
-            className="gap-1"
+    <div className="flex flex-col h-full bg-white overflow-hidden">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 shrink-0">
+        <div>
+          <h1 className="text-base font-semibold text-gray-900">Live Roster</h1>
+          <p className="text-xs text-gray-500">
+            {format(selectedDate, 'EEEE d MMMM yyyy')}
+            {' · '}
+            {crewMembers.length} crew
+            {' · '}
+            {totalAssigned} jobs
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="button-jobs-view"
-            className="gap-1"
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              const now = toZonedTime(new Date(), NZ_TZ);
+              now.setHours(0, 0, 0, 0);
+              setSelectedDate(now);
+            }}
+            className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${
+              isTodaySelected
+                ? 'bg-orange-500 text-white border-orange-500'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
           >
-            <CalendarIcon className="h-3.5 w-3.5" />
-            Jobs
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectedDate(new Date())}
-            data-testid="button-today"
-            className="gap-1"
-          >
-            <CalendarIcon className="h-3.5 w-3.5" />
             Today
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={nextDay}
-            data-testid="button-next-day"
-            className="gap-1"
+          </button>
+          <button
+            onClick={() => navigate(1)}
+            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
           >
-            Next
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Summary Stats Bar */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <span className="text-xs font-semibold text-muted-foreground">
-          JOBS <span className="text-foreground">{totalJobs}</span>
-        </span>
-        <span className="text-xs font-semibold text-muted-foreground">
-          REVENUE <span className="text-foreground">{formatCurrency(totalRevenue)}</span>
-        </span>
-      </div>
+      {/* ── Timeline grid ── */}
+      <div className="flex-1 overflow-auto">
+        <div style={{ minWidth: STAFF_COL_W + 900 }}>
 
-      {/* Staff Schedule List */}
-      <div className="space-y-2">
-        {allEmployeeJobData.map(({ employee, jobs: employeeJobs, totalBooked }) => {
-          const accentColor = getStaffAccentColor(employee.id);
-
-          return (
+          {/* Hour header */}
+          <div className="flex sticky top-0 z-20 bg-white border-b border-gray-200">
+            {/* Staff column header */}
             <div
-              key={employee.id}
-              data-testid={`staff-card-${employee.id}`}
-              className="bg-card border rounded-md overflow-visible"
+              className="shrink-0 border-r border-gray-200 flex items-center px-3 py-2"
+              style={{ width: STAFF_COL_W }}
             >
-              {/* Staff Header */}
-              <div className="flex items-center gap-2 px-3 py-2">
-                <Avatar className={`h-8 w-8 flex-shrink-0 ${accentColor}`}>
-                  <AvatarFallback className="text-xs font-semibold text-primary-foreground">
-                    {employee.firstName[0]}{employee.lastName[0]}
-                  </AvatarFallback>
-                </Avatar>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Crew</span>
+            </div>
 
-                <div className="flex-1 min-w-0">
-                  <span className="font-bold text-sm leading-tight">
-                    {employee.firstName} {employee.lastName}
-                  </span>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    {employeeJobs.length} {employeeJobs.length === 1 ? 'Job' : 'Jobs'}
-                    {totalBooked > 0 && ` · ${formatCurrency(totalBooked)} booked`}
-                  </span>
+            {/* Hour labels */}
+            <div className="flex-1 relative flex">
+              {HOUR_LABELS.map((label, i) => (
+                <div
+                  key={label}
+                  className="flex-1 text-center py-2 border-r border-gray-100 last:border-r-0"
+                >
+                  <span className="text-[10px] font-medium text-gray-400">{label}</span>
                 </div>
-              </div>
+              ))}
+            </div>
+          </div>
 
-              {/* Job Cards Grid */}
-              <div className="px-3 pb-2">
-                {employeeJobs.length === 0 ? (
+          {/* Staff rows */}
+          {crewMembers.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
+              No active crew members found.
+            </div>
+          ) : (
+            crewMembers.map((emp, empIdx) => {
+              const palette   = STAFF_PALETTE[empIdx % STAFF_PALETTE.length];
+              const empJobs   = assignmentsByEmployee.get(emp.id) ?? [];
+              const empName   = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim();
+              const empInit   = initials(empName || 'U');
+
+              return (
+                <div
+                  key={emp.id}
+                  className="flex border-b border-gray-100 last:border-b-0"
+                  style={{ minHeight: 56 }}
+                >
+                  {/* Staff name cell */}
                   <div
-                    className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"
-                    data-testid={`no-jobs-${employee.id}`}
+                    className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2"
+                    style={{ width: STAFF_COL_W, backgroundColor: palette.row }}
                   >
-                    <CalendarIcon className="h-3.5 w-3.5 opacity-50" />
-                    <span>No jobs scheduled</span>
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                      style={{ backgroundColor: palette.dot }}
+                    >
+                      {empInit}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
+                      <p className="text-[10px] text-gray-400 leading-tight">
+                        {empJobs.length} job{empJobs.length !== 1 ? 's' : ''}
+                      </p>
+                    </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {employeeJobs.map(job => {
-                      const jobTotal = calculateJobTotal(job);
-                      const timeDisplay = job._assignmentStartTime
-                        ? formatInTimeZone(new Date(job._assignmentStartTime), 'Pacific/Auckland', 'h:mm a')
-                        : (job.scheduledStartTime ? formatTime12Hour(job.scheduledStartTime) : '');
+
+                  {/* Timeline cell */}
+                  <div className="flex-1 relative" style={{ backgroundColor: palette.row + '55' }}>
+                    {/* Hour grid lines */}
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {HOUR_LABELS.map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 border-r border-gray-100 last:border-r-0 h-full"
+                        />
+                      ))}
+                    </div>
+
+                    {/* Current time line */}
+                    {isTodaySelected && nowPercent !== null && (
+                      <div
+                        className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
+                        style={{ left: `${nowPercent}%` }}
+                      />
+                    )}
+
+                    {/* Job blocks */}
+                    {empJobs.map(job => {
+                      const startStr = job.scheduledStartTime ?? '08:00';
+                      const endStr   = job.scheduledEndTime   ?? '16:00';
+                      const startMins = timeStrToMinutes(startStr);
+                      const endMins   = timeStrToMinutes(endStr);
+                      const left  = minutesToPercent(startMins);
+                      const width = Math.max(2, minutesToPercent(endMins) - left);
+                      const colors = jobColor(job.status ?? 'scheduled');
+                      const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
+                      const label = custName || job.title || `#${job.jobNumber}`;
+                      const timeLabel = `${formatTime(startStr)}–${formatTime(endStr)}`;
 
                       return (
-                        <div
+                        <button
                           key={job.id}
-                          className="group relative rounded-md bg-green/8 dark:bg-green/10 border border-green/20 dark:border-green/15 px-3 py-2 cursor-pointer hover-elevate"
-                          onClick={() => handleJobClick(job)}
-                          data-testid={`job-item-${job.id}`}
+                          onClick={() => openJob(job)}
+                          title={`${label} — ${timeLabel}`}
+                          className="absolute top-1.5 bottom-1.5 rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          style={{
+                            left: `${left}%`,
+                            width: `${width}%`,
+                            backgroundColor: colors.bg,
+                            borderLeft: `3px solid ${colors.border}`,
+                            minWidth: 32,
+                          }}
                         >
-                          {/* Remove button — top right, hidden until hover */}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="absolute top-1 right-1 invisible group-hover:visible md:invisible md:group-hover:visible text-muted-foreground flex-shrink-0"
-                            onClick={(e) => handleRemoveJob(e, job, employee.id)}
-                            disabled={removeAssignmentMutation.isPending}
-                            data-testid={`button-remove-job-${job.id}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-
-                          {/* Time + Customer + Price row */}
-                          <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <div className="h-2 w-2 rounded-full bg-green flex-shrink-0" />
-                              <span className="text-sm font-bold text-green tabular-nums">
-                                {timeDisplay}
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                            <span
+                              className="text-[10px] font-semibold leading-tight block truncate"
+                              style={{ color: colors.text }}
+                            >
+                              {label}
+                            </span>
+                            {width > 8 && (
+                              <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
+                                {timeLabel}
                               </span>
-                              <span className="font-bold text-sm truncate">
-                                {getCustomerName(job)}
-                              </span>
-                            </div>
-                            {jobTotal > 0 && (
-                              <span className="text-xs font-bold whitespace-nowrap flex-shrink-0">
-                                {formatCurrency(jobTotal)} <span className="font-normal text-muted-foreground">ex</span>
+                            )}
+                            {width > 14 && job.address && (
+                              <span className="text-[9px] leading-tight flex items-center gap-0.5 truncate" style={{ color: colors.text, opacity: 0.7 }}>
+                                <MapPin className="w-2 h-2 shrink-0" />
+                                {job.address}
                               </span>
                             )}
                           </div>
-
-                          {/* Description */}
-                          {job.description && (
-                            <div className="text-xs text-muted-foreground line-clamp-2 mb-0.5 pl-[14px]">
-                              {job.description}
-                            </div>
-                          )}
-
-                          {/* Address row */}
-                          <div className="flex items-center justify-between gap-1.5">
-                            {job.address && (
-                              <div className="flex items-center gap-1 text-sm min-w-0">
-                                <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-blue" />
-                                <span className="truncate font-medium">{job.address}</span>
-                              </div>
-                            )}
-                            <ChevronRightSmall className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 ml-auto" />
-                          </div>
-                        </div>
+                        </button>
                       );
                     })}
+
+                    {empJobs.length === 0 && (
+                      <div className="absolute inset-0 flex items-center px-3">
+                        <span className="text-[10px] text-gray-300 italic">No jobs</span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
-      {/* Job Details Modal */}
-      {selectedJob && showJobCard && (
+      {/* ── Status legend ── */}
+      <div className="shrink-0 border-t border-gray-100 px-4 py-2 flex items-center gap-4 bg-white overflow-x-auto">
+        {Object.entries(JOB_PALETTE).map(([status, c]) => (
+          <div key={status} className="flex items-center gap-1 shrink-0">
+            <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c.border }} />
+            <span className="text-[10px] text-gray-500 capitalize">{status.replace('-', ' ')}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Job card modal ── */}
+      {showJobCard && selectedJob && (
         <GlobalJobCard
+          job={selectedJob}
           isOpen={showJobCard}
+          onClose={() => { setShowJobCard(false); setSelectedJob(null); }}
           mode="edit"
-          jobId={selectedJob.id}
-          onClose={() => {
-            setShowJobCard(false);
-            setSelectedJob(null);
-          }}
         />
       )}
     </div>
   );
+}
+
+// ─── Utility ──────────────────────────────────────────────────────────────────
+
+function formatTime(timeStr: string): string {
+  const [h, m] = timeStr.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
 }
