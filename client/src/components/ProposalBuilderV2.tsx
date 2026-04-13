@@ -625,6 +625,19 @@ function LineItemsBlock({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftLineItem>(defaultDraft());
 
+  // Close the catalogue dropdown when clicking anywhere outside the description cell
+  const descCellRef = useRef<HTMLTableCellElement>(null);
+  useEffect(() => {
+    if (!showMats) return;
+    const handler = (e: MouseEvent) => {
+      if (descCellRef.current && !descCellRef.current.contains(e.target as Node)) {
+        setShowMats(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMats]);
+
   const subtotal = calcBlockSubtotal(block);
 
   const filteredMats = materials.filter(
@@ -734,14 +747,7 @@ function LineItemsBlock({
               placeholder="Code"
             />
           </td>
-          <td className="border border-gray-200 px-1 py-1 relative">
-            {/* Click-outside overlay — closes the dropdown when user clicks anywhere else */}
-            {showMats && (
-              <div
-                className="fixed inset-0 z-40"
-                onMouseDown={() => setShowMats(false)}
-              />
-            )}
+          <td ref={descCellRef} className="border border-gray-200 px-1 py-1 relative">
             <Input
               value={matSearchVal || d.description}
               onChange={(e) => {
@@ -751,7 +757,7 @@ function LineItemsBlock({
               }}
               onFocus={() => setShowMats(true)}
               onKeyDown={(e) => { if (e.key === "Escape") { setShowMats(false); e.currentTarget.blur(); } }}
-              className="h-7 text-xs relative z-50"
+              className="h-7 text-xs"
               placeholder="Description or catalogue search…"
               autoFocus={!editingId}
             />
@@ -762,7 +768,7 @@ function LineItemsBlock({
                     key={m.id}
                     type="button"
                     onMouseDown={(e) => {
-                      e.preventDefault(); // keep input focused until we commit
+                      e.preventDefault(); // prevent blur before click fires
                       selectMaterial(m);
                     }}
                     className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50 text-left"
