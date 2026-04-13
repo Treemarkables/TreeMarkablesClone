@@ -787,7 +787,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       if (newJob === "true") {
         window.history.replaceState({}, "", "/dispatch");
         setJobToEdit(null);
-        setInitialJobData(null);
+        setInitialJobData({ status: "work_order" });
         setGlobalJobCardMode("create");
         setShowGlobalJobCard(true);
         return;
@@ -879,7 +879,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // Handle the "New Job" orange header button firing a custom event when already on /dispatch
     const handleNewJobEvent = () => {
       setJobToEdit(null);
-      setInitialJobData(null);
+      setInitialJobData({ status: "work_order" });
       setGlobalJobCardMode("create");
       setShowGlobalJobCard(true);
     };
@@ -1901,7 +1901,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const handleCreateJob = () => {
     setJobToEdit(null);
-    setInitialJobData(null);
+    setInitialJobData({ status: "work_order" });
     setGlobalJobCardMode("create");
     setShowGlobalJobCard(true);
   };
