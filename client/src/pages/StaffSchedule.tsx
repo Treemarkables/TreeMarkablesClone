@@ -13,6 +13,7 @@ const TIMELINE_START_H = 6;   // 6 AM
 const TIMELINE_END_H   = 19;  // 7 PM
 const TIMELINE_HOURS   = TIMELINE_END_H - TIMELINE_START_H;
 const STAFF_COL_W      = 148; // px — fixed left column width
+const DAY_TARGET       = 3500; // NZD daily revenue target
 
 const HOUR_LABELS = Array.from({ length: TIMELINE_HOURS + 1 }, (_, i) => {
   const h = TIMELINE_START_H + i;
@@ -160,6 +161,16 @@ export default function StaffSchedule() {
   const { data: customersData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/customers'],
   });
+  const { data: revenueData } = useQuery<{
+    success: boolean;
+    data: { scheduledRevenue: number; dailyTarget: number; percentComplete: number; jobCount: number; belowTarget: boolean };
+  }>({
+    queryKey: ['/api/scheduling/revenue', dateStr],
+    queryFn: () => fetch(`/api/scheduling/revenue/${dateStr}`, { credentials: 'include' }).then(r => r.json()),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+  const revenueInfo = revenueData?.data;
 
   // dayJobs comes directly from the date-scoped API — no client-side filtering needed
   const dayJobs        = jobsData?.data ?? [];
@@ -302,6 +313,43 @@ export default function StaffSchedule() {
           </button>
         </div>
       </div>
+
+      {/* ── Revenue target tracker ── */}
+      {revenueInfo && (
+        <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
+          <span className="text-xs text-gray-500 whitespace-nowrap">
+            {format(selectedDate, 'd MMM')} revenue:
+          </span>
+          <span
+            className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
+              revenueInfo.belowTarget
+                ? 'bg-amber-50 text-amber-700 border-amber-200'
+                : 'bg-green-50 text-green-700 border-green-200'
+            }`}
+          >
+            ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
+          </span>
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target $3,500 exc. GST
+          </span>
+          <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                revenueInfo.belowTarget ? 'bg-amber-400' : 'bg-green-500'
+              }`}
+              style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
+            />
+          </div>
+          {!revenueInfo.belowTarget && (
+            <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
+          )}
+          {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
+            <span className="text-xs text-gray-400 whitespace-nowrap">
+              ${(DAY_TARGET - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── Timeline grid ── */}
       <div className="flex-1 overflow-auto">
