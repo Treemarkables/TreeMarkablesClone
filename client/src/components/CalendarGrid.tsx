@@ -52,7 +52,7 @@ const GANTT_STAFF_PALETTE = [
   { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
 ];
 const GANTT_COL_W = 148; // px — name column width (matches StaffSchedule)
-const GANTT_ROW_H = 56;  // px — compact row height so all crew fits on screen
+const GANTT_ROW_H = 120; // px — row height tall enough to read all job text
 
 function ganttTimeToMins(t: string | undefined): number {
   if (!t) return 8 * 60;
@@ -927,15 +927,15 @@ export function CalendarGrid({
                             minWidth: 32,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
-                            <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
+                          <div className="px-2 py-1 h-full flex flex-col justify-center overflow-hidden gap-0.5">
+                            <span className="text-xs font-semibold leading-snug block truncate" style={{ color: c.text }}>
                               {custName}
                             </span>
-                            <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
+                            <span className="text-[11px] leading-snug block truncate" style={{ color: c.border }}>
                               {timeLabel}
                             </span>
                             {job.address && (
-                              <span className="text-[9px] leading-tight truncate block" style={{ color: c.text, opacity: 0.7 }}>
+                              <span className="text-[11px] leading-snug truncate block" style={{ color: c.text, opacity: 0.75 }}>
                                 {job.address.split(",")[0]}
                               </span>
                             )}
