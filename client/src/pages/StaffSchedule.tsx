@@ -32,17 +32,32 @@ const STAFF_PALETTE = [
   { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
 ];
 
-// Job block colours by status
-const JOB_PALETTE: Record<string, { bg: string; border: string; text: string }> = {
-  lead:        { bg: '#fef9c3', border: '#ca8a04', text: '#713f12' },
-  quoted:      { bg: '#ffedd5', border: '#ea580c', text: '#7c2d12' },
-  scheduled:   { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' },
-  'in-progress':{ bg: '#d1fae5', border: '#059669', text: '#064e3b' },
-  completed:   { bg: '#f3f4f6', border: '#6b7280', text: '#1f2937' },
-  invoiced:    { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' },
-  paid:        { bg: '#dcfce7', border: '#16a34a', text: '#14532d' },
-};
-const JOB_PALETTE_DEFAULT = { bg: '#f0f9ff', border: '#0ea5e9', text: '#0c4a6e' };
+// 12 visually distinct colours — each job on the day gets its own, consistent across all crew rows
+const JOB_IDENTITY_PALETTE = [
+  { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' }, // blue
+  { bg: '#d1fae5', border: '#059669', text: '#064e3b' }, // emerald
+  { bg: '#ffedd5', border: '#ea580c', text: '#7c2d12' }, // orange
+  { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // purple
+  { bg: '#fce7f3', border: '#db2777', text: '#831843' }, // pink
+  { bg: '#fef9c3', border: '#ca8a04', text: '#713f12' }, // amber
+  { bg: '#ccfbf1', border: '#0d9488', text: '#134e4a' }, // teal
+  { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d' }, // red
+  { bg: '#e0e7ff', border: '#4f46e5', text: '#312e81' }, // indigo
+  { bg: '#dcfce7', border: '#16a34a', text: '#14532d' }, // green
+  { bg: '#fef3c7', border: '#d97706', text: '#78350f' }, // yellow
+  { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' }, // violet
+];
+
+// Status dot colours used in the legend only
+const STATUS_LEGEND: Array<{ label: string; color: string }> = [
+  { label: 'Lead',        color: '#ca8a04' },
+  { label: 'Quoted',      color: '#ea580c' },
+  { label: 'Scheduled',   color: '#2563eb' },
+  { label: 'In Progress', color: '#059669' },
+  { label: 'Completed',   color: '#6b7280' },
+  { label: 'Invoiced',    color: '#7c3aed' },
+  { label: 'Paid',        color: '#16a34a' },
+];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -57,9 +72,6 @@ function minutesToPercent(minutes: number): number {
   return Math.max(0, Math.min(100, (minutes - start) / total * 100));
 }
 
-function jobColor(status: string) {
-  return JOB_PALETTE[status] ?? JOB_PALETTE_DEFAULT;
-}
 
 function initials(name: string) {
   return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
@@ -139,6 +151,15 @@ export default function StaffSchedule() {
   const jobMap = useMemo(() => {
     const m = new Map<string, Job>();
     dayJobs.forEach(j => m.set(j.id, j));
+    return m;
+  }, [dayJobs]);
+
+  // Assign each job a unique identity colour (stable by job order in the day)
+  const jobColorMap = useMemo(() => {
+    const m = new Map<string, typeof JOB_IDENTITY_PALETTE[0]>();
+    dayJobs.forEach((job, idx) => {
+      m.set(job.id, JOB_IDENTITY_PALETTE[idx % JOB_IDENTITY_PALETTE.length]);
+    });
     return m;
   }, [dayJobs]);
 
@@ -326,7 +347,7 @@ export default function StaffSchedule() {
                       const endMins   = timeStrToMinutes(endStr);
                       const left  = minutesToPercent(startMins);
                       const width = Math.max(2, minutesToPercent(endMins) - left);
-                      const colors = jobColor(job.status ?? 'scheduled');
+                      const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
                       const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
                       const label = custName || job.title || `#${job.jobNumber}`;
                       const timeLabel = `${formatTime(startStr)}–${formatTime(endStr)}`;
@@ -381,14 +402,38 @@ export default function StaffSchedule() {
         </div>
       </div>
 
-      {/* ── Status legend ── */}
-      <div className="shrink-0 border-t border-gray-100 px-4 py-2 flex items-center gap-4 bg-white overflow-x-auto">
-        {Object.entries(JOB_PALETTE).map(([status, c]) => (
-          <div key={status} className="flex items-center gap-1 shrink-0">
-            <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: c.border }} />
-            <span className="text-[10px] text-gray-500 capitalize">{status.replace('-', ' ')}</span>
+      {/* ── Legend: job identity colours (top row) + status reference (bottom row) ── */}
+      <div className="shrink-0 border-t border-gray-100 px-4 py-2 bg-white space-y-1.5">
+        {/* Per-job colour swatches */}
+        {dayJobs.length > 0 && (
+          <div className="flex items-center gap-3 overflow-x-auto">
+            <span className="text-[10px] text-gray-400 shrink-0">Jobs:</span>
+            {dayJobs.map(job => {
+              const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
+              const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
+              const label = custName || job.title || `#${job.jobNumber}`;
+              return (
+                <div key={job.id} className="flex items-center gap-1 shrink-0">
+                  <div
+                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: colors.border }}
+                  />
+                  <span className="text-[10px] text-gray-600 truncate max-w-[80px]">{label}</span>
+                </div>
+              );
+            })}
           </div>
-        ))}
+        )}
+        {/* Status reference */}
+        <div className="flex items-center gap-3 overflow-x-auto">
+          <span className="text-[10px] text-gray-400 shrink-0">Status:</span>
+          {STATUS_LEGEND.map(s => (
+            <div key={s.label} className="flex items-center gap-1 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+              <span className="text-[10px] text-gray-500">{s.label}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* ── Job card modal ── */}
