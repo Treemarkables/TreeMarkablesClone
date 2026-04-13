@@ -875,12 +875,12 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                               {entry.photos.length} {entry.photos.length === 1 ? 'Photo' : 'Photos'}
                             </span>
                           </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(50px, 60px))', gap: '2px' }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(25px, 30px))', gap: '2px' }}>
                             {entry.photos.map((photo, index) => (
                               <div
                                 key={index}
                                 className="relative rounded-sm overflow-hidden group cursor-pointer"
-                                style={{ aspectRatio: '1/1', width: '60px', height: '60px' }}
+                                style={{ aspectRatio: '1/1', width: '30px', height: '30px' }}
                               >
                                 <div
                                   role="button"
