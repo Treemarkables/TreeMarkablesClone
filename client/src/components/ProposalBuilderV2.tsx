@@ -3,8 +3,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
-  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye,
+  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft,
 } from "lucide-react";
+import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
+import type { DocumentTemplate, Customer, Proposal } from "@shared/schema";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
 interface SpeechRecognitionAlternative { readonly transcript: string; }
@@ -1035,6 +1037,9 @@ export function ProposalBuilderV2({
   const [draftId, setDraftId] = useState<string | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<"saved" | "saving" | "unsaved">("saved");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [previewSelectedChoices, setPreviewSelectedChoices] = useState<Record<string, string>>({});
+  const [previewSelectedOptional, setPreviewSelectedOptional] = useState<Record<string, boolean>>({});
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [taxRate] = useState(15);
@@ -1484,6 +1489,28 @@ export function ProposalBuilderV2({
         <DialogContent className="max-w-full h-screen sm:h-[95vh] sm:max-w-5xl overflow-hidden flex flex-col p-0 gap-0">
           {/* ── Toolbar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-white">
+            {previewMode ? (
+              /* Preview mode toolbar */
+              <>
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode(false)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Back to Edit
+                </button>
+                <span className="text-sm font-medium text-gray-500">Customer Preview</span>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </>
+            ) : (
+              /* Edit mode toolbar */
+              <>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1504,7 +1531,9 @@ export function ProposalBuilderV2({
                   type="button"
                   onClick={async () => {
                     await saveDraftMutation.mutateAsync(buildPayload());
-                    window.open(`/proposals/${draftId}`, "_blank");
+                    setPreviewSelectedChoices({});
+                    setPreviewSelectedOptional({});
+                    setPreviewMode(true);
                   }}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
                   title="Preview customer view"
@@ -1578,6 +1607,8 @@ export function ProposalBuilderV2({
                 <X className="w-4 h-4" />
               </button>
             </div>
+              </>
+            )}
           </div>
 
           {/* ── VIP Banner ── */}
@@ -1603,7 +1634,67 @@ export function ProposalBuilderV2({
             </div>
           )}
 
+          {/* ── Preview Mode ── */}
+          {previewMode && template && (
+            <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
+              <ProposalTemplate
+                template={template as DocumentTemplate}
+                proposal={({
+                  id: draftId || "",
+                  customerId: (customer as { id?: string } | null)?.id || customerId || "",
+                  jobId: (job as { id?: string } | null)?.id || jobId || null,
+                  title: proposalTitle,
+                  subtotal: subtotalAfterDiscount.toString(),
+                  gstAmount: gst.toString(),
+                  totalAmount: grandTotal.toString(),
+                  taxRate: taxRate.toString(),
+                  discountAmount: discountAmount.toString(),
+                  discountType,
+                  validUntil: validUntil || null,
+                  expiryDate: validUntil || null,
+                  status: "draft",
+                  deliveryMethod: "email",
+                  createdBy: "system",
+                  proposalNumber: draftId ? draftId.slice(-6).toUpperCase() : "",
+                  createdAt: new Date().toISOString(),
+                  updatedAt: new Date().toISOString(),
+                  sentAt: null,
+                  viewedAt: null,
+                  acceptedAt: null,
+                  declinedAt: null,
+                  acceptedByName: null,
+                  acceptedBySignature: null,
+                  notes: null,
+                  internalNotes: null,
+                  presentationMethod: null,
+                }) as Proposal}
+                customer={customer as Customer | undefined}
+                job={job}
+                sections={blocks.map((b) => ({
+                  id: b.id,
+                  title: b.title,
+                  description: b.description,
+                  photos: b.photos,
+                  lineItems: b.lineItems,
+                  sortOrder: b.sortOrder,
+                  sectionType: b.sectionType ?? "fixed",
+                }))}
+                showActions={false}
+                allowChoiceSelection={true}
+                selectedChoices={previewSelectedChoices}
+                onChoiceSelect={(lineItemId, choiceId) =>
+                  setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
+                }
+                selectedOptionalItems={previewSelectedOptional}
+                onOptionalToggle={(lineItemId, selected) =>
+                  setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
+                }
+              />
+            </div>
+          )}
+
           {/* ── Document Canvas ── */}
+          {!previewMode && (
           <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
@@ -1796,6 +1887,7 @@ export function ProposalBuilderV2({
               </div>
             </div>
           </div>
+          )}
         </DialogContent>
       </Dialog>
 
