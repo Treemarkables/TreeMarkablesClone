@@ -3722,6 +3722,37 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Fast date-scoped endpoint for Staff Schedule — returns only jobs for a given NZ calendar date
+  app.get('/api/jobs/for-date', async (req: Request, res: Response) => {
+    try {
+      const { date } = req.query; // expects YYYY-MM-DD in NZ time
+      if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, message: 'date param required (YYYY-MM-DD)' });
+      }
+      // Use PostgreSQL AT TIME ZONE to compare in NZ local time — handles DST automatically
+      const result = await db.execute(
+        sql`SELECT * FROM jobs
+            WHERE scheduled_date IS NOT NULL
+              AND DATE(scheduled_date AT TIME ZONE 'Pacific/Auckland') = ${date}::date
+              AND status NOT IN ('archived', 'unsuccessful')
+            ORDER BY scheduled_date ASC`
+      );
+      const jobs = (result.rows as any[]).map((row: any) => {
+        // Convert snake_case DB columns back to camelCase schema shape
+        const job: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          const camel = k.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+          job[camel] = v;
+        }
+        return serializeJobTimestamps(job);
+      });
+      res.json({ success: true, data: jobs });
+    } catch (error) {
+      console.error('Error fetching jobs for date:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs for date' });
+    }
+  });
+
   // Search jobs endpoint - searches across all jobs (not limited to paginated results)
   app.get('/api/jobs/search', async (req: Request, res: Response) => {
     try {
