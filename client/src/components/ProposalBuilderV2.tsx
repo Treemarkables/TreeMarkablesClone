@@ -1168,9 +1168,15 @@ export function ProposalBuilderV2({
             normTitle === "quote";
           if (isLineItemsBlock && b.lineItems.length === 0) {
             const imported: LineItem[] = jobLineItems.map((item, idx) => {
-              const unitPrice = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
               const qty = parseFloat(String(item.quantity ?? 1)) || 1;
-              const total = parseFloat(String((item as { total?: string | number }).total ?? item.price ?? 0)) || unitPrice * qty;
+              const rawTotal = parseFloat(String(
+                (item as { totalPrice?: string | number }).totalPrice ??
+                (item as { total?: string | number }).total ??
+                item.price ?? 0
+              )) || 0;
+              const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
+              const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
+              const total = rawTotal || (qty * unitPrice);
               return {
                 id: item.id || `import-${idx}`,
                 description: item.description || item.name || "",
@@ -1236,7 +1242,10 @@ export function ProposalBuilderV2({
     if (rawItems && rawItems.length > 0) {
       const items: LineItem[] = rawItems.map((item, idx) => {
         const qty = parseFloat(String(item.quantity ?? 1)) || 1;
-        const rawTotal = parseFloat(String((item as { total?: string | number }).total ?? 0)) || 0;
+        const rawTotal = parseFloat(String(
+          (item as { totalPrice?: string | number }).totalPrice ??
+          (item as { total?: string | number }).total ?? 0
+        )) || 0;
         const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
         const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
         const totalPrice = (qty * unitPrice) || rawTotal;
