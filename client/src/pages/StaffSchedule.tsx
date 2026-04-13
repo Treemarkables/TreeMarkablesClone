@@ -81,6 +81,38 @@ function nzDateStr(date: Date) {
   return formatInTimeZone(date, NZ_TZ, 'yyyy-MM-dd');
 }
 
+// Assigns overlapping jobs in a single row to vertical lanes so they don't cover each other.
+// Returns a map of job.id → { lane, totalLanes }.
+function assignLanes(jobs: Job[]): Map<string, { lane: number; totalLanes: number }> {
+  const sorted = [...jobs].sort(
+    (a, b) => timeStrToMinutes(a.scheduledStartTime ?? '08:00') - timeStrToMinutes(b.scheduledStartTime ?? '08:00')
+  );
+  const laneEnd: number[] = []; // end-time (mins) of the last job placed in each lane
+  const laneOf = new Map<string, number>();
+
+  for (const job of sorted) {
+    const start = timeStrToMinutes(job.scheduledStartTime ?? '08:00');
+    const end   = timeStrToMinutes(job.scheduledEndTime   ?? '16:00');
+    let placed = -1;
+    for (let l = 0; l < laneEnd.length; l++) {
+      if (laneEnd[l] <= start) { placed = l; laneEnd[l] = end; break; }
+    }
+    if (placed === -1) { placed = laneEnd.length; laneEnd.push(end); }
+    laneOf.set(job.id, placed);
+  }
+
+  const total = laneEnd.length || 1;
+  const result = new Map<string, { lane: number; totalLanes: number }>();
+  for (const [id, lane] of laneOf) result.set(id, { lane, totalLanes: total });
+  return result;
+}
+
+// Returns CSS top/height strings that divide the row equally between lanes.
+function laneStyle(lane: number, totalLanes: number) {
+  const pct = 100 / totalLanes;
+  return { top: `calc(${lane * pct}% + 3px)`, height: `calc(${pct}% - 6px)` };
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function StaffSchedule() {
@@ -291,6 +323,7 @@ export default function StaffSchedule() {
             crewMembers.map((emp, empIdx) => {
               const palette   = STAFF_PALETTE[empIdx % STAFF_PALETTE.length];
               const empJobs   = assignmentsByEmployee.get(emp.id) ?? [];
+              const lanes     = assignLanes(empJobs);
               const empName   = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim();
               const empInit   = initials(empName || 'U');
 
@@ -351,16 +384,20 @@ export default function StaffSchedule() {
                       const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
                       const label = custName || job.title || `#${job.jobNumber}`;
                       const timeLabel = `${formatTime(startStr)}–${formatTime(endStr)}`;
+                      const { lane, totalLanes } = lanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
+                      const ls = laneStyle(lane, totalLanes);
 
                       return (
                         <button
                           key={job.id}
                           onClick={() => openJob(job)}
                           title={`${label} — ${timeLabel}`}
-                          className="absolute top-1.5 bottom-1.5 rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
                           style={{
                             left: `${left}%`,
                             width: `${width}%`,
+                            top: ls.top,
+                            height: ls.height,
                             backgroundColor: colors.bg,
                             borderLeft: `3px solid ${colors.border}`,
                             minWidth: 32,
