@@ -151,7 +151,8 @@ function draftTotal(draft: DraftLineItem): number {
 
 function calcBlockSubtotal(block: WysiwygBlock): number {
   return (block.lineItems || []).reduce((sum, i) => {
-    if (!i.selected) return sum;
+    // Optional items are excluded from subtotal — only added when customer clicks to accept
+    if (!i.selected || i.isOptional) return sum;
     // Normalize to ex-GST so section subtotal matches the overall totals basis
     return sum + (i.priceIncludesTax ? i.totalPrice / 1.15 : i.totalPrice);
   }, 0);
@@ -161,7 +162,8 @@ function calcTotals(blocks: WysiwygBlock[]) {
   let subtotalExGst = 0;
   let gstAmount = 0;
   blocks.forEach((b) =>
-    (b.lineItems || []).filter((i) => i.selected).forEach((item) => {
+    // Optional items excluded from totals by default — customer must explicitly add them
+    (b.lineItems || []).filter((i) => i.selected && !i.isOptional).forEach((item) => {
       if (item.priceIncludesTax) {
         const ex = item.totalPrice / 1.15;
         subtotalExGst += ex;
