@@ -898,7 +898,7 @@ export function JobDiary({ jobId, jobTitle, compact = false, onQuoteClick, onInv
                                   <img
                                     src={photo}
                                     alt={`Diary photo ${index + 1}`}
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-contain bg-gray-50"
                                     loading="lazy"
                                   />
                                   <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-10 active:bg-opacity-20 transition-opacity flex items-center justify-center pointer-events-none">

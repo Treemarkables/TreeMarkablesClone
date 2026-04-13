@@ -436,7 +436,7 @@ function PhotoBlock({
   return (
     <div className="px-4 py-3">
       {block.photos.length > 0 && (
-        <div className="grid grid-cols-4 gap-1.5 mb-3">
+        <div className="grid grid-cols-8 gap-1.5 mb-3">
           {block.photos.map((photo) => (
             <div key={photo.id} className="relative group/photo rounded-md overflow-hidden bg-gray-100" style={{ paddingBottom: "100%" }}>
               <img
