@@ -733,6 +733,13 @@ function LineItemsBlock({
             />
           </td>
           <td className="border border-gray-200 px-1 py-1 relative">
+            {/* Click-outside overlay — closes the dropdown when user clicks anywhere else */}
+            {showMats && (
+              <div
+                className="fixed inset-0 z-40"
+                onMouseDown={() => setShowMats(false)}
+              />
+            )}
             <Input
               value={matSearchVal || d.description}
               onChange={(e) => {
@@ -741,9 +748,8 @@ function LineItemsBlock({
                 setShowMats(true);
               }}
               onFocus={() => setShowMats(true)}
-              onBlur={() => setTimeout(() => setShowMats(false), 150)}
               onKeyDown={(e) => { if (e.key === "Escape") { setShowMats(false); e.currentTarget.blur(); } }}
-              className="h-7 text-xs"
+              className="h-7 text-xs relative z-50"
               placeholder="Description or catalogue search…"
               autoFocus={!editingId}
             />
@@ -753,7 +759,10 @@ function LineItemsBlock({
                   <button
                     key={m.id}
                     type="button"
-                    onClick={() => selectMaterial(m)}
+                    onMouseDown={(e) => {
+                      e.preventDefault(); // keep input focused until we commit
+                      selectMaterial(m);
+                    }}
                     className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50 text-left"
                   >
                     <span className="font-medium">{m.name}</span>
