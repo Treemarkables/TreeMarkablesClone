@@ -767,10 +767,11 @@ function LineItemsBlock({
           </td>
           <td className="border border-gray-200 px-1 py-1">
             <Input
-              type="number"
+              type="text"
+              inputMode="numeric"
               value={d.quantity}
               onChange={(e) => setD((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-              className="h-7 text-xs text-center"
+              className="h-7 text-xs text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </td>
           <td className="border border-gray-200 px-1 py-1">
