@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
-  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal,
+  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -1499,6 +1499,19 @@ export function ProposalBuilderV2({
               >
                 <MessageSquare className="w-4 h-4 text-green-600" /> SMS
               </button>
+              {draftId && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await saveDraftMutation.mutateAsync(buildPayload());
+                    window.open(`/proposals/${draftId}`, "_blank");
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
+                  title="Preview customer view"
+                >
+                  <Eye className="w-4 h-4" /> Preview
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {autoSaveStatus === "saving" && (
