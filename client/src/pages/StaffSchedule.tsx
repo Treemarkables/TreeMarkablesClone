@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { addDays, format, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, MapPin } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, AlignJustify } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Job, Employee } from '@shared/schema';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
@@ -123,6 +123,7 @@ export default function StaffSchedule() {
   });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
+  const [rowHeight, setRowHeight] = useState(72);
 
   // Current-time line position (refreshed every minute)
   const [nowPercent, setNowPercent] = useState<number | null>(null);
@@ -257,7 +258,22 @@ export default function StaffSchedule() {
             {totalAssigned} jobs
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {/* Row height slider */}
+          <div className="flex items-center gap-1.5">
+            <AlignJustify className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <input
+              type="range"
+              min={44}
+              max={160}
+              step={4}
+              value={rowHeight}
+              onChange={e => setRowHeight(Number(e.target.value))}
+              className="w-20 accent-orange-500 cursor-pointer"
+              title={`Row height: ${rowHeight}px`}
+            />
+          </div>
+          <div className="w-px h-5 bg-gray-200" />
           <button
             onClick={() => navigate(-1)}
             className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
@@ -331,7 +347,7 @@ export default function StaffSchedule() {
                 <div
                   key={emp.id}
                   className="flex border-b border-gray-100 last:border-b-0"
-                  style={{ minHeight: 56 }}
+                  style={{ minHeight: rowHeight }}
                 >
                   {/* Staff name cell */}
                   <div
