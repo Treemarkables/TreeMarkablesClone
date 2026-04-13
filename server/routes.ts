@@ -16175,7 +16175,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           description: item.description || item.name || '',
           quantity: parseFloat(String(item.quantity ?? 1)) || 1,
           unitPrice: parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0,
-          totalPrice: parseFloat(String(item.totalPrice ?? item.price ?? 0)) || 0,
+          totalPrice: parseFloat(String(item.totalPrice ?? item.total ?? item.price ?? 0)) || 0,
           unit: item.unit || 'each',
           category: item.category || item.itemCode || '',
           isOptional: item.isOptional || false,
