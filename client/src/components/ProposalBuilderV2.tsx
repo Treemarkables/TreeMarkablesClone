@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
-  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown,
+  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -14,6 +14,7 @@ import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
@@ -58,6 +59,14 @@ interface IncomingLineItemRaw {
 const LOGO_URL = "/treemarkables-logo.webp";
 
 type BlockType = "description" | "photos" | "lineItems";
+type SectionType = "fixed" | "subtotalOnly" | "multipleChoice" | "optional";
+
+const SECTION_TYPE_LABELS: Record<SectionType, string> = {
+  fixed: "Fixed Items",
+  subtotalOnly: "Fixed Items (Subtotal Only)",
+  multipleChoice: "Multiple Choice",
+  optional: "Optional",
+};
 
 interface WysiwygBlock {
   id: string;
@@ -67,6 +76,7 @@ interface WysiwygBlock {
   photos: UploadedPhoto[];
   lineItems: LineItem[];
   sortOrder: number;
+  sectionType?: SectionType;
 }
 
 interface DraftLineItem {
@@ -261,6 +271,7 @@ function BlockHeader({
   onDragOver,
   onDrop,
   isDragOver,
+  onSectionTypeChange,
 }: {
   block: WysiwygBlock;
   onTitleChange: (t: string) => void;
@@ -269,7 +280,9 @@ function BlockHeader({
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   isDragOver: boolean;
+  onSectionTypeChange?: (t: SectionType) => void;
 }) {
+  const currentSectionType = block.sectionType ?? "fixed";
   return (
     <div
       className={`flex items-center gap-2 px-3 py-2 border-b border-gray-100 transition-colors ${isDragOver ? "bg-blue-50 border-blue-200" : ""}`}
@@ -287,6 +300,27 @@ function BlockHeader({
       <div className="flex-1 min-w-0">
         <InlineTitle value={block.title} onChange={onTitleChange} />
       </div>
+      {block.type === "lineItems" && onSectionTypeChange && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-7 px-2 gap-1 text-xs text-gray-500">
+              <span className="hidden sm:inline">{SECTION_TYPE_LABELS[currentSectionType]}</span>
+              <MoreHorizontal className="w-3.5 h-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            {(Object.keys(SECTION_TYPE_LABELS) as SectionType[]).map((type) => (
+              <DropdownMenuItem
+                key={type}
+                onClick={() => onSectionTypeChange(type)}
+                className={currentSectionType === type ? "bg-accent font-medium" : ""}
+              >
+                {SECTION_TYPE_LABELS[type]}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
       <Badge variant="secondary" className="text-xs flex-shrink-0">
         {BADGE_LABELS[block.type]}
       </Badge>
@@ -707,6 +741,8 @@ function LineItemsBlock({
                 setShowMats(true);
               }}
               onFocus={() => setShowMats(true)}
+              onBlur={() => setTimeout(() => setShowMats(false), 150)}
+              onKeyDown={(e) => { if (e.key === "Escape") { setShowMats(false); e.currentTarget.blur(); } }}
               className="h-7 text-xs"
               placeholder="Description or catalogue search…"
               autoFocus={!editingId}
@@ -1041,6 +1077,7 @@ export function ProposalBuilderV2({
         photos?: UploadedPhoto[];
         lineItems?: Array<Record<string, unknown>>;
         sortOrder?: number;
+        sectionType?: SectionType;
       }>).map((s, idx) => {
         const photos = (s.photos || []) as UploadedPhoto[];
         const lineItems: LineItem[] = (s.lineItems || []).map((item) => ({
@@ -1068,6 +1105,7 @@ export function ProposalBuilderV2({
           photos,
           lineItems,
           sortOrder: s.sortOrder ?? idx,
+          sectionType: s.sectionType || "fixed",
         };
       });
       setBlocks(loadedBlocks);
@@ -1231,6 +1269,7 @@ export function ProposalBuilderV2({
         photos: b.photos,
         lineItems: b.lineItems,
         sortOrder: b.sortOrder,
+        sectionType: b.sectionType ?? "fixed",
       })),
     };
   }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil]);
@@ -1544,7 +1583,7 @@ export function ProposalBuilderV2({
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
               {/* Document Header — height controlled by headerHeight state only */}
-              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ minHeight: Math.max(headerHeight, logoSize + 24), flexShrink: 0 }}>
+              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0 }}>
                 {/* Logo container — logo scales within fixed header */}
                 <div className="flex items-center h-full py-3" style={{ flexShrink: 0 }}>
                   <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
@@ -1557,7 +1596,7 @@ export function ProposalBuilderV2({
                         <img
                           src={logoUrl}
                           alt="Company Logo"
-                          style={{ height: logoSize, maxWidth: 600 }}
+                          style={{ height: Math.min(logoSize, headerHeight - 8), maxWidth: 600 }}
                           className="w-auto object-contain transition-all group-hover:opacity-80"
                         />
                         <span className="absolute -bottom-5 left-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
@@ -1570,7 +1609,7 @@ export function ProposalBuilderV2({
                         <p className="text-xs font-medium text-muted-foreground mb-2">Header height: {headerHeight}px</p>
                         <Slider
                           min={60}
-                          max={400}
+                          max={800}
                           step={8}
                           value={[headerHeight]}
                           onValueChange={([v]) => setHeaderHeight(v)}
@@ -1585,9 +1624,9 @@ export function ProposalBuilderV2({
                         <p className="text-xs font-medium text-muted-foreground mb-2">Logo size: {logoSize}px</p>
                         <Slider
                           min={24}
-                          max={1200}
+                          max={Math.max(24, headerHeight - 8)}
                           step={4}
-                          value={[logoSize]}
+                          value={[Math.min(logoSize, headerHeight - 8)]}
                           onValueChange={([v]) => setLogoSize(v)}
                           onValueCommit={([v]) => saveLogoSizeMutation.mutate(v)}
                           className="w-full"
@@ -1649,6 +1688,7 @@ export function ProposalBuilderV2({
                         onDragOver={(e) => { e.preventDefault(); setDragOverId(block.id); }}
                         onDrop={(e) => { e.preventDefault(); handleDrop(block.id); }}
                         isDragOver={dragOverId === block.id}
+                        onSectionTypeChange={(t) => updateBlock(block.id, { sectionType: t })}
                       />
                       {block.type === "description" && (
                         <DescriptionBlock block={block} onUpdate={(u) => updateBlock(block.id, u)} />

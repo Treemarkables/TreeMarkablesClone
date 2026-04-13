@@ -43,6 +43,8 @@ interface ProposalPhoto {
   capturedAt: string;
 }
 
+type SectionType = "fixed" | "subtotalOnly" | "multipleChoice" | "optional";
+
 interface ProposalSection {
   id: string;
   title: string;
@@ -50,6 +52,7 @@ interface ProposalSection {
   photos: ProposalPhoto[];
   lineItems: ProposalLineItem[];
   sortOrder: number;
+  sectionType?: SectionType;
 }
 
 interface ProposalTemplateProps {
@@ -502,160 +505,211 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               )}
 
               {/* Section Line Items */}
-              {(section.lineItems || []).length > 0 && (
-                <div className="mb-4 sm:mb-6">
-                  <div className="w-full overflow-x-auto">
-                    <div className="inline-block min-w-full align-middle">
-                      <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Line Item</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900">Qty</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden sm:table-cell">Rate</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Price</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden md:table-cell">Optional</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {(section.lineItems || []).map((item, index) => {
-                            let displayPrice = item.totalPrice;
-                            const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
-                            if (item.pricingType === 'choice' && effectiveChoiceId) {
-                              const selectedChoice = item.choices?.find(c => c.id === effectiveChoiceId);
-                              if (selectedChoice) {
-                                displayPrice = selectedChoice.price * item.quantity;
-                              }
-                            } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-                              displayPrice = item.fixedPrice;
-                            }
+              {(section.lineItems || []).length > 0 && (() => {
+                const secType: SectionType = section.sectionType ?? "fixed";
+                const isInteractive = (secType === "optional" || secType === "multipleChoice") && onOptionalToggle;
+                const isMultipleChoice = secType === "multipleChoice";
+                const isSubtotalOnly = secType === "subtotalOnly";
 
-                            // Check if this item is selected (use state override if available, otherwise use original)
-                            // All items can be selected/deselected by the customer, not just optional ones
-                            const isItemSelected = selectedOptionalItems[item.id] !== undefined 
-                              ? selectedOptionalItems[item.id] 
-                              : item.selected;
-                            
-                            // Determine if this row is clickable - all rows are clickable in customer selection mode
-                            const isRowClickable = allowChoiceSelection && onOptionalToggle;
-                            
-                            const handleRowClick = () => {
-                              if (isRowClickable) {
-                                onOptionalToggle(item.id, !isItemSelected);
-                              }
-                            };
-
-                            return (
-                              <tr 
-                                key={item.id} 
-                                className={`
-                                  ${isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'} 
-                                  ${!isItemSelected && item.isOptional ? 'opacity-60' : ''}
-                                  ${isRowClickable ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}
-                                `} 
-                                data-testid={`row-line-item-${sectionIndex}-${index}`}
-                                onClick={handleRowClick}
-                              >
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-gray-900">
-                                  <div className="flex items-start gap-2">
-                                    {/* Checkbox for selection */}
-                                    {isRowClickable && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isItemSelected}
-                                        onChange={(e) => {
-                                          e.stopPropagation();
-                                          onOptionalToggle(item.id, e.target.checked);
-                                        }}
-                                        className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer shrink-0 rounded border-gray-300"
-                                      />
-                                    )}
-                                    <div className="flex-1">
-                                      <span className="font-medium text-xs sm:text-sm break-words">
-                                        <LinkifiedText text={item.description} />
-                                      </span>
-                                      {item.notes && (
-                                        <p className="text-xs text-gray-600 mt-1 break-words">
-                                          <LinkifiedText text={item.notes} />
-                                        </p>
-                                      )}
-                                      {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
-                                        <div className="mt-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                                          <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
-                                          <ul className="ml-1 space-y-1.5 mt-1">
-                                            {item.choices.map(choice => {
-                                              const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
-                                              const isSelected = choice.id === effectiveChoiceId;
-                                              return (
-                                                <li 
-                                                  key={choice.id} 
-                                                  className={`flex items-start gap-2 ${isSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (allowChoiceSelection && onChoiceSelect) {
-                                                      onChoiceSelect(item.id, choice.id);
-                                                    }
-                                                  }}
-                                                >
-                                                  {allowChoiceSelection ? (
-                                                    <input 
-                                                      type="radio" 
-                                                      name={`choice-${item.id}`}
-                                                      checked={isSelected}
-                                                      onChange={(e) => {
-                                                        e.stopPropagation();
-                                                        onChoiceSelect?.(item.id, choice.id);
-                                                      }}
-                                                      className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer"
-                                                    />
-                                                  ) : (
-                                                    <span>•</span>
-                                                  )}
-                                                  <span className="flex-1">
-                                                    {choice.label} - {formatCurrency(choice.price)}
-                                                    {choice.description && (
-                                                      <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
-                                                    )}
-                                                  </span>
-                                                </li>
-                                              );
-                                            })}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {item.isOptional && !isRowClickable && (
-                                        <div className="mt-1 md:hidden">
-                                          <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                            {isItemSelected ? "Included" : "Optional"}
-                                          </Badge>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.quantity}</td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700 hidden sm:table-cell">{formatCurrency(item.unitPrice)}</td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(displayPrice)}</td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center hidden md:table-cell">
-                                  {item.isOptional && !isRowClickable && (
-                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                      {isItemSelected ? "Included" : "Optional"}
-                                    </Badge>
-                                  )}
-                                  {isRowClickable && (
-                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                      {isItemSelected ? "Selected" : "Click to select"}
-                                    </Badge>
-                                  )}
-                                </td>
+                // For subtotalOnly: compute the section subtotal and show one row
+                if (isSubtotalOnly) {
+                  const sectionSubtotal = (section.lineItems || []).reduce((sum, item) => {
+                    let p = item.totalPrice;
+                    if (item.pricingType === "fixed" && item.fixedPrice) p = item.fixedPrice;
+                    return sum + (p || 0);
+                  }, 0);
+                  return (
+                    <div className="mb-4 sm:mb-6">
+                      <div className="w-full overflow-x-auto">
+                        <div className="inline-block min-w-full align-middle">
+                          <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">{section.title || "Items"}</th>
+                                <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Subtotal</th>
                               </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                            </thead>
+                            <tbody>
+                              <tr className="bg-gray-50">
+                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-700">Included works — {(section.lineItems || []).length} item{(section.lineItems || []).length !== 1 ? "s" : ""}</td>
+                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(sectionSubtotal)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="mb-4 sm:mb-6">
+                    {isInteractive && (
+                      <p className="text-xs text-gray-500 mb-1.5 flex items-center gap-1">
+                        {isMultipleChoice
+                          ? "Select one option:"
+                          : "Select the items you'd like to include:"}
+                      </p>
+                    )}
+                    <div className="w-full overflow-x-auto">
+                      <div className="inline-block min-w-full align-middle">
+                        <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Line Item</th>
+                              <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900">Qty</th>
+                              <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden sm:table-cell">Rate</th>
+                              <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Price</th>
+                              {!isInteractive && (
+                                <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden md:table-cell">Optional</th>
+                              )}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(section.lineItems || []).map((item, index) => {
+                              let displayPrice = item.totalPrice;
+                              const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
+                              if (item.pricingType === 'choice' && effectiveChoiceId) {
+                                const selectedChoice = item.choices?.find(c => c.id === effectiveChoiceId);
+                                if (selectedChoice) {
+                                  displayPrice = selectedChoice.price * item.quantity;
+                                }
+                              } else if (item.pricingType === 'fixed' && item.fixedPrice) {
+                                displayPrice = item.fixedPrice;
+                              }
+
+                              const isItemSelected = selectedOptionalItems[item.id] !== undefined
+                                ? selectedOptionalItems[item.id]
+                                : (isInteractive ? false : (item.selected !== false));
+
+                              const handleRowClick = () => {
+                                if (!isInteractive || !onOptionalToggle) return;
+                                if (isMultipleChoice) {
+                                  // Deselect all others in this section first, then select this one
+                                  (section.lineItems || []).forEach(li => {
+                                    if (li.id !== item.id) onOptionalToggle(li.id, false);
+                                  });
+                                  onOptionalToggle(item.id, !isItemSelected);
+                                } else {
+                                  onOptionalToggle(item.id, !isItemSelected);
+                                }
+                              };
+
+                              return (
+                                <tr
+                                  key={item.id}
+                                  className={`
+                                    ${isInteractive && isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'}
+                                    ${isInteractive && !isItemSelected ? 'opacity-60' : ''}
+                                    ${isInteractive ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}
+                                  `}
+                                  data-testid={`row-line-item-${sectionIndex}-${index}`}
+                                  onClick={handleRowClick}
+                                >
+                                  <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-gray-900">
+                                    <div className="flex items-start gap-2">
+                                      {isInteractive && (
+                                        <input
+                                          type={isMultipleChoice ? "radio" : "checkbox"}
+                                          name={isMultipleChoice ? `section-choice-${section.id}` : undefined}
+                                          checked={isItemSelected}
+                                          onChange={(e) => {
+                                            e.stopPropagation();
+                                            if (!onOptionalToggle) return;
+                                            if (isMultipleChoice) {
+                                              (section.lineItems || []).forEach(li => {
+                                                if (li.id !== item.id) onOptionalToggle(li.id, false);
+                                              });
+                                            }
+                                            onOptionalToggle(item.id, e.target.checked);
+                                          }}
+                                          className={`mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer shrink-0 ${isMultipleChoice ? "" : "rounded"} border-gray-300`}
+                                        />
+                                      )}
+                                      <div className="flex-1">
+                                        <span className="font-medium text-xs sm:text-sm break-words">
+                                          <LinkifiedText text={item.description} />
+                                        </span>
+                                        {item.notes && (
+                                          <p className="text-xs text-gray-600 mt-1 break-words">
+                                            <LinkifiedText text={item.notes} />
+                                          </p>
+                                        )}
+                                        {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
+                                          <div className="mt-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                                            <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
+                                            <ul className="ml-1 space-y-1.5 mt-1">
+                                              {item.choices.map(choice => {
+                                                const isChoiceSelected = choice.id === (selectedChoices[item.id] || item.selectedChoiceId);
+                                                return (
+                                                  <li
+                                                    key={choice.id}
+                                                    className={`flex items-start gap-2 ${isChoiceSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      if (allowChoiceSelection && onChoiceSelect) {
+                                                        onChoiceSelect(item.id, choice.id);
+                                                      }
+                                                    }}
+                                                  >
+                                                    {allowChoiceSelection ? (
+                                                      <input
+                                                        type="radio"
+                                                        name={`choice-${item.id}`}
+                                                        checked={isChoiceSelected}
+                                                        onChange={(e) => {
+                                                          e.stopPropagation();
+                                                          onChoiceSelect?.(item.id, choice.id);
+                                                        }}
+                                                        className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer"
+                                                      />
+                                                    ) : (
+                                                      <span>•</span>
+                                                    )}
+                                                    <span className="flex-1">
+                                                      {choice.label} - {formatCurrency(choice.price)}
+                                                      {choice.description && (
+                                                        <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
+                                                      )}
+                                                    </span>
+                                                  </li>
+                                                );
+                                              })}
+                                            </ul>
+                                          </div>
+                                        )}
+                                        {item.isOptional && !isInteractive && (
+                                          <div className="mt-1 md:hidden">
+                                            <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                              {isItemSelected ? "Included" : "Optional"}
+                                            </Badge>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.quantity}</td>
+                                  <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700 hidden sm:table-cell">{formatCurrency(item.unitPrice)}</td>
+                                  <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(displayPrice)}</td>
+                                  {!isInteractive && (
+                                    <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center hidden md:table-cell">
+                                      {item.isOptional && (
+                                        <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                          {isItemSelected ? "Included" : "Optional"}
+                                        </Badge>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           ))}
 
