@@ -161,11 +161,16 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
     let gstAmount = 0;
     
     sections.forEach(section => {
+      const secType = (section.sectionType ?? 'fixed') as string;
+      const sectionIsInteractive = secType === 'optional' || secType === 'multipleChoice';
       (section.lineItems || []).forEach(item => {
-        // Check if this item is selected - use state override if available, otherwise use original
+        // Optional items (individual isOptional flag OR entire section is interactive) are
+        // excluded from the total by default — only included once the customer explicitly
+        // toggles them on via selectedOptionalItems.
+        const defaultSelected = !item.isOptional && !sectionIsInteractive && item.selected !== false;
         const isItemSelected = selectedOptionalItems[item.id] !== undefined 
           ? selectedOptionalItems[item.id] 
-          : item.selected;
+          : defaultSelected;
         
         if (isItemSelected) {
           let itemPrice = 0;
@@ -599,12 +604,18 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                 displayPrice = Number(item.fixedPrice);
                               }
 
+                              // Optional items (isOptional flag OR interactive section) default to
+                              // NOT selected — price is only added when the customer explicitly adds them.
+                              const defaultSelected = !item.isOptional && !isInteractive && item.selected !== false;
                               const isItemSelected = selectedOptionalItems[item.id] !== undefined
                                 ? selectedOptionalItems[item.id]
-                                : (isInteractive ? false : (item.selected !== false));
+                                : defaultSelected;
+
+                              // Whether this individual item is toggleable by the customer
+                              const isItemToggleable = isInteractive || item.isOptional;
 
                               const handleToggle = () => {
-                                if (!isInteractive || !onOptionalToggle) return;
+                                if (!isItemToggleable || !onOptionalToggle) return;
                                 if (isMultipleChoice) {
                                   (section.lineItems || []).forEach(li => {
                                     if (li.id !== item.id) onOptionalToggle(li.id, false);
@@ -620,8 +631,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                   key={item.id}
                                   className={`
                                     transition-colors
-                                    ${isInteractive && isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'}
-                                    ${isInteractive ? 'cursor-pointer' : ''}
+                                    ${isItemToggleable && isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'}
+                                    ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}
                                   `}
                                   data-testid={`row-line-item-${sectionIndex}-${index}`}
                                   onClick={handleToggle}
@@ -733,15 +744,29 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                   <td className={`border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm hidden sm:table-cell ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-700'}`}>
                                     {formatCurrency(Number(item.unitPrice) || 0)}
                                   </td>
-                                  <td className={`border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm whitespace-nowrap ${isInteractive ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-300') : 'font-semibold text-gray-900'}`}>
+                                  <td className={`border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm whitespace-nowrap ${isItemToggleable ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-300') : 'font-semibold text-gray-900'}`}>
                                     {formatCurrency(displayPrice)}
                                   </td>
+                                  {/* Optional column: large circle button for interactive sections,
+                                      inline add/remove button for individual isOptional items */}
                                   {!isInteractive && (
                                     <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center hidden md:table-cell">
                                       {item.isOptional && (
-                                        <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                          {isItemSelected ? "Included" : "Optional"}
-                                        </Badge>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (onOptionalToggle) onOptionalToggle(item.id, !isItemSelected);
+                                          }}
+                                          className={`
+                                            text-xs px-3 py-1 rounded-full border transition-all duration-150 font-medium
+                                            ${isItemSelected
+                                              ? 'bg-green-500 border-green-500 text-white'
+                                              : 'bg-white border-gray-300 text-gray-500 hover:border-green-400 hover:text-green-600'}
+                                          `}
+                                        >
+                                          {isItemSelected ? "Included" : "+ Add"}
+                                        </button>
                                       )}
                                     </td>
                                   )}
