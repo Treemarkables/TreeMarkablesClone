@@ -1045,6 +1045,11 @@ export function ProposalBuilderV2({
   const [previewMode, setPreviewMode] = useState(false);
   const [previewSelectedChoices, setPreviewSelectedChoices] = useState<Record<string, string>>({});
   const [previewSelectedOptional, setPreviewSelectedOptional] = useState<Record<string, boolean>>({});
+  const [previewServerData, setPreviewServerData] = useState<{ sections: Array<{
+    id: string; title: string; description: string;
+    photos: UploadedPhoto[]; lineItems: LineItem[];
+    sortOrder: number; sectionType?: SectionType;
+  }> } | null>(null);
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [taxRate] = useState(15);
@@ -1075,6 +1080,8 @@ export function ProposalBuilderV2({
       setDiscountAmount(0);
       setDiscountType("fixed");
       setValidUntil("");
+      setPreviewMode(false);
+      setPreviewServerData(null);
     }
   }, [isOpen]);
 
@@ -1083,6 +1090,10 @@ export function ProposalBuilderV2({
   // Initialize from existing proposal (edit mode)
   useEffect(() => {
     if (!existingData || !(existingData as { success?: boolean }).success || mode !== "edit" || !isOpen) return;
+    // Wait for job data when a jobId is associated, so we can auto-import line items.
+    // Only wait if jobId prop is set (meaning the job query is enabled and will return data).
+    const linkedJobId = (existingData as { data?: { jobId?: string } }).data?.jobId;
+    if (linkedJobId && jobId && !job) return;
     const key = `${proposalId}-${isOpen}`;
 
     // Check if incoming data has any line items
@@ -1140,9 +1151,53 @@ export function ProposalBuilderV2({
           sectionType: s.sectionType || "fixed",
         };
       });
-      setBlocks(loadedBlocks);
+
+      // Auto-import job line items if any Line Items block is empty and the job has items
+      const jobLineItems: IncomingLineItemRaw[] = Array.isArray((job as { lineItems?: IncomingLineItemRaw[] } | null)?.lineItems)
+        ? ((job as { lineItems: IncomingLineItemRaw[] }).lineItems)
+        : [];
+      if (jobLineItems.length > 0 && !editHasLineItemsRef.current) {
+        const filled = loadedBlocks.map((b) => {
+          const normTitle = b.title.toLowerCase();
+          const isLineItemsBlock =
+            b.type === "lineItems" ||
+            normTitle.includes("line item") ||
+            normTitle === "items" ||
+            normTitle === "pricing" ||
+            normTitle === "services" ||
+            normTitle === "quote";
+          if (isLineItemsBlock && b.lineItems.length === 0) {
+            const imported: LineItem[] = jobLineItems.map((item, idx) => {
+              const unitPrice = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
+              const qty = parseFloat(String(item.quantity ?? 1)) || 1;
+              const total = parseFloat(String((item as { total?: string | number }).total ?? item.price ?? 0)) || unitPrice * qty;
+              return {
+                id: item.id || `import-${idx}`,
+                description: item.description || item.name || "",
+                quantity: qty,
+                unitPrice,
+                totalPrice: total || qty * unitPrice,
+                unit: item.unit || "each",
+                category: item.category || item.itemCode || "",
+                isOptional: item.isOptional || false,
+                selected: true,
+                pricingType: item.pricingType || "normal",
+                choices: item.choices || [],
+                priceIncludesTax: item.priceIncludesTax || false,
+                costPrice: parseFloat(String(item.costPrice ?? 0)) || unitPrice,
+                markupPct: parseFloat(String(item.markupPct ?? 0)) || 0,
+              };
+            });
+            return { ...b, lineItems: imported };
+          }
+          return b;
+        });
+        setBlocks(filled);
+      } else {
+        setBlocks(loadedBlocks);
+      }
     }
-  }, [existingData, mode, isOpen, proposalId]);
+  }, [existingData, job, mode, isOpen, proposalId]);
 
   // Initialize from job data (create mode) — includes lineItems prefill from parent
   useEffect(() => {
@@ -1551,7 +1606,21 @@ export function ProposalBuilderV2({
                 <button
                   type="button"
                   onClick={async () => {
-                    await saveDraftMutation.mutateAsync(buildPayload());
+                    const saved = await saveDraftMutation.mutateAsync(buildPayload());
+                    const savedId = (saved as { data?: { id?: string } })?.data?.id || draftId;
+                    if (savedId) {
+                      try {
+                        const res = await fetch(`/api/proposals/${savedId}`);
+                        const json = await res.json();
+                        if (json.success && Array.isArray(json.data?.sections)) {
+                          setPreviewServerData({ sections: json.data.sections });
+                        } else {
+                          setPreviewServerData(null);
+                        }
+                      } catch {
+                        setPreviewServerData(null);
+                      }
+                    }
                     setPreviewSelectedChoices({});
                     setPreviewSelectedOptional({});
                     setPreviewMode(true);
@@ -1691,7 +1760,7 @@ export function ProposalBuilderV2({
                 }) as Proposal}
                 customer={customer as Customer | undefined}
                 job={job}
-                sections={blocks.map((b) => ({
+                sections={previewServerData?.sections ?? blocks.map((b) => ({
                   id: b.id,
                   title: b.title,
                   description: b.description,

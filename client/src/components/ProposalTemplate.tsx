@@ -311,6 +311,33 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               )}
             </div>
           </div>
+          {/* Company contact details row */}
+          <div className="mt-3 pt-3 border-t border-orange-100 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+            {(template.companyName) && (
+              <span className="font-medium text-gray-700">{template.companyName}</span>
+            )}
+            {(template.companyAddress) && (
+              <span className="flex items-center gap-1">
+                <MapPin className="w-3 h-3 shrink-0" />
+                {template.companyAddress}
+              </span>
+            )}
+            {(template.companyPhone) && (
+              <span className="flex items-center gap-1">
+                <Phone className="w-3 h-3 shrink-0" />
+                {template.companyPhone}
+              </span>
+            )}
+            {(template.companyEmail) && (
+              <span className="flex items-center gap-1">
+                <MailIcon className="w-3 h-3 shrink-0" />
+                {template.companyEmail}
+              </span>
+            )}
+            {(template.gstNumber) && (
+              <span className="text-gray-400">GST: {template.gstNumber}</span>
+            )}
+          </div>
         </CardHeader>
         
         <CardContent className="p-0">
@@ -772,6 +799,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 
           {/* Footer */}
           <div className="p-3 sm:p-4 pt-2">
+            {template.paymentTerms && (
+              <p className="text-center text-xs text-gray-500 mb-2">{template.paymentTerms}</p>
+            )}
             <div className="text-center text-xs sm:text-sm text-gray-600">
               <p>Thank you for choosing {template.companyName || 'Treemarkables LTD'}!</p>
               <p className="mt-1">Professional tree services you can trust.</p>
