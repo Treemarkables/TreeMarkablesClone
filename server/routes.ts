@@ -16169,23 +16169,30 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         }));
 
       // Helper: map raw job lineItems JSONB entries to the shape ProposalTemplate expects
-      const mapJobItems = (rawItems: any[]) =>
-        rawItems.map((item: any, i: number) => ({
-          id: item.id || `synth-item-${i}`,
-          description: item.description || item.name || '',
-          quantity: parseFloat(String(item.quantity ?? 1)) || 1,
-          unitPrice: parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0,
-          totalPrice: parseFloat(String(item.totalPrice ?? item.total ?? item.price ?? 0)) || 0,
-          unit: item.unit || 'each',
-          category: item.category || item.itemCode || '',
-          isOptional: item.isOptional || false,
-          selected: true,
-          pricingType: item.pricingType || 'normal',
-          choices: item.choices || [],
-          priceIncludesTax: item.priceIncludesTax || false,
-          fixedPrice: item.fixedPrice ? parseFloat(String(item.fixedPrice)) : undefined,
-          sortOrder: i,
-        }));
+      const mapJobItems = (rawItems: any[]): any[] =>
+        rawItems.map((item: any, i: number) => {
+          const qty = parseFloat(String(item.quantity ?? 1)) || 1;
+          const rawTotal = parseFloat(String(item.totalPrice ?? item.total ?? item.price ?? 0)) || 0;
+          const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0));
+          const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
+          const totalPrice = rawTotal || (qty * unitPrice);
+          return {
+            id: item.id || `synth-item-${i}`,
+            description: item.description || item.name || '',
+            quantity: qty,
+            unitPrice,
+            totalPrice,
+            unit: item.unit || 'each',
+            category: item.category || item.itemCode || '',
+            isOptional: item.isOptional || false,
+            selected: true,
+            pricingType: item.pricingType || 'normal',
+            choices: item.choices || [],
+            priceIncludesTax: item.priceIncludesTax || false,
+            fixedPrice: item.fixedPrice ? parseFloat(String(item.fixedPrice)) : undefined,
+            sortOrder: i,
+          };
+        });
 
       let sectionsWithPhotosAndLineItems: any[];
 

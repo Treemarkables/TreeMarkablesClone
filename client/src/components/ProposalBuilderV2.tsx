@@ -1225,19 +1225,28 @@ export function ProposalBuilderV2({
       sortOrder: 0,
     });
 
-    // Block 2: prefill line items from parent prop if available
-    if (Array.isArray(incomingLineItems) && (incomingLineItems as unknown[]).length > 0) {
-      const rawItems = incomingLineItems as IncomingLineItemRaw[];
+    // Block 2: prefill line items — first from parent prop, then from job JSONB as fallback
+    const propItems = Array.isArray(incomingLineItems) && (incomingLineItems as unknown[]).length > 0
+      ? incomingLineItems as IncomingLineItemRaw[]
+      : null;
+    const jobJsonbItems = Array.isArray((job as { lineItems?: IncomingLineItemRaw[] } | null)?.lineItems)
+      ? (job as { lineItems: IncomingLineItemRaw[] }).lineItems
+      : null;
+    const rawItems = propItems ?? jobJsonbItems;
+    if (rawItems && rawItems.length > 0) {
       const items: LineItem[] = rawItems.map((item, idx) => {
-        const unitPrice = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
         const qty = parseFloat(String(item.quantity ?? 1)) || 1;
+        const rawTotal = parseFloat(String((item as { total?: string | number }).total ?? 0)) || 0;
+        const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0)) || 0;
+        const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
+        const totalPrice = (qty * unitPrice) || rawTotal;
         const costPrice = parseFloat(String(item.costPrice ?? 0)) || unitPrice;
         return {
           id: item.id || `prefill-${idx}`,
           description: item.description || item.name || "",
           quantity: qty,
           unitPrice,
-          totalPrice: qty * unitPrice,
+          totalPrice,
           unit: item.unit || "each",
           category: item.category || item.itemCode || "",
           isOptional: item.isOptional || false,
