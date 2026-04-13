@@ -284,14 +284,14 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 
       <Card className="shadow-lg">
         {/* Header with Logo — compact, logo left, company contact info right */}
-        <CardHeader className="p-4 sm:p-6 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
+        <CardHeader className="p-4 sm:p-6 border-b border-gray-200">
           <div className="flex items-center justify-between gap-4">
             {/* Left: Logo */}
             <div className="shrink-0">
               <img 
                 src={logoUrl} 
                 alt="Company Logo" 
-                className="h-20 sm:h-28 w-auto object-contain"
+                className="h-32 sm:h-44 w-auto object-contain"
                 data-testid="img-company-logo"
               />
             </div>

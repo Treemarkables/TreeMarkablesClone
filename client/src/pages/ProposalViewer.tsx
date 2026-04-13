@@ -185,7 +185,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   if (actualLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading proposal...</p>
@@ -196,7 +196,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   if (!actualProposalResponse?.success || !actualProposalResponse?.data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
@@ -241,7 +241,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const isAccepted = proposal.status === "accepted";
 
   return (
-    <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
+    <div className="min-h-screen bg-white w-full overflow-x-hidden">
       {/* Header with safe area padding for mobile notch/Dynamic Island */}
       <div
         className="sticky top-0 z-50 bg-white border-b border-gray-200 w-full shadow-sm"
