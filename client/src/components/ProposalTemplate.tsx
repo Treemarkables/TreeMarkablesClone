@@ -557,7 +557,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           <thead className="bg-gray-50">
                             <tr>
                               {isInteractive && (
-                                <th className="border border-gray-200 px-2 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 w-16">Select</th>
+                                <th className="border border-gray-200 px-2 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 w-20 sm:w-24">Select</th>
                               )}
                               <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Line Item</th>
                               <th className="border border-gray-200 px-2 sm:px-3 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 w-14">Qty</th>
@@ -610,35 +610,38 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                 >
                                   {/* Large visible selector button */}
                                   {isInteractive && (
-                                    <td className="border border-gray-200 px-2 py-2 sm:py-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                                    <td className="border border-gray-200 px-2 py-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
                                       <button
                                         type="button"
                                         onClick={handleToggle}
                                         aria-pressed={isItemSelected}
                                         className={`
-                                          inline-flex items-center justify-center
-                                          w-9 h-9 sm:w-10 sm:h-10
-                                          rounded-full border-2 transition-all duration-150
-                                          focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-green-400
+                                          inline-flex flex-col items-center justify-center gap-1
+                                          w-16 h-16 sm:w-18 sm:h-18
+                                          rounded-full border-[3px] transition-all duration-200
+                                          focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-green-300
                                           ${isItemSelected
-                                            ? 'bg-green-500 border-green-500 text-white shadow-md scale-105'
-                                            : 'bg-white border-gray-300 text-gray-300 hover:border-green-400 hover:text-green-400'}
+                                            ? 'bg-green-500 border-green-500 text-white shadow-lg scale-105'
+                                            : 'bg-white border-gray-300 text-gray-400 hover:border-green-400 hover:text-green-500 hover:shadow-md hover:scale-105'}
                                         `}
+                                        style={{ minWidth: "4rem", minHeight: "4rem" }}
                                       >
                                         {isItemSelected ? (
-                                          <svg className="w-5 h-5 sm:w-6 sm:h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <polyline points="20 6 9 17 4 12" />
-                                          </svg>
-                                        ) : (
-                                          isMultipleChoice ? (
-                                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="currentColor">
-                                              <circle cx="12" cy="12" r="8" />
-                                            </svg>
-                                          ) : (
-                                            <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                          <>
+                                            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
                                               <polyline points="20 6 9 17 4 12" />
                                             </svg>
-                                          )
+                                            <span className="text-[10px] font-bold leading-none">ADDED</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                              <circle cx="12" cy="12" r="9" />
+                                              <line x1="12" y1="8" x2="12" y2="16" />
+                                              <line x1="8" y1="12" x2="16" y2="12" />
+                                            </svg>
+                                            <span className="text-[10px] font-semibold leading-none">{isMultipleChoice ? "SELECT" : "ADD"}</span>
+                                          </>
                                         )}
                                       </button>
                                     </td>
