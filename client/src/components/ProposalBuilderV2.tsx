@@ -1000,7 +1000,7 @@ export function ProposalBuilderV2({
   const { data: existingData } = useQuery({
     queryKey: ["/api/proposals", proposalId],
     enabled: !!proposalId && mode === "edit" && isOpen,
-    staleTime: Infinity,
+    staleTime: 0,
     refetchOnWindowFocus: false,
     refetchInterval: false,
   });
