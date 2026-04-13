@@ -28,6 +28,13 @@ const app = express();
 // Trust proxy - needed for secure cookies behind Replit's proxy
 app.set('trust proxy', 1);
 
+// Health check endpoint - must be registered FIRST so it responds immediately
+// even while migrations or other background tasks are still running.
+// Replit's Promote health check hits this URL to confirm the server is up.
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok', env: process.env.NODE_ENV });
+});
+
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
@@ -404,11 +411,7 @@ function startNotificationQueueWorker() {
     const port = parseInt(process.env.PORT || '5000', 10);
     log(`Starting HTTP server on port ${port}...`, "startup");
     
-    server.listen({
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    }, () => {
+    server.listen(port, "0.0.0.0", () => {
       log(`Server successfully started on port ${port}`, "startup");
       log(`Server ready to accept connections at http://0.0.0.0:${port}`, "startup");
 
