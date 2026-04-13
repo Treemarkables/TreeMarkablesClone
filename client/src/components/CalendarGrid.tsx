@@ -176,6 +176,36 @@ export function CalendarGrid({
     return map;
   }, [allJobs]);
 
+  // ── Job identity colours — same 12-colour palette as Staff Schedule ────────
+  const JOB_IDENTITY_PALETTE = [
+    { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' }, // blue
+    { bg: '#d1fae5', border: '#059669', text: '#064e3b' }, // emerald
+    { bg: '#ffedd5', border: '#ea580c', text: '#7c2d12' }, // orange
+    { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // purple
+    { bg: '#fce7f3', border: '#db2777', text: '#831843' }, // pink
+    { bg: '#fef9c3', border: '#ca8a04', text: '#713f12' }, // amber
+    { bg: '#ccfbf1', border: '#0d9488', text: '#134e4a' }, // teal
+    { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d' }, // red
+    { bg: '#e0e7ff', border: '#4f46e5', text: '#312e81' }, // indigo
+    { bg: '#dcfce7', border: '#16a34a', text: '#14532d' }, // green
+    { bg: '#fef3c7', border: '#d97706', text: '#78350f' }, // yellow
+    { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' }, // violet
+  ];
+
+  // Assign a stable colour to each job based on sorted job number order.
+  // Same job → same colour across every staff row and every date.
+  const jobColorMap = useMemo(() => {
+    const sorted = [...allJobs].sort((a, b) => (a.jobNumber ?? 0) - (b.jobNumber ?? 0));
+    const map = new Map<string, typeof JOB_IDENTITY_PALETTE[0]>();
+    sorted.forEach((job, idx) => {
+      map.set(job.id, JOB_IDENTITY_PALETTE[idx % JOB_IDENTITY_PALETTE.length]);
+    });
+    return map;
+  }, [allJobs]);
+
+  const getJobColor = (jobId: string) =>
+    jobColorMap.get(jobId) ?? JOB_IDENTITY_PALETTE[0];
+
   // employee+date → [{assignment, job}]
   // Keys use NZ date strings so UTC-stored startTimes are bucketed correctly
   const assignmentsByEmployeeDate = useMemo(() => {
@@ -852,7 +882,8 @@ export function CalendarGrid({
                                 onDragEnd={() => {
                                   dragRef.current = null;
                                 }}
-                                className={`text-xs p-1.5 rounded border cursor-grab active:cursor-grabbing mb-1 ${getStatusColor(job.status)}`}
+                                className="text-xs p-1.5 rounded border cursor-grab active:cursor-grabbing mb-1"
+                                style={(() => { const c = getJobColor(job.id); return { backgroundColor: c.bg, borderColor: c.border, color: c.text }; })()}
                                 onClick={() => {
                                   setSelectedJobId(job.id);
                                   setShowJobCard(true);
@@ -865,7 +896,7 @@ export function CalendarGrid({
                                     {getCustomerName(job)}
                                   </div>
                                   {job.customerConfirmed && (
-                                    <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
+                                    <Check className="h-3 w-3 flex-shrink-0" style={{ color: getJobColor(job.id).border }} />
                                   )}
                                 </div>
                                 <div className="opacity-70 truncate mt-0.5">
@@ -921,32 +952,36 @@ export function CalendarGrid({
                               Drop to schedule
                             </div>
                           )}
-                          {items.map((job) => (
-                            <div
-                              key={job.id}
-                              className={`text-xs p-1.5 rounded border cursor-pointer mb-1 ${getStatusColor(job.status)}`}
-                              onClick={() => {
-                                setSelectedJobId(job.id);
-                                setShowJobCard(true);
-                              }}
-                              data-testid={`job-block-${job.id}`}
-                            >
-                              <div className="flex items-center justify-between gap-1">
-                                <div className="font-semibold line-clamp-2 leading-tight flex-1">
-                                  {getCustomerName(job)}
+                          {items.map((job) => {
+                            const c = getJobColor(job.id);
+                            return (
+                              <div
+                                key={job.id}
+                                className="text-xs p-1.5 rounded border cursor-pointer mb-1"
+                                style={{ backgroundColor: c.bg, borderColor: c.border, color: c.text }}
+                                onClick={() => {
+                                  setSelectedJobId(job.id);
+                                  setShowJobCard(true);
+                                }}
+                                data-testid={`job-block-${job.id}`}
+                              >
+                                <div className="flex items-center justify-between gap-1">
+                                  <div className="font-semibold line-clamp-2 leading-tight flex-1">
+                                    {getCustomerName(job)}
+                                  </div>
+                                  {job.customerConfirmed && (
+                                    <Check className="h-3 w-3 flex-shrink-0" style={{ color: c.border }} />
+                                  )}
                                 </div>
-                                {job.customerConfirmed && (
-                                  <Check className="h-3 w-3 text-green-600 flex-shrink-0" />
-                                )}
+                                <div className="opacity-70 truncate mt-0.5">
+                                  {job.address?.split(",")[0]}
+                                </div>
+                                <div className="opacity-80 mt-0.5 font-mono">
+                                  #{job.jobNumber}
+                                </div>
                               </div>
-                              <div className="opacity-70 truncate mt-0.5">
-                                {job.address?.split(",")[0]}
-                              </div>
-                              <div className="opacity-80 mt-0.5 font-mono">
-                                #{job.jobNumber}
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })}
