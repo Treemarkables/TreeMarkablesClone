@@ -9,6 +9,9 @@ import { LinkifiedText } from '@/utils/linkify';
 import { resolveCompanyInfo } from '@shared/invoiceBlockDefaults';
 import { renderInvoiceBlock, type InvoiceRenderContext } from '@/components/InvoiceBlockRenderer';
 
+const formatCurrency = (amount: number) =>
+  new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(amount);
+
 const DEFAULT_SECTION_ORDER = [
   'header', 'billTo', 'description', 'lineItems', 'totals', 'payment', 'footer'
 ];
