@@ -31,8 +31,8 @@ const isProduction = process.env.NODE_ENV !== 'development';
 // PRODUCTION ONLY: Use the port already bound by launcher.js, OR bind it
 // ourselves as a fallback (e.g. direct `node dist/index.js` without launcher).
 //
-// launcher.js binds port 5000 in <100ms (before Node finishes parsing this
-// 1.4MB bundle). It sets global.__launcherServer and global.__launcherHandler.
+// launcher.mjs binds port 5000 in <100ms (before Node finishes parsing this
+// 1.4MB bundle). It sets globalThis.__launcherServer and globalThis.__launcherHandler.
 // When this code runs (~5-7s later) we simply reuse that server and swap the
 // handler from "starting" to the real Express app once it's ready.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +41,7 @@ let productionHttpServer: http.Server | null = null;
 let currentHandler: ((req: http.IncomingMessage, res: http.ServerResponse) => void) | null = null;
 
 if (isProduction) {
-  const launcherServer = (global as any).__launcherServer as http.Server | undefined;
+  const launcherServer = (globalThis as any).__launcherServer as http.Server | undefined;
 
   if (launcherServer) {
     // ── Launcher path (normal production deployment) ──────────────────────
@@ -458,8 +458,8 @@ function startNotificationQueueWorker() {
       // Switch the production server to use the full Express app.
       // If the launcher pre-bound the port, update its global handler.
       // If we bound the port ourselves (fallback), update currentHandler.
-      if ((global as any).__launcherHandler !== undefined) {
-        (global as any).__launcherHandler = app;
+      if ((globalThis as any).__launcherHandler !== undefined) {
+        (globalThis as any).__launcherHandler = app;
       } else {
         currentHandler = app as any;
       }
