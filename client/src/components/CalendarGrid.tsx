@@ -31,6 +31,66 @@ import { useToast } from "@/hooks/use-toast";
 
 const NZ_TZ = "Pacific/Auckland";
 
+// ── Gantt (day-view) constants & helpers ──────────────────────────────────────
+const GANTT_START_H = 6;
+const GANTT_END_H   = 19;
+const GANTT_HOURS   = GANTT_END_H - GANTT_START_H;
+const GANTT_HOUR_LABELS = Array.from({ length: GANTT_HOURS + 1 }, (_, i) => {
+  const h = GANTT_START_H + i;
+  if (h === 12) return '12 PM';
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
+});
+// Same palette used in Staff Schedule — index-stable colours per crew member
+const GANTT_STAFF_PALETTE = [
+  { dot: '#3b82f6', row: '#eff6ff', avatar: '#1e40af' }, // blue
+  { dot: '#10b981', row: '#f0fdf4', avatar: '#065f46' }, // emerald
+  { dot: '#f97316', row: '#fff7ed', avatar: '#9a3412' }, // orange
+  { dot: '#a855f7', row: '#faf5ff', avatar: '#6b21a8' }, // purple
+  { dot: '#ec4899', row: '#fdf2f8', avatar: '#9d174d' }, // pink
+  { dot: '#eab308', row: '#fefce8', avatar: '#713f12' }, // yellow
+  { dot: '#14b8a6', row: '#f0fdfa', avatar: '#134e4a' }, // teal
+  { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
+];
+const GANTT_COL_W = 148; // px — name column width (matches StaffSchedule)
+const GANTT_ROW_H = 56;  // px — compact row height so all crew fits on screen
+
+function ganttTimeToMins(t: string | undefined): number {
+  if (!t) return 8 * 60;
+  const [h, m] = t.split(':').map(Number);
+  return (isNaN(h) ? 8 : h) * 60 + (isNaN(m) ? 0 : m);
+}
+function ganttMinsToPercent(mins: number): number {
+  return ((mins - GANTT_START_H * 60) / (GANTT_HOURS * 60)) * 100;
+}
+function ganttLaneStyle(lane: number, totalLanes: number) {
+  const pct = 100 / totalLanes;
+  return { top: `calc(${lane * pct}% + 3px)`, height: `calc(${pct}% - 6px)` };
+}
+function assignGanttLanes(jobs: { id: string; scheduledStartTime?: string; scheduledEndTime?: string }[]) {
+  const sorted = [...jobs].sort(
+    (a, b) => ganttTimeToMins(a.scheduledStartTime) - ganttTimeToMins(b.scheduledStartTime)
+  );
+  const laneEnd: number[] = [];
+  const laneOf = new Map<string, number>();
+  for (const job of sorted) {
+    const start = ganttTimeToMins(job.scheduledStartTime);
+    const end   = ganttTimeToMins(job.scheduledEndTime);
+    let placed = -1;
+    for (let l = 0; l < laneEnd.length; l++) {
+      if (laneEnd[l] <= start) { placed = l; laneEnd[l] = end; break; }
+    }
+    if (placed === -1) { placed = laneEnd.length; laneEnd.push(end); }
+    laneOf.set(job.id, placed);
+  }
+  const total = laneEnd.length || 1;
+  const result = new Map<string, { lane: number; totalLanes: number }>();
+  for (const [id, lane] of laneOf) result.set(id, { lane, totalLanes: total });
+  return result;
+}
+function ganttInitials(emp: { firstName: string; lastName: string }): string {
+  return `${(emp.firstName || ' ')[0]}${(emp.lastName || ' ')[0]}`.toUpperCase();
+}
+
 interface Employee {
   id: string;
   firstName: string;
@@ -725,23 +785,34 @@ export function CalendarGrid({
         className="flex-1 overflow-auto"
         onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
       >
-        <div className="flex flex-col min-w-max h-full">
+        <div className={`flex flex-col h-full ${viewMode !== "day" ? "min-w-max" : "w-full"}`}>
           {/* Header row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
+            {viewMode === "day" ? (
+              <>
+                <div
+                  className="flex-shrink-0 border-r bg-gray-50 font-semibold p-2 text-sm sticky left-0 z-20 flex items-end"
+                  style={{ width: GANTT_COL_W }}
+                >
+                  CREW
+                </div>
+                <div className="flex flex-1">
+                  {GANTT_HOUR_LABELS.map((label, i) => (
+                    <div
+                      key={i}
+                      className="flex-1 border-r border-gray-100 last:border-r-0 text-[10px] text-gray-400 font-medium pb-1 pl-0.5 flex items-end"
+                    >
+                      {label}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
             <div className="w-28 flex-shrink-0 border-r bg-gray-50 font-semibold p-2 text-sm sticky left-0 z-20">
               Staff
             </div>
-            {viewMode === "day"
-              ? timeSlots.map((slot) => (
-                  <div
-                    key={slot.hour}
-                    className="w-[110px] flex-shrink-0 border-r p-1 text-xs text-center font-medium text-gray-600 whitespace-nowrap"
-                    data-testid={`time-slot-${slot.hour}`}
-                  >
-                    {slot.label}
-                  </div>
-                ))
-              : dateRange.map((date) => {
+            {dateRange.map((date) => {
                   const dateKey = format(date, "yyyy-MM-dd");
                   const rev = weekRevenue[dateKey] ?? 0;
                   return (
@@ -764,6 +835,8 @@ export function CalendarGrid({
                     </div>
                   );
                 })}
+              </>
+            )}
           </div>
 
           {/* Staff rows */}
@@ -771,147 +844,110 @@ export function CalendarGrid({
             className="flex-1 flex flex-col"
             onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
           >
-            {employees.map((employee) => (
+            {employees.map((employee, empIdx) => {
+              const gPalette = GANTT_STAFF_PALETTE[empIdx % GANTT_STAFF_PALETTE.length];
+              const empDayJobs = viewMode === "day" ? getItemsForDate(employee.id, currentDate) : [];
+              const empGanttLanes = viewMode === "day" ? assignGanttLanes(empDayJobs) : new Map<string, { lane: number; totalLanes: number }>();
+              return (
               <div
                 key={employee.id}
-                className="flex min-h-[80px] border-b hover:bg-gray-50/50"
+                className={`flex border-b ${viewMode !== "day" ? "min-h-[80px] hover:bg-gray-50/50" : ""}`}
+                style={viewMode === "day" ? { height: GANTT_ROW_H } : undefined}
                 data-testid={`staff-row-${employee.id}`}
                 onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
               >
                 {/* Name column */}
-                <div className="w-28 flex-shrink-0 border-r p-2 flex items-center gap-2 sticky left-0 bg-white z-10">
-                  <Avatar className="h-6 w-6 flex-shrink-0">
-                    <AvatarFallback className="text-xs">
-                      {employee.firstName[0]}
-                      {employee.lastName[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="text-sm truncate">{employee.firstName}</span>
-                </div>
+                {viewMode === "day" ? (
+                  <div
+                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
+                    style={{ width: GANTT_COL_W, backgroundColor: gPalette.row }}
+                  >
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
+                      style={{ backgroundColor: gPalette.dot }}
+                    >
+                      {ganttInitials(employee)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate leading-tight">
+                        {employee.firstName} {employee.lastName}
+                      </p>
+                      <p className="text-[10px] text-gray-400 leading-tight">
+                        {empDayJobs.length} job{empDayJobs.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-28 flex-shrink-0 border-r p-2 flex items-center gap-2 sticky left-0 bg-white z-10">
+                    <Avatar className="h-6 w-6 flex-shrink-0">
+                      <AvatarFallback className="text-xs">
+                        {employee.firstName[0]}
+                        {employee.lastName[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm truncate">{employee.firstName}</span>
+                  </div>
+                )}
 
-                {viewMode === "day"
-                  ? timeSlots.map((slot) => {
-                      const dateKey = getNZDateString(currentDate);
-                      const assignedItems =
-                        assignmentsByEmployeeDate.get(
-                          `${employee.id}__${dateKey}`,
-                        ) || [];
-                      const items = getItemsForHour(
-                        employee.id,
-                        currentDate,
-                        slot.hour,
-                      );
-                      const slotKey = `${employee.id}-${slot.hour}`;
-                      const isOver = dragOverSlot === slotKey;
+                {viewMode === "day" ? (
+                  /* ── Gantt timeline bar ─────────────────────────────── */
+                  <div
+                    className="flex-1 relative"
+                    style={{ backgroundColor: gPalette.row + "55" }}
+                  >
+                    {/* Hour grid lines */}
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {GANTT_HOUR_LABELS.map((_, i) => (
+                        <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
+                      ))}
+                    </div>
+                    {/* Job blocks */}
+                    {empDayJobs.map((job) => {
+                      const startPct = ganttMinsToPercent(ganttTimeToMins(job.scheduledStartTime));
+                      const endPct   = ganttMinsToPercent(ganttTimeToMins(job.scheduledEndTime));
+                      const { lane, totalLanes } = empGanttLanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
+                      const ls = ganttLaneStyle(lane, totalLanes);
+                      const c = getJobColor(job.id);
+                      const custName = getCustomerName(job);
+                      const timeLabel = `${job.scheduledStartTime ?? ""}–${job.scheduledEndTime ?? ""}`;
                       return (
-                        <div
-                          key={slot.hour}
-                          className={`w-[110px] flex-shrink-0 border-r p-1 min-h-[80px] transition-colors duration-100 ${isOver ? "bg-blue-50 border-blue-300 border-2" : ""}`}
-                          data-testid={`slot-${employee.id}-${slot.hour}`}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.dataTransfer.dropEffect = "move";
-                            setDragOverSlot(slotKey);
-                          }}
-                          onDragLeave={() => setDragOverSlot(null)}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            setDragOverSlot(null);
-                            const drag = dragRef.current;
-                            if (drag) {
-                              // Internal reschedule: job block dragged within calendar
-                              dragRef.current = null;
-                              handleInternalReschedule(
-                                drag.jobId,
-                                drag.employeeId,
-                                drag.assignmentId,
-                                drag.durationHours,
-                                slot.hour,
-                                employee.id,
-                                currentDate,
-                              );
-                            } else if (onJobDrop) {
-                              // External drop from right panel
-                              const jobId = e.dataTransfer.getData("jobId");
-                              if (jobId)
-                                onJobDrop(
-                                  jobId,
-                                  currentDate,
-                                  slot.hour,
-                                  employee.id,
-                                );
-                            }
+                        <button
+                          key={job.id}
+                          onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
+                          title={`${custName} — ${timeLabel}`}
+                          className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          style={{
+                            left: `${Math.max(0, startPct)}%`,
+                            width: `${Math.max(2, endPct - startPct)}%`,
+                            top: ls.top,
+                            height: ls.height,
+                            backgroundColor: c.bg,
+                            borderLeft: `3px solid ${c.border}`,
+                            color: c.text,
+                            minWidth: 32,
                           }}
                         >
-                          {isOver && (
-                            <div className="text-[10px] text-blue-500 font-medium text-center py-1 opacity-80">
-                              Drop to schedule {slot.label}
-                            </div>
-                          )}
-                          {items.map((job) => {
-                            const assignment =
-                              assignedItems.find((x) => x.job.id === job.id)
-                                ?.assignment || null;
-                            const durationHours = assignment
-                              ? Math.max(
-                                  1,
-                                  Math.round(
-                                    (new Date(assignment.endTime).getTime() -
-                                      new Date(
-                                        assignment.startTime,
-                                      ).getTime()) /
-                                      3600000,
-                                  ),
-                                )
-                              : 2;
-                            return (
-                              <div
-                                key={job.id}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.stopPropagation();
-                                  e.dataTransfer.effectAllowed = "move";
-                                  e.dataTransfer.setData("text/plain", job.id);
-                                  dragRef.current = {
-                                    jobId: job.id,
-                                    employeeId: employee.id,
-                                    assignmentId: assignment?.id ?? null,
-                                    durationHours,
-                                  };
-                                }}
-                                onDragEnd={() => {
-                                  dragRef.current = null;
-                                }}
-                                className="text-xs p-1.5 rounded border cursor-grab active:cursor-grabbing mb-1"
-                                style={(() => { const c = getJobColor(job.id); return { backgroundColor: c.bg, borderColor: c.border, color: c.text }; })()}
-                                onClick={() => {
-                                  setSelectedJobId(job.id);
-                                  setShowJobCard(true);
-                                }}
-                                data-testid={`job-block-${job.id}`}
-                              >
-                                <div className="flex items-center justify-between gap-1">
-                                  <GripVertical className="h-3 w-3 opacity-40 flex-shrink-0" />
-                                  <div className="font-semibold line-clamp-2 leading-tight flex-1">
-                                    {getCustomerName(job)}
-                                  </div>
-                                  {job.customerConfirmed && (
-                                    <Check className="h-3 w-3 flex-shrink-0" style={{ color: getJobColor(job.id).border }} />
-                                  )}
-                                </div>
-                                <div className="opacity-70 truncate mt-0.5">
-                                  {job.address?.split(",")[0]}
-                                </div>
-                                <div className="opacity-80 mt-0.5 font-mono">
-                                  #{job.jobNumber}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                            <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
+                              {custName}
+                            </span>
+                            <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
+                              {timeLabel}
+                            </span>
+                            {job.address && (
+                              <span className="text-[9px] leading-tight truncate block" style={{ color: c.text, opacity: 0.7 }}>
+                                {job.address.split(",")[0]}
+                              </span>
+                            )}
+                          </div>
+                        </button>
                       );
-                    })
-                  : dateRange.map((date) => {
+                    })}
+                  </div>
+                ) : (
+                  /* ── Week / 2wks / 4wks: per-date cells ──────────────── */
+                  <>
+                  {dateRange.map((date) => {
                       const items = getItemsForDate(employee.id, date);
                       const slotKey = `${employee.id}-${format(date, "yyyy-MM-dd")}`;
                       const isOver = dragOverSlot === slotKey;
@@ -984,9 +1020,12 @@ export function CalendarGrid({
                           })}
                         </div>
                       );
-                    })}
+                  })}
+                  </>
+                )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
