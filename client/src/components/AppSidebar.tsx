@@ -1,11 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Calendar,
   CalendarDays,
   BarChart3,
   Users,
   Settings,
-  Home,
   GitBranch,
   MessageSquare,
   Star,
@@ -18,8 +17,6 @@ import {
   Shield,
   LogOut,
   ClipboardCheck,
-  ClipboardList,
-  History as HistoryIconLucide,
   Megaphone,
   Clock,
   PhoneCall,
@@ -27,6 +24,7 @@ import {
   Leaf,
   GitMerge,
   Bot,
+  ChevronRight,
 } from "lucide-react";
 import {
   Sidebar,
@@ -37,11 +35,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarHeader,
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Link, useLocation, useRoute } from "wouter";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Link, useLocation } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 
 interface AppSidebarProps {
@@ -50,7 +52,6 @@ interface AppSidebarProps {
 }
 
 const dashboardItems = [
-  { title: "Overview", url: "/overview", icon: Home, value: "overview", isTab: false },
   { title: "All Jobs", url: "/job-dashboard", icon: Briefcase, value: "jobs", isTab: true },
   { title: "Pipeline", url: "/pipeline", icon: GitBranch, value: "pipeline", isTab: false },
 ];
@@ -89,6 +90,20 @@ function SidebarNavContent({
   isCrew: boolean;
   logout: () => void;
 }) {
+  const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
+  const jhaActive = location === "/jha-assessment" || location === "/jha-history";
+
+  const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
+  const [jhaOpen, setJhaOpen] = useState(jhaActive);
+
+  useEffect(() => {
+    if (vehicleActive) setVehicleOpen(true);
+  }, [vehicleActive]);
+
+  useEffect(() => {
+    if (jhaActive) setJhaOpen(true);
+  }, [jhaActive]);
+
   const close = () => {
     if (isMobile) setOpenMobile(false);
   };
@@ -181,53 +196,71 @@ function SidebarNavContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Vehicle Inspection */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection"}>
-                  <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <ClipboardCheck className="h-4 w-4" />
-                    </span>
-                    <span>Vehicle Inspection</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/* Vehicle Inspection — collapsible group */}
+              <Collapsible open={vehicleOpen} onOpenChange={setVehicleOpen} className="group/vehicle-collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton isActive={vehicleActive} data-testid="collapsible-vehicle-inspection">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                        <ClipboardCheck className="h-4 w-4" />
+                      </span>
+                      <span>Vehicle Inspection</span>
+                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/vehicle-collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/vehicle-inspection"}>
+                          <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
+                            <span>New Inspection</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/vehicle-inspection-history"}>
+                          <Link href="/vehicle-inspection-history" onClick={handleLinkClick} data-testid="link-inspection-history">
+                            <span>History</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
 
-              {/* Inspection History */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/vehicle-inspection-history"}>
-                  <Link href="/vehicle-inspection-history" onClick={handleLinkClick} data-testid="link-inspection-history">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <HistoryIconLucide className="h-4 w-4" />
-                    </span>
-                    <span>Inspection History</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* JHA Assessment */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/jha-assessment"}>
-                  <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Shield className="h-4 w-4" />
-                    </span>
-                    <span>JHA Assessment</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* JHA History */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/jha-history"}>
-                  <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <HistoryIconLucide className="h-4 w-4" />
-                    </span>
-                    <span>JHA History</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
+              {/* JHA — collapsible group */}
+              <Collapsible open={jhaOpen} onOpenChange={setJhaOpen} className="group/jha-collapsible">
+                <SidebarMenuItem>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuButton isActive={jhaActive} data-testid="collapsible-jha">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
+                        <Shield className="h-4 w-4" />
+                      </span>
+                      <span>JHA</span>
+                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/jha-collapsible:rotate-90" />
+                    </SidebarMenuButton>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/jha-assessment"}>
+                          <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">
+                            <span>Assessment</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/jha-history"}>
+                          <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
+                            <span>History</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
 
               {/* Mulch Drops */}
               <SidebarMenuItem>
@@ -237,18 +270,6 @@ function SidebarNavContent({
                       <Leaf className="h-4 w-4" />
                     </span>
                     <span>Mulch Drops</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-
-              {/* Daily Briefing */}
-              <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/daily-briefing"}>
-                  <Link href="/daily-briefing" onClick={handleLinkClick} data-testid="link-daily-briefing">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-700">
-                      <ClipboardList className="h-4 w-4" />
-                    </span>
-                    <span>Daily Briefing</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

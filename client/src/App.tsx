@@ -64,11 +64,9 @@ import ProposalAccept from "@/pages/ProposalAccept";
 import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
-import ActivityDashboard from "@/pages/ActivityDashboard";
 import MulchDrops from "@/pages/MulchDrops";
 import EquipmentRegister from "@/pages/EquipmentRegister";
 import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
-import DailyBriefing from "@/pages/DailyBriefing";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import InvoiceBuilderPage from "@/pages/InvoiceBuilderPage";
 import SettingsCompany from "@/pages/SettingsCompany";
@@ -809,13 +807,6 @@ function Router() {
       <Route path="/review/:token" component={PublicReview}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
-      <Route path="/overview">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <ActivityDashboard />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
       <Route path="/pipeline">
         <ProtectedRoute>
           <SidebarLayout>
@@ -1012,14 +1003,6 @@ function Router() {
         </AuthenticatedRoute>
       </Route>
 
-      {/* Daily Briefing - accessible to all logged-in users */}
-      <Route path="/daily-briefing">
-        <AuthenticatedRoute>
-          <SidebarLayout>
-            <DailyBriefing />
-          </SidebarLayout>
-        </AuthenticatedRoute>
-      </Route>
       <Route path="/history">
         <ProtectedRoute>
           <SidebarLayout>
