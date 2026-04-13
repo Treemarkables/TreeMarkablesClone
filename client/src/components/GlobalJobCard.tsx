@@ -9025,9 +9025,12 @@ The Treemarkables Team`;
         ) : (
           <Dialog
             open={isInvoiceModalOpen}
-            onOpenChange={setIsInvoiceModalOpen}
+            onOpenChange={(open) => { if (!open) setIsInvoiceModalOpen(false); }}
           >
-            <DialogContent className="flex items-center justify-center min-h-[200px]">
+            <DialogContent
+              className="flex items-center justify-center min-h-[200px]"
+              onEscapeKeyDown={(e) => e.stopPropagation()}
+            >
               <div className="text-center space-y-2">
                 <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
                 <p className="text-sm text-muted-foreground">
@@ -9525,6 +9528,12 @@ The Treemarkables Team`;
           <DialogContent
             className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
             style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+            onEscapeKeyDown={(e) => {
+              if (isInvoiceModalOpen) e.preventDefault();
+            }}
+            onInteractOutside={(e) => {
+              if (isInvoiceModalOpen) e.preventDefault();
+            }}
           >
             {jobCardContent}
           </DialogContent>

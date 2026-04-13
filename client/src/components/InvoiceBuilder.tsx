@@ -975,8 +975,11 @@ export function InvoiceBuilder({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6">
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+        <DialogContent
+          className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
+          onEscapeKeyDown={(e) => e.stopPropagation()}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <div className="flex items-center gap-3">
