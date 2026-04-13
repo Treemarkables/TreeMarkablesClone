@@ -725,6 +725,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   );
   const [queueReasonInput, setQueueReasonInput] = useState<string>("");
   const isCreatingLeadJobRef = useRef(false);
+  // Ref so event-listener closures always see the latest "actively editing a job" state
+  const isActivelyEditingRef = useRef(false);
 
   // Swipe-to-navigate refs
   const swipeTouchStartX = useRef<number | null>(null);
@@ -796,6 +798,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       }
     }
   }, []); // Run only on mount
+
+  // Keep the ref in sync so event-listener closures always see the latest editing state
+  useEffect(() => {
+    isActivelyEditingRef.current =
+      showGlobalJobCard && globalJobCardMode === "edit" && !!jobToEdit?.id;
+  }, [showGlobalJobCard, globalJobCardMode, jobToEdit]);
 
   // Clear deep search and search query whenever the user navigates away from the dispatch board,
   // so they start fresh on return instead of seeing stale deep-search results.
@@ -911,6 +919,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     // Handle the "New Job" orange header button firing a custom event when already on /dispatch
     const handleNewJobEvent = () => {
+      // Guard: never wipe out a job that is actively being edited (use ref for fresh state)
+      if (isActivelyEditingRef.current) {
+        return;
+      }
       setJobToEdit(null);
       setInitialJobData({ status: "work_order" });
       setGlobalJobCardMode("create");
