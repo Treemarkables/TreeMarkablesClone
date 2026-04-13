@@ -52,9 +52,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       queryFn: async () => {
         try {
           const response = await fetch(`/api/proposals?jobId=${proposalId}`);
-          if (!response.ok) {
-            return { success: false, data: [], count: 0 };
-          }
+          if (!response.ok) return { success: false, data: [], count: 0 };
           return response.json();
         } catch (error) {
           console.error("Error fetching proposals by job ID:", error);
@@ -64,14 +62,29 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       enabled: !!proposalId && !proposalLoading && !proposalResponse?.success,
     });
 
-  // Use either direct proposal or first proposal found by job ID
+  // The job-ID list endpoint returns proposals without sections — do a follow-up fetch
+  const fallbackProposalId =
+    !proposalResponse?.success &&
+    proposalsByJobResponse?.success &&
+    proposalsByJobResponse.data?.length > 0
+      ? proposalsByJobResponse.data[0].id
+      : null;
+
+  const { data: fallbackFullResponse, isLoading: fallbackLoading } = useQuery({
+    queryKey: ["/api/proposals", fallbackProposalId],
+    enabled: !!fallbackProposalId && fallbackProposalId !== proposalId,
+  });
+
+  // Use either direct proposal, or the full follow-up fetch from the job-ID search
   const actualProposalResponse = proposalResponse?.success
     ? proposalResponse
-    : proposalsByJobResponse?.success && proposalsByJobResponse.data.length > 0
-      ? { success: true, data: proposalsByJobResponse.data[0] }
-      : proposalResponse;
+    : fallbackFullResponse?.success
+      ? fallbackFullResponse
+      : proposalsByJobResponse?.success && proposalsByJobResponse.data?.length > 0
+        ? { success: true, data: proposalsByJobResponse.data[0] }
+        : proposalResponse;
 
-  const actualLoading = proposalLoading || proposalsByJobLoading;
+  const actualLoading = proposalLoading || proposalsByJobLoading || fallbackLoading;
 
   // Fetch customer data if proposal has customerId
   const { data: customerResponse } = useQuery({
