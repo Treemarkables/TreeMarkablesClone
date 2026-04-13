@@ -755,7 +755,6 @@ function LineItemsBlock({
                 setD((prev) => ({ ...prev, description: e.target.value }));
                 setShowMats(true);
               }}
-              onFocus={() => setShowMats(true)}
               onKeyDown={(e) => { if (e.key === "Escape") { setShowMats(false); e.currentTarget.blur(); } }}
               className="h-7 text-xs"
               placeholder="Description or catalogue search…"
