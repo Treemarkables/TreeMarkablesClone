@@ -132,12 +132,19 @@ export default function StaffSchedule() {
   );
 
   // Jobs for the selected date
+  // scheduledDate is stored as a UTC ISO timestamp (e.g. "2026-04-13T22:00:00.000Z")
+  // so we must convert to NZ local date before comparing against dateStr
   const dayJobs = useMemo(() =>
-    allJobs.filter(j =>
-      j.scheduledDate === dateStr &&
-      j.status !== 'archived' &&
-      j.status !== 'unsuccessful'
-    ),
+    allJobs.filter(j => {
+      if (!j.scheduledDate) return false;
+      if (j.status === 'archived' || j.status === 'unsuccessful') return false;
+      try {
+        const nzDate = formatInTimeZone(new Date(j.scheduledDate), NZ_TZ, 'yyyy-MM-dd');
+        return nzDate === dateStr;
+      } catch {
+        return false;
+      }
+    }),
     [allJobs, dateStr]
   );
 
