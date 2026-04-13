@@ -332,7 +332,13 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                     {(job?.address || customer.address) && (
                       <div className="flex items-start gap-2 text-gray-700 mt-2 text-sm sm:text-base">
                         <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 mt-1" />
-                        <p className="break-words">{job?.address || customer.address}</p>
+                        <p className="break-words">
+                          {[
+                            job?.address || customer.address,
+                            job?.city || customer.city,
+                            job?.region || customer.region,
+                          ].filter(Boolean).join(', ')}
+                        </p>
                       </div>
                     )}
                   </div>

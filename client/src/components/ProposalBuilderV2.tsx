@@ -1484,7 +1484,11 @@ export function ProposalBuilderV2({
 
   const customerName = (customer as { name?: string } | null)?.name || (job as { clientName?: string } | null)?.clientName || "";
   const customerCompany = (customer as { company?: string } | null)?.company || "";
-  const customerAddress = (job as { address?: string } | null)?.address || (customer as { address?: string } | null)?.address || "";
+  const customerAddress = [
+    (job as { address?: string } | null)?.address || (customer as { address?: string } | null)?.address,
+    (job as { city?: string } | null)?.city || (customer as { city?: string } | null)?.city,
+    (job as { region?: string } | null)?.region || (customer as { region?: string } | null)?.region,
+  ].filter(Boolean).join(", ");
 
   if (!isOpen) return null;
 
