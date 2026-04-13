@@ -324,124 +324,16 @@ function startNotificationQueueWorker() {
   try {
     log("Starting server initialization...", "startup");
 
-    // Run startup migrations to ensure schema is up to date
-    try {
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS checklist_templates (
-          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-          text TEXT NOT NULL,
-          sort_order INTEGER DEFAULT 0,
-          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        )
-      `);
-      log("✅ Schema migration: checklist_templates ready", "startup");
-
-      // Add customer_confirmed column to jobs table if it doesn't exist
-      await pool.query(`
-        ALTER TABLE jobs ADD COLUMN IF NOT EXISTS customer_confirmed BOOLEAN NOT NULL DEFAULT false
-      `);
-      log("✅ Schema migration: jobs.customer_confirmed ready", "startup");
-
-      // Add eta_notification_requested column to jobs table if it doesn't exist
-      await pool.query(`
-        ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eta_notification_requested BOOLEAN NOT NULL DEFAULT false
-      `);
-      log("✅ Schema migration: jobs.eta_notification_requested ready", "startup");
-
-      // Create assistant_messages table for AI chat history
-      await pool.query(`
-        CREATE TABLE IF NOT EXISTS assistant_messages (
-          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
-          session_id VARCHAR NOT NULL,
-          employee_id VARCHAR NOT NULL DEFAULT '',
-          role TEXT NOT NULL,
-          content TEXT NOT NULL,
-          created_at TIMESTAMP NOT NULL DEFAULT NOW()
-        )
-      `);
-      // Backfill: add employee_id column if table was created without it
-      await pool.query(`
-        ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS employee_id VARCHAR NOT NULL DEFAULT ''
-      `);
-      log("✅ Schema migration: assistant_messages ready", "startup");
-
-      // Add default_gross_margin_pct to business_settings for analytics fallback
-      await pool.query(`
-        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS default_gross_margin_pct NUMERIC(5,2) NOT NULL DEFAULT 0
-      `);
-      log("✅ Schema migration: business_settings.default_gross_margin_pct ready", "startup");
-
-      // Add xero_default_bank_account_code to business_settings for reconciliation
-      await pool.query(`
-        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS xero_default_bank_account_code TEXT
-      `);
-      log("✅ Schema migration: business_settings.xero_default_bank_account_code ready", "startup");
-
-      // Add invoice_payment_days to business_settings
-      await pool.query(`
-        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS invoice_payment_days INTEGER NOT NULL DEFAULT 7
-      `);
-      log("✅ Schema migration: business_settings.invoice_payment_days ready", "startup");
-
-      // Add logo_size to document_templates
-      await pool.query(`
-        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_size INTEGER NOT NULL DEFAULT 40
-      `);
-      log("✅ Schema migration: document_templates.logo_size ready", "startup");
-
-      // Add logo_alignment to document_templates
-      await pool.query(`
-        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_alignment TEXT NOT NULL DEFAULT 'left'
-      `);
-      log("✅ Schema migration: document_templates.logo_alignment ready", "startup");
-
-      // Add header_color to document_templates
-      await pool.query(`
-        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS header_color TEXT NOT NULL DEFAULT '#ffffff'
-      `);
-      log("✅ Schema migration: document_templates.header_color ready", "startup");
-
-      // Add requires_pre_start to equipment
-      await pool.query(`
-        ALTER TABLE equipment ADD COLUMN IF NOT EXISTS requires_pre_start BOOLEAN NOT NULL DEFAULT false
-      `);
-      log("✅ Schema migration: equipment.requires_pre_start ready", "startup");
-
-      // Add invoice_cc_email to customers for auto-CC on invoice emails
-      await pool.query(`
-        ALTER TABLE customers ADD COLUMN IF NOT EXISTS invoice_cc_email TEXT
-      `);
-      log("✅ Schema migration: customers.invoice_cc_email ready", "startup");
-
-      // Add block_config to document_templates for visual invoice block builder
-      await pool.query(`
-        ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS block_config JSONB
-      `);
-      log("✅ Schema migration: document_templates.block_config ready", "startup");
-
-      // Seed default block_config on invoice templates that don't have it yet
-      try {
-        const { seedDefaultBlockConfig } = await import('./seedTemplates');
-        await seedDefaultBlockConfig();
-      } catch (seedErr) {
-        log(`⚠️ Block config seed warning: ${(seedErr as Error).message}`, "startup");
-      }
-    } catch (migErr) {
-      log(`⚠️ Schema migration warning: ${(migErr as Error).message}`, "startup");
-    }
-    
-    // Register API routes with error handling
+    // Register API routes FIRST (fast, CPU-bound — no DB round-trips)
+    // This creates the HTTP server so it can start listening immediately.
     let server;
     try {
       log("Registering API routes...", "startup");
       server = await registerRoutes(app);
       log("API routes registered successfully", "startup");
-      
+
       // Register time tracking routes
       setupTimeTrackingRoutes(app);
-      
-      // Initialize time tracking sample data
-      await timeTrackingService.initializeSampleData();
     } catch (error) {
       const err = error as Error;
       log(`Failed to register routes: ${err.message}`, "error");
@@ -519,6 +411,67 @@ function startNotificationQueueWorker() {
     }, () => {
       log(`Server successfully started on port ${port}`, "startup");
       log(`Server ready to accept connections at http://0.0.0.0:${port}`, "startup");
+
+      // Run schema migrations and data seeding in the background AFTER the server
+      // is already listening so the deployment health check passes immediately.
+      (async () => {
+        try {
+          log("Running background schema migrations...", "startup");
+          await pool.query(`
+            CREATE TABLE IF NOT EXISTS checklist_templates (
+              id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+              text TEXT NOT NULL,
+              sort_order INTEGER DEFAULT 0,
+              created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            ALTER TABLE jobs ADD COLUMN IF NOT EXISTS customer_confirmed BOOLEAN NOT NULL DEFAULT false;
+            ALTER TABLE jobs ADD COLUMN IF NOT EXISTS eta_notification_requested BOOLEAN NOT NULL DEFAULT false;
+            CREATE TABLE IF NOT EXISTS assistant_messages (
+              id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+              session_id VARCHAR NOT NULL,
+              employee_id VARCHAR NOT NULL DEFAULT '',
+              role TEXT NOT NULL,
+              content TEXT NOT NULL,
+              created_at TIMESTAMP NOT NULL DEFAULT NOW()
+            );
+            ALTER TABLE assistant_messages ADD COLUMN IF NOT EXISTS employee_id VARCHAR NOT NULL DEFAULT '';
+            ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS default_gross_margin_pct NUMERIC(5,2) NOT NULL DEFAULT 0;
+            ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS xero_default_bank_account_code TEXT;
+            ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS invoice_payment_days INTEGER NOT NULL DEFAULT 7;
+            ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_size INTEGER NOT NULL DEFAULT 40;
+            ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS logo_alignment TEXT NOT NULL DEFAULT 'left';
+            ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS header_color TEXT NOT NULL DEFAULT '#ffffff';
+            ALTER TABLE equipment ADD COLUMN IF NOT EXISTS requires_pre_start BOOLEAN NOT NULL DEFAULT false;
+            ALTER TABLE customers ADD COLUMN IF NOT EXISTS invoice_cc_email TEXT;
+            ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS block_config JSONB;
+          `);
+          log("✅ Background schema migrations complete", "startup");
+
+          try {
+            const { seedDefaultBlockConfig } = await import('./seedTemplates');
+            await seedDefaultBlockConfig();
+          } catch (seedErr) {
+            log(`⚠️ Block config seed warning: ${(seedErr as Error).message}`, "startup");
+          }
+
+          await timeTrackingService.initializeSampleData();
+          log("✅ Background initialization complete", "startup");
+        } catch (bgErr) {
+          log(`⚠️ Background migration warning: ${(bgErr as Error).message}`, "startup");
+        }
+      })();
+
+      // Start background workers
+      startNotificationQueueWorker();
+
+      (async () => {
+        const { startSMSReplyPolling } = await import('./services/smsReplyPoller');
+        startSMSReplyPolling();
+        const { startEmailReplyPolling } = await import('./services/emailReplyPoller');
+        startEmailReplyPolling();
+        const { marketingScheduler } = await import('./services/marketingScheduler');
+        marketingScheduler.start();
+      })();
     });
 
     // Handle server listen errors
@@ -555,21 +508,6 @@ function startNotificationQueueWorker() {
 
     process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
     process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
-    // Start notification queue worker
-    startNotificationQueueWorker();
-    
-    // Start SMS reply polling (polls every 60 seconds)
-    const { startSMSReplyPolling } = await import('./services/smsReplyPoller');
-    startSMSReplyPolling();
-
-    // Start email reply polling (polls every 5 minutes)
-    const { startEmailReplyPolling } = await import('./services/emailReplyPoller');
-    startEmailReplyPolling();
-
-    // Start marketing campaign scheduler (checks every 5 minutes)
-    const { marketingScheduler } = await import('./services/marketingScheduler');
-    marketingScheduler.start();
 
   } catch (error) {
     const err = error as Error;
