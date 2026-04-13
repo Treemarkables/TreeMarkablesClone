@@ -1395,7 +1395,7 @@ export function JobDiarySection({
                         </div>
                         {/* Photo Grid */}
                         <div
-                          className={`p-2 grid gap-1.5 ${
+                          className={`p-2 grid gap-1.5 max-w-[50%] ${
                             photos.length === 1
                               ? "grid-cols-1"
                               : photos.length === 2
@@ -1427,7 +1427,7 @@ export function JobDiarySection({
                                 alt="Job photo"
                                 className={
                                   photos.length === 1
-                                    ? "w-full h-auto max-h-96 object-contain"
+                                    ? "w-full h-auto max-h-48 object-contain"
                                     : "w-full h-full object-cover"
                                 }
                                 onError={(e) =>
