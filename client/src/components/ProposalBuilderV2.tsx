@@ -1441,6 +1441,8 @@ export function ProposalBuilderV2({
 
   // Logo sizing — stored on the proposal template, editable inline
   const [logoSize, setLogoSize] = useState<number>((template?.logoSize as number) ?? 80);
+  const liveLogoSizeRef = useRef(logoSize);
+  liveLogoSizeRef.current = logoSize;
   const [headerHeight, setHeaderHeight] = useState<number>(() => {
     const saved = localStorage.getItem("proposalHeaderHeight");
     return saved ? parseInt(saved, 10) : 120;
@@ -1584,28 +1586,65 @@ export function ProposalBuilderV2({
 
               {/* Document Header — height controlled by headerHeight state only */}
               <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0 }}>
-                {/* Logo container — logo scales within fixed header */}
+                {/* Logo container — resize by dragging the corner handle */}
                 <div className="flex items-center h-full py-3" style={{ flexShrink: 0 }}>
-                  <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
-                    <PopoverTrigger asChild>
-                      <button
-                        type="button"
-                        title="Click to adjust logo and header"
-                        className="block group relative focus:outline-none h-full"
-                      >
-                        <img
-                          src={logoUrl}
-                          alt="Company Logo"
-                          style={{ height: Math.min(logoSize, headerHeight - 8), maxWidth: 600 }}
-                          className="w-auto object-contain transition-all group-hover:opacity-80"
-                        />
-                        <span className="absolute -bottom-5 left-0 text-[10px] text-gray-400 opacity-0 group-hover:opacity-100 whitespace-nowrap transition-opacity">
-                          Click to adjust
-                        </span>
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-60 p-3 space-y-4" align="start">
-                      <div>
+                  <div className="relative group/logo">
+                    {/* Logo image */}
+                    <img
+                      src={logoUrl}
+                      alt="Company Logo"
+                      style={{ height: Math.min(logoSize, headerHeight - 8), maxWidth: 600, display: "block" }}
+                      className="w-auto object-contain select-none"
+                      draggable={false}
+                    />
+
+                    {/* Drag-to-resize corner handle */}
+                    <div
+                      title="Drag to resize logo"
+                      className="absolute bottom-0 right-0 w-5 h-5 cursor-se-resize rounded-tl-md bg-blue-500 flex items-center justify-center opacity-0 group-hover/logo:opacity-80 hover:opacity-100! transition-opacity z-10 shadow"
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const startX = e.clientX;
+                        const startY = e.clientY;
+                        const startSize = liveLogoSizeRef.current;
+                        const maxSize = headerHeight - 8;
+                        (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                        const handleMove = (ev: PointerEvent) => {
+                          const dx = ev.clientX - startX;
+                          const dy = startY - ev.clientY;
+                          const delta = Math.round((dx + dy) / 2);
+                          const newSize = Math.max(24, Math.min(maxSize, startSize + delta));
+                          setLogoSize(newSize);
+                        };
+                        const handleUp = () => {
+                          saveLogoSizeMutation.mutate(liveLogoSizeRef.current);
+                          window.removeEventListener("pointermove", handleMove);
+                          window.removeEventListener("pointerup", handleUp);
+                        };
+                        window.addEventListener("pointermove", handleMove);
+                        window.addEventListener("pointerup", handleUp);
+                      }}
+                    >
+                      <svg viewBox="0 0 10 10" className="w-3 h-3 text-white" fill="currentColor">
+                        <path d="M0 10 L10 0 L10 10 Z" />
+                      </svg>
+                    </div>
+
+                    {/* Header height control — small icon trigger */}
+                    <Popover open={logoPopoverOpen} onOpenChange={setLogoPopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          title="Adjust header height"
+                          className="absolute top-0 right-0 w-5 h-5 rounded-bl-md bg-gray-400 flex items-center justify-center opacity-0 group-hover/logo:opacity-70 hover:opacity-100! transition-opacity z-10 shadow focus:outline-none"
+                        >
+                          <svg viewBox="0 0 24 24" className="w-3 h-3 text-white" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19" /><polyline points="19 12 12 19 5 12" />
+                          </svg>
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-52 p-3" align="start">
                         <p className="text-xs font-medium text-muted-foreground mb-2">Header height: {headerHeight}px</p>
                         <Slider
                           min={60}
@@ -1619,24 +1658,9 @@ export function ProposalBuilderV2({
                         <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
                           <span>Short</span><span>Tall</span>
                         </div>
-                      </div>
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-2">Logo size: {logoSize}px</p>
-                        <Slider
-                          min={24}
-                          max={Math.max(24, headerHeight - 8)}
-                          step={4}
-                          value={[Math.min(logoSize, headerHeight - 8)]}
-                          onValueChange={([v]) => setLogoSize(v)}
-                          onValueCommit={([v]) => saveLogoSizeMutation.mutate(v)}
-                          className="w-full"
-                        />
-                        <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                          <span>Small</span><span>Large</span>
-                        </div>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
                 </div>
                 <div className="text-right text-xs sm:text-sm text-gray-600 space-y-0.5">
                   {companyAddress && <p>{companyAddress}</p>}
