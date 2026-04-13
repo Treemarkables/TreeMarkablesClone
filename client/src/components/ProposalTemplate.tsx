@@ -280,8 +280,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       <Card className="shadow-lg">
         {/* Header with Logo */}
         <CardHeader className="p-4 sm:p-8 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
+          <div className="flex items-start justify-between gap-4">
+            {/* Left: Logo */}
+            <div className="shrink-0">
               <img 
                 src={logoUrl} 
                 alt="Treemarkables Logo" 
@@ -289,54 +290,54 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                 data-testid="img-company-logo"
               />
             </div>
-            <div className="text-right">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">PROPOSAL</h2>
-              <p className="text-sm text-gray-600" data-testid="text-proposal-number">
-                #{proposal.proposalNumber}
-              </p>
-              {job?.jobNumber && (
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Job #{job.jobNumber}
+
+            {/* Right: Company details + Proposal info stacked */}
+            <div className="text-right flex flex-col gap-3">
+              {/* Company details block */}
+              <div className="text-right">
+                {template.companyName && (
+                  <p className="text-sm font-semibold text-gray-800">{template.companyName}</p>
+                )}
+                {template.companyAddress && (
+                  <p className="text-xs text-gray-500 mt-0.5">{template.companyAddress}</p>
+                )}
+                {template.companyPhone && (
+                  <p className="text-xs text-gray-500 mt-0.5">{template.companyPhone}</p>
+                )}
+                {template.companyEmail && (
+                  <p className="text-xs text-gray-500 mt-0.5">{template.companyEmail}</p>
+                )}
+                {template.gstNumber && (
+                  <p className="text-xs text-gray-400 mt-0.5">GST: {template.gstNumber}</p>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="border-t border-orange-200" />
+
+              {/* Proposal number / date block */}
+              <div className="text-right">
+                <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">PROPOSAL</h2>
+                <p className="text-sm text-gray-600" data-testid="text-proposal-number">
+                  #{proposal.proposalNumber}
                 </p>
-              )}
-              {proposal.createdAt && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
-                </p>
-              )}
-              {expiryDate && (
-                <p className={`text-xs mt-1 ${isExpired ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                  {isExpired ? 'Expired:' : 'Valid until:'} {format(expiryDate, 'dd MMM yyyy')}
-                </p>
-              )}
+                {job?.jobNumber && (
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Job #{job.jobNumber}
+                  </p>
+                )}
+                {proposal.createdAt && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
+                  </p>
+                )}
+                {expiryDate && (
+                  <p className={`text-xs mt-1 ${isExpired ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                    {isExpired ? 'Expired:' : 'Valid until:'} {format(expiryDate, 'dd MMM yyyy')}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-          {/* Company contact details row */}
-          <div className="mt-3 pt-3 border-t border-orange-100 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-            {(template.companyName) && (
-              <span className="font-medium text-gray-700">{template.companyName}</span>
-            )}
-            {(template.companyAddress) && (
-              <span className="flex items-center gap-1">
-                <MapPin className="w-3 h-3 shrink-0" />
-                {template.companyAddress}
-              </span>
-            )}
-            {(template.companyPhone) && (
-              <span className="flex items-center gap-1">
-                <Phone className="w-3 h-3 shrink-0" />
-                {template.companyPhone}
-              </span>
-            )}
-            {(template.companyEmail) && (
-              <span className="flex items-center gap-1">
-                <MailIcon className="w-3 h-3 shrink-0" />
-                {template.companyEmail}
-              </span>
-            )}
-            {(template.gstNumber) && (
-              <span className="text-gray-400">GST: {template.gstNumber}</span>
-            )}
           </div>
         </CardHeader>
         
@@ -542,8 +543,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                 // For subtotalOnly: compute the section subtotal and show one row
                 if (isSubtotalOnly) {
                   const sectionSubtotal = (section.lineItems || []).reduce((sum, item) => {
-                    let p = item.totalPrice;
-                    if (item.pricingType === "fixed" && item.fixedPrice) p = item.fixedPrice;
+                    const p = item.pricingType === "fixed" && item.fixedPrice
+                      ? Number(item.fixedPrice)
+                      : Number(item.totalPrice);
                     return sum + (p || 0);
                   }, 0);
                   return (
@@ -598,15 +600,15 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           </thead>
                           <tbody>
                             {(section.lineItems || []).map((item, index) => {
-                              let displayPrice = item.totalPrice;
+                              let displayPrice: number = Number(item.totalPrice) || 0;
                               const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
                               if (item.pricingType === 'choice' && effectiveChoiceId) {
                                 const selectedChoice = item.choices?.find(c => c.id === effectiveChoiceId);
                                 if (selectedChoice) {
-                                  displayPrice = selectedChoice.price * item.quantity;
+                                  displayPrice = Number(selectedChoice.price) * Number(item.quantity);
                                 }
                               } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-                                displayPrice = item.fixedPrice;
+                                displayPrice = Number(item.fixedPrice);
                               }
 
                               const isItemSelected = selectedOptionalItems[item.id] !== undefined
@@ -716,7 +718,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                                     <span>•</span>
                                                   )}
                                                   <span className="flex-1">
-                                                    {choice.label} - {formatCurrency(choice.price)}
+                                                    {choice.label} - {formatCurrency(Number(choice.price) || 0)}
                                                     {choice.description && (
                                                       <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
                                                     )}
@@ -741,7 +743,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                     {item.quantity}
                                   </td>
                                   <td className={`border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm hidden sm:table-cell ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-700'}`}>
-                                    {formatCurrency(item.unitPrice)}
+                                    {formatCurrency(Number(item.unitPrice) || 0)}
                                   </td>
                                   <td className={`border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm whitespace-nowrap ${isInteractive ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-300') : 'font-semibold text-gray-900'}`}>
                                     {formatCurrency(displayPrice)}
