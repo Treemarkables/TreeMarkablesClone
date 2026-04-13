@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
-const logoUrl = "/treemarkables-logo.webp";
+const DEFAULT_LOGO_URL = "/treemarkables-logo.webp";
 
 interface ProposalLineItem {
   id: string;
@@ -153,6 +153,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   onOptionalToggle
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
+  const logoUrl = (template.logoUrl as string | null | undefined) || DEFAULT_LOGO_URL;
 
   // Calculate totals from all sections
   const calculateTotals = () => {
