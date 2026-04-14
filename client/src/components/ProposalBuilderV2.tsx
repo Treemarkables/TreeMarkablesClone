@@ -615,10 +615,12 @@ function LineItemsBlock({
   block,
   materials,
   onUpdate,
+  onDraftTotalChange,
 }: {
   block: WysiwygBlock;
   materials: Array<{ id: string; name: string; itemNumber?: string; price?: number; category?: string }>;
   onUpdate: (updates: Partial<WysiwygBlock>) => void;
+  onDraftTotalChange?: (extra: number) => void;
 }) {
   const [draft, setDraft] = useState<DraftLineItem>(defaultDraft());
   const [showAdd, setShowAdd] = useState(false);
@@ -640,7 +642,30 @@ function LineItemsBlock({
     return () => document.removeEventListener("mousedown", handler);
   }, [showMats]);
 
-  const subtotal = calcBlockSubtotal(block);
+  // Calculate draft extra (non-optional items being typed should count toward the total immediately)
+  const draftExtra = (() => {
+    let extra = 0;
+    // New item being added (not optional/choice) — include in subtotal live
+    if (showAdd && draft.description && draft.pricingType !== "choice" && !draft.isOptional) {
+      extra += draftTotal(draft);
+    }
+    // Existing item being edited — replace its old committed value with the new draft value
+    if (editingId && editDraft.description && editDraft.pricingType !== "choice" && !editDraft.isOptional) {
+      const original = block.lineItems.find((i) => i.id === editingId);
+      if (original && original.selected && !original.isOptional) {
+        extra -= (original.priceIncludesTax ? original.totalPrice / 1.15 : original.totalPrice);
+      }
+      extra += draftTotal(editDraft);
+    }
+    return extra;
+  })();
+
+  // Notify parent so overall totals reflect the draft
+  useEffect(() => {
+    onDraftTotalChange?.(draftExtra);
+  }, [draftExtra, onDraftTotalChange]);
+
+  const subtotal = calcBlockSubtotal(block) + draftExtra;
 
   const filteredMats = materials.filter(
     (m) => !matSearch || m.name?.toLowerCase().includes(matSearch.toLowerCase()) || String(m.itemNumber || "").includes(matSearch)
@@ -1058,6 +1083,7 @@ export function ProposalBuilderV2({
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [taxRate] = useState(15);
+  const [draftTotalExtra, setDraftTotalExtra] = useState(0);
   const [validUntil, setValidUntil] = useState("");
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showSmsDialog, setShowSmsDialog] = useState(false);
@@ -1348,8 +1374,9 @@ export function ProposalBuilderV2({
   // ── Totals ─────────────────────────────────────────────────────────────────
 
   const totals = calcTotals(blocks);
-  const discountValue = discountType === "percentage" ? (totals.subtotal * discountAmount) / 100 : discountAmount;
-  const subtotalAfterDiscount = Math.max(0, totals.subtotal - discountValue);
+  const subtotalWithDraft = totals.subtotal + draftTotalExtra;
+  const discountValue = discountType === "percentage" ? (subtotalWithDraft * discountAmount) / 100 : discountAmount;
+  const subtotalAfterDiscount = Math.max(0, subtotalWithDraft - discountValue);
   const gst = subtotalAfterDiscount * (taxRate / 100);
   const grandTotal = subtotalAfterDiscount + gst;
 
@@ -1957,6 +1984,7 @@ export function ProposalBuilderV2({
                           block={block}
                           materials={materials}
                           onUpdate={(u) => updateBlock(block.id, u)}
+                          onDraftTotalChange={setDraftTotalExtra}
                         />
                       )}
                     </div>
