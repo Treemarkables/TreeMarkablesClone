@@ -76,7 +76,7 @@ import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import Reconciliation from "@/pages/Reconciliation";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User } from "lucide-react";
 import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -414,9 +414,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="flex items-center gap-1" data-testid="button-account-dropdown-mobile">
-                      Account
-                      <ChevronDown className="h-4 w-4" />
+                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" data-testid="button-account-dropdown-mobile">
+                      <User className="h-6 w-6" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">

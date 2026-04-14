@@ -928,18 +928,18 @@ function LineItemsBlock({
   }
 
   return (
-    <div className="px-0 py-0 overflow-x-auto">
-      <table className="w-full border-collapse text-sm min-w-[640px]">
+    <div className="px-0 py-0">
+      <table className="w-full border-collapse text-sm">
         <thead className="bg-green-50">
           <tr>
-            <th className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600 w-20">Item Code</th>
+            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600 w-20">Item Code</th>
             <th className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600">Item Name</th>
-            <th className="border border-gray-200 px-3 py-2 text-center text-xs font-semibold text-gray-600 w-12">Qty</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Cost ex GST</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-20">Markup</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Price ex GST</th>
-            <th className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Total ex GST</th>
-            <th className="border border-gray-200 px-2 py-2 w-8" />
+            <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-600 w-10">Qty</th>
+            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Cost ex GST</th>
+            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-20">Markup</th>
+            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Price ex GST</th>
+            <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-600 w-24">Total ex GST</th>
+            <th className="border border-gray-200 px-1 py-2 w-8" />
           </tr>
         </thead>
         <tbody>
@@ -961,20 +961,20 @@ function LineItemsBlock({
                 className="hover:bg-gray-50 cursor-pointer group/row"
                 onClick={() => startEdit(item)}
               >
-                <td className="border border-gray-200 px-3 py-2 text-xs text-gray-500">{item.category || "—"}</td>
+                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-xs text-gray-500">{item.category || "—"}</td>
                 <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 font-medium">
                   {item.description}
                   {item.pricingType === "choice" && <span className="ml-1 text-xs text-blue-500">(choice)</span>}
                   {item.isOptional && <span className="ml-1 text-xs text-gray-400">(optional)</span>}
                 </td>
-                <td className="border border-gray-200 px-3 py-2 text-center text-sm text-gray-700">{item.quantity}</td>
-                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">{fmtNZD(item.costPrice ?? item.unitPrice)}</td>
-                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">
+                <td className="border border-gray-200 px-2 py-2 text-center text-sm text-gray-700">{item.quantity}</td>
+                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">{fmtNZD(item.costPrice ?? item.unitPrice)}</td>
+                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">
                   {item.markupPct ? fmtPct(item.markupPct) : "—"}
                 </td>
-                <td className="border border-gray-200 px-3 py-2 text-right text-sm text-gray-700">{fmtNZD(item.unitPrice)}</td>
-                <td className="border border-gray-200 px-3 py-2 text-right text-sm font-semibold text-gray-900">{fmtNZD(item.totalPrice)}</td>
-                <td className="border border-gray-200 px-2 py-2">
+                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-sm text-gray-700">{fmtNZD(item.unitPrice)}</td>
+                <td className="border border-gray-200 px-2 py-2 text-right text-sm font-semibold text-gray-900">{fmtNZD(item.totalPrice)}</td>
+                <td className="border border-gray-200 px-1 py-2">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); removeItem(item.id!); }}
@@ -1015,9 +1015,11 @@ function LineItemsBlock({
 
           {/* Section subtotal */}
           <tr className="bg-gray-50">
-            <td colSpan={5} />
-            <td className="border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">SUBTOTAL</td>
-            <td className="border border-gray-200 px-3 py-2 text-right text-sm font-bold text-gray-900">{fmtNZD(subtotal)}</td>
+            <td className="hidden sm:table-cell" colSpan={5} />
+            <td className="sm:hidden" colSpan={1} />
+            <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">SUBTOTAL</td>
+            <td className="sm:hidden border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">SUBTOTAL</td>
+            <td className="border border-gray-200 px-2 py-2 text-right text-sm font-bold text-gray-900">{fmtNZD(subtotal)}</td>
             <td className="border border-gray-200" />
           </tr>
         </tbody>
@@ -1637,7 +1639,7 @@ export function ProposalBuilderV2({
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-full h-screen sm:h-[95vh] sm:max-w-5xl overflow-hidden flex flex-col p-0 gap-0">
           {/* ── Toolbar ── */}
-          <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-white">
+          <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
             {previewMode ? (
               /* Preview mode toolbar */
               <>
