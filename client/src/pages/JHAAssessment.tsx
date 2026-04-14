@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-const jhaHeaderImage = "/treemarkables-logo.png";
+const jhaHeaderImage = "/treemarkables-logo-header.png";
 
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
@@ -441,15 +441,11 @@ export default function JHAAssessment() {
       </div>
 
       {/* JHA Risk Assessment Header */}
-      <div className="mb-4 overflow-hidden rounded-lg shadow-md h-[150px] md:h-[250px]">
+      <div className="mb-4 overflow-hidden rounded-lg shadow-md w-full">
         <img
           src={jhaHeaderImage}
           alt="Job Hazard Analysis Risk Assessment"
-          className="w-full h-full"
-          style={{
-            objectFit: "cover",
-            objectPosition: "center",
-          }}
+          className="w-full h-auto block"
         />
       </div>
 
