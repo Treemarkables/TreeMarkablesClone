@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Fragment } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -796,10 +796,10 @@ function LineItemsBlock({
             {d.pricingType === "fixed" ? (
               <Input
                 type="number"
-                value={d.fixedPrice}
+                value={d.fixedPrice === 0 ? '' : d.fixedPrice}
                 onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
-                className="h-7 text-xs text-right"
-                placeholder="Fixed"
+                className="h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                placeholder=""
               />
             ) : (
               <Input
@@ -897,15 +897,16 @@ function LineItemsBlock({
         <tbody>
           {block.lineItems.map((item) =>
             editingId === item.id ? (
-              <RowEditor
-                key={item.id + "-edit"}
-                d={editDraft}
-                setD={(fn) => setEditDraft((prev) => fn(prev))}
-                onCommit={commitEdit}
-                onCancel={() => setEditingId(null)}
-                matSearchVal={matSearch}
-                setMatSearchVal={setMatSearch}
-              />
+              <Fragment key={item.id + "-edit"}>
+                {RowEditor({
+                  d: editDraft,
+                  setD: (fn) => setEditDraft((prev) => fn(prev)),
+                  onCommit: commitEdit,
+                  onCancel: () => setEditingId(null),
+                  matSearchVal: matSearch,
+                  setMatSearchVal: setMatSearch,
+                })}
+              </Fragment>
             ) : (
               <tr
                 key={item.id}
@@ -940,14 +941,16 @@ function LineItemsBlock({
 
           {/* Search or Add New row */}
           {showAdd ? (
-            <RowEditor
-              d={draft}
-              setD={(fn) => setDraft((prev) => fn(prev))}
-              onCommit={commitDraft}
-              onCancel={() => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); }}
-              matSearchVal={matSearch}
-              setMatSearchVal={setMatSearch}
-            />
+            <Fragment key="add-row">
+              {RowEditor({
+                d: draft,
+                setD: (fn) => setDraft((prev) => fn(prev)),
+                onCommit: commitDraft,
+                onCancel: () => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); },
+                matSearchVal: matSearch,
+                setMatSearchVal: setMatSearch,
+              })}
+            </Fragment>
           ) : (
             <tr>
               <td colSpan={8} className="border border-gray-200 px-3 py-2">
