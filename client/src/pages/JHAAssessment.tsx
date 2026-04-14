@@ -461,18 +461,16 @@ export default function JHAAssessment() {
           className="space-y-4"
         >
           {/* Header */}
-          <Card>
-            <CardHeader className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
-              <CardTitle className="text-2xl">
-                {isEditing ? "Edit Job Hazard Analysis" : "Job Hazard Analysis"}
-              </CardTitle>
-              <CardDescription className="text-white/90">
-                {isEditing
-                  ? "Update assessment details or add additional signatures"
-                  : "Complete this form before starting work"}
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <div>
+            <h2 className="text-2xl font-semibold">
+              {isEditing ? "Edit Job Hazard Analysis" : "Job Hazard Analysis"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {isEditing
+                ? "Update assessment details or add additional signatures"
+                : "Complete this form before starting work"}
+            </p>
+          </div>
 
           {/* Job Details */}
           <Card>
