@@ -141,8 +141,11 @@ function inferBlockType(section: {
 }
 
 function draftPriceExGst(draft: DraftLineItem): number {
-  if (draft.pricingType === "fixed") return draft.fixedPrice;
-  return draft.costExGst * (1 + draft.markupPct / 100);
+  if (draft.pricingType === "fixed") {
+    return draft.priceIncludesTax ? draft.fixedPrice / 1.15 : draft.fixedPrice;
+  }
+  const costEx = draft.priceIncludesTax ? draft.costExGst / 1.15 : draft.costExGst;
+  return costEx * (1 + draft.markupPct / 100);
 }
 
 function draftTotal(draft: DraftLineItem): number {
@@ -890,6 +893,25 @@ function LineItemsBlock({
                   </SelectContent>
                 </Select>
               </div>
+              {d.pricingType !== "choice" && (
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-gray-500">Price entered:</span>
+                  <button
+                    type="button"
+                    onClick={() => setD((prev) => ({ ...prev, priceIncludesTax: false }))}
+                    className={`px-1.5 py-0.5 text-xs rounded transition-colors ${!d.priceIncludesTax ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  >
+                    ex GST
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setD((prev) => ({ ...prev, priceIncludesTax: true }))}
+                    className={`px-1.5 py-0.5 text-xs rounded transition-colors ${d.priceIncludesTax ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+                  >
+                    inc GST
+                  </button>
+                </div>
+              )}
               {d.pricingType === "choice" && (
                 <div className="flex-1">
                   <ChoiceEditor
