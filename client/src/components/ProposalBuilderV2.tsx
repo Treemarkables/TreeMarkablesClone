@@ -628,6 +628,7 @@ function LineItemsBlock({
   const [showMats, setShowMats] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftLineItem>(defaultDraft());
+  const [addRowKey, setAddRowKey] = useState(0);
 
   // Close the catalogue dropdown when clicking anywhere outside the description cell
   const descCellRef = useRef<HTMLTableCellElement>(null);
@@ -727,7 +728,7 @@ function LineItemsBlock({
     onUpdate({ lineItems: [...block.lineItems, draftToItem(draft)] });
     setDraft(defaultDraft());
     setMatSearch("");
-    setShowAdd(false);
+    setAddRowKey((k) => k + 1); // Remount add row so autoFocus re-fires on the description field
   };
 
   const removeItem = (id: string) => onUpdate({ lineItems: block.lineItems.filter((i) => i.id !== id) });
@@ -966,7 +967,7 @@ function LineItemsBlock({
 
           {/* Search or Add New row */}
           {showAdd ? (
-            <Fragment key="add-row">
+            <Fragment key={`add-row-${addRowKey}`}>
               {RowEditor({
                 d: draft,
                 setD: (fn) => setDraft((prev) => fn(prev)),
