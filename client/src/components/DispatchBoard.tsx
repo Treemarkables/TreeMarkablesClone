@@ -33,6 +33,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import {
   Calendar,
   Clock,
@@ -691,6 +692,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [globalJobCardMode, setGlobalJobCardMode] = useState<"create" | "edit">(
     "create",
   );
+  const leftDispatchPanelRef = useRef<ImperativePanelHandle>(null);
+
+  // Imperatively resize the left panel when the job card panel opens/closes.
+  // defaultSize on an already-mounted ResizablePanel has no effect, so we use
+  // the imperative API to drive the 100 ↔ 50 transition.
+  useEffect(() => {
+    leftDispatchPanelRef.current?.resize(showGlobalJobCard ? 50 : 100);
+  }, [showGlobalJobCard]);
+
   const [jobToEdit, setJobToEdit] = useState<JobAssignment | null>(null);
   const [initialJobData, setInitialJobData] = useState<any>(null);
   const [newJobFormData, setNewJobFormData] = useState({
@@ -2284,7 +2294,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
             {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
             <ResizablePanel
-              defaultSize={showGlobalJobCard ? 50 : 100}
+              ref={leftDispatchPanelRef}
+              defaultSize={100}
               minSize={30}
             >
               <ResizablePanelGroup
