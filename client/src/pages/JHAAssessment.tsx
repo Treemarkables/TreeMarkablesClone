@@ -441,11 +441,11 @@ export default function JHAAssessment() {
       </div>
 
       {/* JHA Risk Assessment Header */}
-      <div className="mb-4 overflow-hidden rounded-lg shadow-md w-full">
+      <div className="mb-4 overflow-hidden rounded-lg shadow-md w-full h-[120px] md:h-[160px]">
         <img
           src={jhaHeaderImage}
           alt="Job Hazard Analysis Risk Assessment"
-          className="w-full h-auto block"
+          className="w-full h-full object-cover object-center block"
         />
       </div>
 
