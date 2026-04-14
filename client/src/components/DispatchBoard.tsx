@@ -1,6 +1,5 @@
 import { useJobFilter, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -645,17 +644,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return today;
   });
 
-  // Fetch daily revenue progress for the selected date (moved here so selectedDate is in scope)
-  const selectedDateStr = format(selectedDate, "yyyy-MM-dd");
-  const { data: revenueData } = useQuery<{
-    success: boolean;
-    data: { scheduledRevenue: number; dailyTarget: number; percentComplete: number; jobCount: number; belowTarget: boolean };
-  }>({
-    queryKey: ["/api/scheduling/revenue", selectedDateStr],
-    queryFn: () => fetch(`/api/scheduling/revenue/${selectedDateStr}`, { credentials: "include" }).then(r => r.json()),
-    staleTime: 30000,
-  });
-  const revenueInfo = revenueData?.data;
 
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
@@ -2342,24 +2330,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         <CardTitle className="text-base">
                           {filterMeta[jobFilter]?.title ?? "Active Jobs"}
                         </CardTitle>
-
-                        {/* Daily Revenue Progress Bar */}
-                        {revenueInfo && (
-                          <div className="mt-2 space-y-1" data-testid="revenue-progress-bar">
-                            <div className="flex items-center justify-between text-xs">
-                              <span className={revenueInfo.belowTarget ? "text-amber-600 font-medium" : "text-green-700 font-medium"}>
-                                ${revenueInfo.scheduledRevenue.toLocaleString("en-NZ", { maximumFractionDigits: 0 })} scheduled
-                              </span>
-                              <span className="text-muted-foreground">
-                                target ${revenueInfo.dailyTarget.toLocaleString("en-NZ", { maximumFractionDigits: 0 })} · {revenueInfo.percentComplete}%
-                              </span>
-                            </div>
-                            <Progress
-                              value={Math.min(100, revenueInfo.percentComplete)}
-                              className={`h-1.5 ${revenueInfo.belowTarget ? "[&>div]:bg-amber-400" : "[&>div]:bg-green-500"}`}
-                            />
-                          </div>
-                        )}
 
                         {/* Search Input - Desktop */}
                         <div className="mt-3 relative">
