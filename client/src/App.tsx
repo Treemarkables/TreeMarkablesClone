@@ -271,7 +271,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           {/* Mobile header - sidebar toggle, logo, and actions */}
           <header
             className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
-            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 1rem)" }}
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
           >
             <LogoSidebarTrigger size={44} />
             {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
@@ -387,7 +387,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       disabled={isRefreshing}
                       data-testid="button-mobile-refresh"
                     >
-                      <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -416,7 +416,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="flex items-center gap-1" data-testid="button-account-dropdown-mobile">
                       Account
-                      <ChevronDown className="h-16 w-16" />
+                      <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
@@ -596,7 +596,7 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       disabled={isRefreshing}
                       data-testid="button-desktop-refresh"
                     >
-                      <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
+                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>

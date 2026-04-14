@@ -2365,6 +2365,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 setDeepSearchResults([]);
                               }
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && searchQuery.trim()) {
+                                performDeepSearch(searchQuery);
+                              }
+                            }}
                             className="pl-8 pr-8 h-8 text-sm"
                             data-testid="desktop-job-search-input"
                           />
@@ -2372,7 +2377,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="absolute right-0.5 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                              className="absolute right-4 top-[60%] transform -translate-y-1/2 h-6 w-6 p-0"
                               onClick={() => {
                                 setIsDeepSearchActive(false);
                                 setDeepSearchResults([]);
@@ -2760,9 +2765,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       value={searchQuery}
                       onChange={(e) => {
                         setSearchQuery(e.target.value);
-                        if (!e.target.value.trim()) {
+                        if (isDeepSearchActive) {
                           setIsDeepSearchActive(false);
                           setDeepSearchResults([]);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && searchQuery.trim()) {
+                          performDeepSearch(searchQuery);
                         }
                       }}
                       className="pl-9 pr-9 h-9 text-sm rounded-xl"
@@ -2772,7 +2782,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <Button
                         size="icon"
                         variant="ghost"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                        className="absolute right-4 top-[60%] -translate-y-1/2 h-7 w-7"
                         onClick={() => {
                           setSearchQuery("");
                           setIsDeepSearchActive(false);
