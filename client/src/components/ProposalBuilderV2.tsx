@@ -1270,7 +1270,7 @@ export function ProposalBuilderV2({
     setProposalTitle((job as { title?: string } | null)?.title || "Treemarkables Quote");
 
     const includeDesc = (job as { includeDescriptionInQuotesProposals?: boolean } | null)?.includeDescriptionInQuotesProposals !== false;
-    const desc = includeDesc ? (jobDescription ?? (job as { description?: string } | null)?.description ?? "") : "";
+    const desc = includeDesc ? (jobDescription || (job as { description?: string } | null)?.description || "") : "";
 
     const builtBlocks: WysiwygBlock[] = [];
 
