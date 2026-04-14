@@ -5979,8 +5979,8 @@ The Treemarkables Team`;
                               )}
                             />
                           </div>
-                          {/* Quote Presentation Method - only show for jobs with quotes/proposals */}
-                          {mode === "edit" &&
+                          {/* Quote Presentation Method - show for existing jobs and newly-created jobs */}
+                          {(mode === "edit" || !!createdJobId) &&
                             editingJob &&
                             [
                               "quote",
