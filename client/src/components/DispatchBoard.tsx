@@ -923,9 +923,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     const handleNewLeadEvent = () => handleCreateLead();
     const handleNewQuoteEvent = () => handleCreateQuote();
+    const handleNewInvoiceEvent = () => handleCreateInvoice();
     const handlePasteEvent = () => setShowCreateFromMessageDialog(true);
     window.addEventListener("dispatch-new-lead", handleNewLeadEvent);
     window.addEventListener("dispatch-new-quote", handleNewQuoteEvent);
+    window.addEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
     window.addEventListener("dispatch-paste", handlePasteEvent);
 
     return () => {
@@ -937,6 +939,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
       window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
       window.removeEventListener("dispatch-new-quote", handleNewQuoteEvent);
+      window.removeEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
       window.removeEventListener("dispatch-paste", handlePasteEvent);
     };
   }, [jobsData, location]); // Re-run when jobs data loads OR location changes
@@ -1953,6 +1956,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     setGlobalJobCardMode("create");
     setShowGlobalJobCard(true);
     setJobFilter("quote");
+  };
+
+  const handleCreateInvoice = () => {
+    setJobToEdit(null);
+    setInitialJobData({ status: "invoiced" });
+    setGlobalJobCardMode("create");
+    setShowGlobalJobCard(true);
   };
 
   const saveSchedule = () => {

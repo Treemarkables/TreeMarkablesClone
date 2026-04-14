@@ -315,6 +315,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                       >
                         Work Order
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-invoice"))}
+                        data-testid="create-invoice-button-mobile"
+                      >
+                        Invoice
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
 
@@ -570,6 +576,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                         data-testid="create-wo-button-desktop"
                       >
                         Work Order
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-invoice"))}
+                        data-testid="create-invoice-button-desktop"
+                      >
+                        Invoice
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
