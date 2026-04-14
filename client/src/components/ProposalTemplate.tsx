@@ -249,7 +249,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   const isExpired = expiryDate && expiryDate < new Date();
 
   return (
-    <div ref={ref} className={`max-w-4xl mx-auto bg-white w-full ${className}`}>
+    <div ref={ref} className={`max-w-4xl mx-auto bg-white w-full overflow-x-hidden ${className}`}>
       {/* Action Bar */}
       {showActions && (
         <div className="flex justify-end items-center mb-6 p-4 bg-gray-50 rounded-lg">
@@ -285,27 +285,27 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       <Card className="shadow-lg">
         {/* Header with Logo — compact, logo left, company contact info right */}
         <CardHeader className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex items-center justify-between gap-4">
-            {/* Left: Logo */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            {/* Logo */}
             <div className="shrink-0">
-              <img 
-                src={logoUrl} 
-                alt="Company Logo" 
-                className="h-32 sm:h-44 w-auto object-contain"
+              <img
+                src={logoUrl}
+                alt="Company Logo"
+                className="h-24 sm:h-36 w-auto object-contain"
                 data-testid="img-company-logo"
               />
             </div>
 
-            {/* Right: Company contact info only (no PROPOSAL info here) */}
-            <div className="text-right">
+            {/* Company contact info */}
+            <div className="sm:text-right min-w-0">
               {template.companyAddress && (
-                <p className="text-sm text-gray-700">{template.companyAddress}</p>
+                <p className="text-sm text-gray-700 break-words">{template.companyAddress}</p>
               )}
               {template.companyPhone && (
-                <p className="text-sm text-gray-600 mt-0.5">{template.companyPhone}</p>
+                <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyPhone}</p>
               )}
               {template.companyEmail && (
-                <p className="text-sm text-gray-600 mt-0.5">{template.companyEmail}</p>
+                <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyEmail}</p>
               )}
               {template.gstNumber && (
                 <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
