@@ -804,10 +804,10 @@ function LineItemsBlock({
             ) : (
               <Input
                 type="number"
-                value={d.costExGst}
+                value={d.costExGst === 0 ? '' : d.costExGst}
                 onChange={(e) => setD((prev) => ({ ...prev, costExGst: parseFloat(e.target.value) || 0 }))}
-                className="h-7 text-xs text-right"
-                placeholder="Cost"
+                className="h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                placeholder=""
               />
             )}
           </td>
