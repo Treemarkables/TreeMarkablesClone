@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Check, GripVertical, MapPin } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, GripVertical, MapPin, AlignJustify } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   format,
@@ -160,6 +160,7 @@ export function CalendarGrid({
 }: CalendarGridProps = {}) {
   const [internalDate, setInternalDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("day");
+  const [ganttRowHeight, setGanttRowHeight] = useState(72);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
@@ -726,7 +727,22 @@ export function CalendarGrid({
           </Button>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          {viewMode === "day" && (
+            <div className="flex items-center gap-1.5 border-r pr-2 mr-1">
+              <AlignJustify className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <input
+                type="range"
+                min={44}
+                max={160}
+                step={4}
+                value={ganttRowHeight}
+                onChange={e => setGanttRowHeight(Number(e.target.value))}
+                className="w-20 accent-orange-500 cursor-pointer"
+                title={`Row height: ${ganttRowHeight}px`}
+              />
+            </div>
+          )}
           {(["day", "week", "2weeks", "4weeks"] as ViewMode[]).map((v) => (
             <Button
               key={v}
@@ -859,7 +875,7 @@ export function CalendarGrid({
               <div
                 key={employee.id}
                 className={`flex border-b ${viewMode !== "day" ? "min-h-[80px] hover:bg-gray-50/50" : ""}`}
-                style={viewMode === "day" ? { height: GANTT_ROW_H } : undefined}
+                style={viewMode === "day" ? { height: ganttRowHeight } : undefined}
                 data-testid={`staff-row-${employee.id}`}
                 onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
               >
