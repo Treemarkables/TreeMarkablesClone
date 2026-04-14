@@ -6021,6 +6021,7 @@ The Treemarkables Team`;
                           {(mode === "edit" || !!createdJobId) &&
                             editingJob &&
                             [
+                              "lead",
                               "quote",
                               "scheduled",
                               "work_order",
