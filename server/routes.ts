@@ -5620,12 +5620,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
       
-      // DEBUG: Log received photo selection data
       console.log('📧 Email send request received:');
       console.log('   - To:', to);
       console.log('   - Subject:', subject);
+      console.log('   - JobId:', jobId);
+      console.log('   - CustomerId:', customerId);
+      console.log('   - InvoiceId:', invoiceId);
+      console.log('   - InvoiceData id:', invoiceData?.id, 'number:', invoiceData?.invoiceNumber);
       console.log('   - Selected photos count:', selectedPhotos?.length || 0);
-      console.log('   - Selected photos URLs:', JSON.stringify(selectedPhotos));
+      console.log('   - Client attachments:', JSON.stringify((attachments || []).map((a: any) => ({type: a.type, id: a.id}))));
       
       // DEFENSIVE FIX: Validate invoiceData is a proper object with required properties
       // The frontend may sometimes serialize it incorrectly as a boolean
@@ -5721,6 +5724,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       } else if (effectiveInvoiceId) {
         invoice = await storage.getInvoice(effectiveInvoiceId);
+        if (invoice) {
+          console.log(`📄 Fetched invoice from DB: #${invoice.invoiceNumber} (${invoice.id}), items: ${(invoice.items || []).length}`);
+        } else {
+          console.warn(`⚠️ Invoice not found in DB for effectiveInvoiceId: ${effectiveInvoiceId}`);
+        }
       }
       
       if (quoteId) {
@@ -6058,6 +6066,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         emailHtml = emailHtml + photoGalleryHtml;
       }
       
+      // Log final attachment summary before sending
+      console.log(`📧 Preparing to send email with ${emailAttachments.length} server-side attachment(s):`, 
+        emailAttachments.map(a => ({ filename: (a as any).filename, type: (a as any).type, contentKB: Math.round(((a as any).content?.length || 0) / 1024 * 0.75) })));
+
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
       const emailResult = await emailService.sendEmail({

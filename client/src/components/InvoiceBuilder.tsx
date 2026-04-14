@@ -790,6 +790,11 @@ export function InvoiceBuilder({
       if (response.success) {
         console.log("✅ Invoice updated successfully");
 
+        // Update createdInvoice state with the fresh data from server
+        if (response.data) {
+          setCreatedInvoice(response.data);
+        }
+
         // Invalidate queries to refresh data
         queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
         queryClient.invalidateQueries({
