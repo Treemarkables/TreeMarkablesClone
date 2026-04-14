@@ -3922,16 +3922,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // If the request sends an empty/null value but the DB has a real value, strip it from the
       // update so the database value is naturally preserved by the partial update pattern.
       // RC7 FIX: Extended to phone/mobile fields (previously only email was guarded here).
+      // RC8 FIX: Extended to description/internalNotes for cross-device sync safety.
+      // Rationale: if a user deliberately clears description, auto-save (PATCH) fires first
+      // and sets DB to "". By the time the full PUT fires, stripping an empty description is
+      // safe — if it was intentionally cleared, the PATCH already wrote "" to DB. If the form
+      // had stale empty data from an old cache, stripping prevents overwriting content saved on
+      // another device.
       const contactFieldsToProtect = [
         'jobContactEmail', 'billingContactEmail',
         'jobContactMobile', 'jobContactPhone',
         'billingContactMobile', 'billingContactPhone',
+        'description', 'internalNotes',
       ];
       for (const contactField of contactFieldsToProtect) {
         const rawVal = req.body[contactField];
         const isEmpty = rawVal === '' || rawVal === null || rawVal === undefined;
         if (isEmpty && contactField in req.body) {
-          console.log(`🔒 RC6/RC7: Stripping empty "${contactField}" from PUT body to preserve DB value`);
+          console.log(`🔒 RC6/RC7/RC8: Stripping empty "${contactField}" from PUT body to preserve DB value`);
           delete processedBody[contactField];
         }
       }

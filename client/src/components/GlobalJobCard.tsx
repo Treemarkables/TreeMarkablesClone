@@ -1470,6 +1470,44 @@ export function GlobalJobCard({
     initialData,
   ]);
 
+  // Cross-device live sync: when the background poll brings fresh data for the already-loaded
+  // job (e.g. a change saved on mobile), selectively update form fields that the user hasn't
+  // locally edited on this device. This runs whenever editingJob changes for the SAME job ID,
+  // which is the scenario excluded by the same-job guard in the main load effect above.
+  useEffect(() => {
+    // Only run once the form is loaded for this specific job
+    if (!editingJob?.id || formLoadedJobId !== editingJob.id) return;
+    // Skip during reset or loading to avoid fighting with the main load effect
+    if (isResettingRef.current || isLoadingDataRef.current) return;
+
+    // Text fields that can be updated cross-device when the user hasn't edited them locally
+    const syncableTextFields: Array<{ key: string; getValue: () => string | null | undefined }> = [
+      { key: 'description', getValue: () => editingJob.description },
+      { key: 'notes', getValue: () => editingJob.notes },
+      { key: 'internalNotes', getValue: () => (editingJob as any).internalNotes },
+      { key: 'address', getValue: () => editingJob.address },
+    ];
+
+    for (const { key, getValue } of syncableTextFields) {
+      if (changedFieldsRef.current.has(key)) continue; // user is editing this field locally
+      const serverValue = getValue() ?? '';
+      const formValue = form.getValues(key as any) ?? '';
+      if (serverValue !== formValue) {
+        isResettingRef.current = true;
+        form.setValue(key as any, serverValue, { shouldDirty: false, shouldTouch: false });
+        isResettingRef.current = false;
+        console.log(`🔄 Cross-device sync: updated "${key}" from background poll`);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    editingJob?.description,
+    editingJob?.notes,
+    (editingJob as any)?.internalNotes,
+    editingJob?.address,
+    formLoadedJobId,
+  ]);
+
   // Separate lightweight effect: keep selectedCustomerName in sync whenever the customer data
   // changes (e.g. first load after customers query resolves, or switching between jobs).
   // This is intentionally kept separate from the form-reset effect to avoid coupling.
