@@ -1445,6 +1445,11 @@ export function GlobalJobCard({
               hasUserChangedRef.current = false;
               changedFieldsRef.current.clear();
               queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob?.id] });
+              const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status"];
+              if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
+                queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
+              }
             })
             .catch((err) => {
               console.error("❌ Deferred auto-save failed:", err);
@@ -1658,6 +1663,13 @@ export function GlobalJobCard({
           // Only invalidate the specific job — not the full list — to avoid forcing
           // the dispatch board (125+ jobs) to refetch on every 1.5-second auto-save.
           queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+          // If schedule-related fields changed, also refresh the date-scoped views
+          // (Staff Schedule, CalendarGrid day view) so they immediately reflect the change.
+          const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status"];
+          if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
+          }
         } catch (error) {
           console.error("❌ Auto-save failed:", error);
           // RC5 FIX: Show toast so user knows their changes weren't saved.
