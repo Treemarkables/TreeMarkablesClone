@@ -1679,21 +1679,10 @@ export function ProposalBuilderV2({
                 <button
                   type="button"
                   onClick={async () => {
-                    const saved = await saveDraftMutation.mutateAsync(buildPayload());
-                    const savedId = (saved as { data?: { id?: string } })?.data?.id || draftId;
-                    if (savedId) {
-                      try {
-                        const res = await fetch(`/api/proposals/${savedId}`);
-                        const json = await res.json();
-                        if (json.success && Array.isArray(json.data?.sections)) {
-                          setPreviewServerData({ sections: json.data.sections });
-                        } else {
-                          setPreviewServerData(null);
-                        }
-                      } catch {
-                        setPreviewServerData(null);
-                      }
-                    }
+                    // Save for persistence, but always use the client-side blocks for display
+                    // (server round-trip can return stale/empty data due to sectionId timing)
+                    try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* save errors don't block preview */ }
+                    setPreviewServerData(null); // Always use blocks.map() fallback
                     setPreviewSelectedChoices({});
                     setPreviewSelectedOptional({});
                     setPreviewMode(true);
