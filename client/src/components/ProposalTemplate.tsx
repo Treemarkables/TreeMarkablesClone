@@ -413,8 +413,9 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           // Create close button
                           const closeBtn = document.createElement('button');
                           closeBtn.innerHTML = '×';
-                          closeBtn.className = 'absolute top-4 right-4 text-white text-4xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors z-10';
-                          closeBtn.onclick = () => modal.remove();
+                          closeBtn.className = 'absolute right-4 text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 hover:bg-white/20 rounded-full transition-colors z-10';
+                          closeBtn.style.top = 'max(1rem, env(safe-area-inset-top))';
+                          closeBtn.onclick = (e) => { e.stopPropagation(); modal.remove(); document.removeEventListener('keydown', handleKeyDown); };
                           
                           // Create image container
                           const imgContainer = document.createElement('div');
@@ -495,8 +496,13 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                             }
                           });
                           
-                          // Clean up on close
+                          // Close on background tap
                           modal.onclick = () => {
+                            document.removeEventListener('keydown', handleKeyDown);
+                            modal.remove();
+                          };
+                          // Also close on image tap (mobile friendly)
+                          img.onclick = () => {
                             document.removeEventListener('keydown', handleKeyDown);
                             modal.remove();
                           };
