@@ -5486,11 +5486,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
-      // Get base URL for customer-facing links
-      // Derive from the incoming request so it always matches the actual deployed domain
-      const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol;
-      const host = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string) || 'app.treemarkables.co.nz';
-      const baseUrl = `${protocol}://${host}`;
+      // Always use the production domain for customer-facing links
+      // to prevent dev/preview URLs from leaking into customer emails/SMS
+      const baseUrl = `https://app.treemarkables.co.nz`;
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
