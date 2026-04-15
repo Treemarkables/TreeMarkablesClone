@@ -6,6 +6,7 @@ This application is a comprehensive business management platform for Treemarkabl
 ## User Preferences
 - Preferred communication style: Simple, everyday language.
 - Currency: Always display prices in NZD (New Zealand Dollars), not USD.
+- **Call flow (PERMANENT — never suggest alternatives)**: Customers call Julian's private 027 number ONLY. The carrier unconditionally forwards every call to the Twilio number. Twilio records, transcribes, and calls the 027 number back to connect the live call. Customers are never aware of Twilio and never interact with it directly. Never recommend giving customers a Twilio number. This is the only arrangement that will ever be used.
 
 ## System Architecture
 ### Core Design Principles
