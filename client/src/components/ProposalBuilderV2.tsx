@@ -1665,6 +1665,14 @@ export function ProposalBuilderV2({
             <div className="flex items-center gap-2">
               <button
                 type="button"
+                onClick={handleClose}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span className="hidden sm:inline">Back</span>
+              </button>
+              <button
+                type="button"
                 onClick={() => { initEmailForm(); setShowEmailDialog(true); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
               >
