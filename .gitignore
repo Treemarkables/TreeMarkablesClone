@@ -10,4 +10,47 @@ uploads
 attached_assets/*.png
 attached_assets/Screenshot*
 attached_assets/IMG_*
-.claude-user
+.claude-user # Environment variables
+.env
+.env.dev
+.env.staging
+.env.prod
+.env.local
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build output
+dist/
+build/
+.next/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Replit specific
+.replit
+.upm/
+
+# Git
+.git/
+.locks/
+
+# Test coverage
+coverage/
+# Secrets
+.secrets/
+.google-ads-tokens.json
