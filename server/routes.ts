@@ -16129,7 +16129,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
         description: section.content, // Map content to description for frontend
-        photos: (section.images || []).map((url: string) => {
+        photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => {
           // Generate thumbnail URL: /objects/photos/filename.jpg → /objects/photos/thumb_filename.webp
           const filename = url.split('/').pop() || 'photo';
           const thumbnailUrl = url.includes('/objects/photos/') 
@@ -16206,8 +16206,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         })
       );
 
-      const mapPhotos = (images: string[]) =>
-        (images || []).map((url: string) => ({
+      const mapPhotos = (images: string[] | unknown) =>
+        (Array.isArray(images) ? images : []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,
           filename: url.split('/').pop() || 'photo',
@@ -17327,7 +17327,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const sectionsWithPhotos = sections.map(section => ({
         ...section,
         description: section.content || '', // Map content to description for client compatibility
-        photos: (section.images || []).map((url: string) => ({
+        photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,
           filename: url.split('/').pop() || 'photo',
