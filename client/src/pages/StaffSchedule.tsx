@@ -234,6 +234,14 @@ export default function StaffSchedule() {
     return map;
   }, [dayJobs, allAssignments, jobMap]);
 
+  // Jobs that don't appear on any crew row — surface them in an "Unassigned" swim lane
+  // so the user can still see (and open) them from the roster.
+  const unassignedJobs = useMemo(() => {
+    const assignedIds = new Set<string>();
+    assignmentsByEmployee.forEach(list => list.forEach(j => assignedIds.add(j.id)));
+    return dayJobs.filter(j => !assignedIds.has(j.id));
+  }, [dayJobs, assignmentsByEmployee]);
+
   // Summary stats
   const totalAssigned = useMemo(() => {
     let count = 0;
@@ -377,6 +385,107 @@ export default function StaffSchedule() {
               ))}
             </div>
           </div>
+
+          {/* Unassigned swim lane — jobs scheduled for this day but not yet assigned to a crew member */}
+          {unassignedJobs.length > 0 && (() => {
+            const lanes = assignLanes(unassignedJobs);
+            return (
+              <div
+                className="flex border-b-2 border-amber-200 bg-amber-50/40"
+                style={{ minHeight: rowHeight }}
+              >
+                <div
+                  className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2"
+                  style={{ width: STAFF_COL_W }}
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 bg-amber-500">
+                    ?
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-900 truncate leading-tight">Unassigned</p>
+                    <p className="text-[10px] text-amber-700 leading-tight">
+                      {unassignedJobs.length} job{unassignedJobs.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex-1 relative">
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    {HOUR_LABELS.map((_, i) => (
+                      <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
+                    ))}
+                  </div>
+
+                  {isTodaySelected && nowPercent !== null && (
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
+                      style={{ left: `${nowPercent}%` }}
+                    />
+                  )}
+
+                  {unassignedJobs.map(job => {
+                    const startStr = job.scheduledStartTime ?? '08:00';
+                    const endStr   = job.scheduledEndTime   ?? '16:00';
+                    const startMins = timeStrToMinutes(startStr);
+                    const endMins   = timeStrToMinutes(endStr);
+                    const left  = minutesToPercent(startMins);
+                    const width = Math.max(2, minutesToPercent(endMins) - left);
+                    const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
+                    const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
+                    const label = custName || job.title || `#${job.jobNumber}`;
+                    const timeLabel = `${formatTime(startStr)}–${formatTime(endStr)}`;
+                    const { lane, totalLanes } = lanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
+                    const ls = laneStyle(lane, totalLanes);
+
+                    return (
+                      <button
+                        key={job.id}
+                        onClick={() => openJob(job)}
+                        title={`${label} — ${timeLabel} (unassigned)`}
+                        className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                        style={{
+                          left: `${left}%`,
+                          width: `${width}%`,
+                          top: ls.top,
+                          height: ls.height,
+                          backgroundColor: colors.bg,
+                          borderLeft: `3px solid ${colors.border}`,
+                          borderStyle: 'dashed',
+                          borderTopWidth: 1,
+                          borderRightWidth: 1,
+                          borderBottomWidth: 1,
+                          borderTopColor: colors.border,
+                          borderRightColor: colors.border,
+                          borderBottomColor: colors.border,
+                          minWidth: 32,
+                        }}
+                      >
+                        <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                          <span
+                            className="text-[10px] font-semibold leading-tight block truncate"
+                            style={{ color: colors.text }}
+                          >
+                            {label}
+                          </span>
+                          {width > 8 && (
+                            <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
+                              {timeLabel}
+                            </span>
+                          )}
+                          {width > 14 && job.address && (
+                            <span className="text-[9px] leading-tight flex items-center gap-0.5 truncate" style={{ color: colors.text, opacity: 0.7 }}>
+                              <MapPin className="w-2 h-2 shrink-0" />
+                              {job.address}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Staff rows */}
           {crewMembers.length === 0 ? (
