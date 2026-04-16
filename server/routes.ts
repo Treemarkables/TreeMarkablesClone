@@ -1949,7 +1949,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   // POST /api/leads - Create a job lead (converts conversation to job with 'lead' status)
   app.post('/api/leads', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, address, notes, status } = req.body;
+      const { name, email, phone, address, notes, status, conversationId } = req.body;
       
       // First, create or find the customer
       let customer;
