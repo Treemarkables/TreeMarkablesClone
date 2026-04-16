@@ -112,13 +112,15 @@ export default function TreeRemoval() {
         {/* Gradient overlay — dark at bottom where text sits, lighter at top to show the action */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
         
-        {/* Heading pinned to the bottom so the video action plays unobstructed above */}
-        <div className="absolute bottom-0 left-0 right-0 z-10 pb-8 sm:pb-12 px-4 sm:px-6">
-          <div className="max-w-6xl mx-auto">
-            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white whitespace-nowrap" data-testid="text-hero-title">
-              Gisborne's tree removal experts
-            </h1>
-          </div>
+        {/* Heading raised slightly from the bottom, centred, full width */}
+        <div className="absolute bottom-0 left-0 right-0 z-10 pb-16 sm:pb-20 px-4">
+          <h1
+            className="font-bold text-white text-center w-full"
+            style={{ fontSize: 'clamp(1.5rem, 4.5vw, 3.5rem)', lineHeight: 1.15 }}
+            data-testid="text-hero-title"
+          >
+            Gisborne's tree removal experts
+          </h1>
         </div>
       </section>
 
