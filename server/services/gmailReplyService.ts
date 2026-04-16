@@ -1,7 +1,7 @@
 import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import { db } from '../db';
-import { jobs, jobDiaryEntries, customers } from '../../shared/schema';
+import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
 interface ParsedEmailReply {
@@ -320,7 +320,22 @@ class GmailReplyService {
         try {
           const notificationHelper = await import('./notificationHelper.js');
           const { storage } = await import('../storage.js');
-          
+
+          // DEDUP GUARD: If this exact messageId already exists in any conversation message, skip entirely.
+          // This is the primary fix for the "keeps reappearing" bug — the same Gmail email was being
+          // inserted into conversation_messages on every poll cycle.
+          if (email.messageId) {
+            const existingMsg = await db
+              .select({ id: conversationMessages.id })
+              .from(conversationMessages)
+              .where(sql`${conversationMessages.metadata}->>'messageId' = ${email.messageId}`)
+              .limit(1);
+            if (existingMsg.length > 0) {
+              console.log(`📧 Conversation message already exists for messageId: ${email.messageId} - skipping`);
+              return true;
+            }
+          }
+
           // Check for existing open conversation from this email
           let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
           
@@ -337,23 +352,47 @@ class GmailReplyService {
               cleanedBody
             );
           } else {
-            // Create new conversation for this lead
-            console.log(`📧 Creating new conversation for lead: ${email.from}`);
-            const conversationTitle = cleanedBody.length > 0 
-              ? cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '')
-              : `Re: ${email.subject}`;
-            
-            conversation = await storage.createConversation({
-              title: conversationTitle,
-              status: 'open',
-              priority: 'medium',
-              source: 'email',
-              tags: ['email-reply', 'lead']
-            });
-            
-            // Create notification bell entry for new conversation
-            await notificationHelper.createConversationNotification(conversation);
-            console.log(`📧 ✅ Created new conversation for email from lead: ${conversation.id}`);
+            // No open conversation — check if ANY conversation (even closed/converted) already has a
+            // message from this sender. If so, reopen that one rather than creating a duplicate.
+            // This prevents ghost conversations coming back every poll after the user dismisses them.
+            const allConvs = await storage.getAllConversations({});
+            let priorConv: any = null;
+            for (const c of allConvs) {
+              const msgs = await storage.getConversationMessages(c.id);
+              if (msgs.some((m: any) => m.fromContact?.toLowerCase() === email.from.trim().toLowerCase())) {
+                priorConv = c;
+                break;
+              }
+            }
+
+            if (priorConv) {
+              // Reopen the prior conversation instead of creating a new one
+              console.log(`📧 Reopening prior conversation for ${email.from}: ${priorConv.id}`);
+              await storage.updateConversation(priorConv.id, { status: 'open' });
+              conversation = { ...priorConv, status: 'open' };
+              await notificationHelper.notifyConversationReply(
+                { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
+                cleanedBody
+              );
+            } else {
+              // Truly new lead — create a fresh conversation
+              console.log(`📧 Creating new conversation for lead: ${email.from}`);
+              const conversationTitle = cleanedBody.length > 0 
+                ? cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '')
+                : `Re: ${email.subject}`;
+              
+              conversation = await storage.createConversation({
+                title: conversationTitle,
+                status: 'open',
+                priority: 'medium',
+                source: 'email',
+                tags: ['email-reply', 'lead']
+              });
+              
+              // Create notification bell entry for new conversation
+              await notificationHelper.createConversationNotification(conversation);
+              console.log(`📧 ✅ Created new conversation for email from lead: ${conversation.id}`);
+            }
           }
           
           // Create conversation message
