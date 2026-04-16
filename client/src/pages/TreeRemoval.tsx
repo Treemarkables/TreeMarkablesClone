@@ -98,17 +98,12 @@ export default function TreeRemoval() {
       <Header />
       {/* Hero Section */}
       <section className="relative h-[70vh] sm:h-[80vh] md:min-h-screen overflow-hidden">
-        {/* Video Background */}
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
+        {/* Photo Background */}
+        <img
+          src={heroImage}
+          alt="Tree removal in Gisborne"
           className="absolute inset-0 w-full h-full object-cover"
-          style={{ minHeight: '100%', minWidth: '100%' }}
-        >
-          <source src={philosophyVideo} type="video/mp4" />
-        </video>
+        />
         {/* Dark Overlay */}
         <div className="absolute inset-0 bg-black/50 sm:bg-black/40"></div>
         
