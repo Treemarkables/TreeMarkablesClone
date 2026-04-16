@@ -35,7 +35,10 @@ const NZ_TZ = "Pacific/Auckland";
 const GANTT_START_H = 6;
 const GANTT_END_H   = 19;
 const GANTT_HOURS   = GANTT_END_H - GANTT_START_H;
-const GANTT_HOUR_LABELS = Array.from({ length: GANTT_HOURS + 1 }, (_, i) => {
+// Labels for the START of each 1-hour slot (GANTT_HOURS columns, NOT +1).
+// This keeps label positions aligned with ganttMinsToPercent which also uses GANTT_HOURS as denominator.
+// The last column's right edge implicitly marks GANTT_END_H without a label.
+const GANTT_HOUR_LABELS = Array.from({ length: GANTT_HOURS }, (_, i) => {
   const h = GANTT_START_H + i;
   if (h === 12) return '12 PM';
   return h < 12 ? `${h} AM` : `${h - 12} PM`;
