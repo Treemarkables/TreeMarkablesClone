@@ -55,6 +55,8 @@ const GANTT_COL_W = 148; // px — name column width (matches StaffSchedule)
 const GANTT_ROW_H = 72;  // px — matches StaffSchedule default row height
 const GANTT_MIN_COL_W = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
 
+const GANTT_MIN_DURATION_MINS = 60; // minimum block size = 1 hour
+
 function ganttTimeToMins(t: string | undefined): number {
   if (!t) return 8 * 60;
   const [h, m] = t.split(':').map(Number);
@@ -67,21 +69,18 @@ function ganttLaneStyle(lane: number, totalLanes: number) {
   const pct = 100 / totalLanes;
   return { top: `calc(${lane * pct}% + 3px)`, height: `calc(${pct}% - 6px)` };
 }
-function assignGanttLanes(jobs: { id: string; scheduledStartTime?: string; scheduledEndTime?: string }[]) {
-  const sorted = [...jobs].sort(
-    (a, b) => ganttTimeToMins(a.scheduledStartTime) - ganttTimeToMins(b.scheduledStartTime)
-  );
+// Accept pre-computed effective times so assignment UTC times can be used as fallback
+function assignGanttLanes(items: { id: string; startMins: number; endMins: number }[]) {
+  const sorted = [...items].sort((a, b) => a.startMins - b.startMins);
   const laneEnd: number[] = [];
   const laneOf = new Map<string, number>();
-  for (const job of sorted) {
-    const start = ganttTimeToMins(job.scheduledStartTime);
-    const end   = ganttTimeToMins(job.scheduledEndTime);
+  for (const item of sorted) {
     let placed = -1;
     for (let l = 0; l < laneEnd.length; l++) {
-      if (laneEnd[l] <= start) { placed = l; laneEnd[l] = end; break; }
+      if (laneEnd[l] <= item.startMins) { placed = l; laneEnd[l] = item.endMins; break; }
     }
-    if (placed === -1) { placed = laneEnd.length; laneEnd.push(end); }
-    laneOf.set(job.id, placed);
+    if (placed === -1) { placed = laneEnd.length; laneEnd.push(item.endMins); }
+    laneOf.set(item.id, placed);
   }
   const total = laneEnd.length || 1;
   const result = new Map<string, { lane: number; totalLanes: number }>();
@@ -94,6 +93,14 @@ function ganttInitials(emp: { firstName: string; lastName: string }): string {
 function ganttFormatTime(t: string | undefined): string {
   if (!t) return '';
   const [h, m] = t.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
+}
+// Format NZ minutes-since-midnight (0..1439) to "H AM/PM" string
+function ganttFormatMins(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12  = h % 12 || 12;
   return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
@@ -165,6 +172,7 @@ export function CalendarGrid({
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+  const [dayViewDragOver, setDayViewDragOver] = useState<string | null>(null); // employeeId or 'unassigned'
   const [showRevBreakdown, setShowRevBreakdown] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -493,6 +501,71 @@ export function CalendarGrid({
         : isSameDayNZ(job.scheduledDate, date);
     });
   };
+
+  // ── Day-view Gantt items (returns job + assignment pair) ────────────────────
+  // Returns { job, assignment } pairs for a given employee on the current day.
+  // The assignment is used as a fallback for block positioning when the job has no scheduledStartTime.
+  const getDayGanttItems = (employeeId: string, date: Date): { job: Job; assignment: StaffAssignment | null }[] => {
+    const dateKey = getNZDateString(date);
+    const assigned = assignmentsByEmployeeDate.get(`${employeeId}__${dateKey}`) || [];
+    const seenIds = new Set(assigned.map((x) => x.job.id));
+    const fromMultiDay = multiDaySpanningDate(employeeId, dateKey).filter(({ job }) => !seenIds.has(job.id));
+    if (assigned.length > 0 || fromMultiDay.length > 0) {
+      return [
+        ...assigned.map((x) => ({ job: x.job, assignment: x.assignment })),
+        ...fromMultiDay.map((x) => ({ job: x.job, assignment: x.assignment })),
+      ];
+    }
+    // Fallback: jobs with job.assignedTo (no assignment record at all)
+    return allJobs.filter((job) => {
+      if (job.status === "archived" || job.status === "unsuccessful") return false;
+      if (!job.assignedTo?.includes(employeeId)) return false;
+      if (!job.scheduledDate) return false;
+      return job.scheduledEndDate
+        ? isBetweenNZ(date, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
+        : isSameDayNZ(job.scheduledDate, date);
+    }).map((job) => ({ job, assignment: null }));
+  };
+
+  // Compute effective Gantt minutes for a job block.
+  // Priority: scheduledStartTime/EndTime text → assignment UTC times → 8 AM default.
+  const effectiveGanttMins = (job: Job, assignment: StaffAssignment | null): { startMins: number; endMins: number; fromAssignment: boolean } => {
+    if (job.scheduledStartTime) {
+      const startMins = ganttTimeToMins(job.scheduledStartTime);
+      const rawEnd = job.scheduledEndTime ? ganttTimeToMins(job.scheduledEndTime) : startMins + GANTT_MIN_DURATION_MINS;
+      return { startMins, endMins: Math.max(rawEnd, startMins + GANTT_MIN_DURATION_MINS), fromAssignment: false };
+    }
+    if (assignment) {
+      const startNZ = toZonedTime(new Date(assignment.startTime), NZ_TZ);
+      const endNZ = toZonedTime(new Date(assignment.endTime), NZ_TZ);
+      const startMins = startNZ.getHours() * 60 + startNZ.getMinutes();
+      const rawEnd = endNZ.getHours() * 60 + endNZ.getMinutes();
+      return { startMins, endMins: Math.max(rawEnd, startMins + GANTT_MIN_DURATION_MINS), fromAssignment: true };
+    }
+    return { startMins: 8 * 60, endMins: 9 * 60, fromAssignment: false };
+  };
+
+  // Jobs for the selected day with a scheduledDate but NO assignment record for any employee.
+  // These are shown in the "Unassigned" swim lane at the top of the day-view Gantt.
+  const unassignedJobsForDay = useMemo((): Job[] => {
+    if (viewMode !== "day") return [];
+    const dateKey = getNZDateString(currentDate);
+    const assignedJobIds = new Set<string>();
+    for (const [key, items] of assignmentsByEmployeeDate) {
+      if (key.endsWith(`__${dateKey}`)) {
+        items.forEach(({ job }) => assignedJobIds.add(job.id));
+      }
+    }
+    const EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled']);
+    return allJobs.filter((job) => {
+      if (EXCLUDE.has(job.status)) return false;
+      if (assignedJobIds.has(job.id)) return false;
+      if (!job.scheduledDate) return false;
+      return job.scheduledEndDate
+        ? isBetweenNZ(currentDate, new Date(job.scheduledDate), new Date(job.scheduledEndDate))
+        : isSameDayNZ(job.scheduledDate, currentDate);
+    });
+  }, [viewMode, currentDate, assignmentsByEmployeeDate, allJobs]);
 
   // ── Revenue helpers ─────────────────────────────────────────────────────────
   // Statuses that don't represent confirmed revenue (quotes/leads aren't booked work)
@@ -898,10 +971,120 @@ export function CalendarGrid({
             className="flex-1 flex flex-col"
             onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
           >
+            {/* ── Unassigned swim lane (day view only) ───────────────────── */}
+            {viewMode === "day" && unassignedJobsForDay.length > 0 && (() => {
+              const unassignedEffective = unassignedJobsForDay.map((job) => ({
+                id: job.id,
+                startMins: ganttTimeToMins(job.scheduledStartTime),
+                endMins: job.scheduledStartTime
+                  ? Math.max(ganttTimeToMins(job.scheduledEndTime), ganttTimeToMins(job.scheduledStartTime) + GANTT_MIN_DURATION_MINS)
+                  : 9 * 60,
+              }));
+              const unassignedLanes = assignGanttLanes(unassignedEffective);
+              return (
+                <div
+                  className="flex border-b"
+                  style={{ height: ganttRowHeight }}
+                >
+                  {/* Name column */}
+                  <div
+                    className="flex-shrink-0 border-r flex items-center gap-2 px-3 sticky left-0 z-10"
+                    style={{ width: GANTT_COL_W, backgroundColor: '#f9fafb' }}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 text-[10px] font-bold flex-shrink-0">
+                      ?
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-500 truncate leading-tight">Unassigned</p>
+                      <p className="text-[10px] text-gray-400 leading-tight">
+                        {unassignedJobsForDay.length} job{unassignedJobsForDay.length !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {/* Timeline */}
+                  <div
+                    className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === 'unassigned' ? 'bg-blue-50' : 'bg-gray-50/40'}`}
+                  >
+                    {/* Hour grid lines */}
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {GANTT_HOUR_LABELS.map((_, i) => (
+                        <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
+                      ))}
+                    </div>
+                    {/* Job blocks */}
+                    {unassignedJobsForDay.map((job) => {
+                      const eff = unassignedEffective.find((x) => x.id === job.id)!;
+                      const startPct = ganttMinsToPercent(eff.startMins);
+                      const blockW = Math.max(4, ganttMinsToPercent(eff.endMins) - startPct);
+                      const { lane, totalLanes } = unassignedLanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
+                      const ls = ganttLaneStyle(lane, totalLanes);
+                      const c = getJobColor(job.id);
+                      const custName = getCustomerName(job);
+                      const timeLabel = job.scheduledStartTime
+                        ? `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`
+                        : '';
+                      return (
+                        <button
+                          key={job.id}
+                          draggable
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "move";
+                            const durationMins = eff.endMins - eff.startMins;
+                            dragRef.current = {
+                              jobId: job.id,
+                              employeeId: '',
+                              assignmentId: null,
+                              durationHours: Math.max(1, Math.round(durationMins / 60)),
+                            };
+                          }}
+                          onDragEnd={() => setDayViewDragOver(null)}
+                          onClick={() => { setSelectedJobId(job.id); setShowJobCard(true); }}
+                          title={`${custName}${timeLabel ? ' — ' + timeLabel : ''} (unassigned — drag to assign crew)`}
+                          className="absolute rounded text-left overflow-hidden hover:brightness-95 hover:shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400 cursor-grab active:cursor-grabbing"
+                          style={{
+                            left: `${Math.max(0, startPct)}%`,
+                            width: `${blockW}%`,
+                            top: ls.top,
+                            height: ls.height,
+                            backgroundColor: c.bg,
+                            borderLeft: `3px solid ${c.border}`,
+                            borderStyle: 'dashed',
+                            borderWidth: '1px 1px 1px 3px',
+                            borderColor: c.border,
+                            minWidth: 40,
+                          }}
+                        >
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                            <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
+                              {custName}
+                            </span>
+                            {blockW > 8 && timeLabel && (
+                              <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
+                                {timeLabel}
+                              </span>
+                            )}
+                            {blockW > 8 && (
+                              <span className="text-[9px] leading-tight block truncate text-gray-400">
+                                drag to assign
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {employees.map((employee, empIdx) => {
               const gPalette = GANTT_STAFF_PALETTE[empIdx % GANTT_STAFF_PALETTE.length];
-              const empDayJobs = viewMode === "day" ? getItemsForDate(employee.id, currentDate) : [];
-              const empGanttLanes = viewMode === "day" ? assignGanttLanes(empDayJobs) : new Map<string, { lane: number; totalLanes: number }>();
+              const empDayItems = viewMode === "day" ? getDayGanttItems(employee.id, currentDate) : [];
+              const empGanttLaneInput = empDayItems.map(({ job, assignment }) => {
+                const eff = effectiveGanttMins(job, assignment);
+                return { id: job.id, startMins: eff.startMins, endMins: eff.endMins };
+              });
+              const empGanttLanes = viewMode === "day" ? assignGanttLanes(empGanttLaneInput) : new Map<string, { lane: number; totalLanes: number }>();
               return (
               <div
                 key={employee.id}
@@ -927,7 +1110,7 @@ export function CalendarGrid({
                         {employee.firstName} {employee.lastName}
                       </p>
                       <p className="text-[10px] text-gray-400 leading-tight">
-                        {empDayJobs.length} job{empDayJobs.length !== 1 ? "s" : ""}
+                        {empDayItems.length} job{empDayItems.length !== 1 ? "s" : ""}
                       </p>
                     </div>
                   </div>
@@ -946,8 +1129,31 @@ export function CalendarGrid({
                 {viewMode === "day" ? (
                   /* ── Gantt timeline bar ─────────────────────────────── */
                   <div
-                    className="flex-1 relative"
-                    style={{ backgroundColor: gPalette.row + "55" }}
+                    className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === employee.id ? 'ring-2 ring-inset ring-blue-400' : ''}`}
+                    style={{ backgroundColor: dayViewDragOver === employee.id ? gPalette.row : gPalette.row + "55" }}
+                    onDragOver={(e) => {
+                      if (!dragRef.current) return;
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                      setDayViewDragOver(employee.id);
+                    }}
+                    onDragLeave={(e) => {
+                      if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+                        setDayViewDragOver(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDayViewDragOver(null);
+                      const drag = dragRef.current;
+                      if (!drag) return;
+                      dragRef.current = null;
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                      const mins = GANTT_START_H * 60 + pct * GANTT_HOURS * 60;
+                      const hour = Math.max(GANTT_START_H, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
+                      handleInternalReschedule(drag.jobId, drag.employeeId, drag.assignmentId, drag.durationHours, hour, employee.id, currentDate);
+                    }}
                   >
                     {/* Hour grid lines */}
                     <div className="absolute inset-0 flex pointer-events-none">
@@ -956,15 +1162,17 @@ export function CalendarGrid({
                       ))}
                     </div>
                     {/* Job blocks */}
-                    {empDayJobs.map((job) => {
-                      const startPct = ganttMinsToPercent(ganttTimeToMins(job.scheduledStartTime));
-                      const endPct   = ganttMinsToPercent(ganttTimeToMins(job.scheduledEndTime));
-                      const blockW   = Math.max(2, endPct - startPct);
+                    {empDayItems.map(({ job, assignment }) => {
+                      const eff = effectiveGanttMins(job, assignment);
+                      const startPct = ganttMinsToPercent(eff.startMins);
+                      const blockW   = Math.max(4, ganttMinsToPercent(eff.endMins) - startPct);
                       const { lane, totalLanes } = empGanttLanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
                       const ls = ganttLaneStyle(lane, totalLanes);
                       const c = getJobColor(job.id);
                       const custName = getCustomerName(job);
-                      const timeLabel = `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`;
+                      const timeLabel = eff.fromAssignment
+                        ? `${ganttFormatMins(eff.startMins)}–${ganttFormatMins(eff.endMins)}`
+                        : `${ganttFormatTime(job.scheduledStartTime)}–${ganttFormatTime(job.scheduledEndTime)}`;
                       return (
                         <button
                           key={job.id}
@@ -985,7 +1193,7 @@ export function CalendarGrid({
                             <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
                               {custName}
                             </span>
-                            {blockW > 8 && (
+                            {blockW > 8 && timeLabel && (
                               <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
                                 {timeLabel}
                               </span>
