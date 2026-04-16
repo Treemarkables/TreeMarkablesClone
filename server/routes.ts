@@ -2001,6 +2001,18 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       };
       
       const job = await storage.createJob(jobData);
+
+      // Mark the source conversation as converted if one was provided
+      if (conversationId) {
+        try {
+          await storage.updateConversation(conversationId, {
+            status: 'converted',
+            conversionDate: new Date(),
+          });
+        } catch (e) {
+          // Non-critical — continue even if the conversation update fails
+        }
+      }
       
       res.json({ 
         success: true, 
