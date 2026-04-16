@@ -784,11 +784,14 @@ export function CalendarGrid({
               >
                 {formatNZD(displayDayRevenue)}
               </button>
-              <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {getUniqueJobsForDate(currentDate).length} job
-                {getUniqueJobsForDate(currentDate).length !== 1 ? "s" : ""} ·
-                target $3.5k exc. GST
-              </span>
+              {(() => {
+                const dayJobs = getUniqueJobsForDate(currentDate);
+                return (
+                  <span className="text-xs text-muted-foreground whitespace-nowrap">
+                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""} · target $3.5k exc. GST
+                  </span>
+                );
+              })()}
               <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
                 <div
                   className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? "bg-green-500" : dayRevenue >= DAY_TARGET * 0.7 ? "bg-amber-400" : "bg-red-400"}`}
