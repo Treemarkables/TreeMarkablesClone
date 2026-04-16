@@ -36,6 +36,7 @@ interface ProposalLineItem {
 interface ProposalPhoto {
   id: string;
   url: string;
+  thumbnailUrl?: string;
   filename: string;
   type: string;
   category: string;
@@ -460,16 +461,16 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                             }
                           });
                           
-                          // Close on background tap
-                          modal.onclick = () => {
+                          // Guard against ghost clicks on mobile: the same tap that opens the
+                          // modal fires a synthetic click ~300ms later and would close it instantly.
+                          const openedAt = Date.now();
+                          const safeClose = () => {
+                            if (Date.now() - openedAt < 400) return;
                             document.removeEventListener('keydown', handleKeyDown);
                             modal.remove();
                           };
-                          // Also close on image tap (mobile friendly)
-                          img.onclick = () => {
-                            document.removeEventListener('keydown', handleKeyDown);
-                            modal.remove();
-                          };
+                          // Close on background tap only (not on image — tap to zoom is natural)
+                          modal.onclick = safeClose;
                           
                           // Assemble modal
                           imgContainer.appendChild(img);

@@ -493,17 +493,80 @@ function PhotoBlock({
     <div className="px-4 py-3">
       {block.photos.length > 0 && (
         <div className="grid grid-cols-12 gap-1 mb-3">
-          {block.photos.map((photo) => (
-            <div key={photo.id} className="relative group/photo rounded-md overflow-hidden bg-gray-100" style={{ paddingBottom: "100%" }}>
+          {block.photos.map((photo, photoIndex) => (
+            <div
+              key={photo.id}
+              className="relative group/photo rounded-md overflow-hidden bg-gray-100 cursor-pointer"
+              style={{ paddingBottom: "100%" }}
+              onClick={() => {
+                const photos = block.photos;
+                let currentIndex = photoIndex;
+                const modal = document.createElement('div');
+                modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/95';
+                const closeBtn = document.createElement('button');
+                closeBtn.innerHTML = '×';
+                closeBtn.className = 'absolute right-4 text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 hover:bg-white/20 rounded-full transition-colors z-10';
+                closeBtn.style.top = 'max(1rem, env(safe-area-inset-top))';
+                const imgContainer = document.createElement('div');
+                imgContainer.className = 'relative w-full h-full flex items-center justify-center p-4';
+                const img = document.createElement('img');
+                img.style.cssText = 'max-width: calc(100vw - 4rem); max-height: calc(100vh - 4rem); width: auto; height: auto; object-fit: contain; display: block; border-radius: 4px;';
+                const counter = document.createElement('div');
+                counter.className = 'absolute bottom-4 left-1/2 transform -translate-x-1/2 text-white text-sm bg-black/50 px-3 py-1 rounded-full';
+                const prevBtn = document.createElement('button');
+                prevBtn.innerHTML = '‹';
+                prevBtn.className = 'absolute left-2 top-1/2 transform -translate-y-1/2 text-white text-5xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors';
+                const nextBtn = document.createElement('button');
+                nextBtn.innerHTML = '›';
+                nextBtn.className = 'absolute right-2 top-1/2 transform -translate-y-1/2 text-white text-5xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors';
+                const updateImage = () => {
+                  img.src = photos[currentIndex].url;
+                  counter.textContent = `${currentIndex + 1} / ${photos.length}`;
+                  prevBtn.style.display = currentIndex === 0 ? 'none' : 'flex';
+                  nextBtn.style.display = currentIndex === photos.length - 1 ? 'none' : 'flex';
+                };
+                const openedAt = Date.now();
+                const safeClose = () => {
+                  if (Date.now() - openedAt < 400) return;
+                  document.removeEventListener('keydown', handleKeyDown);
+                  modal.remove();
+                };
+                const handleKeyDown = (e: KeyboardEvent) => {
+                  if (e.key === 'ArrowLeft' && currentIndex > 0) { currentIndex--; updateImage(); }
+                  else if (e.key === 'ArrowRight' && currentIndex < photos.length - 1) { currentIndex++; updateImage(); }
+                  else if (e.key === 'Escape') { document.removeEventListener('keydown', handleKeyDown); modal.remove(); }
+                };
+                closeBtn.onclick = (e) => { e.stopPropagation(); document.removeEventListener('keydown', handleKeyDown); modal.remove(); };
+                prevBtn.onclick = (e) => { e.stopPropagation(); if (currentIndex > 0) { currentIndex--; updateImage(); } };
+                nextBtn.onclick = (e) => { e.stopPropagation(); if (currentIndex < photos.length - 1) { currentIndex++; updateImage(); } };
+                let touchStartX = 0;
+                imgContainer.addEventListener('touchstart', (e) => { touchStartX = e.changedTouches[0].screenX; });
+                imgContainer.addEventListener('touchend', (e) => {
+                  const dx = e.changedTouches[0].screenX - touchStartX;
+                  if (dx < -50 && currentIndex < photos.length - 1) { currentIndex++; updateImage(); }
+                  else if (dx > 50 && currentIndex > 0) { currentIndex--; updateImage(); }
+                });
+                modal.onclick = safeClose;
+                document.addEventListener('keydown', handleKeyDown);
+                imgContainer.appendChild(img);
+                modal.appendChild(closeBtn);
+                modal.appendChild(imgContainer);
+                modal.appendChild(counter);
+                if (photos.length > 1) { modal.appendChild(prevBtn); modal.appendChild(nextBtn); }
+                updateImage();
+                document.body.appendChild(modal);
+              }}
+            >
               <img
                 src={photo.thumbnailUrl || photo.url}
                 alt={photo.filename}
                 className="absolute inset-0 w-full h-full object-cover"
               />
+              {/* X button: pointer-events-none when invisible so taps reach the lightbox handler */}
               <button
                 type="button"
-                onClick={() => removePhoto(photo.id)}
-                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover/photo:opacity-100 transition-opacity"
+                onClick={(e) => { e.stopPropagation(); removePhoto(photo.id); }}
+                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 pointer-events-none group-hover/photo:opacity-100 group-hover/photo:pointer-events-auto transition-opacity"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -532,7 +595,20 @@ function PhotoBlock({
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-80 p-3" align="start">
-              <p className="text-sm font-medium mb-2">Select diary photos</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-medium">Select diary photos</p>
+                <button
+                  type="button"
+                  className="text-xs text-blue-600 underline"
+                  onClick={() =>
+                    selectedUrls.length === diaryPhotos.length
+                      ? setSelectedUrls([])
+                      : setSelectedUrls([...diaryPhotos])
+                  }
+                >
+                  {selectedUrls.length === diaryPhotos.length ? "Deselect all" : "Select all"}
+                </button>
+              </div>
               <div className="grid grid-cols-4 gap-1 max-h-48 overflow-y-auto mb-3">
                 {diaryPhotos.map((url) => (
                   <div
