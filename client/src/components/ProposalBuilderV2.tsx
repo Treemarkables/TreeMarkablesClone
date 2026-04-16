@@ -505,10 +505,10 @@ function PhotoBlock({
                 modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/95';
                 const closeBtn = document.createElement('button');
                 closeBtn.innerHTML = '×';
-                closeBtn.className = 'absolute right-4 text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 hover:bg-white/20 rounded-full transition-colors z-10';
-                closeBtn.style.top = 'max(1rem, env(safe-area-inset-top))';
+                closeBtn.className = 'text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 rounded-full transition-colors';
+                closeBtn.style.cssText = 'position:fixed;right:1rem;top:max(1rem,env(safe-area-inset-top));z-index:201;pointer-events:auto;';
                 const imgContainer = document.createElement('div');
-                imgContainer.className = 'relative w-full h-full flex items-center justify-center p-4';
+                imgContainer.className = 'w-full h-full flex items-center justify-center p-4';
                 const img = document.createElement('img');
                 img.style.cssText = 'max-width: calc(100vw - 4rem); max-height: calc(100vh - 4rem); width: auto; height: auto; object-fit: contain; display: block; border-radius: 4px;';
                 const counter = document.createElement('div');
@@ -547,6 +547,10 @@ function PhotoBlock({
                   else if (dx > 50 && currentIndex > 0) { currentIndex--; updateImage(); }
                 });
                 modal.onclick = safeClose;
+                // Stop pointer/mouse events bubbling to document so Radix dialogs don't
+                // treat them as outside-clicks and close the underlying panel.
+                modal.addEventListener('pointerdown', (e) => e.stopPropagation());
+                modal.addEventListener('mousedown', (e) => e.stopPropagation());
                 document.addEventListener('keydown', handleKeyDown);
                 imgContainer.appendChild(img);
                 modal.appendChild(closeBtn);

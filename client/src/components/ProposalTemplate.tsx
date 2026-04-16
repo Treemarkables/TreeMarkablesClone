@@ -75,8 +75,8 @@ interface ProposalTemplateProps {
   onOptionalToggle?: (lineItemId: string, selected: boolean) => void;
 }
 
-// Photo thumbnail — simple native lazy loading, no IntersectionObserver
-function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
+// Photo thumbnail — fills its square aspect-ratio container completely
+function LazyImage({ src, alt }: { src: string; alt: string; className?: string }) {
   const [hasError, setHasError] = useState(false);
 
   return (
@@ -89,7 +89,7 @@ function LazyImage({ src, alt, className }: { src: string; alt: string; classNam
         <img
           src={src}
           alt={alt}
-          className={`${className} absolute inset-0`}
+          className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
           decoding="async"
           onError={() => setHasError(true)}
@@ -375,16 +375,16 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           const modal = document.createElement('div');
                           modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/95';
                           
-                          // Create close button
+                          // Create close button — fixed positioning so it always sits above imgContainer
                           const closeBtn = document.createElement('button');
                           closeBtn.innerHTML = '×';
-                          closeBtn.className = 'absolute right-4 text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 hover:bg-white/20 rounded-full transition-colors z-10';
-                          closeBtn.style.top = 'max(1rem, env(safe-area-inset-top))';
+                          closeBtn.className = 'text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 rounded-full transition-colors';
+                          closeBtn.style.cssText = 'position:fixed;right:1rem;top:max(1rem,env(safe-area-inset-top));z-index:201;pointer-events:auto;';
                           closeBtn.onclick = (e) => { e.stopPropagation(); modal.remove(); document.removeEventListener('keydown', handleKeyDown); };
-                          
-                          // Create image container
+
+                          // Create image container — no position:relative so it doesn't compete with closeBtn
                           const imgContainer = document.createElement('div');
-                          imgContainer.className = 'relative w-full h-full flex items-center justify-center p-4 sm:p-16';
+                          imgContainer.className = 'w-full h-full flex items-center justify-center p-4 sm:p-16';
                           
                           // Create image element
                           const img = document.createElement('img');
@@ -471,7 +471,12 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           };
                           // Close on background tap only (not on image — tap to zoom is natural)
                           modal.onclick = safeClose;
-                          
+
+                          // Stop pointer/mouse events from bubbling to document so Radix Dialog
+                          // doesn't interpret them as an "outside click" and close the proposal viewer.
+                          modal.addEventListener('pointerdown', (e) => e.stopPropagation());
+                          modal.addEventListener('mousedown', (e) => e.stopPropagation());
+
                           // Assemble modal
                           imgContainer.appendChild(img);
                           modal.appendChild(closeBtn);
