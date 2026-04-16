@@ -6819,12 +6819,9 @@ The Treemarkables Team`;
                                             {staffName}
                                           </span>
                                           <span className="text-xs text-gray-500">
-                                            {(() => {
-                                              try {
-                                                const d = new Date(editingJob.scheduledDate!);
-                                                return isNaN(d.getTime()) ? "" : format(d, "h:mm a");
-                                              } catch { return ""; }
-                                            })()}
+                                            {editingJob.scheduledStartTime
+                                              ? formatTime12Hour(editingJob.scheduledStartTime)
+                                              : ""}
                                           </span>
                                         </div>
                                       );

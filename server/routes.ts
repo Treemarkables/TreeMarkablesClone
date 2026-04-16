@@ -5,6 +5,7 @@ import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
 import { randomUUID, randomBytes } from 'crypto';
 import { z } from "zod";
+import { fromZonedTime } from 'date-fns-tz';
 
 // Extend Express Session to include employeeId
 declare module 'express-session' {
@@ -21791,8 +21792,10 @@ If you cannot find a value, use null. Do not guess.`
   app.get('/api/scheduling/revenue/:date', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { date } = req.params;
-      const dayStart = new Date(date + 'T00:00:00.000Z');
-      const dayEnd = new Date(date + 'T23:59:59.999Z');
+      // Use NZ (Pacific/Auckland) timezone boundaries so morning NZ jobs aren't missed
+      const NZ_TZ = 'Pacific/Auckland';
+      const dayStart = fromZonedTime(`${date}T00:00:00`, NZ_TZ);
+      const dayEnd = fromZonedTime(`${date}T23:59:59.999`, NZ_TZ);
 
       const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
       const settings = await storage.getBusinessSettings();

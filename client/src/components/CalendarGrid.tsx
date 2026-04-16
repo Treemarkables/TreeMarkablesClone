@@ -53,6 +53,7 @@ const GANTT_STAFF_PALETTE = [
 ];
 const GANTT_COL_W = 148; // px — name column width (matches StaffSchedule)
 const GANTT_ROW_H = 72;  // px — matches StaffSchedule default row height
+const GANTT_MIN_COL_W = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
 
 function ganttTimeToMins(t: string | undefined): number {
   if (!t) return 8 * 60;
@@ -164,6 +165,7 @@ export function CalendarGrid({
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
+  const [showRevBreakdown, setShowRevBreakdown] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
@@ -493,7 +495,10 @@ export function CalendarGrid({
   };
 
   // ── Revenue helpers ─────────────────────────────────────────────────────────
-  // Returns the unique set of jobs scheduled on a given date (no duplicates across staff rows)
+  // Statuses that don't represent confirmed revenue (quotes/leads aren't booked work)
+  const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
+
+  // Returns the unique set of revenue-generating jobs on a given date (no duplicates across staff rows)
   const getUniqueJobsForDate = (date: Date): Job[] => {
     const dateKey = getNZDateString(date);
     const seen = new Set<string>();
@@ -502,7 +507,7 @@ export function CalendarGrid({
     for (const [key, items] of assignmentsByEmployeeDate.entries()) {
       if (!key.endsWith(`__${dateKey}`)) continue;
       items.forEach(({ job }) => {
-        if (!seen.has(job.id)) {
+        if (!seen.has(job.id) && !REVENUE_EXCLUDE.has(job.status)) {
           seen.add(job.id);
           result.push(job);
         }
@@ -512,8 +517,7 @@ export function CalendarGrid({
     allJobs.forEach((job) => {
       if (
         seen.has(job.id) ||
-        job.status === "archived" ||
-        job.status === "unsuccessful" ||
+        REVENUE_EXCLUDE.has(job.status) ||
         !job.scheduledDate
       )
         return;
@@ -766,39 +770,60 @@ export function CalendarGrid({
         dayRevenue !== null &&
         displayDayRevenue !== null && (
           <div
-            className="flex items-center gap-3 px-4 py-2 border-b bg-gray-50 flex-shrink-0"
+            className="border-b bg-gray-50 flex-shrink-0"
             data-testid="day-revenue-bar"
           >
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              {format(currentDate, "d MMM")} jobs:
-            </span>
-            <span
-              className={`text-sm font-semibold px-2 py-0.5 rounded border ${revenueColor(dayRevenue)}`}
-            >
-              {formatNZD(displayDayRevenue)}
-            </span>
-            <span className="text-xs text-muted-foreground whitespace-nowrap">
-              {getUniqueJobsForDate(currentDate).length} job
-              {getUniqueJobsForDate(currentDate).length !== 1 ? "s" : ""} ·
-              target $3.5k exc. GST
-            </span>
-            <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
-              <div
-                className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? "bg-green-500" : dayRevenue >= DAY_TARGET * 0.7 ? "bg-amber-400" : "bg-red-400"}`}
-                style={{
-                  width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%`,
-                }}
-              />
-            </div>
-            {displayDayRevenue >= DAY_TARGET && (
-              <span className="text-xs font-medium text-green-700 whitespace-nowrap">
-                Target hit!
-              </span>
-            )}
-            {displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
+            <div className="flex items-center gap-3 px-4 py-2">
               <span className="text-xs text-muted-foreground whitespace-nowrap">
-                {formatNZD(DAY_TARGET - displayDayRevenue)} to go
+                {format(currentDate, "d MMM")} jobs:
               </span>
+              <button
+                className={`text-sm font-semibold px-2 py-0.5 rounded border ${revenueColor(dayRevenue)}`}
+                onClick={() => setShowRevBreakdown(v => !v)}
+                title="Click to see job breakdown"
+              >
+                {formatNZD(displayDayRevenue)}
+              </button>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">
+                {getUniqueJobsForDate(currentDate).length} job
+                {getUniqueJobsForDate(currentDate).length !== 1 ? "s" : ""} ·
+                target $3.5k exc. GST
+              </span>
+              <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ${dayRevenue >= DAY_TARGET ? "bg-green-500" : dayRevenue >= DAY_TARGET * 0.7 ? "bg-amber-400" : "bg-red-400"}`}
+                  style={{
+                    width: `${Math.min(100, (dayRevenue / DAY_TARGET) * 100)}%`,
+                  }}
+                />
+              </div>
+              {displayDayRevenue >= DAY_TARGET && (
+                <span className="text-xs font-medium text-green-700 whitespace-nowrap">
+                  Target hit!
+                </span>
+              )}
+              {displayDayRevenue > 0 && displayDayRevenue < DAY_TARGET && (
+                <span className="text-xs text-muted-foreground whitespace-nowrap">
+                  {formatNZD(DAY_TARGET - displayDayRevenue)} to go
+                </span>
+              )}
+            </div>
+            {showRevBreakdown && (
+              <div className="px-4 pb-2 flex flex-wrap gap-2">
+                {getUniqueJobsForDate(currentDate).length === 0 ? (
+                  <span className="text-xs text-muted-foreground">No jobs counted</span>
+                ) : (
+                  getUniqueJobsForDate(currentDate).map(j => (
+                    <span
+                      key={j.id}
+                      className="text-xs px-2 py-0.5 rounded bg-white border border-gray-200 text-gray-700"
+                    >
+                      #{j.jobNumber} {getCustomerName(j)} — ${Math.round(jobRevenue(j))} exc. GST
+                      {j.scheduledEndDate ? ` (${jobDayCount(j)}-day job, split)` : ''}
+                    </span>
+                  ))
+                )}
+              </div>
             )}
           </div>
         )}
@@ -808,7 +833,10 @@ export function CalendarGrid({
         className="flex-1 overflow-auto"
         onDragOver={onJobDrop ? (e) => e.preventDefault() : undefined}
       >
-        <div className={`flex flex-col h-full ${viewMode !== "day" ? "min-w-max" : "w-full"}`}>
+        <div
+          className={`flex flex-col h-full ${viewMode !== "day" ? "min-w-max" : ""}`}
+          style={viewMode === "day" ? { minWidth: GANTT_COL_W + GANTT_HOUR_LABELS.length * GANTT_MIN_COL_W } : undefined}
+        >
           {/* Header row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
             {viewMode === "day" ? (
