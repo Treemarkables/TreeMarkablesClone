@@ -2651,11 +2651,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                             </div>
                                           );
                                         })}
-                                        <span className="text-xs text-gray-400 ml-0.5">
-                                          {job.assignedTeam.length === 1
-                                            ? (employeeMap.get(job.assignedTeam[0])?.firstName ?? 'Assigned')
-                                            : `${job.assignedTeam.length} crew`}
-                                        </span>
                                       </div>
                                     )}
                                   </div>
@@ -3057,11 +3052,6 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 </div>
                               );
                             })}
-                            <span className="text-xs text-gray-400 ml-0.5">
-                              {job.assignedTeam.length === 1
-                                ? (employeeMap.get(job.assignedTeam[0])?.firstName ?? 'Assigned')
-                                : `${job.assignedTeam.length} crew`}
-                            </span>
                           </div>
                         )}
                       </div>

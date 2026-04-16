@@ -779,6 +779,16 @@ export function GlobalJobCard({
     enabled: isOpen && isProposalViewerOpen,
   });
 
+  // Fetch the individual proposal (with sections + photos) when the viewer opens.
+  // This uses the same /api/proposals/:id endpoint that the editor uses, which correctly
+  // maps section.images → section.photos. The batch query (jobProposalResponse) only has
+  // metadata and may have stale/missing photos.
+  const { data: viewingProposalData } = useQuery({
+    queryKey: ["/api/proposals", viewingProposalId],
+    enabled: isOpen && isProposalViewerOpen && !!viewingProposalId,
+    staleTime: 0,
+  });
+
   // Lazy load materials and services - only when billing tab is active (desktop uses sidebarTab, mobile uses activeTab)
   const { data: materialsData } = useQuery({
     queryKey: ["/api/materials"],
@@ -9948,16 +9958,13 @@ The Treemarkables Team`;
           </DialogHeader>
           <div className="p-4">
             {(() => {
-              const proposals = jobProposalResponse?.data || [];
-              const viewingProposal = proposals.find(
-                (p: any) => p.id === viewingProposalId,
-              );
+              const viewingProposal = (viewingProposalData as any)?.data;
 
               if (!viewingProposal) {
                 return (
                   <div className="text-center py-8 text-gray-500">
                     <FileText className="w-8 h-8 mx-auto mb-2" />
-                    <p>Proposal not found</p>
+                    <p>Loading proposal...</p>
                   </div>
                 );
               }
