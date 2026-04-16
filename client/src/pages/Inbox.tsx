@@ -187,14 +187,21 @@ export default function Inbox() {
   // Create Job as Lead mutation
   const createJobMutation = useMutation({
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema> & { conversationId?: string }) => {
-      return apiRequest("POST", "/api/leads", { ...leadData, status: "new" });
+      const res = await apiRequest("POST", "/api/leads", { ...leadData, status: "new" });
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setShowCreateJobDialog(false);
       jobForm.reset();
+      const jobId = data?.data?.id;
+      if (jobId) {
+        setLocation(`/dispatch?job=${jobId}`);
+      } else {
+        setLocation("/dispatch");
+      }
     },
     onError: () => {
       toast({
