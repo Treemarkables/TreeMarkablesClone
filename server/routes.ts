@@ -16457,35 +16457,44 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // Note: Diary entries are only created when proposal is SENT (via email/SMS)
       // not when it's saved/created as a draft to prevent duplicate entries
       
-      // Sync job subtotal and totalAmount from proposal
-      if (proposal.jobId) {
-        try {
-          let syncAmount = parseFloat(req.body.subtotal || '0') || 0;
-          // If no subtotal in body, calculate from line items
-          if (syncAmount === 0 && req.body.sections && Array.isArray(req.body.sections)) {
-            for (const section of req.body.sections) {
-              if (section.lineItems && Array.isArray(section.lineItems)) {
-                for (const item of section.lineItems) {
-                  if (item.selected !== false) {
-                    syncAmount += parseFloat(item.totalPrice || '0') || 0;
-                  }
-                }
-              }
-            }
+      // Recompute subtotal server-side from actual stored line items (authoritative)
+      // This prevents frontend calculation bugs from corrupting the stored value
+      try {
+        const storedItems = await storage.getProposalLineItemsByProposal(proposal.id);
+        const taxRate = parseFloat(req.body.taxRate || '15') / 100;
+        const discountAmt = parseFloat(req.body.discountAmount || '0') || 0;
+        const discountType = req.body.discountType || 'fixed';
+        let recomputedSubtotal = 0;
+        for (const item of storedItems) {
+          if (item.selected !== false) {
+            const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
+            recomputedSubtotal += item.priceIncludesTax ? price / (1 + taxRate) : price;
           }
-          if (syncAmount > 0) {
-            const gst = syncAmount * 0.15;
-            await storage.updateJob(proposal.jobId, { 
-              subtotal: syncAmount.toString(),
-              totalAmount: syncAmount.toString(),
-              gstAmount: gst.toFixed(2),
-              totalIncludingGst: (syncAmount + gst).toFixed(2)
-            });
-            console.log('✅ Synced job prices from proposal:', { subtotal: syncAmount, gst: gst.toFixed(2), total: (syncAmount + gst).toFixed(2) });
-          }
-        } catch (error) {
-          console.error('❌ Error syncing job prices:', error);
         }
+        const discountValue = discountType === 'percentage'
+          ? (recomputedSubtotal * discountAmt) / 100
+          : discountAmt;
+        const subtotalAfterDiscount = Math.max(0, recomputedSubtotal - discountValue);
+        const recomputedGst = subtotalAfterDiscount * taxRate;
+        const recomputedTotal = subtotalAfterDiscount + recomputedGst;
+        // Update proposal with correct values
+        await storage.updateProposal(proposal.id, {
+          subtotal: parseFloat(recomputedSubtotal.toFixed(2)),
+          gstAmount: parseFloat(recomputedGst.toFixed(2)),
+          totalAmount: parseFloat(recomputedTotal.toFixed(2)),
+        });
+        // Sync correct values to job
+        if (proposal.jobId && recomputedSubtotal > 0) {
+          await storage.updateJob(proposal.jobId, {
+            subtotal: recomputedSubtotal.toFixed(2),
+            totalAmount: recomputedSubtotal.toFixed(2),
+            gstAmount: recomputedGst.toFixed(2),
+            totalIncludingGst: recomputedTotal.toFixed(2)
+          });
+          console.log('✅ Synced job prices from recomputed line items (CREATE):', { subtotal: recomputedSubtotal.toFixed(2), gst: recomputedGst.toFixed(2), total: recomputedTotal.toFixed(2) });
+        }
+      } catch (error) {
+        console.error('❌ Error recomputing/syncing job prices (CREATE):', error);
       }
       
       res.status(201).json({
@@ -16620,34 +16629,44 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         console.log('⚠️ PUT proposal - no sections in request body');
       }
       
-      // Sync job prices from proposal subtotal
-      if (proposal.jobId) {
-        try {
-          let syncAmount = parseFloat(req.body.subtotal || '0') || 0;
-          if (syncAmount === 0 && req.body.sections && Array.isArray(req.body.sections)) {
-            for (const section of req.body.sections) {
-              if (section.lineItems && Array.isArray(section.lineItems)) {
-                for (const item of section.lineItems) {
-                  if (item.selected !== false) {
-                    syncAmount += parseFloat(item.totalPrice || '0') || 0;
-                  }
-                }
-              }
-            }
+      // Recompute subtotal server-side from actual stored line items (authoritative)
+      // This prevents frontend calculation bugs from corrupting the stored value
+      try {
+        const storedItemsPut = await storage.getProposalLineItemsByProposal(proposal.id);
+        const taxRatePut = parseFloat(req.body.taxRate || '15') / 100;
+        const discountAmtPut = parseFloat(req.body.discountAmount || '0') || 0;
+        const discountTypePut = req.body.discountType || 'fixed';
+        let recomputedSubtotalPut = 0;
+        for (const item of storedItemsPut) {
+          if (item.selected !== false) {
+            const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
+            recomputedSubtotalPut += item.priceIncludesTax ? price / (1 + taxRatePut) : price;
           }
-          if (syncAmount > 0) {
-            const gst = syncAmount * 0.15;
-            await storage.updateJob(proposal.jobId, { 
-              subtotal: syncAmount.toString(),
-              totalAmount: syncAmount.toString(),
-              gstAmount: gst.toFixed(2),
-              totalIncludingGst: (syncAmount + gst).toFixed(2)
-            });
-            console.log('✅ Synced job prices from proposal:', { subtotal: syncAmount, gst: gst.toFixed(2), total: (syncAmount + gst).toFixed(2) });
-          }
-        } catch (error) {
-          console.error('❌ Error syncing job prices:', error);
         }
+        const discountValuePut = discountTypePut === 'percentage'
+          ? (recomputedSubtotalPut * discountAmtPut) / 100
+          : discountAmtPut;
+        const subtotalAfterDiscountPut = Math.max(0, recomputedSubtotalPut - discountValuePut);
+        const recomputedGstPut = subtotalAfterDiscountPut * taxRatePut;
+        const recomputedTotalPut = subtotalAfterDiscountPut + recomputedGstPut;
+        // Update proposal with correct values
+        await storage.updateProposal(proposal.id, {
+          subtotal: parseFloat(recomputedSubtotalPut.toFixed(2)),
+          gstAmount: parseFloat(recomputedGstPut.toFixed(2)),
+          totalAmount: parseFloat(recomputedTotalPut.toFixed(2)),
+        });
+        // Sync correct values to job
+        if (proposal.jobId && recomputedSubtotalPut > 0) {
+          await storage.updateJob(proposal.jobId, {
+            subtotal: recomputedSubtotalPut.toFixed(2),
+            totalAmount: recomputedSubtotalPut.toFixed(2),
+            gstAmount: recomputedGstPut.toFixed(2),
+            totalIncludingGst: recomputedTotalPut.toFixed(2)
+          });
+          console.log('✅ Synced job prices from recomputed line items (PUT):', { subtotal: recomputedSubtotalPut.toFixed(2), gst: recomputedGstPut.toFixed(2), total: recomputedTotalPut.toFixed(2) });
+        }
+      } catch (error) {
+        console.error('❌ Error recomputing/syncing job prices (PUT):', error);
       }
       
       res.json({
@@ -16768,8 +16787,35 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
       // If customer selected different choices, update the proposal sections
       let updatedSections = proposal.sections;
-      let updatedTotalAmount = proposal.totalAmount;
-      let updatedSubtotal = proposal.subtotal;
+      let updatedTotalAmount: number = parseFloat(proposal.totalAmount?.toString() || '0');
+      let updatedSubtotal: number = parseFloat(proposal.subtotal?.toString() || '0');
+
+      // When no choices are made, recompute from actual DB line items (more reliable than cached proposal.subtotal)
+      if (!selectedChoices || Object.keys(selectedChoices).length === 0) {
+        try {
+          const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
+          const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
+          const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+          const acceptDiscountType = proposal.discountType || 'fixed';
+          let computedSubtotal = 0;
+          for (const item of acceptLineItems) {
+            if (item.selected !== false) {
+              const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
+              computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
+            }
+          }
+          const acceptDiscountValue = acceptDiscountType === 'percentage'
+            ? (computedSubtotal * acceptDiscountAmt) / 100
+            : acceptDiscountAmt;
+          const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
+          const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
+          updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
+          updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
+          console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, total=${updatedTotalAmount}`);
+        } catch (err) {
+          console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
+        }
+      }
       
       if (selectedChoices && Object.keys(selectedChoices).length > 0 && Array.isArray(proposal.sections)) {
         console.log('🎯 Applying customer-selected choices to proposal...');
