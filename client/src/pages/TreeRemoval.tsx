@@ -115,7 +115,7 @@ export default function TreeRemoval() {
         {/* Heading pinned to the bottom so the video action plays unobstructed above */}
         <div className="absolute bottom-0 left-0 right-0 z-10 pb-8 sm:pb-12 px-4 sm:px-6">
           <div className="max-w-6xl mx-auto">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold text-white" data-testid="text-hero-title">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white whitespace-nowrap" data-testid="text-hero-title">
               Gisborne's tree removal experts
             </h1>
           </div>
