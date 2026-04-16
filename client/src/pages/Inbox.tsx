@@ -57,7 +57,7 @@ import { LeadFormDialog } from "@/components/LeadFormDialog";
 // Form schema extending insertLeadSchema with required validation
 const createLeadFormSchema = insertLeadSchema.extend({
   name: z.string().min(1, "Name is required"),
-  phone: z.string().min(1, "Phone is required"),
+  phone: z.string().optional().default(""),
   status: z.string().default("new"),
   urgency: z
     .enum(["low", "medium", "high", "emergency"])
@@ -166,7 +166,6 @@ export default function Inbox() {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
       setShowCreateJobDialog(false);
       jobForm.reset();
-      setLocation("/dispatch");
     },
     onError: () => {
       toast({

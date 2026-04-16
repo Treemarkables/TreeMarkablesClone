@@ -1254,7 +1254,6 @@ export default function ConversationDetail() {
                 );
 
                 setShowCreateJob(false);
-                setLocation("/dispatch");
               }}
               data-testid="button-submit-job"
             >
