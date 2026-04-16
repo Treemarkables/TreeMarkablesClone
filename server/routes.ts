@@ -3742,11 +3742,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ success: false, message: 'date param required (YYYY-MM-DD)' });
       }
-      // Use PostgreSQL AT TIME ZONE to compare in NZ local time — handles DST automatically
+      // scheduled_date is `timestamp without time zone` storing UTC values, so we must first
+      // mark it AT TIME ZONE 'UTC' (to get a timestamptz) and THEN convert to NZ local. Doing
+      // a single AT TIME ZONE 'Pacific/Auckland' would (incorrectly) interpret the naive value
+      // as NZ local — shifting every job by 12h and hiding them from the calendar.
       const result = await db.execute(
         sql`SELECT * FROM jobs
             WHERE scheduled_date IS NOT NULL
-              AND DATE(scheduled_date AT TIME ZONE 'Pacific/Auckland') = ${date}::date
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') = ${date}::date
               AND status NOT IN ('archived', 'unsuccessful')
             ORDER BY scheduled_date ASC`
       );
