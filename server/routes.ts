@@ -16057,10 +16057,25 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           const sections = sectionsByProposalId.get(proposal.id) || [];
           const lineItems = lineItemsByProposalId.get(proposal.id) || [];
 
-          // Attach line items to their sections and map content to description
+          // Attach line items to their sections, map content → description, and images → photos
           const sectionsWithLineItems = sections.map(section => ({
             ...section,
-            description: section.content || '', // Map content to description for client compatibility
+            description: section.content || '',
+            photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => {
+              const filename = url.split('/').pop() || 'photo';
+              const thumbnailUrl = url.includes('/objects/photos/')
+                ? url.replace(/\/([^/]+)\.(jpg|jpeg|png|webp)$/i, '/thumb_$1.webp')
+                : url;
+              return {
+                id: `photo-${filename}`,
+                url,
+                thumbnailUrl,
+                filename,
+                type: 'before' as const,
+                category: 'documentation' as const,
+                capturedAt: new Date().toISOString(),
+              };
+            }),
             lineItems: lineItems.filter(item => item.sectionId === section.id)
           }));
 
