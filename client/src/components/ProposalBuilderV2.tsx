@@ -850,7 +850,7 @@ function LineItemsBlock({
     return (
       <>
         <tr className="bg-blue-50/60">
-          <td className="border border-gray-200 px-1 py-1">
+          <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
             <Input
               value={d.itemCode}
               onChange={(e) => setD((prev) => ({ ...prev, itemCode: e.target.value }))}
@@ -901,7 +901,7 @@ function LineItemsBlock({
               className="h-7 text-xs text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </td>
-          <td className="border border-gray-200 px-1 py-1">
+          <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
             {d.pricingType === "fixed" ? (
               <Input
                 type="number"
@@ -920,7 +920,7 @@ function LineItemsBlock({
               />
             )}
           </td>
-          <td className="border border-gray-200 px-1 py-1">
+          <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
             {d.pricingType !== "fixed" ? (
               <div className="flex items-center">
                 <Input
@@ -936,7 +936,7 @@ function LineItemsBlock({
               <span className="text-xs text-gray-400 px-2">—</span>
             )}
           </td>
-          <td className="border border-gray-200 px-2 py-1 text-right text-xs text-gray-700">
+          <td className="hidden sm:table-cell border border-gray-200 px-2 py-1 text-right text-xs text-gray-700">
             {d.pricingType === "choice" ? "varies" : fmtNZD(priceEx)}
           </td>
           <td className="border border-gray-200 px-2 py-1 text-right text-xs font-medium">
