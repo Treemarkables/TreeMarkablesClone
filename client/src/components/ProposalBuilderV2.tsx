@@ -920,6 +920,7 @@ function LineItemsBlock({
                 type="number"
                 value={d.fixedPrice === 0 ? '' : d.fixedPrice}
                 onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
+                onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
                 className="h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 placeholder=""
               />
@@ -928,6 +929,7 @@ function LineItemsBlock({
                 type="number"
                 value={d.costExGst === 0 ? '' : d.costExGst}
                 onChange={(e) => setD((prev) => ({ ...prev, costExGst: parseFloat(e.target.value) || 0 }))}
+                onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.costExGst || 0) > 0) { onCommit(); onCancel(); } }}
                 className="h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                 placeholder=""
               />
@@ -967,6 +969,7 @@ function LineItemsBlock({
                     pricingType: "fixed",
                     fixedPrice: parseFloat(e.target.value) || 0,
                   }))}
+                  onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
                   className="sm:hidden h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                   placeholder="0.00"
                 />
