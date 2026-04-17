@@ -767,7 +767,7 @@ function Router() {
       );
     }
     if (isAuthenticated) {
-      return <Redirect to="/home" />;
+      return <Redirect to="/dispatch" />;
     }
     const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
     if (isNative) {

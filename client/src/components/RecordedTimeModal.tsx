@@ -204,26 +204,15 @@ export function RecordedTimeModal({
       });
     }
 
-    // Track staff without rates
+    // Track staff without charge-out line items assigned
     const staffWithoutRates: string[] = [];
 
-    // Staff to item number mapping
-    const staffItemNumbers: Record<string, string> = {
-      dan: "1",
-      kalsey: "4",
-      jack: "5",
-      josh: "3",
-      jullian: "14",
-      julian: "14",
-    };
-
-    // Create one pending entry for each selected staff member with mapped rate
+    // Create one pending entry for each selected staff member using their assigned line items
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map((staffId) => {
       const staff = employees.find((e: any) => e.id === staffId);
-      const staffFirstName = (staff?.firstName || "").toLowerCase().trim();
 
-      // Look up the item number for this staff member
-      const itemNumber = staffItemNumbers[staffFirstName] || "";
+      // Use the staff member's assigned charge-out line item number
+      const itemNumber = staff?.chargeOutLineItemNumber || "";
 
       if (!itemNumber) {
         staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
@@ -243,11 +232,11 @@ export function RecordedTimeModal({
 
     setPendingEntries((prev) => [...prev, ...newTimeEntries]);
 
-    // Show warning if some staff don't have matching rates
+    // Show warning if some staff don't have a charge-out line item assigned
     if (staffWithoutRates.length > 0) {
       toast({
         title: "Warning",
-        description: `${staffWithoutRates.join(", ")} ${staffWithoutRates.length === 1 ? "does" : "do"} not have a matching labour rate set up. Please add a rate in Settings.`,
+        description: `${staffWithoutRates.join(", ")} ${staffWithoutRates.length === 1 ? "does" : "do"} not have a charge-out line item assigned. Please set one in Settings → Staff.`,
         variant: "destructive",
       });
     }
@@ -376,6 +365,14 @@ export function RecordedTimeModal({
           entryDate: today,
           hours: entry.duration,
           rate: rateItem?.price || parseFloat(entry.rate.split(" ")[0]) || 75,
+          costRate: (() => {
+            const costLineItem = materialsAndServices.find(
+              (item: any) => item.itemNumber === staff?.costLineItemNumber
+            );
+            return costLineItem
+              ? parseFloat(costLineItem.price)
+              : parseFloat(staff?.hourlyRate || "0") || 0;
+          })(),
           startTime: entry.start,
 
           // ServiceM8 features
@@ -607,27 +604,11 @@ export function RecordedTimeModal({
                     className="p-1 hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between"
                     data-testid={`entry-${entry.id}`}
                   >
-                    <div className="flex-1 grid grid-cols-3 gap-1">
+                    <div className="flex-1 grid grid-cols-2 gap-1">
                       <div>
                         <div className="text-[8px] text-gray-500">Staff</div>
                         <div className="font-medium text-[10px]">
                           {entry.staffName}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[8px] text-gray-500">Pay Rate</div>
-                        <div className="text-[10px]">
-                          {(() => {
-                            const staff = employees.find(
-                              (e: any) => e.id === entry.staffId,
-                            );
-                            const rate = staff?.hourlyRate
-                              ? parseFloat(staff.hourlyRate)
-                              : 0;
-                            return rate > 0
-                              ? `$${rate.toFixed(2)}/hr`
-                              : "Not set";
-                          })()}
                         </div>
                       </div>
                       <div>
@@ -679,7 +660,7 @@ export function RecordedTimeModal({
                     className="p-1 bg-white hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between"
                     data-testid={`saved-entry-${entry.id}`}
                   >
-                    <div className="flex-1 grid grid-cols-3 gap-1">
+                    <div className="flex-1 grid grid-cols-2 gap-1">
                       <div>
                         <div className="text-[8px] text-gray-500">Staff</div>
                         <div className="font-medium text-[10px]">
@@ -687,25 +668,9 @@ export function RecordedTimeModal({
                         </div>
                       </div>
                       <div>
-                        <div className="text-[8px] text-gray-500">Charge-Out Rate</div>
-                        <div className="text-[10px]">
-                          {(() => {
-                            const rate = parseFloat(String(entry.rate || 0));
-                            return rate > 0 ? `$${rate.toFixed(2)}/hr` : "Not set";
-                          })()}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[8px] text-gray-500">Time · Total</div>
+                        <div className="text-[8px] text-gray-500">Time</div>
                         <div className="text-[10px] font-medium">
                           {formatDuration(entry.hours)}
-                          {(() => {
-                            const rate = parseFloat(String(entry.rate || 0));
-                            const hours = parseFloat(String(entry.hours || 0));
-                            return rate > 0 && hours > 0
-                              ? ` · $${(hours * rate).toFixed(2)}`
-                              : "";
-                          })()}
                         </div>
                       </div>
                     </div>
