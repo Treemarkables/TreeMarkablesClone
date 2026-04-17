@@ -7643,6 +7643,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       for (const entry of entries) {
         const hours = typeof entry.hours === 'string' ? parseFloat(entry.hours) : entry.hours;
         const rate = typeof entry.rate === 'string' ? parseFloat(entry.rate) : entry.rate;
+        const costRate = typeof entry.costRate === 'string' ? parseFloat(entry.costRate) : (entry.costRate ?? null);
         const employeeId = entry.employeeId || entry.staffId; // Support both field names
 
         if (isNaN(hours) || hours <= 0) continue;
@@ -7651,6 +7652,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           employeeId: employeeId,
           hours: hours,
           rate: rate || 0,
+          costRate: costRate !== null && !isNaN(costRate) ? costRate : undefined,
           date: entry.date || entry.entryDate || new Date().toISOString().split('T')[0]
         });
 
@@ -7684,9 +7686,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         await storage.updateJobExpenses(jobId, { additionalCosts: additionalCosts });
       }
 
-      // Calculate and update labor costs
+      // Calculate and update labor costs using cost rate (not charge-out rate)
       const staffEntries = await storage.getJobStaffTimeEntries(jobId);
-      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalLaborCost = await staffEntries.reduce(async (accPromise, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
 
       // Recalculate gross margin
@@ -7732,10 +7742,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Save back to job
       await storage.updateJobStaffTime(jobId, updatedEntries);
       
-      // Recalculate labor costs
-      const totalLaborCost = updatedEntries.reduce((sum: number, e: any) => sum + (e.hours * e.rate), 0);
+      // Recalculate labor costs using cost rate (not charge-out rate)
+      const totalLaborCost = await updatedEntries.reduce(async (accPromise: Promise<number>, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
-      
+
       res.json({ success: true, message: 'Time entry deleted', remainingCount: updatedEntries.length });
     } catch (error) {
       console.error('Error deleting time entry:', error);
@@ -7808,9 +7826,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       // Automatically update job labor costs from staff time totals
       const staffEntries = await storage.getJobStaffTimeEntries(id);
-      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalLaborCost = await (staffEntries as any[]).reduce(async (accPromise, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       const totalHours = staffEntries.reduce((sum, e) => sum + e.hours, 0);
-      
+
       // Update job with computed labor costs
       await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
       
@@ -7864,7 +7890,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const updatedJob = await storage.updateJobStaffTime(id, validatedEntries);
       
       // Automatically update job labor costs from staff time totals
-      const totalLaborCost = validatedEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalLaborCost = await (validatedEntries as any[]).reduce(async (accPromise, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       const totalHours = validatedEntries.reduce((sum, e) => sum + e.hours, 0);
       
       // Get employee names and create diary entry for time tracking update

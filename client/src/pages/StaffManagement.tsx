@@ -133,6 +133,8 @@ const staffFormSchema = z.object({
     .default("beginner"),
   hourlyRate: z.string().optional(),
   chargeOutRate: z.string().optional(),
+  costLineItemNumber: z.string().optional(),
+  chargeOutLineItemNumber: z.string().optional(),
   emergencyContact: z.string().optional(),
   emergencyContactPhone: z.string().optional(),
   notes: z.string().optional(),
@@ -156,6 +158,8 @@ interface StaffMember {
   skillLevel: "beginner" | "intermediate" | "advanced" | "expert";
   hourlyRate?: string;
   chargeOutRate?: string;
+  costLineItemNumber?: string;
+  chargeOutLineItemNumber?: string;
   certifications: string[];
   licences: string[];
   skills: string[];
@@ -179,6 +183,14 @@ function StaffFormDialog({
   onClose: () => void;
   onSubmit: (data: StaffFormData) => void;
 }) {
+  const { data: materialsData } = useQuery({
+    queryKey: ["/api/materials-services"],
+    enabled: isOpen,
+  });
+  const labourItems = ((materialsData as any)?.data || []).filter(
+    (item: any) => item.category === "Labour"
+  );
+
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffFormSchema),
     defaultValues: {
@@ -192,6 +204,8 @@ function StaffFormDialog({
       skillLevel: "beginner",
       hourlyRate: "",
       chargeOutRate: "",
+      costLineItemNumber: "",
+      chargeOutLineItemNumber: "",
       emergencyContact: "",
       emergencyContactPhone: "",
       notes: "",
@@ -217,6 +231,8 @@ function StaffFormDialog({
           skillLevel: staff.skillLevel,
           hourlyRate: staff.hourlyRate || "",
           chargeOutRate: staff.chargeOutRate || "",
+          costLineItemNumber: (staff as any).costLineItemNumber || "",
+          chargeOutLineItemNumber: (staff as any).chargeOutLineItemNumber || "",
           emergencyContact: staff.emergencyContact || "",
           emergencyContactPhone: staff.emergencyContactPhone || "",
           notes: staff.notes || "",
@@ -237,6 +253,8 @@ function StaffFormDialog({
           skillLevel: "beginner",
           hourlyRate: "",
           chargeOutRate: "",
+          costLineItemNumber: "",
+          chargeOutLineItemNumber: "",
           emergencyContact: "",
           emergencyContactPhone: "",
           notes: "",
@@ -542,6 +560,60 @@ function StaffFormDialog({
                         data-testid="input-hire-date"
                       />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            {/* Line Item Assignments */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="costLineItemNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cost Line Item</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-cost-line-item">
+                          <SelectValue placeholder="Select cost item..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {labourItems.map((item: any) => (
+                          <SelectItem key={item.itemNumber} value={item.itemNumber}>
+                            {item.itemNumber} — {item.name} (${parseFloat(item.price).toFixed(2)}/hr)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="chargeOutLineItemNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Charge-out Line Item</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-charge-out-line-item">
+                          <SelectValue placeholder="Select charge-out item..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {labourItems.map((item: any) => (
+                          <SelectItem key={item.itemNumber} value={item.itemNumber}>
+                            {item.itemNumber} — {item.name} (${parseFloat(item.price).toFixed(2)}/hr)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}

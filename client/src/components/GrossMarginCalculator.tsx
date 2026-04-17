@@ -138,8 +138,8 @@ export function GrossMarginCalculator({
   const staffTimeLaborCost = staffTimeEntries.reduce(
     (sum: number, entry: any) => {
       const hours = Number(entry.hours) || 0;
-      const rate = Number(entry.rate) || 0;
-      return sum + hours * rate;
+      const costRate = Number(entry.costRate ?? entry.rate) || 0;
+      return sum + hours * costRate;
     },
     0,
   );

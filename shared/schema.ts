@@ -1256,6 +1256,8 @@ export const employees = pgTable("employees", {
   skills: text("skills").array().default([]), // chainsaw, bucket_truck, climbing, etc.
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }), // Internal cost rate
   chargeOutRate: decimal("charge_out_rate", { precision: 10, scale: 2 }), // Rate billed to customers
+  costLineItemNumber: text("cost_line_item_number"), // itemNumber of Labour catalog item used for cost tracking
+  chargeOutLineItemNumber: text("charge_out_line_item_number"), // itemNumber of Labour catalog item used for invoicing
   availableHours: text("available_hours"), // JSON: {"mon": "8-17", "tue": "8-17", ...}
   emergencyContact: text("emergency_contact"),
   emergencyContactPhone: text("emergency_contact_phone"),

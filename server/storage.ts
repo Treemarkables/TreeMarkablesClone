@@ -252,6 +252,7 @@ export interface IStorage {
     employeeId: string;
     hours: number;
     rate: number;
+    costRate?: number;
     date?: string;
   }): Promise<Job>;
   removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job>;
@@ -1790,6 +1791,7 @@ class DatabaseStorage implements IStorage {
     employeeId: string;
     hours: number;
     rate: number;
+    costRate?: number;
     date?: string;
   }): Promise<Job> {
     const job = await this.getJob(jobId);
