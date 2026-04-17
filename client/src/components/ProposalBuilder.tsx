@@ -2244,6 +2244,15 @@ export function ProposalBuilder({
                                                 parseFloat(e.target.value) || 0,
                                             }))
                                           }
+                                          onBlur={() => {
+                                            if (
+                                              currentLineItem.description?.trim() &&
+                                              (currentLineItem.quantity || 0) > 0 &&
+                                              (currentLineItem.unitPrice || 0) > 0
+                                            ) {
+                                              addLineItemToSection(section.id);
+                                            }
+                                          }}
                                           className="min-h-[44px] text-base"
                                           data-testid={`input-line-item-price-${section.id}`}
                                         />
@@ -2284,6 +2293,14 @@ export function ProposalBuilder({
                                               parseFloat(e.target.value) || 0,
                                           }))
                                         }
+                                        onBlur={() => {
+                                          if (
+                                            currentLineItem.description?.trim() &&
+                                            (currentLineItem.fixedPrice || 0) > 0
+                                          ) {
+                                            addLineItemToSection(section.id);
+                                          }
+                                        }}
                                         className="min-h-[44px] text-base"
                                         data-testid={`input-fixed-price-${section.id}`}
                                       />
