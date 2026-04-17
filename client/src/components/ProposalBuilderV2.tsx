@@ -726,6 +726,19 @@ function LineItemsBlock({
     return () => document.removeEventListener("mousedown", handler);
   }, [showMats]);
 
+  // When opening the add-row or edit-row, scroll it into view so the iOS keyboard doesn't hide it
+  useEffect(() => {
+    if (!showAdd && !editingId) return;
+    const t = setTimeout(() => {
+      const el = descCellRef.current;
+      if (!el) return;
+      el.scrollIntoView({ block: "center", behavior: "smooth" });
+      const input = el.querySelector("input") as HTMLInputElement | null;
+      input?.focus();
+    }, 50);
+    return () => clearTimeout(t);
+  }, [showAdd, editingId]);
+
   // Calculate draft extra (non-optional items being typed should count toward the total immediately)
   const draftExtra = (() => {
     let extra = 0;
