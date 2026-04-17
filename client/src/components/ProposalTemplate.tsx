@@ -580,95 +580,92 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                         return (
                           <div
                             key={item.id}
-                            className={`border rounded-lg p-3 transition-colors ${isItemToggleable && isItemSelected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'} ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}`}
+                            className={`border rounded-lg p-3 overflow-hidden transition-colors ${isItemToggleable && isItemSelected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'} ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}`}
                             data-testid={`row-line-item-${sectionIndex}-${index}`}
                             onClick={handleToggle}
                           >
-                            <div className="flex items-start gap-3">
+                            <div className="flex flex-col gap-2 min-w-0">
                               {isInteractive && (
-                                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                                <div onClick={(e) => e.stopPropagation()}>
                                   <button
                                     type="button"
                                     onClick={handleToggle}
                                     aria-pressed={isItemSelected}
-                                    className={`inline-flex flex-col items-center justify-center gap-1 w-14 h-14 rounded-full border-[3px] transition-all duration-200 focus:outline-none ${isItemSelected ? 'bg-green-500 border-green-500 text-white shadow-lg' : 'bg-white border-gray-300 text-gray-400'}`}
+                                    className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-md border-2 text-sm font-semibold transition-all duration-200 focus:outline-none ${isItemSelected ? 'bg-green-500 border-green-500 text-white shadow' : 'bg-white border-gray-300 text-gray-600'}`}
                                   >
                                     {isItemSelected ? (
                                       <>
-                                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                        <span className="text-[9px] font-bold leading-none">ADDED</span>
+                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                        <span>ADDED</span>
                                       </>
                                     ) : (
                                       <>
-                                        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
-                                        <span className="text-[9px] font-semibold leading-none">{isMultipleChoice ? "SELECT" : "ADD"}</span>
+                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                                        <span>{isMultipleChoice ? "SELECT" : "ADD"}</span>
                                       </>
                                     )}
                                   </button>
                                 </div>
                               )}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex justify-between items-start gap-2">
-                                  <span className={`font-medium text-sm break-words flex-1 ${isInteractive && !isItemSelected ? 'text-gray-400' : 'text-gray-900'}`}>
-                                    <LinkifiedText text={item.description} />
-                                  </span>
-                                  <span className={`text-sm font-semibold whitespace-nowrap shrink-0 ${isItemToggleable ? (isItemSelected ? 'text-green-700' : 'text-gray-300') : 'text-gray-900'}`}>
-                                    {formatCurrency(displayPrice)}
-                                  </span>
-                                </div>
-                                {item.notes && (
-                                  <p className={`text-xs mt-1 break-words ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    <LinkifiedText text={item.notes} />
-                                  </p>
-                                )}
-                                <p className={`text-xs mt-1 ${isInteractive ? (isItemSelected ? 'text-green-600' : 'text-gray-400') : 'text-gray-500'}`}>
-                                  Qty: {item.quantity}
-                                </p>
-                                {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
-                                  <div className="mt-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                                    <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
-                                    <ul className="ml-1 space-y-1.5 mt-1">
-                                      {item.choices.map(choice => {
-                                        const isChoiceSelected = choice.id === (selectedChoices[item.id] || item.selectedChoiceId);
-                                        return (
-                                          <li
-                                            key={choice.id}
-                                            className={`flex items-start gap-2 ${isChoiceSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (allowChoiceSelection && onChoiceSelect) onChoiceSelect(item.id, choice.id);
-                                            }}
-                                          >
-                                            {allowChoiceSelection ? (
-                                              <input type="radio" name={`choice-${item.id}`} checked={isChoiceSelected} onChange={(e) => { e.stopPropagation(); onChoiceSelect?.(item.id, choice.id); }} className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer" />
-                                            ) : <span>•</span>}
-                                            <span className="flex-1">
-                                              {choice.label} - {formatCurrency(Number(choice.price) || 0)}
-                                              {choice.description && <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>}
-                                            </span>
-                                          </li>
-                                        );
-                                      })}
-                                    </ul>
-                                  </div>
-                                )}
-                                {item.isOptional && !isInteractive && (
-                                  <div className="mt-2 flex items-center justify-between">
-                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                      {isItemSelected ? "Included" : "Optional"}
-                                    </Badge>
-                                    {onOptionalToggle && (
-                                      <button
-                                        type="button"
-                                        onClick={(e) => { e.stopPropagation(); onOptionalToggle(item.id, !isItemSelected); }}
-                                        className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 font-medium ${isItemSelected ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-500'}`}
-                                      >
-                                        {isItemSelected ? "Included" : "+ Add"}
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
+                              <div className={`font-medium text-sm break-words [overflow-wrap:anywhere] ${isInteractive && !isItemSelected ? 'text-gray-400' : 'text-gray-900'}`}>
+                                <LinkifiedText text={item.description} />
                               </div>
+                              {item.notes && (
+                                <div className={`text-xs break-words [overflow-wrap:anywhere] ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-600'}`}>
+                                  <LinkifiedText text={item.notes} />
+                                </div>
+                              )}
+                              <div className={`text-xs ${isInteractive ? (isItemSelected ? 'text-green-600' : 'text-gray-400') : 'text-gray-500'}`}>
+                                Qty: {item.quantity}
+                              </div>
+                              <div className={`text-base font-semibold break-words ${isItemToggleable ? (isItemSelected ? 'text-green-700' : 'text-gray-400') : 'text-gray-900'}`}>
+                                {formatCurrency(displayPrice)}
+                              </div>
+                              {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
+                                <div className="text-xs min-w-0" onClick={(e) => e.stopPropagation()}>
+                                  <p className="text-gray-600 font-medium mb-1">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
+                                  <ul className="flex flex-col gap-1.5">
+                                    {item.choices.map(choice => {
+                                      const isChoiceSelected = choice.id === (selectedChoices[item.id] || item.selectedChoiceId);
+                                      return (
+                                        <li
+                                          key={choice.id}
+                                          className={`flex items-start gap-2 p-2 rounded-md border ${isChoiceSelected ? 'border-green-300 bg-green-50 font-medium text-green-700' : 'border-gray-200 text-gray-700'} ${allowChoiceSelection ? 'cursor-pointer' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (allowChoiceSelection && onChoiceSelect) onChoiceSelect(item.id, choice.id);
+                                          }}
+                                        >
+                                          {allowChoiceSelection ? (
+                                            <input type="radio" name={`choice-${item.id}`} checked={isChoiceSelected} onChange={(e) => { e.stopPropagation(); onChoiceSelect?.(item.id, choice.id); }} className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer shrink-0" />
+                                          ) : <span className="shrink-0">•</span>}
+                                          <div className="flex-1 min-w-0 flex flex-col gap-0.5 break-words [overflow-wrap:anywhere]">
+                                            <span>{choice.label}</span>
+                                            <span className="text-gray-600">{formatCurrency(Number(choice.price) || 0)}</span>
+                                            {choice.description && <span className="text-gray-500 text-[11px]">{choice.description}</span>}
+                                          </div>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                </div>
+                              )}
+                              {item.isOptional && !isInteractive && (
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                    {isItemSelected ? "Included" : "Optional"}
+                                  </Badge>
+                                  {onOptionalToggle && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); onOptionalToggle(item.id, !isItemSelected); }}
+                                      className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 font-medium ${isItemSelected ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-500'}`}
+                                    >
+                                      {isItemSelected ? "Included" : "+ Add"}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
