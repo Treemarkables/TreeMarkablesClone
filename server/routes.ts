@@ -2054,6 +2054,7 @@ Extract the following information:
   • "For access contact" table field (may be a tenant, not the requester — prefer the sender's name)
   • "From" line or opening greeting
   • Property managers often sign off with their name, company, and number at the end
+  • Fallback: if no explicit name is found anywhere, derive one from the email address local part (the bit before @): split on dots, underscores, hyphens or digits, drop digits, and Title Case the words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith". Skip this fallback for generic local parts like "info", "admin", "contact", "hello", "sales", "office", "enquiries", "noreply".
 - phone: The REQUESTER's phone number (from signature block or "contact" field). Format NZ numbers as 02X XXX XXXX.
 - email: The REQUESTER's email address (from signature block or From/Reply-To)
 - address: The SERVICE ADDRESS (the property where tree work is needed). Look for:
@@ -2135,7 +2136,7 @@ Use empty string if a field cannot be determined.`
 
 Extract the following information:
 1. Phone number - Look at the TOP of the screen where the contact info is shown (usually shows the phone number like "+64 21 231 8338")
-2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings
+2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings. If no explicit name is given anywhere, try to derive one from the email address local part (the bit before @): split it on dots, underscores, hyphens or digits, drop digits, and Title Case the remaining words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith", "jane_doe2@…" → "Jane Doe". Only do this fallback when no real name is found, and never invent a name from a generic local part like "info", "admin", "contact", "hello", "sales", "office", "enquiries".
 3. Email address - Look for any email addresses mentioned anywhere in the messages (e.g. someone@example.com, someone@gmail.com)
 4. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
 5. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
