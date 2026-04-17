@@ -940,7 +940,27 @@ function LineItemsBlock({
             {d.pricingType === "choice" ? "varies" : fmtNZD(priceEx)}
           </td>
           <td className="border border-gray-200 px-2 py-1 text-right text-xs font-medium">
-            {d.pricingType === "choice" ? "varies" : fmtNZD(total)}
+            {d.pricingType === "choice" ? (
+              "varies"
+            ) : (
+              <>
+                {/* Mobile: editable fixed-price input (since cost/markup columns are hidden) */}
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  value={d.fixedPrice === 0 ? '' : d.fixedPrice}
+                  onChange={(e) => setD((prev) => ({
+                    ...prev,
+                    pricingType: "fixed",
+                    fixedPrice: parseFloat(e.target.value) || 0,
+                  }))}
+                  className="sm:hidden h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  placeholder="0.00"
+                />
+                {/* Desktop: read-only computed total */}
+                <span className="hidden sm:inline">{fmtNZD(total)}</span>
+              </>
+            )}
           </td>
           <td className="border border-gray-200 px-1 py-1 align-top">
             <div className="flex gap-1">
