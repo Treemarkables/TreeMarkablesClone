@@ -574,14 +574,14 @@ function StaffFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Cost Line Item</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
                       <FormControl>
                         <SelectTrigger data-testid="select-cost-line-item">
                           <SelectValue placeholder="Select cost item..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="__none__">None</SelectItem>
                         {labourItems.map((item: any) => (
                           <SelectItem key={item.itemNumber} value={item.itemNumber}>
                             {item.itemNumber} — {item.name} (${parseFloat(item.price).toFixed(2)}/hr)
@@ -599,14 +599,14 @@ function StaffFormDialog({
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Charge-out Line Item</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
                       <FormControl>
                         <SelectTrigger data-testid="select-charge-out-line-item">
                           <SelectValue placeholder="Select charge-out item..." />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value="__none__">None</SelectItem>
                         {labourItems.map((item: any) => (
                           <SelectItem key={item.itemNumber} value={item.itemNumber}>
                             {item.itemNumber} — {item.name} (${parseFloat(item.price).toFixed(2)}/hr)

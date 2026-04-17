@@ -739,6 +739,28 @@ function LineItemsBlock({
     return () => clearTimeout(t);
   }, [showAdd, editingId]);
 
+  // Auto-commit the line item when focus leaves the editor row (no need to tap the green check)
+  useEffect(() => {
+    if (!showAdd && !editingId) return;
+    const handler = () => {
+      // Defer until after focus has settled on the new target
+      setTimeout(() => {
+        const active = document.activeElement as HTMLElement | null;
+        // Still inside the editor row → keep editing
+        if (active && active.closest('[data-row-editor="1"]')) return;
+        // Inside a Radix popover (Select dropdown for pricing type, catalogue list, etc.) → keep editing
+        if (active && active.closest('[data-radix-popper-content-wrapper]')) return;
+        if (showAdd && draft.description.trim()) {
+          commitDraft();
+        } else if (editingId && editDraft.description.trim()) {
+          commitEdit();
+        }
+      }, 0);
+    };
+    document.addEventListener("focusout", handler);
+    return () => document.removeEventListener("focusout", handler);
+  }, [showAdd, editingId, draft, editDraft]);
+
   // Calculate draft extra (non-optional items being typed should count toward the total immediately)
   const draftExtra = (() => {
     let extra = 0;
@@ -862,7 +884,7 @@ function LineItemsBlock({
     const total = draftTotal(d);
     return (
       <>
-        <tr className="bg-blue-50/60">
+        <tr data-row-editor="1" className="bg-blue-50/60">
           <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
             <Input
               value={d.itemCode}
@@ -990,7 +1012,7 @@ function LineItemsBlock({
           </td>
         </tr>
         {/* Pricing type selector */}
-        <tr className="bg-blue-50/40">
+        <tr data-row-editor="1" className="bg-blue-50/40">
           <td colSpan={8} className="border border-gray-200 px-2 py-1.5">
             <div className="flex flex-wrap items-center gap-3">
               <div className="flex items-center gap-1.5">
