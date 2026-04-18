@@ -1,4 +1,5 @@
 import { useJobFilter, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -2820,9 +2821,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           )}
           </div>{/* end header group */}
 
-          {/* Jobs List - scrollable area */}
-          <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain">
-            <div className="divide-y divide-gray-100 w-full">
+          {/* Jobs List - scrollable area with pull-to-refresh */}
+          <div className="flex-1 min-h-0">
+          <PullToRefresh
+            onRefresh={async () => {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["/api/jobs"] }),
+                queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] }),
+                queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
+                queryClient.invalidateQueries({ queryKey: ["/api/employees/active"] }),
+              ]);
+            }}
+          >
+          <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
                 const total = calculateJobTotal(job);
@@ -3075,6 +3086,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
               )}
             </div>
+          </PullToRefresh>
           </div>
         </div>
       </div>

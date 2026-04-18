@@ -8,45 +8,41 @@ interface PullToRefreshProps {
 }
 
 export function PullToRefresh({ onRefresh, children, enabled = true }: PullToRefreshProps) {
-  const { pullDistance, isRefreshing, shouldTrigger } = usePullToRefresh({
+  const { pullDistance, isRefreshing, shouldTrigger, handlers } = usePullToRefresh({
     onRefresh,
-    enabled
+    enabled,
   });
 
-  return (
-    <div className="relative h-full w-full" data-pull-refresh>
-      {/* Pull to refresh indicator */}
-      <div 
-        className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-50 transition-all duration-200"
-        style={{
-          transform: `translateY(${pullDistance - 60}px)`,
-          opacity: Math.min(pullDistance / 80, 1)
-        }}
-      >
-        <div className={`
-          flex items-center gap-2 px-4 py-2 rounded-full 
-          bg-white dark:bg-gray-800 shadow-lg border border-gray-200 dark:border-gray-700
-          ${shouldTrigger ? 'text-primary' : 'text-gray-500'}
-        `}>
-          <RefreshCw 
-            className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`}
-            style={{
-              transform: !isRefreshing ? `rotate(${Math.min(pullDistance * 3, 360)}deg)` : undefined
-            }}
-          />
-          <span className="text-sm font-medium">
-            {isRefreshing ? 'Refreshing...' : shouldTrigger ? 'Release to refresh' : 'Pull to refresh'}
-          </span>
-        </div>
-      </div>
+  const showIndicator = pullDistance > 0 || isRefreshing;
 
-      {/* Content */}
-      <div 
-        className="h-full overflow-auto"
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      {/* Pull indicator */}
+      {showIndicator && (
+        <div
+          className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-50"
+          style={{ transform: `translateY(${Math.min(pullDistance, 70) - 48}px)`, transition: isRefreshing ? 'transform 0.2s ease' : 'none' }}
+        >
+          <div className={`flex items-center gap-2 px-4 py-2 rounded-full bg-white shadow-lg border border-gray-200 ${shouldTrigger ? 'text-primary' : 'text-gray-500'}`}>
+            <RefreshCw
+              className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
+              style={{ transform: !isRefreshing ? `rotate(${Math.min(pullDistance * 4, 360)}deg)` : undefined }}
+            />
+            <span className="text-xs font-medium">
+              {isRefreshing ? 'Refreshing…' : shouldTrigger ? 'Release to refresh' : 'Pull to refresh'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Scrollable content — touch events attached here */}
+      <div
+        className="h-full overflow-y-auto overflow-x-hidden overscroll-y-contain"
         style={{
-          transform: isRefreshing ? 'translateY(60px)' : `translateY(${pullDistance}px)`,
-          transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s ease' : 'none'
+          transform: isRefreshing ? 'translateY(56px)' : pullDistance > 0 ? `translateY(${Math.min(pullDistance, 70)}px)` : undefined,
+          transition: isRefreshing || pullDistance === 0 ? 'transform 0.25s ease' : 'none',
         }}
+        {...handlers}
       >
         {children}
       </div>
