@@ -29,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const consecutive401sRef = useRef<number>(0);
 
-  const { data: meResponse, isLoading: authQueryLoading, isFetching } = useQuery<{ success: boolean; data: Employee | null }>({
+  const { data: meResponse, isLoading: authQueryLoading, isFetching, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -141,8 +141,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [DEV_AUTO_LOGIN, devAutoLoginAttempted, initialAuthCheckComplete, currentUser, loginMutation.isPending]);
 
   useEffect(() => {
-    // Mark initial check as complete once we have a response
-    if (meResponse !== undefined && !initialAuthCheckComplete) {
+    // Mark initial check as complete once we have a response OR if the query failed
+    // (network error in Capacitor WKWebView when server can't be reached)
+    if ((meResponse !== undefined || authQueryError) && !initialAuthCheckComplete) {
+      if (authQueryError) {
+        console.error('[Auth] Auth query failed with network error — treating as unauthenticated');
+      }
       setInitialAuthCheckComplete(true);
     }
 
@@ -188,7 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCurrentUserState(meResponse.data);
       }
     }
-  }, [meResponse, currentUser, initialAuthCheckComplete, isFetching]);
+  }, [meResponse, authQueryError, currentUser, initialAuthCheckComplete, isFetching]);
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
