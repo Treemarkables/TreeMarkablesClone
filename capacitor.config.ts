@@ -11,13 +11,7 @@ const config: CapacitorConfig = {
   ios: {
     contentInset: "automatic",
     backgroundColor: "#1a1a1a",
-    scheme: "treemarkables",
     scrollEnabled: false,
-  },
-  plugins: {
-    SplashScreen: {
-      launchShowDuration: 0,
-    },
   },
 };
 
