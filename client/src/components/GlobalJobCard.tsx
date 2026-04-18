@@ -1678,13 +1678,22 @@ export function GlobalJobCard({
           const formData = form.getValues();
 
           const changedData: Record<string, any> = {};
+          const clearFields: string[] = [];
           for (const field of changedFieldsRef.current) {
-            changedData[field] = (formData as any)[field];
+            const val = (formData as any)[field];
+            changedData[field] = val;
+            if (val === "" || val === null || val === undefined) {
+              clearFields.push(field);
+            }
+          }
+          if (clearFields.length > 0) {
+            changedData._clearFields = clearFields;
           }
 
           console.log("💾 Auto-saving ONLY changed fields...", {
             jobId: editingJob.id,
             changedFields: Array.from(changedFieldsRef.current),
+            clearFields,
           });
 
           await apiRequest("PUT", `/api/jobs/${editingJob.id}`, changedData);
@@ -3065,7 +3074,7 @@ The Treemarkables Team`;
     // Do NOT call setDescriptionPopupOpen(false) here — closing the Radix Dialog mid-save
     // triggers focus management that disrupts the create→edit split-screen transition.
     // The popup is closed in createJobMutation.onSuccess after the transition completes.
-    if (descriptionPopupOpen && descriptionDraft) {
+    if (descriptionPopupOpen) {
       form.setValue("description", descriptionDraft, { shouldDirty: true });
     }
     // RC10 FIX: Mirror the description sync for internal notes popup.
@@ -3093,8 +3102,8 @@ The Treemarkables Team`;
         );
         form.setValue("isNewCustomer", false);
       }
-      // CRITICAL: Preserve original description if form description is empty
-      if (!formData.description && editingJob.description) {
+      // Preserve original description only if the field was never touched (not intentionally cleared)
+      if (!formData.description && editingJob.description && !form.formState.dirtyFields.description) {
         console.warn("⚠️ description was empty - restoring from editingJob");
         form.setValue("description", editingJob.description);
       }
@@ -3356,7 +3365,7 @@ The Treemarkables Team`;
 
     // Commit any open popup drafts before reading form values.
     // Do NOT close the popups here — see handleSave comment for why.
-    if (descriptionPopupOpen && descriptionDraft) {
+    if (descriptionPopupOpen) {
       form.setValue("description", descriptionDraft, { shouldDirty: true });
     }
     // RC10 FIX: Mirror for internal notes popup.
@@ -3366,8 +3375,8 @@ The Treemarkables Team`;
 
     const formData = form.getValues();
 
-    // CRITICAL: Preserve original description if form description is empty (edit mode)
-    if (mode === "edit" && !formData.description && editingJob?.description) {
+    // Preserve original description only if the field was never touched (not intentionally cleared)
+    if (mode === "edit" && !formData.description && editingJob?.description && !form.formState.dirtyFields.description) {
       formData.description = editingJob.description;
     }
 
@@ -3398,6 +3407,7 @@ The Treemarkables Team`;
           "newCustomerAddress",
         ];
 
+        const clearFields: string[] = [];
         for (const [key, value] of Object.entries(formData)) {
           if (skipFields.includes(key)) continue;
           const origVal = originalData[key];
@@ -3407,7 +3417,13 @@ The Treemarkables Team`;
           }
           if (JSON.stringify(value) !== JSON.stringify(origVal)) {
             changedData[key] = value;
+            if (value === "" || value === null || value === undefined) {
+              clearFields.push(key);
+            }
           }
+        }
+        if (clearFields.length > 0) {
+          changedData._clearFields = clearFields;
         }
 
         if (formData.isNewCustomer) {
