@@ -12727,7 +12727,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Update conversation
   app.patch('/api/conversations/:id', async (req: Request, res: Response) => {
     try {
-      const updates = updateConversationSchema.safeParse(req.body);
+      // Preprocess date fields - convert ISO strings to Date objects
+      const processedBody = { ...req.body };
+      if (processedBody.conversionDate && typeof processedBody.conversionDate === 'string') {
+        processedBody.conversionDate = new Date(processedBody.conversionDate);
+      }
+      if (processedBody.lastMessageAt && typeof processedBody.lastMessageAt === 'string') {
+        processedBody.lastMessageAt = new Date(processedBody.lastMessageAt);
+      }
+      const updates = updateConversationSchema.safeParse(processedBody);
       if (!updates.success) {
         return res.status(400).json({ 
           success: false, 

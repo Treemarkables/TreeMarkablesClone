@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Conversation, ConversationMessage } from "@shared/schema";
+import type { Conversation, ConversationMessage, Job } from "@shared/schema";
 import {
   ArrowLeft,
   Send,
@@ -514,6 +514,93 @@ export default function ConversationDetail() {
       toast({
         title: "Failed to create opportunity",
         description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create Job mutation — actually creates a job and redirects to it
+  const createJobMutation = useMutation<Job, Error, typeof leadForm>({
+    mutationFn: async (formValues) => {
+      // First, create or find customer using values from the dialog form
+      const customerRes = await apiRequest("POST", "/api/customers", {
+        name: formValues.name,
+        email: formValues.email,
+        phone: formValues.phone,
+        address: formValues.address,
+      });
+      const customerData = (await customerRes.json()) as {
+        data: { id: string };
+      };
+      const customerId = customerData.data.id;
+
+      // Detect if phone is a mobile number (NZ mobiles start with 02, +642, etc.)
+      const cleanPhone = (formValues.phone || "").replace(/\s/g, "");
+      const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
+
+      // Carry leadSource through from the original conversation extraction so
+      // the new job records where the inquiry came from.
+      const extractedSource = extractContactDetails().leadSource || "website";
+
+      const jobData = {
+        customerId,
+        title: formValues.name || "Lead from conversation",
+        description:
+          formValues.serviceRequested || formValues.notes || "",
+        address: formValues.address || "",
+        status: "lead",
+        priority: formValues.urgency || "medium",
+        leadSource: extractedSource,
+        totalAmount: "0.00",
+        paidAmount: "0.00",
+        jobContactPhone: isMobileNumber ? "" : formValues.phone || "",
+        jobContactMobile: isMobileNumber ? formValues.phone || "" : "",
+        conversationId: conversationId,
+      };
+
+      const jobRes = await apiRequest("POST", "/api/jobs", jobData);
+      const jobResponseData = (await jobRes.json()) as { data: Job };
+      const job = jobResponseData.data;
+
+      // Mark the conversation as converted so the "Already Converted" state
+      // shows correctly on revisit. The job has already been created, so
+      // failure here is best-effort: surface a warning toast but still
+      // redirect the user to their new job rather than encouraging a retry
+      // that would create a duplicate job.
+      if (conversationId) {
+        try {
+          await apiRequest("PATCH", `/api/conversations/${conversationId}`, {
+            status: "converted",
+            conversionDate: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.error("Failed to mark conversation converted:", err);
+          toast({
+            title: "Job created",
+            description:
+              "Couldn't update conversation status; you may see this conversation as unconverted.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      return job;
+    },
+    onSuccess: (job) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId],
+      });
+      setShowCreateJob(false);
+      if (job?.id) {
+        setLocation(`/jobs/${job.id}`);
+      }
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to create job",
+        description: error?.message || "Please try again.",
         variant: "destructive",
       });
     },
@@ -1232,32 +1319,11 @@ export default function ConversationDetail() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                const extracted = extractContactDetails();
-
-                // Store job data in localStorage for dispatch board to pick up
-                localStorage.setItem(
-                  "pendingJobData",
-                  JSON.stringify({
-                    customerName: extracted.name,
-                    customerFirstName: extracted.firstName,
-                    customerLastName: extracted.lastName,
-                    customerEmail: extracted.email,
-                    customerPhone: extracted.phone,
-                    address: extracted.address,
-                    description: extracted.description,
-                    leadSource: extracted.leadSource || "website",
-                    status: "lead",
-                    fromConversation: true,
-                    conversationId: conversationId,
-                  }),
-                );
-
-                setShowCreateJob(false);
-              }}
+              onClick={() => createJobMutation.mutate(leadForm)}
+              disabled={createJobMutation.isPending}
               data-testid="button-submit-job"
             >
-              Create Job
+              {createJobMutation.isPending ? "Creating..." : "Create Job"}
             </Button>
           </DialogFooter>
         </DialogContent>
