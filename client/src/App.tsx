@@ -74,6 +74,7 @@ import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import Reconciliation from "@/pages/Reconciliation";
+import ProfitabilityCalculator from "@/pages/ProfitabilityCalculator";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User } from "lucide-react";
@@ -807,6 +808,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <MetricsDashboard />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/profitability-calculator">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <ProfitabilityCalculator />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

@@ -70,7 +70,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const jhaActive = location === "/jha-assessment" || location === "/jha-history";
   const financeActive = ["/invoices", "/templates", "/settings/invoice-builder", "/equipment", "/time-tracking", "/unlinked-calls", "/integrations", "/reconciliation"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics", "/profitability-calculator"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [jhaOpen, setJhaOpen] = useState(jhaActive);
@@ -399,6 +399,11 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
                             <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>
+                            <Link href="/profitability-calculator" onClick={handleLinkClick} data-testid="link-profitability-calculator"><span>Profitability Calculator</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
