@@ -1,21 +1,11 @@
 import { useState } from "react";
 
-const fmt = (n: number) =>
+const fmt = (n) =>
   n < 0
     ? `-$${Math.abs(Math.round(n)).toLocaleString()}`
     : `$${Math.round(n).toLocaleString()}`;
 
-interface SliderProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-  format: (v: number) => string;
-}
-
-const Slider = ({ label, value, min, max, step, onChange, format }: SliderProps) => {
+const Slider = ({ label, value, min, max, step, onChange, format }) => {
   const pct = ((value - min) / (max - min)) * 100;
   return (
     <div style={{ marginBottom: "1.4rem" }}>
@@ -45,14 +35,7 @@ const Slider = ({ label, value, min, max, step, onChange, format }: SliderProps)
   );
 };
 
-interface MetricCardProps {
-  label: string;
-  value: string;
-  sub?: string;
-  highlight?: boolean;
-}
-
-const MetricCard = ({ label, value, sub, highlight }: MetricCardProps) => (
+const MetricCard = ({ label, value, sub, highlight }) => (
   <div style={{
     background: highlight ? "linear-gradient(135deg, #0d2200, #0a1a00)" : "#0d0d0d",
     border: `1px solid ${highlight ? "#39FF14" : "#222"}`,
@@ -66,7 +49,7 @@ const MetricCard = ({ label, value, sub, highlight }: MetricCardProps) => (
   </div>
 );
 
-export default function ProfitabilityCalculator() {
+export default function Calculator() {
   const [hourlyRate, setHourlyRate] = useState(125);
   const [billableStaff, setBillableStaff] = useState(6);
   const [efficiency, setEfficiency] = useState(85);
@@ -152,7 +135,7 @@ export default function ProfitabilityCalculator() {
       {/* Breakdown */}
       <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "1.2rem 1.4rem" }}>
         <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "1rem" }}>Breakdown</div>
-        {([
+        {[
           ["Billable hrs/person/day", `${hoursPerPersonPerDay.toFixed(1)} hrs`],
           ["Total billable hrs/year", `${Math.round(totalBillableHours).toLocaleString()} hrs`],
           ["Revenue", fmt(revenue)],
@@ -160,7 +143,7 @@ export default function ProfitabilityCalculator() {
           ["Gross Profit", fmt(grossProfit)],
           ["Your Salary", `- ${fmt(ownerSalary)}`],
           ["Net Profit", fmt(netProfit)],
-        ] as [string, string][]).map(([label, val], i) => (
+        ].map(([label, val], i) => (
           <div key={i} style={{
             display: "flex", justifyContent: "space-between",
             padding: "0.5rem 0",
