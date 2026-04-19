@@ -915,14 +915,14 @@ export default function ConversationDetail() {
                 const extracted = await extractWithAI();
                 setIsExtractingLead(false);
                 setLeadForm({
-                  name: extracted.name || "",
+                  name: extracted.name || conversation?.title || "New Lead",
                   email: extracted.email || "",
                   phone: extracted.phone || "",
                   address: extracted.address || "",
                   serviceRequested: extracted.description || "",
                   urgency: "medium",
                   status: "new",
-                  notes: `Opportunity from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ""}`,
+                  notes: `Opportunity from conversation: ${conversation?.title || ""}`,
                 });
                 setShowCreateOpportunity(true);
               }}
@@ -966,14 +966,14 @@ export default function ConversationDetail() {
                   const extracted = await extractWithAI();
                   setIsExtractingLead(false);
                   setLeadForm({
-                    name: extracted.name || "",
+                    name: extracted.name || conversation?.title || "New Lead",
                     email: extracted.email || "",
                     phone: extracted.phone || "",
                     address: extracted.address || "",
                     serviceRequested: extracted.description || "",
                     urgency: "medium",
                     status: "new",
-                    notes: `Lead from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ""}`,
+                    notes: `Lead from conversation: ${conversation?.title || ""}`,
                   });
                   setShowCreateJob(true);
                 }}
