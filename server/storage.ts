@@ -454,6 +454,7 @@ export interface IStorage {
   getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]>;
   getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]>;
   deleteScheduleEvent(id: string): Promise<void>;
+  deleteScheduleEventsByJob(jobId: string): Promise<void>;
 
   // Job Staff Assignment Management
   createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment>;
@@ -4083,6 +4084,10 @@ class DatabaseStorage implements IStorage {
   
   async deleteScheduleEvent(id: string): Promise<void> {
     await db.delete(schema.scheduleEvents).where(eq(schema.scheduleEvents.id, id));
+  }
+
+  async deleteScheduleEventsByJob(jobId: string): Promise<void> {
+    await db.delete(schema.scheduleEvents).where(eq(schema.scheduleEvents.jobId, jobId));
   }
 
   async createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment> {
