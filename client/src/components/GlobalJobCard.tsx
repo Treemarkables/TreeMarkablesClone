@@ -3052,7 +3052,9 @@ The Treemarkables Team`;
   const unscheduleJob = async () => {
     if (!editingJob?.id) return;
     try {
+      const prevDate = editingJob.scheduledDate;
       await fetch(`/api/jobs/${editingJob.id}/staff-assignments`, { method: "DELETE" });
+      await fetch(`/api/jobs/${editingJob.id}/schedule-events`, { method: "DELETE" });
       const res = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -3062,7 +3064,9 @@ The Treemarkables Team`;
           scheduledStartTime: null,
           scheduledEndTime: null,
           assignedTo: [],
+          assignedTeam: [],
           status: "work_order",
+          _clearFields: ["scheduledDate", "scheduledEndDate", "scheduledStartTime", "scheduledEndTime"],
         }),
       });
       if (!res.ok) throw new Error("Failed to unschedule job");
@@ -3070,9 +3074,30 @@ The Treemarkables Team`;
       changedFieldsRef.current.clear();
       hasUserChangedRef.current = false;
       form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+
+      // Create diary entry to record the unscheduling
+      try {
+        const dateStr = prevDate ? ` (was scheduled ${new Date(prevDate).toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" })})` : "";
+        await apiRequest("POST", `/api/jobs/${editingJob.id}/diary`, {
+          jobId: editingJob.id,
+          entryType: "note",
+          title: "Job Unscheduled",
+          description: `Job removed from the schedule${dateStr} and returned to work orders.`,
+          authorName: "System",
+          isPrivate: false,
+        });
+      } catch (diaryError) {
+        console.error("Failed to log unschedule to diary:", diaryError);
+      }
+
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=10000&offset=0"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary-timeline"] });
       setIsSchedulingModalOpen(false);
       setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false });
     } catch (error) {

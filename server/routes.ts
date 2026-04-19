@@ -11016,6 +11016,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Bulk delete all schedule events for a job (used by Unschedule)
+  app.delete('/api/jobs/:jobId/schedule-events', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteScheduleEventsByJob(req.params.jobId);
+      res.json({ success: true, message: 'All schedule events removed' });
+    } catch (error) {
+      console.error('Error bulk-deleting schedule events:', error);
+      res.status(500).json({ success: false, message: 'Error removing schedule events' });
+    }
+  });
+
   // ========================================
   // SCHEDULE EVENT MANAGEMENT ROUTES
   // ========================================
