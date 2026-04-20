@@ -153,6 +153,9 @@ function draftTotal(draft: DraftLineItem): number {
 }
 
 function calcBlockSubtotal(block: WysiwygBlock): number {
+  // Entire section is optional/multipleChoice — excluded from subtotal until customer selects
+  const sectionIsInteractive = block.sectionType === 'optional' || block.sectionType === 'multipleChoice';
+  if (sectionIsInteractive) return 0;
   return (block.lineItems || []).reduce((sum, i) => {
     // Optional items are excluded from subtotal — only added when customer clicks to accept
     if (!i.selected || i.isOptional) return sum;
@@ -164,8 +167,10 @@ function calcBlockSubtotal(block: WysiwygBlock): number {
 function calcTotals(blocks: WysiwygBlock[]) {
   let subtotalExGst = 0;
   let gstAmount = 0;
-  blocks.forEach((b) =>
-    // Optional items excluded from totals by default — customer must explicitly add them
+  blocks.forEach((b) => {
+    // Optional/multipleChoice sections excluded from totals — customer must explicitly select items
+    const sectionIsInteractive = b.sectionType === 'optional' || b.sectionType === 'multipleChoice';
+    if (sectionIsInteractive) return;
     (b.lineItems || []).filter((i) => i.selected && !i.isOptional).forEach((item) => {
       if (item.priceIncludesTax) {
         const ex = item.totalPrice / 1.15;
@@ -175,8 +180,8 @@ function calcTotals(blocks: WysiwygBlock[]) {
         subtotalExGst += item.totalPrice;
         gstAmount += item.totalPrice * 0.15;
       }
-    })
-  );
+    });
+  });
   return { subtotal: subtotalExGst, gst: gstAmount, total: subtotalExGst + gstAmount };
 }
 
@@ -763,6 +768,8 @@ function LineItemsBlock({
 
   // Calculate draft extra (non-optional items being typed should count toward the total immediately)
   const draftExtra = (() => {
+    // Optional/multipleChoice sections are excluded from running totals entirely
+    if (block.sectionType === 'optional' || block.sectionType === 'multipleChoice') return 0;
     let extra = 0;
     // New item being added (not optional/choice) — include in subtotal live
     if (showAdd && draft.description && draft.pricingType !== "choice" && !draft.isOptional) {

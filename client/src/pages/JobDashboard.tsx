@@ -75,6 +75,7 @@ interface ApiResponse<T> {
 // Display types that combine schema with UI requirements
 type DisplayJob = {
   id: string;
+  jobNumber?: string;
   title: string;
   customerId: string;
   status: string;
@@ -347,6 +348,7 @@ export default function JobDashboard({
   const transformJobsForDisplay = (apiJobs: Job[]): DisplayJob[] => {
     return apiJobs.map((job) => ({
       id: job.id,
+      jobNumber: job.jobNumber || undefined,
       title: job.title || getCustomerName(job.customerId || ""),
       customerId: job.customerId || "",
       status: job.status || "unknown",
@@ -847,12 +849,19 @@ export default function JobDashboard({
                                   onClick={(e) => e.stopPropagation()}
                                   data-testid={`checkbox-select-job-${job.id}`}
                                 />
-                                <h3
-                                  className="font-semibold text-foreground line-clamp-2"
-                                  data-testid={`text-job-customer-${job.id}`}
-                                >
-                                  {job.customer}
-                                </h3>
+                                <div>
+                                  <h3
+                                    className="font-semibold text-foreground line-clamp-2"
+                                    data-testid={`text-job-customer-${job.id}`}
+                                  >
+                                    {job.customer}
+                                  </h3>
+                                  {job.jobNumber && (
+                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                      #{job.jobNumber}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                               <div
                                 className="text-lg font-bold text-green-600 ml-2"
