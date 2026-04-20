@@ -5612,18 +5612,32 @@ The Treemarkables Team`;
                                         <MessageSquare className="h-4 w-4" />
                                         Job Description
                                       </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setSpeechToQuoteContext("job-description");
-                                          setIsSpeechToQuoteOpen(true);
-                                        }}
-                                        className="flex items-center gap-1 text-xs font-medium text-purple-600 border border-border rounded-full px-2 py-0.5 hover-elevate"
-                                        data-testid="button-speech-job-description"
-                                      >
-                                        <Mic className="h-3 w-3" />
-                                        Voice
-                                      </button>
+                                      <div className="flex items-center gap-2">
+                                        {field.value && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              form.setValue("description", "", { shouldDirty: true });
+                                            }}
+                                            className="flex items-center gap-1 text-xs font-medium text-red-500 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                            Clear
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSpeechToQuoteContext("job-description");
+                                            setIsSpeechToQuoteOpen(true);
+                                          }}
+                                          className="flex items-center gap-1 text-xs font-medium text-purple-600 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                          data-testid="button-speech-job-description"
+                                        >
+                                          <Mic className="h-3 w-3" />
+                                          Voice
+                                        </button>
+                                      </div>
                                     </div>
                                     <FormControl>
                                       <Textarea
