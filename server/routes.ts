@@ -12662,6 +12662,84 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
       
       console.log(`📬 Stored ${event.type} event for message ${messageId}`);
+
+      // ── Bounce & complaint alerts ─────────────────────────────────────────
+      if (event.type === 'email.bounced' || event.type === 'email.complained') {
+        const isBounce = event.type === 'email.bounced';
+        const recipientEmail: string = (Array.isArray(data?.to) ? data.to[0] : data?.to) ?? '';
+        const subject: string = data?.subject ?? '';
+        const bounceMsg: string = data?.bounce?.message ?? '';
+
+        // Try to extract a job/invoice number from the subject line
+        // Matches: "Invoice #3888", "Job #3888", "Quote #42", "#3888"
+        const jobNumMatch = subject.match(/#(\d{3,})/);
+        const jobNumber = jobNumMatch ? jobNumMatch[1] : null;
+
+        // Try to look up the job by extracted number
+        let matchedJob: schema.Job | undefined;
+        if (jobNumber) {
+          matchedJob = await storage.getJobByJobNumber(jobNumber) ?? undefined;
+        }
+
+        // If no job found via subject, try finding via customer email
+        if (!matchedJob && recipientEmail) {
+          const matchedCustomer = await db.select().from(customers)
+            .where(eq(customers.email, recipientEmail))
+            .limit(1)
+            .then(rows => rows[0]);
+          if (matchedCustomer) {
+            const customerJobs = await storage.getCustomerJobs(matchedCustomer.id);
+            // Pick the most recent active or open job
+            matchedJob = customerJobs
+              .filter(j => j.status !== 'completed' && j.status !== 'cancelled')
+              .sort((a, b) => (b.jobNumber ?? 0) - (a.jobNumber ?? 0))[0];
+          }
+        }
+
+        const jobLabel = matchedJob?.jobNumber ? `Job #${matchedJob.jobNumber}` : (jobNumber ? `Job #${jobNumber}` : 'an email');
+        const subjectSnippet = subject ? ` (subject: "${subject}")` : '';
+        const bounceDetail = bounceMsg ? ` — ${bounceMsg}` : '';
+
+        const notifTitle = isBounce
+          ? `Email bounced — ${jobLabel}`
+          : `Spam complaint — ${jobLabel}`;
+        const notifMessage = isBounce
+          ? `Email to ${recipientEmail} for ${jobLabel} was not delivered${bounceDetail}. Check the address and resend.${subjectSnippet}`
+          : `${recipientEmail} marked your email as spam for ${jobLabel}. Consider using a different address.${subjectSnippet}`;
+
+        const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
+
+        await storage.createNotification({
+          title: notifTitle,
+          message: notifMessage,
+          type: isBounce ? 'email_bounce' : 'email_complaint',
+          priority: 'high',
+          isRead: false,
+          actionUrl,
+          jobId: matchedJob?.id,
+        });
+
+        // Also write a job diary entry so the bounce is visible in context
+        if (matchedJob) {
+          await storage.createJobDiaryEntry({
+            jobId: matchedJob.id,
+            entryType: 'note',
+            title: isBounce ? `Email bounced: ${subject || recipientEmail}` : `Spam complaint: ${subject || recipientEmail}`,
+            description: isBounce
+              ? `Email to ${recipientEmail} bounced and was not delivered.${bounceDetail ? '\n' + bounceDetail : ''}\n\nThe email address may be incorrect, deactivated, or the domain may not exist. Please verify and resend.`
+              : `${recipientEmail} reported your email as spam. You may need to use an alternative contact method.`,
+            authorName: 'System',
+            authorRole: 'system',
+            tags: ['email', isBounce ? 'bounce' : 'spam-complaint'],
+            isPrivate: false,
+            metadata: { recipientEmail, subject, resendMessageId: messageId },
+          }).catch(() => { /* non-critical */ });
+        }
+
+        console.log(`🚨 ${isBounce ? 'Bounce' : 'Complaint'} alert created for ${recipientEmail} (${jobLabel})`);
+        broadcast(['/api/notifications/summary']);
+      }
+      // ─────────────────────────────────────────────────────────────────────
       
       return res.status(200).json({ received: true });
     } catch (error) {
