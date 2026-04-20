@@ -3055,21 +3055,9 @@ The Treemarkables Team`;
     if (!editingJob?.id) return;
     try {
       const prevDate = editingJob.scheduledDate;
-      await fetch(`/api/jobs/${editingJob.id}/staff-assignments`, { method: "DELETE" });
-      await fetch(`/api/jobs/${editingJob.id}/schedule-events`, { method: "DELETE" });
-      const res = await fetch(`/api/jobs/${editingJob.id}`, {
-        method: "PUT",
+      const res = await fetch(`/api/jobs/${editingJob.id}/unschedule`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          scheduledDate: null,
-          scheduledEndDate: null,
-          scheduledStartTime: null,
-          scheduledEndTime: null,
-          assignedTo: [],
-          assignedTeam: [],
-          status: "work_order",
-          _clearFields: ["scheduledDate", "scheduledEndDate", "scheduledStartTime", "scheduledEndTime"],
-        }),
       });
       if (!res.ok) throw new Error("Failed to unschedule job");
       form.setValue("status", "work_order");
@@ -3094,6 +3082,7 @@ The Treemarkables Team`;
 
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=10000&offset=0"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });

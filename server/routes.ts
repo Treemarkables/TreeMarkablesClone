@@ -4077,10 +4077,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           if (isEmpty && oldHasValue && !explicitClears.includes(field)) {
             console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (would be overwritten with empty)`);
             (validation.data as any)[field] = oldVal;
-          } else if (!wasExplicitlySent && isEmpty && oldHasValue) {
+          } else if (!wasExplicitlySent && isEmpty && oldHasValue && !explicitClears.includes(field)) {
             console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (not in request body)`);
             (validation.data as any)[field] = oldVal;
           }
+        }
+        // Force-null any fields in _clearFields — Zod may have stripped null→undefined,
+        // which causes Drizzle to skip the field entirely in the UPDATE statement.
+        for (const field of explicitClears) {
+          (validation.data as any)[field] = null;
         }
       }
 
@@ -11027,6 +11032,29 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity
+  app.post('/api/jobs/:jobId/unschedule', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      await storage.deleteJobStaffAssignmentsByJob(jobId);
+      await storage.deleteScheduleEventsByJob(jobId);
+      const job = await storage.updateJob(jobId, {
+        scheduledDate: null,
+        scheduledEndDate: null,
+        scheduledStartTime: null,
+        scheduledEndTime: null,
+        assignedTo: [],
+        assignedTeam: [],
+        status: 'work_order',
+      } as any);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error unscheduling job:', error);
+      res.status(500).json({ success: false, message: 'Error unscheduling job' });
+    }
+  });
+
   // ========================================
   // SCHEDULE EVENT MANAGEMENT ROUTES
   // ========================================
@@ -16518,12 +16546,20 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // This prevents frontend calculation bugs from corrupting the stored value
       try {
         const storedItems = await storage.getProposalLineItemsByProposal(proposal.id);
+        const storedSections = await storage.getProposalSectionsByProposal(proposal.id);
+        // Build set of optional section IDs — items in these sections are excluded from the total
+        const optionalSectionIds = new Set(
+          storedSections
+            .filter(s => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map(s => s.id)
+        );
         const taxRate = parseFloat(req.body.taxRate || '15') / 100;
         const discountAmt = parseFloat(req.body.discountAmount || '0') || 0;
         const discountType = req.body.discountType || 'fixed';
         let recomputedSubtotal = 0;
         for (const item of storedItems) {
-          if (item.selected !== false) {
+          const inOptionalSection = optionalSectionIds.has(item.sectionId || '');
+          if (item.selected !== false && !item.isOptional && !inOptionalSection) {
             const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
             recomputedSubtotal += item.priceIncludesTax ? price / (1 + taxRate) : price;
           }
@@ -16690,12 +16726,19 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // This prevents frontend calculation bugs from corrupting the stored value
       try {
         const storedItemsPut = await storage.getProposalLineItemsByProposal(proposal.id);
+        const storedSectionsPut = await storage.getProposalSectionsByProposal(proposal.id);
+        const optionalSectionIdsPut = new Set(
+          storedSectionsPut
+            .filter(s => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map(s => s.id)
+        );
         const taxRatePut = parseFloat(req.body.taxRate || '15') / 100;
         const discountAmtPut = parseFloat(req.body.discountAmount || '0') || 0;
         const discountTypePut = req.body.discountType || 'fixed';
         let recomputedSubtotalPut = 0;
         for (const item of storedItemsPut) {
-          if (item.selected !== false) {
+          const inOptionalSectionPut = optionalSectionIdsPut.has(item.sectionId || '');
+          if (item.selected !== false && !item.isOptional && !inOptionalSectionPut) {
             const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
             recomputedSubtotalPut += item.priceIncludesTax ? price / (1 + taxRatePut) : price;
           }
