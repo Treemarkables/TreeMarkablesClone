@@ -22,12 +22,34 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const DEV_AUTO_LOGIN = import.meta.env.DEV; // Only true in development mode
 const DEV_ADMIN_ID = 'admin-test-001';
 
+const STORAGE_KEY = 'treemarkables_user';
+
+function loadStoredUser(): Employee | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Employee) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
-  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
+  const storedUser = loadStoredUser();
+  const [currentUser, setCurrentUserState] = useState<Employee | null>(storedUser);
+  // If we already have a cached user, skip the loading gate so the app shows immediately
+  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(!!storedUser);
   const [devAutoLoginAttempted, setDevAutoLoginAttempted] = useState(false);
   const [, setLocation] = useLocation();
   const consecutive401sRef = useRef<number>(0);
+
+  const setCurrentUser = (user: Employee | null) => {
+    setCurrentUserState(user);
+    if (user) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); } catch {}
+    } else {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    }
+  };
 
   const { data: meResponse, isLoading: authQueryLoading, isFetching, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
@@ -71,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data) {
         console.log('Login Success - User Data:', data.data);
         console.log('Login Success - Role:', data.data.role, typeof data.data.role);
-        setCurrentUserState(data.data);
+        setCurrentUser(data.data);
         // Set the query data directly instead of invalidating to prevent race condition
         queryClient.setQueryData(['/api/auth/me'], { success: true, data: data.data });
       }
@@ -85,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       // Clear all user state
-      setCurrentUserState(null);
+      setCurrentUser(null);
       
       // Clear ALL query cache to prevent stale data
       queryClient.clear();
@@ -174,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Only log out after multiple consecutive 401s to tolerate transient network issues
         if (consecutive401sRef.current >= 3) {
           console.warn('⚠️ Multiple consecutive 401s detected - logging out user');
-          setCurrentUserState(null);
+          setCurrentUser(null);
           consecutive401sRef.current = 0;
           // Don't clear the entire query cache - just let the user re-login
           // This prevents data loss if the 401 was a temporary network/cookie issue
@@ -189,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       if (!currentUser || currentUser.id !== meResponse.data.id) {
         console.log('✅ Setting authenticated user:', meResponse.data.role);
-        setCurrentUserState(meResponse.data);
+        setCurrentUser(meResponse.data);
       }
     }
   }, [meResponse, authQueryError, currentUser, initialAuthCheckComplete, isFetching]);
