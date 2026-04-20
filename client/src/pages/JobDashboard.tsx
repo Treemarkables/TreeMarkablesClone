@@ -161,19 +161,19 @@ export default function JobDashboard({
     },
   });
 
-  // Bulk archive jobs mutation (changed from delete to archive)
   const deleteJobsMutation = useMutation({
     mutationFn: async (jobIds: string[]) => {
-      return await apiRequest("PUT", "/api/jobs/bulk-archive", { jobIds });
+      return await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.refetchQueries({ queryKey: [jobsApiUrl] });
       setSelectedJobs(new Set());
     },
     onError: (error: any) => {
       toast({
-        title: "Archive Failed",
-        description: error.message || "Failed to archive jobs",
+        title: "Delete Failed",
+        description: error.message || "Failed to delete jobs",
         variant: "destructive",
       });
     },
