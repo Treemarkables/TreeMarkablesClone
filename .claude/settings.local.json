@@ -9,7 +9,15 @@
       "Bash(python3:*)",
       "Bash(ls *)",
       "Bash(git stash *)",
-      "Bash(curl *)"
+      "Bash(curl *)",
+      "Bash(npm run *)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(node *)",
+      "WebSearch",
+      "WebFetch(domain:dev.loom.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "Bash(npm install *)"
     ]
   }
 }

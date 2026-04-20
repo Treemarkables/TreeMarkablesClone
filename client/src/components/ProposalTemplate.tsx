@@ -342,6 +342,29 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             </div>
           </div>
 
+          {/* Loom Video Walkthrough */}
+          {job?.loomVideoUrl && (
+            <div className="p-4 sm:p-6 border-b border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3">
+                Watch Julian's video walkthrough
+              </h3>
+              <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+                <iframe
+                  src={job.loomVideoUrl.replace('https://www.loom.com/share/', 'https://www.loom.com/embed/')}
+                  className="absolute inset-0 w-full h-full rounded-lg"
+                  frameBorder="0"
+                  allowFullScreen
+                  title="Job walkthrough video"
+                />
+              </div>
+              <p className="mt-2 text-sm text-gray-500">
+                <a href={job.loomVideoUrl} target="_blank" rel="noopener noreferrer" className="underline">
+                  Open in Loom
+                </a>
+              </p>
+            </div>
+          )}
+
           {/* Proposal Sections */}
           {sections.map((section, sectionIndex) => (
             <div key={section.id} className="p-4 sm:p-5 border-b border-gray-200">

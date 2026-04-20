@@ -585,6 +585,11 @@ export function GlobalJobCard({
   const [internalNotesPopupOpen, setInternalNotesPopupOpen] = useState(false);
   const [internalNotesDraft, setInternalNotesDraft] = useState("");
   const [internalNotesFocused, setInternalNotesFocused] = useState(false);
+
+  // Loom SDK state
+  const loomInstanceRef = useRef<any>(null);
+  const [loomSDKReady, setLoomSDKReady] = useState(false);
+  const [loomSDKUnsupported, setLoomSDKUnsupported] = useState(false);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
 
   // Double-tap detection for mobile description
@@ -3094,6 +3099,66 @@ The Treemarkables Team`;
     } catch (error) {
       console.error("Error unscheduling job:", error);
       toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
+    }
+  };
+
+  const initLoomSDK = useCallback(async () => {
+    if (!editingJob?.id || loomInstanceRef.current) return;
+    try {
+      const { createInstance, isSupported } = await import('@loomhq/record-sdk');
+      if (!isSupported()) {
+        setLoomSDKUnsupported(true);
+        return;
+      }
+      const tokenRes = await fetch('/api/loom/sdk-token');
+      const tokenData = await tokenRes.json();
+      if (!tokenData.success) throw new Error(tokenData.message || 'Failed to get Loom token');
+
+      const instance = await createInstance({ mode: 'custom', jws: tokenData.jws });
+      loomInstanceRef.current = instance;
+
+      instance.on('upload-complete', async (video: any) => {
+        const shareUrl: string = video.sharedUrl;
+        if (!shareUrl || !editingJob?.id) return;
+        try {
+          await fetch(`/api/jobs/${editingJob.id}/loom-video`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ loomVideoUrl: shareUrl }),
+          });
+          queryClient.setQueryData(['/api/jobs', editingJob.id], (old: any) => {
+            if (!old) return old;
+            const jobData = old?.data ?? old;
+            const updated = { ...jobData, loomVideoUrl: shareUrl };
+            return old?.data ? { ...old, data: updated } : updated;
+          });
+          queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
+        } catch (err) {
+          console.error('[Loom] save URL error:', err);
+          toast({ title: 'Failed to save Loom URL', variant: 'destructive' });
+        }
+      });
+
+      setLoomSDKReady(true);
+    } catch (err) {
+      console.error('[Loom] SDK init error:', err);
+    }
+  }, [editingJob?.id, queryClient, toast]);
+
+  const handleLoomInsertIntoDescription = async (loomUrl: string) => {
+    if (!editingJob?.id) return;
+    const current = form.getValues("description") || "";
+    const appended = current ? `${current}\n\n${loomUrl}` : loomUrl;
+    form.setValue("description", appended, { shouldDirty: true });
+    try {
+      await fetch(`/api/jobs/${editingJob.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ description: appended }),
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+    } catch (err) {
+      console.error("[Loom] insert description error:", err);
     }
   };
 
@@ -6879,6 +6944,90 @@ The Treemarkables Team`;
                             </div>
                           </div>
                         </div>
+
+                        {/* Loom Video Section */}
+                        {editingJob?.id && (
+                          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <div className="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
+                                <svg className="h-4 w-4 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                              </div>
+                              <h3 className="font-bold text-gray-900 text-sm">Loom Video</h3>
+                            </div>
+                            {(editingJob as any)?.loomVideoUrl ? (
+                              <div className="space-y-3">
+                                <div className="flex items-center gap-2 text-sm text-gray-700 bg-purple-50 rounded-lg p-3">
+                                  <svg className="h-4 w-4 text-purple-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                  <a href={(editingJob as any).loomVideoUrl} target="_blank" rel="noopener noreferrer" className="text-purple-700 underline truncate flex-1">
+                                    Watch on Loom
+                                  </a>
+                                </div>
+                                <div className="flex gap-2">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1 text-xs"
+                                    onClick={() => handleLoomInsertIntoDescription((editingJob as any).loomVideoUrl)}
+                                  >
+                                    Insert link into description
+                                  </Button>
+                                  <label className="cursor-pointer">
+                                    <Button type="button" variant="ghost" size="sm" className="text-xs" asChild>
+                                      <span>Replace</span>
+                                    </Button>
+                                    <input
+                                      type="file"
+                                      accept="video/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) handleLoomUpload(f);
+                                        e.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                </div>
+                              </div>
+                            ) : (
+                              <div>
+                                {loomUploading ? (
+                                  <div className="space-y-2">
+                                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                                      <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
+                                      <span>Uploading to Loom...</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-2">
+                                      <div
+                                        className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                                        style={{ width: `${loomUploadProgress}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <label className="cursor-pointer block">
+                                    <Button type="button" variant="outline" size="sm" className="w-full text-xs pointer-events-none" asChild>
+                                      <span className="flex items-center gap-2">
+                                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                        Upload to Loom
+                                      </span>
+                                    </Button>
+                                    <input
+                                      type="file"
+                                      accept="video/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) handleLoomUpload(f);
+                                        e.target.value = "";
+                                      }}
+                                    />
+                                  </label>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate &&
