@@ -13,7 +13,7 @@ const getStatusColors = (status?: string): { bg: string; text: string } => {
   switch (status.toLowerCase().replace(/\s+/g, '_')) {
     case 'completed':   return { bg: "bg-green-400",  text: "text-green-950" };
     case 'work_order':  return { bg: "bg-blue-400",   text: "text-blue-950" };
-    case 'scheduled':   return { bg: "bg-green-400",  text: "text-green-950" };
+    case 'scheduled':   return { bg: "bg-purple-400",  text: "text-purple-950" };
     case 'quote':       return { bg: "bg-orange-400", text: "text-orange-950" };
     case 'invoiced':    return { bg: "bg-violet-400", text: "text-violet-950" };
     case 'lead':
