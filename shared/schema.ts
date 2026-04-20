@@ -474,6 +474,9 @@ export const jobs = pgTable("jobs", {
   inQueue: boolean("in_queue").default(false),
   queueReason: text("queue_reason"), // Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other
 
+  // Loom Video
+  loomVideoUrl: text("loom_video_url"),
+
   // Customer confirmation
   customerConfirmed: boolean("customer_confirmed").default(false),
   etaNotificationRequested: boolean("eta_notification_requested").default(false),
