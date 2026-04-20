@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const { data: meResponse, isLoading: authQueryLoading, isFetching, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
+  const { data: meResponse, isFetching, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -70,14 +70,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return await res.json();
     },
-    retry: 2, // Retry twice on network errors (not 401s) to tolerate transient issues
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    // CRITICAL: Never cache authentication state
-    staleTime: 0,
-    gcTime: 0,
-    refetchInterval: false, // Disable auto-polling - only check on mount
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: false, // Prevent rapid-fire 401s from PWA window focus events on open
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    staleTime: 5 * 60 * 1000,   // treat auth as fresh for 5 min — no background churn
+    gcTime: 10 * 60 * 1000,      // keep in cache 10 min so re-navigation is instant
+    refetchInterval: false,
+    refetchOnMount: true,         // only refetch if stale (not 'always')
+    refetchOnWindowFocus: false,
   });
 
   const loginMutation = useMutation({
@@ -231,7 +230,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
-        isLoading: !initialAuthCheckComplete || authQueryLoading,
+        isLoading: !initialAuthCheckComplete,
         login,
         loginPending: loginMutation.isPending,
         logout,
