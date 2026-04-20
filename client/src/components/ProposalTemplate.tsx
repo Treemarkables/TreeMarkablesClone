@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare } from 'lucide-react';
+import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare, MousePointerClick } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
 const DEFAULT_LOGO_URL = "/treemarkables-logo.webp";
@@ -544,11 +544,14 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                 return (
                   <div className="mb-4 sm:mb-6">
                     {isInteractive && (
-                      <p className="text-xs text-gray-500 mb-1.5 flex items-center gap-1">
-                        {isMultipleChoice
-                          ? "Select one option:"
-                          : "Select the items you'd like to include:"}
-                      </p>
+                      <div className="flex items-center gap-2.5 bg-orange-50 border border-orange-200 rounded-lg px-3 py-3 mb-3">
+                        <MousePointerClick className="w-5 h-5 text-orange-500 shrink-0" />
+                        <p className="text-sm font-semibold text-orange-700">
+                          {isMultipleChoice
+                            ? "Tap an option to select it — only your chosen option will be added to the total"
+                            : "Tap the options you'd like to add — they'll be reflected in the total below"}
+                        </p>
+                      </div>
                     )}
 
                     {/* ── Mobile card layout (hidden on sm+) ── */}
@@ -580,42 +583,59 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                         return (
                           <div
                             key={item.id}
-                            className={`border rounded-lg p-3 overflow-hidden transition-colors ${isItemToggleable && isItemSelected ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'} ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}`}
+                            className={`border rounded-lg p-3 overflow-hidden transition-colors ${isItemToggleable && isItemSelected ? 'bg-green-50 border-green-300' : isInteractive ? 'bg-white border-gray-200' : 'bg-white border-gray-200'} ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}`}
                             data-testid={`row-line-item-${sectionIndex}-${index}`}
                             onClick={handleToggle}
                           >
-                            <div className="flex flex-col gap-2 min-w-0">
-                              {isInteractive && (
-                                <div onClick={(e) => e.stopPropagation()}>
+                            {/* Interactive: side-by-side layout with big circle on right */}
+                            {isInteractive ? (
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                  <div className={`font-medium text-sm break-words [overflow-wrap:anywhere] ${isItemSelected ? 'text-gray-900' : 'text-gray-500'}`}>
+                                    <LinkifiedText text={item.description} />
+                                  </div>
+                                  {item.notes && (
+                                    <div className={`text-xs break-words [overflow-wrap:anywhere] ${isItemSelected ? 'text-gray-600' : 'text-gray-400'}`}>
+                                      <LinkifiedText text={item.notes} />
+                                    </div>
+                                  )}
+                                  <div className={`text-xs ${isItemSelected ? 'text-gray-500' : 'text-gray-400'}`}>Qty: {item.quantity}</div>
+                                  <div className={`text-base font-semibold ${isItemSelected ? 'text-green-700' : 'text-gray-400'}`}>
+                                    {formatCurrency(displayPrice)}
+                                  </div>
+                                </div>
+                                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
                                   <button
                                     type="button"
                                     onClick={handleToggle}
                                     aria-pressed={isItemSelected}
-                                    className={`inline-flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-md border-2 text-sm font-semibold transition-all duration-200 focus:outline-none ${isItemSelected ? 'bg-green-500 border-green-500 text-white shadow' : 'bg-white border-gray-300 text-gray-600'}`}
+                                    className={`inline-flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-full border-[3px] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-green-300 ${isItemSelected ? 'bg-green-500 border-green-500 text-white shadow-lg scale-105' : 'bg-white border-gray-300 text-gray-400 hover:border-green-400 hover:text-green-500 hover:shadow-md'}`}
                                   >
                                     {isItemSelected ? (
                                       <>
-                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                                        <span>ADDED</span>
+                                        <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                        <span className="text-[9px] font-bold leading-none">ADDED</span>
                                       </>
                                     ) : (
                                       <>
-                                        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
-                                        <span>{isMultipleChoice ? "SELECT" : "ADD"}</span>
+                                        <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                                        <span className="text-[9px] font-semibold leading-none">{isMultipleChoice ? "SELECT" : "ADD"}</span>
                                       </>
                                     )}
                                   </button>
                                 </div>
-                              )}
-                              <div className={`font-medium text-sm break-words [overflow-wrap:anywhere] ${isInteractive && !isItemSelected ? 'text-gray-400' : 'text-gray-900'}`}>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-2 min-w-0">
+                              <div className={`font-medium text-sm break-words [overflow-wrap:anywhere] text-gray-900`}>
                                 <LinkifiedText text={item.description} />
                               </div>
                               {item.notes && (
-                                <div className={`text-xs break-words [overflow-wrap:anywhere] ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-600'}`}>
+                                <div className={`text-xs break-words [overflow-wrap:anywhere] text-gray-600`}>
                                   <LinkifiedText text={item.notes} />
                                 </div>
                               )}
-                              <div className={`text-xs ${isInteractive ? (isItemSelected ? 'text-green-600' : 'text-gray-400') : 'text-gray-500'}`}>
+                              <div className={`text-xs text-gray-500`}>
                                 Qty: {item.quantity}
                               </div>
                               <div className={`text-base font-semibold break-words ${isItemToggleable ? (isItemSelected ? 'text-green-700' : 'text-gray-400') : 'text-gray-900'}`}>
@@ -667,6 +687,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                 </div>
                               )}
                             </div>
+                          )}
                           </div>
                         );
                       })}

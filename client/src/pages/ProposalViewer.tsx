@@ -20,9 +20,16 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const [selectedChoices, setSelectedChoices] = useState<
     Record<string, string>
   >({});
+  const [selectedOptionalItems, setSelectedOptionalItems] = useState<
+    Record<string, boolean>
+  >({});
 
   const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
     setSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }));
+  };
+
+  const handleOptionalToggle = (lineItemId: string, selected: boolean) => {
+    setSelectedOptionalItems((prev) => ({ ...prev, [lineItemId]: selected }));
   };
 
   const handleBackClick = () => {
@@ -387,6 +394,8 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             allowChoiceSelection={!isAccepted && !isExpired}
             selectedChoices={selectedChoices}
             onChoiceSelect={handleChoiceSelect}
+            selectedOptionalItems={selectedOptionalItems}
+            onOptionalToggle={!isAccepted && !isExpired ? handleOptionalToggle : undefined}
           />
         </div>
       </div>
