@@ -75,9 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // CRITICAL: Never cache authentication state
     staleTime: 0,
     gcTime: 0,
-    refetchInterval: false, // Disable auto-polling - only check on mount/focus
+    refetchInterval: false, // Disable auto-polling - only check on mount
     refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    refetchOnWindowFocus: false, // Prevent rapid-fire 401s from PWA window focus events on open
   });
 
   const loginMutation = useMutation({
@@ -195,8 +195,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         // Only log out after multiple consecutive 401s to tolerate transient network issues
         if (consecutive401sRef.current >= 3) {
-          console.warn('⚠️ Multiple consecutive 401s detected - logging out user');
-          setCurrentUser(null);
+          console.warn('⚠️ Multiple consecutive 401s detected - session expired');
+          // Clear state but NOT localStorage — preserve stored user so next login is instant
+          setCurrentUserState(null);
           consecutive401sRef.current = 0;
           // Don't clear the entire query cache - just let the user re-login
           // This prevents data loss if the 401 was a temporary network/cookie issue
