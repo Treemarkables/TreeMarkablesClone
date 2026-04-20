@@ -20778,6 +20778,56 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // JHA Photo upload (no assessment ID — for pending photos before assessment is created)
+  app.post("/api/jha/photos/upload", imageUpload.single("photo"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No photo file provided" });
+      }
+      const photoStorage = new PhotoStorageService();
+      const { url: photoUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      return res.json({ success: true, photoUrl });
+    } catch (error) {
+      console.error("Error uploading JHA photo:", error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to upload photo",
+      });
+    }
+  });
+
+  // JHA Photo upload for an existing assessment
+  app.post("/api/jha/assessments/:assessmentId/photos", imageUpload.single("photo"), async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getJhaAssessment(req.params.assessmentId);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: "Assessment not found" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No photo file provided" });
+      }
+      const photoStorage = new PhotoStorageService();
+      const { url: photoUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      const updatedPhotos = [...(existing.photos ?? []), photoUrl];
+      await storage.updateJhaAssessment(req.params.assessmentId, { photos: updatedPhotos });
+      return res.json({ success: true, photoUrl });
+    } catch (error) {
+      console.error("Error uploading JHA assessment photo:", error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to upload photo",
+      });
+    }
+  });
+
   // JHA Steps
   app.get("/api/jha/assessments/:assessmentId/steps", async (req, res) => {
     try {
