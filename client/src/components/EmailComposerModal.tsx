@@ -48,7 +48,11 @@ import {
   MicOff,
   AlertCircle,
   Loader2,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { format as formatDate } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
 import { ProposalTemplate } from "./ProposalTemplate";
@@ -118,8 +122,43 @@ export function EmailComposerModal({
   const queryClient = useQueryClient();
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
   const recognitionRef = useRef<any>(null);
   const emailBodyRef = useRef<HTMLDivElement>(null);
+
+  // Insert text at the caret inside the email body (same pattern as voice input).
+  const insertTextIntoBody = (text: string) => {
+    if (!emailBodyRef.current) return;
+    emailBodyRef.current.focus();
+
+    // Clear placeholder if present
+    if (emailBodyRef.current.innerHTML.includes("Compose your email...")) {
+      emailBodyRef.current.innerHTML = "";
+    }
+
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0 && emailBodyRef.current.contains(selection.anchorNode)) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      const textNode = document.createTextNode(text);
+      range.insertNode(textNode);
+      range.setStartAfter(textNode);
+      range.setEndAfter(textNode);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      // No caret inside the editor — append at the end.
+      emailBodyRef.current.appendChild(document.createTextNode(text));
+    }
+    setEmailData((prev) => ({ ...prev, body: emailBodyRef.current?.innerHTML || "" }));
+  };
+
+  const handleSlotPick = (slotStart: Date) => {
+    const nz = toZonedTime(slotStart, "Pacific/Auckland");
+    // e.g. "Tuesday 25 November at 2 PM"
+    const phrase = formatDate(nz, "EEEE d MMMM 'at' h a");
+    insertTextIntoBody(phrase);
+  };
 
   // Fetch email templates from database
   const { data: dbTemplates = [] } = useQuery({
@@ -1606,6 +1645,17 @@ export function EmailComposerModal({
             <div className="w-px h-6 bg-gray-300 mx-1" />
             <Button
               type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setIsAvailabilityOpen(true)}
+              title="Check your Google Calendar availability"
+              data-testid="button-check-availability"
+            >
+              <CalendarIcon className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
               variant={isListening ? "default" : "ghost"}
               size="icon"
               className={`h-8 w-8 ${isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}`}
@@ -1662,6 +1712,13 @@ export function EmailComposerModal({
           </div>
         </div>
       </DialogContent>
+
+      {/* Calendar Availability Modal */}
+      <CalendarAvailabilityModal
+        isOpen={isAvailabilityOpen}
+        onClose={() => setIsAvailabilityOpen(false)}
+        onSlotPick={handleSlotPick}
+      />
 
       {/* Document Preview Modal */}
       {showPreview.type && showPreview.data && (

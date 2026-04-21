@@ -1415,10 +1415,43 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
 
     } catch (error) {
       console.error('Google Calendar status check error:', error);
-      return res.json({ 
+      return res.json({
         connected: false,
         message: 'Error checking Google Calendar status'
       });
+    }
+  });
+
+  // List events from the operator's primary Google Calendar.
+  // Used by the CalendarAvailabilityModal inside email/SMS composers so the
+  // user can eyeball their own schedule while drafting a message to a customer.
+  app.get('/api/google-calendar/events', async (req: Request, res: Response) => {
+    const start = typeof req.query.start === 'string' ? req.query.start : '';
+    const end = typeof req.query.end === 'string' ? req.query.end : '';
+    const startDate = start ? new Date(start) : null;
+    const endDate = end ? new Date(end) : null;
+
+    if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'start and end must be ISO timestamps' });
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'end must be after start' });
+    }
+    const MAX_RANGE_MS = 31 * 24 * 60 * 60 * 1000;
+    if (endDate.getTime() - startDate.getTime() > MAX_RANGE_MS) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'range must be 31 days or less' });
+    }
+
+    try {
+      const events = await googleCalendarService.listEvents(startDate.toISOString(), endDate.toISOString());
+      return res.json({ success: true, data: events });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('not connected')) {
+        return res.status(200).json({ success: false, error: 'not_connected' });
+      }
+      console.error('Google Calendar events fetch error:', error);
+      return res.status(502).json({ success: false, error: 'upstream', message });
     }
   });
 

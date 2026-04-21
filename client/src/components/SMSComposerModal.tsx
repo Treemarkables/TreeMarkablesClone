@@ -7,7 +7,11 @@ import {
   Send,
   Link,
   FileText,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { format as formatDate } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -68,6 +72,7 @@ export function SMSComposerModal({
   const queryClient = useQueryClient();
   const [characterCount, setCharacterCount] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
+  const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
 
   // Fetch SMS templates
   const { data: smsTemplatesData } = useQuery({
@@ -209,6 +214,33 @@ export function SMSComposerModal({
     setCharacterCount(watchedMessage?.length || 0);
   }, [watchedMessage]);
 
+  // Insert a time phrase from the availability modal at the current caret position,
+  // falling back to appending if the textarea isn't mounted.
+  const handleSlotPick = (slotStart: Date) => {
+    const nz = toZonedTime(slotStart, "Pacific/Auckland");
+    // Compact form to preserve SMS segment count: "Tue 25 Nov 2 PM"
+    const phrase = formatDate(nz, "EEE d MMM h a");
+    const ta = document.querySelector(
+      '[data-testid="textarea-message"]',
+    ) as HTMLTextAreaElement | null;
+    const current = form.getValues("message") || "";
+
+    if (ta) {
+      const start = ta.selectionStart ?? current.length;
+      const end = ta.selectionEnd ?? current.length;
+      const next = current.slice(0, start) + phrase + current.slice(end);
+      form.setValue("message", next, { shouldDirty: true, shouldValidate: true });
+      requestAnimationFrame(() => {
+        ta.focus();
+        const pos = start + phrase.length;
+        ta.setSelectionRange(pos, pos);
+      });
+    } else {
+      const next = current ? `${current} ${phrase}` : phrase;
+      form.setValue("message", next, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
   const sendSMSMutation = useMutation({
     mutationFn: async (data: SMSFormData) => {
       return apiRequest("POST", "/api/sms/send", {
@@ -244,6 +276,7 @@ export function SMSComposerModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg p-0">
         <DialogHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-t-lg">
@@ -377,17 +410,30 @@ export function SMSComposerModal({
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Message</FormLabel>
-                    <MicrophoneButton
-                      onTranscript={(transcript) => {
-                        const currentValue = form.getValues("message");
-                        const newValue = currentValue
-                          ? `${currentValue} ${transcript}`
-                          : transcript;
-                        form.setValue("message", newValue);
-                      }}
-                      size="sm"
-                      variant="ghost"
-                    />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => setIsAvailabilityOpen(true)}
+                        title="Check your Google Calendar availability"
+                        data-testid="button-sms-check-availability"
+                      >
+                        <CalendarIcon className="h-4 w-4" />
+                      </Button>
+                      <MicrophoneButton
+                        onTranscript={(transcript) => {
+                          const currentValue = form.getValues("message");
+                          const newValue = currentValue
+                            ? `${currentValue} ${transcript}`
+                            : transcript;
+                          form.setValue("message", newValue);
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      />
+                    </div>
                   </div>
                   <FormControl>
                     <Textarea
@@ -449,5 +495,11 @@ export function SMSComposerModal({
         </Form>
       </DialogContent>
     </Dialog>
+    <CalendarAvailabilityModal
+      isOpen={isAvailabilityOpen}
+      onClose={() => setIsAvailabilityOpen(false)}
+      onSlotPick={handleSlotPick}
+    />
+    </>
   );
 }
