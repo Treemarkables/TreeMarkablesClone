@@ -59,6 +59,15 @@ interface CalendarEventData {
   attendees?: string[];
 }
 
+export interface CalendarEventSummary {
+  id: string;
+  summary: string;
+  start: string;   // ISO UTC
+  end: string;     // ISO UTC
+  htmlLink?: string;
+  location?: string;
+}
+
 class GoogleCalendarService {
   
   // Create a calendar event
@@ -199,6 +208,40 @@ View in Treemarkables Dashboard
       console.error('Error syncing job to Google Calendar:', error);
       return null;
     }
+  }
+
+  // List events from the user's primary calendar between two ISO timestamps.
+  // Throws on failure so the caller can distinguish "not connected" from upstream errors.
+  // Skips all-day events since the availability UI reasons in hourly slots.
+  async listEvents(startIso: string, endIso: string): Promise<CalendarEventSummary[]> {
+    const calendar = await getUncachableGoogleCalendarClient();
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: startIso,
+      timeMax: endIso,
+      singleEvents: true,
+      orderBy: 'startTime',
+      maxResults: 250,
+    });
+
+    const items = response.data.items ?? [];
+    const events: CalendarEventSummary[] = [];
+    for (const item of items) {
+      // Skip all-day events — they only expose `date`, not `dateTime`.
+      const startDateTime = item.start?.dateTime;
+      const endDateTime = item.end?.dateTime;
+      if (!startDateTime || !endDateTime || !item.id) continue;
+      events.push({
+        id: item.id,
+        summary: item.summary || '(no title)',
+        start: new Date(startDateTime).toISOString(),
+        end: new Date(endDateTime).toISOString(),
+        htmlLink: item.htmlLink ?? undefined,
+        location: item.location ?? undefined,
+      });
+    }
+    return events;
   }
 
   // Sync a schedule event to Google Calendar
