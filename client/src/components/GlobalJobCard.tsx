@@ -220,6 +220,13 @@ const globalJobCardSchema = insertJobSchema
     jobContactPhone: z.string().optional(),
     jobContactMobile: z.string().optional(),
 
+    // Tenant contact (opt-in secondary recipient for tenanted properties).
+    tenantContactFirstName: z.string().optional(),
+    tenantContactLastName: z.string().optional(),
+    tenantContactEmail: z.union([z.string().email(), z.literal("")]).optional(),
+    tenantContactPhone: z.string().optional(),
+    tenantContactMobile: z.string().optional(),
+
     // ServiceM8 Billing Fields
     billingAddress: z.string().optional(),
     billingNameOverride: z.string().optional(), // Override customer name for invoicing
@@ -371,6 +378,11 @@ export function GlobalJobCard({
       jobContactEmail: "",
       jobContactPhone: "",
       jobContactMobile: "",
+      tenantContactFirstName: "",
+      tenantContactLastName: "",
+      tenantContactEmail: "",
+      tenantContactPhone: "",
+      tenantContactMobile: "",
       address: "",
       leadSource: "",
       totalAmount: "0",
@@ -424,6 +436,11 @@ export function GlobalJobCard({
     watchedBillingContactEmail_raw,
     watchedJobContactEmail_raw,
     watchedBillingNameOverride_raw,
+    watchedTenantContactEmail_raw,
+    watchedTenantContactPhone_raw,
+    watchedTenantContactMobile_raw,
+    watchedTenantContactFirstName_raw,
+    watchedTenantContactLastName_raw,
   ] = useWatch({
     control: form.control,
     name: [
@@ -439,6 +456,11 @@ export function GlobalJobCard({
       "billingContactEmail",
       "jobContactEmail",
       "billingNameOverride",
+      "tenantContactEmail",
+      "tenantContactPhone",
+      "tenantContactMobile",
+      "tenantContactFirstName",
+      "tenantContactLastName",
     ],
   });
   const watchedCustomerId = (watchedCustomerId_raw as string) ?? "";
@@ -453,6 +475,11 @@ export function GlobalJobCard({
   const watchedBillingContactEmail = (watchedBillingContactEmail_raw as string) ?? "";
   const watchedJobContactEmail = (watchedJobContactEmail_raw as string) ?? "";
   const watchedBillingNameOverride = (watchedBillingNameOverride_raw as string) ?? "";
+  const watchedTenantContactEmail = (watchedTenantContactEmail_raw as string) ?? "";
+  const watchedTenantContactPhone = (watchedTenantContactPhone_raw as string) ?? "";
+  const watchedTenantContactMobile = (watchedTenantContactMobile_raw as string) ?? "";
+  const watchedTenantContactFirstName = (watchedTenantContactFirstName_raw as string) ?? "";
+  const watchedTenantContactLastName = (watchedTenantContactLastName_raw as string) ?? "";
   // lineItems is sourced from useFieldArray.fields (NOT form.watch) to avoid double-subscription
   const watchedLineItems = lineItemFields as any[];
   const selectedVipCustomer = customers.find((c) => c.id === watchedCustomerId);
@@ -1399,6 +1426,11 @@ export function GlobalJobCard({
           editingJob.jobContactPhone || editingJobCustomer?.phone || "",
         jobContactMobile:
           editingJob.jobContactMobile || editingJobCustomer?.mobile || "",
+        tenantContactFirstName: editingJob.tenantContactFirstName || "",
+        tenantContactLastName: editingJob.tenantContactLastName || "",
+        tenantContactEmail: editingJob.tenantContactEmail || "",
+        tenantContactPhone: editingJob.tenantContactPhone || "",
+        tenantContactMobile: editingJob.tenantContactMobile || "",
         billingContactEmail: editingJob.billingContactEmail || "",
         billingContactPhone: editingJob.billingContactPhone || "",
         billingContactMobile: editingJob.billingContactMobile || "",
@@ -1479,6 +1511,16 @@ export function GlobalJobCard({
               isResettingRef.current = false;
               hasUserChangedRef.current = false;
               changedFieldsRef.current.clear();
+              // RC12 FIX: Patch list caches so re-open shows saved values.
+              queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+                if (!old) return old;
+                const data = old?.data ?? old;
+                if (!Array.isArray(data)) return old;
+                const patched = data.map((j: any) =>
+                  j.id === editingJob?.id ? { ...j, ...changedData } : j,
+                );
+                return old?.data ? { ...old, data: patched } : patched;
+              });
               queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob?.id] });
               const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status"];
               if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
@@ -1616,6 +1658,11 @@ export function GlobalJobCard({
       "jobContactEmail",
       "jobContactPhone",
       "jobContactMobile",
+      "tenantContactFirstName",
+      "tenantContactLastName",
+      "tenantContactEmail",
+      "tenantContactPhone",
+      "tenantContactMobile",
       "billingAddress",
       "billingNameOverride",
       "invoiceDescription",
@@ -1658,6 +1705,10 @@ export function GlobalJobCard({
     let timeoutId: NodeJS.Timeout;
 
     const subscription = form.watch((values, { name }) => {
+      // Diagnostic: surface every watch firing so we can see what the form reports.
+      if (name && (name === 'tenantContactEmail' || name === 'tenantContactFirstName' || name === 'tenantContactLastName' || name === 'tenantContactPhone' || name === 'tenantContactMobile')) {
+        console.log(`🏠 watch fired for tenant field: ${name}, inWhitelist=${autoSaveFieldsRef.current.has(name)}, value=`, (values as any)[name]);
+      }
       if (!name || !autoSaveFieldsRef.current.has(name)) {
         return;
       }
@@ -1740,6 +1791,19 @@ export function GlobalJobCard({
             if (!old) return old;
             const jobData = old?.data ?? old;
             const updated = { ...jobData, ...changedData };
+            return old?.data ? { ...old, data: updated } : updated;
+          });
+          // RC12 FIX: Also patch the job inside all list-shaped caches (e.g. the
+          // dispatch board's /api/jobs list). Without this, closing and re-opening the
+          // job card uses the stale list entry (job prop) and resets the form with
+          // pre-save values — making it look like the save never happened.
+          queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+            if (!old) return old;
+            const data = old?.data ?? old;
+            if (!Array.isArray(data)) return old; // skip single-job cache entries
+            const updated = data.map((j: any) =>
+              j.id === editingJob.id ? { ...j, ...changedData } : j,
+            );
             return old?.data ? { ...old, data: updated } : updated;
           });
           // Only invalidate the specific job — not the full list — to avoid forcing
@@ -3237,6 +3301,7 @@ The Treemarkables Team`;
             : "Please fill in all required fields",
         variant: "destructive",
       });
+      isSavingRef.current = false;
       return;
     }
 
@@ -7030,117 +7095,233 @@ The Treemarkables Team`;
                           </div>
                         </div>
 
-                        {/* Contacts */}
+                        {/* Contacts — two tabs: Job Contact (primary, used by automations)
+                            and Tenant Details (opt-in, for tenanted properties). */}
                         <div>
                           <div className="flex items-center gap-2 mb-3">
                             <UserCircle className="w-4 h-4 text-gray-600" />
                             <label className="text-xs font-medium text-gray-600">
-                              Job Contact
+                              Contacts
                             </label>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="jobContactFirstName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="First Name"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactLastName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Last Name"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="mt-3 space-y-2">
-                            <FormField
-                              control={form.control}
-                              name="jobContactEmail"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Email"
-                                      type="email"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactMobile"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Mobile"
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        field.onChange(val);
-                                      }}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactPhone"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Phone (Landline)"
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        field.onChange(val);
+                          <Tabs defaultValue="job" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2 h-8">
+                              <TabsTrigger value="job" className="text-xs" data-testid="tab-job-contact">
+                                Job Contact
+                              </TabsTrigger>
+                              <TabsTrigger value="tenant" className="text-xs" data-testid="tab-tenant-details">
+                                Tenant Details
+                              </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="job" className="mt-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactFirstName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="First Name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactLastName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Last Name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactEmail"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Email"
+                                          type="email"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactMobile"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Mobile"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            field.onChange(val);
+                                          }}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactPhone"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Phone (Landline)"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            field.onChange(val);
 
-                                        // Auto-route mobile numbers to mobile field
-                                        const cleaned = val
-                                          .replace(/\s/g, "")
-                                          .replace(/^\+64/, "0");
-                                        if (/^0?2[0-9]/.test(cleaned)) {
-                                          form.setValue(
-                                            "jobContactMobile",
-                                            val,
-                                            { shouldDirty: true },
-                                          );
-                                          form.setValue("jobContactPhone", "", {
-                                            shouldDirty: true,
-                                          });
-                                        }
-                                      }}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
+                                            // Auto-route mobile numbers to mobile field
+                                            const cleaned = val
+                                              .replace(/\s/g, "")
+                                              .replace(/^\+64/, "0");
+                                            if (/^0?2[0-9]/.test(cleaned)) {
+                                              form.setValue(
+                                                "jobContactMobile",
+                                                val,
+                                                { shouldDirty: true },
+                                              );
+                                              form.setValue("jobContactPhone", "", {
+                                                shouldDirty: true,
+                                              });
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </TabsContent>
+                            <TabsContent value="tenant" className="mt-3">
+                              <p className="text-[11px] text-gray-500 mb-2">
+                                Used only when you manually pick Tenant as the recipient in the Email or SMS composer. Automations continue to use the Job Contact.
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactFirstName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="First Name"
+                                          data-testid="input-tenant-first-name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactLastName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Last Name"
+                                          data-testid="input-tenant-last-name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactEmail"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Email"
+                                          type="email"
+                                          data-testid="input-tenant-email"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactMobile"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Mobile"
+                                          data-testid="input-tenant-mobile"
+                                          onChange={(e) => field.onChange(e.target.value)}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactPhone"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Phone (Landline)"
+                                          data-testid="input-tenant-phone"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            field.onChange(val);
+                                            // Auto-route mobile numbers to the tenant mobile field
+                                            const cleaned = val
+                                              .replace(/\s/g, "")
+                                              .replace(/^\+64/, "0");
+                                            if (/^0?2[0-9]/.test(cleaned)) {
+                                              form.setValue("tenantContactMobile", val, { shouldDirty: true });
+                                              form.setValue("tenantContactPhone", "", { shouldDirty: true });
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </TabsContent>
+                          </Tabs>
                         </div>
                       </div>
                     </div>
@@ -8752,6 +8933,12 @@ The Treemarkables Team`;
               watchedBillingContactEmail || editingJob?.billingContactEmail,
             jobContactEmail:
               watchedJobContactEmail || editingJob?.jobContactEmail,
+            tenantContactEmail:
+              watchedTenantContactEmail || editingJob?.tenantContactEmail,
+            tenantContactFirstName:
+              watchedTenantContactFirstName || editingJob?.tenantContactFirstName,
+            tenantContactLastName:
+              watchedTenantContactLastName || editingJob?.tenantContactLastName,
           }}
           customEmail={
             emailContext !== "invoice"
@@ -9040,7 +9227,17 @@ The Treemarkables Team`;
         <SMSComposerModal
           isOpen={isSMSComposerOpen}
           onClose={() => setIsSMSComposerOpen(false)}
-          job={editingJob}
+          job={{
+            ...editingJob,
+            tenantContactPhone:
+              watchedTenantContactPhone || editingJob?.tenantContactPhone,
+            tenantContactMobile:
+              watchedTenantContactMobile || editingJob?.tenantContactMobile,
+            tenantContactFirstName:
+              watchedTenantContactFirstName || editingJob?.tenantContactFirstName,
+            tenantContactLastName:
+              watchedTenantContactLastName || editingJob?.tenantContactLastName,
+          }}
           customer={selectedCustomer}
         />
       )}

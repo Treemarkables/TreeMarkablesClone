@@ -448,7 +448,16 @@ export const jobs = pgTable("jobs", {
   jobContactEmail: text("job_contact_email"),
   jobContactPhone: text("job_contact_phone"),
   jobContactMobile: text("job_contact_mobile"),
-  
+
+  // Tenant Contact Information — used for properties where the customer is an
+  // organisation (or absent owner) and a tenant lives on-site. Automations
+  // continue to use Job Contact; this is an opt-in secondary recipient.
+  tenantContactFirstName: text("tenant_contact_first_name"),
+  tenantContactLastName: text("tenant_contact_last_name"),
+  tenantContactEmail: text("tenant_contact_email"),
+  tenantContactPhone: text("tenant_contact_phone"),
+  tenantContactMobile: text("tenant_contact_mobile"),
+
   // GST/Tax System (New Zealand 15% GST)
   taxMode: text("tax_mode").default('tax_exclusive'), // cost_markup, tax_inclusive, tax_exclusive
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default('15.00'), // 15% GST

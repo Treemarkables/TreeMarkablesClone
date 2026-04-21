@@ -3403,11 +3403,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid job data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
+      }
+
+      // Defensive: re-add tenant contact fields after Zod's .strip() in case the
+      // server process was started before these columns were added to the schema.
+      const TENANT_CONTACT_FIELDS_CREATE = [
+        'tenantContactFirstName', 'tenantContactLastName', 'tenantContactEmail',
+        'tenantContactPhone', 'tenantContactMobile',
+      ] as const;
+      for (const field of TENANT_CONTACT_FIELDS_CREATE) {
+        if (field in processedBody) {
+          (validation.data as any)[field] = processedBody[field];
+        }
       }
 
       // Check for duplicate jobs - two layers of protection
@@ -4048,6 +4060,17 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.put('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
+      // Diagnostic: surface tenant-contact payloads so we can confirm auto-save
+      // reaches the server with the right keys.
+      const tenantKeys = [
+        'tenantContactFirstName', 'tenantContactLastName',
+        'tenantContactEmail', 'tenantContactPhone', 'tenantContactMobile',
+      ];
+      const tenantPayload: Record<string, any> = {};
+      for (const k of tenantKeys) if (k in req.body) tenantPayload[k] = req.body[k];
+      if (Object.keys(tenantPayload).length > 0) {
+        console.log(`🏠 PUT /api/jobs/${req.params.id} tenant fields in body:`, tenantPayload);
+      }
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
@@ -4170,11 +4193,31 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid job data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
+      }
+
+      // Defensive: Zod's default .strip() drops unknown keys, which silently erases
+      // newly-added schema columns if the server process was started before the
+      // schema edit and hasn't been restarted. Re-add the tenant contact fields
+      // from the raw body so adding tenant details doesn't require a rebuild.
+      const TENANT_CONTACT_FIELDS = [
+        'tenantContactFirstName', 'tenantContactLastName', 'tenantContactEmail',
+        'tenantContactPhone', 'tenantContactMobile',
+      ] as const;
+      for (const field of TENANT_CONTACT_FIELDS) {
+        if (field in processedBody) {
+          (validation.data as any)[field] = processedBody[field];
+        }
+      }
+      // Diagnostic: log what's about to flow into storage.updateJob for tenant keys.
+      if (Object.keys(tenantPayload).length > 0) {
+        const afterValidation: Record<string, any> = {};
+        for (const k of tenantKeys) if (k in (validation.data as any)) afterValidation[k] = (validation.data as any)[k];
+        console.log(`🏠 PUT /api/jobs/${req.params.id} tenant fields after validation:`, afterValidation);
       }
 
       // Get the old job for status comparison
@@ -4547,6 +4590,18 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           message: 'Invalid update data',
           errors: validation.error.errors
         });
+      }
+
+      // Defensive: re-add tenant contact fields after Zod's .strip() in case the
+      // server process was started before these columns were added to the schema.
+      const TENANT_CONTACT_FIELDS_PATCH = [
+        'tenantContactFirstName', 'tenantContactLastName', 'tenantContactEmail',
+        'tenantContactPhone', 'tenantContactMobile',
+      ] as const;
+      for (const field of TENANT_CONTACT_FIELDS_PATCH) {
+        if (field in processedBody) {
+          (validation.data as any)[field] = processedBody[field];
+        }
       }
 
       // Get old job for description comparison

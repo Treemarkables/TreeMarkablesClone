@@ -123,41 +123,81 @@ export function EmailComposerModal({
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
+  // Recipient selector: "job" routes to the Job Contact (default, used by all automations),
+  // "tenant" routes to the Tenant Details contact for tenanted properties. Toggle only
+  // affects this modal's To field — nothing server-side changes.
+  const [recipientMode, setRecipientMode] = useState<"job" | "tenant">("job");
   const recognitionRef = useRef<any>(null);
   const emailBodyRef = useRef<HTMLDivElement>(null);
 
-  // Insert text at the caret inside the email body (same pattern as voice input).
-  const insertTextIntoBody = (text: string) => {
+  // Derived recipient candidates from the job prop. Tenant may be unset.
+  const jobContactEmailCandidate: string =
+    (job?.jobContactEmail as string) ||
+    (customer?.email as string) ||
+    "";
+  const tenantContactEmailCandidate: string =
+    (job?.tenantContactEmail as string) || "";
+
+  // First-name candidates used to swap the greeting line when the recipient toggle changes.
+  const jobContactFirstNameCandidate: string =
+    (job?.jobContactFirstName as string) ||
+    (customer?.firstName as string) ||
+    "";
+  const tenantContactFirstNameCandidate: string =
+    (job?.tenantContactFirstName as string) || "";
+
+  // Replace the greeting name in the first <p> that looks like a salutation
+  // ("Hi X,", "Hello X,", "Hey X", "Kia ora X", "Dear X"). Keeps the rest of
+  // the body untouched so user edits are preserved.
+  const swapGreetingName = (newFirstName: string) => {
+    if (!emailBodyRef.current || !newFirstName) return;
+    const body = emailBodyRef.current;
+    const paragraphs = Array.from(body.querySelectorAll("p"));
+    const GREETING_RE = /^(\s*(?:Hi|Hello|Hey|Kia ora|Dear)\s+)([^,.!?\n]+)(?=[,.!?\n]|$)/i;
+    for (const p of paragraphs) {
+      const text = p.textContent ?? "";
+      if (GREETING_RE.test(text)) {
+        p.textContent = text.replace(GREETING_RE, `$1${newFirstName}`);
+        setEmailData((prev) => ({ ...prev, body: body.innerHTML }));
+        return;
+      }
+    }
+  };
+
+  // Insert a new paragraph with `text` right after the greeting line
+  // (the first <p> with non-empty text — usually "Hi {firstName},").
+  // Falls back to prepending at the start if there's no recognisable greeting.
+  const insertAfterGreeting = (text: string) => {
     if (!emailBodyRef.current) return;
-    emailBodyRef.current.focus();
+    const body = emailBodyRef.current;
 
     // Clear placeholder if present
-    if (emailBodyRef.current.innerHTML.includes("Compose your email...")) {
-      emailBodyRef.current.innerHTML = "";
+    if (body.innerHTML.includes("Compose your email...")) {
+      body.innerHTML = "";
     }
 
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0 && emailBodyRef.current.contains(selection.anchorNode)) {
-      const range = selection.getRangeAt(0);
-      range.deleteContents();
-      const textNode = document.createTextNode(text);
-      range.insertNode(textNode);
-      range.setStartAfter(textNode);
-      range.setEndAfter(textNode);
-      selection.removeAllRanges();
-      selection.addRange(range);
+    const newP = document.createElement("p");
+    newP.textContent = text;
+
+    const paragraphs = Array.from(body.querySelectorAll("p"));
+    const greetingP = paragraphs.find(
+      (p) => (p.textContent ?? "").trim().length > 0,
+    );
+
+    if (greetingP && greetingP.parentNode) {
+      greetingP.parentNode.insertBefore(newP, greetingP.nextSibling);
     } else {
-      // No caret inside the editor — append at the end.
-      emailBodyRef.current.appendChild(document.createTextNode(text));
+      body.insertBefore(newP, body.firstChild);
     }
-    setEmailData((prev) => ({ ...prev, body: emailBodyRef.current?.innerHTML || "" }));
+
+    setEmailData((prev) => ({ ...prev, body: body.innerHTML }));
   };
 
   const handleSlotPick = (slotStart: Date) => {
     const nz = toZonedTime(slotStart, "Pacific/Auckland");
     // e.g. "Tuesday 25 November at 2 PM"
     const phrase = formatDate(nz, "EEEE d MMMM 'at' h a");
-    insertTextIntoBody(phrase);
+    insertAfterGreeting(phrase);
   };
 
   // Fetch email templates from database
@@ -1401,6 +1441,54 @@ export function EmailComposerModal({
         <div className="flex-1 flex flex-col gap-2 sm:gap-2 overflow-y-auto p-2 sm:p-3">
           {/* Email Fields */}
           <div className="space-y-1 sm:space-y-1.5">
+            {/* Recipient selector — switches the "To" field between Job Contact and Tenant */}
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
+              <span className="text-xs sm:col-span-1 sm:text-right font-medium text-gray-600">
+                Send to:
+              </span>
+              <div className="sm:col-span-11 inline-flex rounded-md border overflow-hidden w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecipientMode("job");
+                    setEmailData((prev) => ({ ...prev, to: jobContactEmailCandidate }));
+                    if (jobContactFirstNameCandidate) {
+                      swapGreetingName(jobContactFirstNameCandidate);
+                    }
+                  }}
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${
+                    recipientMode === "job"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                  data-testid="btn-recipient-job"
+                >
+                  Job Contact
+                </button>
+                <button
+                  type="button"
+                  disabled={!tenantContactEmailCandidate}
+                  onClick={() => {
+                    setRecipientMode("tenant");
+                    setEmailData((prev) => ({ ...prev, to: tenantContactEmailCandidate }));
+                    // If the tenant has a first name, swap the greeting. Otherwise leave it —
+                    // the user can edit manually.
+                    if (tenantContactFirstNameCandidate) {
+                      swapGreetingName(tenantContactFirstNameCandidate);
+                    }
+                  }}
+                  title={!tenantContactEmailCandidate ? "No tenant email on this job" : "Send to the tenant instead"}
+                  className={`px-3 py-1 text-xs font-medium transition-colors border-l ${
+                    recipientMode === "tenant"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  } ${!tenantContactEmailCandidate ? "opacity-40 cursor-not-allowed" : ""}`}
+                  data-testid="btn-recipient-tenant"
+                >
+                  Tenant
+                </button>
+              </div>
+            </div>
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
               <Label
                 htmlFor="email-to"

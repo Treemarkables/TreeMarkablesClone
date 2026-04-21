@@ -73,6 +73,40 @@ export function SMSComposerModal({
   const [characterCount, setCharacterCount] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
   const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
+  // Recipient selector: "job" uses the Job Contact (default, used by automations),
+  // "tenant" routes manual sends to the Tenant contact for tenanted properties.
+  const [recipientMode, setRecipientMode] = useState<"job" | "tenant">("job");
+
+  // Derived candidates. Mobile is preferred since SMS requires a mobile number.
+  const jobContactPhoneCandidate: string =
+    (job?.jobContactMobile as string) ||
+    (job?.jobContactPhone as string) ||
+    (customer?.mobile as string) ||
+    (customer?.phone as string) ||
+    "";
+  const tenantContactPhoneCandidate: string =
+    (job?.tenantContactMobile as string) ||
+    (job?.tenantContactPhone as string) ||
+    "";
+
+  // First-name candidates used to swap the salutation in the SMS body on toggle.
+  const jobContactFirstNameCandidate: string =
+    (job?.jobContactFirstName as string) ||
+    (customer?.firstName as string) ||
+    "";
+  const tenantContactFirstNameCandidate: string =
+    (job?.tenantContactFirstName as string) || "";
+
+  // Rewrite the salutation at the start of the SMS body ("Hi X,", "Hey X", etc.)
+  // to use `newFirstName`. Preserves the rest of the message.
+  const swapSmsGreetingName = (newFirstName: string) => {
+    if (!newFirstName) return;
+    const current = form.getValues("message") || "";
+    const GREETING_RE = /^(\s*(?:Hi|Hello|Hey|Kia ora|Dear)\s+)([^,.!?\n]+)(?=[,.!?\n]|$)/i;
+    if (!GREETING_RE.test(current)) return;
+    const next = current.replace(GREETING_RE, `$1${newFirstName}`);
+    form.setValue("message", next, { shouldDirty: true, shouldValidate: true });
+  };
 
   // Fetch SMS templates
   const { data: smsTemplatesData } = useQuery({
@@ -304,6 +338,51 @@ export function SMSComposerModal({
             onSubmit={form.handleSubmit(handleSend)}
             className="space-y-4 p-6"
           >
+            {/* Recipient selector — switches the phone field between Job Contact and Tenant */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-600">Send to:</span>
+              <div className="inline-flex rounded-md border overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecipientMode("job");
+                    form.setValue("phone", jobContactPhoneCandidate, { shouldDirty: true, shouldValidate: true });
+                    if (jobContactFirstNameCandidate) {
+                      swapSmsGreetingName(jobContactFirstNameCandidate);
+                    }
+                  }}
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${
+                    recipientMode === "job"
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                  data-testid="btn-sms-recipient-job"
+                >
+                  Job Contact
+                </button>
+                <button
+                  type="button"
+                  disabled={!tenantContactPhoneCandidate}
+                  onClick={() => {
+                    setRecipientMode("tenant");
+                    form.setValue("phone", tenantContactPhoneCandidate, { shouldDirty: true, shouldValidate: true });
+                    if (tenantContactFirstNameCandidate) {
+                      swapSmsGreetingName(tenantContactFirstNameCandidate);
+                    }
+                  }}
+                  title={!tenantContactPhoneCandidate ? "No tenant phone on this job" : "Send to the tenant instead"}
+                  className={`px-3 py-1 text-xs font-medium transition-colors border-l ${
+                    recipientMode === "tenant"
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  } ${!tenantContactPhoneCandidate ? "opacity-40 cursor-not-allowed" : ""}`}
+                  data-testid="btn-sms-recipient-tenant"
+                >
+                  Tenant
+                </button>
+              </div>
+            </div>
+
             {/* Phone Number Field */}
             <FormField
               control={form.control}
