@@ -291,16 +291,37 @@ export function JobDiarySection({
     return "08:00";
   };
 
+  // Format a Date as YYYY-MM-DD using local (browser) time, not UTC.
+  // toISOString() always returns UTC — in NZ (UTC+12/+13) this gives yesterday's date.
+  const localDateStr = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
   const extractDateFromText = (text: string): string | null => {
     const lower = text.toLowerCase();
     const today = new Date();
     if (lower.includes("tomorrow")) {
       const d = new Date(today);
       d.setDate(d.getDate() + 1);
-      return d.toISOString().split("T")[0];
+      return localDateStr(d);
     }
     if (lower.includes("today")) {
-      return today.toISOString().split("T")[0];
+      return localDateStr(today);
+    }
+    // Day-name matching — find the next occurrence of the named day from today
+    const dayNames = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+    for (let i = 0; i < dayNames.length; i++) {
+      if (lower.includes(dayNames[i])) {
+        const todayDow = today.getDay(); // 0=Sun … 6=Sat
+        let daysAhead = i - todayDow;
+        if (daysAhead <= 0) daysAhead += 7; // always go forward
+        const d = new Date(today);
+        d.setDate(d.getDate() + daysAhead);
+        return localDateStr(d);
+      }
     }
     const dateMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
     if (dateMatch) {
@@ -403,6 +424,16 @@ export function JobDiarySection({
     select: (response: any) => response.data || response,
   });
 
+  // Fetch customer record so the Book button always has the customer's name,
+  // even when jobContactFirstName/jobContactLastName are empty (e.g. lead-status jobs
+  // created by selecting an existing customer rather than entering new contact details).
+  const effectiveCustomerId = customerId || jobData?.customerId;
+  const { data: customerRecord } = useQuery({
+    queryKey: ["/api/customers", effectiveCustomerId],
+    enabled: !!effectiveCustomerId,
+    select: (response: any) => response.data || response,
+  });
+
   // Fetch email templates
   const { data: emailTemplates = [] } = useQuery({
     queryKey: ["/api/email-templates"],
@@ -417,7 +448,7 @@ export function JobDiarySection({
 
   // Variable replacement function
   const replaceTemplateVariables = (template: string) => {
-    const customerName = jobData?.customerName || "";
+    const customerName = customerRecord?.name || "";
     const address = jobData?.jobAddress || jobData?.address || "";
     const phone = jobData?.customerPhone || customerPhone || "";
     const email = jobData?.customerEmail || customerEmail || "";
@@ -1709,7 +1740,7 @@ export function JobDiarySection({
                                     jobData?.jobContactLastName
                                       ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                                       : jobData?.jobContactFirstName ||
-                                        jobData?.customerName ||
+                                        customerRecord?.name ||
                                         "Customer";
                                   const extractedTime =
                                     extractTimeFromText(content);
@@ -1721,7 +1752,7 @@ export function JobDiarySection({
                                   );
                                   const dateStr =
                                     extractedDate ||
-                                    fallbackDate.toISOString().split("T")[0];
+                                    localDateStr(fallbackDate);
 
                                   setCalendarBookingEntry(entry);
                                   setCalendarBookingTitle(custName);
@@ -1771,7 +1802,7 @@ export function JobDiarySection({
                                         jobData?.jobContactLastName
                                           ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                                           : jobData?.jobContactFirstName ||
-                                            jobData?.customerName ||
+                                            customerRecord?.name ||
                                             "Customer";
                                       const extractedTime =
                                         extractTimeFromText(content);
@@ -1783,9 +1814,7 @@ export function JobDiarySection({
                                       );
                                       const dateStr =
                                         extractedDate ||
-                                        fallbackDate
-                                          .toISOString()
-                                          .split("T")[0];
+                                        localDateStr(fallbackDate);
 
                                       setCalendarBookingEntry(entry);
                                       setCalendarBookingTitle(custName);
@@ -2535,7 +2564,7 @@ export function JobDiarySection({
             <DialogHeader>
               <DialogTitle>Send Email</DialogTitle>
               <DialogDescription>
-                Send an email to {jobData?.customerName || "the customer"}
+                Send an email to {customerRecord?.name || "the customer"}
               </DialogDescription>
             </DialogHeader>
             <Form {...emailForm}>
@@ -2875,7 +2904,7 @@ export function JobDiarySection({
                       jobData?.jobContactLastName
                         ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                         : jobData?.jobContactFirstName ||
-                          jobData?.customerName ||
+                          customerRecord?.name ||
                           "Customer";
                     const jobAddress =
                       jobData?.jobAddress || jobData?.address || "";

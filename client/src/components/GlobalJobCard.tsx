@@ -546,6 +546,8 @@ export function GlobalJobCard({
   }, [jobId, mode, checklistTemplatesData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save state to prevent double-clicking
+  // useRef is synchronous so a second click in the same render cycle can't slip through
+  const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Quote presentation method local state (for immediate UI update)
@@ -3119,11 +3121,12 @@ The Treemarkables Team`;
   const handleSave = async () => {
     console.log("🔴 SAVE BUTTON CLICKED");
 
-    // Prevent double-clicking
-    if (isSaving) {
+    // Prevent double-clicking — ref check is synchronous, state check covers the visual guard
+    if (isSavingRef.current || isSaving) {
       console.log("Save already in progress, ignoring duplicate click");
       return;
     }
+    isSavingRef.current = true;
 
     // Commit any open popup drafts before reading form values.
     // Without this, clicking Save while a popup is open loses the typed text.
@@ -3313,6 +3316,7 @@ The Treemarkables Team`;
         variant: "destructive",
       });
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -3413,11 +3417,12 @@ The Treemarkables Team`;
   };
 
   const handleSaveAndClose = async () => {
-    // Prevent double-clicking
-    if (isSaving) {
+    // Prevent double-clicking — ref check is synchronous, state check covers the visual guard
+    if (isSavingRef.current || isSaving) {
       console.log("Save already in progress, ignoring duplicate click");
       return;
     }
+    isSavingRef.current = true;
 
     // Commit any open popup drafts before reading form values.
     // Do NOT close the popups here — see handleSave comment for why.
@@ -3503,6 +3508,7 @@ The Treemarkables Team`;
     } catch (error) {
       console.error("Save and close failed:", error);
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -5926,10 +5932,13 @@ The Treemarkables Team`;
                                         // status field so we never accidentally overwrite address or
                                         // other fields with stale form state captured mid-transition.
                                         // The server safeguard preserves all other DB values.
-                                        if (mode === "edit" && editingJob?.id) {
+                                        if (editingJob?.id) {
                                           // Capture job ID now — if the modal closes before the
                                           // mutation completes, editingJob becomes null and the
                                           // status save would silently fail without _jobId.
+                                          // NOTE: check editingJob?.id (not mode prop) so that jobs
+                                          // created in "create" mode and then saved also get their
+                                          // status persisted when changed before closing.
                                           const capturedJobId = editingJob.id;
                                           updateJobMutation.mutate({
                                             _jobId: capturedJobId,

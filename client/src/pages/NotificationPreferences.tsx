@@ -20,6 +20,9 @@ import {
   CheckCircle,
   BellRing,
   Settings,
+  User,
+  DollarSign,
+  Calendar,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { notificationService } from "@/lib/notificationService";
@@ -35,6 +38,9 @@ interface NotificationPreferences {
   noteActivity: boolean;
   quoteActivity: boolean;
   jobStatusChanges: boolean;
+  leadActivity: boolean;
+  paymentActivity: boolean;
+  rescheduleRequests: boolean;
 }
 
 export default function NotificationPreferences() {
@@ -50,6 +56,9 @@ export default function NotificationPreferences() {
     noteActivity: true,
     quoteActivity: true,
     jobStatusChanges: true,
+    leadActivity: true,
+    paymentActivity: true,
+    rescheduleRequests: true,
   });
 
   // Load preferences from localStorage
@@ -74,6 +83,9 @@ export default function NotificationPreferences() {
       noteActivity: true,
       quoteActivity: true,
       jobStatusChanges: true,
+      leadActivity: true,
+      paymentActivity: true,
+      rescheduleRequests: true,
     };
 
     let parsedPreferences = defaultPreferences;
@@ -242,7 +254,7 @@ export default function NotificationPreferences() {
             <div className="flex-1">
               <CardTitle>Job Diary Activity</CardTitle>
               <CardDescription>
-                Get notified when diary entries are added to jobs
+                These toggles also control what appears in the notification bell.
               </CardDescription>
             </div>
           </div>
@@ -417,6 +429,72 @@ export default function NotificationPreferences() {
                 checked={preferences.jobStatusChanges}
                 onCheckedChange={() => handleToggle("jobStatusChanges")}
                 data-testid="switch-job-status"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <User className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <Label htmlFor="lead-activity" className="font-medium">
+                    Lead activity
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    New leads, new conversations, and stale-lead reminders
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="lead-activity"
+                checked={preferences.leadActivity}
+                onCheckedChange={() => handleToggle("leadActivity")}
+                data-testid="switch-lead-activity"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <DollarSign className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <Label htmlFor="payment-activity" className="font-medium">
+                    Payments &amp; invoicing
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Payments received, invoices paid, and uninvoiced-job reminders
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="payment-activity"
+                checked={preferences.paymentActivity}
+                onCheckedChange={() => handleToggle("paymentActivity")}
+                data-testid="switch-payment-activity"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Calendar className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <Label htmlFor="reschedule-requests" className="font-medium">
+                    Scheduling &amp; reminders
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Reschedule requests, schedule proposals, stale quotes, and missing-crew alerts
+                  </p>
+                </div>
+              </div>
+              <Switch
+                id="reschedule-requests"
+                checked={preferences.rescheduleRequests}
+                onCheckedChange={() => handleToggle("rescheduleRequests")}
+                data-testid="switch-reschedule-requests"
               />
             </div>
           </div>

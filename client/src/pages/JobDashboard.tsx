@@ -163,12 +163,20 @@ export default function JobDashboard({
 
   const deleteJobsMutation = useMutation({
     mutationFn: async (jobIds: string[]) => {
-      return await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds });
+      const res = await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds });
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.refetchQueries({ queryKey: [jobsApiUrl] });
       setSelectedJobs(new Set());
+      if (result?.failed > 0) {
+        toast({
+          title: "Some jobs could not be deleted",
+          description: `${result.deleted} deleted, ${result.failed} failed.${result.errors?.length ? ` First error: ${result.errors[0]}` : ""}`,
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
