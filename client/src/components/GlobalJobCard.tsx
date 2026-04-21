@@ -6972,57 +6972,44 @@ The Treemarkables Team`;
                                   >
                                     Insert link into description
                                   </Button>
-                                  <label className="cursor-pointer">
-                                    <Button type="button" variant="ghost" size="sm" className="text-xs" asChild>
-                                      <span>Replace</span>
-                                    </Button>
-                                    <input
-                                      type="file"
-                                      accept="video/*"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) handleLoomUpload(f);
-                                        e.target.value = "";
-                                      }}
-                                    />
-                                  </label>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-xs"
+                                    onClick={() => {
+                                      if (loomSDKReady) {
+                                        loomInstanceRef.current?.openPreRecordPanel();
+                                      } else {
+                                        initLoomSDK().then(() => loomInstanceRef.current?.openPreRecordPanel());
+                                      }
+                                    }}
+                                  >
+                                    Replace
+                                  </Button>
                                 </div>
                               </div>
                             ) : (
                               <div>
-                                {loomUploading ? (
-                                  <div className="space-y-2">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                                      <Loader2 className="h-4 w-4 animate-spin text-purple-600" />
-                                      <span>Uploading to Loom...</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-2">
-                                      <div
-                                        className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                                        style={{ width: `${loomUploadProgress}%` }}
-                                      />
-                                    </div>
-                                  </div>
+                                {loomSDKUnsupported ? (
+                                  <p className="text-xs text-gray-500">Loom recording is not supported in this browser.</p>
                                 ) : (
-                                  <label className="cursor-pointer block">
-                                    <Button type="button" variant="outline" size="sm" className="w-full text-xs pointer-events-none" asChild>
-                                      <span className="flex items-center gap-2">
-                                        <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                                        Upload to Loom
-                                      </span>
-                                    </Button>
-                                    <input
-                                      type="file"
-                                      accept="video/*"
-                                      className="hidden"
-                                      onChange={(e) => {
-                                        const f = e.target.files?.[0];
-                                        if (f) handleLoomUpload(f);
-                                        e.target.value = "";
-                                      }}
-                                    />
-                                  </label>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="w-full text-xs"
+                                    onClick={() => {
+                                      if (loomSDKReady) {
+                                        loomInstanceRef.current?.openPreRecordPanel();
+                                      } else {
+                                        initLoomSDK().then(() => loomInstanceRef.current?.openPreRecordPanel());
+                                      }
+                                    }}
+                                  >
+                                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
+                                    Record with Loom
+                                  </Button>
                                 )}
                               </div>
                             )}

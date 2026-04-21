@@ -114,7 +114,7 @@ export default function ConversationDetail() {
   const [showCreateOpportunity, setShowCreateOpportunity] = useState(false);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isExtractingLead, setIsExtractingLead] = useState(false);
+
 
   // Create Opportunity form state
   const [leadForm, setLeadForm] = useState({
@@ -245,7 +245,7 @@ export default function ConversationDetail() {
     // Fallback: Use full first customer message as description if no Message: field found
     if (!description && messages.length > 0) {
       const firstCustomerMessage = messages.find(
-        (m) => m.sender === "customer",
+        (m) => m.direction === "inbound",
       );
       if (firstCustomerMessage?.content) {
         // Get content after stripping form fields
@@ -374,6 +374,33 @@ export default function ConversationDetail() {
       }
     });
 
+    // For SMS/phone conversations: use fromContact of first inbound message as phone/email
+    if (!phone && !email) {
+      const firstInboundMsg = messages.find((m) => m.direction === "inbound");
+      const contact = firstInboundMsg?.fromContact || "";
+      if (contact) {
+        if (contact.includes("@")) {
+          email = contact;
+        } else {
+          phone = contact;
+        }
+      }
+    } else if (!phone) {
+      const firstInboundMsg = messages.find((m) => m.direction === "inbound");
+      const contact = firstInboundMsg?.fromContact || "";
+      if (contact && !contact.includes("@")) {
+        phone = contact;
+      }
+    }
+
+    // Also use fromName of first inbound message as name fallback
+    if (!name) {
+      const firstInboundMsg = messages.find((m) => m.direction === "inbound");
+      if (firstInboundMsg?.fromName) {
+        name = firstInboundMsg.fromName.trim();
+      }
+    }
+
     // Last resort: If name is still empty but we have email, extract name from email
     if (!name && email) {
       const emailParts = email.split("@")[0]; // Get part before @
@@ -421,50 +448,6 @@ export default function ConversationDetail() {
       leadSource,
       description, // Return full description without truncation
     };
-  };
-
-  // AI-powered extraction — sends all message content to the server for GPT extraction
-  const extractWithAI = async (): Promise<{
-    name: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    address: string;
-    description: string;
-    leadSource: string;
-  }> => {
-    // Combine conversation title + all message content into one text blob
-    const allText = [
-      conversation?.title ? `Subject: ${conversation.title}` : "",
-      ...messages.map((m) => m.content || ""),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
-    try {
-      const response = await apiRequest(
-        "POST",
-        "/api/leads/extract-from-message",
-        { message: allText },
-      );
-      const parsed = await response.json();
-      const data = parsed.data || {};
-      const nameParts = (data.name || "").trim().split(/\s+/);
-      return {
-        name: data.name || "",
-        firstName: nameParts[0] || "",
-        lastName: nameParts.slice(1).join(" ") || "",
-        email: data.email || "",
-        phone: data.phone || "",
-        address: data.address || "",
-        description: data.description || "",
-        leadSource: "email",
-      };
-    } catch {
-      // Fall back to regex extraction if AI fails
-      return extractContactDetails();
-    }
   };
 
   // Reply mutation
@@ -593,9 +576,7 @@ export default function ConversationDetail() {
         queryKey: ["/api/conversations", conversationId],
       });
       setShowCreateJob(false);
-      if (job?.id) {
-        setLocation(`/jobs/${job.id}`);
-      }
+      setLocation(job?.id ? `/dispatch?job=${job.id}` : "/dispatch");
     },
     onError: (error) => {
       toast({
@@ -909,11 +890,9 @@ export default function ConversationDetail() {
 
             {/* Create Opportunity */}
             <button
-              onClick={async () => {
+              onClick={() => {
                 setShowManageMenu(false);
-                setIsExtractingLead(true);
-                const extracted = await extractWithAI();
-                setIsExtractingLead(false);
+                const extracted = extractContactDetails();
                 setLeadForm({
                   name: extracted.name || conversation?.title || "New Lead",
                   email: extracted.email || "",
@@ -926,21 +905,14 @@ export default function ConversationDetail() {
                 });
                 setShowCreateOpportunity(true);
               }}
-              disabled={isExtractingLead}
-              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg disabled:opacity-50"
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-create-opportunity"
             >
               <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                {isExtractingLead ? (
-                  <Loader2 className="h-5 w-5 text-white animate-spin" />
-                ) : (
-                  <UserPlus className="h-5 w-5 text-white" />
-                )}
+                <UserPlus className="h-5 w-5 text-white" />
               </div>
               <span className="text-base font-medium text-gray-900">
-                {isExtractingLead
-                  ? "Extracting details..."
-                  : "Create Opportunity"}
+                Create Opportunity
               </span>
             </button>
 
@@ -960,11 +932,9 @@ export default function ConversationDetail() {
               </div>
             ) : (
               <button
-                onClick={async () => {
+                onClick={() => {
                   setShowManageMenu(false);
-                  setIsExtractingLead(true);
-                  const extracted = await extractWithAI();
-                  setIsExtractingLead(false);
+                  const extracted = extractContactDetails();
                   setLeadForm({
                     name: extracted.name || conversation?.title || "New Lead",
                     email: extracted.email || "",
@@ -977,21 +947,14 @@ export default function ConversationDetail() {
                   });
                   setShowCreateJob(true);
                 }}
-                disabled={isExtractingLead}
-                className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg disabled:opacity-50"
+                className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
                 data-testid="button-create-job"
               >
                 <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                  {isExtractingLead ? (
-                    <Loader2 className="h-5 w-5 text-white animate-spin" />
-                  ) : (
-                    <Briefcase className="h-5 w-5 text-white" />
-                  )}
+                  <Briefcase className="h-5 w-5 text-white" />
                 </div>
                 <span className="text-base font-medium text-gray-900">
-                  {isExtractingLead
-                    ? "Extracting details..."
-                    : "Create Job from Lead"}
+                  Create Job from Lead
                 </span>
               </button>
             )}
