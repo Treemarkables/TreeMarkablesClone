@@ -22608,45 +22608,6 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     }
   });
 
-  // Loom SDK token — generates a short-lived RS256 JWT for @loomhq/record-sdk authentication
-  app.get('/api/loom/sdk-token', async (req: Request, res: Response) => {
-    try {
-      const privateKeyPem = process.env.LOOM_PRIVATE_KEY;
-      const appId = process.env.LOOM_APP_ID;
-      if (!privateKeyPem || !appId) {
-        return res.status(500).json({ success: false, message: 'LOOM_APP_ID and LOOM_PRIVATE_KEY must be configured' });
-      }
-      const { SignJWT, importPKCS8 } = await import('jose');
-      const privateKey = await importPKCS8(privateKeyPem, 'RS256');
-      const now = Math.floor(Date.now() / 1000);
-      const jws = await new SignJWT({})
-        .setProtectedHeader({ alg: 'RS256' })
-        .setIssuer(appId)
-        .setIssuedAt(now)
-        .setExpirationTime(now + 180)
-        .sign(privateKey);
-      return res.json({ success: true, jws, appId });
-    } catch (error) {
-      console.error('[Loom] SDK token error:', error);
-      return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to generate Loom SDK token' });
-    }
-  });
-
-  app.patch('/api/jobs/:id/loom-video', async (req: Request, res: Response) => {
-    try {
-      const { id } = req.params;
-      const { loomVideoUrl } = req.body;
-      if (typeof loomVideoUrl !== 'string' && loomVideoUrl !== null) {
-        return res.status(400).json({ success: false, message: 'loomVideoUrl must be a string or null' });
-      }
-      const updated = await storage.updateJob(id, { loomVideoUrl });
-      return res.json({ success: true, data: updated });
-    } catch (error) {
-      console.error('[Loom] Save URL error:', error);
-      return res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to save Loom URL' });
-    }
-  });
-
   const httpServer = createServer(app);
 
   return httpServer;
