@@ -498,9 +498,9 @@ export default function StaffSchedule() {
                           minWidth: 32,
                         }}
                       >
-                        <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                        <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
                           <span
-                            className="text-[10px] font-semibold leading-tight block truncate"
+                            className="text-[10px] font-semibold leading-tight block whitespace-normal break-words"
                             style={{ color: colors.text }}
                           >
                             {label}
@@ -510,10 +510,10 @@ export default function StaffSchedule() {
                               {timeLabel}
                             </span>
                           )}
-                          {width > 14 && job.address && (
-                            <span className="text-[9px] leading-tight flex items-center gap-0.5 truncate" style={{ color: colors.text, opacity: 0.7 }}>
-                              <MapPin className="w-2 h-2 shrink-0" />
-                              {job.address}
+                          {job.address && (
+                            <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: colors.text, opacity: 0.7 }}>
+                              <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
+                              <span className="min-w-0">{job.address}</span>
                             </span>
                           )}
                         </div>
@@ -611,9 +611,9 @@ export default function StaffSchedule() {
                             minWidth: 32,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
                             <span
-                              className="text-[10px] font-semibold leading-tight block truncate"
+                              className="text-[10px] font-semibold leading-tight block whitespace-normal break-words"
                               style={{ color: colors.text }}
                             >
                               {label}
@@ -623,10 +623,10 @@ export default function StaffSchedule() {
                                 {timeLabel}
                               </span>
                             )}
-                            {width > 14 && job.address && (
-                              <span className="text-[9px] leading-tight flex items-center gap-0.5 truncate" style={{ color: colors.text, opacity: 0.7 }}>
-                                <MapPin className="w-2 h-2 shrink-0" />
-                                {job.address}
+                            {job.address && (
+                              <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: colors.text, opacity: 0.7 }}>
+                                <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
+                                <span className="min-w-0">{job.address}</span>
                               </span>
                             )}
                           </div>
