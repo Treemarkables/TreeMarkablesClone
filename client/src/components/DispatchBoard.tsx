@@ -781,20 +781,31 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       try {
         const parsed = JSON.parse(pendingData);
         console.log("📋 Found pending job data from conversation:", parsed);
-
-        // Store the initial data to pass to GlobalJobCard
         setInitialJobData(parsed);
-
-        // Open the global job card in create mode
         setShowGlobalJobCard(true);
         setGlobalJobCardMode("create");
-
-        // Clear localStorage so it doesn't keep popping up
         localStorage.removeItem("pendingJobData");
       } catch (error) {
         console.error("Error parsing pending job data:", error);
         localStorage.removeItem("pendingJobData");
       }
+    }
+
+    // Open a specific job card when navigating from Create Lead flows
+    const pendingJobId = sessionStorage.getItem("dispatch_open_job");
+    if (pendingJobId) {
+      sessionStorage.removeItem("dispatch_open_job");
+      fetch(`/api/jobs/${pendingJobId}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          const jobData = data?.data ?? data;
+          if (jobData?.id) {
+            setShowGlobalJobCard(true);
+            setGlobalJobCardMode("edit");
+            setJobToEdit(jobData as JobAssignment);
+          }
+        })
+        .catch(console.error);
     }
   }, []); // Run only on mount
 
