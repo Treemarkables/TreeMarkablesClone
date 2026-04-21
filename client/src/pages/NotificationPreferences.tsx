@@ -184,14 +184,7 @@ export default function NotificationPreferences() {
   const permissionStatus = notificationService.getPermissionStatus();
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-2">Notification Preferences</h1>
-        <p className="text-muted-foreground">
-          Control which events trigger notifications and how you receive them
-        </p>
-      </div>
-
+    <div className="max-w-4xl mx-auto space-y-6">
       {/* Browser Notifications */}
       <Card className="mb-6">
         <CardHeader>
