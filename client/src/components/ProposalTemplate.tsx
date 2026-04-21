@@ -577,8 +577,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                       </div>
                     )}
 
-                    {/* ── Mobile card layout (hidden on sm+) ── */}
-                    <div className="sm:hidden space-y-2">
+                    {/* ── Mobile card layout (interactive sections only — non-interactive always uses the table) ── */}
+                    <div className={`${isInteractive ? 'sm:hidden' : 'hidden'} space-y-2`}>
                       {(section.lineItems || []).map((item, index) => {
                         let displayPrice: number = Number(item.totalPrice) || 0;
                         const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
@@ -716,8 +716,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                       })}
                     </div>
 
-                    {/* ── Desktop table (hidden below sm) ── */}
-                    <div className="hidden sm:block w-full">
+                    {/* ── Table layout (always visible for non-interactive; desktop-only for interactive) ── */}
+                    <div className={`${isInteractive ? 'hidden sm:block' : 'block'} w-full overflow-x-auto`}>
                       <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                         <thead className="bg-gray-50">
                           <tr>
@@ -726,10 +726,10 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                             )}
                             <th className="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900">Line Item</th>
                             <th className="border border-gray-200 px-3 py-3 text-center text-sm font-semibold text-gray-900 w-14">Qty</th>
-                            <th className="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">Rate</th>
+                            <th className="hidden sm:table-cell border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">Rate</th>
                             <th className="border border-gray-200 px-4 py-3 text-right text-sm font-semibold text-gray-900">Price</th>
                             {!isInteractive && (
-                              <th className="border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">Optional</th>
+                              <th className="hidden sm:table-cell border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">Optional</th>
                             )}
                           </tr>
                         </thead>
@@ -841,14 +841,14 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                                 <td className={`border border-gray-200 px-3 py-3 text-center text-sm whitespace-nowrap ${isInteractive ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-400') : 'text-gray-700'}`}>
                                   {item.quantity}
                                 </td>
-                                <td className={`border border-gray-200 px-4 py-3 text-center text-sm ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-700'}`}>
+                                <td className={`hidden sm:table-cell border border-gray-200 px-4 py-3 text-center text-sm ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-700'}`}>
                                   {formatCurrency(Number(item.unitPrice) || 0)}
                                 </td>
                                 <td className={`border border-gray-200 px-4 py-3 text-right text-sm whitespace-nowrap ${isItemToggleable ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-300') : 'font-semibold text-gray-900'}`}>
                                   {formatCurrency(displayPrice)}
                                 </td>
                                 {!isInteractive && (
-                                  <td className="border border-gray-200 px-4 py-3 text-center">
+                                  <td className="hidden sm:table-cell border border-gray-200 px-4 py-3 text-center">
                                     {item.isOptional && (
                                       <button
                                         type="button"
