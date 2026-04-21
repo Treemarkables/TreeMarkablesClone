@@ -275,10 +275,11 @@ export function InvoiceBuilder({
       customer.name ||
       "",
     );
-    // Email: prefer billing contact email override, then existing invoice email, then customer email
+    // Email: prefer billing contact email override, then existing invoice email, then job contact email, then customer email
     setEditableEmail(
       job.billingContactEmail ||
       (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
+      (job as any).jobContactEmail ||
       customer.email ||
       "",
     );

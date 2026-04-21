@@ -1995,11 +1995,15 @@ export function GlobalJobCard({
 
   const updateJobMutation = useMutation({
     mutationFn: async (data: GlobalJobCardFormData) => {
-      if (!editingJob?.id) throw new Error("No job ID for update");
+      // Prefer an id explicitly baked into data (captures the job ID at the moment
+      // the user acts, so a subsequent modal-close that nulls editingJob cannot lose it)
+      const jobId = (data as any)._jobId || editingJob?.id;
+      if (!jobId) throw new Error("No job ID for update");
+      const { _jobId, ...payload } = data as any;
       const response = await apiRequest(
         "PUT",
-        `/api/jobs/${editingJob.id}`,
-        data,
+        `/api/jobs/${jobId}`,
+        payload,
       );
       return response.json();
     },
@@ -6015,8 +6019,12 @@ The Treemarkables Team`;
                                         // other fields with stale form state captured mid-transition.
                                         // The server safeguard preserves all other DB values.
                                         if (mode === "edit" && editingJob?.id) {
+                                          // Capture job ID now — if the modal closes before the
+                                          // mutation completes, editingJob becomes null and the
+                                          // status save would silently fail without _jobId.
+                                          const capturedJobId = editingJob.id;
                                           updateJobMutation.mutate({
-                                            id: editingJob.id,
+                                            _jobId: capturedJobId,
                                             status: value,
                                           } as GlobalJobCardFormData);
                                         }
