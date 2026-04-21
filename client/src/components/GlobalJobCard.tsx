@@ -586,12 +586,6 @@ export function GlobalJobCard({
   const [internalNotesDraft, setInternalNotesDraft] = useState("");
   const [internalNotesFocused, setInternalNotesFocused] = useState(false);
 
-  // Loom SDK state
-  const loomInstanceRef = useRef<any>(null);
-  const [loomSDKReady, setLoomSDKReady] = useState(false);
-  const [loomSDKUnsupported, setLoomSDKUnsupported] = useState(false);
-  const [loomPasteUrl, setLoomPasteUrl] = useState('');
-  const [loomPasteSaving, setLoomPasteSaving] = useState(false);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
 
   // Double-tap detection for mobile description
@@ -3118,92 +3112,6 @@ The Treemarkables Team`;
     } catch (error) {
       console.error("Error unscheduling job:", error);
       toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
-    }
-  };
-
-  const initLoomSDK = useCallback(async () => {
-    if (!editingJob?.id || loomInstanceRef.current) return;
-    try {
-      const { createInstance, isSupported } = await import('@loomhq/record-sdk');
-      if (!isSupported()) {
-        setLoomSDKUnsupported(true);
-        return;
-      }
-      const tokenRes = await fetch('/api/loom/sdk-token');
-      const tokenData = await tokenRes.json();
-      if (!tokenData.success) throw new Error(tokenData.message || 'Failed to get Loom token');
-
-      const instance = await createInstance({ mode: 'custom', jws: tokenData.jws });
-      loomInstanceRef.current = instance;
-
-      instance.on('upload-complete', async (video: any) => {
-        const shareUrl: string = video.sharedUrl;
-        if (!shareUrl || !editingJob?.id) return;
-        try {
-          await fetch(`/api/jobs/${editingJob.id}/loom-video`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ loomVideoUrl: shareUrl }),
-          });
-          queryClient.setQueryData(['/api/jobs', editingJob.id], (old: any) => {
-            if (!old) return old;
-            const jobData = old?.data ?? old;
-            const updated = { ...jobData, loomVideoUrl: shareUrl };
-            return old?.data ? { ...old, data: updated } : updated;
-          });
-          queryClient.invalidateQueries({ queryKey: ['/api/jobs', editingJob.id] });
-        } catch (err) {
-          console.error('[Loom] save URL error:', err);
-          toast({ title: 'Failed to save Loom URL', variant: 'destructive' });
-        }
-      });
-
-      setLoomSDKReady(true);
-    } catch (err) {
-      console.error('[Loom] SDK init error:', err);
-    }
-  }, [editingJob?.id, queryClient, toast]);
-
-  const handleLoomInsertIntoDescription = async (loomUrl: string) => {
-    if (!editingJob?.id) return;
-    const current = form.getValues("description") || "";
-    const appended = current ? `${current}\n\n${loomUrl}` : loomUrl;
-    form.setValue("description", appended, { shouldDirty: true });
-    try {
-      await fetch(`/api/jobs/${editingJob.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ description: appended }),
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
-    } catch (err) {
-      console.error("[Loom] insert description error:", err);
-    }
-  };
-
-  const handleSavePastedLoomUrl = async () => {
-    if (!editingJob?.id || !loomPasteUrl.trim()) return;
-    const url = loomPasteUrl.trim();
-    if (!url.includes('loom.com/')) {
-      toast({ title: 'Please paste a valid Loom link', variant: 'destructive' });
-      return;
-    }
-    setLoomPasteSaving(true);
-    try {
-      await fetch(`/api/jobs/${editingJob.id}/loom-video`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ loomVideoUrl: url }),
-        credentials: 'include',
-      });
-      setEditingJob((prev: any) => prev ? { ...prev, loomVideoUrl: url } : prev);
-      setLoomPasteUrl('');
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    } catch (err) {
-      console.error('[Loom] paste save error:', err);
-      toast({ title: 'Failed to save Loom URL', variant: 'destructive' });
-    } finally {
-      setLoomPasteSaving(false);
     }
   };
 
@@ -6993,87 +6901,6 @@ The Treemarkables Team`;
                             </div>
                           </div>
                         </div>
-
-                        {/* Loom Video Section */}
-                        {editingJob?.id && (
-                          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 mb-4">
-                            <div className="flex items-center gap-2 mb-3">
-                              <div className="w-6 h-6 bg-purple-100 rounded flex items-center justify-center">
-                                <svg className="h-4 w-4 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                              </div>
-                              <h3 className="font-bold text-gray-900 text-sm">Loom Video</h3>
-                            </div>
-                            {(editingJob as any)?.loomVideoUrl ? (
-                              <div className="space-y-3">
-                                <div className="flex items-center gap-2 text-sm text-gray-700 bg-purple-50 rounded-lg p-3">
-                                  <svg className="h-4 w-4 text-purple-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                                  <a href={(editingJob as any).loomVideoUrl} target="_blank" rel="noopener noreferrer" className="text-purple-700 underline truncate flex-1">
-                                    Watch on Loom
-                                  </a>
-                                </div>
-                                <div className="flex gap-2">
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1 text-xs"
-                                    onClick={() => handleLoomInsertIntoDescription((editingJob as any).loomVideoUrl)}
-                                  >
-                                    Insert link into description
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs"
-                                    onClick={() => setEditingJob((prev: any) => prev ? { ...prev, loomVideoUrl: null } : prev)}
-                                  >
-                                    Replace
-                                  </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="space-y-3">
-                                {!loomSDKUnsupported && (
-                                  <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full text-xs"
-                                    onClick={() => {
-                                      if (loomSDKReady) {
-                                        loomInstanceRef.current?.openPreRecordPanel();
-                                      } else {
-                                        initLoomSDK().then(() => loomInstanceRef.current?.openPreRecordPanel());
-                                      }
-                                    }}
-                                  >
-                                    <svg className="h-4 w-4 mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>
-                                    Record with Loom
-                                  </Button>
-                                )}
-                                <div className="flex gap-2">
-                                  <input
-                                    type="url"
-                                    value={loomPasteUrl}
-                                    onChange={e => setLoomPasteUrl(e.target.value)}
-                                    placeholder="Paste Loom link from app…"
-                                    className="flex-1 text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
-                                  />
-                                  <Button
-                                    type="button"
-                                    size="sm"
-                                    className="text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0"
-                                    disabled={!loomPasteUrl.trim() || loomPasteSaving}
-                                    onClick={handleSavePastedLoomUrl}
-                                  >
-                                    {loomPasteSaving ? 'Saving…' : 'Save'}
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
 
                         {/* Upcoming Bookings - Shows scheduled staff with 12-hour time format */}
                         {editingJob?.scheduledDate &&
