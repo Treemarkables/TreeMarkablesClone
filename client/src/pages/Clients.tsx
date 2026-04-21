@@ -31,6 +31,8 @@ import {
   Archive,
   Eye,
   Crown,
+  GitMerge,
+  Check,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
@@ -76,6 +78,52 @@ const editCustomerSchema = z.object({
   address: z.string().optional().or(z.literal("")),
 });
 
+// Multi-email tag editor — stores emails as a comma-separated string
+function MultiEmailInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const emails = value ? value.split(",").map((e) => e.trim()).filter(Boolean) : [];
+  const [inputVal, setInputVal] = useState("");
+
+  const add = () => {
+    const trimmed = inputVal.trim().toLowerCase();
+    if (!trimmed || emails.includes(trimmed)) { setInputVal(""); return; }
+    onChange([...emails, trimmed].join(","));
+    setInputVal("");
+  };
+
+  const remove = (i: number) => onChange(emails.filter((_, idx) => idx !== i).join(","));
+
+  return (
+    <div className="space-y-2">
+      {emails.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {emails.map((email, i) => (
+            <span key={i} className="flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full border border-blue-200">
+              {email}
+              <button type="button" onClick={() => remove(i)} className="hover:text-red-500 ml-0.5">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input
+          type="email"
+          value={inputVal}
+          onChange={(e) => setInputVal(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+          onBlur={() => { if (inputVal.trim()) add(); }}
+          placeholder="Add invoice recipient email"
+          className="flex-1 h-8 text-sm"
+        />
+        <Button type="button" variant="outline" size="sm" onClick={add} disabled={!inputVal.trim()}>
+          Add
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function Clients() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("name");
@@ -93,6 +141,8 @@ export default function Clients() {
     null,
   );
   const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [primaryMergeId, setPrimaryMergeId] = useState<string | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -206,6 +256,27 @@ export default function Clients() {
     },
   });
 
+  // Merge duplicate customers mutation
+  const mergeCustomersMutation = useMutation({
+    mutationFn: async ({ primaryId, duplicateIds }: { primaryId: string; duplicateIds: string[] }) => {
+      return await apiRequest("POST", "/api/customers/merge", { primaryId, duplicateIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers/historical"] });
+      setSelectedCustomers(new Set());
+      setShowMergeDialog(false);
+      setPrimaryMergeId(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Merge Failed",
+        description: error.message || "Failed to merge customers",
+        variant: "destructive",
+      });
+    },
+  });
+
   // Individual delete mutation
   const deleteCustomerMutation = useMutation({
     mutationFn: async (customerId: string) => {
@@ -313,6 +384,17 @@ export default function Clients() {
     ) {
       deleteCustomersMutation.mutate(Array.from(selectedCustomers));
     }
+  };
+
+  const handleOpenMerge = () => {
+    setPrimaryMergeId(null);
+    setShowMergeDialog(true);
+  };
+
+  const handleConfirmMerge = () => {
+    if (!primaryMergeId) return;
+    const duplicateIds = Array.from(selectedCustomers).filter(id => id !== primaryMergeId);
+    mergeCustomersMutation.mutate({ primaryId: primaryMergeId, duplicateIds });
   };
 
   // Individual customer handlers
@@ -628,16 +710,29 @@ export default function Clients() {
                   </Button>
                 </div>
                 {isAdmin && (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={handleBulkDelete}
-                    disabled={deleteCustomersMutation.isPending}
-                    data-testid="button-bulk-delete"
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Selected
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {selectedCustomers.size >= 2 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenMerge}
+                        data-testid="button-merge-customers"
+                      >
+                        <GitMerge className="w-4 h-4 mr-2" />
+                        Merge Duplicates
+                      </Button>
+                    )}
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={handleBulkDelete}
+                      disabled={deleteCustomersMutation.isPending}
+                      data-testid="button-bulk-delete"
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Selected
+                    </Button>
+                  </div>
                 )}
               </div>
             )}
@@ -912,14 +1007,11 @@ export default function Clients() {
                 name="invoiceCcEmail"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Invoice CC Email</FormLabel>
+                    <FormLabel>Invoice Email Recipients</FormLabel>
                     <FormControl>
-                      <Input
-                        placeholder="Auto-CC on all invoice emails (optional)"
-                        type="email"
-                        {...field}
-                      />
+                      <MultiEmailInput value={field.value || ""} onChange={field.onChange} />
                     </FormControl>
+                    <p className="text-xs text-gray-500">Saved addresses appear as quick-select chips when sending invoices.</p>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -1219,6 +1311,66 @@ export default function Clients() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Merge Duplicates Dialog */}
+      <Dialog open={showMergeDialog} onOpenChange={(open) => { if (!open) { setShowMergeDialog(false); setPrimaryMergeId(null); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Merge Duplicate Clients</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Choose which record to keep. All jobs, invoices, quotes, and history from the other records will be moved to the primary record, and the duplicates will be deleted.
+            </p>
+            <div className="space-y-2">
+              {Array.from(selectedCustomers).map((id) => {
+                const customer = allCustomers.find(c => c.id === id);
+                if (!customer) return null;
+                const isPrimary = primaryMergeId === id;
+                return (
+                  <div
+                    key={id}
+                    className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${isPrimary ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}
+                    onClick={() => setPrimaryMergeId(id)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{customer.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{customer.email || customer.phone || customer.mobile || 'No contact info'}</p>
+                      <p className="text-xs text-gray-400">{(customer as any).totalJobs ?? 0} job{((customer as any).totalJobs ?? 0) !== 1 ? 's' : ''}</p>
+                    </div>
+                    {isPrimary && (
+                      <span className="ml-3 flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full shrink-0">
+                        <Check className="w-3 h-3" /> Keep this one
+                      </span>
+                    )}
+                    {!isPrimary && (
+                      <span className="ml-3 text-xs text-gray-400 shrink-0">Click to keep</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {primaryMergeId && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                The other {selectedCustomers.size - 1} record{selectedCustomers.size - 1 !== 1 ? 's' : ''} will be permanently deleted after their data is moved.
+              </p>
+            )}
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => { setShowMergeDialog(false); setPrimaryMergeId(null); }}>
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                disabled={!primaryMergeId || mergeCustomersMutation.isPending}
+                onClick={handleConfirmMerge}
+              >
+                <GitMerge className="w-4 h-4 mr-2" />
+                {mergeCustomersMutation.isPending ? 'Merging...' : 'Merge'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

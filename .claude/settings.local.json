@@ -17,7 +17,9 @@
       "WebFetch(domain:dev.loom.com)",
       "WebFetch(domain:www.npmjs.com)",
       "WebFetch(domain:registry.npmjs.org)",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "Bash(awk -F: '$2>1890 && $2<1960')",
+      "Bash(awk -F: '$2>3380 && $2<3420')"
     ]
   }
 }

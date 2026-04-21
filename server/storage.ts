@@ -1724,21 +1724,28 @@ class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
-      // Delete all related records first (in order to avoid foreign key constraints)
-      
-      // 1. Delete diary entries
+      // Clear every table that FK-references jobs.id before deleting the job
       await db.delete(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.jobId, id));
-      
-      // 2. Delete proposals
       await db.delete(schema.proposals).where(eq(schema.proposals.jobId, id));
-      
-      // 3. Delete staff assignments
       await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.jobId, id));
-      
-      // 4. Delete communications
       await db.delete(schema.communications).where(eq(schema.communications.jobId, id));
-      
-      // Finally, delete the job itself
+      await db.delete(schema.activities).where(eq(schema.activities.jobId, id));
+      await db.delete(schema.callRecords).where(eq(schema.callRecords.jobId, id));
+      await db.delete(schema.dailyJobNotes).where(eq(schema.dailyJobNotes.jobId, id));
+      await db.delete(schema.equipmentCheckouts).where(eq(schema.equipmentCheckouts.jobId, id));
+      await db.delete(schema.generatedDocuments).where(eq(schema.generatedDocuments.jobId, id));
+      await db.delete(schema.inventoryTransactions).where(eq(schema.inventoryTransactions.jobId, id));
+      await db.delete(schema.invoices).where(eq(schema.invoices.jobId, id));
+      await db.delete(schema.jhaAssessments).where(eq(schema.jhaAssessments.jobId, id));
+      await db.delete(schema.photos).where(eq(schema.photos.jobId, id));
+      await db.delete(schema.quotes).where(eq(schema.quotes.jobId, id));
+      await db.delete(schema.reviewRequests).where(eq(schema.reviewRequests.jobId, id));
+      await db.delete(schema.reviewSubmissions).where(eq(schema.reviewSubmissions.jobId, id));
+      await db.delete(schema.reviews).where(eq(schema.reviews.jobId, id));
+      await db.delete(schema.riskAssessments).where(eq(schema.riskAssessments.jobId, id));
+      await db.delete(schema.safetyIncidents).where(eq(schema.safetyIncidents.jobId, id));
+      await db.delete(schema.treeMarkers).where(eq(schema.treeMarkers.jobId, id));
+
       const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
       return (result.rowCount || 0) > 0;
     } catch (error) {

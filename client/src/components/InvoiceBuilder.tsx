@@ -110,6 +110,15 @@ export function InvoiceBuilder({
   const [customDueDate, setCustomDueDate] = useState<string>("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
 
+  // Fetch the customer fresh so invoiceCcEmail is always up-to-date,
+  // even if the parent component cached stale customer data before the record was edited.
+  const { data: freshCustomerData } = useQuery({
+    queryKey: ["/api/customers", customer.id],
+    enabled: !!customer.id,
+    select: (response: any) => response.data || response,
+  });
+  const effectiveCustomer = (freshCustomerData as Customer | undefined) || customer;
+
   // Fetch proposals for this job
   const { data: proposalsResponse, isLoading: loadingProposals } = useQuery({
     queryKey: ["/api/proposals", job.id],
@@ -1723,11 +1732,11 @@ export function InvoiceBuilder({
             handleClose();
           }}
           job={job}
-          customer={customer}
+          customer={effectiveCustomer}
           customEmail={editableEmail}
           invoiceData={createdInvoice}
           templateType="invoice"
-          defaultCc={customer?.invoiceCcEmail || undefined}
+          defaultCc={effectiveCustomer?.invoiceCcEmail || undefined}
         />
       )}
 

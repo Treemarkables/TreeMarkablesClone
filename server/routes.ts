@@ -17,7 +17,7 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, inArray } from "drizzle-orm";
 import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -2362,6 +2362,102 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error deleting customer:', error);
       res.status(500).json({ success: false, message: 'Error deleting customer' });
+    }
+  });
+
+  // Merge duplicate customers into one primary record
+  app.post('/api/customers/merge', requireAdmin, async (req: Request, res: Response) => {
+    const { primaryId, duplicateIds } = req.body;
+
+    if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'primaryId and duplicateIds[] are required' });
+    }
+    if (duplicateIds.includes(primaryId)) {
+      return res.status(400).json({ success: false, message: 'primaryId cannot also appear in duplicateIds' });
+    }
+
+    try {
+      // Verify all customer IDs exist
+      const allIds = [primaryId, ...duplicateIds];
+      const found = await db.select({ id: schema.customers.id }).from(schema.customers)
+        .where(inArray(schema.customers.id, allIds));
+      if (found.length !== allIds.length) {
+        return res.status(404).json({ success: false, message: 'One or more customer IDs not found' });
+      }
+
+      // Fetch all duplicate records before deleting (to fill in missing fields on primary)
+      const duplicates = await db.select().from(schema.customers)
+        .where(inArray(schema.customers.id, duplicateIds));
+      const primary = await storage.getCustomer(primaryId);
+      if (!primary) {
+        return res.status(404).json({ success: false, message: 'Primary customer not found' });
+      }
+
+      // Reassign all related records from each duplicate to the primary
+      const tables: { table: any; col: any }[] = [
+        { table: schema.communicationPreferences, col: schema.communicationPreferences.customerId },
+        { table: schema.leads,                    col: schema.leads.customerId },
+        { table: schema.calls,                    col: schema.calls.customerId },
+        { table: schema.quotes,                   col: schema.quotes.customerId },
+        { table: schema.jobs,                     col: schema.jobs.customerId },
+        { table: schema.proposals,                col: schema.proposals.customerId },
+        { table: schema.photos,                   col: schema.photos.customerId },
+        { table: schema.activities,               col: schema.activities.customerId },
+        { table: schema.reviews,                  col: schema.reviews.customerId },
+        { table: schema.conversations,            col: schema.conversations.customerId },
+        { table: schema.invoices,                 col: schema.invoices.customerId },
+        { table: schema.serviceRequests,          col: schema.serviceRequests.customerId },
+        { table: schema.customerAuth,             col: schema.customerAuth.customerId },
+        { table: schema.generatedDocuments,       col: schema.generatedDocuments.customerId },
+        { table: schema.reviewRequests,           col: schema.reviewRequests.customerId },
+        { table: schema.reviewSubmissions,        col: schema.reviewSubmissions.customerId },
+        { table: schema.pendingOutboundMessages,  col: schema.pendingOutboundMessages.customerId },
+        { table: schema.communications,           col: schema.communications.customerId },
+        { table: schema.callRecords,              col: schema.callRecords.customerId },
+      ];
+
+      for (const dupId of duplicateIds) {
+        for (const { table, col } of tables) {
+          await db.update(table).set({ customerId: primaryId } as any).where(eq(col, dupId));
+        }
+      }
+
+      // Fill any blank fields on the primary from the duplicates (never overwrite non-empty values)
+      const fillableFields: (keyof typeof primary)[] = [
+        'email', 'phone', 'mobile', 'address', 'city', 'region', 'notes',
+        'source', 'importSource', 'externalId', 'servicem8Uuid',
+      ];
+      const patch: Record<string, any> = {};
+      for (const field of fillableFields) {
+        if (!primary[field]) {
+          for (const dup of duplicates) {
+            if (dup[field]) {
+              patch[field] = dup[field];
+              break;
+            }
+          }
+        }
+      }
+      // Recalculate job count and lifetime value from newly consolidated jobs
+      const consolidatedJobs = await db.select({ totalAmount: schema.jobs.totalAmount })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.customerId, primaryId));
+      patch.totalJobs = consolidatedJobs.length;
+      patch.lifetimeValue = consolidatedJobs
+        .reduce((sum, j) => sum + parseFloat((j.totalAmount as string) || '0'), 0)
+        .toFixed(2);
+
+      await storage.updateCustomer(primaryId, patch);
+
+      // Delete the duplicate records (FK violations are gone now)
+      await db.delete(schema.customers).where(inArray(schema.customers.id, duplicateIds));
+
+      const updatedPrimary = await storage.getCustomer(primaryId);
+      console.log(`✅ Merged customers [${duplicateIds.join(', ')}] into ${primaryId}`);
+      res.json({ success: true, data: updatedPrimary });
+    } catch (error) {
+      console.error('Error merging customers:', error);
+      res.status(500).json({ success: false, message: 'Failed to merge customers' });
     }
   });
 

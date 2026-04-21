@@ -421,9 +421,14 @@ export function EmailComposerModal({
         .replace(/{contactName}/g, "Treemarkables Team")
         .replace(/{contactPhone}/g, "0272166882");
 
+      // When there are multiple saved invoice emails (chips UI), start CC empty so
+      // the user selects which ones to include. For a single address, pre-populate as before.
+      const savedEmailCount = defaultCc
+        ? defaultCc.split(",").map((e) => e.trim()).filter(Boolean).length
+        : 0;
       setEmailData({
         to: billingEmail || "",
-        cc: defaultCc || "",
+        cc: savedEmailCount > 1 ? "" : (defaultCc || ""),
         subject: populatedSubject,
         body: populatedBody,
         selectedTemplate: template.id,
@@ -1376,6 +1381,52 @@ export function EmailComposerModal({
                 data-testid="input-email-to"
               />
             </div>
+
+            {/* Saved invoice recipient chips — shown when customer has multiple saved emails */}
+            {(() => {
+              const savedEmails = defaultCc
+                ? defaultCc.split(",").map((e) => e.trim()).filter(Boolean)
+                : [];
+              if (savedEmails.length === 0) return null;
+              return (
+                <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-start">
+                  <Label className="text-xs sm:col-span-1 sm:text-right font-medium pt-1">
+                    Saved:
+                  </Label>
+                  <div className="sm:col-span-11 flex flex-wrap gap-1.5">
+                    {savedEmails.map((email) => {
+                      const ccEmails = emailData.cc.split(",").map((e) => e.trim()).filter(Boolean);
+                      const isActive = ccEmails.includes(email) || emailData.to === email;
+                      const toggle = () => {
+                        setEmailData((prev) => {
+                          const current = prev.cc.split(",").map((e) => e.trim()).filter(Boolean);
+                          const next = isActive
+                            ? current.filter((e) => e !== email)
+                            : [...current, email];
+                          return { ...prev, cc: next.join(", ") };
+                        });
+                      };
+                      return (
+                        <button
+                          key={email}
+                          type="button"
+                          onClick={toggle}
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-colors ${
+                            isActive
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600"
+                          }`}
+                        >
+                          {isActive && <Check className="w-3 h-3" />}
+                          {email}
+                        </button>
+                      );
+                    })}
+                    <span className="text-xs text-gray-400 self-center">click to add/remove from CC</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
               <Label

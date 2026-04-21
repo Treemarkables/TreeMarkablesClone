@@ -44,6 +44,11 @@ import { apiRequest } from "@/lib/queryClient";
 import { formatDistanceToNow } from "date-fns";
 import { notificationService } from "@/lib/notificationService";
 import { useToast } from "@/hooks/use-toast";
+import {
+  loadNotificationPrefs,
+  isNotificationVisible,
+  type NotificationPrefs,
+} from "@/lib/notificationFilter";
 
 interface NotificationWithDetails {
   id: string;
@@ -150,31 +155,21 @@ export function NotificationBell() {
 
   const [pushEnabled, setPushEnabled] = useState(getUserPreference());
   const [lastNotificationCount, setLastNotificationCount] = useState(0);
+  const [prefs, setPrefs] = useState<NotificationPrefs>(loadNotificationPrefs());
 
   // Listen for preference changes (both same tab and other tabs)
   useEffect(() => {
-    const handleStorageChange = () => {
+    const refresh = () => {
       setPushEnabled(getUserPreference());
+      setPrefs(loadNotificationPrefs());
     };
 
-    const handleCustomChange = () => {
-      setPushEnabled(getUserPreference());
-    };
-
-    // Cross-tab changes
-    window.addEventListener("storage", handleStorageChange);
-    // Same-tab changes via custom event
-    window.addEventListener(
-      "notificationPreferencesChanged",
-      handleCustomChange,
-    );
+    window.addEventListener("storage", refresh);
+    window.addEventListener("notificationPreferencesChanged", refresh);
 
     return () => {
-      window.removeEventListener("storage", handleStorageChange);
-      window.removeEventListener(
-        "notificationPreferencesChanged",
-        handleCustomChange,
-      );
+      window.removeEventListener("storage", refresh);
+      window.removeEventListener("notificationPreferencesChanged", refresh);
     };
   }, []);
 
@@ -184,11 +179,12 @@ export function NotificationBell() {
     refetchInterval: 60000, // Poll every 60 seconds
   });
 
-  // Fetch all notifications when dropdown is opened
+  // Always fetch the list (same cadence as the summary) so the badge count
+  // can be filtered client-side against the user's bell preferences.
   const { data: notificationsData, isLoading: isLoadingNotifications } =
     useQuery({
       queryKey: ["/api/notifications"],
-      enabled: isOpen,
+      refetchInterval: 60000,
     });
 
   // Check for new notifications and show browser notification
@@ -211,6 +207,14 @@ export function NotificationBell() {
       // Fetch specific notification by ID to get actionUrl
       if (summary.recent && summary.recent.length > 0) {
         const latestNotificationSummary = summary.recent[0];
+
+        // Skip push if this notification type is muted in the bell filter
+        if (!isNotificationVisible(latestNotificationSummary.type, prefs)) {
+          if (summary.unread !== lastNotificationCount) {
+            setLastNotificationCount(summary.unread);
+          }
+          return;
+        }
 
         // Fetch the specific notification by ID using queryClient with a fetcher
         queryClient
@@ -296,7 +300,7 @@ export function NotificationBell() {
     if (summary.unread !== lastNotificationCount) {
       setLastNotificationCount(summary.unread);
     }
-  }, [summaryData, pushEnabled, lastNotificationCount, queryClient]);
+  }, [summaryData, pushEnabled, lastNotificationCount, queryClient, prefs]);
 
   // Handle browser notification permission request
   const handleEnablePushNotifications = async () => {
@@ -371,36 +375,12 @@ export function NotificationBell() {
     },
   });
 
-  // Helper to optimistically zero out the summary badge
-  const optimisticClearSummary = (clearTotal = false) => {
-    queryClient.setQueryData(["/api/notifications/summary"], (old: any) => {
-      if (!old?.data) return old;
-      return {
-        ...old,
-        data: {
-          ...old.data,
-          unread: 0,
-          ...(clearTotal ? { total: 0, recent: [] } : {}),
-        },
-      };
-    });
-    if (clearTotal) {
-      queryClient.setQueryData(["/api/notifications"], (old: any) => {
-        if (!old?.data) return old;
-        return { ...old, data: [] };
-      });
-    }
-  };
-
-  // Mark all as read mutation
+  // Mark all VISIBLE notifications as read
   const markAllAsReadMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("PATCH", "/api/notifications/read-all", {
-        userId: undefined,
-      });
-    },
-    onMutate: () => {
-      optimisticClearSummary(false);
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(
+        ids.map((id) => apiRequest("PATCH", `/api/notifications/${id}/read`)),
+      );
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
@@ -410,13 +390,12 @@ export function NotificationBell() {
     },
   });
 
-  // Delete ALL notifications mutation
+  // Delete all VISIBLE notifications
   const deleteAllNotificationsMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("DELETE", "/api/notifications");
-    },
-    onMutate: () => {
-      optimisticClearSummary(true);
+    mutationFn: async (ids: string[]) => {
+      await Promise.all(
+        ids.map((id) => apiRequest("DELETE", `/api/notifications/${id}`)),
+      );
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
@@ -447,8 +426,14 @@ export function NotificationBell() {
     recent: [],
   };
 
-  const notifications: NotificationWithDetails[] =
+  const rawNotifications: NotificationWithDetails[] =
     (notificationsData as any)?.data || [];
+  const notifications = rawNotifications.filter((n) =>
+    isNotificationVisible(n.type, prefs),
+  );
+
+  const visibleUnread = notifications.filter((n) => !n.isRead).length;
+  const visibleTotal = notifications.length;
 
   const handleNotificationClick = (notification: NotificationWithDetails) => {
     console.log("🔔 Notification clicked:", {
@@ -621,9 +606,9 @@ export function NotificationBell() {
           data-testid="button-notifications"
         >
           <Bell
-            className={`fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${summary.unread > 0 ? "animate-pulse" : ""}`}
+            className={`fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${visibleUnread > 0 ? "animate-pulse" : ""}`}
           />
-          {summary.unread > 0 && (
+          {visibleUnread > 0 && (
             <>
               <div className="absolute inset-0 rounded-md bg-orange-400/30 animate-ping" />
               <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white text-xs flex items-center justify-center shadow-lg animate-bounce border-2 border-white">
@@ -631,7 +616,7 @@ export function NotificationBell() {
                   className="text-[11px] font-bold"
                   data-testid="text-notification-count"
                 >
-                  {summary.unread > 99 ? "99+" : summary.unread}
+                  {visibleUnread > 99 ? "99+" : visibleUnread}
                 </span>
               </div>
             </>
@@ -662,11 +647,15 @@ export function NotificationBell() {
                     Enable Alerts
                   </Button>
                 )}
-                {summary.unread > 0 && (
+                {visibleUnread > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => markAllAsReadMutation.mutate()}
+                    onClick={() =>
+                      markAllAsReadMutation.mutate(
+                        notifications.filter((n) => !n.isRead).map((n) => n.id),
+                      )
+                    }
                     disabled={markAllAsReadMutation.isPending}
                     className="text-xs"
                     data-testid="button-mark-all-read"
@@ -675,11 +664,15 @@ export function NotificationBell() {
                     Mark all read
                   </Button>
                 )}
-                {(summary.total > 0 || notifications.length > 0) && (
+                {notifications.length > 0 && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => deleteAllNotificationsMutation.mutate()}
+                    onClick={() =>
+                      deleteAllNotificationsMutation.mutate(
+                        notifications.map((n) => n.id),
+                      )
+                    }
                     disabled={deleteAllNotificationsMutation.isPending}
                     className="text-xs text-destructive hover:text-destructive"
                     data-testid="button-delete-all-notifications"
@@ -690,14 +683,14 @@ export function NotificationBell() {
                 )}
               </div>
             </div>
-            {summary.total > 0 && (
+            {visibleTotal > 0 && (
               <div className="flex gap-2 text-xs text-muted-foreground">
                 <span data-testid="text-total-notifications">
-                  {summary.total} total
+                  {visibleTotal} total
                 </span>
-                {summary.unread > 0 && (
+                {visibleUnread > 0 && (
                   <span data-testid="text-unread-notifications">
-                    • {summary.unread} unread
+                    • {visibleUnread} unread
                   </span>
                 )}
               </div>
@@ -836,7 +829,7 @@ export function NotificationBell() {
             {notifications.length > 0 && (
               <div className="p-3 border-t bg-muted/30">
                 <div className="text-xs text-muted-foreground text-center">
-                  Showing {notifications.length} of {summary.total}{" "}
+                  Showing {notifications.length} of {visibleTotal}{" "}
                   notifications
                 </div>
               </div>
