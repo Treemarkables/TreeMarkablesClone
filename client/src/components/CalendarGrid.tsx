@@ -559,7 +559,16 @@ export function CalendarGrid({
         items.forEach(({ job }) => assignedJobIds.add(job.id));
       }
     }
-    const EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled']);
+    // Pre-schedule statuses (lead/quote/work_order) aren't on the calendar yet —
+    // if a stale scheduledDate lingers on one of those, don't surface it here.
+    const EXCLUDE = new Set([
+      'archived',
+      'unsuccessful',
+      'cancelled',
+      'lead',
+      'quote',
+      'work_order',
+    ]);
     return allJobs.filter((job) => {
       if (EXCLUDE.has(job.status)) return false;
       if (assignedJobIds.has(job.id)) return false;
