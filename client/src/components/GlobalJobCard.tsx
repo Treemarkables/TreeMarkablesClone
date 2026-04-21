@@ -800,7 +800,7 @@ export function GlobalJobCard({
 
   const { data: quoteTemplateData } = useQuery({
     queryKey: ["/api/templates/default/quote"],
-    enabled: isOpen && (activeTab === "billing" || sidebarTab === "billing"),
+    enabled: isOpen && (activeTab === "billing" || sidebarTab === "billing" || isQuoteModalOpen),
   });
 
   const { data: proposalTemplateData } = useQuery({
@@ -2311,8 +2311,12 @@ export function GlobalJobCard({
         throw new Error("Job and customer are required");
       }
 
-      // Get line items from job record first, fallback to form values
-      const lineItems = editingJob.lineItems || form.getValues("lineItems") || [];
+      // Get line items — prefer DB value only if non-empty ([] is truthy so plain || fails)
+      const dbItems = editingJob.lineItems;
+      const lineItems =
+        dbItems && dbItems.length > 0
+          ? dbItems
+          : form.getValues("lineItems") || [];
       const totalAmount =
         lineItems.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
       const quoteData = {
@@ -2340,7 +2344,11 @@ export function GlobalJobCard({
       // Update the job with the quote ID (preserve line items)
       if (result.data?.id && editingJob?.id) {
         try {
-          const lineItems = editingJob.lineItems || form.getValues("lineItems") || [];
+          const savedItems = editingJob.lineItems;
+          const lineItems =
+            savedItems && savedItems.length > 0
+              ? savedItems
+              : form.getValues("lineItems") || [];
           console.log("📝 Updating job with quoteId and line items:", {
             quoteId: result.data.id,
             lineItemsCount: lineItems.length,
@@ -2599,8 +2607,13 @@ export function GlobalJobCard({
       return;
     }
 
-    // Get line items from the job record (not from formData which might not be loaded yet)
-    const lineItems = editingJob?.lineItems || form.getValues("lineItems") || [];
+    // Get line items — prefer DB value only if it's non-empty, otherwise fall
+    // back to form state (empty-array [] is truthy so plain || doesn't work).
+    const dbLineItems = editingJob?.lineItems;
+    const lineItems =
+      dbLineItems && dbLineItems.length > 0
+        ? dbLineItems
+        : form.getValues("lineItems") || [];
     if (lineItems.length === 0) {
       toast({
         title: "No Line Items",
@@ -9275,9 +9288,12 @@ The Treemarkables Team`;
             </DialogHeader>
             <div className="p-3 sm:p-6">
               {(() => {
-                // Use editingJob.lineItems first (loaded from database), fallback to form values
+                // Prefer DB items only if non-empty ([] is truthy so plain || fails)
+                const _dbSrc = editingJob.lineItems;
                 const lineItemsSource =
-                  editingJob.lineItems || form.getValues("lineItems") || [];
+                  _dbSrc && _dbSrc.length > 0
+                    ? _dbSrc
+                    : form.getValues("lineItems") || [];
                 const mappedLineItems = lineItemsSource.map((item) => {
                   const quantity = item.quantity || 1;
                   const unitPrice = item.unitPrice || 0;
