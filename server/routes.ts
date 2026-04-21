@@ -14103,13 +14103,24 @@ Transcription: ${transcriptText}`;
         
         try {
           const notificationHelper = await import('./services/notificationHelper.js');
-          await notificationHelper.createNotification({
-            type: 'email_reply',
-            title: `Email reply on Job #${job.jobNumber}`,
-            message: `${actualFromName || actualFromEmail} replied to Job #${job.jobNumber}`,
-            jobId: job.id,
-            metadata: { emailAddress: actualFromEmail || actualFrom }
-          });
+          // De-dup against gmailReplyService (which polls the inbox) so the same email
+          // doesn't produce two bell entries. Matches the 24h/per-job guard there.
+          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+          const alreadyNotified = recentNotifs.some(
+            (n) => n.type === 'email_reply' && n.jobId === job.id,
+          );
+          if (!alreadyNotified) {
+            await notificationHelper.createNotification({
+              type: 'email_reply',
+              title: `Email reply on Job #${job.jobNumber}`,
+              message: `${actualFromName || actualFromEmail} replied to Job #${job.jobNumber}`,
+              jobId: job.id,
+              metadata: { emailAddress: actualFromEmail || actualFrom }
+            });
+          } else {
+            console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (UUID path)`);
+          }
           // Detect reschedule intent → alert dispatcher to re-propose a time slot
           const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
           if (rescheduleKeywords.test(cleanedBody)) {
@@ -14159,28 +14170,39 @@ Transcription: ${transcriptText}`;
           try {
             const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
-            
-            const notificationData = {
-              title: 'Customer Email Reply',
-              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
-              type: 'email_reply',
-              priority: 'high' as const,
-              isRead: false,
-              actionUrl: `/dispatch?job=${job.id}&tab=diary`,
-              entityType: 'job',
-              entityId: job.id,
-              relatedEntityType: 'job',
-              relatedEntityId: job.id,
-              jobId: job.id,
-              metadata: { 
-                preview: previewText,
-                senderEmail: actualFromEmail || actualFrom,
-                senderName: actualFromName
-              }
-            };
-            
-            await storage.createNotification(notificationData);
-            console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+
+            // De-dup against gmailReplyService: same 24h/per-job guard used there.
+            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+            const alreadyNotified = recentNotifs.some(
+              (n) => n.type === 'email_reply' && n.jobId === job.id,
+            );
+
+            if (!alreadyNotified) {
+              const notificationData = {
+                title: 'Customer Email Reply',
+                message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
+                type: 'email_reply',
+                priority: 'high' as const,
+                isRead: false,
+                actionUrl: `/dispatch?job=${job.id}&tab=diary`,
+                entityType: 'job',
+                entityId: job.id,
+                relatedEntityType: 'job',
+                relatedEntityId: job.id,
+                jobId: job.id,
+                metadata: {
+                  preview: previewText,
+                  senderEmail: actualFromEmail || actualFrom,
+                  senderName: actualFromName
+                }
+              };
+
+              await storage.createNotification(notificationData);
+              console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+            } else {
+              console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (job-number path)`);
+            }
             // Detect reschedule intent → alert dispatcher to re-propose a time slot
             const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
             if (rescheduleKeywords.test(cleanedBody)) {
@@ -14234,28 +14256,39 @@ Transcription: ${transcriptText}`;
           try {
             const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
-            
-            const notificationData = {
-              title: 'Customer Email Reply',
-              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
-              type: 'email_reply',
-              priority: 'high' as const,
-              isRead: false,
-              actionUrl: `/dispatch?job=${job.id}&tab=diary`,
-              entityType: 'job',
-              entityId: job.id,
-              relatedEntityType: 'job',
-              relatedEntityId: job.id,
-              jobId: job.id,
-              metadata: { 
-                preview: previewText,
-                senderEmail: actualFromEmail || actualFrom,
-                senderName: actualFromName
-              }
-            };
-            
-            await storage.createNotification(notificationData);
-            console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (via quote)`);
+
+            // De-dup against gmailReplyService: same 24h/per-job guard used there.
+            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+            const alreadyNotified = recentNotifs.some(
+              (n) => n.type === 'email_reply' && n.jobId === job.id,
+            );
+
+            if (!alreadyNotified) {
+              const notificationData = {
+                title: 'Customer Email Reply',
+                message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
+                type: 'email_reply',
+                priority: 'high' as const,
+                isRead: false,
+                actionUrl: `/dispatch?job=${job.id}&tab=diary`,
+                entityType: 'job',
+                entityId: job.id,
+                relatedEntityType: 'job',
+                relatedEntityId: job.id,
+                jobId: job.id,
+                metadata: {
+                  preview: previewText,
+                  senderEmail: actualFromEmail || actualFrom,
+                  senderName: actualFromName
+                }
+              };
+
+              await storage.createNotification(notificationData);
+              console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (via quote)`);
+            } else {
+              console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (quote-number path)`);
+            }
           } catch (notifError) {
             console.error('Error creating email reply notification:', notifError);
             // Don't fail the request if notification creation fails
