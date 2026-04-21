@@ -590,6 +590,8 @@ export function GlobalJobCard({
   const loomInstanceRef = useRef<any>(null);
   const [loomSDKReady, setLoomSDKReady] = useState(false);
   const [loomSDKUnsupported, setLoomSDKUnsupported] = useState(false);
+  const [loomPasteUrl, setLoomPasteUrl] = useState('');
+  const [loomPasteSaving, setLoomPasteSaving] = useState(false);
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
 
   // Double-tap detection for mobile description
@@ -3159,6 +3161,32 @@ The Treemarkables Team`;
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
     } catch (err) {
       console.error("[Loom] insert description error:", err);
+    }
+  };
+
+  const handleSavePastedLoomUrl = async () => {
+    if (!editingJob?.id || !loomPasteUrl.trim()) return;
+    const url = loomPasteUrl.trim();
+    if (!url.includes('loom.com/')) {
+      toast({ title: 'Please paste a valid Loom link', variant: 'destructive' });
+      return;
+    }
+    setLoomPasteSaving(true);
+    try {
+      await fetch(`/api/jobs/${editingJob.id}/loom-video`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ loomVideoUrl: url }),
+        credentials: 'include',
+      });
+      setEditingJob((prev: any) => prev ? { ...prev, loomVideoUrl: url } : prev);
+      setLoomPasteUrl('');
+      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
+    } catch (err) {
+      console.error('[Loom] paste save error:', err);
+      toast({ title: 'Failed to save Loom URL', variant: 'destructive' });
+    } finally {
+      setLoomPasteSaving(false);
     }
   };
 
@@ -6977,23 +7005,15 @@ The Treemarkables Team`;
                                     variant="ghost"
                                     size="sm"
                                     className="text-xs"
-                                    onClick={() => {
-                                      if (loomSDKReady) {
-                                        loomInstanceRef.current?.openPreRecordPanel();
-                                      } else {
-                                        initLoomSDK().then(() => loomInstanceRef.current?.openPreRecordPanel());
-                                      }
-                                    }}
+                                    onClick={() => setEditingJob((prev: any) => prev ? { ...prev, loomVideoUrl: null } : prev)}
                                   >
                                     Replace
                                   </Button>
                                 </div>
                               </div>
                             ) : (
-                              <div>
-                                {loomSDKUnsupported ? (
-                                  <p className="text-xs text-gray-500">Loom recording is not supported in this browser.</p>
-                                ) : (
+                              <div className="space-y-3">
+                                {!loomSDKUnsupported && (
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -7011,6 +7031,24 @@ The Treemarkables Team`;
                                     Record with Loom
                                   </Button>
                                 )}
+                                <div className="flex gap-2">
+                                  <input
+                                    type="url"
+                                    value={loomPasteUrl}
+                                    onChange={e => setLoomPasteUrl(e.target.value)}
+                                    placeholder="Paste Loom link from app…"
+                                    className="flex-1 text-xs border border-gray-200 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="text-xs bg-purple-600 hover:bg-purple-700 text-white shrink-0"
+                                    disabled={!loomPasteUrl.trim() || loomPasteSaving}
+                                    onClick={handleSavePastedLoomUrl}
+                                  >
+                                    {loomPasteSaving ? 'Saving…' : 'Save'}
+                                  </Button>
+                                </div>
                               </div>
                             )}
                           </div>
