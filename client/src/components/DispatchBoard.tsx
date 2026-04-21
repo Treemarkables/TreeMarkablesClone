@@ -2437,8 +2437,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             const customerName =
                               job.customerName || "Unknown Customer";
                             const total = calculateJobTotal(job);
-                            const suburb =
-                              job.address?.split(",")[0]?.trim() || "";
+                            const fullAddress = job.address?.trim() || "";
 
                             // Get status badge styling - same as mobile
                             const getDesktopStatusBadge = () => {
@@ -2575,7 +2574,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       <div className="flex items-start gap-1.5 text-sm text-gray-500 min-w-0">
                                         <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
                                         <span className="whitespace-normal break-words min-w-0">
-                                          {suburb || "No location"}
+                                          {fullAddress || "No location"}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-1 flex-shrink-0">
