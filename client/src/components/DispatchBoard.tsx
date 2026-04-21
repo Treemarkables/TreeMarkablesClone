@@ -1502,20 +1502,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (job.status === "unsuccessful" || job.status === "archived")
           return false;
 
+        // When searching, ignore the tab filter — search is global across all active jobs
+        // (including queued jobs). Completed/invoiced are still excluded here; Deep Search
+        // covers those.
+        if (isSearching) {
+          return job.status !== "completed" && job.status !== "invoiced";
+        }
+
         // Queued jobs belong exclusively to the Queue tab
         if (jobFilter === "queue") return job.inQueue === true;
         if (job.inQueue) return false;
 
-        // When a specific tab is selected, always scope to that tab (even while searching)
+        // When a specific tab is selected, scope to that tab
         if (jobFilter === "lead") return job.status === "lead";
         if (jobFilter === "quote") return job.status === "quote";
         if (jobFilter === "work_order") return job.status === "work_order";
         if (jobFilter === "scheduled") return job.status === "scheduled";
-
-        // 'all' tab while searching: show all non-terminal active statuses
-        if (isSearching) {
-          return job.status !== "completed" && job.status !== "invoiced";
-        }
 
         // 'all' tab, no search: only the three most actionable statuses
         return (

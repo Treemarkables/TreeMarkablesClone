@@ -13,6 +13,7 @@ const TIMELINE_START_H = 6;   // 6 AM
 const TIMELINE_END_H   = 19;  // 7 PM
 const TIMELINE_HOURS   = TIMELINE_END_H - TIMELINE_START_H;
 const STAFF_COL_W      = 148; // px — fixed left column width
+const MIN_HOUR_COL_W   = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
 const DAY_TARGET       = 3500; // NZD daily revenue target
 
 const HOUR_LABELS = Array.from({ length: TIMELINE_HOURS + 1 }, (_, i) => {
@@ -82,24 +83,20 @@ function nzDateStr(date: Date) {
   return formatInTimeZone(date, NZ_TZ, 'yyyy-MM-dd');
 }
 
-// Assigns overlapping jobs in a single row to vertical lanes so they don't cover each other.
-// Returns a map of job.id → { lane, totalLanes }.
-function assignLanes(jobs: Job[]): Map<string, { lane: number; totalLanes: number }> {
-  const sorted = [...jobs].sort(
-    (a, b) => timeStrToMinutes(a.scheduledStartTime ?? '08:00') - timeStrToMinutes(b.scheduledStartTime ?? '08:00')
-  );
-  const laneEnd: number[] = []; // end-time (mins) of the last job placed in each lane
+// Assigns overlapping items in a single row to vertical lanes so they don't cover each other.
+// Returns a map of item.id → { lane, totalLanes }.
+function assignLanes(items: { id: string; startMins: number; endMins: number }[]): Map<string, { lane: number; totalLanes: number }> {
+  const sorted = [...items].sort((a, b) => a.startMins - b.startMins);
+  const laneEnd: number[] = []; // end-time (mins) of the last item placed in each lane
   const laneOf = new Map<string, number>();
 
-  for (const job of sorted) {
-    const start = timeStrToMinutes(job.scheduledStartTime ?? '08:00');
-    const end   = timeStrToMinutes(job.scheduledEndTime   ?? '16:00');
+  for (const item of sorted) {
     let placed = -1;
     for (let l = 0; l < laneEnd.length; l++) {
-      if (laneEnd[l] <= start) { placed = l; laneEnd[l] = end; break; }
+      if (laneEnd[l] <= item.startMins) { placed = l; laneEnd[l] = item.endMins; break; }
     }
-    if (placed === -1) { placed = laneEnd.length; laneEnd.push(end); }
-    laneOf.set(job.id, placed);
+    if (placed === -1) { placed = laneEnd.length; laneEnd.push(item.endMins); }
+    laneOf.set(item.id, placed);
   }
 
   const total = laneEnd.length || 1;
@@ -112,6 +109,39 @@ function assignLanes(jobs: Job[]): Map<string, { lane: number; totalLanes: numbe
 function laneStyle(lane: number, totalLanes: number) {
   const pct = 100 / totalLanes;
   return { top: `calc(${lane * pct}% + 3px)`, height: `calc(${pct}% - 6px)` };
+}
+
+// Minimum on-screen block size, in minutes. Matches CalendarGrid's GANTT_MIN_DURATION_MINS.
+const MIN_BLOCK_MINS = 60;
+
+// Compute effective NZ-minutes for a slot. Mirrors CalendarGrid's effectiveGanttMins:
+// prefer the job's scheduled string times; fall back to the assignment's UTC timestamps;
+// finally default to 8 AM–4 PM.
+function effectiveMins(
+  job: Job,
+  assignment: { startTime: string | Date; endTime: string | Date } | null,
+): { startMins: number; endMins: number } {
+  if (job.scheduledStartTime) {
+    const startMins = timeStrToMinutes(job.scheduledStartTime);
+    const rawEnd = job.scheduledEndTime ? timeStrToMinutes(job.scheduledEndTime) : startMins + MIN_BLOCK_MINS;
+    return { startMins, endMins: Math.max(rawEnd, startMins + MIN_BLOCK_MINS) };
+  }
+  if (assignment) {
+    const startNZ = toZonedTime(new Date(assignment.startTime), NZ_TZ);
+    const endNZ   = toZonedTime(new Date(assignment.endTime),   NZ_TZ);
+    const startMins = startNZ.getHours() * 60 + startNZ.getMinutes();
+    const rawEnd    = endNZ.getHours()   * 60 + endNZ.getMinutes();
+    return { startMins, endMins: Math.max(rawEnd, startMins + MIN_BLOCK_MINS) };
+  }
+  return { startMins: 8 * 60, endMins: 16 * 60 };
+}
+
+function formatTimeFromMins(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -207,47 +237,58 @@ export default function StaffSchedule() {
     return m;
   }, [dayJobs]);
 
-  // Assignments for this date, keyed by employeeId → jobs[]
-  // Primary source: assignedTeam[] on each job (set via Dispatch Board / AI Dispatch)
-  // Secondary source: job_staff_assignments table (detailed scheduling records)
-  const assignmentsByEmployee = useMemo(() => {
-    const map = new Map<string, Job[]>();
+  // Slots = one renderable block each, keyed by assignment id (or a fallback key for
+  // job.assignedTeam entries that have no assignment record).
+  // This mirrors CalendarGrid: we render one block per assignment record so multiple
+  // short assignments on the same day don't collapse into a single job-level block.
+  const slotsByEmployee = useMemo(() => {
+    const map = new Map<string, { id: string; job: Job; assignment: any | null; startMins: number; endMins: number }[]>();
 
-    // 1. Pull from job.assignedTeam (the primary assignment mechanism)
+    // 1. Assignment records that fall on the selected NZ date
+    allAssignments.forEach((a: any) => {
+      const job = jobMap.get(a.jobId);
+      if (!job) return;
+      const aDate = formatInTimeZone(new Date(a.startTime), NZ_TZ, 'yyyy-MM-dd');
+      if (aDate !== dateStr) return;
+      const { startMins, endMins } = effectiveMins(job, a);
+      const list = map.get(a.employeeId) ?? [];
+      list.push({ id: a.id, job, assignment: a, startMins, endMins });
+      map.set(a.employeeId, list);
+    });
+
+    // 2. Fallback for job.assignedTeam[] entries that have no assignment record today
     dayJobs.forEach(job => {
       (job.assignedTeam ?? []).forEach((empId: string) => {
         const list = map.get(empId) ?? [];
-        if (!list.find(j => j.id === job.id)) list.push(job);
+        if (list.some(s => s.job.id === job.id)) return;
+        const { startMins, endMins } = effectiveMins(job, null);
+        list.push({ id: `team::${empId}::${job.id}`, job, assignment: null, startMins, endMins });
         map.set(empId, list);
       });
     });
 
-    // 2. Merge in any job_staff_assignments records (e.g. AI Dispatch detailed schedules)
-    allAssignments.forEach((a: any) => {
-      const job = jobMap.get(a.jobId);
-      if (!job) return;
-      const list = map.get(a.employeeId) ?? [];
-      if (!list.find(j => j.id === job.id)) list.push(job);
-      map.set(a.employeeId, list);
-    });
-
     return map;
-  }, [dayJobs, allAssignments, jobMap]);
+  }, [allAssignments, jobMap, dayJobs, dateStr]);
 
   // Jobs that don't appear on any crew row — surface them in an "Unassigned" swim lane
   // so the user can still see (and open) them from the roster.
-  const unassignedJobs = useMemo(() => {
-    const assignedIds = new Set<string>();
-    assignmentsByEmployee.forEach(list => list.forEach(j => assignedIds.add(j.id)));
-    return dayJobs.filter(j => !assignedIds.has(j.id));
-  }, [dayJobs, assignmentsByEmployee]);
+  const unassignedSlots = useMemo(() => {
+    const assignedJobIds = new Set<string>();
+    slotsByEmployee.forEach(list => list.forEach(s => assignedJobIds.add(s.job.id)));
+    return dayJobs
+      .filter(j => !assignedJobIds.has(j.id))
+      .map(job => {
+        const { startMins, endMins } = effectiveMins(job, null);
+        return { id: job.id, job, assignment: null as any, startMins, endMins };
+      });
+  }, [dayJobs, slotsByEmployee]);
 
   // Summary stats
   const totalAssigned = useMemo(() => {
     let count = 0;
-    crewMembers.forEach(e => { count += (assignmentsByEmployee.get(e.id) ?? []).length; });
+    crewMembers.forEach(e => { count += (slotsByEmployee.get(e.id) ?? []).length; });
     return count;
-  }, [crewMembers, assignmentsByEmployee]);
+  }, [crewMembers, slotsByEmployee]);
 
   const navigate = (delta: number) => {
     setSelectedDate(d => {
@@ -361,13 +402,13 @@ export default function StaffSchedule() {
 
       {/* ── Timeline grid ── */}
       <div className="flex-1 overflow-auto">
-        <div style={{ minWidth: STAFF_COL_W + 900 }}>
+        <div style={{ minWidth: STAFF_COL_W + HOUR_LABELS.length * MIN_HOUR_COL_W }}>
 
           {/* Hour header */}
           <div className="flex sticky top-0 z-20 bg-white border-b border-gray-200">
             {/* Staff column header */}
             <div
-              className="shrink-0 border-r border-gray-200 flex items-center px-3 py-2"
+              className="shrink-0 border-r border-gray-200 flex items-center px-3 py-2 sticky left-0 z-30 bg-white"
               style={{ width: STAFF_COL_W }}
             >
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Crew</span>
@@ -387,15 +428,15 @@ export default function StaffSchedule() {
           </div>
 
           {/* Unassigned swim lane — jobs scheduled for this day but not yet assigned to a crew member */}
-          {unassignedJobs.length > 0 && (() => {
-            const lanes = assignLanes(unassignedJobs);
+          {unassignedSlots.length > 0 && (() => {
+            const lanes = assignLanes(unassignedSlots);
             return (
               <div
                 className="flex border-b-2 border-amber-200 bg-amber-50/40"
                 style={{ minHeight: rowHeight }}
               >
                 <div
-                  className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2"
+                  className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2 sticky left-0 z-10 bg-amber-50"
                   style={{ width: STAFF_COL_W }}
                 >
                   <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 bg-amber-500">
@@ -404,7 +445,7 @@ export default function StaffSchedule() {
                   <div className="min-w-0">
                     <p className="text-xs font-semibold text-amber-900 truncate leading-tight">Unassigned</p>
                     <p className="text-[10px] text-amber-700 leading-tight">
-                      {unassignedJobs.length} job{unassignedJobs.length !== 1 ? 's' : ''}
+                      {unassignedSlots.length} job{unassignedSlots.length !== 1 ? 's' : ''}
                     </p>
                   </div>
                 </div>
@@ -423,23 +464,20 @@ export default function StaffSchedule() {
                     />
                   )}
 
-                  {unassignedJobs.map(job => {
-                    const startStr = job.scheduledStartTime ?? '08:00';
-                    const endStr   = job.scheduledEndTime   ?? '16:00';
-                    const startMins = timeStrToMinutes(startStr);
-                    const endMins   = timeStrToMinutes(endStr);
+                  {unassignedSlots.map(slot => {
+                    const { job, startMins, endMins } = slot;
                     const left  = minutesToPercent(startMins);
                     const width = Math.max(2, minutesToPercent(endMins) - left);
                     const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
                     const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
                     const label = custName || job.title || `#${job.jobNumber}`;
-                    const timeLabel = `${formatTime(startStr)}–${formatTime(endStr)}`;
-                    const { lane, totalLanes } = lanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
+                    const timeLabel = `${formatTimeFromMins(startMins)}–${formatTimeFromMins(endMins)}`;
+                    const { lane, totalLanes } = lanes.get(slot.id) ?? { lane: 0, totalLanes: 1 };
                     const ls = laneStyle(lane, totalLanes);
 
                     return (
                       <button
-                        key={job.id}
+                        key={slot.id}
                         onClick={() => openJob(job)}
                         title={`${label} — ${timeLabel} (unassigned)`}
                         className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
@@ -495,8 +533,8 @@ export default function StaffSchedule() {
           ) : (
             crewMembers.map((emp, empIdx) => {
               const palette   = STAFF_PALETTE[empIdx % STAFF_PALETTE.length];
-              const empJobs   = assignmentsByEmployee.get(emp.id) ?? [];
-              const lanes     = assignLanes(empJobs);
+              const empSlots  = slotsByEmployee.get(emp.id) ?? [];
+              const lanes     = assignLanes(empSlots);
               const empName   = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim();
               const empInit   = initials(empName || 'U');
 
@@ -508,7 +546,7 @@ export default function StaffSchedule() {
                 >
                   {/* Staff name cell */}
                   <div
-                    className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2"
+                    className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2 sticky left-0 z-10"
                     style={{ width: STAFF_COL_W, backgroundColor: palette.row }}
                   >
                     <div
@@ -520,7 +558,7 @@ export default function StaffSchedule() {
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
                       <p className="text-[10px] text-gray-400 leading-tight">
-                        {empJobs.length} job{empJobs.length !== 1 ? 's' : ''}
+                        {empSlots.length} job{empSlots.length !== 1 ? 's' : ''}
                       </p>
                     </div>
                   </div>
@@ -546,23 +584,20 @@ export default function StaffSchedule() {
                     )}
 
                     {/* Job blocks */}
-                    {empJobs.map(job => {
-                      const startStr = job.scheduledStartTime ?? '08:00';
-                      const endStr   = job.scheduledEndTime   ?? '16:00';
-                      const startMins = timeStrToMinutes(startStr);
-                      const endMins   = timeStrToMinutes(endStr);
+                    {empSlots.map(slot => {
+                      const { job, startMins, endMins } = slot;
                       const left  = minutesToPercent(startMins);
                       const width = Math.max(2, minutesToPercent(endMins) - left);
                       const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
                       const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
                       const label = custName || job.title || `#${job.jobNumber}`;
-                      const timeLabel = `${formatTime(startStr)}–${formatTime(endStr)}`;
-                      const { lane, totalLanes } = lanes.get(job.id) ?? { lane: 0, totalLanes: 1 };
+                      const timeLabel = `${formatTimeFromMins(startMins)}–${formatTimeFromMins(endMins)}`;
+                      const { lane, totalLanes } = lanes.get(slot.id) ?? { lane: 0, totalLanes: 1 };
                       const ls = laneStyle(lane, totalLanes);
 
                       return (
                         <button
-                          key={job.id}
+                          key={slot.id}
                           onClick={() => openJob(job)}
                           title={`${label} — ${timeLabel}`}
                           className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
@@ -599,7 +634,7 @@ export default function StaffSchedule() {
                       );
                     })}
 
-                    {empJobs.length === 0 && (
+                    {empSlots.length === 0 && (
                       <div className="absolute inset-0 flex items-center px-3">
                         <span className="text-[10px] text-gray-300 italic">No jobs</span>
                       </div>
@@ -657,13 +692,4 @@ export default function StaffSchedule() {
       )}
     </div>
   );
-}
-
-// ─── Utility ──────────────────────────────────────────────────────────────────
-
-function formatTime(timeStr: string): string {
-  const [h, m] = timeStr.split(':').map(Number);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12  = h % 12 || 12;
-  return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
 }
