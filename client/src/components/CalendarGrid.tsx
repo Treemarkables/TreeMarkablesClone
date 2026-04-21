@@ -1066,8 +1066,8 @@ export function CalendarGrid({
                             minWidth: 40,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
-                            <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
+                            <span className="text-[10px] font-semibold leading-tight block whitespace-normal break-words" style={{ color: c.text }}>
                               {custName}
                             </span>
                             {blockW > 8 && timeLabel && (
@@ -1201,8 +1201,8 @@ export function CalendarGrid({
                             minWidth: 32,
                           }}
                         >
-                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-center overflow-hidden">
-                            <span className="text-[10px] font-semibold leading-tight block truncate" style={{ color: c.text }}>
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
+                            <span className="text-[10px] font-semibold leading-tight block whitespace-normal break-words" style={{ color: c.text }}>
                               {custName}
                             </span>
                             {blockW > 8 && timeLabel && (
@@ -1210,10 +1210,10 @@ export function CalendarGrid({
                                 {timeLabel}
                               </span>
                             )}
-                            {blockW > 14 && job.address && (
-                              <span className="text-[9px] leading-tight flex items-center gap-0.5 truncate" style={{ color: c.text, opacity: 0.7 }}>
-                                <MapPin className="w-2 h-2 shrink-0" />
-                                {job.address.split(",")[0]}
+                            {job.address && (
+                              <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: c.text, opacity: 0.7 }}>
+                                <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
+                                <span className="min-w-0">{job.address.split(",")[0]}</span>
                               </span>
                             )}
                           </div>
