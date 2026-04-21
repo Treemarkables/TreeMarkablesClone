@@ -591,6 +591,22 @@ export function InvoiceBuilder({
       });
     }
 
+    // If still no items, fall back to job's own line items (set via the Quote tab)
+    if (extractedItems.length === 0 && job.lineItems && Array.isArray(job.lineItems) && job.lineItems.length > 0) {
+      console.log("🔍 Import Debug - Falling back to job.lineItems:", job.lineItems);
+      extractedItems = (job.lineItems as any[]).map((item: any) => ({
+        id: item.id || Math.random().toString(),
+        description: item.description || "",
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || item.rate || 0,
+        total: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0)) || 0,
+        category: item.category,
+        serviceId: item.serviceId,
+        materialId: item.materialId,
+        unitCost: item.unitCost,
+      }));
+    }
+
     console.log("🔍 Import Debug - Extracted Items:", extractedItems);
 
     if (extractedItems.length > 0) {
