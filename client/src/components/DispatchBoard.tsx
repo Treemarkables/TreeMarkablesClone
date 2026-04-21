@@ -2571,10 +2571,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     </div>
 
                                     {/* Row 2: Location + Status Badge */}
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                      <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
-                                        <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                        <span className="truncate">
+                                    <div className="flex items-start justify-between gap-2 mb-1">
+                                      <div className="flex items-start gap-1.5 text-sm text-gray-500 min-w-0">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+                                        <span className="whitespace-normal break-words min-w-0">
                                           {suburb || "No location"}
                                         </span>
                                       </div>
@@ -2640,11 +2640,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                         </Badge>
                                       </div>
                                     )}
-                                    {job.description && (
-                                      <p className="text-sm text-gray-500 line-clamp-3 mb-2">
-                                        {job.description}
-                                      </p>
-                                    )}
+                                    {/* Description — always reserved so every card keeps the same height
+                                        regardless of whether a description is set. Clamps to 3 lines max. */}
+                                    <p className="text-sm text-gray-500 line-clamp-3 mb-2 min-h-[3.75rem]">
+                                      {job.description || ''}
+                                    </p>
 
                                     {/* Crew colour indicators */}
                                     {job.assignedTeam && job.assignedTeam.length > 0 && (
