@@ -6013,17 +6013,28 @@ class DatabaseStorage implements IStorage {
       // Get control measures for each step using raw SQL for proper join
       for (const step of result.steps) {
         const controls = await db.execute(
-          sql`SELECT sc.id, sc.step_id, sc.control_measure_template_id, 
-              sc.description, sc.hierarchy_level, sc.is_implemented, 
+          sql`SELECT sc.id, sc.step_id, sc.control_measure_template_id,
+              sc.description, sc.hierarchy_level, sc.is_implemented,
               sc.sort_order, sc.created_at, cm.description as control_measure
           FROM jha_step_controls sc
-          LEFT JOIN jha_control_measure_templates cm 
+          LEFT JOIN jha_control_measure_templates cm
             ON sc.control_measure_template_id = cm.id
           WHERE sc.step_id = ${step.id}
           ORDER BY sc.sort_order`
         );
-        
-        step.controlMeasures = controls.rows.map((c: any) => c.control_measure || '');
+
+        // Return objects (not bare strings) so the edit form can round-trip
+        // controlMeasureTemplateId and description when re-saving — e.g. when
+        // adding an extra signature to an already-saved JHA.
+        step.controlMeasures = controls.rows.map((c: any) => ({
+          id: c.id,
+          stepId: c.step_id,
+          controlMeasureTemplateId: c.control_measure_template_id,
+          description: c.control_measure || c.description || '',
+          hierarchyLevel: c.hierarchy_level,
+          isImplemented: c.is_implemented,
+          sortOrder: c.sort_order,
+        }));
       }
     }
 

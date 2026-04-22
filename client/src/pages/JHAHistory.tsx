@@ -19,7 +19,11 @@ interface JHAAssessment {
     id: number;
     hazardName: string;
     riskRating: number;
-    controlMeasures: string[];
+    controlMeasures: Array<{
+      id: string;
+      controlMeasureTemplateId: string | null;
+      description: string;
+    }>;
   }>;
   signatures: Array<{
     id: number;
@@ -240,9 +244,9 @@ export default function JHAHistory() {
                               <h4 className="text-sm font-semibold mb-3">Control Measures:</h4>
                               <ul className="space-y-2">
                                 {step.controlMeasures.map((measure, idx) => (
-                                  <li key={idx} className="flex items-start gap-2 text-sm">
+                                  <li key={measure.id ?? idx} className="flex items-start gap-2 text-sm">
                                     <CheckCircle2 className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                    <span>{measure}</span>
+                                    <span>{measure.description}</span>
                                   </li>
                                 ))}
                               </ul>
