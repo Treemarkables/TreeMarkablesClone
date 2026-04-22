@@ -241,13 +241,19 @@ export function GrossMarginCalculator({
     },
   });
 
-  // Calculate total revenue from job line items - read-only consumer
+  // Calculate total revenue from job line items — GST-exclusive, so gross
+  // margin compares ex-GST revenue against ex-GST costs. If a line item's
+  // unitPrice already includes GST, strip it before summing. Otherwise the
+  // margin would be inflated by the GST component, which belongs to IRD.
   const calculateJobLineItemsTotal = (jobLineItems: any[]): number => {
     if (!Array.isArray(jobLineItems)) return 0;
     return jobLineItems.reduce((sum, item) => {
       const quantity = parseFloat(item.quantity || 0);
       const unitPrice = parseFloat(item.unitPrice || 0);
-      return sum + quantity * unitPrice;
+      const lineTotal = quantity * unitPrice;
+      const isInclusive = item.priceIncludesTax === true;
+      const taxRate = (parseFloat(item.taxRate ?? 15) || 15) / 100;
+      return sum + (isInclusive ? lineTotal / (1 + taxRate) : lineTotal);
     }, 0);
   };
 
@@ -321,13 +327,23 @@ export function GrossMarginCalculator({
       }
     }
 
-    // Fall back to job line items or job.totalAmount
+    // Fall back to job line items (already ex-GST via calculateJobLineItemsTotal),
+    // then job.subtotal (ex-GST by definition), then strip GST off totalAmount
+    // (which is stored inclusive of GST on the server).
     const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
-    return jobLineItemsTotal > 0
-      ? jobLineItemsTotal
-      : job?.totalAmount
-        ? parseFloat(job.totalAmount)
-        : 0;
+    if (jobLineItemsTotal > 0) return jobLineItemsTotal;
+
+    const subtotalStr = (job as any).subtotal;
+    if (subtotalStr) {
+      const subtotal = parseFloat(subtotalStr);
+      if (subtotal > 0) return subtotal;
+    }
+
+    if (job?.totalAmount) {
+      const taxRate = (parseFloat((job as any).taxRate || "15") || 15) / 100;
+      return parseFloat(job.totalAmount) / (1 + taxRate);
+    }
+    return 0;
   };
 
   const jobLineItemsCosts = calculateJobLineItemsCosts(job?.lineItems || []);

@@ -2347,14 +2347,25 @@ class DatabaseStorage implements IStorage {
   async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> {
     const job = await this.getJob(jobId);
     if (!job) throw new Error("Job not found");
-    
-    const totalRevenue = parseFloat(job.totalAmount?.toString() || "0");
+
+    // job.totalAmount is GST-inclusive (it's stored as subtotal + gstAmount —
+    // see PUT /api/jobs/:id). All cost fields are GST-exclusive. So compare
+    // ex-GST revenue to ex-GST costs; otherwise the margin gets inflated by
+    // the GST component, which is owed to IRD, not revenue.
+    const taxRate = parseFloat(job.taxRate?.toString() || "15");
+    const subtotalExGst = parseFloat(job.subtotal?.toString() || "0");
+    const totalAmountIncGst = parseFloat(job.totalAmount?.toString() || "0");
+    const totalRevenue =
+      subtotalExGst > 0
+        ? subtotalExGst
+        : totalAmountIncGst / (1 + taxRate / 100);
+
     const laborCosts = parseFloat(job.actualLaborCosts?.toString() || job.laborCosts?.toString() || "0");
     const materialsCosts = parseFloat(job.actualMaterialsCosts?.toString() || job.materialsCosts?.toString() || "0");
     const equipmentCosts = parseFloat(job.equipmentCosts?.toString() || "0");
     const subcontractorCosts = parseFloat(job.subcontractorCosts?.toString() || "0");
     const otherCosts = parseFloat(job.otherCosts?.toString() || "0");
-    
+
     const totalCosts = laborCosts + materialsCosts + equipmentCosts + subcontractorCosts + otherCosts;
     const grossProfit = totalRevenue - totalCosts;
     const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
