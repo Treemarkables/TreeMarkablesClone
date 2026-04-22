@@ -3911,6 +3911,40 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Returns scheduled jobs whose NZ-local scheduled_date falls within [start, end).
+  // Used by CalendarAvailabilityModal so the week-view calendar shows real jobs,
+  // not only Google Calendar events.
+  app.get('/api/jobs/in-range', async (req: Request, res: Response) => {
+    try {
+      const { start, end } = req.query;
+      if (!start || typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+          !end   || typeof end   !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return res.status(400).json({ success: false, message: 'start and end params required (YYYY-MM-DD, NZ local)' });
+      }
+      // Same timezone handling as /api/jobs/for-date — see comment there.
+      const result = await db.execute(
+        sql`SELECT * FROM jobs
+            WHERE scheduled_date IS NOT NULL
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${start}::date
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <  ${end}::date
+              AND status NOT IN ('archived', 'unsuccessful')
+            ORDER BY scheduled_date ASC`
+      );
+      const jobs = (result.rows as any[]).map((row: any) => {
+        const job: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          const camel = k.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+          job[camel] = v;
+        }
+        return serializeJobTimestamps(job);
+      });
+      res.json({ success: true, data: jobs });
+    } catch (error) {
+      console.error('Error fetching jobs in range:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs in range' });
+    }
+  });
+
   // Search jobs endpoint - searches across all jobs (not limited to paginated results)
   app.get('/api/jobs/search', async (req: Request, res: Response) => {
     try {
