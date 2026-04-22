@@ -704,6 +704,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const [jobToEdit, setJobToEdit] = useState<JobAssignment | null>(null);
   const [initialJobData, setInitialJobData] = useState<any>(null);
+  // Sidebar tab to open the job card on — set from the `?tab=` URL param when
+  // a push notification deep-links to a specific section (e.g. the diary).
+  const [initialSidebarTab, setInitialSidebarTab] = useState<
+    "details" | "billing" | "diary" | undefined
+  >(undefined);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -871,6 +876,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         console.log("🔔 Job search result:", { found: !!job, jobId });
 
+        const tabParam =
+          tab === "diary" || tab === "billing" || tab === "details"
+            ? (tab as "details" | "billing" | "diary")
+            : undefined;
+
         const openJob = (jobData: any) => {
           // Guard: Don't re-open if we're already editing this job
           if (showGlobalJobCard && jobToEdit?.id === jobId) {
@@ -878,6 +888,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return;
           }
           window.history.replaceState({}, "", "/dispatch");
+          setInitialSidebarTab(tabParam);
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
@@ -2736,10 +2747,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             mode={globalJobCardMode}
                             jobId={jobToEdit?.jobId || jobToEdit?.id}
                             initialData={initialJobData}
+                            initialSidebarTab={initialSidebarTab}
                             onClose={() => {
                               setShowGlobalJobCard(false);
                               setJobToEdit(null);
                               setInitialJobData(null);
+                              setInitialSidebarTab(undefined);
                             }}
                             renderInline={true}
                           />
@@ -3112,10 +3125,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               mode={globalJobCardMode}
               jobId={jobToEdit?.jobId || jobToEdit?.id}
               initialData={initialJobData}
+              initialSidebarTab={initialSidebarTab}
               onClose={() => {
                 setShowGlobalJobCard(false);
                 setJobToEdit(null);
                 setInitialJobData(null);
+                setInitialSidebarTab(undefined);
               }}
             />
           </JobCardErrorBoundary>

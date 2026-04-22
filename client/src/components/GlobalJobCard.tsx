@@ -291,6 +291,7 @@ interface GlobalJobCardProps {
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
+  initialSidebarTab?: "details" | "billing" | "diary"; // Deep-link from push notifications
 }
 
 export function GlobalJobCard({
@@ -304,14 +305,15 @@ export function GlobalJobCard({
   onJobCreated,
   onJobUpdated,
   renderInline = false,
+  initialSidebarTab,
 }: GlobalJobCardProps) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : [],
   );
   const [checklistCollapsed, setChecklistCollapsed] = useState(true);
   const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [activeTab, setActiveTab] = useState("details");
-  const [sidebarTab, setSidebarTab] = useState("details");
+  const [activeTab, setActiveTab] = useState(initialSidebarTab ?? "details");
+  const [sidebarTab, setSidebarTab] = useState(initialSidebarTab ?? "details");
   const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);
@@ -3662,8 +3664,14 @@ The Treemarkables Team`;
   // Get current status - use editingJob.status directly to avoid showing stale form data during loading
   // In create mode, use form.watch since there's no editingJob yet
   // IMPORTANT: This line accesses editingJob, so it must come AFTER the loading check above
+  // Prefer watchedStatus (form state) over editingJob?.status so the header
+  // badge flips the instant the dropdown changes. editingJob is derived from
+  // the `job` prop, which is a stale snapshot captured when the parent
+  // (e.g. StaffSchedule) opened the modal — it doesn't refresh after the
+  // update mutation succeeds, so reading from it made the badge stay on the
+  // old status until the user closed and reopened the modal.
   const currentStatus =
-    mode === "edit" ? editingJob?.status : watchedStatus;
+    mode === "edit" ? (watchedStatus || editingJob?.status) : watchedStatus;
 
   if (jobLoading) {
     const loadingContent = (

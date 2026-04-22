@@ -108,8 +108,8 @@ self.addEventListener('notificationclick', (event) => {
   let urlToOpen = '/dispatch'; // Default
   
   if (event.notification.data) {
-    const { type, jobNumber, jobId, invoiceNumber } = event.notification.data;
-    
+    const { type, jobId, conversationId } = event.notification.data;
+
     switch (type) {
       case 'job_assignment':
       case 'schedule_change':
@@ -118,6 +118,19 @@ self.addEventListener('notificationclick', (event) => {
         break;
       case 'new_lead':
         urlToOpen = '/conversations';
+        break;
+      case 'new_conversation':
+      case 'conversation_reply':
+        // Once a conversation has been converted to a lead/job, notifications
+        // deep-link to that job card's diary tab. Pre-lead conversations (no
+        // job yet) still land on the conversation detail page.
+        if (jobId) {
+          urlToOpen = `/dispatch?job=${jobId}&tab=diary`;
+        } else if (conversationId) {
+          urlToOpen = `/conversation/${conversationId}`;
+        } else {
+          urlToOpen = '/conversations';
+        }
         break;
       case 'invoice_payment':
         urlToOpen = '/invoices';
