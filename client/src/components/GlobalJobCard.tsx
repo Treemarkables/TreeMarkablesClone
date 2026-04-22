@@ -2595,16 +2595,16 @@ export function GlobalJobCard({
   };
 
   const handleCallClick = () => {
+    const toStr = (v: unknown): string => (typeof v === "string" ? v : "");
+
     const jobPhone =
-      form.getValues("jobContactMobile") ||
-      selectedCustomer?.mobile ||
-      form.getValues("jobContactPhone") ||
-      selectedCustomer?.phone ||
-      "";
+      toStr(form.getValues("jobContactMobile")) ||
+      toStr(selectedCustomer?.mobile) ||
+      toStr(form.getValues("jobContactPhone")) ||
+      toStr(selectedCustomer?.phone);
     const tenantPhone =
-      form.getValues("tenantContactMobile") ||
-      form.getValues("tenantContactPhone") ||
-      "";
+      toStr(form.getValues("tenantContactMobile")) ||
+      toStr(form.getValues("tenantContactPhone"));
 
     if (!jobPhone && !tenantPhone) {
       toast({
@@ -2625,16 +2625,14 @@ export function GlobalJobCard({
       return;
     }
 
-    const jobFirst = form.getValues("jobContactFirstName") || "";
-    const jobLast = form.getValues("jobContactLastName") || "";
     const jobName =
-      `${jobFirst} ${jobLast}`.trim() ||
-      selectedCustomer?.name ||
+      `${toStr(form.getValues("jobContactFirstName"))} ${toStr(form.getValues("jobContactLastName"))}`.trim() ||
+      toStr(selectedCustomer?.name) ||
       "Job Contact";
 
-    const tenantFirst = form.getValues("tenantContactFirstName") || "";
-    const tenantLast = form.getValues("tenantContactLastName") || "";
-    const tenantName = `${tenantFirst} ${tenantLast}`.trim() || "Tenant";
+    const tenantName =
+      `${toStr(form.getValues("tenantContactFirstName"))} ${toStr(form.getValues("tenantContactLastName"))}`.trim() ||
+      "Tenant";
 
     setCallPickerOptions({
       job: { name: jobName, phone: jobPhone },
