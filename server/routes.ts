@@ -21009,8 +21009,14 @@ Transcription: ${transcriptText}`;
 
       res.json({ success: true, data: updatedAssessment });
     } catch (error) {
+      console.error('JHA Assessment update error:', error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+        console.error('JHA Zod validation details:', JSON.stringify(error.errors, null, 2));
+        return res.status(400).json({
+          success: false,
+          message: `Validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')}`,
+          errors: error.errors,
+        });
       }
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update assessment' });
     }
