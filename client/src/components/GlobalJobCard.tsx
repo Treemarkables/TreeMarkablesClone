@@ -2586,12 +2586,14 @@ export function GlobalJobCard({
   };
 
   const dialPhone = (phone: string) => {
-    const a = document.createElement("a");
-    a.href = `tel:${phone}`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const url = `tel:${phone.replace(/\s/g, "")}`;
+    // '_system' routes through Capacitor's bridge on native (iOS/Android)
+    // so tel: URLs reach the system dialer instead of being swallowed by
+    // the WebView. On web it falls through to a normal navigation.
+    const opened = window.open(url, "_system");
+    if (!opened) {
+      window.location.href = url;
+    }
   };
 
   const handleCallClick = () => {
@@ -2612,16 +2614,6 @@ export function GlobalJobCard({
         description: "No phone number available for this customer",
         variant: "destructive",
       });
-      return;
-    }
-
-    if (jobPhone && !tenantPhone) {
-      dialPhone(jobPhone);
-      return;
-    }
-
-    if (tenantPhone && !jobPhone) {
-      dialPhone(tenantPhone);
       return;
     }
 
@@ -10211,48 +10203,50 @@ The Treemarkables Team`;
         </DialogContent>
       </Dialog>
 
-      {/* Call Contact Picker — shown when both job and tenant have a number */}
+      {/* Call Contact Picker — pick between Job Contact and Tenant */}
       <AlertDialog open={callPickerOpen} onOpenChange={setCallPickerOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Who would you like to call?</AlertDialogTitle>
             <AlertDialogDescription>
-              This job has both a Job Contact and a Tenant on file.
+              Choose which contact to dial for this job.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-col gap-2 sm:space-x-0">
-            {callPickerOptions.job && (
-              <AlertDialogAction
-                onClick={() => {
-                  if (callPickerOptions.job) {
-                    dialPhone(callPickerOptions.job.phone);
-                  }
-                }}
-                data-testid="call-picker-job"
-                className="w-full justify-start"
-              >
-                <span className="truncate">
-                  Call Job Contact — {callPickerOptions.job.name} ·{" "}
-                  {callPickerOptions.job.phone}
-                </span>
-              </AlertDialogAction>
-            )}
-            {callPickerOptions.tenant && (
-              <AlertDialogAction
-                onClick={() => {
-                  if (callPickerOptions.tenant) {
-                    dialPhone(callPickerOptions.tenant.phone);
-                  }
-                }}
-                data-testid="call-picker-tenant"
-                className="w-full justify-start"
-              >
-                <span className="truncate">
-                  Call Tenant — {callPickerOptions.tenant.name} ·{" "}
-                  {callPickerOptions.tenant.phone}
-                </span>
-              </AlertDialogAction>
-            )}
+            <AlertDialogAction
+              onClick={() => {
+                if (callPickerOptions.job?.phone) {
+                  dialPhone(callPickerOptions.job.phone);
+                }
+              }}
+              disabled={!callPickerOptions.job?.phone}
+              data-testid="call-picker-job"
+              className="w-full justify-start"
+            >
+              <span className="truncate text-left">
+                Job Contact — {callPickerOptions.job?.name || "Unknown"}
+                {callPickerOptions.job?.phone
+                  ? ` · ${callPickerOptions.job.phone}`
+                  : " · no number"}
+              </span>
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                if (callPickerOptions.tenant?.phone) {
+                  dialPhone(callPickerOptions.tenant.phone);
+                }
+              }}
+              disabled={!callPickerOptions.tenant?.phone}
+              data-testid="call-picker-tenant"
+              className="w-full justify-start"
+            >
+              <span className="truncate text-left">
+                Tenant — {callPickerOptions.tenant?.name || "Unknown"}
+                {callPickerOptions.tenant?.phone
+                  ? ` · ${callPickerOptions.tenant.phone}`
+                  : " · no number"}
+              </span>
+            </AlertDialogAction>
             <AlertDialogCancel
               className="w-full mt-0"
               data-testid="call-picker-cancel"

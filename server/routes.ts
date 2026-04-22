@@ -189,6 +189,100 @@ function serializeJobTimestamps(job: any): any {
   return serialized;
 }
 
+// Core merge: reassign every FK that points at duplicateIds to primaryId,
+// fill any blank fields on the primary from the duplicates, recompute
+// totalJobs/lifetimeValue, then delete the duplicate rows. Used by both
+// the single-group admin endpoint and the bulk dedupe-by-name job.
+async function mergeCustomerRecords(primaryId: string, duplicateIds: string[]) {
+  if (duplicateIds.length === 0) return await storage.getCustomer(primaryId);
+  if (duplicateIds.includes(primaryId)) {
+    throw new Error('primaryId cannot also appear in duplicateIds');
+  }
+  const allIds = [primaryId, ...duplicateIds];
+  const found = await db.select({ id: schema.customers.id }).from(schema.customers)
+    .where(inArray(schema.customers.id, allIds));
+  if (found.length !== allIds.length) {
+    throw new Error('One or more customer IDs not found');
+  }
+
+  const duplicates = await db.select().from(schema.customers)
+    .where(inArray(schema.customers.id, duplicateIds));
+  const primary = await storage.getCustomer(primaryId);
+  if (!primary) throw new Error('Primary customer not found');
+
+  const tables: { table: any; col: any }[] = [
+    { table: schema.communicationPreferences, col: schema.communicationPreferences.customerId },
+    { table: schema.leads,                    col: schema.leads.customerId },
+    { table: schema.calls,                    col: schema.calls.customerId },
+    { table: schema.quotes,                   col: schema.quotes.customerId },
+    { table: schema.jobs,                     col: schema.jobs.customerId },
+    { table: schema.proposals,                col: schema.proposals.customerId },
+    { table: schema.photos,                   col: schema.photos.customerId },
+    { table: schema.activities,               col: schema.activities.customerId },
+    { table: schema.reviews,                  col: schema.reviews.customerId },
+    { table: schema.conversations,            col: schema.conversations.customerId },
+    { table: schema.invoices,                 col: schema.invoices.customerId },
+    { table: schema.serviceRequests,          col: schema.serviceRequests.customerId },
+    { table: schema.customerAuth,             col: schema.customerAuth.customerId },
+    { table: schema.generatedDocuments,       col: schema.generatedDocuments.customerId },
+    { table: schema.reviewRequests,           col: schema.reviewRequests.customerId },
+    { table: schema.reviewSubmissions,        col: schema.reviewSubmissions.customerId },
+    { table: schema.pendingOutboundMessages,  col: schema.pendingOutboundMessages.customerId },
+    { table: schema.communications,           col: schema.communications.customerId },
+    { table: schema.callRecords,              col: schema.callRecords.customerId },
+  ];
+
+  for (const dupId of duplicateIds) {
+    for (const { table, col } of tables) {
+      await db.update(table).set({ customerId: primaryId } as any).where(eq(col, dupId));
+    }
+  }
+
+  const fillableFields: (keyof typeof primary)[] = [
+    'email', 'phone', 'mobile', 'address', 'city', 'region', 'notes',
+    'source', 'importSource', 'externalId', 'servicem8Uuid',
+  ];
+  const patch: Record<string, any> = {};
+  for (const field of fillableFields) {
+    if (!primary[field]) {
+      for (const dup of duplicates) {
+        if (dup[field]) {
+          patch[field] = dup[field];
+          break;
+        }
+      }
+    }
+  }
+  const consolidatedJobs = await db.select({ totalAmount: schema.jobs.totalAmount })
+    .from(schema.jobs)
+    .where(eq(schema.jobs.customerId, primaryId));
+  patch.totalJobs = consolidatedJobs.length;
+  patch.lifetimeValue = consolidatedJobs
+    .reduce((sum, j) => sum + parseFloat((j.totalAmount as string) || '0'), 0)
+    .toFixed(2);
+
+  await storage.updateCustomer(primaryId, patch);
+  await db.delete(schema.customers).where(inArray(schema.customers.id, duplicateIds));
+
+  return await storage.getCustomer(primaryId);
+}
+
+// Returns the subset of incoming customer fields that would fill empty slots
+// on the existing record. Non-destructive: never overwrites an existing
+// non-empty value with a different one.
+function mergeEmptyCustomerFields(existing: any, incoming: any): Record<string, any> {
+  const mergeable = ['email', 'phone', 'mobile', 'address', 'city', 'region', 'notes', 'source'] as const;
+  const updates: Record<string, any> = {};
+  for (const key of mergeable) {
+    const next = incoming?.[key];
+    const current = existing?.[key];
+    if (next && typeof next === 'string' && next.trim() && !(current && String(current).trim())) {
+      updates[key] = next;
+    }
+  }
+  return updates;
+}
+
 // Safe audio file extensions and MIME types for call recordings
 const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.aac', '.ogg', '.webm'];
 const ALLOWED_AUDIO_MIME_TYPES = [
@@ -2289,11 +2383,27 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       const validation = insertCustomerSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid customer data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
+      }
+
+      // Dedupe by name: callers of this endpoint (Opportunities quote flow,
+      // ConversationDetail job flow) treat it as find-or-create. Honour that
+      // contract so resubmitting a lead for an existing client doesn't create
+      // a duplicate customer row.
+      const existing = validation.data.name
+        ? await storage.findCustomerByName(validation.data.name)
+        : undefined;
+      if (existing) {
+        const merged = mergeEmptyCustomerFields(existing, validation.data);
+        const customer = Object.keys(merged).length > 0
+          ? await storage.updateCustomer(existing.id, merged)
+          : existing;
+        broadcast(['/api/customers']);
+        return res.json({ success: true, data: customer, reused: true });
       }
 
       const customer = await storage.createCustomer(validation.data);
@@ -2331,7 +2441,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   app.get('/api/customers/historical', async (req: Request, res: Response) => {
     try {
       const allCustomers = await storage.getAllCustomers();
-      const historicalCustomers = allCustomers.filter(customer => !customer.isActive);
+      const historicalCustomers = allCustomers.filter(customer => customer.isActive === false);
       
       res.json({
         success: true,
@@ -2369,11 +2479,33 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       const updates = insertCustomerSchema.partial().safeParse(body);
       if (!updates.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid update data',
-          errors: updates.error.errors 
+          errors: updates.error.errors
         });
+      }
+
+      // SAFEGUARD: Don't let an empty string silently wipe a non-empty contact field.
+      // Pair with the job PATCH/PUT guards — see job 3935 / John Braybrook incident
+      // where a job-card save blanked email/phone on both the job and the customer.
+      // Clients that actually want to clear a field must opt in via _clearFields.
+      const existingCustomer = await storage.getCustomer(req.params.id);
+      if (existingCustomer) {
+        const preserveFields = ['email', 'phone', 'mobile', 'address', 'name'] as const;
+        const explicitClears: string[] = req.body._clearFields || [];
+        for (const field of preserveFields) {
+          const next = (updates.data as any)[field];
+          const current = (existingCustomer as any)[field];
+          const isEmpty = next === '' || next === null || next === undefined;
+          const hasCurrent = current !== null && current !== undefined && current !== '';
+          if (isEmpty && hasCurrent && !explicitClears.includes(field)) {
+            (updates.data as any)[field] = current;
+          }
+        }
+        for (const field of explicitClears) {
+          (updates.data as any)[field] = null;
+        }
       }
 
       const customer = await storage.updateCustomer(req.params.id, updates.data);
@@ -2410,87 +2542,121 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
 
     try {
-      // Verify all customer IDs exist
-      const allIds = [primaryId, ...duplicateIds];
-      const found = await db.select({ id: schema.customers.id }).from(schema.customers)
-        .where(inArray(schema.customers.id, allIds));
-      if (found.length !== allIds.length) {
-        return res.status(404).json({ success: false, message: 'One or more customer IDs not found' });
-      }
-
-      // Fetch all duplicate records before deleting (to fill in missing fields on primary)
-      const duplicates = await db.select().from(schema.customers)
-        .where(inArray(schema.customers.id, duplicateIds));
-      const primary = await storage.getCustomer(primaryId);
-      if (!primary) {
-        return res.status(404).json({ success: false, message: 'Primary customer not found' });
-      }
-
-      // Reassign all related records from each duplicate to the primary
-      const tables: { table: any; col: any }[] = [
-        { table: schema.communicationPreferences, col: schema.communicationPreferences.customerId },
-        { table: schema.leads,                    col: schema.leads.customerId },
-        { table: schema.calls,                    col: schema.calls.customerId },
-        { table: schema.quotes,                   col: schema.quotes.customerId },
-        { table: schema.jobs,                     col: schema.jobs.customerId },
-        { table: schema.proposals,                col: schema.proposals.customerId },
-        { table: schema.photos,                   col: schema.photos.customerId },
-        { table: schema.activities,               col: schema.activities.customerId },
-        { table: schema.reviews,                  col: schema.reviews.customerId },
-        { table: schema.conversations,            col: schema.conversations.customerId },
-        { table: schema.invoices,                 col: schema.invoices.customerId },
-        { table: schema.serviceRequests,          col: schema.serviceRequests.customerId },
-        { table: schema.customerAuth,             col: schema.customerAuth.customerId },
-        { table: schema.generatedDocuments,       col: schema.generatedDocuments.customerId },
-        { table: schema.reviewRequests,           col: schema.reviewRequests.customerId },
-        { table: schema.reviewSubmissions,        col: schema.reviewSubmissions.customerId },
-        { table: schema.pendingOutboundMessages,  col: schema.pendingOutboundMessages.customerId },
-        { table: schema.communications,           col: schema.communications.customerId },
-        { table: schema.callRecords,              col: schema.callRecords.customerId },
-      ];
-
-      for (const dupId of duplicateIds) {
-        for (const { table, col } of tables) {
-          await db.update(table).set({ customerId: primaryId } as any).where(eq(col, dupId));
-        }
-      }
-
-      // Fill any blank fields on the primary from the duplicates (never overwrite non-empty values)
-      const fillableFields: (keyof typeof primary)[] = [
-        'email', 'phone', 'mobile', 'address', 'city', 'region', 'notes',
-        'source', 'importSource', 'externalId', 'servicem8Uuid',
-      ];
-      const patch: Record<string, any> = {};
-      for (const field of fillableFields) {
-        if (!primary[field]) {
-          for (const dup of duplicates) {
-            if (dup[field]) {
-              patch[field] = dup[field];
-              break;
-            }
-          }
-        }
-      }
-      // Recalculate job count and lifetime value from newly consolidated jobs
-      const consolidatedJobs = await db.select({ totalAmount: schema.jobs.totalAmount })
-        .from(schema.jobs)
-        .where(eq(schema.jobs.customerId, primaryId));
-      patch.totalJobs = consolidatedJobs.length;
-      patch.lifetimeValue = consolidatedJobs
-        .reduce((sum, j) => sum + parseFloat((j.totalAmount as string) || '0'), 0)
-        .toFixed(2);
-
-      await storage.updateCustomer(primaryId, patch);
-
-      // Delete the duplicate records (FK violations are gone now)
-      await db.delete(schema.customers).where(inArray(schema.customers.id, duplicateIds));
-
-      const updatedPrimary = await storage.getCustomer(primaryId);
+      const updatedPrimary = await mergeCustomerRecords(primaryId, duplicateIds);
       console.log(`✅ Merged customers [${duplicateIds.join(', ')}] into ${primaryId}`);
       res.json({ success: true, data: updatedPrimary });
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error merging customers:', error);
+      const msg = String(error?.message || '');
+      if (msg.includes('not found')) {
+        return res.status(404).json({ success: false, message: msg });
+      }
+      if (msg.includes('primaryId cannot')) {
+        return res.status(400).json({ success: false, message: msg });
+      }
       res.status(500).json({ success: false, message: 'Failed to merge customers' });
+    }
+  });
+
+  // Bulk dedupe: find every customer group with a matching normalized name
+  // (trim + lowercase + collapse whitespace) and merge each group into a
+  // single primary. Defaults to dry-run; pass ?apply=true to actually merge.
+  app.post('/api/customers/dedupe-by-name', requireAdmin, async (req: Request, res: Response) => {
+    const apply = req.query.apply === 'true' || req.body?.apply === true;
+    try {
+      const allCustomers = await db.select().from(schema.customers);
+      const jobCounts = await db.select({
+        customerId: schema.jobs.customerId,
+        n: sql<number>`count(*)::int`,
+      }).from(schema.jobs).groupBy(schema.jobs.customerId);
+      const jobCountMap = new Map<string, number>();
+      for (const row of jobCounts) {
+        if (row.customerId) jobCountMap.set(row.customerId as string, Number(row.n));
+      }
+
+      const normalize = (name: string | null | undefined) =>
+        (name ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+      const groups = new Map<string, typeof allCustomers>();
+      for (const c of allCustomers) {
+        const key = normalize(c.name);
+        if (!key) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(c);
+      }
+
+      const nonEmpty = (c: any) =>
+        ['email', 'phone', 'mobile', 'address', 'city', 'region', 'notes', 'externalId', 'servicem8Uuid']
+          .reduce((n, k) => n + (c[k] ? 1 : 0), 0);
+
+      const pickPrimary = (members: typeof allCustomers) =>
+        [...members].sort((a, b) => {
+          const ja = jobCountMap.get(a.id) || 0;
+          const jb = jobCountMap.get(b.id) || 0;
+          if (jb !== ja) return jb - ja;
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : Number.POSITIVE_INFINITY;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : Number.POSITIVE_INFINITY;
+          if (ta !== tb) return ta - tb;
+          return nonEmpty(b) - nonEmpty(a);
+        })[0];
+
+      const plan = Array.from(groups.entries())
+        .filter(([, members]) => members.length > 1)
+        .map(([key, members]) => {
+          const primary = pickPrimary(members);
+          return {
+            normalizedName: key,
+            primaryId: primary.id,
+            primaryName: primary.name,
+            primaryJobCount: jobCountMap.get(primary.id) || 0,
+            duplicateIds: members.filter(m => m.id !== primary.id).map(m => m.id),
+            duplicateCount: members.length - 1,
+            members: members.map(m => ({
+              id: m.id,
+              name: m.name,
+              createdAt: m.createdAt,
+              jobCount: jobCountMap.get(m.id) || 0,
+              email: m.email,
+              phone: m.phone,
+              isPrimary: m.id === primary.id,
+            })),
+          };
+        })
+        .sort((a, b) => b.duplicateCount - a.duplicateCount);
+
+      if (!apply) {
+        return res.json({
+          success: true,
+          apply: false,
+          groupCount: plan.length,
+          totalDuplicatesToRemove: plan.reduce((n, g) => n + g.duplicateCount, 0),
+          groups: plan,
+        });
+      }
+
+      const results: Array<{ normalizedName: string; primaryId: string; merged: number; success: boolean; error?: string }> = [];
+      for (const g of plan) {
+        try {
+          await mergeCustomerRecords(g.primaryId, g.duplicateIds);
+          results.push({ normalizedName: g.normalizedName, primaryId: g.primaryId, merged: g.duplicateIds.length, success: true });
+        } catch (err: any) {
+          console.error(`Failed to merge group "${g.normalizedName}":`, err);
+          results.push({ normalizedName: g.normalizedName, primaryId: g.primaryId, merged: 0, success: false, error: String(err?.message || err) });
+        }
+      }
+      const mergedCount = results.reduce((n, r) => n + (r.merged || 0), 0);
+      broadcast(['/api/customers']);
+      console.log(`✅ Bulk dedupe complete: ${mergedCount} duplicate customers merged across ${results.filter(r => r.success).length} groups`);
+      return res.json({
+        success: true,
+        apply: true,
+        groupsProcessed: results.length,
+        duplicatesRemoved: mergedCount,
+        results,
+      });
+    } catch (error) {
+      console.error('Error in dedupe-by-name:', error);
+      res.status(500).json({ success: false, message: 'Failed to run dedupe' });
     }
   });
 
@@ -3298,6 +3464,32 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
+
+      // Source-level dedupe: if the caller identifies a lead or conversation
+      // that already has an active (non-terminal) job, return that job
+      // instead of inserting a second row. Prevents the "click Create Quote
+      // twice, end up with two jobs" class of bug. Customer alone is NOT a
+      // dedupe key — customers can legitimately have multiple jobs.
+      const TERMINAL_STATUSES = ['completed', 'unsuccessful', 'cancelled', 'archived'];
+      if (processedBody.leadId) {
+        const [existingByLead] = await db.select().from(schema.jobs)
+          .where(sql`${schema.jobs.leadId} = ${processedBody.leadId} AND ${schema.jobs.status} NOT IN (${sql.join(TERMINAL_STATUSES.map(s => sql`${s}`), sql`, `)})`)
+          .limit(1);
+        if (existingByLead) {
+          console.log(`♻️ Reused existing active job ${existingByLead.id} (${existingByLead.jobNumber}) for leadId ${processedBody.leadId}`);
+          return res.json({ success: true, data: serializeJobTimestamps(existingByLead), reused: true });
+        }
+      }
+      if (processedBody.conversationId) {
+        const conv = await storage.getConversation(processedBody.conversationId).catch(() => null);
+        if (conv && (conv as any).convertedToJobId) {
+          const existingJob = await storage.getJob((conv as any).convertedToJobId).catch(() => null);
+          if (existingJob) {
+            console.log(`♻️ Reused existing job ${existingJob.id} (${existingJob.jobNumber}) for already-converted conversation ${processedBody.conversationId}`);
+            return res.json({ success: true, data: serializeJobTimestamps(existingJob), reused: true });
+          }
+        }
+      }
       
       // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
       const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
@@ -3315,17 +3507,30 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           // Use mobile as phone if phone is empty (mobile is more common for SMS leads)
           const customerPhone = processedBody.newCustomerPhone?.trim() || processedBody.newCustomerMobile?.trim() || undefined;
           const customerMobile = processedBody.newCustomerMobile?.trim() || undefined;
-          
-          const newCustomer = await storage.createCustomer({
+          const customerPayload = {
             name: processedBody.newCustomerName.trim(),
             email: processedBody.newCustomerEmail?.trim() || undefined,
             phone: customerPhone,
             mobile: customerMobile,
             address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
-          });
-          
+          };
+
+          // Reuse an existing customer with the same name (case/whitespace
+          // insensitive) instead of creating a duplicate row.
+          const existing = await storage.findCustomerByName(customerPayload.name);
+          let newCustomer;
+          if (existing) {
+            const updates = mergeEmptyCustomerFields(existing, customerPayload);
+            newCustomer = Object.keys(updates).length > 0
+              ? await storage.updateCustomer(existing.id, updates)
+              : existing;
+            console.log(`♻️ Reused existing customer ${newCustomer.id} (${newCustomer.name}) for job`);
+          } else {
+            newCustomer = await storage.createCustomer(customerPayload);
+            console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job`);
+          }
+
           processedBody.customerId = newCustomer.id;
-          console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job`);
           
           // Auto-populate job contact fields from new customer if not already set
           if (!processedBody.jobContactFirstName) {
@@ -4166,15 +4371,28 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (processedBody.isNewCustomer && processedBody.newCustomerName) {
         console.log('🔥 Creating new customer:', processedBody.newCustomerName);
         try {
-          const newCustomer = await storage.createCustomer({
+          const customerPayload = {
             name: processedBody.newCustomerName.trim(),
             email: processedBody.newCustomerEmail?.trim() || undefined,
             phone: processedBody.newCustomerPhone?.trim() || undefined,
             address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
-          });
-          
+          };
+
+          // Reuse an existing customer with the same name instead of duplicating.
+          const existing = await storage.findCustomerByName(customerPayload.name);
+          let newCustomer;
+          if (existing) {
+            const updates = mergeEmptyCustomerFields(existing, customerPayload);
+            newCustomer = Object.keys(updates).length > 0
+              ? await storage.updateCustomer(existing.id, updates)
+              : existing;
+            console.log(`♻️ Reused existing customer ${newCustomer.id} (${newCustomer.name}) for job update`);
+          } else {
+            newCustomer = await storage.createCustomer(customerPayload);
+            console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
+          }
+
           processedBody.customerId = newCustomer.id;
-          console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
           
           // Auto-populate job contact fields from new customer if not already set
           if (!processedBody.jobContactFirstName) {
@@ -4640,6 +4858,33 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       // Get old job for description comparison
       const oldJob = await storage.getJob(req.params.id);
+
+      // SAFEGUARD: Prevent accidental overwrites of critical fields with empty values.
+      // Mirrors the guard on PUT /api/jobs/:id — without it a PATCH that submits
+      // empty contact fields silently wipes them (see job 3935 / John Braybrook).
+      if (oldJob) {
+        const preserveFields: (keyof typeof oldJob)[] = [
+          'address', 'leadSource', 'notes', 'description', 'customerId',
+          'jobContactFirstName', 'jobContactLastName', 'jobContactEmail',
+          'jobContactPhone', 'jobContactMobile', 'billingNameOverride',
+          'billingAddress', 'billingContactPhone', 'billingContactMobile',
+          'billingContactEmail', 'invoiceDescription', 'totalAmount', 'paidAmount',
+          'title', 'priority', 'estimatedManHours', 'scheduledDate'
+        ];
+        const explicitClears: string[] = req.body._clearFields || [];
+        for (const field of preserveFields) {
+          const updateVal = (validation.data as any)[field];
+          const oldVal = oldJob[field];
+          const isEmpty = updateVal === '' || updateVal === null || updateVal === undefined;
+          const oldHasValue = oldVal !== null && oldVal !== undefined && oldVal !== '';
+          if (isEmpty && oldHasValue && !explicitClears.includes(field)) {
+            (validation.data as any)[field] = oldVal;
+          }
+        }
+        for (const field of explicitClears) {
+          (validation.data as any)[field] = null;
+        }
+      }
 
       // Convert empty string customerId to null in validated data
       const updateData = { ...validation.data };

@@ -91,6 +91,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
   findCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  findCustomerByName(name: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
@@ -1028,19 +1029,44 @@ class DatabaseStorage implements IStorage {
   async findCustomerByPhone(phone: string): Promise<Customer | undefined> {
     // Normalize phone number: remove all non-digit characters
     const normalizedInput = this.normalizePhone(phone);
-    
+
     if (!normalizedInput) {
       return undefined;
     }
-    
+
     // Use indexed normalizedPhone column for efficient lookup
     const [customer] = await db
       .select()
       .from(schema.customers)
       .where(eq(schema.customers.normalizedPhone, normalizedInput))
       .limit(1);
-    
+
     return customer || undefined;
+  }
+
+  async findCustomerByName(name: string): Promise<Customer | undefined> {
+    const normalized = (name ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!normalized) return undefined;
+
+    // Case- and whitespace-insensitive match on customers.name. Prefer an
+    // active record; fall back to any match so the caller can reactivate
+    // rather than duplicate. Whitespace collapsing matches the grouping
+    // logic used by the bulk dedupe job.
+    const nameExpr = sql`TRIM(LOWER(REGEXP_REPLACE(${schema.customers.name}, '\s+', ' ', 'g')))`;
+
+    const [active] = await db
+      .select()
+      .from(schema.customers)
+      .where(sql`${nameExpr} = ${normalized} AND ${schema.customers.isActive} IS DISTINCT FROM FALSE`)
+      .limit(1);
+    if (active) return active;
+
+    const [any] = await db
+      .select()
+      .from(schema.customers)
+      .where(sql`${nameExpr} = ${normalized}`)
+      .limit(1);
+    return any || undefined;
   }
 
   async updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer> {
