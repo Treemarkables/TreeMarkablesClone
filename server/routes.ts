@@ -21035,6 +21035,46 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Append a single signature to an existing JHA without re-validating or
+  // rewriting the rest of the assessment. Used when a worker joins a job after
+  // the JHA has already been completed and signed by others.
+  app.post("/api/jha/assessments/:id/signatures", async (req, res) => {
+    try {
+      const existing = await storage.getJhaAssessment(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Assessment not found' });
+      }
+
+      const signaturePayload = z.object({
+        signatureDataUrl: z.string().min(1, 'signatureDataUrl is required'),
+        workerName: z.string().optional(),
+      }).parse(req.body);
+
+      await storage.createJhaSignature({
+        assessmentId: req.params.id,
+        workerName: signaturePayload.workerName?.trim() || 'Worker',
+        workerId: null,
+        signatureDataUrl: signaturePayload.signatureDataUrl,
+        signedAt: new Date(),
+      });
+
+      await storage.updateJhaAssessment(req.params.id, {});
+
+      const updated = await storage.getJhaAssessment(req.params.id, true, true);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('JHA append signature error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: `Validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')}`,
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to add signature' });
+    }
+  });
+
   // JHA Photo upload (no assessment ID — for pending photos before assessment is created)
   app.post("/api/jha/photos/upload", imageUpload.single("photo"), async (req: Request, res: Response) => {
     try {

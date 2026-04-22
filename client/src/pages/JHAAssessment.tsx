@@ -214,14 +214,68 @@ export default function JHAAssessment() {
     mutationFn: async (
       data: JHAFormValues & { sharedSignature: string; photos: string[] },
     ) => {
-      if (isEditing && assessmentId) {
-        return apiRequest(
-          "PATCH",
-          `/api/jha/assessments/${assessmentId}`,
-          data,
+      // Editing an existing JHA with only a new signature added: use the
+      // dedicated append endpoint so we don't re-validate/rewrite the whole
+      // assessment. This is by far the most common "edit" — a worker joined
+      // the job after the initial signing and needs to sign too.
+      if (isEditing && assessmentId && data.sharedSignature) {
+        const res = await fetch(
+          `/api/jha/assessments/${assessmentId}/signatures`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              signatureDataUrl: data.sharedSignature,
+              workerName: data.teamLeader || undefined,
+            }),
+          },
         );
+        if (!res.ok) {
+          const body = await res.text();
+          console.error("JHA append-signature failed", res.status, body);
+          let message = `${res.status} ${res.statusText}`;
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed.message) message = parsed.message;
+          } catch {}
+          throw new Error(message);
+        }
+        return res;
       }
-      return apiRequest("POST", "/api/jha/assessments", data);
+
+      const url =
+        isEditing && assessmentId
+          ? `/api/jha/assessments/${assessmentId}`
+          : `/api/jha/assessments`;
+      const method = isEditing && assessmentId ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error("JHA save failed", res.status, body);
+        console.error("JHA save payload:", data);
+        let message = `${res.status} ${res.statusText}`;
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed.errors && Array.isArray(parsed.errors)) {
+            message = parsed.errors
+              .map(
+                (e: any) =>
+                  `${(e.path || []).join(".")}: ${e.message} (got ${JSON.stringify(e.received)})`,
+              )
+              .join(" | ");
+          } else if (parsed.message) {
+            message = parsed.message;
+          }
+        } catch {}
+        throw new Error(message);
+      }
+      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/assessments"] });
