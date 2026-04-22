@@ -280,6 +280,7 @@ export interface IStorage {
   createReview(review: InsertReview): Promise<Review>;
   getReview(id: string): Promise<Review | undefined>;
   updateReview(id: string, updates: Partial<InsertReview>): Promise<Review>;
+  deleteReview(id: string): Promise<void>;
   getReviewsByCustomer(customerId: string): Promise<Review[]>;
   getAllReviews(): Promise<Review[]>;
   
@@ -2479,11 +2480,27 @@ class DatabaseStorage implements IStorage {
   async getActivitiesByLead(leadId: string): Promise<Activity[]> { return []; }
   async getActivitiesByJob(jobId: string): Promise<Activity[]> { return []; }
   async getAllActivities(limit?: number): Promise<Activity[]> { return []; }
-  async createReview(review: InsertReview): Promise<Review> { throw new Error("Not implemented"); }
-  async getReview(id: string): Promise<Review | undefined> { return undefined; }
-  async updateReview(id: string, updates: Partial<InsertReview>): Promise<Review> { throw new Error("Not implemented"); }
-  async getReviewsByCustomer(customerId: string): Promise<Review[]> { return []; }
-  async getAllReviews(): Promise<Review[]> { return []; }
+  async createReview(review: InsertReview): Promise<Review> {
+    const [row] = await db.insert(schema.reviews).values(review).returning();
+    return row;
+  }
+  async getReview(id: string): Promise<Review | undefined> {
+    const [row] = await db.select().from(schema.reviews).where(eq(schema.reviews.id, id));
+    return row;
+  }
+  async updateReview(id: string, updates: Partial<InsertReview>): Promise<Review> {
+    const [row] = await db.update(schema.reviews).set(updates).where(eq(schema.reviews.id, id)).returning();
+    return row;
+  }
+  async deleteReview(id: string): Promise<void> {
+    await db.delete(schema.reviews).where(eq(schema.reviews.id, id));
+  }
+  async getReviewsByCustomer(customerId: string): Promise<Review[]> {
+    return await db.select().from(schema.reviews).where(eq(schema.reviews.customerId, customerId));
+  }
+  async getAllReviews(): Promise<Review[]> {
+    return await db.select().from(schema.reviews);
+  }
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> { throw new Error("Not implemented"); }
   async getCampaign(id: string): Promise<Campaign | undefined> { return undefined; }
   async updateCampaign(id: string, updates: Partial<InsertCampaign>): Promise<Campaign> { throw new Error("Not implemented"); }

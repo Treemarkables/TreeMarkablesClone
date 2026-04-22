@@ -17,7 +17,7 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, inArray } from "drizzle-orm";
+import { eq, desc, sql, inArray, and, gte, lt, ne } from "drizzle-orm";
 import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -358,6 +358,34 @@ if (!fs.existsSync(recordingsDir)) {
   fs.mkdirSync(recordingsDir, { recursive: true });
 }
 
+// ── Company logo helpers ──────────────────────────────────────────────────
+// Single source of truth: the default proposal template's logoUrl. Settings → Company
+// keeps all three default templates (quote/proposal/invoice) in sync on upload, so any
+// of them would do — proposal is the canonical read.
+const FALLBACK_LOGO_PATH = '/treemarkables-logo.png';
+
+async function getCompanyLogoUrl(): Promise<string> {
+  try {
+    const tpl = await storage.getDefaultDocumentTemplate('proposal');
+    return tpl?.logoUrl || FALLBACK_LOGO_PATH;
+  } catch {
+    return FALLBACK_LOGO_PATH;
+  }
+}
+
+function resolveLogoFsPath(logoUrl: string): string {
+  // URLs look like "/logos/logo-123.png" or "/treemarkables-logo.png" — both served from /client/public.
+  const relative = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+  return path.join(__dirname, '..', 'client', 'public', relative);
+}
+
+async function getCompanyLogoFilePath(): Promise<string> {
+  const url = await getCompanyLogoUrl();
+  const resolved = resolveLogoFsPath(url);
+  if (fs.existsSync(resolved)) return resolved;
+  return path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
+}
+
 // Initialize OpenAI client for call transcription
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -679,6 +707,278 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 // ---------------------------------------------------------------------------
+// Shared proposal/quote PDF generation helper — used by the GET /pdf route
+// and the send-quote-email handler. When proposal.templateUsed === 'quote',
+// the rendered document uses "QUOTE" header and email-reply acceptance copy.
+// ---------------------------------------------------------------------------
+async function generateProposalPDFBuffer(
+  proposalId: string
+): Promise<{ buffer: Buffer; proposalNumber: string; isQuote: boolean }> {
+  const proposal = await storage.getProposal(proposalId);
+  if (!proposal) throw new Error('Proposal not found');
+
+  const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : undefined;
+
+  const sections = await storage.getProposalSectionsByProposal(proposalId);
+  const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+
+  // Featured (curated) reviews to render under the totals block. Same filter as
+  // GET /api/reviews/featured so the builder preview and the PDF show the same
+  // pool. Flattened to individual photo URLs; limit to 6 to keep the PDF compact.
+  const allReviews = await storage.getAllReviews().catch(() => [] as any[]);
+  const featuredPhotos: string[] = (allReviews || [])
+    .filter((r: any) => r?.isPublic && Array.isArray(r.photoUrls) && r.photoUrls.length > 0)
+    .sort((a: any, b: any) => {
+      const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      return bd - ad;
+    })
+    .flatMap((r: any) => r.photoUrls as string[])
+    .slice(0, 6);
+
+  const sectionLineItems = new Map<string, any[]>();
+  for (const item of lineItems) {
+    if (item.sectionId) {
+      if (!sectionLineItems.has(item.sectionId)) {
+        sectionLineItems.set(item.sectionId, []);
+      }
+      sectionLineItems.get(item.sectionId)!.push(item);
+    }
+  }
+
+  let subtotal = 0;
+  for (const item of lineItems) {
+    if (item.selected !== false) {
+      subtotal += parseFloat(item.totalPrice || '0');
+    }
+  }
+  const gst = subtotal * 0.15;
+  const total = subtotal + gst;
+
+  const customerName = customer?.name || 'Valued Customer';
+  const proposalNumber = proposal.proposalNumber || 'N/A';
+  const isQuote = proposal.templateUsed === 'quote';
+  const docTitle = isQuote ? 'QUOTE' : 'PROPOSAL';
+
+  console.log(`📄 Generating ${docTitle.toLowerCase()} PDF for ${proposalId} (${sections.length} sections, ${lineItems.length} line items)`);
+
+  const PDFDoc = (await import('pdfkit')).default;
+  const buffer = await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDoc({ size: 'A4', margin: 50 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const fmtCurrency = (n: number) =>
+      new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(n);
+    const fmtDate = (d: any) =>
+      d ? new Date(d).toLocaleDateString('en-NZ', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+    const pageW = doc.page.width - 100;
+
+    // Header bar
+    doc.rect(0, 0, doc.page.width, 90).fill('#f97316');
+    try { doc.image('client/public/treemarkables-logo.png', 50, 15, { height: 55 }); } catch { /* no logo */ }
+    doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
+      .text(docTitle, doc.page.width - 200, 20, { width: 150, align: 'right' });
+    doc.fontSize(10).font('Helvetica')
+      .text(`#${proposalNumber}`, doc.page.width - 200, 43, { width: 150, align: 'right' });
+    const validUntil = (proposal as any).expiryDate || (proposal as any).expiresAt;
+    if (validUntil) {
+      doc.fontSize(8).text(`Valid until: ${fmtDate(validUntil)}`, doc.page.width - 200, 58, { width: 150, align: 'right' });
+    }
+
+    // Customer block
+    doc.fillColor('#111827').fontSize(12).font('Helvetica-Bold').text('Prepared for:', 50, 110);
+    doc.fontSize(14).text(customerName, 50, 128);
+    if (customer?.address) doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text(customer.address, 50, 147);
+
+    // Description (introduction for newer records, description for legacy)
+    const intro = (proposal as any).introduction || (proposal as any).description;
+    if (intro) {
+      doc.moveDown(3).fillColor('#374151').fontSize(10).font('Helvetica')
+        .text(intro, { width: pageW });
+    }
+
+    const sepY = Math.max(doc.y + 12, 200);
+    doc.moveTo(50, sepY).lineTo(50 + pageW, sepY).lineWidth(1).strokeColor('#e5e7eb').stroke();
+    doc.y = sepY + 10;
+
+    // Line items per section
+    for (const section of sections) {
+      const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+      if (items.length === 0) continue;
+
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, { width: pageW });
+      doc.moveDown(0.3);
+
+      const col = { desc: 50, qty: 360, unit: 405, price: 450, total: 495 };
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#6b7280');
+      doc.text('Description', col.desc, doc.y, { width: 300 });
+      doc.text('Qty', col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+      doc.text('Unit', col.unit, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+      doc.text('Total', col.total, doc.y - doc.currentLineHeight(), { width: 50, align: 'right' });
+      doc.moveDown(0.3);
+      doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#d1d5db').stroke();
+      doc.moveDown(0.3);
+
+      for (const item of items) {
+        const itemTotal = parseFloat(item.totalPrice || '0');
+        const rowY = doc.y;
+        doc.fontSize(9).font('Helvetica').fillColor('#111827')
+          .text(item.description || '', col.desc, rowY, { width: 300 });
+        const rowH = doc.y - rowY;
+        doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
+        doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
+        doc.text(fmtCurrency(itemTotal), col.total, rowY, { width: 50, align: 'right' });
+        doc.y = rowY + Math.max(rowH, 14) + 2;
+      }
+
+      doc.moveDown(0.5);
+    }
+
+    // Totals block
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.moveDown(0.5);
+
+    const tX = 370;
+    const vW = 50 + pageW - tX;
+    doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+      .text('Subtotal (excl. GST)', tX, doc.y, { width: vW - 70, align: 'left' });
+    doc.fillColor('#111827').text(fmtCurrency(subtotal), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    doc.moveDown(0.4);
+    doc.fillColor('#6b7280').text('GST (15%)', tX, doc.y, { width: vW - 70 });
+    doc.fillColor('#111827').text(fmtCurrency(gst), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    doc.moveDown(0.4);
+    doc.moveTo(tX, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.moveDown(0.3);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#111827')
+      .text('Total (inc. GST)', tX, doc.y, { width: vW - 70 });
+    doc.fillColor('#f97316').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+
+    // Reviews block — curated review screenshots under the total. Each uploaded
+    // image gets its own row, centred at a readable size. Skipped entirely when
+    // there are no photos so the layout has no empty header.
+    if (featuredPhotos.length > 0) {
+      doc.moveDown(1.5);
+      doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+      doc.moveDown(0.8);
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151')
+        .text('What our customers say', 50, doc.y, { width: pageW, align: 'center' });
+      doc.moveDown(0.6);
+
+      const maxW = Math.min(360, pageW);
+      const maxH = 180;
+      for (const url of featuredPhotos) {
+        const rel = url.startsWith('/') ? url.slice(1) : url;
+        const fsPath = path.join(__dirname, '..', 'client', 'public', rel);
+        try {
+          if (fs.existsSync(fsPath)) {
+            const startX = 50 + (pageW - maxW) / 2;
+            doc.image(fsPath, startX, doc.y, { fit: [maxW, maxH], align: 'center' });
+            doc.y += maxH + 12;
+          }
+        } catch { /* skip bad image */ }
+      }
+    }
+
+    // Acceptance section
+    doc.moveDown(1.5);
+    doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.moveDown(0.8);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
+    doc.moveDown(0.4);
+    if (isQuote) {
+      doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+        .text('To accept this quote, simply reply to our email — tap the "Accept Quote" button and press send. No signature required.', { width: pageW });
+    } else {
+      doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+        .text('By signing below, you agree to the scope of works and pricing outlined in this proposal.', { width: pageW });
+      doc.moveDown(1.2);
+
+      const sigY = doc.y;
+      doc.moveTo(50, sigY + 20).lineTo(280, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+      doc.moveTo(320, sigY + 20).lineTo(550, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+      doc.fontSize(8).fillColor('#9ca3af')
+        .text('Customer Signature', 50, sigY + 24, { width: 230 })
+        .text('Date', 320, sigY + 24, { width: 230 });
+
+      doc.moveDown(2.5);
+      const nameY = doc.y;
+      doc.moveTo(50, nameY + 20).lineTo(280, nameY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+      doc.fontSize(8).fillColor('#9ca3af').text('Print Name', 50, nameY + 24, { width: 230 });
+    }
+
+    if (proposal.status === 'accepted') {
+      doc.moveDown(1);
+      doc.rect(50, doc.y, pageW, 28).fill('#dcfce7');
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d')
+        .text(`This ${isQuote ? 'quote' : 'proposal'} has been accepted`, 50, doc.y - 20, { width: pageW, align: 'center' });
+      doc.moveDown(0.5);
+    }
+
+    const footerY = doc.page.height - 70;
+    doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+      .text('Treemarkables LTD — Qualified Arborists', 50, footerY + 8, { width: pageW, align: 'center' });
+    doc.text('info@treemarkables.co.nz | 027 216 6882', 50, footerY + 20, { width: pageW, align: 'center' });
+
+    doc.end();
+  });
+
+  return { buffer, proposalNumber, isQuote };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy HTML summary of a proposal (used by Smart Attachments / ?format=html).
+// Kept separate from the PDF renderer so it can be emitted without spinning up
+// PDFKit.
+// ---------------------------------------------------------------------------
+async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
+  const proposal = await storage.getProposal(proposalId);
+  if (!proposal) throw new Error('Proposal not found');
+  const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+  const sections = await storage.getProposalSectionsByProposal(proposalId);
+  const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+
+  const sectionLineItems = new Map<string, any[]>();
+  for (const item of lineItems) {
+    if (item.sectionId) {
+      if (!sectionLineItems.has(item.sectionId)) sectionLineItems.set(item.sectionId, []);
+      sectionLineItems.get(item.sectionId)!.push(item);
+    }
+  }
+  let subtotal = 0;
+  for (const item of lineItems) {
+    if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
+  }
+  const gst = subtotal * 0.15;
+  const total = subtotal + gst;
+  const isQuote = proposal.templateUsed === 'quote';
+  const docLabel = isQuote ? 'Quote' : 'Proposal';
+  const customerName = customer?.name || 'Valued Customer';
+  const proposalNumber = proposal.proposalNumber || 'N/A';
+
+  let htmlItems = '';
+  for (const section of sections) {
+    const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+    if (items.length === 0) continue;
+    htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
+    htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+    items.forEach((item: any) => {
+      const p = parseFloat(item.totalPrice || '0');
+      htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
+    });
+    htmlItems += '</table>';
+  }
+  const gstFmt = `$${gst.toFixed(2)}`;
+  const totalFmt = `$${total.toFixed(2)}`;
+  const subtotalFmt = `$${subtotal.toFixed(2)}`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">Treemarkables ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">Treemarkables LTD | info@treemarkables.co.nz | 027 216 6882</p></body></html>`;
+}
+
+// ---------------------------------------------------------------------------
 // Shared PDF generation helper — used by both the email route and the
 // standalone /api/invoices/:id/pdf download endpoint.
 // Accepts either a DB invoice record (.items) or frontend invoice data
@@ -693,6 +993,9 @@ async function generateInvoicePDFBuffer(
   const PDFDocument = (await import('pdfkit')).default;
   // Import shared rendering contract (resolves camelCase DB fields + defaults)
   const { resolveCompanyInfo, resolveBlockConfig } = await import('../shared/invoiceBlockDefaults');
+  // Resolve the default company logo filesystem path up-front (inside the Promise
+  // executor we can't await) so the PDF header renders without extra async calls.
+  const defaultLogoPath = await getCompanyLogoFilePath();
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -759,8 +1062,8 @@ async function generateInvoicePDFBuffer(
           if (logoAlign === 'center') logoX = 297 - 60;
           else if (logoAlign === 'right') logoX = 435;
           const logoFilePath = co.logoUrl
-            ? path.join(__dirname, '..', 'client', 'public', co.logoUrl)
-            : path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
+            ? resolveLogoFsPath(co.logoUrl)
+            : defaultLogoPath;
           try {
             doc.image(logoFilePath, logoX, 35, { width: 120, height: 50, fit: [120, 50] });
           } catch { /* logo optional */ }
@@ -1132,30 +1435,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create server-side session
-      req.session.employeeId = employee.id;
-
-      // Explicitly save the session before responding
-      req.session.save((err) => {
-        if (err) {
-          console.error('Session save error:', err);
+      // Regenerate session ID on login so any stale cookie in the browser
+      // is always replaced by a fresh Set-Cookie. Also defends against
+      // session fixation.
+      req.session.regenerate((regenErr) => {
+        if (regenErr) {
+          console.error('Session regenerate error:', regenErr);
           return res.status(500).json({
             success: false,
             message: 'Failed to create session'
           });
         }
 
-        res.json({
-          success: true,
-          data: {
-            id: employee.id,
-            firstName: employee.firstName,
-            lastName: employee.lastName,
-            email: employee.email,
-            role: employee.role,
-            phone: employee.phone,
-            status: employee.status
+        req.session.employeeId = employee.id;
+
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to create session'
+            });
           }
+
+          res.json({
+            success: true,
+            data: {
+              id: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              email: employee.email,
+              role: employee.role,
+              phone: employee.phone,
+              status: employee.status
+            }
+          });
         });
       });
     } catch (error) {
@@ -1227,16 +1541,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[LOGOUT] Session destroyed successfully for employee:', employeeId);
       
-      // Clear the session cookie with all possible options to ensure deletion
-      res.clearCookie('connect.sid', {
+      // Clear the session cookie — attributes must match exactly how the
+      // cookie was set in server/index.ts, otherwise the browser ignores the
+      // clear and the stale SID lingers into the next login.
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      res.clearCookie('treemarkables.sid', {
         path: '/',
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
+        secure: true,
+        sameSite: 'none',
+        domain: isDevelopment ? undefined : '.treemarkables.co.nz',
       });
-      
-      // Also try clearing without options (for compatibility)
-      res.clearCookie('connect.sid');
       
       res.json({
         success: true,
@@ -4150,6 +4465,75 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Per-employee staff assignments within an NZ-local date range, enriched with job info.
+  // Backs the staff-filtered CalendarAvailabilityModal so blocks render 1:1 with real assignments.
+  app.get('/api/employees/:employeeId/assignments-in-range', async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const { start, end } = req.query;
+      if (!employeeId) {
+        return res.status(400).json({ success: false, message: 'employeeId required' });
+      }
+      if (!start || typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+          !end   || typeof end   !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return res.status(400).json({ success: false, message: 'start and end params required (YYYY-MM-DD, NZ local)' });
+      }
+
+      // Convert NZ-local day boundaries to UTC so we can filter the (UTC-stored) start_time column.
+      const startUtc = fromZonedTime(`${start}T00:00:00`, 'Pacific/Auckland');
+      const endUtc = fromZonedTime(`${end}T00:00:00`, 'Pacific/Auckland');
+
+      const rawAssignments = await db
+        .select()
+        .from(schema.jobStaffAssignments)
+        .where(
+          and(
+            eq(schema.jobStaffAssignments.employeeId, employeeId),
+            ne(schema.jobStaffAssignments.status, 'cancelled'),
+            gte(schema.jobStaffAssignments.startTime, startUtc),
+            lt(schema.jobStaffAssignments.startTime, endUtc),
+          ),
+        );
+
+      // Batch-fetch job info for the returned assignments so we can show titles/addresses.
+      const jobIds = [...new Set(rawAssignments.map((a) => a.jobId))];
+      const jobRows = jobIds.length
+        ? await db.select().from(jobs).where(inArray(jobs.id, jobIds))
+        : [];
+      const jobMap = new Map(jobRows.map((j) => [j.id, j]));
+
+      const assignments = rawAssignments
+        .map((a) => {
+          const job = jobMap.get(a.jobId);
+          if (!job) return null;
+          if (job.status === 'archived' || job.status === 'unsuccessful') return null;
+          return {
+            id: a.id,
+            jobId: a.jobId,
+            jobNumber: job.jobNumber,
+            jobTitle: job.title,
+            jobAddress: job.address,
+            jobStatus: job.status,
+            status: a.status,
+            startTime: (a.startTime instanceof Date ? a.startTime : new Date(a.startTime)).toISOString(),
+            endTime: (a.endTime instanceof Date ? a.endTime : new Date(a.endTime)).toISOString(),
+          };
+        })
+        .filter((a): a is NonNullable<typeof a> => a !== null)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+      console.log(
+        `📅 assignments-in-range: employee=${employeeId} window=${start}..${end} ` +
+          `rawRows=${rawAssignments.length} returned=${assignments.length}`,
+      );
+
+      res.json({ success: true, data: assignments });
+    } catch (error) {
+      console.error('Error fetching employee assignments in range:', error);
+      res.status(500).json({ success: false, message: 'Error fetching employee assignments in range' });
+    }
+  });
+
   // Search jobs endpoint - searches across all jobs (not limited to paginated results)
   app.get('/api/jobs/search', async (req: Request, res: Response) => {
     try {
@@ -6105,6 +6489,185 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Send quote email — PDF attachment only, no public web viewer link.
+  // Accept is via mailto reply to the job-specific inbox (handled in /api/webhooks/email).
+  app.post('/api/proposals/:proposalId/send-quote-email', async (req: Request, res: Response) => {
+    try {
+      const { proposalId } = req.params;
+      const { to, subject, message, cc } = req.body;
+
+      if (!to || !subject) {
+        return res.status(400).json({
+          success: false,
+          message: 'Recipient email and subject are required'
+        });
+      }
+
+      const proposal = await storage.getProposal(proposalId);
+      if (!proposal) {
+        return res.status(404).json({ success: false, message: 'Quote not found' });
+      }
+
+      const job = proposal.jobId ? await storage.getJob(proposal.jobId) : null;
+      const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+
+      // Mark this record as a quote on first send (templateUsed drives PDF + acceptance behaviour).
+      if (proposal.templateUsed !== 'quote') {
+        await storage.updateProposal(proposalId, { templateUsed: 'quote' });
+      }
+
+      // Promote draft number Q-DRAFT-* → Q-* so the customer-facing number is stable.
+      let quoteNumber = proposal.proposalNumber || 'N/A';
+      if (quoteNumber.startsWith('Q-DRAFT-')) {
+        quoteNumber = quoteNumber.replace('Q-DRAFT-', 'Q-');
+        await storage.updateProposal(proposalId, { proposalNumber: quoteNumber });
+      } else if (quoteNumber.startsWith('DRAFT-')) {
+        quoteNumber = quoteNumber.replace('DRAFT-', 'Q-');
+        await storage.updateProposal(proposalId, { proposalNumber: quoteNumber });
+      }
+
+      // Recompute totals from the live line items for the email body.
+      const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+      let subtotal = 0;
+      for (const item of lineItems) {
+        if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
+      }
+      const gst = subtotal * 0.15;
+      const total = subtotal + gst;
+
+      // Generate PDF buffer for the attachment.
+      const { buffer: pdfBuffer } = await generateProposalPDFBuffer(proposalId);
+      const pdfBase64 = pdfBuffer.toString('base64');
+
+      // Build the mailto "Accept Quote" button. Reply lands in the job-specific
+      // inbox (Cloudflare → Gmail IMAP) where the webhook parser detects the
+      // "ACCEPT QUOTE" subject and marks the quote accepted.
+      const jobReplyAddress = job?.jobNumber
+        ? `job-${job.jobNumber}@jobs.treemarkables.co.nz`
+        : 'info@treemarkables.co.nz';
+      const mailtoSubject = encodeURIComponent(`ACCEPT QUOTE ${quoteNumber}`);
+      const mailtoBody = encodeURIComponent(
+        `Hi Treemarkables,\n\nI accept quote ${quoteNumber}. Please proceed.\n\nRegards,`
+      );
+      const acceptMailto = `mailto:${jobReplyAddress}?subject=${mailtoSubject}&body=${mailtoBody}`;
+
+      const customerName = customer?.name || 'Valued Customer';
+      const bodyLead = message && message.trim().length > 0
+        ? message
+        : `Thank you for your enquiry. Please find your quote attached as a PDF.`;
+
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 640px;">
+          <p>Dear ${customerName},</p>
+          <p>${bodyLead}</p>
+          <p><strong>Quote:</strong> ${quoteNumber}<br>
+          <strong>Total (inc. GST):</strong> $${total.toFixed(2)} NZD</p>
+          <p>The quote is attached to this email as a PDF. To accept, tap the button below and press send in your email app — no signature required.</p>
+          <p style="margin: 24px 0;">
+            <a href="${acceptMailto}"
+               style="background: #f97316; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+              Accept Quote
+            </a>
+          </p>
+          <p style="color: #6b7280; font-size: 12px;">If the button doesn't work in your email app, simply reply to this email with the words "I accept quote ${quoteNumber}".</p>
+          <p>Regards,<br>Treemarkables</p>
+        </div>
+      `;
+
+      const textContent = [
+        `Quote ${quoteNumber} for ${customerName}.`,
+        `Total (inc. GST): $${total.toFixed(2)} NZD.`,
+        `${bodyLead}`,
+        `The quote is attached as a PDF.`,
+        `To accept, reply to this email with: I accept quote ${quoteNumber}`,
+      ].join('\n\n');
+
+      const emailResult = await emailService.sendEmail({
+        to,
+        cc,
+        subject,
+        html: htmlContent,
+        text: textContent,
+        jobNumber: job?.jobNumber,
+        attachments: [
+          {
+            filename: `Quote-${quoteNumber}.pdf`,
+            content: pdfBase64,
+            type: 'application/pdf',
+          },
+        ],
+      });
+
+      if (!emailResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: emailResult.error || 'Failed to send quote email',
+        });
+      }
+
+      // Update proposal to sent status.
+      await storage.updateProposal(proposalId, {
+        status: 'sent',
+        sentDate: new Date(),
+        deliveryMethod: 'email',
+      });
+
+      // Diary entry + job activity (mirrors proposal email flow, minus the viewer link).
+      if (proposal.jobId) {
+        try {
+          await storage.createJobDiaryEntry({
+            jobId: proposal.jobId,
+            entryType: 'email',
+            title: `Quote ${quoteNumber} emailed`,
+            description: `Quote ${quoteNumber} sent to ${to} (total $${total.toFixed(2)} NZD)`,
+            content: `Quote ${quoteNumber} sent to ${to}`,
+            authorName: (req as any).user?.name || 'System',
+            authorRole: (req as any).user?.role || 'system',
+            metadata: {
+              proposalId,
+              quoteNumber,
+              recipient: to,
+              cc: cc || null,
+              total: total.toFixed(2),
+              documentType: 'quote',
+              documentNumber: quoteNumber,
+              sendgridMessageId: emailResult.messageId,
+            },
+          });
+
+          const jobForUpdate = await storage.getJob(proposal.jobId);
+          const updateData: any = {
+            lastActivityAt: new Date(),
+            quotePresentedDate: new Date(),
+          };
+          if (jobForUpdate && jobForUpdate.status === 'lead') {
+            updateData.status = 'quote';
+          }
+          await storage.updateJob(proposal.jobId, updateData);
+        } catch (diaryError) {
+          console.error('Error creating diary entry for quote email:', diaryError);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Quote email sent successfully',
+        data: {
+          proposalId,
+          quoteNumber,
+          recipient: to,
+          sentAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('Error sending quote email:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error sending quote email',
+      });
+    }
+  });
+
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
@@ -6470,14 +7033,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Add logo as inline attachment for emails with invoices
       if (validatedInvoiceData || invoiceId || invoice) {
         try {
-          const logoPath = path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
+          const logoPath = await getCompanyLogoFilePath();
           if (fs.existsSync(logoPath)) {
             const logoContent = fs.readFileSync(logoPath);
             const logoBase64 = logoContent.toString('base64');
+            const ext = path.extname(logoPath).toLowerCase();
+            const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+              : ext === '.webp' ? 'image/webp'
+              : ext === '.svg' ? 'image/svg+xml'
+              : 'image/png';
             emailAttachments.push({
               content: logoBase64,
-              filename: 'treemarkables-logo.png',
-              type: 'image/png',
+              filename: `company-logo${ext || '.png'}`,
+              type: mime,
               disposition: 'inline',
               content_id: 'treemarkables-logo'
             });
@@ -8540,14 +9108,33 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // REVIEW MANAGEMENT API ROUTES
   // ========================================
 
+  // Convert ISO date strings in the request body into Date objects so the
+  // Drizzle-zod insert schema (which expects z.date()) accepts JSON payloads
+  // from the admin UI. Safe to call on unknown shapes — only the two known
+  // date columns are touched.
+  const coerceReviewDates = (body: any) => {
+    if (!body || typeof body !== 'object') return body;
+    const out = { ...body };
+    for (const key of ['reviewDate', 'responseDate'] as const) {
+      const v = out[key];
+      if (typeof v === 'string' && v.trim().length > 0) {
+        const d = new Date(v);
+        if (!isNaN(d.getTime())) out[key] = d;
+      } else if (v === '' || v === null) {
+        out[key] = null;
+      }
+    }
+    return out;
+  };
+
   app.post('/api/reviews', async (req: Request, res: Response) => {
     try {
-      const validation = insertReviewSchema.safeParse(req.body);
+      const validation = insertReviewSchema.safeParse(coerceReviewDates(req.body));
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid review data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
       }
 
@@ -8577,14 +9164,40 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Featured (curated) reviews for the proposal/quote builder widget and PDF.
+  // Filters to public reviews that have at least one uploaded photo; sorts
+  // newest first; limit defaults to 10 so the carousel has enough slides.
+  app.get('/api/reviews/featured', async (req: Request, res: Response) => {
+    try {
+      const limit = Math.max(1, Math.min(20, parseInt(String(req.query.limit || '10'), 10) || 10));
+      const all = await storage.getAllReviews();
+      const featured = (all || [])
+        .filter((r: any) => r?.isPublic && Array.isArray(r.photoUrls) && r.photoUrls.length > 0)
+        .sort((a: any, b: any) => {
+          const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          return bd - ad;
+        })
+        .slice(0, limit)
+        .map((r: any) => ({
+          id: r.id,
+          photoUrls: Array.isArray(r.photoUrls) ? r.photoUrls : [],
+        }));
+      res.json({ success: true, data: featured });
+    } catch (error) {
+      console.error('Error fetching featured reviews:', error);
+      res.status(500).json({ success: false, message: 'Error fetching featured reviews' });
+    }
+  });
+
   app.put('/api/reviews/:id', async (req: Request, res: Response) => {
     try {
-      const updates = insertReviewSchema.partial().safeParse(req.body);
+      const updates = insertReviewSchema.partial().safeParse(coerceReviewDates(req.body));
       if (!updates.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid update data',
-          errors: updates.error.errors 
+          errors: updates.error.errors
         });
       }
 
@@ -8595,6 +9208,55 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       res.status(500).json({ success: false, message: 'Error updating review' });
     }
   });
+
+  app.delete('/api/reviews/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteReview(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      res.status(500).json({ success: false, message: 'Error deleting review' });
+    }
+  });
+
+  // Upload one or more photos to attach to a curated review. Reuses the logo
+  // upload's validation (5MB cap, image mimetypes only) but accepts up to 10
+  // files per call so the admin can drop a whole screenshot set at once.
+  app.post(
+    '/api/reviews/upload-photos',
+    logoUpload.array('photos', 10),
+    async (req: Request, res: Response) => {
+      try {
+        const files = (req.files as Express.Multer.File[] | undefined) || [];
+        if (files.length === 0) {
+          return res.status(400).json({ success: false, message: 'No files uploaded' });
+        }
+        const destDir = path.join(__dirname, '..', 'client', 'public', 'reviews');
+        fs.mkdirSync(destDir, { recursive: true });
+
+        const extFor = (mime: string) =>
+          mime === 'image/png' ? '.png'
+          : mime === 'image/jpeg' ? '.jpg'
+          : mime === 'image/webp' ? '.webp'
+          : mime === 'image/gif' ? '.gif'
+          : mime === 'image/svg+xml' ? '.svg'
+          : '.png';
+
+        const urls: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const filename = `review-${Date.now()}-${i}${extFor(f.mimetype)}`;
+          fs.writeFileSync(path.join(destDir, filename), f.buffer);
+          urls.push(`/reviews/${filename}`);
+        }
+
+        res.json({ success: true, urls });
+      } catch (error) {
+        console.error('Error uploading review photos:', error);
+        res.status(500).json({ success: false, message: 'Error uploading photos' });
+      }
+    },
+  );
 
   // ========================================
   // CAMPAIGN MANAGEMENT API ROUTES
@@ -12103,7 +12765,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  // Upload logo for templates
+  // Upload logo for templates — saves the file and propagates the new URL to all three
+  // default templates (quote, proposal, invoice) so Settings → Company is the single
+  // source of truth for the company logo.
   app.post('/api/templates/upload-logo', logoUpload.single('logo'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
@@ -12118,7 +12782,20 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const dest = path.join(__dirname, '..', 'client', 'public', 'logos', filename);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, req.file.buffer);
-      res.json({ success: true, url: `/logos/${filename}` });
+      const url = `/logos/${filename}`;
+
+      const defaults = await Promise.all([
+        storage.getDefaultDocumentTemplate('quote'),
+        storage.getDefaultDocumentTemplate('proposal'),
+        storage.getDefaultDocumentTemplate('invoice'),
+      ]);
+      await Promise.all(
+        defaults
+          .filter((t): t is NonNullable<typeof t> => !!t)
+          .map(t => storage.updateDocumentTemplate(t.id, { logoUrl: url })),
+      );
+
+      res.json({ success: true, url });
     } catch (error) {
       console.error('Error uploading logo:', error);
       res.status(500).json({ success: false, message: 'Error uploading logo' });
@@ -14663,6 +15340,71 @@ Transcription: ${transcriptText}`;
         }
       }
       
+      // Quote acceptance via email reply — triggered by the "Accept Quote"
+      // mailto button. Subject is "ACCEPT QUOTE Q-XXX"; body fallback is
+      // "I accept quote Q-XXX". Only runs when a job was matched above.
+      const acceptQuoteMatch =
+        actualSubject?.match(/ACCEPT\s+QUOTE\s+(Q-[A-Za-z0-9-]+)/i) ||
+        cleanedBody?.match(/\bI?\s*accept\s+quote\s+(Q-[A-Za-z0-9-]+)/i);
+      if (acceptQuoteMatch && jobFound) {
+        const acceptedNumber = acceptQuoteMatch[1];
+        try {
+          let targetJob: any = jobFromUuid;
+          if (!targetJob && jobNumberMatch) {
+            targetJob = await storage.getJobByJobNumber(jobNumberMatch[1]);
+          }
+          if (!targetJob && quoteNumberMatch) {
+            const jobs = await storage.getAllJobs({ quoteNumber: quoteNumberMatch[1] });
+            if (jobs && jobs.length > 0) targetJob = jobs[0];
+          }
+
+          if (targetJob) {
+            const proposals = await storage.getProposalsByJob(targetJob.id);
+            const quoteProposal = proposals.find(
+              (p) => p.proposalNumber === acceptedNumber && p.templateUsed === 'quote',
+            );
+            if (quoteProposal && quoteProposal.status !== 'accepted') {
+              await storage.updateProposal(quoteProposal.id, {
+                status: 'accepted',
+                responseDate: new Date(),
+              });
+              await storage.createJobDiaryEntry({
+                jobId: targetJob.id,
+                entryType: 'email',
+                title: `Quote ${acceptedNumber} accepted`,
+                description: `Customer accepted quote ${acceptedNumber} via email reply.`,
+                content: `Quote ${acceptedNumber} accepted`,
+                authorName: actualFromName || actualFromEmail,
+                authorRole: 'customer',
+                metadata: {
+                  proposalId: quoteProposal.id,
+                  quoteNumber: acceptedNumber,
+                  documentType: 'quote',
+                  action: 'quote_accepted',
+                },
+              });
+              try {
+                const notificationHelper = await import('./services/notificationHelper.js');
+                await notificationHelper.createNotification({
+                  type: 'quote_accepted',
+                  title: `Quote ${acceptedNumber} accepted`,
+                  message: `${actualFromName || actualFromEmail} accepted quote ${acceptedNumber} for Job #${targetJob.jobNumber}`,
+                  jobId: targetJob.id,
+                  priority: 'high',
+                  actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
+                  metadata: { proposalId: quoteProposal.id, quoteNumber: acceptedNumber },
+                });
+              } catch (notifErr) {
+                console.error('Failed to create quote_accepted notification:', notifErr);
+              }
+              console.log(`✅ Marked quote ${acceptedNumber} as accepted for job ${targetJob.jobNumber}`);
+            }
+          }
+        } catch (acceptErr) {
+          console.error('Failed to process quote acceptance:', acceptErr);
+        }
+      }
+
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
         console.log(`💬 No job reference found - checking for existing conversation`);
@@ -17838,11 +18580,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // GET /api/proposals/:id/pdf
-  // Returns a proposal document. Known consumers (all audited 2026-04-11):
+  // Returns a proposal/quote document. Known consumers (all audited 2026-04-11):
   //   1. ProposalViewer — Download PDF button (frontend blob download)
   //   2. ProposalBuilder — onDownload in preview dialog (frontend blob download)
   //   3. EmailComposerModal — Smart Attachments URL (stored in attachments array
   //      and sent as email attachment via Resend — PDF is the correct format here)
+  //   4. send-quote-email handler — attaches the generated buffer to outgoing emails.
+  // When proposal.templateUsed === 'quote', the header renders as "QUOTE" (not
+  // "PROPOSAL") and the acceptance copy points to an email-reply flow.
   // Default: application/pdf (binary, PDFKit-generated, branded layout)
   // Legacy HTML: append ?format=html to receive a plain HTML summary instead.
   app.get('/api/proposals/:id/pdf', async (req: Request, res: Response) => {
@@ -17855,208 +18600,18 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         });
       }
 
-      // Get customer details
-      let customer;
-      if (proposal.customerId) {
-        customer = await storage.getCustomer(proposal.customerId);
-      }
-
-      // Get proposal sections and line items
-      const sections = await storage.getProposalSectionsByProposal(req.params.id);
-      const lineItems = await storage.getProposalLineItemsByProposal(req.params.id);
-      
-      console.log(`📄 Generating proposal PDF for ${req.params.id} (${sections.length} sections, ${lineItems.length} line items)`);
-
-      // Group line items by section
-      const sectionLineItems = new Map<string, any[]>();
-      for (const item of lineItems) {
-        if (item.sectionId) {
-          if (!sectionLineItems.has(item.sectionId)) {
-            sectionLineItems.set(item.sectionId, []);
-          }
-          sectionLineItems.get(item.sectionId)!.push(item);
-        }
-      }
-
-      // Calculate totals (only selected items)
-      let subtotal = 0;
-      for (const item of lineItems) {
-        if (item.selected !== false) {
-          subtotal += parseFloat(item.totalPrice || '0');
-        }
-      }
-      const gst = subtotal * 0.15;
-      const total = subtotal + gst;
-
-      const customerName = customer?.name || 'Valued Customer';
-      const proposalNumber = proposal.proposalNumber || 'N/A';
-
-      // Legacy HTML format (used by Smart Attachments feature)
+      // Legacy HTML format (used by Smart Attachments feature) — unchanged output.
       if (req.query.format === 'html') {
-        let htmlItems = '';
-        for (const section of sections) {
-          const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
-          if (items.length === 0) continue;
-          htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
-          htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-          items.forEach((item: any) => {
-            const p = parseFloat(item.totalPrice || '0');
-            htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
-          });
-          htmlItems += '</table>';
-        }
-        const gstFmt = `$${gst.toFixed(2)}`;
-        const totalFmt = `$${total.toFixed(2)}`;
-        const subtotalFmt = `$${subtotal.toFixed(2)}`;
-        const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Proposal ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">Treemarkables Proposal</h1><p><strong>Proposal #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">Treemarkables LTD | info@treemarkables.co.nz | 027 216 6882</p></body></html>`;
+        const html = await renderProposalHTMLSummary(req.params.id);
         res.setHeader('Content-Type', 'text/html');
         return res.send(html);
       }
 
-      // Build PDF using PDFKit
-      const PDFDoc = (await import('pdfkit')).default;
-      const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
-        const doc = new PDFDoc({ size: 'A4', margin: 50 });
-        const chunks: Buffer[] = [];
-        doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
-        doc.on('end', () => resolve(Buffer.concat(chunks)));
-        doc.on('error', reject);
-
-        const fmtCurrency = (n: number) =>
-          new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(n);
-        const fmtDate = (d: any) =>
-          d ? new Date(d).toLocaleDateString('en-NZ', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
-        const pageW = doc.page.width - 100;
-
-        // Header bar
-        doc.rect(0, 0, doc.page.width, 90).fill('#f97316');
-        try { doc.image('client/public/treemarkables-logo.png', 50, 15, { height: 55 }); } catch { /* no logo */ }
-        doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
-          .text('PROPOSAL', doc.page.width - 200, 20, { width: 150, align: 'right' });
-        doc.fontSize(10).font('Helvetica')
-          .text(`#${proposalNumber}`, doc.page.width - 200, 43, { width: 150, align: 'right' });
-        if (proposal.expiresAt) {
-          doc.fontSize(8).text(`Valid until: ${fmtDate(proposal.expiresAt)}`, doc.page.width - 200, 58, { width: 150, align: 'right' });
-        }
-
-        // Customer block
-        doc.fillColor('#111827').fontSize(12).font('Helvetica-Bold').text('Prepared for:', 50, 110);
-        doc.fontSize(14).text(customerName, 50, 128);
-        if (customer?.address) doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text(customer.address, 50, 147);
-
-        // Proposal description
-        if (proposal.description) {
-          doc.moveDown(3).fillColor('#374151').fontSize(10).font('Helvetica')
-            .text(proposal.description, { width: pageW });
-        }
-
-        // Separator
-        const sepY = Math.max(doc.y + 12, 200);
-        doc.moveTo(50, sepY).lineTo(50 + pageW, sepY).lineWidth(1).strokeColor('#e5e7eb').stroke();
-        doc.y = sepY + 10;
-
-        // Line items per section
-        for (const section of sections) {
-          const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
-          if (items.length === 0) continue;
-
-          doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, { width: pageW });
-          doc.moveDown(0.3);
-
-          // Table header
-          const col = { desc: 50, qty: 360, unit: 405, price: 450, total: 495 };
-          doc.fontSize(8).font('Helvetica-Bold').fillColor('#6b7280');
-          doc.text('Description', col.desc, doc.y, { width: 300 });
-          doc.text('Qty', col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
-          doc.text('Unit', col.unit, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
-          doc.text('Total', col.total, doc.y - doc.currentLineHeight(), { width: 50, align: 'right' });
-          doc.moveDown(0.3);
-          doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#d1d5db').stroke();
-          doc.moveDown(0.3);
-
-          for (const item of items) {
-            const itemTotal = parseFloat(item.totalPrice || '0');
-            const rowY = doc.y;
-            doc.fontSize(9).font('Helvetica').fillColor('#111827')
-              .text(item.description || '', col.desc, rowY, { width: 300 });
-            const rowH = doc.y - rowY;
-            doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
-            doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
-            doc.text(fmtCurrency(itemTotal), col.total, rowY, { width: 50, align: 'right' });
-            doc.y = rowY + Math.max(rowH, 14) + 2;
-          }
-
-          doc.moveDown(0.5);
-        }
-
-        // Totals block
-        doc.moveDown(0.5);
-        doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
-        doc.moveDown(0.5);
-
-        const tX = 370;
-        const vW = 50 + pageW - tX;
-        doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
-          .text('Subtotal (excl. GST)', tX, doc.y, { width: vW - 70, align: 'left' });
-        doc.fillColor('#111827').text(fmtCurrency(subtotal), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
-        doc.moveDown(0.4);
-        doc.fillColor('#6b7280').text('GST (15%)', tX, doc.y, { width: vW - 70 });
-        doc.fillColor('#111827').text(fmtCurrency(gst), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
-        doc.moveDown(0.4);
-        doc.moveTo(tX, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
-        doc.moveDown(0.3);
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#111827')
-          .text('Total (inc. GST)', tX, doc.y, { width: vW - 70 });
-        doc.fillColor('#f97316').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
-
-        // Acceptance section
-        doc.moveDown(1.5);
-        doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
-        doc.moveDown(0.8);
-        doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
-        doc.moveDown(0.4);
-        doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
-          .text('By signing below, you agree to the scope of works and pricing outlined in this proposal.', { width: pageW });
-        doc.moveDown(1.2);
-
-        // Signature line
-        const sigY = doc.y;
-        doc.moveTo(50, sigY + 20).lineTo(280, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
-        doc.moveTo(320, sigY + 20).lineTo(550, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
-        doc.fontSize(8).fillColor('#9ca3af')
-          .text('Customer Signature', 50, sigY + 24, { width: 230 })
-          .text('Date', 320, sigY + 24, { width: 230 });
-
-        // Print name line
-        doc.moveDown(2.5);
-        const nameY = doc.y;
-        doc.moveTo(50, nameY + 20).lineTo(280, nameY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
-        doc.fontSize(8).fillColor('#9ca3af').text('Print Name', 50, nameY + 24, { width: 230 });
-
-        // Status banner (if already accepted)
-        if (proposal.status === 'accepted') {
-          doc.moveDown(1);
-          doc.rect(50, doc.y, pageW, 28).fill('#dcfce7');
-          doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d')
-            .text('This proposal has been accepted', 50, doc.y - 20, { width: pageW, align: 'center' });
-          doc.moveDown(0.5);
-        }
-
-        // Footer
-        const footerY = doc.page.height - 70;
-        doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
-        doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
-          .text('Treemarkables LTD — Qualified Arborists', 50, footerY + 8, { width: pageW, align: 'center' });
-        doc.text('info@treemarkables.co.nz | 027 216 6882', 50, footerY + 20, { width: pageW, align: 'center' });
-
-        doc.end();
-      });
-
-
-
+      const { buffer, proposalNumber, isQuote } = await generateProposalPDFBuffer(req.params.id);
+      const docLabel = isQuote ? 'Quote' : 'Proposal';
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="Proposal-${proposalNumber}.pdf"`);
-      res.send(pdfBuffer);
+      res.setHeader('Content-Disposition', `attachment; filename="${docLabel}-${proposalNumber}.pdf"`);
+      res.send(buffer);
     } catch (error) {
       console.error('Error generating proposal PDF:', error);
       res.status(500).json({

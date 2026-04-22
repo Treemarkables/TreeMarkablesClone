@@ -736,6 +736,7 @@ export const reviews = pgTable("reviews", {
   keywords: text("keywords").array(),
   isPublic: boolean("is_public").default(true),
   platformReviewId: text("platform_review_id"),
+  photoUrls: text("photo_urls").array(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

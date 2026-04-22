@@ -53,6 +53,24 @@ interface JobsResponse {
   message?: string;
 }
 
+interface EmployeeAssignmentRow {
+  id: string;
+  jobId: string;
+  jobNumber?: string | null;
+  jobTitle?: string | null;
+  jobAddress?: string | null;
+  jobStatus?: string | null;
+  status: string;
+  startTime: string;
+  endTime: string;
+}
+
+interface EmployeeAssignmentsResponse {
+  success: boolean;
+  data?: EmployeeAssignmentRow[];
+  message?: string;
+}
+
 interface CalendarBlock {
   id: string;
   kind: 'job' | 'google';
@@ -66,6 +84,13 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onSlotPick: (slotStart: Date) => void;
+  employeeId?: string;
+  employeeName?: string;
+  /**
+   * When true, overlays the logged-in user's Google Calendar events on top of the
+   * staff-scoped view. Only meaningful when employeeId matches the current user.
+   */
+  includeGoogleCalendar?: boolean;
 }
 
 function minsToPercent(mins: number): number {
@@ -147,7 +172,14 @@ function googleEventToBlock(ev: GoogleEventSummary): CalendarBlock {
   };
 }
 
-export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props) {
+export function CalendarAvailabilityModal({
+  isOpen,
+  onClose,
+  onSlotPick,
+  employeeId,
+  employeeName,
+  includeGoogleCalendar = false,
+}: Props) {
   // Monday-anchored NZ week
   const [weekStart, setWeekStart] = useState<Date>(() => {
     const nowNZ = toZonedTime(new Date(), NZ_TZ);
@@ -172,13 +204,19 @@ export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props
   const startDateNZ = useMemo(() => formatInTimeZone(weekStart, NZ_TZ, 'yyyy-MM-dd'), [weekStart]);
   const endDateNZ = useMemo(() => formatInTimeZone(addDays(weekStart, 7), NZ_TZ, 'yyyy-MM-dd'), [weekStart]);
 
+  // Employee-scoped view excludes the company-wide jobs feed (we only want this person's
+  // assignments). Google Calendar is only shown when the caller explicitly opts in —
+  // e.g. the employee being viewed is the logged-in user themself.
+  const isEmployeeScoped = !!employeeId;
+  const showGoogleCalendar = isEmployeeScoped ? includeGoogleCalendar : true;
+
   const googleQuery = useQuery<GoogleEventsResponse>({
     queryKey: ['/api/google-calendar/events', startIso, endIso],
     queryFn: async () => {
       const res = await fetch(`/api/google-calendar/events?start=${encodeURIComponent(startIso)}&end=${encodeURIComponent(endIso)}`);
       return res.json();
     },
-    enabled: isOpen,
+    enabled: isOpen && showGoogleCalendar,
     staleTime: 5 * 60 * 1000,
   });
 
@@ -188,19 +226,51 @@ export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props
       const res = await fetch(`/api/jobs/in-range?start=${startDateNZ}&end=${endDateNZ}`);
       return res.json();
     },
-    enabled: isOpen,
+    enabled: isOpen && !isEmployeeScoped,
+    staleTime: 60 * 1000,
+  });
+
+  const employeeAssignmentsQuery = useQuery<EmployeeAssignmentsResponse>({
+    queryKey: ['/api/employees/assignments-in-range', employeeId, startDateNZ, endDateNZ],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/employees/${encodeURIComponent(employeeId!)}/assignments-in-range?start=${startDateNZ}&end=${endDateNZ}`,
+      );
+      return res.json();
+    },
+    enabled: isOpen && isEmployeeScoped,
     staleTime: 60 * 1000,
   });
 
   const googleNotConnected = googleQuery.data?.success === false && googleQuery.data.error === 'not_connected';
   const googleEvents = googleQuery.data?.success && googleQuery.data.data ? googleQuery.data.data : [];
   const jobs = jobsQuery.data?.success && jobsQuery.data.data ? jobsQuery.data.data : [];
+  const employeeAssignments =
+    employeeAssignmentsQuery.data?.success && employeeAssignmentsQuery.data.data
+      ? employeeAssignmentsQuery.data.data
+      : [];
 
   const blocks = useMemo<CalendarBlock[]>(() => {
+    if (isEmployeeScoped) {
+      const assignmentBlocks = employeeAssignments.map((a): CalendarBlock => {
+        const label = a.jobNumber ? `#${a.jobNumber}` : 'Job';
+        const title = a.jobTitle ? `${label} — ${a.jobTitle}` : label;
+        return {
+          id: `assignment:${a.id}`,
+          kind: 'job',
+          title,
+          subtitle: a.jobAddress || undefined,
+          startIso: a.startTime,
+          endIso: a.endTime,
+        };
+      });
+      const googleBlocks = showGoogleCalendar ? googleEvents.map(googleEventToBlock) : [];
+      return [...assignmentBlocks, ...googleBlocks];
+    }
     const jobBlocks = jobs.map(jobToBlock).filter((b): b is CalendarBlock => b !== null);
     const googleBlocks = googleEvents.map(googleEventToBlock);
     return [...jobBlocks, ...googleBlocks];
-  }, [jobs, googleEvents]);
+  }, [isEmployeeScoped, showGoogleCalendar, employeeAssignments, jobs, googleEvents]);
 
   // Group blocks by NZ date
   const blocksByDate = useMemo(() => {
@@ -269,11 +339,14 @@ export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props
 
   const todayKey = nzDateKey(new Date());
 
-  const isLoading = googleQuery.isLoading || jobsQuery.isLoading;
-  const jobsError = jobsQuery.isError;
+  const isLoading = isEmployeeScoped
+    ? employeeAssignmentsQuery.isLoading || (showGoogleCalendar && googleQuery.isLoading)
+    : googleQuery.isLoading || jobsQuery.isLoading;
+  const jobsError = isEmployeeScoped ? employeeAssignmentsQuery.isError : jobsQuery.isError;
   const googleUpstreamError =
-    googleQuery.isError ||
-    (googleQuery.data?.success === false && googleQuery.data.error !== 'not_connected');
+    showGoogleCalendar &&
+    (googleQuery.isError ||
+      (googleQuery.data?.success === false && googleQuery.data.error !== 'not_connected'));
 
   let footerHint: string;
   if (isLoading) {
@@ -281,9 +354,13 @@ export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props
   } else if (jobsError && googleUpstreamError) {
     footerHint = 'Could not load calendar data.';
   } else if (jobsError) {
-    footerHint = 'Could not load scheduled jobs.';
+    footerHint = isEmployeeScoped
+      ? 'Could not load this staff member’s assignments.'
+      : 'Could not load scheduled jobs.';
   } else if (googleUpstreamError) {
     footerHint = 'Could not load Google Calendar events.';
+  } else if (isEmployeeScoped) {
+    footerHint = 'Click any empty slot to use that time for scheduling.';
   } else {
     footerHint = 'Click any empty slot to drop that time into your message.';
   }
@@ -294,7 +371,7 @@ export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props
         <DialogHeader className="px-4 py-3 border-b flex-row items-center justify-between space-y-0">
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
-            Your availability — {weekLabel}
+            {employeeName ? `${employeeName}'s availability` : 'Your availability'} — {weekLabel}
           </DialogTitle>
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" size="icon" onClick={goPrev} aria-label="Previous week" data-testid="btn-availability-prev">
@@ -310,7 +387,7 @@ export function CalendarAvailabilityModal({ isOpen, onClose, onSlotPick }: Props
         </DialogHeader>
 
         <div className="flex-1 flex flex-col overflow-hidden">
-          {googleNotConnected && (
+          {googleNotConnected && showGoogleCalendar && (
             <div className="px-4 py-2 text-[11px] border-b bg-amber-50 text-amber-900 flex items-center justify-between gap-2">
               <span>
                 Google Calendar isn't connected — showing Treemarkables scheduled jobs only.

@@ -115,6 +115,8 @@ import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { JobLocationMap } from "./JobLocationMap";
+import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { formatInTimeZone } from "date-fns-tz";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -330,7 +332,7 @@ export function GlobalJobCard({
   const toast = () => {}; // Disabled - user preference: no toast notifications
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
-  const { isAdmin } = useAuth();
+  const { isAdmin, currentUser } = useAuth();
 
   // Fetch customers for the dropdown (needed upfront)
   const { data: customersData, isLoading: customersLoading } = useQuery({
@@ -660,6 +662,9 @@ export function GlobalJobCard({
   const [staffConflicts, setStaffConflicts] = useState<
     { employeeId: string; conflicts: any[] }[]
   >([]);
+  const [staffAvailabilityFor, setStaffAvailabilityFor] = useState<
+    { id: string; name: string } | null
+  >(null);
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
@@ -9316,115 +9321,37 @@ The Treemarkables Team`;
         />
       )}
 
-      {/* Quote Management Modal */}
-      {isQuoteModalOpen && editingJob && quoteTemplate && (
-        <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
-          <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="p-3 sm:p-6 border-b">
-              <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-1 sm:gap-2 w-full sm:w-auto">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveQuote}
-                    data-testid="button-save-quote"
-                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    <span>Save</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {}}
-                    data-testid="button-copy-quote"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    <span>Copy</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsQuoteModalOpen(false);
-                      handleEmailClick("quote");
-                    }}
-                    data-testid="button-email-quote"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Mail className="w-4 h-4 mr-1" />
-                    <span>Email</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {}}
-                    data-testid="button-download-quote"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Download className="w-4 h-4 mr-1" />
-                    <span>PDF</span>
-                  </Button>
-                </div>
-              </div>
-            </DialogHeader>
-            <div className="p-3 sm:p-6">
-              {(() => {
-                // Prefer DB items only if non-empty ([] is truthy so plain || fails)
-                const _dbSrc = editingJob.lineItems;
-                const lineItemsSource =
-                  _dbSrc && _dbSrc.length > 0
-                    ? _dbSrc
-                    : form.getValues("lineItems") || [];
-                const mappedLineItems = lineItemsSource.map((item) => {
-                  const quantity = item.quantity || 1;
-                  const unitPrice = item.unitPrice || 0;
-                  const total = quantity * unitPrice;
-                  return {
-                    id: item.id,
-                    description: item.description,
-                    quantity: quantity,
-                    unitPrice: unitPrice,
-                    unit: "each",
-                    total: total,
-                    priceIncludesTax: item.priceIncludesTax || false,
-                  };
-                });
-                const totalAmount = mappedLineItems.reduce(
-                  (sum, item) => sum + item.total,
-                  0,
-                );
-
-                return (
-                  <QuoteTemplate
-                    template={quoteTemplate}
-                    quote={{
-                      id: editingJob.id,
-                      quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
-                      amount: String(totalAmount),
-                      status: "draft",
-                      customerId: selectedCustomer?.id || "",
-                      jobId: editingJob.id,
-                      description:
-                        form.getValues("description") || editingJob.description || "",
-                      validUntil: new Date(
-                        Date.now() + 30 * 24 * 60 * 60 * 1000,
-                      ),
-                      terms:
-                        quoteTemplate?.paymentTerms ||
-                        "Payment due within 30 days",
-                      createdAt: new Date(),
-                      updatedAt: new Date(),
-                    }}
-                    customer={selectedCustomer || undefined}
-                    lineItems={mappedLineItems}
-                    showActions={false}
-                  />
-                );
-              })()}
-            </div>
-          </DialogContent>
-        </Dialog>
+      {/* Quote Builder — proposal-builder-style UI in quote mode.
+          Sends by email with a PDF attachment and a mailto "Accept Quote"
+          button (no public viewer link). */}
+      {isQuoteModalOpen && editingJob && (
+        <ProposalBuilderV2
+          kind="quote"
+          isOpen={isQuoteModalOpen}
+          onClose={() => {
+            setIsQuoteModalOpen(false);
+            if (editingJob?.id) {
+              queryClient.invalidateQueries({
+                queryKey: ["/api/jobs", editingJob.id, "diary-timeline"],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["/api/jobs", editingJob.id, "diary"],
+              });
+              queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
+            }
+          }}
+          jobId={editingJob?.id}
+          customerId={selectedCustomer?.id}
+          mode="create"
+          jobDescription={watchedDescription}
+          lineItems={watchedLineItems}
+          customEmail={
+            watchedJobContactEmail ||
+            editingJob?.jobContactEmail ||
+            undefined
+          }
+          onRequestJobSave={handleRequestJobSave}
+        />
       )}
 
       {/* Invoice Builder Modal */}
@@ -9676,6 +9603,7 @@ The Treemarkables Team`;
                       employee.id,
                     );
 
+                    const employeeName = `${employee.firstName} ${employee.lastName}`;
                     return (
                       <div
                         key={employee.id}
@@ -9703,13 +9631,29 @@ The Treemarkables Team`;
                           htmlFor={`staff-${employee.id}`}
                           className="text-sm flex-1 cursor-pointer"
                         >
-                          {employee.firstName} {employee.lastName}
+                          {employeeName}
                           {employee.position && (
                             <span className="text-xs text-muted-foreground ml-1">
                               ({employee.position})
                             </span>
                           )}
                         </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() =>
+                            setStaffAvailabilityFor({
+                              id: employee.id,
+                              name: employeeName,
+                            })
+                          }
+                          data-testid={`btn-staff-calendar-${employee.id}`}
+                          title={`View ${employeeName}'s calendar`}
+                        >
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                        </Button>
                       </div>
                     );
                   })
@@ -9806,6 +9750,28 @@ The Treemarkables Team`;
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Staff Availability Calendar — opened from the Schedule modal's staff list.
+          Google Calendar only overlays when the viewer is looking at their own row. */}
+      <CalendarAvailabilityModal
+        isOpen={!!staffAvailabilityFor}
+        onClose={() => setStaffAvailabilityFor(null)}
+        employeeId={staffAvailabilityFor?.id}
+        employeeName={staffAvailabilityFor?.name}
+        includeGoogleCalendar={
+          !!staffAvailabilityFor && !!currentUser && staffAvailabilityFor.id === currentUser.id
+        }
+        onSlotPick={(slotStart) => {
+          const dateStr = formatInTimeZone(slotStart, "Pacific/Auckland", "yyyy-MM-dd");
+          const timeStr = formatInTimeZone(slotStart, "Pacific/Auckland", "HH:mm");
+          setSchedulingData((prev) => ({
+            ...prev,
+            date: dateStr,
+            startTime: timeStr,
+            endDate: prev.endDate && prev.endDate < dateStr ? "" : prev.endDate,
+          }));
+        }}
+      />
 
       {/* Time Tracking Modal */}
       {isTimeTrackingOpen && editingJob && (

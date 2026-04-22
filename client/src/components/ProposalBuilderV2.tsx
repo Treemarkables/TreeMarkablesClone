@@ -6,6 +6,7 @@ import {
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft,
 } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
+import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -118,6 +119,11 @@ interface ProposalBuilderV2Props {
   jobDescription?: string;
   customEmail?: string;
   lineItems?: unknown;
+  // When "quote", the builder UI stays identical to proposal mode — only the
+  // save payload (templateUsed='quote') and the email endpoint change. The
+  // quote email delivers a PDF attachment with a mailto "Accept Quote" button
+  // (no public viewer link).
+  kind?: "proposal" | "quote";
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
@@ -1186,9 +1192,13 @@ export function ProposalBuilderV2({
   jobDescription,
   customEmail,
   lineItems: incomingLineItems,
+  kind = "proposal",
 }: ProposalBuilderV2Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // Quote mode: the builder UI is identical to the proposal builder; only the
+  // save payload (templateUsed='quote'), send endpoint, and SMS visibility change.
+  const isQuote = kind === "quote";
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
@@ -1569,6 +1579,12 @@ export function ProposalBuilderV2({
       status: "draft",
       deliveryMethod: "email",
       createdBy: "system",
+      // Quote-mode discriminator: templateUsed='quote' drives the server-side
+      // PDF header ("QUOTE") and the send-quote-email endpoint behaviour.
+      ...(isQuote && !draftId
+        ? { templateUsed: "quote", proposalNumber: `Q-DRAFT-${Date.now()}` }
+        : {}),
+      ...(isQuote && draftId ? { templateUsed: "quote" } : {}),
       sections: blocks.map((b) => ({
         id: b.id,
         title: b.title,
@@ -1579,7 +1595,7 @@ export function ProposalBuilderV2({
         sectionType: b.sectionType ?? "fixed",
       })),
     };
-  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil]);
+  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil, isQuote, draftId]);
 
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReturnType<typeof buildPayload>) => {
@@ -1630,7 +1646,10 @@ export function ProposalBuilderV2({
 
   const sendEmailMutation = useMutation({
     mutationFn: async (d: { proposalId: string; to: string; subject: string; message?: string; cc?: string }) => {
-      const res = await apiRequest("POST", `/api/proposals/${d.proposalId}/send-email`, { to: d.to, subject: d.subject, message: d.message, cc: d.cc });
+      const endpoint = isQuote
+        ? `/api/proposals/${d.proposalId}/send-quote-email`
+        : `/api/proposals/${d.proposalId}/send-email`;
+      const res = await apiRequest("POST", endpoint, { to: d.to, subject: d.subject, message: d.message, cc: d.cc });
       return res;
     },
     onSuccess: () => { setShowEmailDialog(false); setEmailForm({ to: "", cc: "", subject: "", message: "" }); },
@@ -2005,16 +2024,16 @@ export function ProposalBuilderV2({
           <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
-              {/* Document Header — height controlled by headerHeight state only */}
-              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0 }}>
-                {/* Logo container — resize by dragging the corner handle */}
-                <div className="flex items-center h-full py-3" style={{ flexShrink: 0 }}>
+              {/* Document Header — height controlled by headerHeight only. Logo size is independent and may overflow the header. */}
+              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0, overflow: "visible" }}>
+                {/* Logo container — resize by dragging the corner handle. Logo height is decoupled from header height. */}
+                <div className="flex items-center" style={{ flexShrink: 0, overflow: "visible" }}>
                   <div className="relative group/logo">
                     {/* Logo image */}
                     <img
                       src={logoUrl}
                       alt="Company Logo"
-                      style={{ height: Math.min(logoSize, headerHeight - 8), maxWidth: 600, display: "block" }}
+                      style={{ height: logoSize, maxWidth: 600, display: "block" }}
                       className="w-auto object-contain select-none"
                       draggable={false}
                     />
@@ -2029,13 +2048,12 @@ export function ProposalBuilderV2({
                         const startX = e.clientX;
                         const startY = e.clientY;
                         const startSize = liveLogoSizeRef.current;
-                        const maxSize = headerHeight - 8;
                         (e.target as HTMLElement).setPointerCapture(e.pointerId);
                         const handleMove = (ev: PointerEvent) => {
                           const dx = ev.clientX - startX;
                           const dy = startY - ev.clientY;
                           const delta = Math.round((dx + dy) / 2);
-                          const newSize = Math.max(24, Math.min(maxSize, startSize + delta));
+                          const newSize = Math.max(24, Math.min(600, startSize + delta));
                           setLogoSize(newSize);
                         };
                         const handleUp = () => {
@@ -2187,6 +2205,9 @@ export function ProposalBuilderV2({
                   </div>
                 </div>
               </div>
+
+              {/* Curated customer reviews — renders nothing when the pool is empty */}
+              <ProposalReviewsWidget />
 
               {/* Footer */}
               <div className="px-6 sm:px-10 py-4 border-t border-gray-100 text-center text-xs text-gray-500">
