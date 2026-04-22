@@ -7,7 +7,6 @@ import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-const logoUrl = "/treemarkables-logo.webp";
 
 interface ProposalViewerProps {}
 

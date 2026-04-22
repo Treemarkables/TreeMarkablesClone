@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,7 +29,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Slider } from "@/components/ui/slider";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -127,11 +126,6 @@ export default function TemplateManagement() {
   const [editingTemplate, setEditingTemplate] =
     useState<DocumentTemplate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [logoUploading, setLogoUploading] = useState(false);
-  const logoInputRef = useRef<HTMLInputElement>(null);
-  const headerStripRef = useRef<HTMLDivElement>(null);
-  const resizeStartYRef = useRef(0);
-  const resizeStartSizeRef = useRef(0);
 
   const form = useForm<TemplateFormData>({
     resolver: zodResolver(templateFormSchema),
@@ -155,42 +149,6 @@ export default function TemplateManagement() {
       logoAlignment: "left",
     },
   });
-
-  const handleLogoDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!headerStripRef.current) return;
-      const rect = headerStripRef.current.getBoundingClientRect();
-      const x = ev.clientX - rect.left;
-      const third = rect.width / 3;
-      const next = x < third ? "left" : x < third * 2 ? "center" : "right";
-      form.setValue("logoAlignment", next as "left" | "center" | "right", { shouldDirty: true });
-    };
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  }, [form]);
-
-  const handleResizeStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    resizeStartYRef.current = e.clientY;
-    resizeStartSizeRef.current = form.getValues("logoSize") ?? 40;
-    const onMouseMove = (ev: MouseEvent) => {
-      const delta = ev.clientY - resizeStartYRef.current;
-      const next = Math.min(200, Math.max(20, Math.round(resizeStartSizeRef.current + delta)));
-      form.setValue("logoSize", next, { shouldDirty: true });
-    };
-    const onMouseUp = () => {
-      document.removeEventListener("mousemove", onMouseMove);
-      document.removeEventListener("mouseup", onMouseUp);
-    };
-    document.addEventListener("mousemove", onMouseMove);
-    document.addEventListener("mouseup", onMouseUp);
-  }, [form]);
 
   const [sections, setSections] = useState<InvoiceSectionConfig[]>(() =>
     DEFAULT_SECTIONS.map(s => ({ ...s }))
@@ -384,25 +342,6 @@ export default function TemplateManagement() {
     );
   };
 
-  const handleLogoUpload = async (file: File) => {
-    setLogoUploading(true);
-    try {
-      const formData = new FormData();
-      formData.append("logo", file);
-      const res = await fetch("/api/templates/upload-logo", { method: "POST", body: formData });
-      const data = await res.json();
-      if (data.success) {
-        form.setValue("logoUrl", data.url);
-      } else {
-        toast({ title: "Logo upload failed", variant: "destructive" });
-      }
-    } catch {
-      toast({ title: "Logo upload failed", variant: "destructive" });
-    } finally {
-      setLogoUploading(false);
-    }
-  };
-
   const filteredTemplates = templates.filter(
     (template: DocumentTemplate) =>
       selectedType === "all" || template.type === selectedType,
@@ -591,128 +530,8 @@ export default function TemplateManagement() {
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
-                    {/* Logo upload + interactive position & size editor */}
-                    <div className="space-y-3">
-                      <label className="text-sm font-medium">Company Logo</label>
-
-                      {/* Header strip — drag logo left/center/right, drag corner to resize */}
-                      <div
-                        ref={headerStripRef}
-                        className="relative w-full rounded-md border bg-white overflow-visible select-none"
-                        style={{ height: 80 }}
-                      >
-                        {/* Zone dividers */}
-                        <div className="absolute inset-0 flex pointer-events-none">
-                          <div className="flex-1 border-r border-dashed border-gray-200" />
-                          <div className="flex-1 border-r border-dashed border-gray-200" />
-                          <div className="flex-1" />
-                        </div>
-                        {/* Zone labels */}
-                        <div className="absolute bottom-1 inset-x-0 flex text-[10px] text-gray-300 pointer-events-none">
-                          <div className="flex-1 text-center">left</div>
-                          <div className="flex-1 text-center">center</div>
-                          <div className="flex-1 text-center">right</div>
-                        </div>
-
-                        {watchedValues.logoUrl ? (
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2"
-                            style={{
-                              ...(watchedValues.logoAlignment === "left"   ? { left: "12px" } :
-                                  watchedValues.logoAlignment === "center" ? { left: "50%", transform: "translateX(-50%) translateY(-50%)" } :
-                                                                             { right: "12px" }),
-                            }}
-                          >
-                            <div
-                              className="relative cursor-grab active:cursor-grabbing"
-                              onMouseDown={handleLogoDragStart}
-                            >
-                              <img
-                                src={watchedValues.logoUrl}
-                                alt="Logo"
-                                style={{ height: watchedValues.logoSize ?? 40 }}
-                                className="w-auto object-contain block"
-                                draggable={false}
-                              />
-                              {/* Corner resize handle */}
-                              <div
-                                className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-se-resize z-10 flex items-center justify-center shadow"
-                                onMouseDown={handleResizeStart}
-                                title="Drag to resize"
-                              >
-                                <svg width="8" height="8" viewBox="0 0 8 8" className="text-primary">
-                                  <path d="M1 7L7 1M4 7L7 4M7 7L7 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                                </svg>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground">
-                            Upload a logo — then drag it to position
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Alignment quick buttons */}
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground">Position:</span>
-                        {(["left", "center", "right"] as const).map(pos => (
-                          <Button
-                            key={pos}
-                            type="button"
-                            size="sm"
-                            variant={watchedValues.logoAlignment === pos ? "default" : "outline"}
-                            className="capitalize text-xs"
-                            onClick={() => form.setValue("logoAlignment", pos, { shouldDirty: true })}
-                          >
-                            {pos}
-                          </Button>
-                        ))}
-                        <span className="ml-auto text-xs font-medium tabular-nums text-muted-foreground">
-                          {watchedValues.logoSize ?? 40}px
-                        </span>
-                      </div>
-
-                      {/* Size slider (precision fallback) */}
-                      <Slider
-                        min={20}
-                        max={200}
-                        step={2}
-                        value={[watchedValues.logoSize ?? 40]}
-                        onValueChange={([v]) => form.setValue("logoSize", v, { shouldDirty: true, shouldTouch: true })}
-                        className="w-full"
-                      />
-
-                      {/* Upload / remove buttons */}
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <input
-                          ref={logoInputRef}
-                          type="file"
-                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                          className="hidden"
-                          onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoUpload(f); }}
-                        />
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={logoUploading}
-                          onClick={() => logoInputRef.current?.click()}
-                        >
-                          {logoUploading ? "Uploading..." : watchedValues.logoUrl ? "Change Logo" : "Upload Logo"}
-                        </Button>
-                        {watchedValues.logoUrl && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => form.setValue("logoUrl", null, { shouldDirty: true })}
-                          >
-                            Remove
-                          </Button>
-                        )}
-                        <span className="text-xs text-muted-foreground">PNG, JPG, SVG or WebP</span>
-                      </div>
+                    <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                      Company logo is managed globally in <span className="font-medium">Settings → Company</span> and applies to every proposal, quote, invoice, PDF and email.
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <FormField

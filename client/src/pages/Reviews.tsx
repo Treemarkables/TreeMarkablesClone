@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Card,
   CardContent,
@@ -20,7 +20,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search,
@@ -38,6 +39,10 @@ import {
   Copy,
   ExternalLink,
   ThumbsUp,
+  Plus,
+  Trash2,
+  EyeOff,
+  Eye,
 } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 
@@ -67,6 +72,23 @@ interface ReviewStats {
   totalReceived: number;
   conversionRate: number;
   averageRating: number;
+}
+
+// Row from the `reviews` table — drives the curated pool used by the proposal
+// widget and PDF. `/api/reviews/featured` filters this to isPublic rows that
+// have at least one uploaded photo.
+interface CuratedReview {
+  id: string;
+  platform: string;
+  rating: number;
+  reviewerName: string | null;
+  reviewText: string | null;
+  reviewDate: string | null;
+  response: string | null;
+  isPublic: boolean | null;
+  sentiment: string | null;
+  photoUrls: string[] | null;
+  createdAt: string | null;
 }
 
 interface ReviewTemplate {
@@ -178,11 +200,19 @@ const getSentViaBadge = (sentVia: string | null) => {
 
 export default function Reviews() {
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("requests");
+  const [activeTab, setActiveTab] = useState("curated");
   const [selectedTemplate, setSelectedTemplate] =
     useState<ReviewTemplate | null>(null);
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
+
+  // Curated review upload state — the dialog only collects photos. Each save
+  // creates one row per uploaded image (platform/rating are defaulted server-
+  // side-friendly values so the NOT NULL columns are satisfied).
+  const [curatedDialogOpen, setCuratedDialogOpen] = useState(false);
+  const [pendingPhotos, setPendingPhotos] = useState<string[]>([]);
+
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const { data: statsData, isLoading: statsLoading } = useQuery<{
     success: boolean;
@@ -201,6 +231,116 @@ export default function Reviews() {
 
   const stats = statsData?.data;
   const requests = requestsData?.data || [];
+
+  // Curated reviews feed — what powers the featured widget on quotes/proposals.
+  const { data: curatedData, isLoading: curatedLoading } = useQuery<{
+    success: boolean;
+    data: CuratedReview[];
+  }>({
+    queryKey: ["/api/reviews"],
+  });
+  const curatedReviews = curatedData?.data || [];
+  const featuredCount = curatedReviews.filter(
+    (r) => r.isPublic && Array.isArray(r.photoUrls) && r.photoUrls.length > 0,
+  ).length;
+
+  const invalidateCuratedCaches = () => {
+    queryClient.invalidateQueries({ queryKey: ["/api/reviews"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/reviews/featured"] });
+  };
+
+  // One POST per uploaded image so each screenshot is an independent row the
+  // widget can rotate through. `platform`/`rating` are required by the schema
+  // but unused in the image-only flow, so they get harmless defaults.
+  const saveCuratedMutation = useMutation({
+    mutationFn: async (photos: string[]) => {
+      await Promise.all(
+        photos.map((url) =>
+          apiRequest("POST", "/api/reviews", {
+            platform: "manual",
+            rating: 5,
+            isPublic: true,
+            photoUrls: [url],
+          }),
+        ),
+      );
+    },
+    onSuccess: () => {
+      invalidateCuratedCaches();
+      setCuratedDialogOpen(false);
+      setPendingPhotos([]);
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Couldn't save review",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteCuratedMutation = useMutation({
+    mutationFn: async (id: string) => apiRequest("DELETE", `/api/reviews/${id}`),
+    onSuccess: () => invalidateCuratedCaches(),
+    onError: () =>
+      toast({ title: "Couldn't delete review", variant: "destructive" }),
+  });
+
+  const togglePublicMutation = useMutation({
+    mutationFn: async ({ id, isPublic }: { id: string; isPublic: boolean }) =>
+      apiRequest("PUT", `/api/reviews/${id}`, { isPublic }),
+    onSuccess: () => invalidateCuratedCaches(),
+    onError: () =>
+      toast({ title: "Couldn't update visibility", variant: "destructive" }),
+  });
+
+  const openCuratedForCreate = () => {
+    setPendingPhotos([]);
+    setCuratedDialogOpen(true);
+  };
+
+  // Upload state for the dialog's photo dropzone. Kept alongside the dialog
+  // lifecycle so a mid-upload spinner disappears when the dialog closes.
+  const [photoUploading, setPhotoUploading] = useState(false);
+  const [photoDragActive, setPhotoDragActive] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+
+  const uploadPhotos = async (files: FileList | File[]) => {
+    const list = Array.from(files).filter((f) => f.type.startsWith("image/"));
+    if (list.length === 0) return;
+    setPhotoUploading(true);
+    try {
+      const fd = new FormData();
+      list.forEach((f) => fd.append("photos", f));
+      const res = await fetch("/api/reviews/upload-photos", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Upload failed");
+      }
+      setPendingPhotos((prev) => [...prev, ...(data.urls as string[])]);
+    } catch (err: any) {
+      toast({
+        title: "Couldn't upload photos",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoUploading(false);
+    }
+  };
+
+  const removePhoto = (url: string) => {
+    setPendingPhotos((prev) => prev.filter((u) => u !== url));
+  };
+
+  const handleDeleteCurated = (review: CuratedReview) => {
+    if (!window.confirm("Delete this review? This can't be undone.")) return;
+    deleteCuratedMutation.mutate(review.id);
+  };
 
   const filteredRequests = requests.filter(
     (r) =>
@@ -335,7 +475,15 @@ export default function Reviews() {
           onValueChange={setActiveTab}
           className="space-y-4"
         >
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
+            <TabsTrigger value="curated">
+              Curated
+              {featuredCount > 0 && (
+                <Badge variant="secondary" className="ml-2">
+                  {featuredCount}
+                </Badge>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="requests">
               All Requests
               {requests.length > 0 && (
@@ -355,6 +503,119 @@ export default function Reviews() {
             <TabsTrigger value="templates">Templates</TabsTrigger>
             <TabsTrigger value="links">Review Links</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="curated" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <CardTitle>Curated reviews</CardTitle>
+                    <CardDescription>
+                      Upload review screenshots. Public uploads appear on
+                      quotes, proposals and generated PDFs.
+                    </CardDescription>
+                  </div>
+                  <Button onClick={openCuratedForCreate} size="sm">
+                    <Plus className="w-4 h-4 mr-2" /> Upload reviews
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {curatedLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+                  </div>
+                ) : curatedReviews.length === 0 ? (
+                  <div className="py-8 text-center border border-dashed rounded-lg">
+                    <Star className="w-10 h-10 mx-auto text-gray-300 mb-3" />
+                    <p className="text-sm text-gray-600">No reviews yet</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Add your first review to start showcasing on quotes.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {curatedReviews
+                      .slice()
+                      .sort((a, b) => {
+                        const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                        const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                        return bd - ad;
+                      })
+                      .map((review) => {
+                        const url = Array.isArray(review.photoUrls)
+                          ? review.photoUrls[0]
+                          : undefined;
+                        const willFeature = !!review.isPublic && !!url;
+                        return (
+                          <div
+                            key={review.id}
+                            className="relative group aspect-[3/4] rounded-md border overflow-hidden bg-gray-50"
+                          >
+                            {url ? (
+                              <img
+                                src={url}
+                                alt="Customer review"
+                                className="w-full h-full object-cover"
+                                loading="lazy"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">
+                                No image
+                              </div>
+                            )}
+                            <div className="absolute top-1 left-1">
+                              {willFeature ? (
+                                <Badge className="bg-green-100 text-green-800 hover:bg-green-100 text-[10px] px-1.5 py-0">
+                                  On quotes
+                                </Badge>
+                              ) : (
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                                  Hidden
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="absolute top-1 right-1 flex gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                              <Button
+                                size="icon"
+                                variant="secondary"
+                                className="h-7 w-7"
+                                onClick={() =>
+                                  togglePublicMutation.mutate({
+                                    id: review.id,
+                                    isPublic: !review.isPublic,
+                                  })
+                                }
+                                title={
+                                  review.isPublic
+                                    ? "Hide from quotes"
+                                    : "Show on quotes"
+                                }
+                              >
+                                {review.isPublic ? (
+                                  <Eye className="w-3.5 h-3.5" />
+                                ) : (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                )}
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="secondary"
+                                className="h-7 w-7"
+                                onClick={() => handleDeleteCurated(review)}
+                                title="Delete"
+                              >
+                                <Trash2 className="w-3.5 h-3.5 text-red-500" />
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="requests" className="space-y-4">
             <div className="relative">
@@ -704,6 +965,116 @@ export default function Reviews() {
             </div>
           </TabsContent>
         </Tabs>
+
+        <Dialog
+          open={curatedDialogOpen}
+          onOpenChange={(open) => {
+            setCuratedDialogOpen(open);
+            if (!open) setPendingPhotos([]);
+          }}
+        >
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Upload reviews</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files) uploadPhotos(e.target.files);
+                  e.target.value = "";
+                }}
+              />
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => photoInputRef.current?.click()}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    photoInputRef.current?.click();
+                  }
+                }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setPhotoDragActive(true);
+                }}
+                onDragLeave={() => setPhotoDragActive(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setPhotoDragActive(false);
+                  if (e.dataTransfer.files) uploadPhotos(e.dataTransfer.files);
+                }}
+                className={`rounded-md border-2 border-dashed p-6 text-center text-sm cursor-pointer transition-colors ${
+                  photoDragActive
+                    ? "border-orange-400 bg-orange-50"
+                    : "border-gray-300 hover:border-orange-300 hover:bg-orange-50/30"
+                }`}
+              >
+                {photoUploading ? (
+                  <span className="inline-flex items-center gap-2 text-gray-500">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    Uploading…
+                  </span>
+                ) : (
+                  <span className="text-gray-600">
+                    Drop review screenshots here or click to browse
+                    <br />
+                    <span className="text-xs text-gray-400">
+                      PNG, JPG, WebP, GIF — up to 5MB each
+                    </span>
+                  </span>
+                )}
+              </div>
+              {pendingPhotos.length > 0 && (
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {pendingPhotos.map((url) => (
+                    <div
+                      key={url}
+                      className="relative group aspect-[3/4] rounded-md border overflow-hidden"
+                    >
+                      <img
+                        src={url}
+                        alt="Review"
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removePhoto(url)}
+                        className="absolute top-1 right-1 w-6 h-6 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                        aria-label="Remove photo"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setCuratedDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => saveCuratedMutation.mutate(pendingPhotos)}
+                disabled={
+                  saveCuratedMutation.isPending ||
+                  photoUploading ||
+                  pendingPhotos.length === 0
+                }
+              >
+                {saveCuratedMutation.isPending ? "Saving…" : "Save"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={templateDialogOpen} onOpenChange={setTemplateDialogOpen}>
           <DialogContent>

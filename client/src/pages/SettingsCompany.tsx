@@ -67,19 +67,40 @@ export default function SettingsCompany() {
       fd.append("logo", file);
       const res = await fetch("/api/templates/upload-logo", { method: "POST", body: fd });
       if (!res.ok) throw new Error("Upload failed");
-      return res.json() as Promise<{ success: boolean; url: string }>;
+      const { url } = (await res.json()) as { success: boolean; url: string };
+
+      // Propagate the new logo to every default document template so the
+      // proposal/quote/invoice builders and viewers all show it. We do this
+      // from the client so it works regardless of server-side sync behaviour.
+      const types = ["invoice", "proposal", "quote"] as const;
+      const defaults = await Promise.all(
+        types.map(async (type) => {
+          try {
+            const r = await fetch(`/api/templates/default/${type}`, { credentials: "include" });
+            if (!r.ok) return null;
+            const body = (await r.json()) as { success?: boolean; data?: { id?: string } };
+            return body?.data?.id ?? null;
+          } catch {
+            return null;
+          }
+        }),
+      );
+      await Promise.all(
+        defaults
+          .filter((id): id is string => !!id)
+          .map((id) => apiRequest("PUT", `/api/templates/${id}`, { logoUrl: url })),
+      );
+
+      return { url };
     },
     onSuccess: (result) => {
       const url = result.url;
       setLogoPreview(url);
       setForm((f) => ({ ...f, logoUrl: url }));
-      const id = data?.data?.id;
-      if (id) {
-        apiRequest("PUT", `/api/templates/${id}`, { logoUrl: url }).then(() => {
-          queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
-        });
-      }
-      toast({ title: "Logo uploaded" });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/default/proposal"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/default/quote"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/templates"] });
     },
     onError: () => {
       toast({ title: "Logo upload failed", variant: "destructive" });
@@ -154,7 +175,7 @@ export default function SettingsCompany() {
                 <Upload className="w-3 h-3 mr-1" />
                 {logoMutation.isPending ? "Uploading…" : "Upload logo"}
               </Button>
-              <p className="text-xs text-muted-foreground">PNG, JPG or SVG — shown on all documents</p>
+              <p className="text-xs text-muted-foreground">PNG, JPG, WebP or SVG — shown on all proposals, quotes, invoices, PDFs and emails</p>
             </div>
             <input
               ref={fileInputRef}
