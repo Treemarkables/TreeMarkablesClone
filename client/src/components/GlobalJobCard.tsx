@@ -605,6 +605,13 @@ export function GlobalJobCard({
   const [showXeroResetConfirm, setShowXeroResetConfirm] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
 
+  // Call picker state — shown when both job contact and tenant have a number
+  const [callPickerOpen, setCallPickerOpen] = useState(false);
+  const [callPickerOptions, setCallPickerOptions] = useState<{
+    job: { name: string; phone: string } | null;
+    tenant: { name: string; phone: string } | null;
+  }>({ job: null, tenant: null });
+
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
@@ -2578,13 +2585,28 @@ export function GlobalJobCard({
     }
   };
 
+  const dialPhone = (phone: string) => {
+    const a = document.createElement("a");
+    a.href = `tel:${phone}`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const handleCallClick = () => {
-    const phone =
+    const jobPhone =
       form.getValues("jobContactMobile") ||
       selectedCustomer?.mobile ||
       form.getValues("jobContactPhone") ||
-      selectedCustomer?.phone;
-    if (!phone) {
+      selectedCustomer?.phone ||
+      "";
+    const tenantPhone =
+      form.getValues("tenantContactMobile") ||
+      form.getValues("tenantContactPhone") ||
+      "";
+
+    if (!jobPhone && !tenantPhone) {
       toast({
         title: "No Phone Number",
         description: "No phone number available for this customer",
@@ -2592,12 +2614,33 @@ export function GlobalJobCard({
       });
       return;
     }
-    const a = document.createElement("a");
-    a.href = `tel:${phone}`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+
+    if (jobPhone && !tenantPhone) {
+      dialPhone(jobPhone);
+      return;
+    }
+
+    if (tenantPhone && !jobPhone) {
+      dialPhone(tenantPhone);
+      return;
+    }
+
+    const jobFirst = form.getValues("jobContactFirstName") || "";
+    const jobLast = form.getValues("jobContactLastName") || "";
+    const jobName =
+      `${jobFirst} ${jobLast}`.trim() ||
+      selectedCustomer?.name ||
+      "Job Contact";
+
+    const tenantFirst = form.getValues("tenantContactFirstName") || "";
+    const tenantLast = form.getValues("tenantContactLastName") || "";
+    const tenantName = `${tenantFirst} ${tenantLast}`.trim() || "Tenant";
+
+    setCallPickerOptions({
+      job: { name: jobName, phone: jobPhone },
+      tenant: { name: tenantName, phone: tenantPhone },
+    });
+    setCallPickerOpen(true);
   };
 
   // Handle schedule click
@@ -10169,6 +10212,58 @@ The Treemarkables Team`;
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Call Contact Picker — shown when both job and tenant have a number */}
+      <AlertDialog open={callPickerOpen} onOpenChange={setCallPickerOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Who would you like to call?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This job has both a Job Contact and a Tenant on file.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-col gap-2 sm:space-x-0">
+            {callPickerOptions.job && (
+              <AlertDialogAction
+                onClick={() => {
+                  if (callPickerOptions.job) {
+                    dialPhone(callPickerOptions.job.phone);
+                  }
+                }}
+                data-testid="call-picker-job"
+                className="w-full justify-start"
+              >
+                <span className="truncate">
+                  Call Job Contact — {callPickerOptions.job.name} ·{" "}
+                  {callPickerOptions.job.phone}
+                </span>
+              </AlertDialogAction>
+            )}
+            {callPickerOptions.tenant && (
+              <AlertDialogAction
+                onClick={() => {
+                  if (callPickerOptions.tenant) {
+                    dialPhone(callPickerOptions.tenant.phone);
+                  }
+                }}
+                data-testid="call-picker-tenant"
+                className="w-full justify-start"
+              >
+                <span className="truncate">
+                  Call Tenant — {callPickerOptions.tenant.name} ·{" "}
+                  {callPickerOptions.tenant.phone}
+                </span>
+              </AlertDialogAction>
+            )}
+            <AlertDialogCancel
+              className="w-full mt-0"
+              data-testid="call-picker-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Booking Cancellation Confirmation Dialog */}
       <AlertDialog
