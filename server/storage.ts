@@ -1553,6 +1553,11 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createJob(job: InsertJob): Promise<Job> {
+    // Stamp workOrderAt when a job is created directly at work_order status
+    // (e.g. from proposal acceptance paths that skip the lead/quote stages).
+    if (job.status === 'work_order' && !(job as any).workOrderAt) {
+      (job as any).workOrderAt = new Date();
+    }
     const [newJob] = await db.insert(schema.jobs).values(job).returning();
     return newJob;
   }
@@ -1568,8 +1573,20 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateJob(id: string, updates: Partial<InsertJob>): Promise<Job> {
+    // Stamp workOrderAt once, the first time a job transitions to 'work_order'.
+    // Only set if the caller hasn't provided one and the job doesn't already have it.
+    const finalUpdates: Partial<InsertJob> = { ...updates };
+    if (updates.status === 'work_order' && !(updates as any).workOrderAt) {
+      const existingRows = await db.select({ workOrderAt: schema.jobs.workOrderAt })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.id, id));
+      const existing = Array.isArray(existingRows) ? existingRows[0] : undefined;
+      if (!existing?.workOrderAt) {
+        (finalUpdates as any).workOrderAt = new Date();
+      }
+    }
     const [job] = await db.update(schema.jobs)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...finalUpdates, updatedAt: new Date() })
       .where(eq(schema.jobs.id, id))
       .returning();
     return job;
