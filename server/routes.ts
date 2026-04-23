@@ -6176,20 +6176,75 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
       });
 
+      // Compute exc-GST and inc-GST totals per line item so the diary entry
+      // can show both, clearly labelled. Without this, the diary dumped the
+      // raw `amount` sum (whose GST basis depends on each item's
+      // priceIncludesTax flag) while the job-card header always shows
+      // exc-GST — producing confusing "$9,145 vs $7,952" discrepancies.
+      type DiaryLineItem = {
+        total?: number | string;
+        amount?: number | string;
+        quantity?: number | string;
+        unitPrice?: number | string;
+        rate?: number | string;
+        priceIncludesTax?: boolean;
+      };
+      const taxRate = parseFloat(job.taxRate ?? '15') / 100 || 0.15;
+      let exGstTotal = 0;
+      let incGstTotal = 0;
+      const sourceItems: DiaryLineItem[] =
+        (customData.lineItems && customData.lineItems.length > 0)
+          ? (customData.lineItems as DiaryLineItem[])
+          : ((job.lineItems as DiaryLineItem[] | null) ?? []);
+      if (sourceItems.length > 0) {
+        for (const item of sourceItems) {
+          const rawTotal = item.total ?? item.amount;
+          const qty = Number(item.quantity) || 0;
+          const unit = Number(item.unitPrice ?? item.rate) || 0;
+          const raw = rawTotal ?? qty * unit;
+          const v = typeof raw === 'string' ? parseFloat(raw) : Number(raw) || 0;
+          if (item.priceIncludesTax) {
+            incGstTotal += v;
+            exGstTotal += v / (1 + taxRate);
+          } else {
+            exGstTotal += v;
+            incGstTotal += v * (1 + taxRate);
+          }
+        }
+      } else {
+        // No line items — fall back to job.totalAmount with the job's tax mode.
+        if (job.taxMode === 'tax_inclusive') {
+          incGstTotal = amount;
+          exGstTotal = amount / (1 + taxRate);
+        } else {
+          exGstTotal = amount;
+          incGstTotal = amount * (1 + taxRate);
+        }
+      }
+      if (invoiceType === 'partial' && customData.percentage) {
+        const pct = parseFloat(customData.percentage) / 100;
+        exGstTotal *= pct;
+        incGstTotal *= pct;
+      }
+      const partialSuffix = invoiceType === 'partial' ? ' (partial)' : '';
+      const diaryText = `Invoice ${invoiceNumber} created for $${exGstTotal.toFixed(2)} + GST — $${incGstTotal.toFixed(2)} total${partialSuffix}`;
+
       // Create diary entry for invoice creation with invoice-specific metadata
       try {
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId: id,
           entryType: 'email', // Use 'email' type so it can display with invoice icon
           title: 'Invoice Created',
-          description: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`, // Database requires description field
-          content: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`,
+          description: diaryText, // Database requires description field
+          content: diaryText,
           authorName: req.user?.name || 'System',
           authorRole: req.user?.role || 'system',
           metadata: {
             invoiceId: invoice.id,
             invoiceNumber: invoiceNumber,
             amount: amount.toString(),
+            amountExGst: exGstTotal.toFixed(2),
+            amountIncGst: incGstTotal.toFixed(2),
             action: 'invoice_created',
             documentType: 'invoice', // Mark this as an invoice document
             documentNumber: invoiceNumber

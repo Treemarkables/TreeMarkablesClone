@@ -2967,6 +2967,13 @@ export function GlobalJobCard({
       });
       return;
     }
+    // Commit any open description-popup draft so form state holds the latest
+    // typed value before InvoiceBuilder reads it. Without this, text entered
+    // via the popup (which doesn't touch form state until the popup closes)
+    // would be missed when the user clicks Invoice before dismissing it.
+    if (descriptionPopupOpen) {
+      form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
     setIsInvoiceModalOpen(true);
   };
 
@@ -3689,7 +3696,13 @@ The Treemarkables Team`;
       if (formData.newCustomerEmail) {
         formData.jobContactEmail = formData.newCustomerEmail;
       }
-      formData.jobContactPhone = formData.newCustomerPhone || "";
+      // Only overwrite jobContactPhone if newCustomerPhone has a real value
+      // (mirrors the RC1 fix for email above). Previously this wiped any phone
+      // the user had typed directly into the jobContactPhone field when they
+      // hadn't also filled in the New Customer Phone field.
+      if (formData.newCustomerPhone) {
+        formData.jobContactPhone = formData.newCustomerPhone;
+      }
       // Copy new customer address to job address if job address is empty.
       // newCustomerAddress saves to the customer record but the job needs its own copy.
       if (!formData.address && (formData as any).newCustomerAddress) {
@@ -3782,10 +3795,19 @@ The Treemarkables Team`;
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
       const names = formData.newCustomerName.split(" ");
-      formData.jobContactFirstName = names[0] || "";
-      formData.jobContactLastName = names.slice(1).join(" ") || "";
-      formData.jobContactEmail = formData.newCustomerEmail || "";
-      formData.jobContactPhone = formData.newCustomerPhone || "";
+      // Preserve any jobContact* value the user typed directly. Fall back to
+      // parsing the new customer name only if the direct field is empty.
+      formData.jobContactFirstName = formData.jobContactFirstName || names[0] || "";
+      formData.jobContactLastName = formData.jobContactLastName || names.slice(1).join(" ") || "";
+      // Only overwrite email/phone if the newCustomer* source has a real
+      // value — previously these lines wiped user-typed jobContact values
+      // whenever the New Customer fields were left blank.
+      if (formData.newCustomerEmail) {
+        formData.jobContactEmail = formData.newCustomerEmail;
+      }
+      if (formData.newCustomerPhone) {
+        formData.jobContactPhone = formData.newCustomerPhone;
+      }
       if (!formData.address && (formData as any).newCustomerAddress) {
         formData.address = (formData as any).newCustomerAddress;
       }
@@ -3890,10 +3912,19 @@ The Treemarkables Team`;
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
       const names = formData.newCustomerName.split(" ");
-      formData.jobContactFirstName = names[0] || "";
-      formData.jobContactLastName = names.slice(1).join(" ") || "";
-      formData.jobContactEmail = formData.newCustomerEmail || "";
-      formData.jobContactPhone = formData.newCustomerPhone || "";
+      // Preserve any jobContact* value the user typed directly. Fall back to
+      // parsing the new customer name only if the direct field is empty.
+      formData.jobContactFirstName = formData.jobContactFirstName || names[0] || "";
+      formData.jobContactLastName = formData.jobContactLastName || names.slice(1).join(" ") || "";
+      // Only overwrite email/phone if the newCustomer* source has a real
+      // value — previously these lines wiped user-typed jobContact values
+      // whenever the New Customer fields were left blank.
+      if (formData.newCustomerEmail) {
+        formData.jobContactEmail = formData.newCustomerEmail;
+      }
+      if (formData.newCustomerPhone) {
+        formData.jobContactPhone = formData.newCustomerPhone;
+      }
       if (!formData.address && (formData as any).newCustomerAddress) {
         formData.address = (formData as any).newCustomerAddress;
       }
@@ -9713,7 +9744,34 @@ The Treemarkables Team`;
           <InvoiceBuilder
             isOpen={isInvoiceModalOpen}
             onClose={() => setIsInvoiceModalOpen(false)}
-            job={editingJob}
+            // Merge live form values over editingJob. editingJob reflects the
+            // last-saved server state, which lags by up to 1.5s behind typing
+            // (the auto-save debounce). Without this, descriptions (and other
+            // text fields) typed right before clicking Invoice would be
+            // missed by InvoiceBuilder's initializer.
+            job={{
+              ...editingJob,
+              // `??` (not `||`) so an intentional user clear ("") isn't
+              // silently replaced by the stale cached value.
+              description:
+                form.getValues("description") ?? editingJob.description,
+              notes: form.getValues("notes") ?? editingJob.notes,
+              address: form.getValues("address") ?? editingJob.address,
+              billingAddress:
+                form.getValues("billingAddress") ?? editingJob.billingAddress,
+              billingContactEmail:
+                form.getValues("billingContactEmail") ??
+                editingJob.billingContactEmail,
+              billingNameOverride:
+                form.getValues("billingNameOverride") ??
+                editingJob.billingNameOverride,
+              jobContactFirstName:
+                form.getValues("jobContactFirstName") ??
+                editingJob.jobContactFirstName,
+              jobContactLastName:
+                form.getValues("jobContactLastName") ??
+                editingJob.jobContactLastName,
+            }}
             customer={{
               ...selectedCustomer,
               // Use billing name override from form (current unsaved value) first, then saved value, then customer name
