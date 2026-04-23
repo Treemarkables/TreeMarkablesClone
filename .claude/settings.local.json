@@ -22,7 +22,8 @@
       "Bash(awk -F: '$2>3380 && $2<3420')",
       "Bash(pkill -f \"drizzle-kit push\")",
       "Bash(git -C /home/runner/workspace log --all --oneline -20 -- shared/schema.ts server/routes.ts client/src/components/GlobalJobCard.tsx)",
-      "Bash(git show *)"
+      "Bash(git show *)",
+      "Bash(grep *)"
     ]
   }
 }

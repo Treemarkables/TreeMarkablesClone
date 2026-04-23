@@ -786,6 +786,24 @@ export function GlobalJobCard({
     refetchOnWindowFocus: false,
   });
 
+  // All staff assignments — used to highlight staff who are busy during the
+  // selected date/time window in the scheduling modal. Shares cache with the
+  // dispatch board and staff schedule queries.
+  const { data: allStaffAssignmentsData } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      employeeId: string;
+      jobId: string;
+      startTime: string | Date;
+      endTime: string | Date;
+    }>;
+  }>({
+    queryKey: ["/api/staff-assignments"],
+    enabled: isSchedulingModalOpen,
+    staleTime: 30_000,
+  });
+
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
   // Use internal mode to handle newly created jobs that transition from create to edit mode
   const effectiveModeForQuery = createdJobId ? "edit" : internalMode;
@@ -2968,6 +2986,61 @@ The Treemarkables Team`;
     schedulingData.startTime,
     schedulingData.duration,
     schedulingData.assignedTo,
+    editingJob?.id,
+  ]);
+
+  // Advisory busy map: which employees already have an overlapping assignment
+  // on another job during the window the user is picking. Doesn't block
+  // selection — just lets us highlight the row.
+  const busyEmployees = useMemo(() => {
+    const map = new Map<string, { startTime: Date; endTime: Date }[]>();
+    const { date, startTime, duration, endDate, day2Duration } = schedulingData;
+    const assignments = allStaffAssignmentsData?.data ?? [];
+    if (!date || !startTime || !duration || assignments.length === 0) return map;
+    const durMs = parseInt(duration, 10) * 60_000;
+    if (!durMs || Number.isNaN(durMs)) return map;
+
+    // Build every [startUTC, endUTC] window the user's selection covers —
+    // mirrors how saveSchedule creates one assignment per day.
+    const isMultiDay = !!(endDate && endDate !== date);
+    const day2Ms = isMultiDay && day2Duration ? parseInt(day2Duration, 10) * 60_000 : durMs;
+    const lastDay = isMultiDay ? endDate : date;
+    const windows: { start: number; end: number }[] = [];
+    try {
+      const d = new Date(date + "T12:00:00Z");
+      const end = new Date(lastDay + "T12:00:00Z");
+      while (d <= end) {
+        const dayStr = d.toISOString().split("T")[0];
+        const isLast = dayStr === lastDay;
+        const thisMs = isMultiDay && isLast ? day2Ms : durMs;
+        const ws = nzTimeToUTC(dayStr, startTime).getTime();
+        windows.push({ start: ws, end: ws + thisMs });
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+    } catch {
+      return map;
+    }
+
+    const thisJobId = editingJob?.id;
+    for (const a of assignments) {
+      if (a.jobId && thisJobId && a.jobId === thisJobId) continue;
+      const aStart = new Date(a.startTime).getTime();
+      const aEnd = new Date(a.endTime).getTime();
+      if (Number.isNaN(aStart) || Number.isNaN(aEnd)) continue;
+      const overlaps = windows.some(w => aStart < w.end && aEnd > w.start);
+      if (!overlaps) continue;
+      const list = map.get(a.employeeId) ?? [];
+      list.push({ startTime: new Date(aStart), endTime: new Date(aEnd) });
+      map.set(a.employeeId, list);
+    }
+    return map;
+  }, [
+    schedulingData.date,
+    schedulingData.startTime,
+    schedulingData.duration,
+    schedulingData.endDate,
+    schedulingData.day2Duration,
+    allStaffAssignmentsData,
     editingJob?.id,
   ]);
 
@@ -9602,12 +9675,25 @@ The Treemarkables Team`;
                     const isSelected = schedulingData.assignedTo.includes(
                       employee.id,
                     );
+                    const conflicts = busyEmployees.get(employee.id);
+                    const isBusy = !!conflicts && conflicts.length > 0;
+                    const busyTooltip = isBusy
+                      ? `Already booked: ${conflicts
+                          .map(c => {
+                            const s = utcToNZTime(c.startTime).time;
+                            const e = utcToNZTime(c.endTime).time;
+                            return `${formatTime12Hour(s)}–${formatTime12Hour(e)}`;
+                          })
+                          .join(", ")}`
+                      : undefined;
 
                     const employeeName = `${employee.firstName} ${employee.lastName}`;
                     return (
                       <div
                         key={employee.id}
-                        className="flex items-center space-x-2"
+                        className={`flex items-center space-x-2 rounded-sm px-1 ${
+                          isBusy ? "bg-amber-50 border border-amber-200" : ""
+                        }`}
                       >
                         <input
                           type="checkbox"
@@ -9635,6 +9721,15 @@ The Treemarkables Team`;
                           {employee.position && (
                             <span className="text-xs text-muted-foreground ml-1">
                               ({employee.position})
+                            </span>
+                          )}
+                          {isBusy && (
+                            <span
+                              className="ml-2 inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-300"
+                              title={busyTooltip}
+                              data-testid={`badge-staff-busy-${employee.id}`}
+                            >
+                              Busy
                             </span>
                           )}
                         </label>
