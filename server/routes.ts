@@ -10866,6 +10866,16 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     next();
   }, express.static(path.join(__dirname, '..', 'uploads', 'photos')));
 
+  // Serve uploaded company logos. Mirrors the photos mount so files written by
+  // POST /api/templates/upload-logo (to uploads/logos/) are reachable at
+  // /logos/<filename> in both dev and production.
+  app.use('/logos', (req, res, next) => {
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
+    next();
+  }, express.static(path.join(__dirname, '..', 'uploads', 'logos')));
+
   // Legacy API route compatibility
   app.use('/api/photos', (req, res, next) => {
     // Skip if this is an API endpoint (contains alphanumeric photoId)
@@ -12779,7 +12789,12 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         : req.file.mimetype === 'image/svg+xml' ? '.svg'
         : '.png';
       const filename = `logo-${Date.now()}${ext}`;
-      const dest = path.join(__dirname, '..', 'client', 'public', 'logos', filename);
+      // Write to the persistent uploads/ dir (mirrors the photos pattern). The
+      // previous path pointed at client/public/logos/ which is Vite's source
+      // static dir — fine in dev where Vite middleware serves from it, but in
+      // production Express serves from dist/public/, so writes after build
+      // were unreachable and the new logo never rendered.
+      const dest = path.join(__dirname, '..', 'uploads', 'logos', filename);
       fs.mkdirSync(path.dirname(dest), { recursive: true });
       fs.writeFileSync(dest, req.file.buffer);
       const url = `/logos/${filename}`;
