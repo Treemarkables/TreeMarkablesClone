@@ -5041,21 +5041,35 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         const subtotal = updateData.lineItems.reduce((sum: number, item: any) => {
           return sum + (parseFloat(item.total) || 0);
         }, 0);
-        
+
         const taxRate = parseFloat(updateData.taxRate || oldJob?.taxRate || '15');
         const gstAmount = subtotal * (taxRate / 100);
         const totalAmount = subtotal + gstAmount;
-        
+
         updateData.subtotal = subtotal.toFixed(2);
         updateData.gstAmount = gstAmount.toFixed(2);
         updateData.totalAmount = totalAmount.toFixed(2);
-        
+
         console.log('💰 Recalculated job totals:', {
           subtotal: updateData.subtotal,
           taxRate,
           gstAmount: updateData.gstAmount,
           totalAmount: updateData.totalAmount
         });
+      }
+
+      // Stamp customerConfirmedAt + method when the confirmation flag transitions.
+      // Only fires on actual state change so re-saving the form doesn't refresh the timestamp.
+      if ('customerConfirmed' in updateData) {
+        const was = !!oldJob?.customerConfirmed;
+        const now = !!updateData.customerConfirmed;
+        if (now && !was) {
+          (updateData as any).customerConfirmedAt = new Date();
+          (updateData as any).customerConfirmationMethod = 'manual';
+        } else if (!now && was) {
+          (updateData as any).customerConfirmedAt = null;
+          (updateData as any).customerConfirmationMethod = null;
+        }
       }
 
       const job = await storage.updateJob(req.params.id, updateData);
@@ -5305,6 +5319,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         if (!updateData.completedDate) {
           updateData.completedDate = new Date();
           console.log(`✅ Auto-setting completedDate for job ${req.params.id} (PATCH status → completed)`);
+        }
+      }
+
+      // Stamp customerConfirmedAt + method when the confirmation flag transitions.
+      if ('customerConfirmed' in updateData) {
+        const was = !!oldJob?.customerConfirmed;
+        const now = !!updateData.customerConfirmed;
+        if (now && !was) {
+          (updateData as any).customerConfirmedAt = new Date();
+          (updateData as any).customerConfirmationMethod = 'manual';
+        } else if (!now && was) {
+          (updateData as any).customerConfirmedAt = null;
+          (updateData as any).customerConfirmationMethod = null;
         }
       }
 
@@ -7542,7 +7569,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
           // Detect reschedule intent → alert dispatcher to re-propose a time slot
           const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
-          if (rescheduleKeywords.test(Body)) {
+          const isReschedule = rescheduleKeywords.test(Body);
+          if (isReschedule) {
             await storage.createNotification({
               title: `Reschedule requested — Job #${recentJob.jobNumber}`,
               message: `Customer ${customer.name} may be requesting a new time slot for Job #${recentJob.jobNumber} via SMS. Consider re-proposing via AI Smart Dispatch.`,
@@ -7552,6 +7580,66 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               actionUrl: '/ai-scheduler',
               jobId: recentJob.id,
             }).catch(() => { /* non-critical */ });
+          }
+
+          // Detect confirmation intent. Only auto-flip customerConfirmed when we have
+          // reasonable proof we actually asked: a pending_outbound_messages row was
+          // created for this job within the last 14 days. Otherwise raise a notification
+          // for manual review.
+          const confirmKeywords = /\b(yes|yep|yeah|yup|confirm(ed|ing)?|all good|sounds good|that works|works for me|sg|ok(ay)?|thanks(\s|!|$)|thank you|perfect|great|cheers|sweet|awesome)\b/i;
+          const isConfirmation = !isReschedule && confirmKeywords.test(Body);
+          if (
+            isConfirmation &&
+            (recentJob.status === 'scheduled' || recentJob.status === 'work_order') &&
+            !recentJob.customerConfirmed
+          ) {
+            try {
+              const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+              const allPending = await storage.getPendingOutboundMessages();
+              const hasRecentOutbound = allPending.some(
+                (m) =>
+                  m.jobId === recentJob.id &&
+                  m.createdAt &&
+                  new Date(m.createdAt).getTime() >= fourteenDaysAgo,
+              );
+              if (hasRecentOutbound) {
+                await storage.updateJob(recentJob.id, {
+                  customerConfirmed: true,
+                  customerConfirmedAt: new Date(),
+                  customerConfirmationMethod: 'sms',
+                } as any);
+                await storage.createJobDiaryEntry({
+                  jobId: recentJob.id,
+                  entryType: 'milestone',
+                  title: 'Customer confirmed scheduled date',
+                  description: `Customer ${customer.name} confirmed the scheduled date/time via SMS reply: "${Body}"`,
+                  authorName: customer.name,
+                  authorRole: 'customer',
+                  tags: ['customer-confirmation', 'sms'],
+                  metadata: { source: 'sms', from: From },
+                });
+                await storage.createNotification({
+                  title: `Customer confirmed Job #${recentJob.jobNumber}`,
+                  message: `${customer.name} confirmed the scheduled date for Job #${recentJob.jobNumber} via SMS.`,
+                  type: 'customer_confirmation',
+                  priority: 'medium',
+                  isRead: false,
+                  jobId: recentJob.id,
+                }).catch(() => { /* non-critical */ });
+                console.log(`✅ Auto-confirmed Job #${recentJob.jobNumber} from SMS reply`);
+              } else {
+                await storage.createNotification({
+                  title: `Possible confirmation — Job #${recentJob.jobNumber}`,
+                  message: `${customer.name} replied with confirmation-style wording but no recent booking request was on file. Review and tick manually if appropriate.`,
+                  type: 'customer_confirmation_review',
+                  priority: 'low',
+                  isRead: false,
+                  jobId: recentJob.id,
+                }).catch(() => { /* non-critical */ });
+              }
+            } catch (confirmErr) {
+              console.error('Error processing SMS confirmation:', confirmErr);
+            }
           }
         } else {
           console.log(`⚠️ No jobs found for customer ${customer.name}`);
@@ -15496,6 +15584,59 @@ Transcription: ${transcriptText}`;
           }
         } catch (acceptErr) {
           console.error('Failed to process quote acceptance:', acceptErr);
+        }
+      }
+
+      // Booking-date confirmation via email reply — mirrors the quote-accept parser.
+      // The outbound "Proposed Booking" email instructs the customer to reply with
+      // "I confirm booking J-<jobNumber>" (or set the subject to "CONFIRM BOOKING J-...").
+      const confirmBookingMatch =
+        actualSubject?.match(/CONFIRM\s+BOOKING\s+J-(\d+)/i) ||
+        cleanedBody?.match(/\bI?\s*confirm\s+booking\s+J-(\d+)/i);
+      if (confirmBookingMatch && jobFound) {
+        const confirmedJobNumber = confirmBookingMatch[1];
+        try {
+          let targetJob: any = jobFromUuid;
+          if (!targetJob || String(targetJob.jobNumber) !== String(confirmedJobNumber)) {
+            targetJob = await storage.getJobByJobNumber(confirmedJobNumber);
+          }
+          if (targetJob && !targetJob.customerConfirmed &&
+              (targetJob.status === 'scheduled' || targetJob.status === 'work_order')) {
+            await storage.updateJob(targetJob.id, {
+              customerConfirmed: true,
+              customerConfirmedAt: new Date(),
+              customerConfirmationMethod: 'email',
+            } as any);
+            await storage.createJobDiaryEntry({
+              jobId: targetJob.id,
+              entryType: 'email',
+              title: `Customer confirmed scheduled date`,
+              description: `Customer confirmed the scheduled date for Job #${targetJob.jobNumber} via email reply.`,
+              content: `Confirmation received from ${actualFromName || actualFromEmail}`,
+              authorName: actualFromName || actualFromEmail,
+              authorRole: 'customer',
+              tags: ['customer-confirmation', 'email'],
+              metadata: {
+                source: 'email',
+                jobNumber: confirmedJobNumber,
+                action: 'booking_confirmed',
+              },
+            });
+            await storage.createNotification({
+              type: 'customer_confirmation',
+              title: `Customer confirmed Job #${targetJob.jobNumber}`,
+              message: `${actualFromName || actualFromEmail} confirmed the scheduled date for Job #${targetJob.jobNumber}.`,
+              jobId: targetJob.id,
+              priority: 'medium',
+              isRead: false,
+              actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
+            }).catch((notifErr) => {
+              console.error('Failed to create customer_confirmation notification:', notifErr);
+            });
+            console.log(`✅ Auto-confirmed Job #${targetJob.jobNumber} from email reply`);
+          }
+        } catch (confirmErr) {
+          console.error('Failed to process email booking confirmation:', confirmErr);
         }
       }
 

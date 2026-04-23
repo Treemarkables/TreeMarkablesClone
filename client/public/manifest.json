@@ -5,7 +5,7 @@
   "start_url": "/dispatch",
   "display": "standalone",
   "background_color": "#000000",
-  "theme_color": "#ea8c3e",
+  "theme_color": "#4A90D9",
   "orientation": "portrait",
   "scope": "/",
   "icons": [
@@ -13,13 +13,13 @@
       "src": "/treemarkables-logo-green-192.png?v=3",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "/treemarkables-logo-green-512.png?v=3",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     }
   ],
   "categories": ["business", "productivity"],

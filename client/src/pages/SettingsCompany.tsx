@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
-import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image } from "lucide-react";
+import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Link } from "wouter";
 
 interface Template {
@@ -19,7 +20,11 @@ interface Template {
   gstNumber: string;
   paymentTerms: string;
   logoUrl?: string;
+  logoSize?: number;
+  logoAlignment?: "left" | "center" | "right";
 }
+
+type LogoAlignment = "left" | "center" | "right";
 
 export default function SettingsCompany() {
   const { toast } = useToast();
@@ -34,6 +39,9 @@ export default function SettingsCompany() {
   });
 
   if (!isLoading && data?.data && !loaded) {
+    const rawAlign = (data.data as Template).logoAlignment;
+    const alignment: LogoAlignment =
+      rawAlign === "center" || rawAlign === "right" ? rawAlign : "left";
     setForm({
       companyName: data.data.companyName ?? "",
       companyAddress: data.data.companyAddress ?? "",
@@ -42,6 +50,8 @@ export default function SettingsCompany() {
       gstNumber: data.data.gstNumber ?? "",
       paymentTerms: data.data.paymentTerms ?? "",
       logoUrl: data.data.logoUrl ?? "",
+      logoSize: (data.data as Template).logoSize ?? 40,
+      logoAlignment: alignment,
     });
     setLoaded(true);
   }
@@ -110,6 +120,41 @@ export default function SettingsCompany() {
   const set = (field: keyof Template, value: string) =>
     setForm((f) => ({ ...f, [field]: value }));
 
+  // Propagate logoSize / logoAlignment to the default templates for invoice,
+  // proposal and quote (same pattern as the logo upload mutation). Debounced
+  // by a short delay so dragging the slider doesn't fire a request per pixel.
+  const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleLayoutSave = (patch: { logoSize?: number; logoAlignment?: LogoAlignment }) => {
+    if (layoutTimer.current) clearTimeout(layoutTimer.current);
+    layoutTimer.current = setTimeout(async () => {
+      const types = ["invoice", "proposal", "quote"] as const;
+      try {
+        const defaults = await Promise.all(
+          types.map(async (type) => {
+            try {
+              const r = await fetch(`/api/templates/default/${type}`, { credentials: "include" });
+              if (!r.ok) return null;
+              const body = (await r.json()) as { success?: boolean; data?: { id?: string } };
+              return body?.data?.id ?? null;
+            } catch {
+              return null;
+            }
+          }),
+        );
+        await Promise.all(
+          defaults
+            .filter((id): id is string => !!id)
+            .map((id) => apiRequest("PUT", `/api/templates/${id}`, patch)),
+        );
+        queryClient.invalidateQueries({ queryKey: ["/api/templates/default/proposal"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/templates/default/quote"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/templates/default/invoice"] });
+      } catch {
+        toast({ title: "Couldn't save logo layout", variant: "destructive" });
+      }
+    }, 400);
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -148,35 +193,54 @@ export default function SettingsCompany() {
       <Separator />
 
       <div className="space-y-5">
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Label className="flex items-center gap-2">
             <Image className="w-4 h-4 text-muted-foreground" />
             Company Logo
           </Label>
-          <div className="flex items-center gap-4">
-            {currentLogo ? (
-              <img
-                src={currentLogo}
-                alt="Logo"
-                className="h-16 max-w-48 object-contain rounded border bg-white p-1"
-              />
-            ) : (
-              <div className="h-16 w-32 rounded border border-dashed flex items-center justify-center bg-muted">
-                <Building2 className="w-6 h-6 text-muted-foreground" />
-              </div>
-            )}
-            <div className="space-y-1">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={logoMutation.isPending}
-              >
-                <Upload className="w-3 h-3 mr-1" />
-                {logoMutation.isPending ? "Uploading…" : "Upload logo"}
-              </Button>
-              <p className="text-xs text-muted-foreground">PNG, JPG, WebP or SVG — shown on all proposals, quotes, invoices, PDFs and emails</p>
+
+          {/* Header preview — mirrors the document header so users can see
+              what their logo will look like at the chosen size and alignment */}
+          <div className="rounded-md border bg-white overflow-hidden">
+            <div
+              className={`flex items-center px-4 ${
+                (form.logoAlignment ?? "left") === "center"
+                  ? "justify-center"
+                  : (form.logoAlignment ?? "left") === "right"
+                  ? "justify-end"
+                  : "justify-start"
+              }`}
+              style={{ height: 96 }}
+            >
+              {currentLogo ? (
+                <img
+                  src={currentLogo}
+                  alt="Logo"
+                  className="w-auto object-contain"
+                  style={{ height: `${form.logoSize ?? 40}px`, maxHeight: 80 }}
+                />
+              ) : (
+                <div className="h-12 w-32 rounded border border-dashed flex items-center justify-center bg-muted">
+                  <Building2 className="w-6 h-6 text-muted-foreground" />
+                </div>
+              )}
             </div>
+            <div className="px-4 py-1.5 border-t bg-muted/40 text-[11px] text-muted-foreground">
+              Header preview — shown on proposals, quotes and invoices
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={logoMutation.isPending}
+            >
+              <Upload className="w-3 h-3 mr-1" />
+              {logoMutation.isPending ? "Uploading…" : "Upload logo"}
+            </Button>
+            <span className="text-xs text-muted-foreground">PNG, JPG, WebP or SVG</span>
             <input
               ref={fileInputRef}
               type="file"
@@ -184,6 +248,60 @@ export default function SettingsCompany() {
               className="hidden"
               onChange={handleFileChange}
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-4 items-end pt-1">
+            {/* Size slider */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium">Logo size</Label>
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {form.logoSize ?? 40}px
+                </span>
+              </div>
+              <Slider
+                min={24}
+                max={120}
+                step={2}
+                value={[form.logoSize ?? 40]}
+                onValueChange={([v]) => {
+                  setForm((f) => ({ ...f, logoSize: v }));
+                  scheduleLayoutSave({ logoSize: v });
+                }}
+              />
+            </div>
+
+            {/* Alignment buttons */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Alignment</Label>
+              <div className="inline-flex rounded-md border overflow-hidden">
+                {([
+                  { v: "left", Icon: AlignLeft, label: "Left" },
+                  { v: "center", Icon: AlignCenter, label: "Centre" },
+                  { v: "right", Icon: AlignRight, label: "Right" },
+                ] as const).map(({ v, Icon, label }) => {
+                  const current = (form.logoAlignment ?? "left") === v;
+                  return (
+                    <button
+                      key={v}
+                      type="button"
+                      aria-label={label}
+                      aria-pressed={current}
+                      onClick={() => {
+                        setForm((f) => ({ ...f, logoAlignment: v }));
+                        scheduleLayoutSave({ logoAlignment: v });
+                      }}
+                      className={`px-3 py-1.5 text-xs flex items-center gap-1 border-r last:border-r-0 ${
+                        current ? "bg-primary text-primary-foreground" : "bg-background"
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
