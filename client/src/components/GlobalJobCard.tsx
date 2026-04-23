@@ -3346,14 +3346,23 @@ The Treemarkables Team`;
         hasUserChangedRef.current = false;
         form.reset(form.getValues(), { keepValues: true, keepDirty: false });
 
-        // Refresh job data and staff assignments for dispatch board
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
+        // Refresh job data and staff assignments for the calendar, dispatch
+        // board, and staff schedule. The calendar grid and dispatch board
+        // use parameterised keys like ["/api/jobs?limit=10000&offset=0"] and
+        // ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"],
+        // so a plain ["/api/jobs"] invalidation won't match them (TanStack
+        // compares array elements, not string prefixes). Use a predicate to
+        // catch every /api/jobs* variant so those views refetch immediately
+        // instead of waiting for the 30s refetchInterval.
         queryClient.invalidateQueries({
-          queryKey: ["/api/jobs", editingJob.id, "diary"],
+          predicate: (query) => {
+            const first = query.queryKey[0];
+            return typeof first === "string" && first.startsWith("/api/jobs");
+          },
         });
+        queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
 
         setIsSchedulingModalOpen(false);
         setSchedulingData({
