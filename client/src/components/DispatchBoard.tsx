@@ -169,6 +169,7 @@ interface JobAssignment {
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
   workOrderAt?: string; // Timestamp stamped once when the job first became a work order — used for FIFO sorting on the Work Order tab
+  createdAt?: string; // Immutable job-creation timestamp — fallback for FIFO sorting when workOrderAt is NULL (legacy jobs)
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledEndDate?: string; // For multi-day jobs
@@ -1122,6 +1123,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
           workOrderAt: apiJob.workOrderAt,
+          createdAt: apiJob.createdAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
@@ -1209,6 +1211,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
           workOrderAt: apiJob.workOrderAt,
+          createdAt: apiJob.createdAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
@@ -1623,12 +1626,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       }
 
       // Work Order tab: FIFO by when the job first became a work order (oldest conversion at top),
-      // then priority as tiebreaker. Falls back to lastActivityAt for legacy jobs that
-      // were accepted before the workOrderAt column was introduced.
+      // then priority as tiebreaker. Falls back to createdAt (not lastActivityAt) for legacy
+      // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
+      // note, or edit, which caused those jobs to reshuffle whenever they were touched.
+      // createdAt is immutable so positions stay stable.
       if (jobFilter === "work_order") {
         const getAcceptedTime = (job: JobAssignment): number => {
           if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
-          if (job.lastActivityAt) return new Date(job.lastActivityAt).getTime();
+          if (job.createdAt) return new Date(job.createdAt).getTime();
           return Infinity;
         };
         const tDiff = getAcceptedTime(a) - getAcceptedTime(b); // ASC: oldest first

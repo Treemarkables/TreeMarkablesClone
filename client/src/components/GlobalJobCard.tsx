@@ -1805,13 +1805,22 @@ export function GlobalJobCard({
         try {
           setIsAutoSaving(true);
           const formData = form.getValues();
+          const dirtyFields = form.formState.dirtyFields;
 
           const changedData: Record<string, any> = {};
           const clearFields: string[] = [];
           for (const field of changedFieldsRef.current) {
             const val = (formData as any)[field];
             changedData[field] = val;
-            if (val === "" || val === null || val === undefined) {
+            // Only force-clear on the server if the user *actually* emptied the
+            // field (RHF marks it dirty). Async watch callbacks from form.reset()
+            // or the cross-device-sync form.setValue(..., shouldDirty:false) can
+            // leak into changedFieldsRef despite isResettingRef guards — without
+            // this check an empty synced value would end up in _clearFields and
+            // wipe a non-empty DB value via the server's force-null path.
+            const isEmpty = val === "" || val === null || val === undefined;
+            const userDirty = !!(dirtyFields as any)[field];
+            if (isEmpty && userDirty) {
               clearFields.push(field);
             }
           }
@@ -1907,6 +1916,25 @@ export function GlobalJobCard({
         for (const field of changedFieldsRef.current) {
           changedData[field] = (formData as any)[field];
         }
+        // Patch the caches BEFORE the keepalive fetch fires so that if the
+        // user reopens the same job within the staleTime window they see the
+        // freshly-typed values instead of the pre-save snapshot (which made
+        // their description "disappear" when reopening quickly after close).
+        queryClient.setQueryData(["/api/jobs", capturedJobId], (old: any) => {
+          if (!old) return old;
+          const jobData = old?.data ?? old;
+          const updated = { ...jobData, ...changedData };
+          return old?.data ? { ...old, data: updated } : updated;
+        });
+        queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+          if (!old) return old;
+          const data = old?.data ?? old;
+          if (!Array.isArray(data)) return old;
+          const updated = data.map((j: any) =>
+            j.id === capturedJobId ? { ...j, ...changedData } : j,
+          );
+          return old?.data ? { ...old, data: updated } : updated;
+        });
         // keepalive ensures the request completes even after the component
         // unmounts or the user navigates away mid-session.
         fetch(`/api/jobs/${capturedJobId}`, {
@@ -1918,6 +1946,91 @@ export function GlobalJobCard({
       }
     };
   }, [form, mode, editingJob?.id, queryClient]);
+
+  // Unmount-flush for the description / internal-notes popups.
+  //
+  // The popups are controlled Radix Dialogs with their own draft state. They
+  // commit to the form via form.setValue on three paths: the Close button,
+  // onOpenChange (Esc / click-outside / programmatic-open-change), and the
+  // Save button. But onOpenChange does NOT fire when the parent unmounts the
+  // Dialog subtree — so if the user types in the popup and then closes the
+  // whole job card (or even the browser tab) without first dismissing the
+  // popup, the draft is never committed and is silently lost. This was the
+  // most common "description disappeared" complaint.
+  //
+  // Solution: track the popup state in a ref, and on unmount, if a popup was
+  // open with a draft that differs from the current form value, flush it via
+  // a keepalive PUT so the request survives the unmount.
+  const popupFlushRef = useRef<{
+    descriptionPopupOpen: boolean;
+    descriptionDraft: string;
+    internalNotesPopupOpen: boolean;
+    internalNotesDraft: string;
+    jobId: string | undefined;
+    mode: typeof mode;
+    getFormValue: (name: string) => any;
+  }>({
+    descriptionPopupOpen: false,
+    descriptionDraft: "",
+    internalNotesPopupOpen: false,
+    internalNotesDraft: "",
+    jobId: undefined,
+    mode,
+    getFormValue: (name: string) => form.getValues(name as any),
+  });
+  popupFlushRef.current = {
+    descriptionPopupOpen,
+    descriptionDraft,
+    internalNotesPopupOpen,
+    internalNotesDraft,
+    jobId: editingJob?.id,
+    mode,
+    getFormValue: (name: string) => form.getValues(name as any),
+  };
+
+  useEffect(() => {
+    return () => {
+      const snap = popupFlushRef.current;
+      if (snap.mode !== "edit" || !snap.jobId) return;
+      const pending: Record<string, any> = {};
+      if (
+        snap.descriptionPopupOpen &&
+        snap.descriptionDraft !== (snap.getFormValue("description") ?? "")
+      ) {
+        pending.description = snap.descriptionDraft;
+      }
+      if (
+        snap.internalNotesPopupOpen &&
+        snap.internalNotesDraft !== (snap.getFormValue("internalNotes") ?? "")
+      ) {
+        pending.internalNotes = snap.internalNotesDraft;
+      }
+      if (Object.keys(pending).length === 0) return;
+
+      const jobId = snap.jobId;
+      queryClient.setQueryData(["/api/jobs", jobId], (old: any) => {
+        if (!old) return old;
+        const jobData = old?.data ?? old;
+        const updated = { ...jobData, ...pending };
+        return old?.data ? { ...old, data: updated } : updated;
+      });
+      queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+        if (!old) return old;
+        const data = old?.data ?? old;
+        if (!Array.isArray(data)) return old;
+        const updated = data.map((j: any) =>
+          j.id === jobId ? { ...j, ...pending } : j,
+        );
+        return old?.data ? { ...old, data: updated } : updated;
+      });
+      fetch(`/api/jobs/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(pending),
+        keepalive: true,
+      }).catch(() => {});
+    };
+  }, [queryClient]);
 
   // Immediately persist a customer change when the user explicitly picks one.
   // customerId is excluded from the debounced auto-save watcher (to prevent
@@ -3802,6 +3915,7 @@ The Treemarkables Team`;
         ];
 
         const clearFields: string[] = [];
+        const dirtyFields = form.formState.dirtyFields;
         for (const [key, value] of Object.entries(formData)) {
           if (skipFields.includes(key)) continue;
           const origVal = originalData[key];
@@ -3811,7 +3925,13 @@ The Treemarkables Team`;
           }
           if (JSON.stringify(value) !== JSON.stringify(origVal)) {
             changedData[key] = value;
-            if (value === "" || value === null || value === undefined) {
+            // Same defense as the auto-save: only mark a field as a *force
+            // clear* if the user actually dirtied it. A sync-induced empty
+            // value (form.setValue with shouldDirty:false) would otherwise
+            // slip into _clearFields and wipe a non-empty DB value.
+            const isEmpty = value === "" || value === null || value === undefined;
+            const userDirty = !!(dirtyFields as any)[key];
+            if (isEmpty && userDirty) {
               clearFields.push(key);
             }
           }
