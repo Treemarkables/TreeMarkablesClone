@@ -196,6 +196,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
 import { LinkifyMultiline } from "@/lib/linkify";
+import { Link } from "wouter";
 
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema
@@ -658,6 +659,7 @@ export function GlobalJobCard({
     assignedTo: [] as string[],
     notes: "",
     sendClientNotification: false,
+    sendProposalEmail: false,
   });
   const [staffConflicts, setStaffConflicts] = useState<
     { employeeId: string; conflicts: any[] }[]
@@ -802,6 +804,25 @@ export function GlobalJobCard({
     queryKey: ["/api/staff-assignments"],
     enabled: isSchedulingModalOpen,
     staleTime: 30_000,
+  });
+
+  // Email templates — used by the proposal-email checkbox so the user can edit
+  // the wording in Settings → Communication Templates rather than in code.
+  const { data: emailTemplatesData } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      name: string;
+      category: string;
+      subject: string;
+      htmlContent: string;
+      isActive: boolean;
+      isDefault: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/email-templates"],
+    enabled: isSchedulingModalOpen,
+    staleTime: 60_000,
   });
 
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
@@ -2698,9 +2719,11 @@ export function GlobalJobCard({
           endDate: existingEndDate,
           startTime: startNZ.time, // NZ time, not UTC!
           duration: durationMinutes.toString(),
+          day2Duration: "",
           assignedTo: uniqueEmployeeIds,
           notes: firstAssignment.notes || "",
           sendClientNotification: false,
+          sendProposalEmail: false,
         });
       }
     } catch (error) {
@@ -3184,6 +3207,111 @@ The Treemarkables Team`;
           });
         }
 
+        // Fire the proposal email ("Can we schedule your job in for...") if requested.
+        // Runs independently of sendClientNotification — the user may want one, both, or neither.
+        if (schedulingData.sendProposalEmail) {
+          const proposalFirstName =
+            editingJob.jobContactFirstName ||
+            editingJobCustomer?.name?.split(" ")[0] ||
+            "there";
+          const proposalCustomerName =
+            editingJobCustomer?.name ||
+            [editingJob.jobContactFirstName, editingJob.jobContactLastName]
+              .filter(Boolean)
+              .join(" ") ||
+            proposalFirstName;
+          const proposalEmail =
+            editingJob.jobContactEmail ||
+            editingJob.billingContactEmail ||
+            editingJobCustomer?.email ||
+            "";
+          const dateDisplay = format(
+            new Date(schedulingData.date + "T12:00:00Z"),
+            "EEEE d MMMM yyyy",
+          );
+          const timeDisplay = formatTime12Hour(schedulingData.startTime);
+
+          // Look up a user-editable "Proposed Booking" template. We match by
+          // name (case-insensitive, substring) so the user can name theirs
+          // anything containing "proposed booking" without further config.
+          const templates = emailTemplatesData?.data ?? [];
+          const proposalTemplate =
+            templates.find(
+              t => t.isActive && /proposed\s*booking/i.test(t.name),
+            ) || null;
+
+          // Fill the variables we have in hand. Uses the *picked* date/time,
+          // not the job's stale scheduledDate, so the email matches what the
+          // user just chose.
+          const substitute = (text: string) =>
+            (text || "")
+              .replace(/\{firstName\}/g, proposalFirstName)
+              .replace(/\{customerName\}/g, proposalCustomerName)
+              .replace(/\{scheduledDate\}/g, dateDisplay)
+              .replace(/\{scheduledTime\}/g, timeDisplay)
+              .replace(/\{jobAddress\}/g, editingJob.address || "")
+              .replace(/\{jobNumber\}/g, editingJob.jobNumber || "")
+              .replace(
+                /\{customerPhone\}/g,
+                editingJob.jobContactPhone || editingJobCustomer?.phone || "",
+              )
+              .replace(/\{email\}/g, proposalEmail);
+
+          const fallbackBody = `<p>Hi ${proposalFirstName},</p>
+<p>Can we schedule your job in for <strong>${dateDisplay}</strong> at <strong>${timeDisplay}</strong>?</p>
+<p>Please note this start time is approximate and may vary slightly on the day.</p>
+<p>Let us know if that works for you.</p>`;
+
+          const proposalSubject = proposalTemplate
+            ? substitute(proposalTemplate.subject) ||
+              `Proposed booking: ${dateDisplay} at ${timeDisplay}`
+            : `Proposed booking: ${dateDisplay} at ${timeDisplay}`;
+          const proposalBody = proposalTemplate
+            ? substitute(proposalTemplate.htmlContent) || fallbackBody
+            : fallbackBody;
+
+          if (!proposalEmail) {
+            toast({
+              title: "No email address on file",
+              description:
+                "The proposal email wasn't sent because this job has no client email address.",
+              variant: "destructive",
+            });
+          } else {
+            try {
+              const proposalRes = await fetch("/api/emails/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  to: proposalEmail,
+                  subject: proposalSubject,
+                  body: proposalBody,
+                  jobId: editingJob.id,
+                  customerId: editingJob.customerId || undefined,
+                }),
+              });
+              const proposalJson = await proposalRes.json().catch(() => ({}));
+              if (!proposalRes.ok || proposalJson?.success === false) {
+                toast({
+                  title: "Proposal email failed",
+                  description:
+                    proposalJson?.message ||
+                    "The job was scheduled but the proposal email couldn't be sent.",
+                  variant: "destructive",
+                });
+              }
+            } catch (emailErr) {
+              console.error("Proposal email error:", emailErr);
+              toast({
+                title: "Proposal email failed",
+                description:
+                  "The job was scheduled but the proposal email couldn't be sent.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
+
         // Update form's status to match database
         form.setValue("status", "scheduled");
 
@@ -3230,6 +3358,7 @@ The Treemarkables Team`;
           assignedTo: [],
           notes: "",
           sendClientNotification: false,
+          sendProposalEmail: false,
         });
         setStaffConflicts([]);
       } else {
@@ -3287,7 +3416,7 @@ The Treemarkables Team`;
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary-timeline"] });
       setIsSchedulingModalOpen(false);
-      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false });
+      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false, sendProposalEmail: false });
     } catch (error) {
       console.error("Error unscheduling job:", error);
       toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
@@ -9777,6 +9906,43 @@ The Treemarkables Team`;
               </label>
             </div>
 
+            {/* Proposal Email Option — asks the customer to confirm the proposed date/time.
+                Uses the "Proposed Booking" template from Settings → Communication Templates
+                when present; falls back to a built-in message otherwise. */}
+            <div className="flex items-start space-x-2 p-3 bg-amber-50 dark:bg-amber-950 rounded-md border border-amber-200 dark:border-amber-800">
+              <Checkbox
+                id="proposal-email"
+                checked={schedulingData.sendProposalEmail}
+                onCheckedChange={(checked) =>
+                  setSchedulingData((prev) => ({
+                    ...prev,
+                    sendProposalEmail: checked === true,
+                  }))
+                }
+                data-testid="checkbox-send-proposal-email"
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <label
+                  htmlFor="proposal-email"
+                  className="text-sm font-medium leading-none cursor-pointer select-none"
+                >
+                  Send proposal email asking client to confirm this date and time
+                </label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Uses the "Proposed Booking" template from{" "}
+                  <Link
+                    href="/settings/templates"
+                    className="underline hover:text-foreground"
+                  >
+                    Communication Templates
+                  </Link>
+                  . Variables: {"{firstName}"}, {"{scheduledDate}"},{" "}
+                  {"{scheduledTime}"}, {"{jobAddress}"}, {"{jobNumber}"}.
+                </p>
+              </div>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Notes</label>
               <Textarea
@@ -9820,6 +9986,7 @@ The Treemarkables Team`;
                     assignedTo: [],
                     notes: "",
                     sendClientNotification: false,
+                    sendProposalEmail: false,
                   });
                 }}
                 data-testid="btn-cancel-schedule"
