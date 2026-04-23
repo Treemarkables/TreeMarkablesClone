@@ -1351,11 +1351,24 @@ export function ProposalBuilderV2({
           costPrice: item.costPrice ? parseFloat(item.costPrice as string) : undefined,
           markupPct: item.markupPct ? parseFloat(item.markupPct as string) : undefined,
         }));
+        const sectionDesc = s.description || "";
+        const inferredType = inferBlockType({ description: sectionDesc, photos, lineItems });
+        // If this is a description-type block with no saved content, fall
+        // back to the current job description so editing an existing
+        // proposal still reflects job-description updates made after the
+        // proposal was first created. A non-empty saved value still wins so
+        // direct edits inside the proposal are preserved.
+        const effectiveDesc =
+          inferredType === "description" && !sectionDesc.trim()
+            ? (jobDescription ||
+               (job as { description?: string } | null)?.description ||
+               "")
+            : sectionDesc;
         return {
           id: s.id || `block-${idx}`,
-          type: inferBlockType({ description: s.description || "", photos, lineItems }),
+          type: inferredType,
           title: s.title || "",
-          description: s.description || "",
+          description: effectiveDesc,
           photos,
           lineItems,
           sortOrder: s.sortOrder ?? idx,
@@ -1677,6 +1690,7 @@ export function ProposalBuilderV2({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         keepalive: true,
+        credentials: "include",
       }).catch(() => {}); // best-effort; the component is gone
     };
   }, []);

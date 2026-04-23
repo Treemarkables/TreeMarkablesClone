@@ -258,9 +258,14 @@ export function InvoiceBuilder({
       // Populate notes and description from existing invoice (always set, even if empty)
       // description is the primary field; fall back to notes for older invoices that stored description there
       setEditableNotes(existingInvoice.notes ?? "");
-      setEditableDescription(
-        existingInvoice.description ?? existingInvoice.notes ?? "",
-      );
+      // If the saved invoice description is empty (either the user created
+      // the invoice before adding a job description, or the initial copy at
+      // create time was from an empty job), fall back to the current job
+      // description. A non-empty saved value still wins — we don't stomp on
+      // edits that were made directly inside the invoice.
+      const savedInvoiceDesc =
+        existingInvoice.description ?? existingInvoice.notes ?? "";
+      setEditableDescription(savedInvoiceDesc || job.description || "");
     } else {
       console.log("⚠️ No existing invoices found for this job");
     }
