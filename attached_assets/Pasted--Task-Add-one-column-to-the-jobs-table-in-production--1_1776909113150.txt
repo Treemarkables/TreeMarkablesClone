@@ -1,0 +1,30 @@
+---
+  Task: Add one column to the jobs table in production.                              
+                                                                                     
+  What to run (just this, nothing else):
+                                                                                     
+  psql "$DATABASE_URL" -c "ALTER TABLE jobs ADD COLUMN work_order_at TIMESTAMP;"
+                                                                                     
+  What NOT to run: npm run db:push. It'll try to drop the session table (982 rows —  
+  logs everyone out) and 5 legacy call_records columns. That drift is pre-existing   
+  and unrelated to this change. Leave it alone.                                      
+                                                         
+  Context: All application code for this change is already committed. The column is  
+  already declared in shared/schema.ts:348 as workOrderAt: 
+  timestamp("work_order_at"). Both createJob() and updateJob() in server/storage.ts  
+  already auto-stamp workOrderAt = now() the first time a job hits status = 
+  'work_order'. The Dispatch Board Work Order tab already reads this column and sorts
+   by it. Only the actual DB column is missing.
+
+  After running, verify:
+
+  psql "$DATABASE_URL" -c "\d jobs" | grep work_order_at
+                                                                                     
+  Should print: work_order_at | timestamp without time zone                          
+                                                                                     
+  Then restart the app, open the Dispatch Board → Work Order tab, accept a test      
+  quote, and confirm the new work order appears correctly in the FIFO list.
+                                                                                     
+  Do not touch: the session table, the call_records columns, drizzle.config.ts, or   
+  anything else. This is a single additive column.
+                                            
