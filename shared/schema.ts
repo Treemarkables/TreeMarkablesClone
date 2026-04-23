@@ -345,6 +345,7 @@ export const jobs = pgTable("jobs", {
   scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
+  workOrderAt: timestamp("work_order_at"), // Timestamp set when the job first transitions to status 'work_order' (i.e. quote accepted). Used by the Dispatch Board to FIFO-sort work orders by acceptance time; stable across subsequent edits.
   status: text("status").notNull().default('quote'), // lead, quote, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),

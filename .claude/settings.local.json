@@ -23,7 +23,9 @@
       "Bash(pkill -f \"drizzle-kit push\")",
       "Bash(git -C /home/runner/workspace log --all --oneline -20 -- shared/schema.ts server/routes.ts client/src/components/GlobalJobCard.tsx)",
       "Bash(git show *)",
-      "Bash(grep *)"
+      "Bash(grep *)",
+      "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Profit_and_Loss_\\(6\\)_1776905495826.pdf\")",
+      "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Account_Transactions_1776905495813.pdf\")"
     ]
   }
 }

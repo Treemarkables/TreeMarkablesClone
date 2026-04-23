@@ -168,6 +168,7 @@ interface JobAssignment {
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
+  workOrderAt?: string; // Timestamp stamped once when the job first became a work order — used for FIFO sorting on the Work Order tab
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledEndDate?: string; // For multi-day jobs
@@ -1120,6 +1121,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          workOrderAt: apiJob.workOrderAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
@@ -1206,6 +1208,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          workOrderAt: apiJob.workOrderAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
@@ -1618,7 +1621,30 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const diff = scoreJob(b) - scoreJob(a);
         if (diff !== 0) return diff;
       }
-      // Sort by most recently active (descending) — jobs with recent messages or changes appear at top
+
+      // Work Order tab: FIFO by when the job first became a work order (oldest conversion at top),
+      // then priority as tiebreaker. Falls back to lastActivityAt for legacy jobs that
+      // were accepted before the workOrderAt column was introduced.
+      if (jobFilter === "work_order") {
+        const getAcceptedTime = (job: JobAssignment): number => {
+          if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
+          if (job.lastActivityAt) return new Date(job.lastActivityAt).getTime();
+          return Infinity;
+        };
+        const tDiff = getAcceptedTime(a) - getAcceptedTime(b); // ASC: oldest first
+        if (tDiff !== 0) return tDiff;
+        const priorityRank: Record<string, number> = {
+          urgent: 0,
+          high: 1,
+          medium: 2,
+          low: 3,
+        };
+        const pa = priorityRank[a.priority] ?? 4;
+        const pb = priorityRank[b.priority] ?? 4;
+        return pa - pb; // urgent first on ties
+      }
+
+      // Default: sort by most recently active (descending) — jobs with recent messages or changes appear at top
       const getActivityTime = (job: JobAssignment): number => {
         const activity = job.lastActivityAt
           ? new Date(job.lastActivityAt).getTime()
