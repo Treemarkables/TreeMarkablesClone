@@ -4694,8 +4694,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (Object.keys(tenantPayload).length > 0) {
         console.log(`🏠 PUT /api/jobs/${req.params.id} tenant fields in body:`, tenantPayload);
       }
+      // Optimistic-concurrency baseline from the client (ISO string). Pulled out
+      // here so it doesn't flow into validation.data or storage.updateJob.
+      const expectedUpdatedAt: string | null = typeof req.body.expectedUpdatedAt === 'string'
+        ? req.body.expectedUpdatedAt
+        : null;
+
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
+      delete processedBody.expectedUpdatedAt;
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
@@ -4859,7 +4866,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Get the old job for status comparison
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
-      
+
+      // Optimistic concurrency: reject writes whose baseline is older than the
+      // current row. Callers that don't send expectedUpdatedAt (mobile, Xero
+      // webhook, internal scripts) skip the check for backward compatibility.
+      if (expectedUpdatedAt && oldJob?.updatedAt) {
+        const clientBaseline = new Date(expectedUpdatedAt);
+        if (!Number.isNaN(clientBaseline.getTime()) && oldJob.updatedAt > clientBaseline) {
+          return res.status(409).json({
+            success: false,
+            code: 'STALE_WRITE',
+            message: 'This job was updated on another device since you loaded it.',
+            currentUpdatedAt: oldJob.updatedAt,
+            currentJob: oldJob,
+          });
+        }
+      }
+
       // SAFEGUARD: Prevent accidental overwrites of critical fields with empty values
       // Defense-in-depth: even if the client sends a field, never replace a non-empty DB value
       // with an empty/null value unless the client explicitly requests clearing via _clearFields
@@ -4870,7 +4893,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           'jobContactPhone', 'jobContactMobile', 'billingNameOverride',
           'billingAddress', 'billingContactPhone', 'billingContactMobile',
           'billingContactEmail', 'invoiceDescription', 'totalAmount', 'paidAmount',
-          'title', 'priority', 'estimatedManHours', 'scheduledDate'
+          'title', 'priority', 'estimatedManHours', 'scheduledDate',
+          'equipment'
         ];
         const fieldsInRequest = Object.keys(req.body);
         const explicitClears: string[] = req.body._clearFields || [];

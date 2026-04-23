@@ -185,7 +185,7 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiError } from "@/lib/queryClient";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
   insertJobSchema,
@@ -1515,6 +1515,10 @@ export function GlobalJobCard({
       isResettingRef.current = false;
       setFormLoadedJobId(editingJob.id);
       originalLoadedDataRef.current = { ...resetData };
+      // Capture the server's updatedAt as our concurrency baseline. Any stale
+      // cached editingJob will be caught by the server's 409 on next save.
+      baselineUpdatedAtRef.current =
+        editingJob.updatedAt ? new Date(editingJob.updatedAt).toISOString() : null;
 
       // Fix: Explicitly sync useFieldArray with line items after form reset
       if (editingJob.lineItems) {
@@ -1554,8 +1558,17 @@ export function GlobalJobCard({
           for (const field of changedFieldsRef.current) {
             changedData[field] = (formData as any)[field];
           }
-          apiRequest("PUT", `/api/jobs/${editingJob?.id}`, changedData)
-            .then(() => {
+          const deferredBody: Record<string, any> = { ...changedData };
+          if (baselineUpdatedAtRef.current) {
+            deferredBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+          }
+          apiRequest("PUT", `/api/jobs/${editingJob?.id}`, deferredBody)
+            .then(async (res) => {
+              const json = await res.json().catch(() => null);
+              const newUpdatedAt = json?.data?.updatedAt ?? json?.updatedAt;
+              if (newUpdatedAt) {
+                baselineUpdatedAtRef.current = new Date(newUpdatedAt).toISOString();
+              }
               console.log("✅ Deferred auto-save completed");
               // RC7 FIX: Guard so reset() watch callbacks aren't treated as user edits.
               isResettingRef.current = true;
@@ -1731,14 +1744,15 @@ export function GlobalJobCard({
       "quotingMethod",
       "unsuccessfulReason",
       "categoryId",
-      "crewMembers",
-      "equipment",
       "internalNotes",
       "customerConfirmed",
       // NOTE: etaNotificationRequested is intentionally excluded from auto-save.
       // It's saved immediately via direct apiRequest on click (see ETA toggle handler)
       // to prevent it from being tracked during form.reset() and triggering a
       // deferred auto-save loop ("Maximum update depth exceeded" crash).
+      // crewMembers and equipment are also excluded — they are arrays that
+      // form.reset() can re-emit as [], wiping DB state. Saved via explicit
+      // PUT in their add/remove handlers instead.
     ]),
   );
 
@@ -1747,6 +1761,10 @@ export function GlobalJobCard({
   // from firing watch callbacks that are mistakenly treated as user edits, which caused
   // an infinite autosave loop and silently overwrote contact fields with empty strings.
   const isResettingRef = useRef(false);
+  // Optimistic-concurrency baseline. Set from editingJob.updatedAt on load and
+  // advanced after every successful save. Sent as expectedUpdatedAt in every
+  // auto-save body so the server can reject stale writes with HTTP 409.
+  const baselineUpdatedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Gate on editingJob?.id rather than the `mode` prop. The prop stays
@@ -1845,7 +1863,16 @@ export function GlobalJobCard({
             clearFields,
           });
 
-          await apiRequest("PUT", `/api/jobs/${editingJob.id}`, changedData);
+          const saveBody: Record<string, any> = { ...changedData };
+          if (baselineUpdatedAtRef.current) {
+            saveBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+          }
+          const saveRes = await apiRequest("PUT", `/api/jobs/${editingJob.id}`, saveBody);
+          const saveJson = await saveRes.json().catch(() => null);
+          const savedUpdatedAt = saveJson?.data?.updatedAt ?? saveJson?.updatedAt;
+          if (savedUpdatedAt) {
+            baselineUpdatedAtRef.current = new Date(savedUpdatedAt).toISOString();
+          }
           console.log("✅ Auto-save completed successfully");
           setLastAutoSaveTime(new Date());
           hasUserChangedRef.current = false;
@@ -1891,15 +1918,35 @@ export function GlobalJobCard({
           }
         } catch (error) {
           console.error("❌ Auto-save failed:", error);
-          // RC5 FIX: Show toast so user knows their changes weren't saved.
-          // Do NOT clear changedFieldsRef — preserves fields for next retry attempt.
-          const failedFields = Array.from(changedFieldsRef.current);
-          toast({
-            title: "Changes not saved",
-            description: `Could not save: ${failedFields.join(", ")}. Will retry automatically.`,
-            variant: "destructive",
-          });
-          hasUserChangedRef.current = true; // Keep true so next watch triggers a retry
+          // 409 STALE_WRITE: the server has a newer version of this job than the
+          // baseline we loaded. Surface it, clear our pending edits (so we don't
+          // re-send them against a stale baseline on the next keystroke), and
+          // invalidate the query so the card reloads with the latest data.
+          if (error instanceof ApiError && error.status === 409) {
+            const body = error.body as { currentUpdatedAt?: string } | null;
+            if (body?.currentUpdatedAt) {
+              baselineUpdatedAtRef.current = new Date(body.currentUpdatedAt).toISOString();
+            }
+            hasUserChangedRef.current = false;
+            changedFieldsRef.current.clear();
+            toast({
+              title: "This job was updated on another device",
+              description: "Your last edit was not saved. Reloading the latest version.",
+              variant: "destructive",
+            });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+          } else {
+            // RC5 FIX: Show toast so user knows their changes weren't saved.
+            // Do NOT clear changedFieldsRef — preserves fields for next retry attempt.
+            const failedFields = Array.from(changedFieldsRef.current);
+            toast({
+              title: "Changes not saved",
+              description: `Could not save: ${failedFields.join(", ")}. Will retry automatically.`,
+              variant: "destructive",
+            });
+            hasUserChangedRef.current = true; // Keep true so next watch triggers a retry
+          }
         } finally {
           setIsAutoSaving(false);
         }
@@ -1951,10 +1998,14 @@ export function GlobalJobCard({
         // credentials: "include" matches apiRequest() so session cookies reach
         // the server — without it, this request could 401 in edge cases where
         // browsers tighten default cookie-sending rules.
+        const keepaliveBody: Record<string, any> = { ...changedData };
+        if (baselineUpdatedAtRef.current) {
+          keepaliveBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+        }
         fetch(`/api/jobs/${capturedJobId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(changedData),
+          body: JSON.stringify(keepaliveBody),
           keepalive: true,
           credentials: "include",
         }).catch(() => {}); // best-effort, silent failure
@@ -2041,10 +2092,14 @@ export function GlobalJobCard({
         );
         return old?.data ? { ...old, data: updated } : updated;
       });
+      const popupBody: Record<string, any> = { ...pending };
+      if (baselineUpdatedAtRef.current) {
+        popupBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+      }
       fetch(`/api/jobs/${jobId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(pending),
+        body: JSON.stringify(popupBody),
         keepalive: true,
         credentials: "include",
       }).catch(() => {});
@@ -2090,18 +2145,40 @@ export function GlobalJobCard({
     if (!editingJob?.id) return;
     try {
       setIsAutoSaving(true);
-      await apiRequest("PUT", `/api/jobs/${editingJob.id}`, { customerId });
+      const body: Record<string, any> = { customerId };
+      if (baselineUpdatedAtRef.current) {
+        body.expectedUpdatedAt = baselineUpdatedAtRef.current;
+      }
+      const res = await apiRequest("PUT", `/api/jobs/${editingJob.id}`, body);
+      const json = await res.json().catch(() => null);
+      const newUpdatedAt = json?.data?.updatedAt ?? json?.updatedAt;
+      if (newUpdatedAt) {
+        baselineUpdatedAtRef.current = new Date(newUpdatedAt).toISOString();
+      }
       setLastAutoSaveTime(new Date());
       console.log(
         `✅ Customer saved immediately: ${customerName} (${customerId})`,
       );
     } catch (err) {
       console.error("Failed to save customer change:", err);
-      toast({
-        title: "Could not save customer change",
-        description: "Please hit Save manually.",
-        variant: "destructive",
-      });
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { currentUpdatedAt?: string } | null;
+        if (body?.currentUpdatedAt) {
+          baselineUpdatedAtRef.current = new Date(body.currentUpdatedAt).toISOString();
+        }
+        toast({
+          title: "This job was updated on another device",
+          description: "Reloading the latest version — please re-pick the customer.",
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+      } else {
+        toast({
+          title: "Could not save customer change",
+          description: "Please hit Save manually.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsAutoSaving(false);
     }

@@ -1,31 +1,38 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+export class ApiError extends Error {
+  status: number;
+  body: unknown;
+  constructor(message: string, status: number, body: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
 
-    // Try to parse JSON error response for a human-readable message
+    let parsed: unknown = null;
+    let message = `${res.status}: ${text}`;
     try {
-      const errorData = JSON.parse(text);
-      if (errorData.message) {
-        throw new Error(errorData.message);
-      }
-      if (errorData.errors && Array.isArray(errorData.errors)) {
+      parsed = JSON.parse(text);
+      const errorData = parsed as { message?: string; errors?: Array<{ message?: string; path?: string[] }> };
+      if (errorData?.message) {
+        message = errorData.message;
+      } else if (errorData?.errors && Array.isArray(errorData.errors)) {
         const errorMessages = errorData.errors
-          .map((e: any) => e.message || (e.path?.join('.') + ': ' + e.message))
+          .map((e) => e.message || (e.path?.join('.') + ': ' + (e.message ?? '')))
           .join(', ');
-        throw new Error(errorMessages || text);
+        message = errorMessages || text;
       }
-    } catch (parseError) {
-      // Only fall back to raw text if the error came from JSON.parse itself
-      if (parseError instanceof SyntaxError) {
-        throw new Error(`${res.status}: ${text}`);
-      }
-      // Otherwise re-throw the human-readable error we constructed above
-      throw parseError;
+    } catch {
+      // Non-JSON body — keep raw text message
     }
 
-    throw new Error(`${res.status}: ${text}`);
+    throw new ApiError(message, res.status, parsed);
   }
 }
 

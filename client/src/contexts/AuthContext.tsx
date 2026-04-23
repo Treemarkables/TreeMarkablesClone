@@ -51,7 +51,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const { data: meResponse, isFetching, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
+  const { data: meResponse, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refetchInterval: false,
     refetchOnMount: true,         // only refetch if stale (not 'always')
     refetchOnWindowFocus: false,
+    refetchOnReconnect: false,    // don't thrash the 401 counter on overnight sleep/wake cycles
   });
 
   const loginMutation = useMutation({
@@ -161,60 +162,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [DEV_AUTO_LOGIN, devAutoLoginAttempted, initialAuthCheckComplete, currentUser, loginMutation.isPending]);
 
+  // Bookkeeping-only effect: mark the initial auth check complete once the
+  // query has produced a result (success, 401, or network error). Kept
+  // separate so its deps don't retrigger the auth-reactor effect below.
   useEffect(() => {
-    // Mark initial check as complete once we have a response OR if the query failed
-    // (network error in Capacitor WKWebView when server can't be reached)
     if ((meResponse !== undefined || authQueryError) && !initialAuthCheckComplete) {
       if (authQueryError) {
         console.error('[Auth] Auth query failed with network error — treating as unauthenticated');
       }
       setInitialAuthCheckComplete(true);
     }
+  }, [meResponse, authQueryError, initialAuthCheckComplete]);
 
-    // CRITICAL: Ignore stale responses while a fresh query is in progress
-    // This prevents race conditions where an old unauthenticated response
-    // arrives after a successful login
-    if (isFetching) {
-      return;
-    }
+  // Read currentUser via a ref inside the reactor effect so we don't need it
+  // as a dep — otherwise setting currentUser from inside the effect would
+  // retrigger the effect and re-increment the 401 counter on the same response.
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-    // If server returns not authenticated
-    if (meResponse?.success === false) {
+  // Auth reactor: depends ONLY on meResponse so it runs exactly once per new
+  // /api/auth/me response. Previous version also depended on isFetching /
+  // currentUser / initialAuthCheckComplete, which caused the 401 counter to
+  // tick up on unrelated re-renders (e.g. background refetches on network
+  // reconnect), producing overnight-logout and log-in-twice symptoms.
+  useEffect(() => {
+    if (meResponse === undefined) return;
+    const user = currentUserRef.current;
+
+    if (meResponse.success === false) {
+      // Don't clear user state if they just logged in (within last 10 seconds)
+      // to tolerate a stale 401 arriving after a successful login.
+      const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
+      if (timeSinceLogin < 10000) {
+        console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
+        consecutive401sRef.current = 0;
+        return;
+      }
+
       consecutive401sRef.current += 1;
-      
-      if (currentUser) {
-        // CRITICAL FIX: Don't clear user state if they just logged in (within last 10 seconds)
-        // This prevents race condition where stale 401 response arrives after successful login
-        const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
-        if (timeSinceLogin < 10000) {
-          console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
-          consecutive401sRef.current = 0;
-          return;
-        }
-        
-        // Only log out after multiple consecutive 401s to tolerate transient network issues
+
+      if (user) {
         if (consecutive401sRef.current >= 3) {
           console.warn('⚠️ Multiple consecutive 401s detected - session expired');
           // Clear state but NOT localStorage — preserve stored user so next login is instant
           setCurrentUserState(null);
           consecutive401sRef.current = 0;
-          // Don't clear the entire query cache - just let the user re-login
-          // This prevents data loss if the 401 was a temporary network/cookie issue
         } else {
           console.log(`🔄 Transient 401 detected (${consecutive401sRef.current}/3) - not logging out yet`);
         }
       }
-    } 
-    // If server returns authenticated user data
-    else if (meResponse?.success === true && meResponse.data) {
-      consecutive401sRef.current = 0; // Reset failure counter on successful auth
-      
-      if (!currentUser || currentUser.id !== meResponse.data.id) {
+    } else if (meResponse.success === true && meResponse.data) {
+      consecutive401sRef.current = 0;
+      if (!user || user.id !== meResponse.data.id) {
         console.log('✅ Setting authenticated user:', meResponse.data.role);
         setCurrentUser(meResponse.data);
       }
     }
-  }, [meResponse, authQueryError, currentUser, initialAuthCheckComplete, isFetching]);
+  }, [meResponse]);
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;

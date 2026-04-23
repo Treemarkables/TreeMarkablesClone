@@ -190,22 +190,41 @@ export default function StaffSchedule() {
   const { data: customersData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/customers'],
   });
-  const { data: revenueData } = useQuery<{
+  const { data: businessSettingsData } = useQuery<{
     success: boolean;
-    data: { scheduledRevenue: number; dailyTarget: number; percentComplete: number; jobCount: number; belowTarget: boolean };
+    data: { dailyRevenueTarget?: string | number | null };
   }>({
-    queryKey: ['/api/scheduling/revenue', dateStr],
-    queryFn: () => fetch(`/api/scheduling/revenue/${dateStr}`, { credentials: 'include' }).then(r => r.json()),
-    staleTime: 30_000,
-    refetchInterval: 30_000,
+    queryKey: ['/api/business-settings'],
   });
-  const revenueInfo = revenueData?.data;
 
   // dayJobs comes directly from the date-scoped API — no client-side filtering needed
   const dayJobs        = jobsData?.data ?? [];
   const allEmployees   = employeesData?.data ?? [];
   const allAssignments = assignmentsData?.data ?? [];
   const allCustomers   = customersData?.data ?? [];
+
+  // Daily revenue tracker — computed client-side from dayJobs, mirroring the
+  // dispatch board's CalendarGrid logic so the two views always agree.
+  const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
+  const revenueInfo = useMemo(() => {
+    const revenueJobs = dayJobs.filter(j => j.status !== 'completed' && j.status !== 'unsuccessful');
+    const scheduledRevenue = revenueJobs.reduce((sum, j) => {
+      const sub = parseFloat(j.subtotal || '0');
+      if (sub > 0) return sum + sub;
+      const incGst = parseFloat(j.totalIncludingGst || '0');
+      if (incGst > 0) return sum + incGst / 1.15;
+      const total = parseFloat(j.totalAmount || '0');
+      if (total > 0) return sum + total / 1.15;
+      return sum;
+    }, 0);
+    return {
+      scheduledRevenue,
+      dailyTarget: DAILY_TARGET,
+      percentComplete: DAILY_TARGET > 0 ? Math.round((scheduledRevenue / DAILY_TARGET) * 100) : 0,
+      jobCount: revenueJobs.length,
+      belowTarget: scheduledRevenue < DAILY_TARGET,
+    };
+  }, [dayJobs, DAILY_TARGET]);
 
   const customerMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -363,41 +382,39 @@ export default function StaffSchedule() {
       </div>
 
       {/* ── Revenue target tracker ── */}
-      {revenueInfo && (
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
-          <span className="text-xs text-gray-500 whitespace-nowrap">
-            {format(selectedDate, 'd MMM')} revenue:
-          </span>
-          <span
-            className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
-              revenueInfo.belowTarget
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-green-50 text-green-700 border-green-200'
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
+        <span className="text-xs text-gray-500 whitespace-nowrap">
+          {format(selectedDate, 'd MMM')} revenue:
+        </span>
+        <span
+          className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
+            revenueInfo.belowTarget
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : 'bg-green-50 text-green-700 border-green-200'
+          }`}
+        >
+          ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
+        </span>
+        <span className="text-xs text-gray-400 whitespace-nowrap">
+          {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target ${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
+        </span>
+        <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              revenueInfo.belowTarget ? 'bg-amber-400' : 'bg-green-500'
             }`}
-          >
-            ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
-          </span>
-          <span className="text-xs text-gray-400 whitespace-nowrap">
-            {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target ${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
-          </span>
-          <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                revenueInfo.belowTarget ? 'bg-amber-400' : 'bg-green-500'
-              }`}
-              style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
-            />
-          </div>
-          {!revenueInfo.belowTarget && (
-            <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
-          )}
-          {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
-            <span className="text-xs text-gray-400 whitespace-nowrap">
-              ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
-            </span>
-          )}
+            style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
+          />
         </div>
-      )}
+        {!revenueInfo.belowTarget && (
+          <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
+        )}
+        {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+          </span>
+        )}
+      </div>
 
       {/* ── Timeline grid ── */}
       <div className="flex-1 overflow-auto">
