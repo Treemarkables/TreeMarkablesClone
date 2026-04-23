@@ -14,7 +14,6 @@ const TIMELINE_END_H   = 19;  // 7 PM
 const TIMELINE_HOURS   = TIMELINE_END_H - TIMELINE_START_H;
 const STAFF_COL_W      = 148; // px — fixed left column width
 const MIN_HOUR_COL_W   = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
-const DAY_TARGET       = 3500; // NZD daily revenue target
 
 const HOUR_LABELS = Array.from({ length: TIMELINE_HOURS + 1 }, (_, i) => {
   const h = TIMELINE_START_H + i;
@@ -379,7 +378,7 @@ export default function StaffSchedule() {
             ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
           </span>
           <span className="text-xs text-gray-400 whitespace-nowrap">
-            {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target $3,500 exc. GST
+            {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target ${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
           </span>
           <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
             <div
@@ -394,7 +393,7 @@ export default function StaffSchedule() {
           )}
           {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
             <span className="text-xs text-gray-400 whitespace-nowrap">
-              ${(DAY_TARGET - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+              ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
             </span>
           )}
         </div>

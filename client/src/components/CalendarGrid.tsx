@@ -238,6 +238,12 @@ export function CalendarGrid({
   }>({
     queryKey: ["/api/customers"],
   });
+  const { data: businessSettingsData } = useQuery<{
+    success: boolean;
+    data: { dailyRevenueTarget?: string | number | null };
+  }>({
+    queryKey: ["/api/business-settings"],
+  });
 
   const employees = employeesData?.data || [];
   const allJobs = jobsData?.data || [];
@@ -621,7 +627,7 @@ export function CalendarGrid({
     return result;
   };
 
-  const DAY_TARGET = 3500;
+  const DAY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
 
   // Number of calendar days a job spans (minimum 1)
   const jobDayCount = (job: Job): number => {
@@ -873,7 +879,7 @@ export function CalendarGrid({
                 const dayJobs = getUniqueJobsForDate(currentDate);
                 return (
                   <span className="text-xs text-muted-foreground whitespace-nowrap">
-                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""} · target $3.5k exc. GST
+                    {dayJobs.length} job{dayJobs.length !== 1 ? "s" : ""} · target {formatNZD(DAY_TARGET)} exc. GST
                   </span>
                 );
               })()}
