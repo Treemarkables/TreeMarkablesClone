@@ -933,7 +933,9 @@ export function GlobalJobCard({
   // Immediately persist lineItems to the server so that any subsequent auto-save
   // invalidateQueries refetch doesn't wipe out unsaved local changes.
   const saveLineItemsNow = async (updatedItems: any[]) => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // Don't gate on the `mode` prop — it stays "create" for the whole session
+    // even after the job is created. editingJob?.id is the real signal.
+    if (!editingJob?.id) return;
     try {
       await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
         lineItems: updatedItems,
@@ -1747,7 +1749,16 @@ export function GlobalJobCard({
   const isResettingRef = useRef(false);
 
   useEffect(() => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // Gate on editingJob?.id rather than the `mode` prop. The prop stays
+    // "create" for the whole session when the modal is opened to create a
+    // new job — even after createJobMutation succeeds and the component
+    // transitions internally to an edit view with a real editingJob.id.
+    // Gating on mode meant the auto-save effect silently no-oped for every
+    // field the user touched after creation, so closing and reopening the
+    // job showed a blank form ("the data disappeared"). editingJob?.id is
+    // the authoritative signal: if we have a saved job in front of us,
+    // auto-save should be running regardless of how the modal was opened.
+    if (!editingJob?.id) return;
 
     // RC8 FIX: Capture job ID at effect-start time so the cleanup closure
     // uses the correct job ID even if editingJob has changed by cleanup time.
@@ -1937,11 +1948,15 @@ export function GlobalJobCard({
         });
         // keepalive ensures the request completes even after the component
         // unmounts or the user navigates away mid-session.
+        // credentials: "include" matches apiRequest() so session cookies reach
+        // the server — without it, this request could 401 in edge cases where
+        // browsers tighten default cookie-sending rules.
         fetch(`/api/jobs/${capturedJobId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(changedData),
           keepalive: true,
+          credentials: "include",
         }).catch(() => {}); // best-effort, silent failure
       }
     };
@@ -1991,7 +2006,10 @@ export function GlobalJobCard({
   useEffect(() => {
     return () => {
       const snap = popupFlushRef.current;
-      if (snap.mode !== "edit" || !snap.jobId) return;
+      // Same gating fix as the auto-save effect: don't check snap.mode (the
+      // prop stays "create" for the whole session even after a job is
+      // created). snap.jobId is the authoritative signal.
+      if (!snap.jobId) return;
       const pending: Record<string, any> = {};
       if (
         snap.descriptionPopupOpen &&
@@ -2028,9 +2046,37 @@ export function GlobalJobCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(pending),
         keepalive: true,
+        credentials: "include",
       }).catch(() => {});
     };
   }, [queryClient]);
+
+  // Mirror the description / internal-notes popup drafts into form state in
+  // near-real-time while the popup is open. Previously the draft only reached
+  // the form on Close/Esc/outside-click, which meant: if the user closed the
+  // whole modal with the popup still open, or the browser unmounted the
+  // component for any reason before the close handler ran, the typed text
+  // was never in form state and the auto-save system had no idea there was
+  // anything to save — the keepalive popup-flush was a fragile band-aid.
+  //
+  // With this, every keystroke in the popup flows through the normal form →
+  // watch → debounced auto-save path, plus gets covered by the auto-save
+  // unmount-flush on modal close. No new code paths for consumers.
+  useEffect(() => {
+    if (!descriptionPopupOpen) return;
+    const current = form.getValues("description") ?? "";
+    if (descriptionDraft !== current) {
+      form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
+  }, [descriptionDraft, descriptionPopupOpen, form]);
+
+  useEffect(() => {
+    if (!internalNotesPopupOpen) return;
+    const current = form.getValues("internalNotes") ?? "";
+    if (internalNotesDraft !== current) {
+      form.setValue("internalNotes", internalNotesDraft, { shouldDirty: true });
+    }
+  }, [internalNotesDraft, internalNotesPopupOpen, form]);
 
   // Immediately persist a customer change when the user explicitly picks one.
   // customerId is excluded from the debounced auto-save watcher (to prevent
@@ -2039,7 +2085,9 @@ export function GlobalJobCard({
     customerId: string,
     customerName: string,
   ) => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // Don't gate on the `mode` prop — it stays "create" for the whole session
+    // even after the job is created. editingJob?.id is the real signal.
+    if (!editingJob?.id) return;
     try {
       setIsAutoSaving(true);
       await apiRequest("PUT", `/api/jobs/${editingJob.id}`, { customerId });
