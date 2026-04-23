@@ -119,6 +119,10 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
   const logoUrl = (template.logoUrl as string | null | undefined) || "/treemarkables-logo.png";
+  const logoSize = ((template as { logoSize?: number }).logoSize) ?? 40;
+  const rawAlign = (template as { logoAlignment?: string }).logoAlignment;
+  const logoAlignment: "left" | "center" | "right" =
+    rawAlign === "center" || rawAlign === "right" ? rawAlign : "left";
 
   // Calculate totals from all sections
   const calculateTotals = () => {
@@ -248,35 +252,63 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       )}
 
       <Card className="shadow-lg">
-        {/* Header with Logo — compact, logo left, company contact info right */}
+        {/* Header with Logo — size and alignment follow the template settings */}
         <CardHeader className="p-4 sm:p-6 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-            {/* Logo */}
-            <div className="shrink-0">
+          {logoAlignment === "center" ? (
+            <div className="flex flex-col items-center gap-3 text-center">
               <img
                 src={logoUrl}
                 alt="Company Logo"
-                className="h-24 sm:h-36 w-auto object-contain"
+                className="w-auto object-contain"
+                style={{ height: `${logoSize}px`, maxHeight: 160 }}
                 data-testid="img-company-logo"
               />
+              <div className="min-w-0">
+                {template.companyAddress && (
+                  <p className="text-sm text-gray-700 break-words">{template.companyAddress}</p>
+                )}
+                {template.companyPhone && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyPhone}</p>
+                )}
+                {template.companyEmail && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyEmail}</p>
+                )}
+                {template.gstNumber && (
+                  <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
+                )}
+              </div>
             </div>
-
-            {/* Company contact info */}
-            <div className="sm:text-right min-w-0">
-              {template.companyAddress && (
-                <p className="text-sm text-gray-700 break-words">{template.companyAddress}</p>
-              )}
-              {template.companyPhone && (
-                <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyPhone}</p>
-              )}
-              {template.companyEmail && (
-                <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyEmail}</p>
-              )}
-              {template.gstNumber && (
-                <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
-              )}
+          ) : (
+            <div
+              className={`flex flex-col sm:items-center sm:justify-between gap-3 ${
+                logoAlignment === "right" ? "sm:flex-row-reverse" : "sm:flex-row"
+              }`}
+            >
+              <div className="shrink-0">
+                <img
+                  src={logoUrl}
+                  alt="Company Logo"
+                  className="w-auto object-contain"
+                  style={{ height: `${logoSize}px`, maxHeight: 160 }}
+                  data-testid="img-company-logo"
+                />
+              </div>
+              <div className={`min-w-0 ${logoAlignment === "right" ? "sm:text-left" : "sm:text-right"}`}>
+                {template.companyAddress && (
+                  <p className="text-sm text-gray-700 break-words">{template.companyAddress}</p>
+                )}
+                {template.companyPhone && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyPhone}</p>
+                )}
+                {template.companyEmail && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyEmail}</p>
+                )}
+                {template.gstNumber && (
+                  <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </CardHeader>
         
         <CardContent className="p-0">

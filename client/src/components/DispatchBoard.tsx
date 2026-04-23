@@ -2205,6 +2205,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const scheduledJobs = todaysJobs.filter(
       (job) => job.status === "scheduled",
     ).length;
+    const unconfirmedCount = todaysJobs.filter(
+      (job) =>
+        (job.status === "scheduled" || job.status === "work_order") &&
+        !job.customerConfirmed,
+    ).length;
 
     return (
       <Card data-testid="dispatch-summary-card">
@@ -2404,9 +2409,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       style={{ pointerEvents: "auto" }}
                     >
                       <CardHeader className="flex-shrink-0 border-b pb-3">
-                        <CardTitle className="text-base">
-                          {filterMeta[jobFilter]?.title ?? "Active Jobs"}
-                        </CardTitle>
+                        <div className="flex items-center justify-between gap-2">
+                          <CardTitle className="text-base">
+                            {filterMeta[jobFilter]?.title ?? "Active Jobs"}
+                          </CardTitle>
+                          {(jobFilter === "scheduled" ||
+                            jobFilter === "work_order" ||
+                            jobFilter === "all") &&
+                            unconfirmedCount > 0 && (
+                              <Badge
+                                variant="outline"
+                                className="border-dashed text-amber-700 text-xs"
+                                data-testid="badge-unconfirmed-count"
+                              >
+                                {unconfirmedCount} awaiting confirmation
+                              </Badge>
+                            )}
+                        </div>
 
                         {/* Search Input - Desktop */}
                         <div className="mt-3 relative">

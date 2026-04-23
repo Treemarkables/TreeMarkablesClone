@@ -28,6 +28,7 @@ import {
   Grid3x3,
   List,
   MessageSquare,
+  Check,
 } from "lucide-react";
 import {
   format,
@@ -337,6 +338,20 @@ export default function Calendar() {
         </Button>
       </div>
 
+      {/* Legend: explains confirmed vs awaiting-confirmation styling */}
+      <div className="flex items-center gap-4 px-3 sm:px-4 py-1.5 border-b text-[11px] text-muted-foreground">
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded bg-blue-500 text-white">
+            <Check className="h-2.5 w-2.5" />
+          </span>
+          <span>Customer confirmed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block h-3.5 w-3.5 rounded bg-blue-500 border border-dashed border-white/70 opacity-70" />
+          <span>Awaiting confirmation</span>
+        </div>
+      </div>
+
       <div className="flex flex-1 overflow-hidden">
         {/* Calendar Grid */}
         <div className="flex-1 overflow-auto">
@@ -402,26 +417,44 @@ export default function Calendar() {
 
                         {/* Appointment indicators */}
                         <div className="flex-1 space-y-0.5 overflow-hidden">
-                          {dayAppointments.slice(0, 3).map((appointment) => (
-                            <div
-                              key={appointment.id}
-                              className={`text-[10px] sm:text-xs p-1 rounded ${getStatusColor(
-                                appointment.status,
-                              )} text-white`}
-                              data-testid={`appointment-indicator-${appointment.id}`}
-                            >
-                              <div className="font-semibold truncate">
-                                {appointment.customer?.name ||
-                                  appointment.title ||
-                                  "Untitled"}
-                              </div>
-                              {appointment.address && (
-                                <div className="text-[9px] sm:text-[10px] truncate opacity-90">
-                                  {appointment.address}
+                          {dayAppointments.slice(0, 3).map((appointment) => {
+                            const awaitingConfirm =
+                              (appointment.status === "scheduled" ||
+                                appointment.status === "work_order") &&
+                              !appointment.customerConfirmed;
+                            return (
+                              <div
+                                key={appointment.id}
+                                className={`text-[10px] sm:text-xs p-1 rounded ${getStatusColor(
+                                  appointment.status,
+                                )} text-white ${
+                                  awaitingConfirm
+                                    ? "border border-dashed border-white/70 opacity-70"
+                                    : ""
+                                }`}
+                                data-testid={`appointment-indicator-${appointment.id}`}
+                              >
+                                <div className="flex items-center gap-1">
+                                  <div className="font-semibold truncate flex-1">
+                                    {appointment.customer?.name ||
+                                      appointment.title ||
+                                      "Untitled"}
+                                  </div>
+                                  {appointment.customerConfirmed && (
+                                    <Check
+                                      className="h-3 w-3 flex-shrink-0"
+                                      data-testid={`icon-confirmed-${appointment.id}`}
+                                    />
+                                  )}
                                 </div>
-                              )}
-                            </div>
-                          ))}
+                                {appointment.address && (
+                                  <div className="text-[9px] sm:text-[10px] truncate opacity-90">
+                                    {appointment.address}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                           {dayAppointments.length > 3 && (
                             <div className="text-[10px] text-muted-foreground text-center">
                               +{dayAppointments.length - 3} more
@@ -467,10 +500,19 @@ export default function Calendar() {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {selectedDateAppointments.map((appointment) => (
+                      {selectedDateAppointments.map((appointment) => {
+                        const awaitingConfirm =
+                          (appointment.status === "scheduled" ||
+                            appointment.status === "work_order") &&
+                          !appointment.customerConfirmed;
+                        return (
                         <Card
                           key={appointment.id}
-                          className="hover-elevate cursor-pointer"
+                          className={`hover-elevate cursor-pointer ${
+                            awaitingConfirm
+                              ? "border-dashed opacity-80"
+                              : ""
+                          }`}
                           onClick={() => handleEditJob(appointment)}
                           data-testid={`appointment-card-${appointment.id}`}
                         >
@@ -533,9 +575,28 @@ export default function Calendar() {
                               </div>
                             )}
                             <div className="pt-2 flex items-center justify-between gap-2">
-                              <Badge variant="outline" className="capitalize">
-                                {appointment.status.replace("_", " ")}
-                              </Badge>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <Badge variant="outline" className="capitalize">
+                                  {appointment.status.replace("_", " ")}
+                                </Badge>
+                                {appointment.customerConfirmed ? (
+                                  <Badge
+                                    className="bg-green-100 text-green-700 border-0 text-xs"
+                                    data-testid={`badge-confirmed-${appointment.id}`}
+                                  >
+                                    <Check className="h-3 w-3 mr-1" />
+                                    Confirmed
+                                  </Badge>
+                                ) : awaitingConfirm ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-dashed text-xs text-muted-foreground"
+                                    data-testid={`badge-awaiting-${appointment.id}`}
+                                  >
+                                    Awaiting confirmation
+                                  </Badge>
+                                ) : null}
+                              </div>
                               {appointment.customer?.phone && (
                                 <Button
                                   variant="outline"
@@ -550,7 +611,8 @@ export default function Calendar() {
                             </div>
                           </CardContent>
                         </Card>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </>
