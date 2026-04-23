@@ -2344,6 +2344,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
+  const todaysJobs = getTodaysJobs();
+  const unconfirmedCount = todaysJobs.filter(
+    (job) =>
+      (job.status === "scheduled" || job.status === "work_order") &&
+      !job.customerConfirmed,
+  ).length;
+
   return (
     <>
       <div className="flex flex-col flex-1 min-h-0">
