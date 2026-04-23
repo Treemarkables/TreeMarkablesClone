@@ -3225,8 +3225,15 @@ The Treemarkables Team`;
             editingJob.billingContactEmail ||
             editingJobCustomer?.email ||
             "";
+          // schedulingData.date is a YYYY-MM-DD NZ calendar date from the
+          // date input. Parse the parts directly so format() prints that
+          // same day — appending "T...Z" treats it as UTC and rolls forward
+          // a day once rendered in NZ time.
+          const [dateY, dateM, dateD] = schedulingData.date
+            .split("-")
+            .map(Number);
           const dateDisplay = format(
-            new Date(schedulingData.date + "T12:00:00Z"),
+            new Date(dateY, dateM - 1, dateD),
             "EEEE d MMMM yyyy",
           );
           const timeDisplay = formatTime12Hour(schedulingData.startTime);
@@ -3626,6 +3633,16 @@ The Treemarkables Team`;
       isSavingRef.current = false;
       setIsSaving(false);
     }
+  };
+
+  // Picking a customer (new or existing) on a fresh job card commits the card
+  // immediately and transitions to split-screen edit mode — no Save click needed.
+  // Deferred so form.setValue calls from the onSelect handler flush first.
+  const autoSaveOnCustomerPick = () => {
+    if (mode !== "create") return;
+    if (createdJobId) return;
+    if (isSavingRef.current || isSaving) return;
+    setTimeout(() => handleSave(), 0);
   };
 
   // Callback for ProposalBuilder to request job save (returns job ID)
@@ -5449,6 +5466,7 @@ The Treemarkables Team`;
                                                   customerSearchValue,
                                                 );
                                                 setCustomerSearchOpen(false);
+                                                autoSaveOnCustomerPick();
                                               }}
                                               className="text-blue-600 cursor-pointer"
                                             >
@@ -5614,6 +5632,7 @@ The Treemarkables Team`;
                                                       customer.id,
                                                       customer.name,
                                                     );
+                                                    autoSaveOnCustomerPick();
                                                   }}
                                                 >
                                                   <Check
@@ -5784,6 +5803,7 @@ The Treemarkables Team`;
                                                   customer.id,
                                                   customer.name,
                                                 );
+                                                autoSaveOnCustomerPick();
                                               }}
                                             >
                                               <Check
