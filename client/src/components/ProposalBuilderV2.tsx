@@ -1621,9 +1621,17 @@ export function ProposalBuilderV2({
   const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSnapshot = useRef<string | null>(null);
 
+  // Refs kept fresh for the unmount-flush below — avoids stale closure.
+  const latestPayloadRef = useRef<ReturnType<typeof buildPayload> | null>(null);
+  const latestSnapshotRef = useRef<string | null>(null);
+  const latestDraftIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!isOpen || blocks.length === 0) return;
     const snap = JSON.stringify({ blocks, proposalTitle });
+    latestSnapshotRef.current = snap;
+    latestPayloadRef.current = buildPayload();
+    latestDraftIdRef.current = draftId ?? null;
     if (snap === lastSnapshot.current) return;
     setAutoSaveStatus("unsaved");
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
@@ -1640,7 +1648,38 @@ export function ProposalBuilderV2({
     }, 2000);
     return () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blocks, proposalTitle, isOpen]);
+  }, [blocks, proposalTitle, isOpen, draftId]);
+
+  // Flush any pending auto-save when the builder closes or unmounts.
+  // The 2s debounce above gets cancelled silently on unmount — if the user
+  // added a line item and closed within that window, the save never fired
+  // and the line item was lost. A keepalive fetch here makes the request
+  // survive the unmount. Mirrors the pattern in GlobalJobCard's auto-save.
+  useEffect(() => {
+    return () => {
+      const snap = latestSnapshotRef.current;
+      const payload = latestPayloadRef.current;
+      if (!snap || !payload || snap === lastSnapshot.current) return;
+      const hasContent =
+        payload.title ||
+        payload.sections.some(
+          (s: { description?: string; photos: unknown[]; lineItems: unknown[] }) =>
+            s.description || s.photos.length > 0 || s.lineItems.length > 0,
+        );
+      if (!hasContent) return;
+      const pendingDraftId = latestDraftIdRef.current;
+      const url = pendingDraftId
+        ? `/api/proposals/${pendingDraftId}`
+        : "/api/proposals";
+      const method = pendingDraftId ? "PUT" : "POST";
+      fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }).catch(() => {}); // best-effort; the component is gone
+    };
+  }, []);
 
   // ── Email / SMS ────────────────────────────────────────────────────────────
 
