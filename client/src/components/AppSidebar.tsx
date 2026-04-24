@@ -69,7 +69,7 @@ function SidebarNavContent({
 }) {
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const jhaActive = location === "/jha-assessment" || location === "/jha-history";
-  const financeActive = ["/invoices", "/templates", "/settings/invoice-builder", "/equipment", "/time-tracking", "/unlinked-calls", "/integrations", "/reconciliation"].includes(location);
+  const financeActive = ["/invoices", "/templates", "/settings/invoice-builder", "/settings/proposal-builder", "/equipment", "/time-tracking", "/unlinked-calls", "/integrations", "/reconciliation"].includes(location);
   const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics", "/profitability-calculator"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
@@ -297,6 +297,11 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/settings/invoice-builder"}>
                             <Link href="/settings/invoice-builder" onClick={handleLinkClick} data-testid="link-invoice-builder"><span>Invoice Builder</span></Link>
+                          </SidebarMenuSubButton>
+                        </SidebarMenuSubItem>
+                        <SidebarMenuSubItem>
+                          <SidebarMenuSubButton asChild isActive={location === "/settings/proposal-builder"}>
+                            <Link href="/settings/proposal-builder" onClick={handleLinkClick} data-testid="link-proposal-builder"><span>Proposal Builder</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
