@@ -2,7 +2,7 @@
  * Shared document block renderer.
  * Single source of truth for rendering document blocks —
  * used by both InvoiceTemplate.tsx (final output) and
- * InvoiceBuilderPage.tsx (live WYSIWYG canvas).
+ * DocumentBuilderPage.tsx (live WYSIWYG canvas).
  */
 import { format, addDays } from 'date-fns';
 import type { DocumentBlock, DocumentTemplate } from '@shared/schema';

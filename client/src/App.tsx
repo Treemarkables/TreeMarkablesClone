@@ -69,7 +69,7 @@ import MulchDrops from "@/pages/MulchDrops";
 import EquipmentRegister from "@/pages/EquipmentRegister";
 import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
-import InvoiceBuilderPage from "@/pages/InvoiceBuilderPage";
+import DocumentBuilderPage from "@/pages/DocumentBuilderPage";
 import SettingsCompany from "@/pages/SettingsCompany";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
@@ -1150,11 +1150,19 @@ function Router() {
       <Route path="/settings/invoice-builder">
         <ProtectedRoute>
           <SidebarLayout>
-            <InvoiceBuilderPage />
+            <DocumentBuilderPage documentKind="invoice" />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
-      
+
+      <Route path="/settings/proposal-builder">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <DocumentBuilderPage documentKind="proposal" />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/developer">
         <SidebarLayout>
           <Developer />
