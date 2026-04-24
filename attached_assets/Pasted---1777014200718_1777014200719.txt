@@ -1,0 +1,64 @@
+---                                                                                                                                            
+  Hey — another Claude Code verification round. This one's a dead-branch PR so the testing shape is different from last time. Let me explain.
+                                                                                                                                                 
+  What landed: PR 3c — commit 0ab6a177 — "Wire proposal viewer/accept to shared renderer".
+                                                                                                                                                 
+  - New file: client/src/components/BlockRenderedProposal.tsx                                                                                    
+  - Modified: client/src/pages/ProposalViewer.tsx, client/src/pages/ProposalAccept.tsx                                                           
+                                                                                                                                                 
+  Both pages now branch: if (proposal.blockConfig is a non-empty array) → render via DocumentBlockRenderer; else → render via ProposalTemplate   
+  (legacy).                                                                                                                                      
+                                                                                                                                                 
+  Important: the proposals table doesn't have a blockConfig column. No proposal in the DB has this field set. So the new branch is dead code in  
+  production today — every proposal still renders via the legacy path. This is intentional. PR 4 (the migration) will populate the field later.
+                                                                                                                                                 
+  Task 1 — Regression check (the critical one)                                                                                                   
+   
+  Because we've added conditional logic around the existing ProposalTemplate call, the most important test is that nothing broke in the legacy   
+  path.                                                  
+                                                                                                                                                 
+  - Open an existing proposal in ProposalViewer (internal /proposals/:id route). Should render identically to before — same layout, same         
+  sections, same line items, same choice/optional behaviour, same Accept button in the sticky header.
+  - Open a proposal via the public ProposalAccept route (the customer-facing one — usually /proposal/:id/accept or similar). Both the viewing    
+  state and the success state (after accepting) should look identical to before.                                                                 
+  - Accept a test proposal end-to-end. Confirm the Accept button still works, selectedChoices and selectedOptionalItems still post correctly, and
+   the success state renders.                                                                                                                    
+                                                         
+  If any of the above looks different from main branch behaviour, the branch logic has a bug — flag which screen and what changed.               
+                                                         
+  Task 2 — Static correctness                                                                                                                    
+                                                         
+  - Run npm run check (tsc). Should report the same baseline error count (983) as before PR 3c. If it's higher, PR 3c introduced new type errors 
+  that need a fix.                                       
+                                                                                                                                                 
+  Task 3 — (optional) Activate the new branch to confirm it renders                                                                              
+   
+  This is optional and only if you want to see the new block-based proposal render visually. Since proposals.blockConfig doesn't exist yet,      
+  there's no in-DB way to flip this. Easiest temporary test:
+                                                                                                                                                 
+  - In client/src/pages/ProposalViewer.tsx, temporarily hardcode the branch check to use the template's blockConfig as a stand-in. Replace this: 
+  const blocks: DocumentBlock[] | null =
+    Array.isArray(proposal.blockConfig) && proposal.blockConfig.length > 0                                                                       
+      ? (proposal.blockConfig as DocumentBlock[]) : null;                                                                                        
+  - with:                                                                                                                                        
+  const blocks: DocumentBlock[] | null =                                                                                                         
+    Array.isArray(template?.blockConfig) && template.blockConfig.length > 0
+      ? (template.blockConfig as DocumentBlock[]) : null;                                                                                        
+  - Open any proposal. It should render via BlockRenderedProposal instead of ProposalTemplate — you'll see the new block-based layout (header /
+  companyInfo / proposalMeta / billTo / jobDescription / photoGallery / lineItemsWithChoices / totals / customText / acceptance / footer).       
+  - If the proposal is accepted, the acceptance block should show the green "ACCEPTED" stamp. If not, it shows a visual placeholder button (not
+  interactive — sticky header is still the real Accept button).                                                                                  
+  - Revert the temporary change after testing. Don't commit it. Claude Code will handle the real activation in PR 4.
+                                                                                                                                                 
+  Do not:                                                                                                                                        
+  - Add a blockConfig column to the proposals table — that's PR 4's job, and it requires explicit migration approval.                            
+  - Run npm run db:push or any migration.                                                                                                        
+  - Retire any of the old proposal builders — they stay until PR 4 cut-over.
+  - Start PR 4 work (migration script). Claude Code owns that.                                                                                   
+                                                                                                                                                 
+  What to report back:                                                                                                                           
+  - Task 1: any regression in ProposalViewer or ProposalAccept? Screenshot helpful if anything looks off.                                        
+  - Task 2: tsc error count, any new errors pointing at the 3 PR 3c files?                                                                       
+  - Task 3 (if you did it): did the block-rendered view look sensible? Any blocks that crashed or rendered weird?                                
+                                                                                                                                                 
+  ---                                                                 
