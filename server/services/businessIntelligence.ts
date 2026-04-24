@@ -9,6 +9,18 @@ import {
   type Communication, type Lead, type Employee
 } from '@shared/schema';
 
+/**
+ * Ex-GST amount for a job/proposal row. Internal metrics show ex-GST per
+ * business rule — customer-facing docs keep inc-GST. Prefers the stored
+ * `subtotal` (written ex-GST when job totals recompute); falls back to
+ * `totalAmount / 1.15` for legacy rows where subtotal is 0 or null.
+ */
+function exGst(row: { subtotal?: string | null; totalAmount?: string | null }): number {
+  const sub = parseFloat((row.subtotal ?? '0').toString());
+  if (sub > 0) return sub;
+  return parseFloat((row.totalAmount ?? '0').toString()) / 1.15;
+}
+
 export interface BusinessIntelligenceData {
   // Executive KPIs
   totalRevenue: number;
@@ -172,7 +184,7 @@ class BusinessIntelligenceService {
     // Calculate total revenue
     const totalRevenue = filteredJobs
       .filter(job => job.status === 'completed' && job.totalAmount)
-      .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      .reduce((sum, job) => sum + exGst(job), 0);
     
     // Calculate monthly growth
     const currentMonthRevenue = filteredJobs
@@ -181,7 +193,7 @@ class BusinessIntelligenceService {
         job.completedDate && 
         new Date(job.completedDate) >= currentMonth
       )
-      .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      .reduce((sum, job) => sum + exGst(job), 0);
     
     const lastMonthRevenue = filteredJobs
       .filter(job => 
@@ -190,7 +202,7 @@ class BusinessIntelligenceService {
         new Date(job.completedDate) >= lastMonth &&
         new Date(job.completedDate) < currentMonth
       )
-      .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      .reduce((sum, job) => sum + exGst(job), 0);
     
     const monthlyGrowth = lastMonthRevenue > 0 
       ? ((currentMonthRevenue - lastMonthRevenue) / lastMonthRevenue) * 100 
@@ -204,7 +216,7 @@ class BusinessIntelligenceService {
     // Calculate average job value
     const completedJobs = filteredJobs.filter(job => job.status === 'completed' && job.totalAmount);
     const averageJobValue = completedJobs.length > 0
-      ? completedJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0) / completedJobs.length
+      ? completedJobs.reduce((sum, job) => sum + exGst(job), 0) / completedJobs.length
       : 0;
     
     // Calculate active projects
@@ -247,13 +259,13 @@ class BusinessIntelligenceService {
     const completedJobs = filteredJobs.filter(job => job.status === 'completed' && job.totalAmount);
     
     // Total revenue
-    const totalRevenue = completedJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+    const totalRevenue = completedJobs.reduce((sum, job) => sum + exGst(job), 0);
     
     // Monthly revenue trends
     const monthlyRevenue = this.groupByMonth(completedJobs, 'completedDate')
       .map(group => ({
         month: group.period,
-        revenue: group.jobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0),
+        revenue: group.jobs.reduce((sum, job) => sum + exGst(job), 0),
         jobs: group.jobs.length
       }));
     
@@ -261,7 +273,7 @@ class BusinessIntelligenceService {
     const quarterlyRevenue = this.groupByQuarter(completedJobs, 'completedDate')
       .map(group => ({
         quarter: group.period,
-        revenue: group.jobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0),
+        revenue: group.jobs.reduce((sum, job) => sum + exGst(job), 0),
         jobs: group.jobs.length
       }));
     
@@ -286,7 +298,7 @@ class BusinessIntelligenceService {
         service = 'Consultation/Assessment';
       }
       
-      serviceRevenue.set(service, (serviceRevenue.get(service) || 0) + parseFloat(job.totalAmount || '0'));
+      serviceRevenue.set(service, (serviceRevenue.get(service) || 0) + exGst(job));
     });
     
     const revenueByService = Array.from(serviceRevenue.entries())
@@ -303,7 +315,7 @@ class BusinessIntelligenceService {
       if (job.customerId) {
         const customer = customers.find(c => c.id === job.customerId);
         const current = customerRevenue.get(job.customerId) || { revenue: 0, jobs: 0, name: customer?.name || 'Unknown' };
-        current.revenue += parseFloat(job.totalAmount || '0');
+        current.revenue += exGst(job);
         current.jobs += 1;
         customerRevenue.set(job.customerId, current);
       }
@@ -326,7 +338,7 @@ class BusinessIntelligenceService {
     
     const lastTwelveMonths = completedJobs
       .filter(job => job.completedDate && new Date(job.completedDate) >= twelveMonthsAgo)
-      .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      .reduce((sum, job) => sum + exGst(job), 0);
     
     const previousTwelveMonths = completedJobs
       .filter(job => 
@@ -334,7 +346,7 @@ class BusinessIntelligenceService {
         new Date(job.completedDate) >= twentyFourMonthsAgo &&
         new Date(job.completedDate) < twelveMonthsAgo
       )
-      .reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      .reduce((sum, job) => sum + exGst(job), 0);
     
     const revenueGrowthRate = previousTwelveMonths > 0 
       ? ((lastTwelveMonths - previousTwelveMonths) / previousTwelveMonths) * 100 
@@ -349,7 +361,7 @@ class BusinessIntelligenceService {
       revenueByCustomerType: [], // Would need customer type categorization
       topCustomers,
       averageJobValue: completedJobs.length > 0 ? totalRevenue / completedJobs.length : 0,
-      medianJobValue: this.calculateMedian(completedJobs.map(job => parseFloat(job.totalAmount || '0'))),
+      medianJobValue: this.calculateMedian(completedJobs.map(job => exGst(job))),
       revenueGrowthRate,
       seasonalTrends: [] // Would need historical data
     };
@@ -431,7 +443,7 @@ class BusinessIntelligenceService {
     // Customer lifetime value calculation
     const customerLifetimeValues = customers.map(customer => {
       const customerJobs = filteredJobs.filter(job => job.customerId === customer.id && job.status === 'completed');
-      const lifetimeValue = customerJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
+      const lifetimeValue = customerJobs.reduce((sum, job) => sum + exGst(job), 0);
       return { customerId: customer.id, lifetimeValue, jobCount: customerJobs.length };
     });
     

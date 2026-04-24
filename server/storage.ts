@@ -2645,10 +2645,12 @@ class DatabaseStorage implements IStorage {
     // Build a set of completed job IDs for the period
     const completedJobIds = new Set(completedJobsForRevenue.map(job => job.id));
     
-    // Sum invoice amounts directly from the period invoices (already date-filtered above)
+    // Sum invoice amounts directly from the period invoices (already date-filtered above).
+    // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST (NZ 15%),
+    // so divide to strip the tax. Customer-facing invoice renders keep inc-GST.
     let totalRevenue = 0;
     for (const inv of periodInvoices) {
-      totalRevenue += parseFloat(inv.amount?.toString() || '0');
+      totalRevenue += parseFloat(inv.amount?.toString() || '0') / 1.15;
     }
     const completedJobs = filteredJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
@@ -2762,9 +2764,11 @@ class DatabaseStorage implements IStorage {
     });
 
     // Step 2: build revenue and job-id maps from those invoices.
-    const jobInvoiceMap = new Map<string, number>(); // jobId → total invoiced amount
+    // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST (NZ 15%),
+    // so divide to strip the tax. Margin/profit calculations below all flow from this map.
+    const jobInvoiceMap = new Map<string, number>(); // jobId → total invoiced amount (ex-GST)
     for (const inv of activeInvoices) {
-      const amount = parseFloat(inv.amount?.toString() || '0');
+      const amount = parseFloat(inv.amount?.toString() || '0') / 1.15;
       jobInvoiceMap.set(inv.jobId!, (jobInvoiceMap.get(inv.jobId!) || 0) + amount);
     }
 
