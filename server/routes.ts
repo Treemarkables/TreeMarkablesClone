@@ -17917,7 +17917,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       res.json({
         success: true,
         data: {
-          proposal: { ...proposal, sections: sectionsWithPhotosAndLineItems },
+          proposal: {
+            ...proposal,
+            blockConfig: (proposal as any).blockConfig ?? schema.DEFAULT_PROPOSAL_BLOCKS,
+            sections: sectionsWithPhotosAndLineItems,
+          },
           customer,
           job,
           template: finalTemplate
@@ -18076,7 +18080,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       
       res.json({
         success: true,
-        data: { ...proposal, sections: sectionsWithPhotosAndLineItems }
+        data: {
+          ...proposal,
+          blockConfig: (proposal as any).blockConfig ?? schema.DEFAULT_PROPOSAL_BLOCKS,
+          sections: sectionsWithPhotosAndLineItems,
+        },
       });
     } catch (error) {
       console.error('Error fetching proposal:', error);
