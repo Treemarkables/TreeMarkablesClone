@@ -6018,16 +6018,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const subject = `Re: Booking J-${job.jobNumber}`;
 
-      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft a very short, warm acknowledgement.
+      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft an extremely brief acknowledgement — essentially one short casual line.
 
-Rules:
-- Plain text only, no HTML, no markdown, no emoji.
-- Very short: 1 to 2 short sentences maximum. Aim for casual brevity like "Awesome, see you then." or "Great, thanks — see you then."
-- NZ English. Friendly and casual, not formal or over-the-top. Do not mention the scheduled date, job number, or job description.
-- Do NOT include a subject line, greeting line label, signature block, or contact details — those are added separately.
+Strict rules:
+- Plain text only. No HTML, no markdown, no emoji.
+- Exactly ONE short acknowledgement line between the greeting and sign-off. No second sentence. No extra detail.
+- That one line must be a casual Kiwi acknowledgement in the same family as "Awesome, see you then." — pick one of: "Awesome, see you then.", "Sweet, see you then.", "Perfect, see you then.", "Beauty, see you then.", "Cheers, see you then." Do not deviate from this pattern and do not invent longer variations.
+- NEVER mention the scheduled date, job number, address, job description, or any logistics. The customer already has those.
+- NO "thanks for confirming", "looking forward to it", "our team will", or any added context — just the short acknowledgement.
+- Do NOT include a subject line, greeting label, signature block, phone number, or contact details.
 - Start with "Hi {firstName}," on its own line.
 - End with "Kind regards," on its own line followed by "Jules" on the next line.
-- Example of the desired length and tone:
+
+Your entire output must look exactly like this shape — four lines, no more:
 Hi Trev,
 Awesome, see you then.
 Kind regards,
