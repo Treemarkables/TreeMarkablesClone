@@ -5,8 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
+import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import type { DocumentBlock, DocumentTemplate } from "@shared/schema";
 
 interface ProposalViewerProps {}
 
@@ -382,20 +384,41 @@ export default function ProposalViewer({}: ProposalViewerProps) {
         )}
 
         <div className="px-2 sm:px-4">
-          <ProposalTemplate
-            template={template}
-            proposal={proposal}
-            customer={customer}
-            job={job}
-            sections={proposal.sections || []}
-            showActions={false}
-            className="bg-white"
-            allowChoiceSelection={!isAccepted && !isExpired}
-            selectedChoices={selectedChoices}
-            onChoiceSelect={handleChoiceSelect}
-            selectedOptionalItems={selectedOptionalItems}
-            onOptionalToggle={!isAccepted && !isExpired ? handleOptionalToggle : undefined}
-          />
+          {(() => {
+            const blocks: DocumentBlock[] | null =
+              Array.isArray(proposal.blockConfig) && proposal.blockConfig.length > 0
+                ? (proposal.blockConfig as DocumentBlock[])
+                : null;
+            if (blocks) {
+              return (
+                <BlockRenderedProposal
+                  proposal={proposal}
+                  customer={customer}
+                  job={job}
+                  template={template as unknown as DocumentTemplate}
+                  blocks={blocks}
+                  selectedChoices={selectedChoices}
+                  selectedOptionalItems={selectedOptionalItems}
+                />
+              );
+            }
+            return (
+              <ProposalTemplate
+                template={template}
+                proposal={proposal}
+                customer={customer}
+                job={job}
+                sections={proposal.sections || []}
+                showActions={false}
+                className="bg-white"
+                allowChoiceSelection={!isAccepted && !isExpired}
+                selectedChoices={selectedChoices}
+                onChoiceSelect={handleChoiceSelect}
+                selectedOptionalItems={selectedOptionalItems}
+                onOptionalToggle={!isAccepted && !isExpired ? handleOptionalToggle : undefined}
+              />
+            );
+          })()}
         </div>
       </div>
     </div>
