@@ -1228,7 +1228,7 @@ export default function MetricsDashboard() {
                   drilldownKey?: "revenue" | "jobs" | "winrate" | "quotes";
                 }[] = [
                   {
-                    label: "Revenue",
+                    label: "Revenue (exc. GST)",
                     value: formatCurrency(appRevenue).replace("NZ$", "$"),
                     sub: `${revenueStats?.jobsWithInvoices || 0} invoiced jobs`,
                     drilldownKey: "revenue",
@@ -3478,7 +3478,7 @@ export default function MetricsDashboard() {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
                 <div className="text-xs text-green-600 dark:text-green-500 mb-1">
-                  Total Revenue
+                  Total Revenue (exc. GST)
                 </div>
                 <div className="text-xl font-bold text-green-700 dark:text-green-400">
                   {formatCurrency(revenueStats?.totalRevenue || 0)}

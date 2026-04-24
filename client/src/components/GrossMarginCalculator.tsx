@@ -295,10 +295,12 @@ export function GrossMarginCalculator({
   const getJobPrice = (): number => {
     if (!job) return 0;
 
-    // First check invoices - the most authoritative source of revenue (ex-GST amount)
+    // First check invoices - the most authoritative source of revenue.
+    // invoice.amount is stored inc-GST (NZ 15%), so divide to get ex-GST revenue
+    // for internal margin calculations (consistent with getDashboardStats / getRevenueStats).
     if (jobInvoices.length > 0) {
       const totalInvoiced = jobInvoices.reduce((sum: number, inv: any) => {
-        return sum + (Number(inv.amount) || 0);
+        return sum + (Number(inv.amount) || 0) / 1.15;
       }, 0);
       if (totalInvoiced > 0) {
         return totalInvoiced;
@@ -562,7 +564,7 @@ export function GrossMarginCalculator({
               </Card>
             ))}
             <div className="text-right pt-2 border-t">
-              <div className="text-sm text-gray-600">Total Revenue</div>
+              <div className="text-sm text-gray-600">Total Revenue (exc. GST)</div>
               <div className="text-lg font-bold text-green-700">
                 ${jobLineItemsTotal.toFixed(2)}
               </div>
@@ -591,7 +593,7 @@ export function GrossMarginCalculator({
           <h3 className="font-semibold mb-3">Cost Breakdown</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between font-semibold text-green-700 border-b pb-2 mb-2">
-              <span>Job Revenue:</span>
+              <span>Job Revenue (exc. GST):</span>
               <span>${totalAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">
