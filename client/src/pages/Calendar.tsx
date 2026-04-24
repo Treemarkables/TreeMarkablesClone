@@ -29,6 +29,7 @@ import {
   List,
   MessageSquare,
   Check,
+  Reply,
 } from "lucide-react";
 import {
   format,
@@ -58,6 +59,7 @@ type ViewMode = "month" | "week";
 
 interface JobWithCustomer extends Job {
   customer?: Customer;
+  confirmationReplySentAt?: string | Date | null;
 }
 
 export default function Calendar() {
@@ -72,7 +74,7 @@ export default function Calendar() {
   const { toast } = useToast();
 
   // Fetch jobs/appointments
-  const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
+  const { data: jobsResponse, isLoading } = useQuery<ApiResponse<JobWithCustomer>>({
     queryKey: ["/api/jobs?limit=10000&offset=0"],
   });
 
@@ -339,12 +341,18 @@ export default function Calendar() {
       </div>
 
       {/* Legend: explains confirmed vs awaiting-confirmation styling */}
-      <div className="flex items-center gap-4 px-3 sm:px-4 py-1.5 border-b text-[11px] text-muted-foreground">
+      <div className="flex items-center gap-4 px-3 sm:px-4 py-1.5 border-b text-[11px] text-muted-foreground flex-wrap">
         <div className="flex items-center gap-1.5">
           <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded bg-blue-500 text-white">
             <Check className="h-2.5 w-2.5" />
           </span>
           <span>Customer confirmed</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex items-center justify-center h-3.5 w-3.5 rounded bg-blue-500 text-white">
+            <Reply className="h-2.5 w-2.5" />
+          </span>
+          <span>Reply sent</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="inline-block h-3.5 w-3.5 rounded bg-blue-500 border border-dashed border-white/70 opacity-70" />
@@ -445,6 +453,13 @@ export default function Calendar() {
                                       className="h-4 w-4 flex-shrink-0"
                                       strokeWidth={3}
                                       data-testid={`icon-confirmed-${appointment.id}`}
+                                    />
+                                  )}
+                                  {appointment.confirmationReplySentAt && (
+                                    <Reply
+                                      className="h-3.5 w-3.5 flex-shrink-0"
+                                      strokeWidth={3}
+                                      data-testid={`icon-reply-sent-${appointment.id}`}
                                     />
                                   )}
                                 </div>
@@ -597,6 +612,15 @@ export default function Calendar() {
                                     Awaiting confirmation
                                   </Badge>
                                 ) : null}
+                                {appointment.confirmationReplySentAt && (
+                                  <Badge
+                                    className="bg-blue-100 text-blue-700 border-0 text-xs"
+                                    data-testid={`badge-reply-sent-${appointment.id}`}
+                                  >
+                                    <Reply className="h-3 w-3 mr-1" />
+                                    Reply sent
+                                  </Badge>
+                                )}
                               </div>
                               {appointment.customer?.phone && (
                                 <Button

@@ -1407,20 +1407,22 @@ export function JobDiarySection({
 
   const sendEmailMutation = useMutation({
     mutationFn: async (data: EmailFormData) => {
-      // This would integrate with your existing email service
       return apiRequest("POST", "/api/communications/email", {
         jobId,
         customerId,
         to: data.to,
         subject: data.subject,
         message: data.message,
+        ...(confirmationReplyEntryId && {
+          tags: ["confirmation-reply-sent"],
+        }),
       });
     },
-    onSuccess: (_res, variables) => {
+    onSuccess: (_res, _variables) => {
       // If this send originated from a customer-confirmation suggested reply,
-      // mark that entry as acknowledged so the draft section hides, and write
-      // a 'confirmation-reply-sent'-tagged diary entry so the hoisted
-      // confirmation-reply card hides on next render.
+      // mark that entry as acknowledged so the draft section hides. The
+      // server-created diary entry (tagged 'confirmation-reply-sent') is
+      // what hides the hoisted confirmation-reply card on next render.
       if (confirmationReplyEntryId) {
         // Only call per-entry acknowledge for real diary entries — the
         // hoisted card uses a sentinel id that doesn't exist on the server.
@@ -1433,16 +1435,6 @@ export function JobDiarySection({
             existingMetadata: entry?.metadata,
           });
         }
-        apiRequest("POST", `/api/jobs/${jobId}/diary`, {
-          entryType: "email",
-          title: "Confirmation reply sent",
-          description: `Confirmation reply sent to ${variables.to}.`,
-          content: variables.message,
-          tags: ["confirmation-reply-sent"],
-          metadata: { to: variables.to, subject: variables.subject },
-        }).catch((err) =>
-          console.error("Failed to log confirmation-reply-sent entry:", err),
-        );
         setConfirmationReplyEntryId(null);
       }
       emailForm.reset();
@@ -1451,6 +1443,16 @@ export function JobDiarySection({
         queryKey: ["/api/jobs", jobId, "diary-timeline"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      // Calendars use full-URL query keys (e.g. "/api/jobs?limit=...",
+      // "/api/jobs/for-date") that don't match the prefix above. Catch them all
+      // so the new "Reply sent" indicator shows up without waiting for the 30s
+      // refetch.
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && k.startsWith("/api/jobs");
+        },
+      });
     },
     onError: (error: any) => {
       toast({
@@ -1478,7 +1480,11 @@ export function JobDiarySection({
         subject: string;
         body: string;
       };
-      const to = customerEmail || "";
+      const to =
+        customerEmail ||
+        jobData?.customerEmail ||
+        customerRecord?.email ||
+        "";
       if (!to) {
         throw new Error("No customer email on file");
       }
@@ -1488,14 +1494,7 @@ export function JobDiarySection({
         to,
         subject,
         message: body,
-      });
-      await apiRequest("POST", `/api/jobs/${jobId}/diary`, {
-        entryType: "email",
-        title: "Confirmation reply sent",
-        description: `Confirmation reply sent to ${to}.`,
-        content: body,
         tags: ["confirmation-reply-sent"],
-        metadata: { to, subject, autoSent: true },
       });
     },
     onSuccess: () => {
@@ -1503,6 +1502,12 @@ export function JobDiarySection({
         queryKey: ["/api/jobs", jobId, "diary-timeline"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && k.startsWith("/api/jobs");
+        },
+      });
     },
     onError: (err: any) => {
       toast({

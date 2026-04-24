@@ -1651,7 +1651,15 @@ class DatabaseStorage implements IStorage {
       conditions.push(ne(schema.jobs.status, 'unsuccessful'));
     }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    
+
+    // Subquery: most-recent 'confirmation-reply-sent' diary entry timestamp per job
+    const replySentSql = sql<Date | null>`(
+      SELECT MAX(${schema.jobDiaryEntries.createdAt})
+      FROM ${schema.jobDiaryEntries}
+      WHERE ${schema.jobDiaryEntries.jobId} = ${schema.jobs.id}
+        AND ${schema.jobDiaryEntries.tags} @> ARRAY['confirmation-reply-sent']::text[]
+    )`;
+
     // Query with LEFT JOIN to include customer phone data
     const jobsQuery = whereClause
       ? db.select({
@@ -1660,6 +1668,7 @@ class DatabaseStorage implements IStorage {
           customerEmail: schema.customers.email,
           customerPhone: schema.customers.phone,
           customerMobile: schema.customers.mobile,
+          confirmationReplySentAt: replySentSql,
         })
         .from(schema.jobs)
         .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
@@ -1673,29 +1682,31 @@ class DatabaseStorage implements IStorage {
           customerEmail: schema.customers.email,
           customerPhone: schema.customers.phone,
           customerMobile: schema.customers.mobile,
+          confirmationReplySentAt: replySentSql,
         })
         .from(schema.jobs)
         .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
         .orderBy(desc(schema.jobs.createdAt))
         .limit(limit)
         .offset(offset);
-    
+
     // Get total count (for pagination)
     const countQuery = whereClause
       ? db.select({ count: sql<number>`count(*)` }).from(schema.jobs).where(whereClause)
       : db.select({ count: sql<number>`count(*)` }).from(schema.jobs);
-    
+
     const [results, totalResult] = await Promise.all([
       jobsQuery,
       countQuery
     ]);
-    
+
     // Transform results to include customer data in job object
     const jobs = results.map((row: any) => ({
       ...row.job,
       customerName: row.customerName,
       customerEmail: row.customerEmail,
       customerPhone: row.customerPhone || row.customerMobile,
+      confirmationReplySentAt: row.confirmationReplySentAt,
     }));
     
     const total = Number(totalResult[0]?.count) || 0;
