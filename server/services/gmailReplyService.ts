@@ -56,6 +56,19 @@ class GmailReplyService {
 
     return new Promise((resolve, reject) => {
       const imap = new Imap(this.imapConfig);
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (!settled) { settled = true; fn(); }
+      };
+
+      // Use .on (not .once) so that every error event is caught — IMAP can emit
+      // multiple error events during its lifecycle (connect phase, fetch phase,
+      // teardown). A second uncaught error event would become an uncaughtException.
+      imap.on('error', (err: Error) => {
+        console.error('📧 IMAP connection error:', err);
+        try { imap.destroy(); } catch (_) {}
+        settle(() => reject(err));
+      });
 
       imap.once('ready', () => {
         // Use '[Gmail]/All Mail' so we catch emails delivered to any label or routing
@@ -65,7 +78,7 @@ class GmailReplyService {
           if (err) {
             console.error('📧 Error opening Gmail All Mail folder:', err);
             imap.end();
-            reject(err);
+            settle(() => reject(err));
             return;
           }
 
@@ -80,14 +93,14 @@ class GmailReplyService {
             if (err) {
               console.error('📧 Gmail search error:', err);
               imap.end();
-              reject(err);
+              settle(() => reject(err));
               return;
             }
 
             if (!results || results.length === 0) {
               console.log('📧 No new email replies found');
               imap.end();
-              resolve();
+              settle(() => resolve());
               return;
             }
 
@@ -157,48 +170,49 @@ class GmailReplyService {
 
             fetch.once('error', (err) => {
               console.error('📧 Fetch error:', err);
-              reject(err);
+              settle(() => reject(err));
             });
 
             fetch.once('end', async () => {
-              // Wait for all emails to finish parsing
-              await Promise.all(parsePromises);
-              
-              console.log(`📧 Finished parsing ${emailsToProcess.length} email(s), processing now...`);
-              
-              // Process all collected emails and track successfully processed UIDs
-              const successfulUids: number[] = [];
-              
-              for (const email of emailsToProcess) {
-                const success = await this.processEmailReply(email);
-                if (success && email.uid) {
-                  successfulUids.push(email.uid);
+              try {
+                // Wait for all emails to finish parsing
+                await Promise.all(parsePromises);
+                
+                console.log(`📧 Finished parsing ${emailsToProcess.length} email(s), processing now...`);
+                
+                // Process all collected emails and track successfully processed UIDs
+                const successfulUids: number[] = [];
+                
+                for (const email of emailsToProcess) {
+                  const success = await this.processEmailReply(email);
+                  if (success && email.uid) {
+                    successfulUids.push(email.uid);
+                  }
                 }
-              }
 
-              // ONLY mark as seen after successful processing
-              if (successfulUids.length > 0) {
-                for (const uid of successfulUids) {
-                  imap.addFlags(uid, ['\\Seen'], (err) => {
-                    if (err) {
-                      console.error(`📧 Error marking email UID ${uid} as read:`, err);
-                    }
-                  });
+                // ONLY mark as seen after successful processing
+                if (successfulUids.length > 0) {
+                  for (const uid of successfulUids) {
+                    imap.addFlags(uid, ['\\Seen'], (err) => {
+                      if (err) {
+                        console.error(`📧 Error marking email UID ${uid} as read:`, err);
+                      }
+                    });
+                  }
+                  console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
                 }
-                console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
-              }
 
-              console.log(`📧 Successfully processed ${successfulUids.length} of ${emailsToProcess.length} email reply(ies)`);
-              imap.end();
-              resolve();
+                console.log(`📧 Successfully processed ${successfulUids.length} of ${emailsToProcess.length} email reply(ies)`);
+                imap.end();
+                settle(() => resolve());
+              } catch (err) {
+                console.error('📧 Error processing fetched emails:', err);
+                try { imap.end(); } catch (_) {}
+                settle(() => reject(err));
+              }
             });
           });
         });
-      });
-
-      imap.once('error', (err) => {
-        console.error('📧 IMAP connection error:', err);
-        reject(err);
       });
 
       imap.once('end', () => {

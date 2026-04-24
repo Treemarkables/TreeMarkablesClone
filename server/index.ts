@@ -277,11 +277,22 @@ function isRecoverableDatabaseError(msg: string): boolean {
   return patterns.some(p => msg.includes(p));
 }
 
+const RECOVERABLE_NETWORK_PATTERNS = [
+  'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND',
+  'socket hang up', 'read ECONNRESET', 'write ECONNRESET',
+  'imap', 'IMAP', 'tls', 'TLS', 'ssl', 'SSL',
+];
+
 process.on('uncaughtException', (error) => {
   const msg = error.message || '';
   const stack = error.stack || '';
   if (isRecoverableDatabaseError(msg) || isRecoverableDatabaseError(stack)) {
     log(`Database connection error (recovering): ${msg}`, "error");
+    return;
+  }
+  const isNetworkError = RECOVERABLE_NETWORK_PATTERNS.some(p => msg.includes(p) || stack.includes(p));
+  if (isNetworkError) {
+    log(`Network/IMAP connection error (recovering — not crashing): ${msg}`, "error");
     return;
   }
   log(`Uncaught Exception: ${msg}`, "error");
