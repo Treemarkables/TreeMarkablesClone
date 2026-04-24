@@ -864,7 +864,7 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
   if (!template) {
     return (
       <div className="flex flex-col items-center justify-center h-full gap-4">
-        <div className="text-gray-500">No invoice template found. Please create one first.</div>
+        <div className="text-gray-500">No {documentKind} template found. Please create one first.</div>
         <Link href="/templates">
           <Button variant="outline">Go to Templates</Button>
         </Link>
@@ -884,7 +884,7 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
         <div className="flex items-center gap-2">
           <LayoutTemplate className="w-5 h-5 text-orange-500" />
           <div>
-            <h1 className="font-semibold text-gray-900 leading-tight">Invoice Block Builder</h1>
+            <h1 className="font-semibold text-gray-900 leading-tight">{meta.title}</h1>
             <p className="text-xs text-gray-500 leading-tight">Drag blocks to reorder · Click to configure</p>
           </div>
         </div>
@@ -916,7 +916,7 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
         <div className="w-52 flex-shrink-0 border-r bg-gray-50 overflow-y-auto p-3 space-y-1.5">
           <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">Block Palette</div>
           <p className="text-xs text-gray-400 px-1 mb-1">Drag onto canvas or click +</p>
-          {PALETTE_ITEMS.map((item) => (
+          {kindPalette.map((item) => (
             <PaletteCard key={item.type} item={item} onAdd={addBlock} />
           ))}
         </div>
