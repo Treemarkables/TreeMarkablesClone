@@ -90,7 +90,15 @@ app.get('/health', (_req, res) => {
 });
 
 // Increase JSON payload limit for large CSV imports (ServiceM8 data can be huge)
-app.use(express.json({ limit: '50mb' }));
+// The verify callback captures the raw body as a Buffer so webhook signature
+// verification (e.g. Svix for Resend events) can work correctly alongside
+// the normal JSON parsing middleware.
+app.use(express.json({
+  limit: '50mb',
+  verify: (req: any, _res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 
 // Serve root-level public/ folder as static files (PDFs, guides, etc.)
