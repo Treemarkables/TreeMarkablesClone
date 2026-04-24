@@ -1,0 +1,53 @@
+---                                                                                                                                            
+  Hey — I need you to verify some work Claude Code did and seed one DB row. No new features, no refactors.                                       
+                                                                                                                                                 
+  Context: Claude Code landed four commits on main between b9c72513 and HEAD as part of a centralised document-builder refactor (PRs 1 → 3b). All
+   tsc-clean (same 983 error count as before). No browser smoke-test has been done. Commits to look at: 817b68fc, 75168ab8, 9688883a, 1ab968bb,  
+  dfb5fa0e.                                              
+                                                                                                                                                 
+  Task 1 — Smoke-test the existing invoice flow hasn't regressed                                                                                 
+   
+  Start the dev server. Visit /settings/invoice-builder and verify:                                                                              
+  - The page loads (template fetched, blocks render on canvas).
+  - The block palette looks the same as before (header, companyInfo, billTo, invoiceMeta, jobDescription, lineItems, totals, payment, divider,   
+  customText, footer). It should NOT show proposalMeta, lineItemsWithChoices, photoGallery, or acceptance.                                    
+  - Save Layout still works.                                                                                                                     
+  - Then open any invoice that has blockConfig set and download its PDF. This exercises the dynamic import at server/routes.ts:995 — the path
+  changed from ../shared/invoiceBlockDefaults → ../shared/documentBlockDefaults. If the PDF comes out, that path resolves fine.                  
+                                                                                                                                                 
+  Task 2 — Seed a proposal template so the new route has something to edit                                                                       
+                                                                                                                                                 
+  Claude Code added a new route /settings/proposal-builder that filters documentTemplates by type='proposal'. There's no such row yet, so the    
+  page shows "No proposal template found".                                                                                                       
+                                                                                                                                                 
+  Insert a row into document_templates:                  
+  - type = 'proposal'
+  - name = 'Standard Proposal' (or similar)                                                                                                      
+  - blockConfig = DEFAULT_PROPOSAL_BLOCKS (exported from shared/schema.ts)
+  - Use the existing company defaults (the columns have sensible .default() values).                                                             
+                                                                                                                                                 
+  Look at server/seedTemplates.ts line 219 — it already does this for invoices using DEFAULT_INVOICE_BLOCKS. Mirror that pattern for proposals.  
+  Do NOT run db:push — the schema already supports this, it's a data insert only.                                                                
+                                                                                                                                                 
+  Task 3 — Verify the new proposal builder route                                                                                                 
+                                                         
+  With the proposal template row in place, visit /settings/proposal-builder:                                                                     
+  - Palette should show the proposal-flavoured blocks (proposalMeta, lineItemsWithChoices, photoGallery, acceptance) plus the shared ones
+  (header, companyInfo, billTo, jobDescription, totals, divider, customText, footer). Should NOT show invoiceMeta, payment, or plain lineItems.  
+  - Drag each of the 4 new block types onto the canvas. The preview should render them with sample data (tree removal / stump grinding / mulch 
+  delivery with a choice option, etc.). Acceptance block should render as a visual placeholder (styled "Accept & Sign" block, not interactive —  
+  that's intentional, interactive acceptance comes in a later PR).                                                                               
+  - Click each on the canvas; the inspector panel should show its config options (labels, toggles, etc.).
+  - Save Layout.                                                                                                                                 
+                                                                                                                                                 
+  What to report back:
+  - Task 1: invoice builder and PDF both green? Any regressions?                                                                                 
+  - Task 2: row inserted? Any issues?                                                                                                            
+  - Task 3: new proposal builder loads, blocks render, save works?                                                                               
+                                                                                                                                                 
+  Do not:                                                                                                                                        
+  - Start the next piece of the refactor (ProposalViewer/ProposalAccept wiring) — Claude Code owns that as PR 3c.                                
+  - Run npm run db:push or any migration.                                                                                                        
+  - Delete any of the old proposal builders (ProposalBuilder.tsx, ProposalBuilderV2.tsx, InvoiceBuilder.tsx) — they're intentionally still in    
+  place until PR 4 cut-over.                                                                                                                     
+                                                      
