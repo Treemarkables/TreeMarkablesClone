@@ -160,6 +160,14 @@ const settingsOptions = [
     icon: LayoutTemplate,
     color: "bg-orange-100 text-orange-600",
     path: "/settings/invoice-builder"
+  },
+  {
+    id: "proposal-builder",
+    title: "Proposal Builder",
+    description: "Drag-and-drop visual proposal layout builder",
+    icon: LayoutTemplate,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/proposal-builder"
   }
 ];
 
