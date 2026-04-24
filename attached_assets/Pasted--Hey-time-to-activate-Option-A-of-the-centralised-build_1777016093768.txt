@@ -1,0 +1,85 @@
+ Hey — time to activate Option A of the centralised builder refactor. This is a tiny   
+  schema change + a runtime verification. Should take 5-10 minutes.                     
+                                                                   
+  What's landing: commit f357a943 added a nullable blockConfig jsonb column to the      
+  proposals table in shared/schema.ts, plus two route tweaks in server/routes.ts that   
+  surface the column (with fallback to DEFAULT_PROPOSAL_BLOCKS) in GET responses. No
+  data migration, no backfill. Once the column exists in Postgres, every proposal in the
+   app immediately starts rendering through the new block pipeline (via the branch
+  Claude Code landed in PR 3c — 0ab6a177).
+
+  Task 1 — Run the migration                                                            
+   
+  npm run db:push                                                                       
+                                                         
+  Before you hit confirm, verify drizzle's plan only proposes adding the block_config   
+  column on the proposals table. If it suggests anything else (dropping a column,
+  renaming a table, touching documentTemplates, anything destructive), stop and report  
+  what it wants to do — do not proceed. Claude Code's only schema change was one
+  additive column.
+
+  Expected plan: ALTER TABLE proposals ADD COLUMN block_config jsonb; — nothing else.   
+   
+  If drizzle's plan is clean, confirm it.                                               
+                                                         
+  Task 2 — Verify the app didn't break                                                  
+   
+  Start the dev server if it isn't already running. Then:                               
+                                                         
+  - Open /proposal/:id (internal viewer) on an existing proposal (e.g. the one Task 3   
+  used last round). Expected: proposal loads, renders through the NEW block layout (not
+  the legacy ProposalTemplate). You should see blocks in this order: header →           
+  companyInfo → proposalMeta → billTo → jobDescription → (photoGallery if photos) →
+  lineItemsWithChoices → totals → customText → acceptance → footer.
+  - Open /proposal/:id/accept (public page) on an existing proposal. Same expected
+  layout. Sticky Accept button in the page header should still be present.              
+  - Open an already-accepted proposal. The acceptance block should now show the green
+  "ACCEPTED" stamp (this is the default behaviour Claude Code tested via temporary edit 
+  last round, now activated for real).                   
+  - Test the end-to-end Accept flow on a fresh draft proposal — click Accept in the     
+  sticky header, confirm you see "Proposal Accepted Successfully!" and no JS errors.    
+  - Check the browser DevTools Network tab on a proposal load — the /api/proposals/:id
+  response should now include a blockConfig field (an array of ~11 block objects).      
+                                                         
+  Task 3 — Regression check on the invoice side                                         
+                                                         
+  The schema change only touched the proposals table, but run a quick sanity check:     
+                                                         
+  - Open /settings/invoice-builder and confirm it still loads with the invoice palette. 
+  - Open an existing invoice and download its PDF. This exercises the PDF generator path
+   that was touched back in PR 1.                                                       
+                                                         
+  Task 4 — Save with a customised layout (optional, if you want to validate the save    
+  path)                                                  
+                                                                                        
+  - Go to /settings/proposal-builder.                                                   
+  - Drag a block to reorder, or toggle a block's visibility, or edit a label in the
+  inspector.                                                                            
+  - Click Save Layout.                                   
+  - Confirm the toast shows "Proposal layout saved" and that reloading the page         
+  preserves the change.                                                                 
+   
+  This confirms PUT /api/templates/:id persists blockConfig for the template (which is  
+  separate from a proposal's blockConfig but uses the same schema type).
+                                                                                        
+  What to report back:                                   
+  - Task 1: did db:push propose only the single column add? Did it succeed?
+  - Task 2: do existing proposals now render through the new block pipeline? Any layouts
+   that look broken (missing data, weird spacing, crashed blocks)?                      
+  - Task 3: invoice flow still fine?                                                    
+  - Task 4 (if you did it): save/reload round-trip works?
+                                                                                        
+  Do not:                                                                               
+  - Drop any columns or tables.                                                         
+  - Delete ProposalBuilder.tsx, ProposalBuilderV2.tsx, or InvoiceBuilder.tsx — cleanup  
+  is a separate, later PR.                                                              
+  - Modify buildProposalRenderContext or BlockRenderedProposal — if a proposal renders  
+  wrong, report the issue, don't patch it. Claude Code will fix from root cause.      
+                                                                                        
+  If something goes badly wrong: The column is nullable with no default. Rollback is
+  either ALTER TABLE proposals DROP COLUMN block_config; (for the schema), or set       
+  blockConfig to an empty string '' / non-array value in the route response to force the
+   legacy ProposalTemplate branch. Don't run either without reporting first — most      
+  likely Claude Code will want to see the failure and fix it properly.
+
+  ---
