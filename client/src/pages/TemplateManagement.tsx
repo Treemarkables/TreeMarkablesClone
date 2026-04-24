@@ -156,17 +156,13 @@ export default function TemplateManagement() {
 
   // Fetch all templates
   const {
-    data: templates = [],
+    data: templatesResponse,
     isLoading,
     refetch,
-  } = useQuery({
+  } = useQuery<{ success: boolean; data: DocumentTemplate[] }>({
     queryKey: ["/api/templates"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/templates");
-      const result = await response.json();
-      return result.data || [];
-    },
   });
+  const templates: DocumentTemplate[] = templatesResponse?.data ?? [];
 
   // Create template mutation
   const createTemplateMutation = useMutation({
