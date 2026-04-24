@@ -18,6 +18,10 @@ import type {
   DocumentBlockConfigInvoiceMeta,
   DocumentBlockConfigDivider,
   DocumentBlockConfigCustomText,
+  DocumentBlockConfigProposalMeta,
+  DocumentBlockConfigLineItemsWithChoices,
+  DocumentBlockConfigPhotoGallery,
+  DocumentBlockConfigAcceptance,
 } from '@shared/schema';
 import type { CompanyInfo } from '@shared/documentBlockDefaults';
 import { LinkifiedText } from '@/utils/linkify';
@@ -46,9 +50,34 @@ export interface DocumentRenderContext {
   gstAmount: number;
   totalAmount: number;
   jobNumber?: number;
+
+  // Proposal-flavoured fields — all optional; invoice callers can omit.
+  proposalNumber?: string;
+  expiryDate?: Date;
+  lineItemsWithChoices?: Array<{
+    id: string;
+    description: string;
+    quantity?: number;
+    unit?: string;
+    notes?: string;
+    pricingType: 'normal' | 'choice' | 'fixed';
+    unitPrice?: number;
+    total?: number;
+    fixedPrice?: number;
+    choices?: Array<{ id: string; label: string; description?: string; price: number; isDefault?: boolean }>;
+    selectedChoiceId?: string;
+    isOptional?: boolean;
+    selected?: boolean;
+  }>;
+  photos?: Array<{ id: string; url: string; caption?: string; altText?: string }>;
+  acceptance?: {
+    accepted: boolean;
+    signedAt?: Date;
+    signatureName?: string;
+  };
 }
 
-/** Sample context used by the invoice builder's WYSIWYG canvas. */
+/** Sample context used by the document builder's WYSIWYG canvas. */
 export function buildSampleContext(): DocumentRenderContext {
   const now = new Date();
   return {
@@ -69,6 +98,32 @@ export function buildSampleContext(): DocumentRenderContext {
     gstAmount: 97.50,
     totalAmount: 747.50,
     jobNumber: 1001,
+
+    // Sample proposal data — used by the builder preview when proposal blocks are placed.
+    proposalNumber: 'PRO-SAMPLE',
+    expiryDate: addDays(now, 30),
+    lineItemsWithChoices: [
+      {
+        id: '1', description: 'Tree removal (large oak)', quantity: 1, pricingType: 'normal',
+        unitPrice: 1200, total: 1200,
+      },
+      {
+        id: '2', description: 'Stump grinding', quantity: 1, pricingType: 'choice',
+        choices: [
+          { id: 'c1', label: 'Surface (10 cm)', price: 180, isDefault: true },
+          { id: 'c2', label: 'Deep (30 cm)', price: 320 },
+        ],
+      },
+      {
+        id: '3', description: 'Mulch delivery (optional)', quantity: 1, pricingType: 'normal',
+        unitPrice: 90, total: 90, isOptional: true, selected: true,
+      },
+    ],
+    photos: [
+      { id: 'p1', url: '/treemarkables-logo.webp', caption: 'Site overview' },
+      { id: 'p2', url: '/treemarkables-logo.webp', caption: 'Tree to remove' },
+    ],
+    acceptance: { accepted: false },
   };
 }
 
@@ -270,6 +325,190 @@ export function renderDocumentBlock(
           <p className="text-xs text-gray-500 break-words">{parts.join(' | ')}</p>
           {cfg.showGST && <p className="text-xs text-gray-500 mt-1">GST Number: {co.gstNumber}</p>}
           {cfg.showPaymentTerms && template.paymentTerms && <p className="text-xs text-gray-500 mt-1">{template.paymentTerms}</p>}
+        </div>
+      );
+    }
+    case 'proposalMeta': {
+      const cfg = block.config as DocumentBlockConfigProposalMeta;
+      return (
+        <div key={block.id} className="mb-4 text-xs space-y-1">
+          {cfg.showProposalNumber && ctx.proposalNumber && (
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-600">{cfg.labelProposal || 'Proposal #'}</span>
+              <span className="font-medium">{ctx.proposalNumber}</span>
+            </div>
+          )}
+          {cfg.showIssueDate && (
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-600">{cfg.labelIssueDate || 'Issue Date'}</span>
+              <span>{format(ctx.issueDate, 'dd/MM/yyyy')}</span>
+            </div>
+          )}
+          {cfg.showExpiryDate && ctx.expiryDate && (
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-600">{cfg.labelExpiryDate || 'Valid Until'}</span>
+              <span>{format(ctx.expiryDate, 'dd/MM/yyyy')}</span>
+            </div>
+          )}
+          {cfg.showJobNumber && ctx.jobNumber ? (
+            <div className="flex justify-between gap-2">
+              <span className="text-gray-600">Job #</span>
+              <span>{ctx.jobNumber}</span>
+            </div>
+          ) : null}
+        </div>
+      );
+    }
+    case 'lineItemsWithChoices': {
+      const cfg = block.config as DocumentBlockConfigLineItemsWithChoices;
+      const items = ctx.lineItemsWithChoices ?? [];
+      if (items.length === 0) return null;
+      const descPct = cfg.descColPct ?? 60;
+      return (
+        <div key={block.id} className="mb-4">
+          <h2 className="text-xs font-semibold text-black mb-2">{cfg.labelDescription || 'Services & Pricing'}</h2>
+          <div className="w-full overflow-x-auto">
+            <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900" style={{ width: `${descPct}%` }}>{cfg.labelDescription || 'Service'}</th>
+                  {cfg.showQty && <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900">{cfg.labelQty || 'Qty'}</th>}
+                  {cfg.showRate && <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{cfg.labelRate || 'Rate'}</th>}
+                  <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{cfg.labelAmount || 'Price'}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const qty = item.quantity ?? 1;
+                  let rate = 0;
+                  let total = 0;
+                  if (item.pricingType === 'fixed' && item.fixedPrice !== undefined) {
+                    rate = item.fixedPrice;
+                    total = item.fixedPrice;
+                  } else if (item.pricingType === 'choice' && item.choices && item.choices.length > 0) {
+                    const chosen = item.choices.find(c => c.id === item.selectedChoiceId)
+                      ?? item.choices.find(c => c.isDefault)
+                      ?? item.choices[0];
+                    rate = chosen.price;
+                    total = chosen.price * qty;
+                  } else {
+                    rate = item.unitPrice ?? 0;
+                    total = item.total ?? qty * rate;
+                  }
+                  const dimmed = item.isOptional && item.selected === false;
+                  return (
+                    <tr key={item.id} className={`even:bg-gray-50 ${dimmed ? 'opacity-50' : ''}`}>
+                      <td className="border border-gray-200 px-2 py-2 text-xs text-gray-900">
+                        <div className="flex items-start gap-2">
+                          {cfg.showOptionalToggle && item.isOptional && (
+                            <span className="inline-block mt-0.5 w-3 h-3 rounded border border-gray-400 flex-shrink-0" style={item.selected !== false ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
+                          )}
+                          <div className="flex-1">
+                            <LinkifiedText text={item.description} />
+                            {item.notes && <div className="text-[10px] text-gray-500 mt-0.5">{item.notes}</div>}
+                            {cfg.showChoiceSelector && item.pricingType === 'choice' && item.choices && (
+                              <div className="mt-1 space-y-0.5">
+                                {item.choices.map(c => {
+                                  const selectedId = item.selectedChoiceId ?? item.choices!.find(x => x.isDefault)?.id ?? item.choices![0].id;
+                                  const isSel = selectedId === c.id;
+                                  return (
+                                    <div key={c.id} className={`flex items-center gap-1.5 text-[10px] ${isSel ? 'font-semibold text-black' : 'text-gray-600'}`}>
+                                      <span className="inline-block w-2 h-2 rounded-full border border-gray-400 flex-shrink-0" style={isSel ? { backgroundColor: '#2563eb', borderColor: '#2563eb' } : undefined} />
+                                      <span>{c.label}</span>
+                                      <span className="ml-auto">{formatCurrency(c.price)}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      {cfg.showQty && <td className="border border-gray-200 px-2 py-2 text-xs text-center text-gray-900">{qty}</td>}
+                      {cfg.showRate && <td className="border border-gray-200 px-2 py-2 text-xs text-right text-gray-900">{formatCurrency(rate)}</td>}
+                      <td className="border border-gray-200 px-2 py-2 text-xs text-right font-medium text-gray-900">{formatCurrency(total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+    case 'photoGallery': {
+      const cfg = block.config as DocumentBlockConfigPhotoGallery;
+      const photos = ctx.photos ?? [];
+      if (photos.length === 0) return null;
+      const aspectClass = ({
+        square: 'aspect-square',
+        '4:3': 'aspect-[4/3]',
+        '16:9': 'aspect-video',
+        auto: '',
+      } as const)[cfg.aspectRatio] ?? 'aspect-[4/3]';
+      if (cfg.layout === 'single' || cfg.layout === 'slideshow') {
+        const p = photos[0];
+        return (
+          <div key={block.id} className="mb-4">
+            {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{cfg.label}</h2>}
+            <div className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden relative`}>
+              <img src={p.url} alt={p.altText ?? p.caption ?? 'Photo'} className="w-full h-full object-cover" />
+              {cfg.layout === 'slideshow' && photos.length > 1 && (
+                <div className="absolute bottom-1 right-1 text-[10px] bg-black/60 text-white px-1.5 rounded">1 / {photos.length}</div>
+              )}
+            </div>
+            {cfg.showCaptions && p.caption && <p className="text-xs text-gray-600 mt-1">{p.caption}</p>}
+          </div>
+        );
+      }
+      const cols = cfg.columns ?? 2;
+      const gridClass = ({ 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' } as const)[cols];
+      return (
+        <div key={block.id} className="mb-4">
+          {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{cfg.label}</h2>}
+          <div className={`grid ${gridClass} gap-2`}>
+            {photos.map(p => (
+              <div key={p.id}>
+                <div className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden`}>
+                  <img src={p.url} alt={p.altText ?? p.caption ?? 'Photo'} className="w-full h-full object-cover" />
+                </div>
+                {cfg.showCaptions && p.caption && <p className="text-[10px] text-gray-600 mt-1">{p.caption}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    case 'acceptance': {
+      const cfg = block.config as DocumentBlockConfigAcceptance;
+      const acc = ctx.acceptance;
+      if (acc?.accepted) {
+        return (
+          <div key={block.id} className="mt-4 p-4 border-2 border-green-600 rounded-lg bg-green-50">
+            {cfg.showAcceptedStamp && (
+              <div className="flex items-center gap-2 mb-2">
+                <div className="px-3 py-1 bg-green-600 text-white text-xs font-bold rounded tracking-wider">ACCEPTED</div>
+                {acc.signedAt && <span className="text-xs text-gray-700">{format(acc.signedAt, 'dd MMM yyyy')}</span>}
+              </div>
+            )}
+            {acc.signatureName && (
+              <p className="text-xs text-gray-700">Signed by <span className="font-semibold">{acc.signatureName}</span></p>
+            )}
+          </div>
+        );
+      }
+      // Visual placeholder — interactive accept UX is layered on by ProposalAccept in a later PR.
+      return (
+        <div key={block.id} className="mt-4 p-4 border border-gray-300 rounded-lg">
+          <h3 className="text-sm font-semibold text-black mb-2">{cfg.label || 'Accept This Proposal'}</h3>
+          {cfg.termsText && <p className="text-xs text-gray-600 mb-3 whitespace-pre-wrap">{cfg.termsText}</p>}
+          <p className="text-xs text-gray-700 mb-3">{cfg.signaturePromptText || 'By signing below you agree to the scope and pricing shown above.'}</p>
+          {cfg.requireSignature && (
+            <div className="mb-3 text-[10px] text-gray-500 italic">Signature field appears here</div>
+          )}
+          <div className="text-center py-2 bg-blue-600 text-white text-xs font-semibold rounded">
+            {cfg.buttonText || 'Accept & Sign'}
+          </div>
         </div>
       );
     }
