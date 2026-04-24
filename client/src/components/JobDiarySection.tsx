@@ -152,6 +152,144 @@ function EmailActivity({ messageId }: { messageId: string }) {
   );
 }
 
+// Hoisted confirmation-reply card shown at the top of the diary whenever a
+// job has customerConfirmed=true and no 'confirmation-reply-sent' diary entry
+// exists yet. Three actions: Send now (one-click), Edit first (opens the
+// composer pre-filled), Dismiss (session-only hide).
+function JobConfirmationReplyCard({
+  jobId,
+  customerEmail,
+  isSending,
+  onSendNow,
+  onEditFirst,
+  onDismiss,
+}: {
+  jobId: string;
+  customerEmail: string;
+  isSending: boolean;
+  onSendNow: () => void;
+  onEditFirst: (draft: { subject: string; body: string }) => void;
+  onDismiss: () => void;
+}) {
+  const { data, isLoading, error, refetch, isFetching } = useQuery<{
+    subject: string;
+    body: string;
+  }>({
+    queryKey: ["confirmation-reply-draft", "job", jobId],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/jobs/${jobId}/draft-confirmation-reply`,
+      );
+      const json = await res.json();
+      if (!json?.success || !json?.data?.body) {
+        throw new Error(json?.message || "Failed to draft reply");
+      }
+      return json.data;
+    },
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+
+  return (
+    <div
+      className="mx-2 mb-2 mt-1 rounded-lg border border-green-200 dark:border-green-800 bg-green-50/60 dark:bg-green-950/30 p-3"
+      data-testid="card-confirmation-reply"
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+          <span className="text-xs font-semibold text-green-800 dark:text-green-200">
+            Customer confirmed — send acknowledgement?
+          </span>
+        </div>
+        {data && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+            disabled={isFetching || isSending}
+            onClick={() => refetch()}
+            data-testid="button-regen-confirmation-reply"
+          >
+            <RefreshCw
+              className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`}
+            />
+          </Button>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
+          <Clock className="w-3 h-3 animate-spin" /> Drafting a reply…
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-red-600 dark:text-red-400">
+            Couldn't draft a reply.
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2"
+            onClick={() => refetch()}
+            data-testid="button-retry-confirmation-reply"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : data ? (
+        <>
+          <p
+            className="text-xs leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 border-l-2 border-green-300 dark:border-green-700 pl-2 mb-2"
+            style={{ wordBreak: "break-word" }}
+          >
+            {data.body}
+          </p>
+          <div className="flex items-center justify-end gap-1 flex-wrap">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[11px] px-2 text-gray-600 dark:text-gray-400"
+              disabled={isSending}
+              onClick={onDismiss}
+              data-testid="button-dismiss-confirmation-reply"
+            >
+              Dismiss
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px] px-2"
+              disabled={isSending || !data}
+              onClick={() => onEditFirst(data)}
+              data-testid="button-edit-first-confirmation-reply"
+            >
+              <Edit className="w-3 h-3 mr-1" /> Edit first
+            </Button>
+            <Button
+              size="sm"
+              variant="default"
+              className="h-7 text-[11px] px-2"
+              disabled={isSending || !customerEmail}
+              onClick={onSendNow}
+              data-testid="button-send-now-confirmation-reply"
+            >
+              <Send className="w-3 h-3 mr-1" />
+              {isSending ? "Sending…" : "Send now"}
+            </Button>
+          </div>
+          {!customerEmail && (
+            <p className="text-[10px] text-muted-foreground mt-1.5">
+              No email address on file for this customer.
+            </p>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // Inline AI-drafted reply shown beneath a customer-confirmation diary entry.
 // Fetches a short acknowledgement from the server, then hands it to the
 // enclosing composer via onEditAndSend — the user tweaks and sends it.
@@ -392,6 +530,12 @@ export function JobDiarySection({
   const [selectedEmailTemplate, setSelectedEmailTemplate] =
     useState<string>("none");
   const [selectedSmsTemplate, setSelectedSmsTemplate] = useState<string>("");
+
+  // Hoisted confirmation-reply card: session-only dismiss. The persistent
+  // hide state comes from a 'confirmation-reply-sent' diary entry — dismissing
+  // deliberately does not persist, so a mis-click is recoverable by reload.
+  const [confirmationCardDismissed, setConfirmationCardDismissed] =
+    useState(false);
 
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -1272,17 +1416,34 @@ export function JobDiarySection({
         message: data.message,
       });
     },
-    onSuccess: () => {
+    onSuccess: (_res, variables) => {
       // If this send originated from a customer-confirmation suggested reply,
-      // mark that entry as acknowledged so the draft section hides.
+      // mark that entry as acknowledged so the draft section hides, and write
+      // a 'confirmation-reply-sent'-tagged diary entry so the hoisted
+      // confirmation-reply card hides on next render.
       if (confirmationReplyEntryId) {
-        const entry = diaryEntries?.find(
-          (e: DiaryEntry) => e.id === confirmationReplyEntryId,
+        // Only call per-entry acknowledge for real diary entries — the
+        // hoisted card uses a sentinel id that doesn't exist on the server.
+        if (confirmationReplyEntryId !== "__hoisted-card__") {
+          const entry = diaryEntries?.find(
+            (e: DiaryEntry) => e.id === confirmationReplyEntryId,
+          );
+          acknowledgeConfirmationReplyMutation.mutate({
+            entryId: confirmationReplyEntryId,
+            existingMetadata: entry?.metadata,
+          });
+        }
+        apiRequest("POST", `/api/jobs/${jobId}/diary`, {
+          entryType: "email",
+          title: "Confirmation reply sent",
+          description: `Confirmation reply sent to ${variables.to}.`,
+          content: variables.message,
+          tags: ["confirmation-reply-sent"],
+          metadata: { to: variables.to, subject: variables.subject },
+        }).catch((err) =>
+          console.error("Failed to log confirmation-reply-sent entry:", err),
         );
-        acknowledgeConfirmationReplyMutation.mutate({
-          entryId: confirmationReplyEntryId,
-          existingMetadata: entry?.metadata,
-        });
+        setConfirmationReplyEntryId(null);
       }
       emailForm.reset();
       setActiveComposer(null);
@@ -1295,6 +1456,58 @@ export function JobDiarySection({
       toast({
         title: "Error",
         description: error.message || "Failed to send email",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // One-click: fetch a fresh GPT draft, send it via the existing
+  // communications endpoint, and log a 'confirmation-reply-sent' diary entry
+  // so the hoisted card hides itself on next render.
+  const sendConfirmationReplyNow = useMutation({
+    mutationFn: async () => {
+      const draftRes = await apiRequest(
+        "POST",
+        `/api/jobs/${jobId}/draft-confirmation-reply`,
+      );
+      const draftJson = await draftRes.json();
+      if (!draftJson?.success || !draftJson?.data?.body) {
+        throw new Error(draftJson?.message || "Couldn't draft reply");
+      }
+      const { subject, body } = draftJson.data as {
+        subject: string;
+        body: string;
+      };
+      const to = customerEmail || "";
+      if (!to) {
+        throw new Error("No customer email on file");
+      }
+      await apiRequest("POST", "/api/communications/email", {
+        jobId,
+        customerId,
+        to,
+        subject,
+        message: body,
+      });
+      await apiRequest("POST", `/api/jobs/${jobId}/diary`, {
+        entryType: "email",
+        title: "Confirmation reply sent",
+        description: `Confirmation reply sent to ${to}.`,
+        content: body,
+        tags: ["confirmation-reply-sent"],
+        metadata: { to, subject, autoSent: true },
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Couldn't send confirmation reply",
+        description: err?.message || "Please try Edit first instead.",
         variant: "destructive",
       });
     },
@@ -1566,6 +1779,40 @@ export function JobDiarySection({
             </Button>
           </div>
         </div>
+
+        {/* Confirmation-reply card: hoisted above the timeline so it shows
+            for every confirmed job (including manual ticks), not just
+            auto-detected email/SMS confirmations. Hides once a
+            'confirmation-reply-sent' diary entry exists. */}
+        {jobData?.customerConfirmed &&
+          !confirmationCardDismissed &&
+          !diaryEntries.some((e: DiaryEntry) =>
+            e.tags?.includes("confirmation-reply-sent"),
+          ) && (
+            <JobConfirmationReplyCard
+              jobId={jobId}
+              customerEmail={
+                customerEmail || jobData?.customerEmail || customerRecord?.email || ""
+              }
+              isSending={sendConfirmationReplyNow.isPending}
+              onSendNow={() => sendConfirmationReplyNow.mutate()}
+              onEditFirst={(draft) => {
+                setReplyToEmail(
+                  customerEmail ||
+                    jobData?.customerEmail ||
+                    customerRecord?.email ||
+                    "",
+                );
+                setReplySubject(draft.subject);
+                setReplyBody(draft.body);
+                // Sentinel marker so sendEmailMutation.onSuccess also writes
+                // a 'confirmation-reply-sent' entry for the Edit-first path.
+                setConfirmationReplyEntryId("__hoisted-card__");
+                setActiveComposer("email");
+              }}
+              onDismiss={() => setConfirmationCardDismissed(true)}
+            />
+          )}
 
         {/* Timeline */}
         <ScrollArea className="flex-1">
@@ -1878,21 +2125,6 @@ export function JobDiarySection({
                             {messageText}
                           </p>
                         </div>
-                        {/* AI-drafted reply shown inline below a confirmed booking */}
-                        {entry.tags?.includes("customer-confirmation") &&
-                          !entry.metadata?.replyAcknowledged && (
-                            <ConfirmationReplyDraft
-                              entry={entry}
-                              jobId={jobId}
-                              onEditAndSend={
-                                handleEditAndSendConfirmationReply
-                              }
-                              onDismiss={handleDismissConfirmationReply}
-                              isDismissing={
-                                acknowledgeConfirmationReplyMutation.isPending
-                              }
-                            />
-                          )}
                         {/* Footer with tracking and reply */}
                         <div
                           className={`px-3 py-1.5 flex items-center justify-between gap-2 ${
@@ -2572,21 +2804,6 @@ export function JobDiarySection({
                           );
                         })()}
                       </div>
-                      {/* AI-drafted reply shown inline below a confirmed booking */}
-                      {entry.tags?.includes("customer-confirmation") &&
-                        !entry.metadata?.replyAcknowledged && (
-                          <ConfirmationReplyDraft
-                            entry={entry}
-                            jobId={jobId}
-                            onEditAndSend={
-                              handleEditAndSendConfirmationReply
-                            }
-                            onDismiss={handleDismissConfirmationReply}
-                            isDismissing={
-                              acknowledgeConfirmationReplyMutation.isPending
-                            }
-                          />
-                        )}
                     </div>
                   </div>
                 );
