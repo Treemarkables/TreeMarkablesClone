@@ -1073,9 +1073,14 @@ export function CalendarGrid({
                           }}
                         >
                           <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <span className="text-[10px] font-semibold leading-tight block whitespace-normal break-words" style={{ color: c.text }}>
-                              {custName}
-                            </span>
+                            <div className="flex items-start gap-1">
+                              <span className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words" style={{ color: c.text }}>
+                                {custName}
+                              </span>
+                              {job.customerConfirmed && (
+                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
+                              )}
+                            </div>
                             {blockW > 8 && timeLabel && (
                               <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
                                 {timeLabel}
@@ -1208,9 +1213,14 @@ export function CalendarGrid({
                           }}
                         >
                           <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <span className="text-[10px] font-semibold leading-tight block whitespace-normal break-words" style={{ color: c.text }}>
-                              {custName}
-                            </span>
+                            <div className="flex items-start gap-1">
+                              <span className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words" style={{ color: c.text }}>
+                                {custName}
+                              </span>
+                              {job.customerConfirmed && (
+                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
+                              )}
+                            </div>
                             {blockW > 8 && timeLabel && (
                               <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
                                 {timeLabel}
@@ -1289,7 +1299,7 @@ export function CalendarGrid({
                                     {getCustomerName(job)}
                                   </div>
                                   {job.customerConfirmed && (
-                                    <Check className="h-3 w-3 flex-shrink-0" style={{ color: c.border }} />
+                                    <Check className="h-4 w-4 flex-shrink-0" strokeWidth={3} style={{ color: c.border }} />
                                   )}
                                 </div>
                                 <div className="opacity-70 truncate mt-0.5">
