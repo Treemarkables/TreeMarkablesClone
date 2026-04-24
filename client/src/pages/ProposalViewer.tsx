@@ -3,7 +3,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { ArrowLeft, Download, Mail, Check, Clock, Eye } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +33,14 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const [selectedOptionalItems, setSelectedOptionalItems] = useState<
     Record<string, boolean>
   >({});
+  const [showAcceptDialog, setShowAcceptDialog] = useState(false);
+  const [confirmName, setConfirmName] = useState("");
+
+  // Detect preview mode (?preview=true) — staff use this to review without
+  // triggering the "viewed" status or accidentally accepting.
+  const isPreviewMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("preview") === "true";
 
   const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
     setSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }));
@@ -34,16 +51,13 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   };
 
   const handleBackClick = () => {
-    // Check if there's a page to go back to in the history
     if (window.history.length > 1) {
       window.history.back();
     } else {
-      // Fallback to dispatch board if no history
       setLocation("/dispatch");
     }
   };
 
-  // First try to fetch proposal directly by ID
   const {
     data: proposalResponse,
     isLoading: proposalLoading,
@@ -53,7 +67,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     enabled: !!proposalId,
   });
 
-  // If direct fetch fails (404), try to find proposal by job ID
   const { data: proposalsByJobResponse, isLoading: proposalsByJobLoading } =
     useQuery({
       queryKey: ["/api/proposals", { jobId: proposalId }],
@@ -70,7 +83,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       enabled: !!proposalId && !proposalLoading && !proposalResponse?.success,
     });
 
-  // The job-ID list endpoint returns proposals without sections — do a follow-up fetch
   const fallbackProposalId =
     !proposalResponse?.success &&
     proposalsByJobResponse?.success &&
@@ -83,7 +95,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     enabled: !!fallbackProposalId && fallbackProposalId !== proposalId,
   });
 
-  // Use either direct proposal, or the full follow-up fetch from the job-ID search
   const actualProposalResponse = proposalResponse?.success
     ? proposalResponse
     : fallbackFullResponse?.success
@@ -94,25 +105,24 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   const actualLoading = proposalLoading || proposalsByJobLoading || fallbackLoading;
 
-  // Fetch customer data if proposal has customerId
   const { data: customerResponse } = useQuery({
     queryKey: ["/api/customers", actualProposalResponse?.data?.customerId],
     enabled: !!actualProposalResponse?.data?.customerId,
   });
 
-  // Fetch job data if proposal has jobId
   const { data: jobResponse } = useQuery({
     queryKey: ["/api/jobs", actualProposalResponse?.data?.jobId],
     enabled: !!actualProposalResponse?.data?.jobId,
   });
 
-  // Fetch default proposal template
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
   });
 
-  // Mark proposal as viewed when loaded (only once per session)
+  // Mark proposal as viewed when loaded — skip entirely in preview mode so
+  // staff can review without affecting the proposal's status.
   useEffect(() => {
+    if (isPreviewMode) return;
     const actualId = actualProposalResponse?.data?.id;
     if (actualId && !viewedRef.current) {
       fetch(`/api/proposals/${actualId}/viewed`, {
@@ -126,18 +136,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
           console.error("Failed to mark proposal as viewed:", err),
         );
     }
-  }, [actualProposalResponse?.data?.id]);
+  }, [actualProposalResponse?.data?.id, isPreviewMode]);
 
-  // Accept proposal mutation
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
       const actualId = actualProposalResponse?.data?.id || proposalId;
-      console.log(
-        "Accepting proposal:",
-        actualId,
-        "with selected choices:",
-        selectedChoices,
-      );
       const response = await apiRequest(
         "POST",
         `/api/proposals/${actualId}/accept`,
@@ -146,13 +149,14 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             Object.keys(selectedChoices).length > 0
               ? selectedChoices
               : undefined,
+          confirmedByName: confirmName.trim(),
         },
       );
       return response;
     },
     onSuccess: (response: any) => {
-      console.log("Proposal accepted successfully:", response);
-      // Refresh proposal data to show updated status
+      setShowAcceptDialog(false);
+      setConfirmName("");
       queryClient.invalidateQueries({
         queryKey: ["/api/proposals", proposalId],
       });
@@ -163,8 +167,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     },
     onError: (error: any) => {
       console.error("Proposal acceptance error:", error);
-
-      // If already accepted, refresh the proposal to show updated status
       if (error.message?.includes("already been accepted")) {
         queryClient.invalidateQueries({
           queryKey: ["/api/proposals", proposalId],
@@ -187,7 +189,19 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     },
   });
 
-  const handleAcceptProposal = () => {
+  const handleAcceptClick = () => {
+    if (isPreviewMode) {
+      toast({
+        title: "Preview Mode",
+        description: "Acceptance is disabled in preview mode.",
+      });
+      return;
+    }
+    setShowAcceptDialog(true);
+  };
+
+  const handleConfirmAccept = () => {
+    if (!confirmName.trim()) return;
     acceptProposalMutation.mutate();
   };
 
@@ -230,7 +244,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   const proposal = actualProposalResponse.data;
   const customer = customerResponse?.data;
-  const job = jobResponse?.data; // Same pattern as customer
+  const job = jobResponse?.data;
   const template = templateResponse?.data || {
     id: "default",
     name: "Default Template",
@@ -250,6 +264,21 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   return (
     <div className="min-h-screen bg-white w-full overflow-x-hidden">
+      {/* Preview mode banner */}
+      {isPreviewMode && (
+        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 text-center">
+          <div className="flex items-center justify-center gap-2 text-amber-800 text-sm font-medium">
+            <Eye className="w-4 h-4" />
+            Admin Preview — viewing as staff. Proposal status will not be
+            affected. Add{" "}
+            <span className="font-mono text-xs bg-amber-100 px-1 rounded">
+              ?preview=true
+            </span>{" "}
+            to any proposal URL to use preview mode.
+          </div>
+        </div>
+      )}
+
       {/* Header with safe area padding for mobile notch/Dynamic Island */}
       <div
         className="sticky top-0 z-50 bg-white border-b border-gray-200 w-full shadow-sm"
@@ -286,7 +315,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             <div className="flex gap-2 shrink-0">
               {!isAccepted && !isExpired && (
                 <Button
-                  onClick={handleAcceptProposal}
+                  onClick={handleAcceptClick}
                   disabled={acceptProposalMutation.isPending}
                   className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
                   size="sm"
@@ -421,6 +450,71 @@ export default function ProposalViewer({}: ProposalViewerProps) {
           })()}
         </div>
       </div>
+
+      {/* Accept confirmation dialog */}
+      <Dialog
+        open={showAcceptDialog}
+        onOpenChange={(open) => {
+          setShowAcceptDialog(open);
+          if (!open) setConfirmName("");
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Accept Proposal</DialogTitle>
+            <DialogDescription>
+              Type your full name below to confirm you accept this proposal.
+              This will authorise the work to proceed.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="confirm-name">Full name</Label>
+              <Input
+                id="confirm-name"
+                placeholder="e.g. Steve Hathaway"
+                value={confirmName}
+                onChange={(e) => setConfirmName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && confirmName.trim()) {
+                    handleConfirmAccept();
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowAcceptDialog(false);
+                  setConfirmName("");
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleConfirmAccept}
+                disabled={!confirmName.trim() || acceptProposalMutation.isPending}
+                className="bg-green-600 hover:bg-green-700 text-white"
+                data-testid="button-confirm-accept"
+              >
+                {acceptProposalMutation.isPending ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
+                    Confirming...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4 mr-2" />
+                    Confirm Acceptance
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
