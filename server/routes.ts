@@ -9914,11 +9914,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         }
       }
       
-      // Get completed jobs with invoices in the date range
-      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
-      const allInvoices = await storage.getAllInvoices();
-      const allCustomers = await storage.getAllCustomers();
-      const allProposals = await storage.getAllProposals();
+      // Get completed jobs with invoices in the date range.
+      // Fetch in parallel — these four queries are independent, and running them
+      // sequentially was the dominant cost of the drilldown.
+      const [{ jobs: allJobs }, allInvoices, allCustomers, allProposals] = await Promise.all([
+        storage.getAllJobs({ limit: 999999 }),
+        storage.getAllInvoices(),
+        storage.getAllCustomers(),
+        storage.getAllProposals(),
+      ]);
       
       // Create customer map
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
@@ -9928,10 +9932,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // the Revenue card calculates its total via getDashboardStats/getRevenueStats.
       const jobInvoiceMap = new Map<string, number>();
       const jobInvoiceDateMap = new Map<string, string>(); // jobId -> latest invoice issue date
+      // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
+      // (NZ 15%), so divide to strip the tax. This keeps the drilldown rows and
+      // total in sync with the Revenue card (getDashboardStats / getRevenueStats).
       for (const invoice of allInvoices) {
         if (invoice.status !== 'cancelled' && invoice.jobId) {
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
           if (invoice.issueDate) {
             const dateStr = invoice.issueDate.toString();
@@ -10100,13 +10107,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
-      // Build a map of jobId -> { sentDate, value } from sent proposals
+      // Build a map of jobId -> { sentDate, value } from sent proposals.
+      // proposal.totalAmount is inc-GST; internal metrics show ex-GST per business rule,
+      // so strip the NZ 15% GST before storing.
       const sentProposalsByJobId = new Map<string, { sentDate: Date; value: number }>();
       for (const p of allProposals) {
         if (p.jobId && (p.status === 'sent' || p.status === 'accepted' || p.status === 'viewed' || p.sentDate)) {
           const sentDate = p.sentDate ? new Date(p.sentDate) : null;
           if (sentDate) {
-            const value = parseFloat((p.totalAmount || '0').toString());
+            const value = parseFloat((p.totalAmount || '0').toString()) / 1.15;
             const existing = sentProposalsByJobId.get(p.jobId);
             if (!existing || sentDate < existing.sentDate) {
               sentProposalsByJobId.set(p.jobId, { sentDate, value });
@@ -17723,12 +17732,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             customerName = customer?.name || undefined;
           }
           
+          // proposal.totalAmount is inc-GST; strip GST so the internal metrics drilldown
+          // reconciles with the ex-GST revenue tiles on the Business Metrics page.
+          const amountExGst = (parseFloat(proposal.totalAmount?.toString() || '0') / 1.15).toFixed(2);
           return {
             id: proposal.id,
             jobId: proposal.jobId,
             jobNumber,
             customerName,
-            amount: proposal.totalAmount,
+            amount: amountExGst,
             sentDate: proposal.sentDate,
             acceptedDate: proposal.acceptedAt,
             title
