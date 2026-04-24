@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import express from "express";
+import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
@@ -1309,6 +1310,30 @@ async function generateInvoicePDFBuffer(
 
     doc.end();
   });
+}
+
+/**
+ * Returns true if the given email address is hosted on a Microsoft consumer
+ * mail platform (Hotmail, Outlook.com, Live, MSN).
+ *
+ * Microsoft's spam/content filters silently strip PDF attachments from emails
+ * that carry many CID-embedded images alongside a PDF. Gmail and other providers
+ * are significantly more lenient. For Microsoft recipients we skip the photo
+ * CID embeddings so the email size stays well under 1 MB and the PDF lands
+ * safely in the inbox.
+ */
+function isMicrosoftEmailDomain(email: string): boolean {
+  const domain = (email.split('@')[1] ?? '').toLowerCase();
+  const knownDomains = new Set([
+    'hotmail.com', 'hotmail.co.nz', 'hotmail.co.uk', 'hotmail.fr',
+    'hotmail.de', 'hotmail.es', 'hotmail.com.au',
+    'outlook.com', 'outlook.co.nz', 'outlook.com.au',
+    'live.com', 'live.co.nz', 'live.com.au', 'live.co.uk',
+    'msn.com',
+  ]);
+  return knownDomains.has(domain)
+    || domain.endsWith('.outlook.com')
+    || domain.endsWith('.hotmail.com');
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -7253,64 +7278,101 @@ Draft the reply now.`;
       // Embed photos as true inline CID attachments — no external URL dependency.
       // Photos are fetched from object storage server-side and embedded directly in the
       // email body, so they display in every email client regardless of auth or server state.
+      //
+      // EXCEPTION — Microsoft-hosted addresses (Hotmail / Outlook.com / Live / MSN):
+      // Microsoft's spam filters silently strip PDF attachments from emails that contain
+      // many CID-embedded images. To ensure the PDF lands in the inbox, we skip the photo
+      // CID loop for these recipients and show a text link to the invoice page instead.
+      // Gmail and all other providers are unaffected.
       let photoGalleryHtml = '';
       let embeddedPhotoCount = 0;
 
+      const recipientIsMicrosoft = typeof to === 'string' && isMicrosoftEmailDomain(to);
+
       if (selectedPhotos && selectedPhotos.length > 0) {
-        const photoStorage = new PhotoStorageService();
-        const photoHtmlParts: string[] = [];
+        if (recipientIsMicrosoft) {
+          // Skip CID embedding for Microsoft recipients so the PDF is not stripped.
+          // Build a text-only section that tells the customer how to view the photos.
+          const photoCount = selectedPhotos.filter((p: string) => p.startsWith('/objects/photos/')).length;
+          const invoiceViewId = invoice?.id || invoiceId || (validatedInvoiceData as any)?.id;
+          const protocol = req.protocol;
+          const host = req.get('host') || 'treemarkables.co.nz';
+          const invoiceViewUrl = invoiceViewId
+            ? `${protocol}://${host}/invoice/${invoiceViewId}`
+            : `${protocol}://${host}`;
 
-        console.log(`📸 Embedding ${selectedPhotos.length} photo(s) as inline CID attachments...`);
+          if (photoCount > 0) {
+            photoGalleryHtml = `
+              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
+                          border-radius: 8px; font-family: Arial, sans-serif;">
+                <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">
+                  Job Photos (${photoCount})
+                </p>
+                <p style="margin: 0; color: #555; font-size: 13px;">
+                  ${photoCount} photo${photoCount !== 1 ? 's' : ''} ${photoCount !== 1 ? 'were' : 'was'} taken at this job.
+                  <a href="${invoiceViewUrl}" style="color: #f97316; font-weight: 600;">View your invoice online</a>
+                  to see the photos.
+                </p>
+              </div>
+            `;
+          }
+          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — PDF deliverability mode`);
+        } else {
+          const photoStorage = new PhotoStorageService();
+          const photoHtmlParts: string[] = [];
 
-        for (let i = 0; i < selectedPhotos.length; i++) {
-          const photoUrl = selectedPhotos[i];
-          if (!photoUrl.startsWith('/objects/photos/')) continue;
+          console.log(`📸 Embedding ${selectedPhotos.length} photo(s) as inline CID attachments...`);
 
-          const fileName = path.basename(photoUrl);
-          const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
-          const thumbPath = `/objects/photos/${thumbFileName}`;
-          const cid = `job-photo-${i}`;
+          for (let i = 0; i < selectedPhotos.length; i++) {
+            const photoUrl = selectedPhotos[i];
+            if (!photoUrl.startsWith('/objects/photos/')) continue;
 
-          // Try thumbnail first (small, fast); fall back to original if thumbnail missing
-          let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
-          if (!photoData) {
-            photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+            const fileName = path.basename(photoUrl);
+            const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
+            const thumbPath = `/objects/photos/${thumbFileName}`;
+            const cid = `job-photo-${i}`;
+
+            // Try thumbnail first (small, fast); fall back to original if thumbnail missing
+            let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
+            if (!photoData) {
+              photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+            }
+
+            if (photoData && photoData.buffer) {
+              // Attach as inline CID image — email client renders it directly in the body
+              emailAttachments.push({
+                content: photoData.buffer.toString('base64'),
+                filename: thumbFileName,
+                type: photoData.contentType || 'image/jpeg',
+                content_id: cid
+              });
+              photoHtmlParts.push(`
+                <div style="display: inline-block; margin: 5px; vertical-align: top;">
+                  <img src="cid:${cid}" alt="Job Photo ${i + 1}"
+                    style="max-width: 200px; max-height: 200px; border-radius: 8px;
+                           border: 1px solid #ddd; display: block;" />
+                </div>
+              `);
+              embeddedPhotoCount++;
+              console.log(`📷 Photo ${i + 1} embedded as CID "${cid}" (${Math.round(photoData.buffer.length / 1024)}KB, ${photoData.contentType})`);
+            } else {
+              console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
+            }
           }
 
-          if (photoData && photoData.buffer) {
-            // Attach as inline CID image — email client renders it directly in the body
-            emailAttachments.push({
-              content: photoData.buffer.toString('base64'),
-              filename: thumbFileName,
-              type: photoData.contentType || 'image/jpeg',
-              content_id: cid
-            });
-            photoHtmlParts.push(`
-              <div style="display: inline-block; margin: 5px; vertical-align: top;">
-                <img src="cid:${cid}" alt="Job Photo ${i + 1}"
-                  style="max-width: 200px; max-height: 200px; border-radius: 8px;
-                         border: 1px solid #ddd; display: block;" />
+          if (photoHtmlParts.length > 0) {
+            photoGalleryHtml = `
+              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
+                          border-radius: 8px; font-family: Arial, sans-serif;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">
+                  Photos (${embeddedPhotoCount}):
+                </p>
+                <div>
+                  ${photoHtmlParts.join('')}
+                </div>
               </div>
-            `);
-            embeddedPhotoCount++;
-            console.log(`📷 Photo ${i + 1} embedded as CID "${cid}" (${Math.round(photoData.buffer.length / 1024)}KB, ${photoData.contentType})`);
-          } else {
-            console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
+            `;
           }
-        }
-
-        if (photoHtmlParts.length > 0) {
-          photoGalleryHtml = `
-            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
-                        border-radius: 8px; font-family: Arial, sans-serif;">
-              <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">
-                Photos (${embeddedPhotoCount}):
-              </p>
-              <div>
-                ${photoHtmlParts.join('')}
-              </div>
-            </div>
-          `;
         }
       }
       
@@ -14052,6 +14114,38 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Resend email events webhook - receives open/click/bounce events
   app.post('/api/webhooks/resend-events', async (req: Request, res: Response) => {
     try {
+      // ── Svix signature verification ──────────────────────────────────────
+      // Resend signs webhook payloads with Svix. Verify before processing so
+      // forged requests from third parties are rejected.
+      const webhookSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const svixId        = req.headers['svix-id'] as string;
+        const svixTimestamp = req.headers['svix-timestamp'] as string;
+        const svixSignature = req.headers['svix-signature'] as string;
+
+        if (!svixId || !svixTimestamp || !svixSignature) {
+          console.warn('📬 Resend events webhook: missing Svix headers — rejecting request');
+          return res.status(401).json({ error: 'Missing webhook signature headers' });
+        }
+
+        try {
+          const wh = new SvixWebhook(webhookSecret);
+          const rawBody = (req as any).rawBody as Buffer | undefined;
+          const payloadStr = rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body);
+          wh.verify(payloadStr, {
+            'svix-id':        svixId,
+            'svix-timestamp': svixTimestamp,
+            'svix-signature': svixSignature,
+          });
+        } catch (verifyErr) {
+          console.warn('📬 Resend events webhook: invalid Svix signature — rejecting request');
+          return res.status(401).json({ error: 'Invalid webhook signature' });
+        }
+      } else {
+        console.warn('⚠️ RESEND_EVENTS_WEBHOOK_SECRET not set — Resend event webhooks are unverified. Set this secret from your Resend dashboard → Webhooks → Signing Secret.');
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const event = req.body;
       console.log('📬 Resend event webhook received:', event.type);
       
@@ -24051,6 +24145,24 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       return res.status(500).json({ success: false, message: 'Error confirming schedule' });
     }
   });
+
+  // ── Resend events webhook configuration reminder ─────────────────────────
+  // Log the webhook URL and configuration status at startup so it's easy to
+  // find in the server console when setting up the Resend dashboard.
+  const resendEventsSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
+  const deployedBase = process.env.REPLIT_DEPLOYMENT_ID
+    ? `https://${process.env.REPL_SLUG}.replit.app`
+    : '(your deployed URL)';
+  console.log('');
+  console.log('━━━ Resend Email Events Webhook ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`  Endpoint : ${deployedBase}/api/webhooks/resend-events`);
+  console.log(`  Secret   : ${resendEventsSecret ? '✅ RESEND_EVENTS_WEBHOOK_SECRET is set' : '⚠️  RESEND_EVENTS_WEBHOOK_SECRET not set — webhooks unverified'}`);
+  console.log('  To configure: resend.com → Webhooks → Add endpoint → paste URL above');
+  console.log('                then copy the Signing Secret into RESEND_EVENTS_WEBHOOK_SECRET');
+  console.log('  Also needed : resend.com → Domains → your domain → Enable open tracking');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  // ─────────────────────────────────────────────────────────────────────────
 
   const httpServer = createServer(app);
 
