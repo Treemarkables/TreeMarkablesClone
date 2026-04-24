@@ -3061,10 +3061,6 @@ class DatabaseStorage implements IStorage {
 
   async getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<any[]> {
     try {
-      // Fetch business settings for default gross margin fallback
-      const [bizSettings] = await db.select().from(schema.businessSettings).limit(1);
-      const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
-
       // Date filtering strategy:
       // - If a job has completedDate set, filter by that (most accurate)
       // - For completed jobs without completedDate: use updatedAt as proxy (updateJob always stamps it)
@@ -3084,56 +3080,66 @@ class DatabaseStorage implements IStorage {
         jobConditions.push(sql`COALESCE(${schema.jobs.completedDate}, ${schema.jobs.updatedAt}, ${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) <= ${toDate}`);
       }
 
-      const jobs = await db
-        .select()
-        .from(schema.jobs)
-        .where(and(...jobConditions));
+      // Phase 1: three independent queries — run in parallel.
+      //   (a) business settings (for default margin fallback)
+      //   (b) jobs in the date window (drives counts/revenue)
+      //   (c) all completed/invoiced jobs ever (drives the all-time margin fallback)
+      // ── All-time margin pass ──────────────────────────────────────────────
+      // Gross margin is a historical benchmark: we fetch ALL completed/invoiced jobs
+      // (no date filter) so that the margin column is always populated regardless of
+      // which date window the user is viewing. Counts/revenue still use the date window.
+      const [bizSettingsRows, jobs, allCompletedJobs] = await Promise.all([
+        db.select().from(schema.businessSettings).limit(1),
+        db.select().from(schema.jobs).where(and(...jobConditions)),
+        db.select().from(schema.jobs).where(and(
+          sql`${schema.jobs.status} IN ('completed', 'invoiced')`,
+          sql`${schema.jobs.status} != 'archived'`
+        )),
+      ]);
+      const bizSettings = bizSettingsRows[0];
+      const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
 
       const completedJobsInRange = jobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
 
-      // ── All-time margin pass ──────────────────────────────────────────────
-      // Gross margin is a historical benchmark: fetch ALL completed/invoiced jobs (no date
-      // filter) so that the margin column is always populated regardless of which
-      // date window the user is viewing. Counts/revenue still use the date window.
-      const allCompletedJobs = await db
-        .select()
-        .from(schema.jobs)
-        .where(and(
-          sql`${schema.jobs.status} IN ('completed', 'invoiced')`,
-          sql`${schema.jobs.status} != 'archived'`
-        ));
-
-      // Build invoice map for all completed jobs
+      // Phase 2: four dependent queries — all depend on phase 1, but are independent of
+      // each other, so run in parallel. Previously these were four sequential awaits.
       const allCompletedIds = allCompletedJobs.map(j => j.id);
-      let allTimeInvoices: any[] = [];
-      if (allCompletedIds.length > 0) {
-        allTimeInvoices = await db
-          .select()
-          .from(schema.invoices)
-          .where(and(
-            sql`${schema.invoices.status} != 'cancelled'`,
-            inArray(schema.invoices.jobId, allCompletedIds)
-          ));
-      }
+      const qualifyingJobIds = jobs.map(j => j.id);
+      const [allTimeInvoices, allTimeProposals, allInvoices, proposals] = await Promise.all([
+        allCompletedIds.length > 0
+          ? db.select().from(schema.invoices).where(and(
+              sql`${schema.invoices.status} != 'cancelled'`,
+              inArray(schema.invoices.jobId, allCompletedIds)
+            ))
+          : Promise.resolve([] as any[]),
+        allCompletedIds.length > 0
+          ? db.select().from(schema.proposals).where(inArray(schema.proposals.jobId, allCompletedIds))
+          : Promise.resolve([] as any[]),
+        qualifyingJobIds.length > 0
+          ? db.select().from(schema.invoices).where(and(
+              sql`${schema.invoices.status} != 'cancelled'`,
+              inArray(schema.invoices.jobId, qualifyingJobIds)
+            ))
+          : Promise.resolve([] as any[]),
+        qualifyingJobIds.length > 0
+          ? db.select().from(schema.proposals).where(inArray(schema.proposals.jobId, qualifyingJobIds))
+          : Promise.resolve([] as any[]),
+      ]);
+      // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
+      // (NZ 15%), so divide to strip the tax.
       const allTimeInvoiceMap = new Map<string, number>();
       for (const inv of allTimeInvoices) {
         if (inv.jobId) {
-          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + (parseFloat(inv.amount?.toString() || '0')));
+          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + (parseFloat(inv.amount?.toString() || '0') / 1.15));
         }
       }
 
-      // Fetch proposal amounts for all completed jobs (for revenue fallback)
-      let allTimeProposals: any[] = [];
-      if (allCompletedIds.length > 0) {
-        allTimeProposals = await db
-          .select()
-          .from(schema.proposals)
-          .where(inArray(schema.proposals.jobId, allCompletedIds));
-      }
+      // Proposal amounts for all completed jobs (for revenue fallback) — fetched above in phase 2.
+      // proposal.totalAmount is inc-GST (customer-facing total); strip GST for internal metrics.
       const allTimeProposalMap = new Map<string, number>();
       for (const p of allTimeProposals) {
         if (p.jobId && p.totalAmount) {
-          const amt = parseFloat(p.totalAmount?.toString() || '0');
+          const amt = parseFloat(p.totalAmount?.toString() || '0') / 1.15;
           if (amt > (allTimeProposalMap.get(p.jobId) || 0)) allTimeProposalMap.set(p.jobId, amt);
         }
       }
@@ -3147,9 +3153,10 @@ class DatabaseStorage implements IStorage {
         const acc = allTimeMarginMap.get(source)!;
 
         const invoiceRev = allTimeInvoiceMap.get(job.id) || 0;
+        // job.totalAmount is inc-GST; strip GST so the margin % is consistent with the ex-GST revenue column.
         const revenueForMargin =
           invoiceRev > 0 ? invoiceRev
-          : parseFloat(job.totalAmount?.toString() || '0') || 0
+          : (parseFloat(job.totalAmount?.toString() || '0') / 1.15) || 0
           || (allTimeProposalMap.get(job.id) || 0);
 
         if (revenueForMargin <= 0) continue;
@@ -3183,38 +3190,21 @@ class DatabaseStorage implements IStorage {
       }
       // ─────────────────────────────────────────────────────────────────────
 
-      // Fetch ALL invoices for these qualifying jobs (not date-filtered —
-      // we want the real revenue for jobs worked on in the period).
-      const qualifyingJobIds = jobs.map(j => j.id);
-      let allInvoices: any[] = [];
-      if (qualifyingJobIds.length > 0) {
-        allInvoices = await db
-          .select()
-          .from(schema.invoices)
-          .where(and(
-            sql`${schema.invoices.status} != 'cancelled'`,
-            inArray(schema.invoices.jobId, qualifyingJobIds)
-          ));
-      }
+      // Invoices for these qualifying jobs (not date-filtered — we want the real
+      // revenue for jobs worked on in the period) — fetched above in phase 2.
 
-      // Map job IDs → total invoiced amount
+      // Map job IDs → total invoiced amount (ex-GST).
+      // invoice.amount is inc-GST (NZ 15%); internal metrics show ex-GST per business rule.
       const jobInvoiceMap = new Map<string, number>();
       for (const invoice of allInvoices) {
         if (invoice.jobId) {
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
         }
       }
 
-      // Fetch ALL proposals for these qualifying jobs
-      let proposals: any[] = [];
-      if (qualifyingJobIds.length > 0) {
-        proposals = await db
-          .select()
-          .from(schema.proposals)
-          .where(inArray(schema.proposals.jobId, qualifyingJobIds));
-      }
+      // Proposals for these qualifying jobs — fetched above in phase 2.
 
       // Create a map of job IDs that have proposals in the date range
       const jobsWithProposals = new Set<string>();
@@ -3224,11 +3214,12 @@ class DatabaseStorage implements IStorage {
         }
       });
 
-      // Create a map of job IDs to their highest proposal amounts (for quoted value)
+      // Create a map of job IDs to their highest proposal amounts (for quoted value).
+      // proposal.totalAmount is inc-GST; strip GST for internal metrics.
       const jobProposalAmountMap = new Map<string, number>();
       for (const proposal of proposals) {
         if (proposal.jobId && proposal.totalAmount) {
-          const proposalAmount = parseFloat(proposal.totalAmount?.toString() || '0');
+          const proposalAmount = parseFloat(proposal.totalAmount?.toString() || '0') / 1.15;
           const existingAmount = jobProposalAmountMap.get(proposal.jobId) || 0;
           // Use the highest proposal amount for each job
           if (proposalAmount > existingAmount) {
@@ -3341,13 +3332,13 @@ class DatabaseStorage implements IStorage {
           existing.totalCosts += totalCosts;
           existing.totalProfit += (invoiceRevenue - totalCosts);
 
-          // Revenue fallback chain for margin calculation:
+          // Revenue fallback chain for margin calculation (all ex-GST):
           // 1. Invoice amount (most accurate — what was actually billed)
-          // 2. job.totalAmount (synced from invoice when created)
-          // 3. Highest proposal amount (quote value — useful for recently completed jobs not yet invoiced)
+          // 2. job.totalAmount (synced from invoice when created) — stored inc-GST, strip GST
+          // 3. Highest proposal amount (quote value — already stripped above)
           const revenueForMargin =
             invoiceRevenue > 0 ? invoiceRevenue
-            : parseFloat(job.totalAmount?.toString() || '0') || 0
+            : (parseFloat(job.totalAmount?.toString() || '0') / 1.15) || 0
             || (jobProposalAmountMap.get(job.id) || 0);
 
           if (revenueForMargin > 0) {
