@@ -5986,6 +5986,77 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Draft a short acknowledgement email in reply to a customer's booking confirmation.
+  // Returns { subject, body } — does not send.
+  app.post('/api/jobs/:id/draft-confirmation-reply', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      if (!job.customerConfirmed) {
+        return res.status(400).json({ success: false, message: 'Job is not marked as customer-confirmed' });
+      }
+
+      const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+
+      const greetingName =
+        (job as any).jobContactFirstName ||
+        (customer?.name ? customer.name.split(' ')[0] : '') ||
+        'there';
+
+      const scheduledDateStr = job.scheduledDate
+        ? formatNZTime(job.scheduledDate as any, 'full')
+        : 'the scheduled date';
+
+      const jobDescription =
+        (job as any).description ||
+        (job as any).invoiceDescription ||
+        (job as any).title ||
+        '';
+
+      const subject = `Re: Booking J-${job.jobNumber}`;
+
+      const systemPrompt = `You are Julian, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft a short, warm, professional email acknowledging their confirmation.
+
+Rules:
+- Plain text only, no HTML, no markdown, no emoji.
+- 3 to 4 short sentences maximum.
+- Friendly but not over-the-top. NZ English. Use "we".
+- Include the scheduled date naturally in the body.
+- Do NOT include a subject line, greeting line label, signature block, or contact details — those are added separately.
+- Start with "Hi {firstName}," on its own line.
+- End with "Kind regards," on its own line followed by "Julian" on the next line.`;
+
+      const userPrompt = `Customer first name: ${greetingName}
+Scheduled date (NZ time): ${scheduledDateStr}
+Job number: J-${job.jobNumber}
+Job description: ${jobDescription || '(not provided)'}
+Confirmation method: ${job.customerConfirmationMethod || 'manual'}
+
+Draft the reply now.`;
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const body = (aiResponse.choices[0].message.content || '').trim();
+      if (!body) {
+        return res.status(502).json({ success: false, message: 'AI returned an empty draft' });
+      }
+
+      return res.json({ success: true, data: { subject, body } });
+    } catch (error) {
+      console.error('Error drafting confirmation reply:', error);
+      return res.status(500).json({ success: false, message: 'Failed to draft reply' });
+    }
+  });
+
   // Validate if gross margin calculation is complete
   app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
     try {

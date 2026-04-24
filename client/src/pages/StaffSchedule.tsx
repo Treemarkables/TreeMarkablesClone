@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { addDays, format, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, MapPin, AlignJustify } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Job, Employee } from '@shared/schema';
 import { GlobalJobCard } from '@/components/GlobalJobCard';
@@ -515,12 +515,17 @@ export default function StaffSchedule() {
                         }}
                       >
                         <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                          <span
-                            className="text-[10px] font-semibold leading-tight block whitespace-normal break-words"
-                            style={{ color: colors.text }}
-                          >
-                            {label}
-                          </span>
+                          <div className="flex items-start gap-1">
+                            <span
+                              className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words"
+                              style={{ color: colors.text }}
+                            >
+                              {label}
+                            </span>
+                            {job.customerConfirmed && (
+                              <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                            )}
+                          </div>
                           {width > 8 && (
                             <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
                               {timeLabel}
@@ -628,12 +633,17 @@ export default function StaffSchedule() {
                           }}
                         >
                           <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
-                            <span
-                              className="text-[10px] font-semibold leading-tight block whitespace-normal break-words"
-                              style={{ color: colors.text }}
-                            >
-                              {label}
-                            </span>
+                            <div className="flex items-start gap-1">
+                              <span
+                                className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words"
+                                style={{ color: colors.text }}
+                              >
+                                {label}
+                              </span>
+                              {job.customerConfirmed && (
+                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                              )}
+                            </div>
                             {width > 8 && (
                               <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
                                 {timeLabel}

@@ -152,6 +152,124 @@ function EmailActivity({ messageId }: { messageId: string }) {
   );
 }
 
+// Inline AI-drafted reply shown beneath a customer-confirmation diary entry.
+// Fetches a short acknowledgement from the server, then hands it to the
+// enclosing composer via onEditAndSend — the user tweaks and sends it.
+function ConfirmationReplyDraft({
+  entry,
+  jobId,
+  onEditAndSend,
+  onDismiss,
+  isDismissing,
+}: {
+  entry: DiaryEntry;
+  jobId: string;
+  onEditAndSend: (
+    draft: { subject: string; body: string },
+    entryId: string,
+  ) => void;
+  onDismiss: (entryId: string) => void;
+  isDismissing: boolean;
+}) {
+  const { data, isLoading, error, refetch, isFetching } = useQuery<{
+    subject: string;
+    body: string;
+  }>({
+    queryKey: ["confirmation-reply-draft", entry.id],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/jobs/${jobId}/draft-confirmation-reply`,
+      );
+      const json = await res.json();
+      if (!json?.success || !json?.data?.body) {
+        throw new Error(json?.message || "Failed to draft reply");
+      }
+      return json.data;
+    },
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+
+  return (
+    <div className="border-t border-purple-200 dark:border-purple-800 px-3 py-2 bg-white/60 dark:bg-black/20">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1">
+          <Reply className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+          <span className="text-[10px] font-medium text-purple-600 dark:text-purple-400">
+            Suggested reply
+          </span>
+        </div>
+        {data && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+            disabled={isFetching}
+            onClick={() => refetch()}
+            data-testid={`button-regen-reply-${entry.id}`}
+          >
+            <RefreshCw
+              className={`w-2.5 h-2.5 ${isFetching ? "animate-spin" : ""}`}
+            />
+          </Button>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <Clock className="w-3 h-3 animate-spin" /> Drafting a reply…
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-red-600 dark:text-red-400">
+            Couldn't draft a reply.
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2"
+            onClick={() => refetch()}
+            data-testid={`button-retry-reply-${entry.id}`}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : data ? (
+        <>
+          <p
+            className="text-xs leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 border-l-2 border-purple-300 dark:border-purple-700 pl-2"
+            style={{ wordBreak: "break-word" }}
+          >
+            {data.body}
+          </p>
+          <div className="flex gap-1 mt-2 justify-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] px-2 text-gray-600 dark:text-gray-400"
+              disabled={isDismissing}
+              onClick={() => onDismiss(entry.id)}
+              data-testid={`button-dismiss-reply-${entry.id}`}
+            >
+              Dismiss
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] px-2"
+              onClick={() => onEditAndSend(data, entry.id)}
+              data-testid={`button-edit-send-reply-${entry.id}`}
+            >
+              <Edit className="w-3 h-3 mr-0.5" /> Edit &amp; send
+            </Button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
 interface ServiceM8DiaryEntry {
   id: string;
@@ -174,6 +292,7 @@ interface DiaryEntry {
   author: string;
   timestamp: string;
   photoUrl?: string;
+  tags?: string[];
   metadata?: {
     phoneNumber?: string;
     emailAddress?: string;
@@ -181,6 +300,10 @@ interface DiaryEntry {
     eventType?: string;
     status?: string;
     viewedDate?: string;
+    replyAcknowledged?: boolean;
+    recipient?: string;
+    sendgridMessageId?: string;
+    [key: string]: any;
   };
 }
 
@@ -244,6 +367,16 @@ export function JobDiarySection({
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
+  // Pre-filled body when opening the email composer from an AI-drafted
+  // confirmation reply. Separate from replySubject so we can pre-populate
+  // the message field without clobbering the subject-only reply flow.
+  const [replyBody, setReplyBody] = useState<string>("");
+  // When the user opens the composer from a confirmation entry's suggested
+  // reply, we track the entry id so we can mark it as acknowledged after
+  // the email is sent.
+  const [confirmationReplyEntryId, setConfirmationReplyEntryId] = useState<
+    string | null
+  >(null);
 
   // Calendar booking state
   const [calendarBookingOpen, setCalendarBookingOpen] = useState(false);
@@ -361,12 +494,22 @@ export function JobDiarySection({
           : `Re: ${replySubject}`;
         emailForm.setValue("subject", subject);
       }
+      if (replyBody) {
+        emailForm.setValue("message", replyBody);
+      }
     } else if (activeComposer === "email" && !replyToEmail) {
       // Reset to default customer email when not replying
       emailForm.setValue("to", customerEmail || "");
       emailForm.setValue("subject", "");
     }
-  }, [activeComposer, replyToEmail, replySubject, emailForm, customerEmail]);
+  }, [
+    activeComposer,
+    replyToEmail,
+    replySubject,
+    replyBody,
+    emailForm,
+    customerEmail,
+  ]);
 
   useEffect(() => {
     if (activeComposer === "sms" && replyToPhone) {
@@ -383,6 +526,8 @@ export function JobDiarySection({
       setReplyToEmail("");
       setReplyToPhone("");
       setReplySubject("");
+      setReplyBody("");
+      setConfirmationReplyEntryId(null);
       setSelectedEmailTemplate("");
       setSelectedSmsTemplate("");
     }
@@ -639,6 +784,7 @@ export function JobDiarySection({
             author: entry.authorName || entry.author_name || "System",
             timestamp: entry.createdAt || entry.created_at,
             photoUrl: photoUrl,
+            tags: entry.tags || undefined,
             metadata: {
               ...entry.metadata, // Preserve existing metadata (email, phone, etc.)
               eventType: entryType,
@@ -1079,6 +1225,42 @@ export function JobDiarySection({
     },
   });
 
+  // Mark a customer-confirmation diary entry as having been acknowledged so
+  // the AI-drafted reply section hides from it. Existing metadata is merged
+  // client-side because the server's update replaces the jsonb column wholesale.
+  const acknowledgeConfirmationReplyMutation = useMutation({
+    mutationFn: async ({
+      entryId,
+      existingMetadata,
+    }: {
+      entryId: string;
+      existingMetadata: DiaryEntry["metadata"];
+    }) => {
+      const mergedMetadata = {
+        ...(existingMetadata || {}),
+        replyAcknowledged: true,
+      };
+      // eventType is a client-only synthetic field — don't persist it back.
+      delete (mergedMetadata as any).eventType;
+      return apiRequest("PUT", `/api/diary/${entryId}`, {
+        metadata: mergedMetadata,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description:
+          error?.message || "Couldn't dismiss the suggested reply.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const sendEmailMutation = useMutation({
     mutationFn: async (data: EmailFormData) => {
       // This would integrate with your existing email service
@@ -1091,6 +1273,17 @@ export function JobDiarySection({
       });
     },
     onSuccess: () => {
+      // If this send originated from a customer-confirmation suggested reply,
+      // mark that entry as acknowledged so the draft section hides.
+      if (confirmationReplyEntryId) {
+        const entry = diaryEntries?.find(
+          (e: DiaryEntry) => e.id === confirmationReplyEntryId,
+        );
+        acknowledgeConfirmationReplyMutation.mutate({
+          entryId: confirmationReplyEntryId,
+          existingMetadata: entry?.metadata,
+        });
+      }
       emailForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({
@@ -1106,6 +1299,26 @@ export function JobDiarySection({
       });
     },
   });
+
+  // Handlers for the inline AI-drafted confirmation reply section.
+  const handleEditAndSendConfirmationReply = (
+    draft: { subject: string; body: string },
+    entryId: string,
+  ) => {
+    setConfirmationReplyEntryId(entryId);
+    setReplyToEmail(customerEmail || "");
+    setReplySubject(draft.subject);
+    setReplyBody(draft.body);
+    setActiveComposer("email");
+  };
+
+  const handleDismissConfirmationReply = (entryId: string) => {
+    const entry = diaryEntries?.find((e: DiaryEntry) => e.id === entryId);
+    acknowledgeConfirmationReplyMutation.mutate({
+      entryId,
+      existingMetadata: entry?.metadata,
+    });
+  };
 
   const updateNoteMutation = useMutation({
     mutationFn: async ({
@@ -1665,6 +1878,21 @@ export function JobDiarySection({
                             {messageText}
                           </p>
                         </div>
+                        {/* AI-drafted reply shown inline below a confirmed booking */}
+                        {entry.tags?.includes("customer-confirmation") &&
+                          !entry.metadata?.replyAcknowledged && (
+                            <ConfirmationReplyDraft
+                              entry={entry}
+                              jobId={jobId}
+                              onEditAndSend={
+                                handleEditAndSendConfirmationReply
+                              }
+                              onDismiss={handleDismissConfirmationReply}
+                              isDismissing={
+                                acknowledgeConfirmationReplyMutation.isPending
+                              }
+                            />
+                          )}
                         {/* Footer with tracking and reply */}
                         <div
                           className={`px-3 py-1.5 flex items-center justify-between gap-2 ${
@@ -2344,6 +2572,21 @@ export function JobDiarySection({
                           );
                         })()}
                       </div>
+                      {/* AI-drafted reply shown inline below a confirmed booking */}
+                      {entry.tags?.includes("customer-confirmation") &&
+                        !entry.metadata?.replyAcknowledged && (
+                          <ConfirmationReplyDraft
+                            entry={entry}
+                            jobId={jobId}
+                            onEditAndSend={
+                              handleEditAndSendConfirmationReply
+                            }
+                            onDismiss={handleDismissConfirmationReply}
+                            isDismissing={
+                              acknowledgeConfirmationReplyMutation.isPending
+                            }
+                          />
+                        )}
                     </div>
                   </div>
                 );

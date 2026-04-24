@@ -73,7 +73,7 @@ export default function Calendar() {
 
   // Fetch jobs/appointments
   const { data: jobsResponse, isLoading } = useQuery<ApiResponse<Job>>({
-    queryKey: ["/api/jobs"],
+    queryKey: ["/api/jobs?limit=10000&offset=0"],
   });
 
   // Fetch customers
@@ -442,7 +442,8 @@ export default function Calendar() {
                                   </div>
                                   {appointment.customerConfirmed && (
                                     <Check
-                                      className="h-3 w-3 flex-shrink-0"
+                                      className="h-4 w-4 flex-shrink-0"
+                                      strokeWidth={3}
                                       data-testid={`icon-confirmed-${appointment.id}`}
                                     />
                                   )}

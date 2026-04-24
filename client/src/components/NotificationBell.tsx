@@ -609,7 +609,7 @@ export function NotificationBell() {
             className={`fill-yellow-500 stroke-yellow-600 stroke-[1.5] ${visibleUnread > 0 ? "animate-pulse" : ""}`}
           />
           {visibleUnread > 0 && (
-            <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white text-xs flex items-center justify-center shadow-lg animate-bounce border-2 border-white">
+            <div className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-gradient-to-br from-red-500 to-red-700 text-white text-xs flex items-center justify-center shadow-lg border-2 border-white">
               <span
                 className="text-[11px] font-bold"
                 data-testid="text-notification-count"
