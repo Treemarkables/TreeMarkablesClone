@@ -7083,6 +7083,16 @@ Draft the reply now.`;
           ? `<div style="font-size: 22px; font-weight: 700; color: #111;">Treemarkables</div>`
           : `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
 
+        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF attachment
+        // is stripped by their spam filters regardless of inline-image presence. We replace the
+        // attachment with a prominent download button that fetches the PDF from the public endpoint.
+        const pdfDownloadBanner = (recipientIsMicrosoft && invoiceDetails?.id)
+          ? `<div style="margin: 0 0 30px 0; padding: 18px 20px; background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; text-align: center;">
+               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">Your invoice PDF is ready to download</div>
+               <a href="https://app.treemarkables.co.nz/api/invoices/${invoiceDetails.id}/pdf" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">Download Invoice PDF</a>
+             </div>`
+          : '';
+
         invoiceHtml = `
         <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
           <!-- Header with Logo and Company Info -->
@@ -7099,6 +7109,8 @@ Draft the reply now.`;
               <div>Email: info@treemarkables.nz</div>
             </div>
           </div>
+
+          ${pdfDownloadBanner}
 
           <!-- Invoice Type and Details -->
           <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
@@ -7235,8 +7247,11 @@ Draft the reply now.`;
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
-      // Generate and attach invoice PDF using the shared helper
-      if (invoice || validatedInvoiceData) {
+      // Generate and attach invoice PDF using the shared helper.
+      // Microsoft recipients: skip the attachment entirely — Microsoft's filters strip PDFs from
+      // this sender's reputation profile even when no inline CIDs are present. The HTML body below
+      // injects a "Download Invoice (PDF)" button pointing at the public PDF endpoint instead.
+      if ((invoice || validatedInvoiceData) && !recipientIsMicrosoft) {
         try {
           const invoiceForPdf = invoice || validatedInvoiceData;
           console.log(`📄 Generating invoice PDF for email (invoice #${invoiceForPdf.invoiceNumber}, lineItems: ${(invoiceForPdf.items || invoiceForPdf.lineItems || []).length})`);
@@ -7255,6 +7270,9 @@ Draft the reply now.`;
         } catch (pdfError) {
           console.error('Error generating invoice PDF for email:', pdfError);
         }
+      } else if ((invoice || validatedInvoiceData) && recipientIsMicrosoft) {
+        const invNum = (invoice || validatedInvoiceData)?.invoiceNumber;
+        console.log(`📄 Skipped PDF attachment for Microsoft-hosted recipient ${to} (Invoice #${invNum}) — delivering via download link`);
       }
 
       

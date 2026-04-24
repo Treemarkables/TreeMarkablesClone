@@ -3,15 +3,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { ArrowLeft, Download, Mail, Check, Clock, Eye } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
@@ -33,8 +24,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const [selectedOptionalItems, setSelectedOptionalItems] = useState<
     Record<string, boolean>
   >({});
-  const [showAcceptDialog, setShowAcceptDialog] = useState(false);
-  const [confirmName, setConfirmName] = useState("");
 
   // Detect preview mode (?preview=true) — staff use this to review without
   // triggering the "viewed" status or accidentally accepting.
@@ -149,14 +138,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             Object.keys(selectedChoices).length > 0
               ? selectedChoices
               : undefined,
-          confirmedByName: confirmName.trim(),
         },
       );
       return response;
     },
     onSuccess: (response: any) => {
-      setShowAcceptDialog(false);
-      setConfirmName("");
       queryClient.invalidateQueries({
         queryKey: ["/api/proposals", proposalId],
       });
@@ -197,11 +183,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       });
       return;
     }
-    setShowAcceptDialog(true);
-  };
-
-  const handleConfirmAccept = () => {
-    if (!confirmName.trim()) return;
     acceptProposalMutation.mutate();
   };
 
@@ -451,70 +432,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
         </div>
       </div>
 
-      {/* Accept confirmation dialog */}
-      <Dialog
-        open={showAcceptDialog}
-        onOpenChange={(open) => {
-          setShowAcceptDialog(open);
-          if (!open) setConfirmName("");
-        }}
-      >
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Accept Proposal</DialogTitle>
-            <DialogDescription>
-              Type your full name below to confirm you accept this proposal.
-              This will authorise the work to proceed.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="confirm-name">Full name</Label>
-              <Input
-                id="confirm-name"
-                placeholder="e.g. Steve Hathaway"
-                value={confirmName}
-                onChange={(e) => setConfirmName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && confirmName.trim()) {
-                    handleConfirmAccept();
-                  }
-                }}
-                autoFocus
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowAcceptDialog(false);
-                  setConfirmName("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleConfirmAccept}
-                disabled={!confirmName.trim() || acceptProposalMutation.isPending}
-                className="bg-green-600 hover:bg-green-700 text-white"
-                data-testid="button-confirm-accept"
-              >
-                {acceptProposalMutation.isPending ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2" />
-                    Confirming...
-                  </>
-                ) : (
-                  <>
-                    <Check className="w-4 h-4 mr-2" />
-                    Confirm Acceptance
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
