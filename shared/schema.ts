@@ -595,6 +595,7 @@ export const proposals = pgTable("proposals", {
   signedDate: timestamp("signed_date"),
   templateUsed: text("template_used"),
   branding: jsonb("branding"), // logo, colors, fonts
+  blockConfig: jsonb("block_config"), // DocumentBlock[] — layout for the block-based renderer; null falls back to DEFAULT_PROPOSAL_BLOCKS
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).default("0.00"),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).default("0.00"),
   gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).default("0.00"),
