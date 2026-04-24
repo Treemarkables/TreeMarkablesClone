@@ -6920,11 +6920,15 @@ Draft the reply now.`;
       
       // Validate required fields
       if (!to || !subject || !body) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Missing required email fields: to, subject, body' 
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required email fields: to, subject, body'
         });
       }
+
+      // Microsoft-hosted addresses silently strip PDFs when inline CID images are present.
+      // We skip both the photo and logo CID attachments for these recipients so the PDF lands.
+      const recipientIsMicrosoft = typeof to === 'string' && isMicrosoftEmailDomain(to);
 
       // Get related data for email context
       let job, customer, invoice, quote;
@@ -7072,15 +7076,19 @@ Draft the reply now.`;
           </tr>
         `;
         
-        // Logo will be embedded as inline attachment (CID) for better email client compatibility
-        const logoUrl = 'cid:treemarkables-logo';
-        
+        // Logo is embedded as inline attachment (CID) for most email clients.
+        // For Microsoft-hosted recipients we render a text heading instead — inline CIDs
+        // trigger silent PDF stripping, and the PDF attachment itself already carries the branding.
+        const logoBlockHtml = recipientIsMicrosoft
+          ? `<div style="font-size: 22px; font-weight: 700; color: #111;">Treemarkables</div>`
+          : `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
+
         invoiceHtml = `
         <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
           <!-- Header with Logo and Company Info -->
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #000;">
             <div>
-              <img src="${logoUrl}" alt="Treemarkables" style="height: 70px; width: auto;" />
+              ${logoBlockHtml}
             </div>
             <div style="text-align: right; font-size: 13px;">
               <div style="font-weight: bold; margin-bottom: 8px;">Treemarkables LTD</div>
@@ -7250,8 +7258,9 @@ Draft the reply now.`;
       }
 
       
-      // Add logo as inline attachment for emails with invoices
-      if (validatedInvoiceData || invoiceId || invoice) {
+      // Add logo as inline attachment for emails with invoices.
+      // Skipped for Microsoft-hosted recipients (PDF-stripping mitigation — see recipientIsMicrosoft).
+      if ((validatedInvoiceData || invoiceId || invoice) && !recipientIsMicrosoft) {
         try {
           const logoPath = await getCompanyLogoFilePath();
           if (fs.existsSync(logoPath)) {
@@ -7273,6 +7282,8 @@ Draft the reply now.`;
         } catch (logoError) {
           console.error('Error adding logo attachment:', logoError);
         }
+      } else if (recipientIsMicrosoft) {
+        console.log(`📧 Skipped logo CID attachment for Microsoft-hosted recipient ${to} — PDF deliverability mode`);
       }
       
       // Embed photos as true inline CID attachments — no external URL dependency.
@@ -7286,8 +7297,6 @@ Draft the reply now.`;
       // Gmail and all other providers are unaffected.
       let photoGalleryHtml = '';
       let embeddedPhotoCount = 0;
-
-      const recipientIsMicrosoft = typeof to === 'string' && isMicrosoftEmailDomain(to);
 
       if (selectedPhotos && selectedPhotos.length > 0) {
         if (recipientIsMicrosoft) {
