@@ -258,7 +258,7 @@ export function NotificationBell() {
                 } else if (latestNotification.jobId) {
                   targetUrl = `/dispatch?job=${latestNotification.jobId}`;
                 } else if (latestNotification.proposalId) {
-                  targetUrl = `/proposal/${latestNotification.proposalId}`;
+                  targetUrl = `/proposal/${latestNotification.proposalId}?preview=true`;
                 } else if (latestNotification.quoteId) {
                   targetUrl = `/quote/${latestNotification.quoteId}`;
                 } else if (latestNotification.leadId) {
@@ -534,7 +534,7 @@ export function NotificationBell() {
 
     // Handle proposal notifications (only if no jobId)
     if (notification.proposalId) {
-      const url = `/proposal/${notification.proposalId}`;
+      const url = `/proposal/${notification.proposalId}?preview=true`;
       console.log("🔀 Navigating to proposal:", url);
       setLocation(url);
       setIsOpen(false);
