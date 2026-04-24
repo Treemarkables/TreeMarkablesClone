@@ -4662,7 +4662,7 @@ The Treemarkables Team`;
                   disabled={
                     !editingJob?.id ||
                     mode === "create" ||
-                    editingJob?.status !== "completed" ||
+                    currentStatus !== "completed" ||
                     editingJob?.xeroStatus === "sent" ||
                     sendToXeroMutation.isPending
                   }
@@ -9427,7 +9427,7 @@ The Treemarkables Team`;
                 disabled={
                   !editingJob?.id ||
                   mode === "create" ||
-                  editingJob?.status !== "completed" ||
+                  currentStatus !== "completed" ||
                   editingJob?.xeroStatus === "sent" ||
                   sendToXeroMutation.isPending
                 }
@@ -9964,11 +9964,11 @@ The Treemarkables Team`;
         open={isSchedulingModalOpen}
         onOpenChange={setIsSchedulingModalOpen}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-2 flex-shrink-0">
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Start Date</label>
@@ -10295,7 +10295,7 @@ The Treemarkables Team`;
               />
             </div>
           </div>
-          <div className="flex justify-between gap-2 pt-4 flex-wrap">
+          <div className="flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
             {/* Unschedule button — only shown when job already has a scheduled date */}
             <div>
               {editingJob?.scheduledDate && (

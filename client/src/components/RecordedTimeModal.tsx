@@ -204,19 +204,10 @@ export function RecordedTimeModal({
       });
     }
 
-    // Track staff without charge-out line items assigned
-    const staffWithoutRates: string[] = [];
-
     // Create one pending entry for each selected staff member using their assigned line items
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map((staffId) => {
       const staff = employees.find((e: any) => e.id === staffId);
-
-      // Use the staff member's assigned charge-out line item number
       const itemNumber = staff?.chargeOutLineItemNumber || "";
-
-      if (!itemNumber) {
-        staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
-      }
 
       return {
         id: `pending-${Date.now()}-${Math.random()}-${staffId}`,
@@ -231,15 +222,6 @@ export function RecordedTimeModal({
     });
 
     setPendingEntries((prev) => [...prev, ...newTimeEntries]);
-
-    // Show warning if some staff don't have a charge-out line item assigned
-    if (staffWithoutRates.length > 0) {
-      toast({
-        title: "Warning",
-        description: `${staffWithoutRates.join(", ")} ${staffWithoutRates.length === 1 ? "does" : "do"} not have a charge-out line item assigned. Please set one in Settings → Staff.`,
-        variant: "destructive",
-      });
-    }
 
     // Reset form but keep it open for adding more entries
     setNewEntry({ staffIds: [], duration: "1" });
