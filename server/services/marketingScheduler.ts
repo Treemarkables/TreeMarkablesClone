@@ -22,11 +22,15 @@ class MarketingScheduler {
     console.log('📅 Starting marketing campaign scheduler (checks every 5 minutes)...');
     
     // Run immediately on start
-    this.checkAndPublishCampaigns();
+    void this.checkAndPublishCampaigns().catch((err) => {
+      console.error('❌ Marketing scheduler unhandled error (initial run):', err);
+    });
 
     // Then run periodically
     this.intervalId = setInterval(() => {
-      this.checkAndPublishCampaigns();
+      void this.checkAndPublishCampaigns().catch((err) => {
+        console.error('❌ Marketing scheduler unhandled error:', err);
+      });
     }, this.CHECK_INTERVAL);
   }
 

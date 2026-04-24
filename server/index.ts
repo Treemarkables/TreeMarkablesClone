@@ -296,9 +296,10 @@ process.on('unhandledRejection', (reason: any, promise) => {
     log(`Database connection promise rejected (recovering): ${msg}`, "error");
     return;
   }
-  log(`Unhandled Promise Rejection: ${msg}`, "error");
-  console.error('Promise that was rejected:', promise);
-  process.exit(1);
+  // Log but do NOT exit — crashing the entire server over a background task
+  // error causes a restart loop that is far more disruptive than the error itself.
+  log(`Unhandled Promise Rejection (recovered): ${msg}`, "error");
+  console.error('Unhandled rejection stack:', stack || '(no stack)');
 });
 
 // Notification queue worker - processes pending notifications
