@@ -5,8 +5,8 @@ const fmt = (n: number) =>
     ? `-$${Math.abs(Math.round(n)).toLocaleString()}`
     : `$${Math.round(n).toLocaleString()}`;
 
-const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
-const parseNum = (s: string) => parseFloat(s.replace(/[^0-9.\-]/g, ""));
+const fmt2 = (n: number) =>
+  `$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 interface SliderProps {
   label: string;
@@ -67,175 +67,63 @@ const Slider = ({ label, value, min, max, step, onChange, format }: SliderProps)
   );
 };
 
-type SolveFor = "hourlyRate" | "billableStaff" | "efficiency" | "workingDays";
-
-const SOLVE_OPTIONS: { key: SolveFor; label: string }[] = [
-  { key: "hourlyRate", label: "Hourly Rate" },
-  { key: "billableStaff", label: "Billable Staff" },
-  { key: "efficiency", label: "Efficiency" },
-  { key: "workingDays", label: "Working Days" },
-];
-
-const SOLVE_BOUNDS: Record<SolveFor, { min: number; max: number }> = {
-  hourlyRate: { min: 40, max: 400 },
-  billableStaff: { min: 1, max: 30 },
-  efficiency: { min: 10, max: 100 },
-  workingDays: { min: 100, max: 320 },
-};
-
-type MetricKey = "revenue" | "dailyRevenue" | "perStaffYear" | "perPersonDay" | "grossProfit" | "netProfit";
-
-// Which inputs each metric depends on — if the chosen solve-for isn't in the formula, we can't edit that metric.
-const METRIC_DEPS: Record<MetricKey, Record<SolveFor, boolean>> = {
-  revenue:       { hourlyRate: true, billableStaff: true,  efficiency: true, workingDays: true  },
-  dailyRevenue:  { hourlyRate: true, billableStaff: true,  efficiency: true, workingDays: false },
-  perStaffYear:  { hourlyRate: true, billableStaff: false, efficiency: true, workingDays: true  },
-  perPersonDay:  { hourlyRate: true, billableStaff: false, efficiency: true, workingDays: false },
-  grossProfit:   { hourlyRate: true, billableStaff: true,  efficiency: true, workingDays: true  },
-  netProfit:     { hourlyRate: true, billableStaff: true,  efficiency: true, workingDays: true  },
-};
-
-interface EditableCardProps {
+interface StatCardProps {
   label: string;
-  value: number;
   formatted: string;
   sub?: string;
   highlight?: boolean;
-  canEdit: boolean;
-  disabledHint?: string;
-  onCommit: (v: number) => void;
 }
 
-const EditableCard = ({ label, value, formatted, sub, highlight, canEdit, disabledHint, onCommit }: EditableCardProps) => {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
+const StatCard = ({ label, formatted, sub, highlight }: StatCardProps) => (
+  <div
+    style={{
+      background: highlight ? "linear-gradient(135deg, #0d2200, #0a1a00)" : "#0d0d0d",
+      border: `1px solid ${highlight ? "#39FF14" : "#222"}`,
+      borderRadius: "8px", padding: "1.2rem 1.4rem",
+      boxShadow: highlight ? "0 0 20px #39FF1422" : "none",
+      flex: "1 1 140px",
+    }}
+  >
+    <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: highlight ? "#39FF14aa" : "#555", marginBottom: "0.4rem" }}>{label}</div>
+    <div style={{ fontSize: highlight ? "1.6rem" : "1.3rem", fontFamily: "'DM Mono', monospace", color: highlight ? "#39FF14" : "#ccc", fontWeight: 700, lineHeight: 1 }}>{formatted}</div>
+    {sub && <div style={{ fontSize: "0.72rem", color: "#555", marginTop: "0.3rem" }}>{sub}</div>}
+  </div>
+);
 
-  const start = () => {
-    if (!canEdit) return;
-    setDraft(String(Math.round(value)));
-    setEditing(true);
-  };
-
-  const commit = () => {
-    const n = parseNum(draft);
-    if (!Number.isNaN(n)) onCommit(n);
-    setEditing(false);
-  };
-
-  return (
-    <div
-      onClick={start}
-      title={canEdit ? "Tap to edit — other metrics will recalculate" : disabledHint}
-      style={{
-        background: highlight ? "linear-gradient(135deg, #0d2200, #0a1a00)" : "#0d0d0d",
-        border: `1px solid ${highlight ? "#39FF14" : "#222"}`,
-        borderRadius: "8px", padding: "1.2rem 1.4rem",
-        boxShadow: highlight ? "0 0 20px #39FF1422" : "none",
-        flex: "1 1 140px",
-        cursor: canEdit ? "pointer" : "not-allowed",
-        opacity: canEdit ? 1 : 0.55,
-        position: "relative",
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
-        <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: highlight ? "#39FF14aa" : "#555" }}>{label}</div>
-        {canEdit && !editing && (
-          <div style={{ fontSize: "0.62rem", color: highlight ? "#39FF1466" : "#333", letterSpacing: "0.08em" }}>EDIT</div>
-        )}
-      </div>
-      {editing ? (
-        <input
-          autoFocus
-          type="text"
-          inputMode="decimal"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onBlur={commit}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape") setEditing(false);
-          }}
-          onClick={(e) => e.stopPropagation()}
-          style={{
-            width: "100%",
-            background: "#000",
-            border: `1px solid ${highlight ? "#39FF14" : "#333"}`,
-            borderRadius: "4px",
-            color: highlight ? "#39FF14" : "#ccc",
-            fontFamily: "'DM Mono', monospace",
-            fontSize: highlight ? "1.3rem" : "1.1rem",
-            fontWeight: 700,
-            padding: "0.3rem 0.5rem",
-            outline: "none",
-          }}
-        />
-      ) : (
-        <div style={{ fontSize: highlight ? "1.6rem" : "1.3rem", fontFamily: "'DM Mono', monospace", color: highlight ? "#39FF14" : "#ccc", fontWeight: 700, lineHeight: 1 }}>{formatted}</div>
-      )}
-      {sub && <div style={{ fontSize: "0.72rem", color: "#555", marginTop: "0.3rem" }}>{sub}</div>}
-    </div>
-  );
-};
+// Non-salary variable cost per person (NZD):
+// ACC 2021 + KiwiSaver 2310 + Chainsaw 3935 + R&M 5594 + Waste 1682 +
+// Training 1387 + Tools 159 + General (50%) 417 + H&S (50%) 699 + Staff Exp 50
+const VARIABLE_PER_PERSON_EX_SALARY = 18254;
+const BASE_WORKING_DAYS = 260;
+const VEHICLE_COST_THRESHOLD_STAFF = 8;
+const ADDITIONAL_VEHICLE_COST_ESTIMATE = 54000;
 
 export default function ProfitabilityCalculator() {
-  const [hourlyRate, setHourlyRate] = useState(125);
   const [billableStaff, setBillableStaff] = useState(6);
-  const [efficiency, setEfficiency] = useState(85);
-  const [workingDays, setWorkingDays] = useState(215);
-  const [opCosts, setOpCosts] = useState(750000);
-  const [ownerSalary, setOwnerSalary] = useState(100000);
-  const [targetNet, setTargetNet] = useState(300000);
-  const [solveFor, setSolveFor] = useState<SolveFor>("hourlyRate");
+  const [salary, setSalary] = useState(67000);
+  const [fixedCosts, setFixedCosts] = useState(234000);
+  const [targetMargin, setTargetMargin] = useState(20);
+  const [publicHolidays, setPublicHolidays] = useState(11);
+  const [annualLeave, setAnnualLeave] = useState(20);
+  const [sickDays, setSickDays] = useState(3);
+  const [billableHoursPerDay, setBillableHoursPerDay] = useState(6.5);
 
-  const hoursPerPersonPerDay = 8 * (efficiency / 100);
-  const totalBillableHours = hoursPerPersonPerDay * billableStaff * workingDays;
-  const revenue = totalBillableHours * hourlyRate;
-  const grossProfit = revenue - opCosts;
-  const netProfit = grossProfit - ownerSalary;
-  const dailyRevenue = revenue / workingDays;
-  const revenuePerPerson = revenue / billableStaff;
-  const perPersonDay = dailyRevenue / billableStaff;
-  const margin = revenue > 0 ? (netProfit / revenue) * 100 : 0;
-  const gap = netProfit - targetNet;
+  const workingDaysPerPerson = BASE_WORKING_DAYS - publicHolidays - annualLeave - sickDays;
+  const totalBillableHours = billableStaff * workingDaysPerPerson * billableHoursPerDay;
 
-  const applyMetricEdit = (metric: MetricKey, targetValue: number) => {
-    // Step 1: convert the edited metric back to "required annual revenue"
-    let needed: number;
-    switch (metric) {
-      case "revenue":       needed = targetValue; break;
-      case "dailyRevenue":  needed = targetValue * workingDays; break;
-      case "perStaffYear":  needed = targetValue * billableStaff; break;
-      case "perPersonDay":  needed = targetValue * billableStaff * workingDays; break;
-      case "grossProfit":   needed = targetValue + opCosts; break;
-      case "netProfit":     needed = targetValue + opCosts + ownerSalary; break;
-    }
-    if (!Number.isFinite(needed) || needed < 0) return;
+  const variablePerPerson = salary + VARIABLE_PER_PERSON_EX_SALARY;
+  const totalVariable = variablePerPerson * billableStaff;
+  const totalCosts = fixedCosts + totalVariable;
 
-    // Step 2: solve revenue = 8*(eff/100)*staff*days*rate for the chosen input
-    const H = 8 * (efficiency / 100);
-    let next: number;
-    switch (solveFor) {
-      case "hourlyRate":    next = needed / (H * billableStaff * workingDays); break;
-      case "billableStaff": next = needed / (H * workingDays * hourlyRate); break;
-      case "efficiency":    next = (needed / (8 * billableStaff * workingDays * hourlyRate)) * 100; break;
-      case "workingDays":   next = needed / (H * billableStaff * hourlyRate); break;
-    }
-    if (!Number.isFinite(next)) return;
+  const marginFrac = targetMargin / 100;
+  const targetRevenue = marginFrac < 1 ? totalCosts / (1 - marginFrac) : 0;
+  const profit = targetRevenue - totalCosts;
+  const revenuePerPersonDay = billableStaff > 0 && workingDaysPerPerson > 0
+    ? targetRevenue / (billableStaff * workingDaysPerPerson)
+    : 0;
+  const hourlyRateNeeded = totalBillableHours > 0 ? targetRevenue / totalBillableHours : 0;
 
-    const { min, max } = SOLVE_BOUNDS[solveFor];
-    const clamped = clamp(next, min, max);
-    const rounded = solveFor === "billableStaff" || solveFor === "workingDays" || solveFor === "efficiency"
-      ? Math.round(clamped)
-      : Math.round(clamped * 100) / 100;
-
-    if (solveFor === "hourlyRate") setHourlyRate(rounded);
-    if (solveFor === "billableStaff") setBillableStaff(rounded);
-    if (solveFor === "efficiency") setEfficiency(rounded);
-    if (solveFor === "workingDays") setWorkingDays(rounded);
-  };
-
-  const solveForLabel = SOLVE_OPTIONS.find((o) => o.key === solveFor)!.label;
-  const disabledHint = `"${solveForLabel}" doesn't change this metric — pick a different variable to solve for.`;
+  const showVehicleWarning = billableStaff >= VEHICLE_COST_THRESHOLD_STAFF;
 
   return (
     <div style={{
@@ -262,123 +150,98 @@ export default function ProfitabilityCalculator() {
         <div style={{ marginBottom: "1.5rem" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.7rem", marginBottom: "0.3rem" }}>
             <div style={{ width: "10px", height: "10px", background: "#39FF14", borderRadius: "50%", boxShadow: "0 0 8px #39FF14", flexShrink: 0 }} />
-            <span style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "#39FF14" }}>Treemarkables Ltd</span>
+            <span style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.15em", color: "#39FF14" }}>Treemarkables Ltd — NZD</span>
           </div>
           <h1 style={{ margin: 0, fontSize: "clamp(1.3rem, 5vw, 1.6rem)", fontWeight: 600, letterSpacing: "-0.02em", color: "#fff" }}>
             Profit Calculator
           </h1>
-          <p style={{ margin: "0.3rem 0 0", fontSize: "0.82rem", color: "#555" }}>FY2026 — tap any metric to edit, or drag the sliders</p>
+          <p style={{ margin: "0.3rem 0 0", fontSize: "0.82rem", color: "#555" }}>
+            Set staffing, costs and target margin — revenue &amp; hourly rate are calculated live.
+          </p>
         </div>
 
-        {/* Target Banner — editable target */}
-        <TargetBanner targetNet={targetNet} setTargetNet={setTargetNet} gap={gap} />
-
-        {/* Solve-for selector */}
-        <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "1rem 1.2rem", marginBottom: "1.5rem" }}>
-          <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "0.6rem" }}>
-            When I edit a metric, solve for
-          </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem" }}>
-            {SOLVE_OPTIONS.map((opt) => {
-              const active = solveFor === opt.key;
-              return (
-                <button
-                  key={opt.key}
-                  onClick={() => setSolveFor(opt.key)}
-                  style={{
-                    flex: "1 1 120px",
-                    padding: "0.55rem 0.8rem",
-                    background: active ? "linear-gradient(135deg, #0d2200, #0a1a00)" : "#111",
-                    border: `1px solid ${active ? "#39FF14" : "#222"}`,
-                    borderRadius: "6px",
-                    color: active ? "#39FF14" : "#888",
-                    fontSize: "0.8rem",
-                    fontWeight: active ? 600 : 500,
-                    letterSpacing: "0.02em",
-                    cursor: "pointer",
-                    textAlign: "center",
-                    fontFamily: "inherit",
-                    boxShadow: active ? "0 0 12px #39FF1422" : "none",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
+        {/* Sliders — team & economics */}
+        <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "1.2rem 1.2rem 0.2rem", marginBottom: "1rem" }}>
+          <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "0.8rem" }}>Team &amp; Economics</div>
+          <Slider label="Billable Staff" value={billableStaff} min={5} max={10} step={1} onChange={setBillableStaff} format={(v) => `${v} people`} />
+          <Slider label="Average Salary / Person" value={salary} min={55000} max={90000} step={1000} onChange={setSalary} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
+          <Slider label="Fixed Base Costs" value={fixedCosts} min={150000} max={350000} step={1000} onChange={setFixedCosts} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
+          <Slider label="Target Profit Margin" value={targetMargin} min={0} max={40} step={1} onChange={setTargetMargin} format={(v) => `${v}%`} />
         </div>
 
-        {/* Sliders */}
+        {/* Sliders — working days */}
         <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "1.2rem 1.2rem 0.2rem", marginBottom: "1.5rem" }}>
-          <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "0.8rem" }}>Variables</div>
-          <Slider label="Hourly Rate" value={hourlyRate} min={80} max={250} step={5} onChange={setHourlyRate} format={(v) => `$${v}/hr`} />
-          <Slider label="Billable Staff" value={billableStaff} min={1} max={12} step={1} onChange={setBillableStaff} format={(v) => `${v} people`} />
-          <Slider label="Efficiency" value={efficiency} min={50} max={100} step={1} onChange={setEfficiency} format={(v) => `${v}%`} />
-          <Slider label="Working Days / Year" value={workingDays} min={150} max={260} step={1} onChange={setWorkingDays} format={(v) => `${v} days`} />
-          <Slider label="Operating Costs" value={opCosts} min={400000} max={1200000} step={5000} onChange={setOpCosts} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
-          <Slider label="Your Salary" value={ownerSalary} min={0} max={300000} step={5000} onChange={setOwnerSalary} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
+          <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "0.8rem" }}>
+            Working Days (base {BASE_WORKING_DAYS} / yr)
+          </div>
+          <Slider label="Public Holidays" value={publicHolidays} min={10} max={13} step={1} onChange={setPublicHolidays} format={(v) => `${v} days`} />
+          <Slider label="Annual Leave" value={annualLeave} min={20} max={25} step={1} onChange={setAnnualLeave} format={(v) => `${v} days`} />
+          <Slider label="Sick Days" value={sickDays} min={0} max={5} step={1} onChange={setSickDays} format={(v) => `${v} days`} />
+          <Slider label="Billable Hours / Day" value={billableHoursPerDay} min={5} max={8} step={0.5} onChange={setBillableHoursPerDay} format={(v) => `${v.toFixed(1)} hrs`} />
         </div>
 
-        {/* Output Cards — all editable */}
+        {/* Vehicle warning */}
+        {showVehicleWarning && (
+          <div style={{
+            background: "linear-gradient(90deg, #2a1800, #1a0f00)",
+            border: "1px solid #ff9500",
+            borderRadius: "8px",
+            padding: "0.9rem 1.2rem",
+            marginBottom: "1.5rem",
+            boxShadow: "0 0 16px #ff950022",
+          }}>
+            <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#ff9500", marginBottom: "0.3rem", fontWeight: 600 }}>
+              Trigger Point — extra vehicle likely
+            </div>
+            <div style={{ fontSize: "0.85rem", color: "#ddd", lineHeight: 1.5 }}>
+              At {billableStaff}+ billable staff, fuel &amp; motor vehicle costs (currently ~{fmt(54000)}) will likely increase — budget another ~{fmt(ADDITIONAL_VEHICLE_COST_ESTIMATE)} for an additional vehicle.
+            </div>
+          </div>
+        )}
+
+        {/* Output cards */}
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem", marginBottom: "0.7rem" }}>
-          <EditableCard
-            label="Annual Revenue"
-            value={revenue}
-            formatted={fmt(revenue)}
-            sub={`${fmt(dailyRevenue)}/day`}
-            canEdit={METRIC_DEPS.revenue[solveFor]}
-            disabledHint={disabledHint}
-            onCommit={(v) => applyMetricEdit("revenue", v)}
+          <StatCard
+            label="Working Days / Person"
+            formatted={`${workingDaysPerPerson} days`}
+            sub={`${BASE_WORKING_DAYS} − ${publicHolidays + annualLeave + sickDays} off`}
           />
-          <EditableCard
-            label="Per Staff / Year"
-            value={revenuePerPerson}
-            formatted={fmt(revenuePerPerson)}
-            sub={`${billableStaff} staff`}
-            canEdit={METRIC_DEPS.perStaffYear[solveFor]}
-            disabledHint={disabledHint}
-            onCommit={(v) => applyMetricEdit("perStaffYear", v)}
+          <StatCard
+            label="Total Billable Hours"
+            formatted={`${Math.round(totalBillableHours).toLocaleString()} hrs`}
+            sub={`${Math.round(totalBillableHours / billableStaff).toLocaleString()} hrs / person`}
           />
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem", marginBottom: "0.7rem" }}>
-          <EditableCard
-            label="Daily Target (Team)"
-            value={dailyRevenue}
-            formatted={fmt(dailyRevenue)}
-            sub="across all billable staff"
-            canEdit={METRIC_DEPS.dailyRevenue[solveFor]}
-            disabledHint={disabledHint}
-            onCommit={(v) => applyMetricEdit("dailyRevenue", v)}
+          <StatCard
+            label="Total Costs"
+            formatted={fmt(totalCosts)}
+            sub={`${fmt(fixedCosts)} fixed + ${fmt(totalVariable)} variable`}
           />
-          <EditableCard
-            label="Per Person / Day"
-            value={perPersonDay}
-            formatted={fmt(perPersonDay)}
-            sub={`at ${hoursPerPersonPerDay.toFixed(1)} billable hrs`}
-            canEdit={METRIC_DEPS.perPersonDay[solveFor]}
-            disabledHint={disabledHint}
-            onCommit={(v) => applyMetricEdit("perPersonDay", v)}
+          <StatCard
+            label="Target Revenue"
+            formatted={fmt(targetRevenue)}
+            sub={`to hit ${targetMargin}% margin`}
+          />
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem", marginBottom: "0.7rem" }}>
+          <StatCard
+            label="Revenue / Person / Day"
+            formatted={fmt(revenuePerPersonDay)}
+            sub={`${billableStaff} staff × ${workingDaysPerPerson} days`}
+          />
+          <StatCard
+            label="Hourly Rate Needed"
+            formatted={fmt2(hourlyRateNeeded)}
+            sub={`per billable hour`}
           />
         </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem", marginBottom: "1.5rem" }}>
-          <EditableCard
-            label="Gross Profit"
-            value={grossProfit}
-            formatted={fmt(grossProfit)}
-            sub="before your salary"
-            canEdit={METRIC_DEPS.grossProfit[solveFor]}
-            disabledHint={disabledHint}
-            onCommit={(v) => applyMetricEdit("grossProfit", v)}
-          />
-          <EditableCard
-            label="Net Profit"
-            value={netProfit}
-            formatted={fmt(netProfit)}
-            sub={`${margin.toFixed(1)}% margin`}
+          <StatCard
+            label="Profit"
+            formatted={fmt(profit)}
+            sub={`${targetMargin}% of target revenue`}
             highlight
-            canEdit={METRIC_DEPS.netProfit[solveFor]}
-            disabledHint={disabledHint}
-            onCommit={(v) => applyMetricEdit("netProfit", v)}
           />
         </div>
 
@@ -386,104 +249,34 @@ export default function ProfitabilityCalculator() {
         <div style={{ background: "#0d0d0d", border: "1px solid #1a1a1a", borderRadius: "10px", padding: "1.2rem 1.2rem" }}>
           <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "1rem" }}>Breakdown</div>
           {([
-            ["Billable hrs/person/day", `${hoursPerPersonPerDay.toFixed(1)} hrs`],
-            ["Total billable hrs/year", `${Math.round(totalBillableHours).toLocaleString()} hrs`],
-            ["Revenue", fmt(revenue)],
-            ["Operating Costs", `− ${fmt(opCosts)}`],
-            ["Gross Profit", fmt(grossProfit)],
-            ["Your Salary", `− ${fmt(ownerSalary)}`],
-            ["Net Profit", fmt(netProfit)],
-          ] as [string, string][]).map(([label, val], i) => (
-            <div key={i} style={{
-              display: "flex", justifyContent: "space-between", alignItems: "baseline",
-              padding: "0.5rem 0",
-              borderTop: i === 6 ? "1px solid #222" : "none",
-              borderBottom: "1px solid #111",
-              gap: "1rem",
-            }}>
-              <span style={{ fontSize: "0.82rem", color: "#555" }}>{label}</span>
-              <span style={{ fontSize: "0.88rem", fontFamily: "'DM Mono', monospace", color: i === 6 ? "#39FF14" : "#aaa", fontWeight: i === 6 ? 700 : 400, whiteSpace: "nowrap" }}>{val}</span>
-            </div>
-          ))}
+            ["Working days / person", `${workingDaysPerPerson} days`],
+            ["Billable hours / person / year", `${Math.round(workingDaysPerPerson * billableHoursPerDay).toLocaleString()} hrs`],
+            ["Total billable hours", `${Math.round(totalBillableHours).toLocaleString()} hrs`],
+            ["Fixed base costs", fmt(fixedCosts)],
+            [`Salary × ${billableStaff}`, fmt(salary * billableStaff)],
+            [`Other variable × ${billableStaff}`, fmt(VARIABLE_PER_PERSON_EX_SALARY * billableStaff)],
+            ["Total costs", fmt(totalCosts)],
+            ["Target revenue", fmt(targetRevenue)],
+            ["Profit", fmt(profit)],
+            ["Hourly rate needed", fmt2(hourlyRateNeeded)],
+          ] as [string, string][]).map(([label, val], i, arr) => {
+            const isTotal = label === "Total costs" || label === "Profit";
+            return (
+              <div key={i} style={{
+                display: "flex", justifyContent: "space-between", alignItems: "baseline",
+                padding: "0.5rem 0",
+                borderTop: isTotal ? "1px solid #222" : "none",
+                borderBottom: i === arr.length - 1 ? "none" : "1px solid #111",
+                gap: "1rem",
+              }}>
+                <span style={{ fontSize: "0.82rem", color: "#555" }}>{label}</span>
+                <span style={{ fontSize: "0.88rem", fontFamily: "'DM Mono', monospace", color: label === "Profit" ? "#39FF14" : "#aaa", fontWeight: isTotal ? 700 : 400, whiteSpace: "nowrap" }}>{val}</span>
+              </div>
+            );
+          })}
         </div>
 
       </div>
-    </div>
-  );
-}
-
-interface TargetBannerProps {
-  targetNet: number;
-  setTargetNet: (v: number) => void;
-  gap: number;
-}
-
-function TargetBanner({ targetNet, setTargetNet, gap }: TargetBannerProps) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState("");
-
-  const start = () => {
-    setDraft(String(Math.round(targetNet)));
-    setEditing(true);
-  };
-
-  const commit = () => {
-    const n = parseNum(draft);
-    if (!Number.isNaN(n) && n >= 0) setTargetNet(Math.round(n));
-    setEditing(false);
-  };
-
-  return (
-    <div
-      onClick={() => { if (!editing) start(); }}
-      style={{
-        background: gap >= 0 ? "linear-gradient(90deg, #0d2200, #0a1800)" : "#120000",
-        border: `1px solid ${gap >= 0 ? "#39FF14" : "#ff3333"}`,
-        borderRadius: "8px", padding: "0.9rem 1.2rem",
-        marginBottom: "1.5rem",
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        flexWrap: "wrap", gap: "0.5rem",
-        cursor: editing ? "default" : "pointer",
-      }}
-    >
-      <span style={{ fontSize: "0.78rem", textTransform: "uppercase", letterSpacing: "0.1em", color: "#666", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        Target:
-        {editing ? (
-          <input
-            autoFocus
-            type="text"
-            inputMode="decimal"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-              if (e.key === "Escape") setEditing(false);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: "#000",
-              border: "1px solid #333",
-              borderRadius: "4px",
-              color: "#ccc",
-              fontFamily: "'DM Mono', monospace",
-              fontSize: "0.9rem",
-              fontWeight: 600,
-              padding: "0.15rem 0.4rem",
-              width: "110px",
-              outline: "none",
-              textTransform: "none",
-              letterSpacing: "normal",
-            }}
-          />
-        ) : (
-          <span style={{ color: "#ccc", fontFamily: "'DM Mono', monospace", fontWeight: 600 }}>{fmt(targetNet)}</span>
-        )}
-        <span style={{ color: "#444" }}>net profit</span>
-      </span>
-      <span style={{ fontFamily: "'DM Mono', monospace", fontSize: "0.95rem", fontWeight: 700, color: gap >= 0 ? "#39FF14" : "#ff4444" }}>
-        {gap >= 0 ? `+${fmt(gap)} above` : `${fmt(Math.abs(gap))} below`}
-      </span>
     </div>
   );
 }
