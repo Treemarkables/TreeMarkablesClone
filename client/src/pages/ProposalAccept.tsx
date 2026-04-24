@@ -6,6 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Check, AlertCircle, Loader2, ArrowLeft, FileText } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
+import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
+import type { DocumentBlock, DocumentTemplate } from "@shared/schema";
 
 export default function ProposalAccept() {
   const { proposalId } = useParams();
@@ -163,20 +165,42 @@ export default function ProposalAccept() {
         <div className="max-w-4xl mx-auto px-4 py-8">
           <Card>
             <CardContent className="p-0">
-              <ProposalTemplate
-                proposal={proposal}
-                customer={customer}
-                job={job}
-                template={template}
-                sections={proposal.sections || []}
-                showActions={false}
-                className="border-0"
-                allowChoiceSelection={proposal?.status !== 'accepted'}
-                selectedChoices={selectedChoices}
-                onChoiceSelect={handleChoiceSelect}
-                selectedOptionalItems={selectedOptionalItems}
-                onOptionalToggle={handleOptionalToggle}
-              />
+              {(() => {
+                const blocks: DocumentBlock[] | null =
+                  Array.isArray(proposal.blockConfig) && proposal.blockConfig.length > 0
+                    ? (proposal.blockConfig as DocumentBlock[])
+                    : null;
+                if (blocks) {
+                  return (
+                    <BlockRenderedProposal
+                      proposal={proposal}
+                      customer={customer}
+                      job={job}
+                      template={template as unknown as DocumentTemplate}
+                      blocks={blocks}
+                      selectedChoices={selectedChoices}
+                      selectedOptionalItems={selectedOptionalItems}
+                      className="border-0"
+                    />
+                  );
+                }
+                return (
+                  <ProposalTemplate
+                    proposal={proposal}
+                    customer={customer}
+                    job={job}
+                    template={template}
+                    sections={proposal.sections || []}
+                    showActions={false}
+                    className="border-0"
+                    allowChoiceSelection={proposal?.status !== 'accepted'}
+                    selectedChoices={selectedChoices}
+                    onChoiceSelect={handleChoiceSelect}
+                    selectedOptionalItems={selectedOptionalItems}
+                    onOptionalToggle={handleOptionalToggle}
+                  />
+                );
+              })()}
             </CardContent>
           </Card>
         </div>
@@ -224,17 +248,38 @@ export default function ProposalAccept() {
       <div className="max-w-4xl mx-auto px-4 py-8">
         <Card>
           <CardContent className="p-0">
-            <ProposalTemplate
-              proposal={proposal}
-              customer={customer}
-              job={job}
-              template={template}
-              sections={proposal.sections || []}
-              showActions={false}
-              className="border-0"
-              allowChoiceSelection={false}
-              selectedChoices={selectedChoices}
-            />
+            {(() => {
+              const blocks: DocumentBlock[] | null =
+                Array.isArray(proposal.blockConfig) && proposal.blockConfig.length > 0
+                  ? (proposal.blockConfig as DocumentBlock[])
+                  : null;
+              if (blocks) {
+                return (
+                  <BlockRenderedProposal
+                    proposal={proposal}
+                    customer={customer}
+                    job={job}
+                    template={template as unknown as DocumentTemplate}
+                    blocks={blocks}
+                    selectedChoices={selectedChoices}
+                    className="border-0"
+                  />
+                );
+              }
+              return (
+                <ProposalTemplate
+                  proposal={proposal}
+                  customer={customer}
+                  job={job}
+                  template={template}
+                  sections={proposal.sections || []}
+                  showActions={false}
+                  className="border-0"
+                  allowChoiceSelection={false}
+                  selectedChoices={selectedChoices}
+                />
+              );
+            })()}
           </CardContent>
         </Card>
 
