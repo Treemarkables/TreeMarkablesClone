@@ -2812,10 +2812,10 @@ export interface InvoiceSectionConfig {
 }
 
 // =====================================
-// INVOICE BLOCK BUILDER TYPES
+// DOCUMENT BLOCK BUILDER TYPES
 // =====================================
 
-export type InvoiceBlockType =
+export type DocumentBlockType =
   | 'header'
   | 'companyInfo'
   | 'billTo'
@@ -2828,13 +2828,13 @@ export type InvoiceBlockType =
   | 'customText'
   | 'footer';
 
-export interface InvoiceBlockConfigHeader {
+export interface DocumentBlockConfigHeader {
   logoAlignment: 'left' | 'center' | 'right';
   headerColor: string;
   showCompanyName: boolean;
 }
 
-export interface InvoiceBlockConfigCompanyInfo {
+export interface DocumentBlockConfigCompanyInfo {
   showName: boolean;
   showAddress: boolean;
   showPhone: boolean;
@@ -2842,13 +2842,13 @@ export interface InvoiceBlockConfigCompanyInfo {
   showGST: boolean;
 }
 
-export interface InvoiceBlockConfigBillTo {
+export interface DocumentBlockConfigBillTo {
   label: string;
   showEmail: boolean;
   showAddress: boolean;
 }
 
-export interface InvoiceBlockConfigInvoiceMeta {
+export interface DocumentBlockConfigInvoiceMeta {
   showInvoiceNumber: boolean;
   showIssueDate: boolean;
   showDueDate: boolean;
@@ -2858,11 +2858,11 @@ export interface InvoiceBlockConfigInvoiceMeta {
   labelDueDate: string;
 }
 
-export interface InvoiceBlockConfigJobDescription {
+export interface DocumentBlockConfigJobDescription {
   label: string;
 }
 
-export interface InvoiceBlockConfigLineItems {
+export interface DocumentBlockConfigLineItems {
   labelDescription: string;
   labelQty: string;
   labelRate: string;
@@ -2872,7 +2872,7 @@ export interface InvoiceBlockConfigLineItems {
   descColPct?: number;
 }
 
-export interface InvoiceBlockConfigTotals {
+export interface DocumentBlockConfigTotals {
   showSubtotal: boolean;
   showGST: boolean;
   labelSubtotal: string;
@@ -2880,7 +2880,7 @@ export interface InvoiceBlockConfigTotals {
   labelTotal: string;
 }
 
-export interface InvoiceBlockConfigPayment {
+export interface DocumentBlockConfigPayment {
   label: string;
   showBank: boolean;
   showAccountNumber: boolean;
@@ -2889,18 +2889,18 @@ export interface InvoiceBlockConfigPayment {
   showTerms: boolean;
 }
 
-export interface InvoiceBlockConfigDivider {
+export interface DocumentBlockConfigDivider {
   color: string;
   thickness: number; // px
 }
 
-export interface InvoiceBlockConfigCustomText {
+export interface DocumentBlockConfigCustomText {
   text: string;
   fontSize: 'xs' | 'sm' | 'base';
   align: 'left' | 'center' | 'right';
 }
 
-export interface InvoiceBlockConfigFooter {
+export interface DocumentBlockConfigFooter {
   showCompanyName: boolean;
   showAddress: boolean;
   showPhone: boolean;
@@ -2909,28 +2909,28 @@ export interface InvoiceBlockConfigFooter {
   showPaymentTerms: boolean;
 }
 
-export type InvoiceBlockConfig =
-  | InvoiceBlockConfigHeader
-  | InvoiceBlockConfigCompanyInfo
-  | InvoiceBlockConfigBillTo
-  | InvoiceBlockConfigInvoiceMeta
-  | InvoiceBlockConfigJobDescription
-  | InvoiceBlockConfigLineItems
-  | InvoiceBlockConfigTotals
-  | InvoiceBlockConfigPayment
-  | InvoiceBlockConfigDivider
-  | InvoiceBlockConfigCustomText
-  | InvoiceBlockConfigFooter;
+export type DocumentBlockConfig =
+  | DocumentBlockConfigHeader
+  | DocumentBlockConfigCompanyInfo
+  | DocumentBlockConfigBillTo
+  | DocumentBlockConfigInvoiceMeta
+  | DocumentBlockConfigJobDescription
+  | DocumentBlockConfigLineItems
+  | DocumentBlockConfigTotals
+  | DocumentBlockConfigPayment
+  | DocumentBlockConfigDivider
+  | DocumentBlockConfigCustomText
+  | DocumentBlockConfigFooter;
 
-export interface InvoiceBlock {
+export interface DocumentBlock {
   id: string;
-  type: InvoiceBlockType;
+  type: DocumentBlockType;
   order: number;
   visible: boolean;
-  config: InvoiceBlockConfig;
+  config: DocumentBlockConfig;
 }
 
-export const DEFAULT_INVOICE_BLOCKS: InvoiceBlock[] = [
+export const DEFAULT_INVOICE_BLOCKS: DocumentBlock[] = [
   { id: 'header-default', type: 'header', order: 0, visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
   { id: 'companyInfo-default', type: 'companyInfo', order: 1, visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
   { id: 'invoiceMeta-default', type: 'invoiceMeta', order: 2, visible: true, config: { showInvoiceNumber: true, showIssueDate: true, showDueDate: true, showJobNumber: true, labelInvoice: 'Invoice #', labelIssueDate: 'Issue Date', labelDueDate: 'Due Date' } },

@@ -56,21 +56,21 @@ import {
 } from 'lucide-react';
 import type {
   DocumentTemplate,
-  InvoiceBlock,
-  InvoiceBlockType,
+  DocumentBlock,
+  DocumentBlockType,
 } from '@shared/schema';
 import { DEFAULT_INVOICE_BLOCKS } from '@shared/schema';
-import { resolveCompanyInfo } from '@shared/invoiceBlockDefaults';
-import { renderInvoiceBlock, buildSampleContext } from '@/components/InvoiceBlockRenderer';
+import { resolveCompanyInfo } from '@shared/documentBlockDefaults';
+import { renderDocumentBlock, buildSampleContext } from '@/components/DocumentBlockRenderer';
 
 // ─── Block metadata ────────────────────────────────────────────────────────────
 
 interface PaletteItem {
-  type: InvoiceBlockType;
+  type: DocumentBlockType;
   label: string;
   description: string;
   icon: React.ElementType;
-  defaultConfig: InvoiceBlock['config'];
+  defaultConfig: DocumentBlock['config'];
 }
 
 const PALETTE_ITEMS: PaletteItem[] = [
@@ -153,7 +153,7 @@ const PALETTE_ITEMS: PaletteItem[] = [
   },
 ];
 
-const BLOCK_LABELS: Record<InvoiceBlockType, string> = {
+const BLOCK_LABELS: Record<DocumentBlockType, string> = {
   header: 'Header',
   companyInfo: 'Company Info',
   billTo: 'Bill To',
@@ -167,7 +167,7 @@ const BLOCK_LABELS: Record<InvoiceBlockType, string> = {
   footer: 'Footer',
 };
 
-const BLOCK_ICONS: Record<InvoiceBlockType, React.ElementType> = {
+const BLOCK_ICONS: Record<DocumentBlockType, React.ElementType> = {
   header: Image,
   companyInfo: Building2,
   billTo: User,
@@ -188,15 +188,15 @@ function InspectorPanel({
   template,
   onUpdate,
 }: {
-  block: InvoiceBlock;
+  block: DocumentBlock;
   template: DocumentTemplate;
-  onUpdate: (id: string, config: InvoiceBlock['config']) => void;
+  onUpdate: (id: string, config: DocumentBlock['config']) => void;
 }) {
   const cfg = block.config as Record<string, unknown>;
 
   const set = useCallback(
     (key: string, value: unknown) => {
-      onUpdate(block.id, { ...cfg, [key]: value } as InvoiceBlock['config']);
+      onUpdate(block.id, { ...cfg, [key]: value } as DocumentBlock['config']);
     },
     [block.id, cfg, onUpdate],
   );
@@ -403,7 +403,7 @@ function InspectorPanel({
 }
 
 // ─── Sortable Canvas Block (WYSIWYG) ──────────────────────────────────────────
-// Uses the shared renderInvoiceBlock() from InvoiceBlockRenderer.tsx so the
+// Uses the shared renderDocumentBlock() from DocumentBlockRenderer.tsx so the
 // canvas matches the final invoice output exactly (no separate BlockPreview).
 
 const SAMPLE_CTX = buildSampleContext();
@@ -416,7 +416,7 @@ function SortableCanvasBlock({
   onRemove,
   onToggleVisible,
 }: {
-  block: InvoiceBlock;
+  block: DocumentBlock;
   template: DocumentTemplate;
   selected: boolean;
   onSelect: (id: string) => void;
@@ -432,7 +432,7 @@ function SortableCanvasBlock({
     opacity: isDragging ? 0.3 : 1,
   };
 
-  const rendered = renderInvoiceBlock(block, template, SAMPLE_CTX, co);
+  const rendered = renderDocumentBlock(block, template, SAMPLE_CTX, co);
 
   return (
     <div
@@ -563,12 +563,12 @@ export default function InvoiceBuilderPage() {
 
   const invoiceTemplate = templatesRes?.data?.find((t) => t.type === 'invoice') ?? null;
 
-  const [blocks, setBlocks] = useState<InvoiceBlock[] | null>(null);
+  const [blocks, setBlocks] = useState<DocumentBlock[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
 
-  const effectiveBlocks: InvoiceBlock[] = blocks
-    ?? (invoiceTemplate?.blockConfig as InvoiceBlock[] | null)
+  const effectiveBlocks: DocumentBlock[] = blocks
+    ?? (invoiceTemplate?.blockConfig as DocumentBlock[] | null)
     ?? DEFAULT_INVOICE_BLOCKS;
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
@@ -605,12 +605,12 @@ export default function InvoiceBuilderPage() {
       if (!isCanvasTarget) return;
 
       const newBlockId = `${item.type}-${crypto.randomUUID().slice(0, 8)}`;
-      const newBlock: InvoiceBlock = {
+      const newBlock: DocumentBlock = {
         id: newBlockId,
         type: item.type,
         order: 0,
         visible: true,
-        config: item.defaultConfig as InvoiceBlock['config'],
+        config: item.defaultConfig as DocumentBlock['config'],
       };
 
       setBlocks((prev) => {
@@ -640,12 +640,12 @@ export default function InvoiceBuilderPage() {
 
   const addBlock = useCallback((item: PaletteItem) => {
     const cur = blocks ?? effectiveBlocks;
-    const newBlock: InvoiceBlock = {
+    const newBlock: DocumentBlock = {
       id: `${item.type}-${crypto.randomUUID().slice(0, 8)}`,
       type: item.type,
       order: cur.length,
       visible: true,
-      config: item.defaultConfig as InvoiceBlock['config'],
+      config: item.defaultConfig as DocumentBlock['config'],
     };
     setBlocks((prev) => [...(prev ?? effectiveBlocks), newBlock]);
     setSelectedId(newBlock.id);
@@ -662,7 +662,7 @@ export default function InvoiceBuilderPage() {
     );
   }, [effectiveBlocks]);
 
-  const updateBlockConfig = useCallback((id: string, config: InvoiceBlock['config']) => {
+  const updateBlockConfig = useCallback((id: string, config: DocumentBlock['config']) => {
     setBlocks((prev) =>
       (prev ?? effectiveBlocks).map((b) => (b.id === id ? { ...b, config } : b)),
     );
@@ -799,7 +799,7 @@ export default function InvoiceBuilderPage() {
             {activeDragId ? (
               activeDragId.startsWith('palette-') ? (
                 (() => {
-                  const paletteType = activeDragId.replace('palette-', '') as InvoiceBlockType;
+                  const paletteType = activeDragId.replace('palette-', '') as DocumentBlockType;
                   const Icon = BLOCK_ICONS[paletteType] ?? BLOCK_ICONS['header'];
                   return (
                     <div className="bg-white border-2 border-orange-400 rounded-md px-3 py-2 shadow-lg opacity-90 flex items-center gap-2">

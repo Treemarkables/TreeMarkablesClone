@@ -1,28 +1,28 @@
 /**
- * Shared invoice block renderer.
- * Single source of truth for rendering invoice blocks —
+ * Shared document block renderer.
+ * Single source of truth for rendering document blocks —
  * used by both InvoiceTemplate.tsx (final output) and
  * InvoiceBuilderPage.tsx (live WYSIWYG canvas).
  */
 import { format, addDays } from 'date-fns';
-import type { InvoiceBlock, DocumentTemplate } from '@shared/schema';
+import type { DocumentBlock, DocumentTemplate } from '@shared/schema';
 import type {
-  InvoiceBlockConfigHeader,
-  InvoiceBlockConfigBillTo,
-  InvoiceBlockConfigLineItems,
-  InvoiceBlockConfigTotals,
-  InvoiceBlockConfigPayment,
-  InvoiceBlockConfigFooter,
-  InvoiceBlockConfigJobDescription,
-  InvoiceBlockConfigCompanyInfo,
-  InvoiceBlockConfigInvoiceMeta,
-  InvoiceBlockConfigDivider,
-  InvoiceBlockConfigCustomText,
+  DocumentBlockConfigHeader,
+  DocumentBlockConfigBillTo,
+  DocumentBlockConfigLineItems,
+  DocumentBlockConfigTotals,
+  DocumentBlockConfigPayment,
+  DocumentBlockConfigFooter,
+  DocumentBlockConfigJobDescription,
+  DocumentBlockConfigCompanyInfo,
+  DocumentBlockConfigInvoiceMeta,
+  DocumentBlockConfigDivider,
+  DocumentBlockConfigCustomText,
 } from '@shared/schema';
-import type { CompanyInfo } from '@shared/invoiceBlockDefaults';
+import type { CompanyInfo } from '@shared/documentBlockDefaults';
 import { LinkifiedText } from '@/utils/linkify';
 
-export interface InvoiceRenderContext {
+export interface DocumentRenderContext {
   invoiceNumber: string;
   issueDate: Date;
   dueDate: Date;
@@ -49,7 +49,7 @@ export interface InvoiceRenderContext {
 }
 
 /** Sample context used by the invoice builder's WYSIWYG canvas. */
-export function buildSampleContext(): InvoiceRenderContext {
+export function buildSampleContext(): DocumentRenderContext {
   const now = new Date();
   return {
     invoiceNumber: 'INV-SAMPLE',
@@ -79,15 +79,15 @@ const formatCurrency = (amount: number) =>
  * Render a single invoice block to JSX.
  * Returns null for invisible or inapplicable blocks.
  */
-export function renderInvoiceBlock(
-  block: InvoiceBlock,
+export function renderDocumentBlock(
+  block: DocumentBlock,
   template: DocumentTemplate,
-  ctx: InvoiceRenderContext,
+  ctx: DocumentRenderContext,
   co: CompanyInfo,
 ): JSX.Element | null {
   switch (block.type) {
     case 'header': {
-      const cfg = block.config as InvoiceBlockConfigHeader;
+      const cfg = block.config as DocumentBlockConfigHeader;
       const hdrBg = cfg.headerColor || '#ffffff';
       const hex = hdrBg.replace('#', '');
       const r = parseInt(hex.substring(0, 2), 16) || 255;
@@ -124,7 +124,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'companyInfo': {
-      const cfg = block.config as InvoiceBlockConfigCompanyInfo;
+      const cfg = block.config as DocumentBlockConfigCompanyInfo;
       return (
         <div key={block.id} className="mb-4 text-xs space-y-0.5 text-gray-700">
           {cfg.showName && <div className="font-semibold text-gray-900">{co.name}</div>}
@@ -136,7 +136,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'invoiceMeta': {
-      const cfg = block.config as InvoiceBlockConfigInvoiceMeta;
+      const cfg = block.config as DocumentBlockConfigInvoiceMeta;
       return (
         <div key={block.id} className="mb-4 text-xs space-y-1">
           {cfg.showInvoiceNumber && <div className="flex justify-between gap-2"><span className="text-gray-600">{cfg.labelInvoice || 'Invoice #'}</span><span className="font-medium">{ctx.invoiceNumber}</span></div>}
@@ -147,7 +147,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'billTo': {
-      const cfg = block.config as InvoiceBlockConfigBillTo;
+      const cfg = block.config as DocumentBlockConfigBillTo;
       return (
         <div key={block.id} className="mb-4">
           <h2 className="text-xs font-semibold text-black mb-2">{cfg.label || 'Bill To'}</h2>
@@ -167,7 +167,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'jobDescription': {
-      const cfg = block.config as InvoiceBlockConfigJobDescription;
+      const cfg = block.config as DocumentBlockConfigJobDescription;
       if (!ctx.description) return null;
       return (
         <div key={block.id} className="mb-4">
@@ -179,7 +179,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'lineItems': {
-      const cfg = block.config as InvoiceBlockConfigLineItems;
+      const cfg = block.config as DocumentBlockConfigLineItems;
       if (!ctx.hasLineItems) return null;
       const descPct = cfg.descColPct ?? 60;
       return (
@@ -216,7 +216,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'totals': {
-      const cfg = block.config as InvoiceBlockConfigTotals;
+      const cfg = block.config as DocumentBlockConfigTotals;
       return (
         <div key={block.id} className="pt-3 border-t border-gray-200">
           <div className="flex justify-end">
@@ -230,7 +230,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'payment': {
-      const cfg = block.config as InvoiceBlockConfigPayment;
+      const cfg = block.config as DocumentBlockConfigPayment;
       return (
         <div key={block.id} className="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
           <h3 className="text-xs font-semibold text-black mb-2">{cfg.label || 'Payment Information'}</h3>
@@ -245,11 +245,11 @@ export function renderInvoiceBlock(
       );
     }
     case 'divider': {
-      const cfg = block.config as InvoiceBlockConfigDivider;
+      const cfg = block.config as DocumentBlockConfigDivider;
       return <hr key={block.id} className="my-3" style={{ borderColor: cfg.color || '#e5e7eb', borderTopWidth: cfg.thickness || 1 }} />;
     }
     case 'customText': {
-      const cfg = block.config as InvoiceBlockConfigCustomText;
+      const cfg = block.config as DocumentBlockConfigCustomText;
       const sizeMap: Record<string, string> = { xs: 'text-xs', sm: 'text-sm', base: 'text-base' };
       const alignMap: Record<string, string> = { left: 'text-left', center: 'text-center', right: 'text-right' };
       return (
@@ -259,7 +259,7 @@ export function renderInvoiceBlock(
       );
     }
     case 'footer': {
-      const cfg = block.config as InvoiceBlockConfigFooter;
+      const cfg = block.config as DocumentBlockConfigFooter;
       const parts: string[] = [];
       if (cfg.showCompanyName) parts.push(co.name);
       if (cfg.showAddress) parts.push(co.address.replace(/\n/g, ', '));
