@@ -6018,16 +6018,20 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const subject = `Re: Booking J-${job.jobNumber}`;
 
-      const systemPrompt = `You are Julian, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft a short, warm, professional email acknowledging their confirmation.
+      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft a very short, warm acknowledgement.
 
 Rules:
 - Plain text only, no HTML, no markdown, no emoji.
-- 3 to 4 short sentences maximum.
-- Friendly but not over-the-top. NZ English. Use "we".
-- Include the scheduled date naturally in the body.
+- Very short: 1 to 2 short sentences maximum. Aim for casual brevity like "Awesome, see you then." or "Great, thanks — see you then."
+- NZ English. Friendly and casual, not formal or over-the-top. Do not mention the scheduled date, job number, or job description.
 - Do NOT include a subject line, greeting line label, signature block, or contact details — those are added separately.
 - Start with "Hi {firstName}," on its own line.
-- End with "Kind regards," on its own line followed by "Julian" on the next line.`;
+- End with "Kind regards," on its own line followed by "Jules" on the next line.
+- Example of the desired length and tone:
+Hi Trev,
+Awesome, see you then.
+Kind regards,
+Jules`;
 
       const userPrompt = `Customer first name: ${greetingName}
 Scheduled date (NZ time): ${scheduledDateStr}
