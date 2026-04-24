@@ -77,6 +77,7 @@ import {
   CircleDollarSign,
   Wrench,
   CalendarCheck,
+  Reply,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -176,6 +177,7 @@ interface JobAssignment {
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
+  confirmationReplySentAt?: string | null; // Timestamp of our acknowledgement reply to the customer's confirmation
   etaNotificationRequested?: boolean; // Whether staff need to notify this customer of arrival time
 }
 
@@ -1128,6 +1130,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
+          confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
           totalAmount:
@@ -1216,6 +1219,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
+          confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
           totalAmount:
@@ -2673,11 +2677,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                                     {/* Row 2c: Customer confirmed badge */}
                                     {job.customerConfirmed && (
-                                      <div className="mb-1">
+                                      <div className="mb-1 flex items-center gap-1 flex-wrap">
                                         <Badge className="bg-green-100 text-green-700 border-0 text-xs">
                                           <Check className="h-3 w-3 mr-1" />
                                           Confirmed
                                         </Badge>
+                                        {job.confirmationReplySentAt && (
+                                          <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                                            <Reply className="h-3 w-3 mr-1" />
+                                            Reply sent
+                                          </Badge>
+                                        )}
                                       </div>
                                     )}
 
@@ -3087,6 +3097,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               <Badge className="bg-green-100 text-green-700 border-0 text-xs">
                                 <Check className="h-3 w-3 mr-1" />
                                 Confirmed
+                              </Badge>
+                            )}
+                            {job.confirmationReplySentAt && (
+                              <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                                <Reply className="h-3 w-3 mr-1" />
+                                Reply sent
                               </Badge>
                             )}
                           </div>

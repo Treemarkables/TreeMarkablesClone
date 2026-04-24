@@ -26,7 +26,9 @@
       "Bash(grep *)",
       "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Profit_and_Loss_\\(6\\)_1776905495826.pdf\")",
       "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Account_Transactions_1776905495813.pdf\")",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Read(//home/runner/.claude/projects/**)",
+      "Read(//home/runner/.claude/**)"
     ]
   }
 }

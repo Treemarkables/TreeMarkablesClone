@@ -156,7 +156,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt'];
+  const timestampFields = ['scheduledDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
@@ -4409,7 +4409,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // a single AT TIME ZONE 'Pacific/Auckland' would (incorrectly) interpret the naive value
       // as NZ local — shifting every job by 12h and hiding them from the calendar.
       const result = await db.execute(
-        sql`SELECT * FROM jobs
+        sql`SELECT jobs.*, (
+              SELECT MAX(created_at)
+              FROM job_diary_entries
+              WHERE job_id = jobs.id
+                AND tags @> ARRAY['confirmation-reply-sent']::text[]
+            ) AS confirmation_reply_sent_at
+            FROM jobs
             WHERE scheduled_date IS NOT NULL
               AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') = ${date}::date
               AND status NOT IN ('archived', 'unsuccessful')
@@ -13866,7 +13872,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Send email from diary  
   app.post('/api/communications/email', async (req: Request, res: Response) => {
     try {
-      const { to, subject, message, jobId, customerId } = req.body;
+      const { to, subject, message, jobId, customerId, tags } = req.body;
       
       if (!to || !subject || !message) {
         return res.status(400).json({ 
@@ -13936,12 +13942,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           jobId,
           entryType: 'email',
           title: `Email: ${subject}`,
-          description: `Email sent to ${to}: ${message}`,
+          description: `Email sent to ${to}\n\nMessage:\n${message}`,
           authorName: 'System',
+          tags: Array.isArray(tags) ? tags : undefined,
           metadata: {
             sendgridMessageId: emailResult.messageId,
             isReviewRequest,
-            reviewRequestId
+            reviewRequestId,
+            to,
+            subject,
           }
         });
         

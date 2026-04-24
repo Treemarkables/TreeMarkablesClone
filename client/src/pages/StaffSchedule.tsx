@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { addDays, format, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
-import type { Job, Employee } from '@shared/schema';
+import type { Job as BaseJob, Employee } from '@shared/schema';
+
+type Job = BaseJob & { confirmationReplySentAt?: string | Date | null };
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -525,6 +527,9 @@ export default function StaffSchedule() {
                             {job.customerConfirmed && (
                               <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
                             )}
+                            {job.confirmationReplySentAt && (
+                              <Reply className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                            )}
                           </div>
                           {width > 8 && (
                             <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
@@ -642,6 +647,9 @@ export default function StaffSchedule() {
                               </span>
                               {job.customerConfirmed && (
                                 <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                              )}
+                              {job.confirmationReplySentAt && (
+                                <Reply className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
                               )}
                             </div>
                             {width > 8 && (
