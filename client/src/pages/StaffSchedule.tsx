@@ -1,11 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { addDays, format, isToday } from 'date-fns';
-import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply, MessageSquare } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Job as BaseJob, Employee } from '@shared/schema';
 
-type Job = BaseJob & { confirmationReplySentAt?: string | Date | null };
+type Job = BaseJob & {
+  confirmationReplySentAt?: string | Date | null;
+  customerReplyReceivedAt?: string | Date | null;
+};
 import { GlobalJobCard } from '@/components/GlobalJobCard';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -526,6 +529,9 @@ export default function StaffSchedule() {
                             </span>
                             {job.customerConfirmed && (
                               <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                            )}
+                            {!job.customerConfirmed && job.customerReplyReceivedAt && (
+                              <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: colors.border }} />
                             )}
                             {job.confirmationReplySentAt && (
                               <Reply className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />

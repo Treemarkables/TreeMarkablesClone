@@ -156,7 +156,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt'];
+  const timestampFields = ['scheduledDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
@@ -4414,7 +4414,12 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               FROM job_diary_entries
               WHERE job_id = jobs.id
                 AND tags @> ARRAY['confirmation-reply-sent']::text[]
-            ) AS confirmation_reply_sent_at
+            ) AS confirmation_reply_sent_at, (
+              SELECT MAX(created_at)
+              FROM job_diary_entries
+              WHERE job_id = jobs.id
+                AND tags @> ARRAY['customer-reply']::text[]
+            ) AS customer_reply_received_at
             FROM jobs
             WHERE scheduled_date IS NOT NULL
               AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') = ${date}::date

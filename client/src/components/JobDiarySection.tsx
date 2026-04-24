@@ -1463,23 +1463,18 @@ export function JobDiarySection({
     },
   });
 
-  // One-click: fetch a fresh GPT draft, send it via the existing
+  // One-click: send the exact draft the user is looking at via the existing
   // communications endpoint, and log a 'confirmation-reply-sent' diary entry
-  // so the hoisted card hides itself on next render.
+  // so the hoisted card hides itself on next render. The draft must be
+  // passed in — never regenerate here, otherwise GPT non-determinism makes
+  // the sent message diverge from what the card displayed.
   const sendConfirmationReplyNow = useMutation({
-    mutationFn: async () => {
-      const draftRes = await apiRequest(
-        "POST",
-        `/api/jobs/${jobId}/draft-confirmation-reply`,
-      );
-      const draftJson = await draftRes.json();
-      if (!draftJson?.success || !draftJson?.data?.body) {
-        throw new Error(draftJson?.message || "Couldn't draft reply");
+    mutationFn: async (draft: { subject: string; body: string }) => {
+      const subject = draft?.subject?.trim();
+      const body = draft?.body?.trim();
+      if (!subject || !body) {
+        throw new Error("Couldn't send reply — draft is empty");
       }
-      const { subject, body } = draftJson.data as {
-        subject: string;
-        body: string;
-      };
       const to =
         customerEmail ||
         jobData?.customerEmail ||
@@ -1800,7 +1795,7 @@ export function JobDiarySection({
                 customerEmail || jobData?.customerEmail || customerRecord?.email || ""
               }
               isSending={sendConfirmationReplyNow.isPending}
-              onSendNow={() => sendConfirmationReplyNow.mutate()}
+              onSendNow={(draft) => sendConfirmationReplyNow.mutate(draft)}
               onEditFirst={(draft) => {
                 setReplyToEmail(
                   customerEmail ||

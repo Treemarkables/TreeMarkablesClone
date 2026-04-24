@@ -120,7 +120,7 @@ async function processSMSReplies() {
           description: `SMS reply from ${customerName} (${reply.Originator}):\n\n${reply.MessageText}`,
           authorName: customerName,
           authorRole: 'customer',
-          tags: ['sms', 'reply', 'communication'],
+          tags: ['sms', 'reply', 'communication', 'customer-reply'],
           createdAt: receivedTimestamp,
           metadata: { phoneNumber: reply.Originator }
         });
