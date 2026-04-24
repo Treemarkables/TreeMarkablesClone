@@ -165,6 +165,10 @@ const BLOCK_LABELS: Record<DocumentBlockType, string> = {
   divider: 'Divider',
   customText: 'Custom Text',
   footer: 'Footer',
+  proposalMeta: 'Proposal Details',
+  lineItemsWithChoices: 'Line Items (with choices)',
+  photoGallery: 'Photo Gallery',
+  acceptance: 'Accept & Sign',
 };
 
 const BLOCK_ICONS: Record<DocumentBlockType, React.ElementType> = {
@@ -179,6 +183,10 @@ const BLOCK_ICONS: Record<DocumentBlockType, React.ElementType> = {
   divider: Minus,
   customText: StickyNote,
   footer: AlignCenter,
+  proposalMeta: Hash,
+  lineItemsWithChoices: Table,
+  photoGallery: Image,
+  acceptance: FileText,
 };
 
 // ─── Inspector Panel ───────────────────────────────────────────────────────────

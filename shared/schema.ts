@@ -2826,7 +2826,11 @@ export type DocumentBlockType =
   | 'payment'
   | 'divider'
   | 'customText'
-  | 'footer';
+  | 'footer'
+  | 'proposalMeta'
+  | 'lineItemsWithChoices'
+  | 'photoGallery'
+  | 'acceptance';
 
 export interface DocumentBlockConfigHeader {
   logoAlignment: 'left' | 'center' | 'right';
@@ -2909,6 +2913,49 @@ export interface DocumentBlockConfigFooter {
   showPaymentTerms: boolean;
 }
 
+// Proposal-flavoured block configs. Data (numbers, line items, photos,
+// signatures) comes from the render context at render time; these configs
+// only hold labels and toggles the builder exposes.
+
+export interface DocumentBlockConfigProposalMeta {
+  showProposalNumber: boolean;
+  showIssueDate: boolean;
+  showExpiryDate: boolean;
+  showJobNumber: boolean;
+  labelProposal: string;
+  labelIssueDate: string;
+  labelExpiryDate: string;
+}
+
+export interface DocumentBlockConfigLineItemsWithChoices {
+  labelDescription: string;
+  labelQty: string;
+  labelRate: string;
+  labelAmount: string;
+  showQty: boolean;
+  showRate: boolean;
+  showOptionalToggle: boolean;
+  showChoiceSelector: boolean;
+  descColPct?: number;
+}
+
+export interface DocumentBlockConfigPhotoGallery {
+  label: string;
+  layout: 'grid' | 'single' | 'slideshow';
+  columns: 1 | 2 | 3 | 4;
+  showCaptions: boolean;
+  aspectRatio: 'square' | '4:3' | '16:9' | 'auto';
+}
+
+export interface DocumentBlockConfigAcceptance {
+  label: string;
+  buttonText: string;
+  requireSignature: boolean;
+  signaturePromptText: string;
+  termsText?: string;
+  showAcceptedStamp: boolean;
+}
+
 export type DocumentBlockConfig =
   | DocumentBlockConfigHeader
   | DocumentBlockConfigCompanyInfo
@@ -2920,7 +2967,11 @@ export type DocumentBlockConfig =
   | DocumentBlockConfigPayment
   | DocumentBlockConfigDivider
   | DocumentBlockConfigCustomText
-  | DocumentBlockConfigFooter;
+  | DocumentBlockConfigFooter
+  | DocumentBlockConfigProposalMeta
+  | DocumentBlockConfigLineItemsWithChoices
+  | DocumentBlockConfigPhotoGallery
+  | DocumentBlockConfigAcceptance;
 
 export interface DocumentBlock {
   id: string;
@@ -2940,6 +2991,20 @@ export const DEFAULT_INVOICE_BLOCKS: DocumentBlock[] = [
   { id: 'totals-default', type: 'totals', order: 6, visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
   { id: 'payment-default', type: 'payment', order: 7, visible: true, config: { label: 'Payment Information', showBank: true, showAccountNumber: true, showAccountName: true, showDueDate: true, showTerms: true } },
   { id: 'footer-default', type: 'footer', order: 8, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: true } },
+];
+
+export const DEFAULT_PROPOSAL_BLOCKS: DocumentBlock[] = [
+  { id: 'header-default', type: 'header', order: 0, visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
+  { id: 'companyInfo-default', type: 'companyInfo', order: 1, visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
+  { id: 'proposalMeta-default', type: 'proposalMeta', order: 2, visible: true, config: { showProposalNumber: true, showIssueDate: true, showExpiryDate: true, showJobNumber: true, labelProposal: 'Proposal #', labelIssueDate: 'Issue Date', labelExpiryDate: 'Valid Until' } },
+  { id: 'billTo-default', type: 'billTo', order: 3, visible: true, config: { label: 'Prepared For', showEmail: true, showAddress: true } },
+  { id: 'jobDescription-default', type: 'jobDescription', order: 4, visible: true, config: { label: 'Overview' } },
+  { id: 'photoGallery-default', type: 'photoGallery', order: 5, visible: true, config: { label: 'Site Photos', layout: 'grid', columns: 2, showCaptions: true, aspectRatio: '4:3' } },
+  { id: 'lineItemsWithChoices-default', type: 'lineItemsWithChoices', order: 6, visible: true, config: { labelDescription: 'Service', labelQty: 'Qty', labelRate: 'Rate', labelAmount: 'Price', showQty: true, showRate: true, showOptionalToggle: true, showChoiceSelector: true, descColPct: 60 } },
+  { id: 'totals-default', type: 'totals', order: 7, visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
+  { id: 'customText-default', type: 'customText', order: 8, visible: true, config: { text: 'Terms & Conditions', fontSize: 'sm', align: 'left' } },
+  { id: 'acceptance-default', type: 'acceptance', order: 9, visible: true, config: { label: 'Accept This Proposal', buttonText: 'Accept & Sign', requireSignature: true, signaturePromptText: 'By signing below you agree to the above scope and pricing.', showAcceptedStamp: true } },
+  { id: 'footer-default', type: 'footer', order: 10, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: false } },
 ];
 
 // TypeScript Types
