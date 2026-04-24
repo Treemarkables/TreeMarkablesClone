@@ -1652,12 +1652,23 @@ class DatabaseStorage implements IStorage {
     }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-    // Subquery: most-recent 'confirmation-reply-sent' diary entry timestamp per job
+    // Subquery: most-recent 'confirmation-reply-sent' diary entry timestamp per job.
+    // Tracks when WE sent an acknowledgement back to the customer after they confirmed.
     const replySentSql = sql<Date | null>`(
       SELECT MAX(${schema.jobDiaryEntries.createdAt})
       FROM ${schema.jobDiaryEntries}
       WHERE ${schema.jobDiaryEntries.jobId} = ${schema.jobs.id}
         AND ${schema.jobDiaryEntries.tags} @> ARRAY['confirmation-reply-sent']::text[]
+    )`;
+
+    // Subquery: most-recent inbound customer reply per job. Surfaces natural-language
+    // replies (e.g. "happy with that date") that don't trip the strict auto-confirm
+    // regex, so dispatch can see a reply is in even when customerConfirmed stays false.
+    const customerReplySql = sql<Date | null>`(
+      SELECT MAX(${schema.jobDiaryEntries.createdAt})
+      FROM ${schema.jobDiaryEntries}
+      WHERE ${schema.jobDiaryEntries.jobId} = ${schema.jobs.id}
+        AND ${schema.jobDiaryEntries.tags} @> ARRAY['customer-reply']::text[]
     )`;
 
     // Query with LEFT JOIN to include customer phone data
@@ -1669,6 +1680,7 @@ class DatabaseStorage implements IStorage {
           customerPhone: schema.customers.phone,
           customerMobile: schema.customers.mobile,
           confirmationReplySentAt: replySentSql,
+          customerReplyReceivedAt: customerReplySql,
         })
         .from(schema.jobs)
         .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
@@ -1683,6 +1695,7 @@ class DatabaseStorage implements IStorage {
           customerPhone: schema.customers.phone,
           customerMobile: schema.customers.mobile,
           confirmationReplySentAt: replySentSql,
+          customerReplyReceivedAt: customerReplySql,
         })
         .from(schema.jobs)
         .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
@@ -1707,6 +1720,7 @@ class DatabaseStorage implements IStorage {
       customerEmail: row.customerEmail,
       customerPhone: row.customerPhone || row.customerMobile,
       confirmationReplySentAt: row.confirmationReplySentAt,
+      customerReplyReceivedAt: row.customerReplyReceivedAt,
     }));
     
     const total = Number(totalResult[0]?.count) || 0;

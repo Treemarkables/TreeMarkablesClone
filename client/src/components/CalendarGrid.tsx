@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { ChevronLeft, ChevronRight, Check, GripVertical, MapPin, AlignJustify } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, GripVertical, MapPin, AlignJustify, MessageSquare } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
   format,
@@ -135,6 +135,7 @@ interface Job {
   totalIncludingGst?: string;
   subtotal?: string;
   customerConfirmed?: boolean;
+  customerReplyReceivedAt?: string | Date | null;
 }
 
 interface StaffAssignment {
@@ -1080,6 +1081,9 @@ export function CalendarGrid({
                               {job.customerConfirmed && (
                                 <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
                               )}
+                              {!job.customerConfirmed && job.customerReplyReceivedAt && (
+                                <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: c.border }} />
+                              )}
                             </div>
                             {blockW > 8 && timeLabel && (
                               <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
@@ -1220,6 +1224,9 @@ export function CalendarGrid({
                               {job.customerConfirmed && (
                                 <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: c.border }} />
                               )}
+                              {!job.customerConfirmed && job.customerReplyReceivedAt && (
+                                <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: c.border }} />
+                              )}
                             </div>
                             {blockW > 8 && timeLabel && (
                               <span className="text-[9px] leading-tight block truncate" style={{ color: c.border }}>
@@ -1300,6 +1307,9 @@ export function CalendarGrid({
                                   </div>
                                   {job.customerConfirmed && (
                                     <Check className="h-4 w-4 flex-shrink-0" strokeWidth={3} style={{ color: c.border }} />
+                                  )}
+                                  {!job.customerConfirmed && job.customerReplyReceivedAt && (
+                                    <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" strokeWidth={2.5} style={{ color: c.border }} />
                                   )}
                                 </div>
                                 <div className="opacity-70 truncate mt-0.5">

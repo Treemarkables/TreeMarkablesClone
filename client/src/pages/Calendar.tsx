@@ -60,6 +60,7 @@ type ViewMode = "month" | "week";
 interface JobWithCustomer extends Job {
   customer?: Customer;
   confirmationReplySentAt?: string | Date | null;
+  customerReplyReceivedAt?: string | Date | null;
 }
 
 export default function Calendar() {
@@ -455,6 +456,13 @@ export default function Calendar() {
                                       data-testid={`icon-confirmed-${appointment.id}`}
                                     />
                                   )}
+                                  {!appointment.customerConfirmed && appointment.customerReplyReceivedAt && (
+                                    <MessageSquare
+                                      className="h-3.5 w-3.5 flex-shrink-0"
+                                      strokeWidth={2.5}
+                                      data-testid={`icon-customer-replied-${appointment.id}`}
+                                    />
+                                  )}
                                   {appointment.confirmationReplySentAt && (
                                     <Reply
                                       className="h-3.5 w-3.5 flex-shrink-0"
@@ -602,6 +610,14 @@ export default function Calendar() {
                                   >
                                     <Check className="h-3 w-3 mr-1" />
                                     Confirmed
+                                  </Badge>
+                                ) : appointment.customerReplyReceivedAt ? (
+                                  <Badge
+                                    className="bg-amber-100 text-amber-700 border-0 text-xs"
+                                    data-testid={`badge-customer-replied-${appointment.id}`}
+                                  >
+                                    <MessageSquare className="h-3 w-3 mr-1" />
+                                    Customer replied
                                   </Badge>
                                 ) : awaitingConfirm ? (
                                   <Badge

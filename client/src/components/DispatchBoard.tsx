@@ -178,6 +178,7 @@ interface JobAssignment {
   queueReason?: string | null; // Reason for being in queue
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
   confirmationReplySentAt?: string | null; // Timestamp of our acknowledgement reply to the customer's confirmation
+  customerReplyReceivedAt?: string | null; // Timestamp of most-recent inbound customer reply (any email/SMS reply tagged customer-reply)
   etaNotificationRequested?: boolean; // Whether staff need to notify this customer of arrival time
 }
 
@@ -1131,6 +1132,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
+          customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
           totalAmount:
@@ -1220,6 +1222,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
           confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
+          customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
           totalAmount:
@@ -2675,13 +2678,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       </div>
                                     )}
 
-                                    {/* Row 2c: Customer confirmed badge */}
-                                    {job.customerConfirmed && (
+                                    {/* Row 2c: Customer confirmed / replied badge */}
+                                    {(job.customerConfirmed || job.customerReplyReceivedAt) && (
                                       <div className="mb-1 flex items-center gap-1 flex-wrap">
-                                        <Badge className="bg-green-100 text-green-700 border-0 text-xs">
-                                          <Check className="h-3 w-3 mr-1" />
-                                          Confirmed
-                                        </Badge>
+                                        {job.customerConfirmed ? (
+                                          <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+                                            <Check className="h-3 w-3 mr-1" />
+                                            Confirmed
+                                          </Badge>
+                                        ) : (
+                                          <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                            <MessageSquare className="h-3 w-3 mr-1" />
+                                            Customer replied
+                                          </Badge>
+                                        )}
                                         {job.confirmationReplySentAt && (
                                           <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
                                             <Reply className="h-3 w-3 mr-1" />
@@ -3097,6 +3107,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               <Badge className="bg-green-100 text-green-700 border-0 text-xs">
                                 <Check className="h-3 w-3 mr-1" />
                                 Confirmed
+                              </Badge>
+                            )}
+                            {!job.customerConfirmed && job.customerReplyReceivedAt && (
+                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                <MessageSquare className="h-3 w-3 mr-1" />
+                                Customer replied
                               </Badge>
                             )}
                             {job.confirmationReplySentAt && (
