@@ -1,5 +1,5 @@
 /**
- * Shared invoice block rendering contract.
+ * Shared document block rendering contract.
  * Used by both the server PDF generator and the client InvoiceTemplate
  * to ensure consistent field access and defaults.
  */

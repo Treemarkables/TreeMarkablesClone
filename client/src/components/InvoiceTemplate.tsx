@@ -4,10 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { addDays, format } from 'date-fns';
 import { Download, Mail, Copy, CreditCard, MessageSquare } from 'lucide-react';
-import type { DocumentTemplate, Customer, InvoiceSectionConfig, InvoiceBlock } from '@shared/schema';
+import type { DocumentTemplate, Customer, InvoiceSectionConfig, DocumentBlock } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
-import { resolveCompanyInfo } from '@shared/invoiceBlockDefaults';
-import { renderInvoiceBlock, type InvoiceRenderContext } from '@/components/InvoiceBlockRenderer';
+import { resolveCompanyInfo } from '@shared/documentBlockDefaults';
+import { renderDocumentBlock, type DocumentRenderContext } from '@/components/DocumentBlockRenderer';
 
 const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(amount);
@@ -59,7 +59,7 @@ interface InvoiceTemplateProps {
   billingName?: string;
   jobNumber?: number;
   sectionConfig?: InvoiceSectionConfig[];
-  blockConfig?: InvoiceBlock[];
+  blockConfig?: DocumentBlock[];
   onEmail?: () => void;
   onSms?: () => void;
   onDownload?: () => void;
@@ -93,12 +93,12 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const [isLoading, setIsLoading] = useState(false);
 
   // Shared company info contract — resolves camelCase template fields + defaults.
-  // Same resolveCompanyInfo function used by the server PDF generator (shared/invoiceBlockDefaults.ts).
+  // Same resolveCompanyInfo function used by the server PDF generator (shared/documentBlockDefaults.ts).
   const co = resolveCompanyInfo(template as unknown as Record<string, unknown>);
 
   // When blockConfig is provided, use it as the rendering source (new block-based renderer)
   // Otherwise fall back to legacy sectionConfig/DEFAULT_SECTION_ORDER
-  const activeBlocks: InvoiceBlock[] | null = blockConfig && blockConfig.length > 0
+  const activeBlocks: DocumentBlock[] | null = blockConfig && blockConfig.length > 0
     ? [...blockConfig].sort((a, b) => a.order - b.order)
     : null;
 
@@ -147,8 +147,8 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
   const issueDate = invoice.issueDate ? new Date(invoice.issueDate) : new Date();
   const dueDate = invoice.dueDate ? new Date(invoice.dueDate) : addDays(issueDate, 7);
 
-  // Render blocks (new block-based path) — uses shared renderInvoiceBlock from InvoiceBlockRenderer
-  const blockCtx: InvoiceRenderContext = {
+  // Render blocks (new block-based path) — uses shared renderDocumentBlock from DocumentBlockRenderer
+  const blockCtx: DocumentRenderContext = {
     invoiceNumber: invoice.invoiceNumber,
     issueDate,
     dueDate,
@@ -168,7 +168,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 
   const renderedBlocks: JSX.Element[] | null = activeBlocks
     ? activeBlocks.filter(b => b.visible)
-        .map(block => renderInvoiceBlock(block, template, blockCtx, co))
+        .map(block => renderDocumentBlock(block, template, blockCtx, co))
         .filter((el): el is JSX.Element => el !== null)
     : null;
 

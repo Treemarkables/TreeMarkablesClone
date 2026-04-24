@@ -992,7 +992,7 @@ async function generateInvoicePDFBuffer(
 ): Promise<Buffer> {
   const PDFDocument = (await import('pdfkit')).default;
   // Import shared rendering contract (resolves camelCase DB fields + defaults)
-  const { resolveCompanyInfo, resolveBlockConfig } = await import('../shared/invoiceBlockDefaults');
+  const { resolveCompanyInfo, resolveBlockConfig } = await import('../shared/documentBlockDefaults');
   // Resolve the default company logo filesystem path up-front (inside the Promise
   // executor we can't await) so the PDF header renders without extra async calls.
   const defaultLogoPath = await getCompanyLogoFilePath();
