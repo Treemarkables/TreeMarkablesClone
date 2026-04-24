@@ -167,7 +167,7 @@ function JobConfirmationReplyCard({
   jobId: string;
   customerEmail: string;
   isSending: boolean;
-  onSendNow: () => void;
+  onSendNow: (draft: { subject: string; body: string }) => void;
   onEditFirst: (draft: { subject: string; body: string }) => void;
   onDismiss: () => void;
 }) {
@@ -271,8 +271,8 @@ function JobConfirmationReplyCard({
               size="sm"
               variant="default"
               className="h-7 text-[11px] px-2"
-              disabled={isSending || !customerEmail}
-              onClick={onSendNow}
+              disabled={isSending || !data || !customerEmail}
+              onClick={() => onSendNow(data)}
               data-testid="button-send-now-confirmation-reply"
             >
               <Send className="w-3 h-3 mr-1" />
