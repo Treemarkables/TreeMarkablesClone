@@ -1013,7 +1013,7 @@ export function InvoiceBuilder({
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
         <DialogContent
-          className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
+          className="max-w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
           onEscapeKeyDown={(e) => e.stopPropagation()}
         >
           <DialogHeader>

@@ -4,7 +4,7 @@ import { Webhook as SvixWebhook } from 'svix';
 import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 import { z } from "zod";
 import { fromZonedTime } from 'date-fns-tz';
 
@@ -139,6 +139,23 @@ const imageUpload = multer({
     // Accept all file types - no restrictions
     cb(null, true);
   }
+});
+
+// Near miss attachment upload — disk storage so files survive server restarts
+const nearMissUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const reportId = (req.params as Record<string, string>).id || 'unknown';
+      const dir = path.join('uploads', 'near-miss', reportId);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
 });
 
 /**
@@ -1062,9 +1079,12 @@ async function generateInvoicePDFBuffer(
           let logoX = 40;
           if (logoAlign === 'center') logoX = 297 - 60;
           else if (logoAlign === 'right') logoX = 435;
-          const logoFilePath = co.logoUrl
+          let logoFilePath = co.logoUrl
             ? resolveLogoFsPath(co.logoUrl)
             : defaultLogoPath;
+          // If the template's logoUrl points at a missing file (e.g. an old upload that
+          // was never migrated), fall back to the default logo so the header still renders.
+          if (!fs.existsSync(logoFilePath)) logoFilePath = defaultLogoPath;
           try {
             doc.image(logoFilePath, logoX, 35, { width: 120, height: 50, fit: [120, 50] });
           } catch { /* logo optional */ }
@@ -7076,12 +7096,10 @@ Draft the reply now.`;
           </tr>
         `;
         
-        // Logo is embedded as inline attachment (CID) for most email clients.
-        // For Microsoft-hosted recipients we render a text heading instead — inline CIDs
-        // trigger silent PDF stripping, and the PDF attachment itself already carries the branding.
-        const logoBlockHtml = recipientIsMicrosoft
-          ? `<div style="font-size: 22px; font-weight: 700; color: #111;">Treemarkables</div>`
-          : `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
+        // Logo is embedded as inline attachment (CID). Microsoft recipients still get the
+        // real logo — the PDF-stripping mitigation is the download-link banner below, so
+        // replacing the logo with text is no longer required.
+        const logoBlockHtml = `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
 
         // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF attachment
         // is stripped by their spam filters regardless of inline-image presence. We replace the
@@ -7276,9 +7294,10 @@ Draft the reply now.`;
       }
 
       
-      // Add logo as inline attachment for emails with invoices.
-      // Skipped for Microsoft-hosted recipients (PDF-stripping mitigation — see recipientIsMicrosoft).
-      if ((validatedInvoiceData || invoiceId || invoice) && !recipientIsMicrosoft) {
+      // Add logo as inline CID attachment for emails with invoices. Attached for all
+      // recipients (incl. Microsoft) — the PDF-stripping workaround is the download-link
+      // banner, so the inline logo no longer needs to be suppressed for deliverability.
+      if (validatedInvoiceData || invoiceId || invoice) {
         try {
           const logoPath = await getCompanyLogoFilePath();
           if (fs.existsSync(logoPath)) {
@@ -7300,8 +7319,6 @@ Draft the reply now.`;
         } catch (logoError) {
           console.error('Error adding logo attachment:', logoError);
         }
-      } else if (recipientIsMicrosoft) {
-        console.log(`📧 Skipped logo CID attachment for Microsoft-hosted recipient ${to} — PDF deliverability mode`);
       }
       
       // Embed photos as true inline CID attachments — no external URL dependency.
@@ -8878,7 +8895,10 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
+      // Inline so the PDF renders in-browser when customers click the email link
+      // (Microsoft PDF-stripping workaround). `attachment` left the tab blank on
+      // desktop and failed silently in mobile email in-app browsers.
+      res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
       res.send(pdfBuffer);
       
     } catch (error) {
@@ -24172,6 +24192,403 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       return res.status(500).json({ success: false, message: 'Error confirming schedule' });
     }
   });
+
+  // ── Near Miss Reports ─────────────────────────────────────────────────────
+
+  // Helper: generate NM-YYYY-#### report numbers (sequential within year)
+  async function generateNearMissReportNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `NM-${year}-`;
+    const rows = await db
+      .select({ rn: schema.nearMissReports.reportNumber })
+      .from(schema.nearMissReports)
+      .where(sql`report_number LIKE ${prefix + '%'}`)
+      .orderBy(desc(schema.nearMissReports.reportNumber));
+    let seq = 1;
+    if (rows.length > 0) {
+      const parts = rows[0].rn.split('-');
+      const lastSeq = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(lastSeq)) seq = lastSeq + 1;
+    }
+    return `${prefix}${String(seq).padStart(4, '0')}`;
+  }
+
+  // GET /api/near-miss-reports
+  app.get('/api/near-miss-reports', async (req: Request, res: Response) => {
+    try {
+      const { status, severity, category, dateFrom, dateTo, reporterUserId } = req.query;
+      const conditions = [];
+      if (status) conditions.push(eq(schema.nearMissReports.status, status as string));
+      if (severity) conditions.push(eq(schema.nearMissReports.potentialSeverity, severity as string));
+      if (category) conditions.push(eq(schema.nearMissReports.category, category as string));
+      if (reporterUserId) conditions.push(eq(schema.nearMissReports.reporterUserId, reporterUserId as string));
+      if (dateFrom) conditions.push(gte(schema.nearMissReports.incidentDatetime, new Date(dateFrom as string)));
+      if (dateTo) conditions.push(lt(schema.nearMissReports.incidentDatetime, new Date(dateTo as string)));
+      const reports = await db
+        .select()
+        .from(schema.nearMissReports)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(schema.nearMissReports.createdAt));
+      res.json({ success: true, data: reports });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch near miss reports' });
+    }
+  });
+
+  // GET /api/near-miss-reports/:id
+  app.get('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const [attachments, witnesses, actions] = await Promise.all([
+        db.select().from(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.reportId, req.params.id)),
+        db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.reportId, req.params.id)),
+        db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.reportId, req.params.id)).orderBy(schema.nearMissActions.createdAt),
+      ]);
+      // Auto-transition to in_review when supervisor opens
+      if (report.status === 'submitted' && req.session.employeeId) {
+        const [reporter] = await db.select({ id: schema.employees.id }).from(schema.employees).where(eq(schema.employees.id, report.reporterUserId));
+        if (!reporter || reporter.id !== req.session.employeeId) {
+          await db.update(schema.nearMissReports).set({ status: 'in_review', updatedAt: new Date() }).where(eq(schema.nearMissReports.id, req.params.id));
+          report.status = 'in_review';
+        }
+      }
+      res.json({ success: true, data: { ...report, attachments, witnesses, actions } });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch report' });
+    }
+  });
+
+  // POST /api/near-miss-reports
+  app.post('/api/near-miss-reports', async (req: Request, res: Response) => {
+    try {
+      const reportNumber = await generateNearMissReportNumber();
+      const parsed = schema.insertNearMissReportSchema.parse(req.body);
+      const [report] = await db.insert(schema.nearMissReports).values({ ...parsed, reportNumber }).returning();
+      res.json({ success: true, data: report });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create report' });
+    }
+  });
+
+  // PUT /api/near-miss-reports/:id
+  app.put('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+      const { reportNumber: _rn, ...updatePayload } = req.body;
+      const parsed = schema.updateNearMissReportSchema.parse({ ...updatePayload, updatedAt: new Date() });
+      const [updated] = await db.update(schema.nearMissReports).set(parsed).where(eq(schema.nearMissReports.id, req.params.id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update report' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/submit
+  app.post('/api/near-miss-reports/:id/submit', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (existing.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft reports can be submitted' });
+      const now = new Date();
+      const effectivenessReviewDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const [updated] = await db
+        .update(schema.nearMissReports)
+        .set({ status: 'submitted', submittedAt: now, effectivenessReviewDate, updatedAt: now })
+        .where(eq(schema.nearMissReports.id, req.params.id))
+        .returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to submit report' });
+    }
+  });
+
+  // DELETE /api/near-miss-reports/:id
+  app.delete('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (existing.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft reports can be deleted' });
+      await db.delete(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete report' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/attachments
+  app.post('/api/near-miss-reports/:id/attachments', nearMissUpload.single('file'), async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+      const type = req.file.mimetype.startsWith('audio') ? 'voice_note' : 'photo';
+      const filePath = req.file.path.replace(/\\/g, '/');
+      const [attachment] = await db.insert(schema.nearMissAttachments).values({
+        reportId: req.params.id,
+        type,
+        filePath,
+        uploadedBy: req.session.employeeId || null,
+      }).returning();
+      res.json({ success: true, data: attachment });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to upload attachment' });
+    }
+  });
+
+  // DELETE /api/near-miss-attachments/:id
+  app.delete('/api/near-miss-attachments/:id', async (req: Request, res: Response) => {
+    try {
+      const [attachment] = await db.select().from(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.id, req.params.id));
+      if (!attachment) return res.status(404).json({ success: false, message: 'Attachment not found' });
+      try { fs.unlinkSync(attachment.filePath); } catch { /* file may already be gone */ }
+      await db.delete(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete attachment' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/witnesses
+  app.post('/api/near-miss-reports/:id/witnesses', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const parsed = schema.insertNearMissWitnessSchema.parse({ ...req.body, reportId: req.params.id });
+      const [witness] = await db.insert(schema.nearMissWitnesses).values(parsed).returning();
+      // State 2: named but signing later — notify the witness via inbox
+      if (witness.witnessUserId && witness.status === 'pending') {
+        await storage.createNotification({
+          userId: witness.witnessUserId,
+          title: 'Near Miss Witness Sign-Off Required',
+          message: `You have been named as a witness on near miss report ${report.reportNumber}. Please review and sign off.`,
+          type: 'near_miss_witness',
+          priority: 'high',
+          isRead: false,
+          metadata: { reportId: report.id, witnessId: witness.id, reportNumber: report.reportNumber },
+        });
+      }
+      res.json({ success: true, data: witness });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create witness record' });
+    }
+  });
+
+  // POST /api/near-miss-witnesses/:id/sign
+  app.post('/api/near-miss-witnesses/:id/sign', async (req: Request, res: Response) => {
+    try {
+      const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
+      if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, witness.reportId));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const { signatureSvg, witnessComment, lat, lng, device } = req.body;
+      if (!signatureSvg) return res.status(400).json({ success: false, message: 'signatureSvg is required' });
+      // SHA-256 of core report content at time of signing — tamper-evident record
+      const reportContent = JSON.stringify({
+        reportNumber: report.reportNumber,
+        description: report.description,
+        category: report.category,
+        potentialSeverity: report.potentialSeverity,
+        incidentDatetime: report.incidentDatetime,
+        immediateActionTaken: report.immediateActionTaken,
+        proposedControl: report.proposedControl,
+      });
+      const reportHashAtSigning = createHash('sha256').update(reportContent).digest('hex');
+      const [updated] = await db
+        .update(schema.nearMissWitnesses)
+        .set({
+          status: 'signed',
+          signatureSvg,
+          witnessComment: witnessComment || null,
+          signedAt: new Date(),
+          signedLat: lat != null ? String(lat) : null,
+          signedLng: lng != null ? String(lng) : null,
+          signedDevice: device || (req.headers['user-agent'] ?? null),
+          reportHashAtSigning,
+        })
+        .where(eq(schema.nearMissWitnesses.id, req.params.id))
+        .returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to record witness signature' });
+    }
+  });
+
+  // POST /api/near-miss-witnesses/:id/decline
+  app.post('/api/near-miss-witnesses/:id/decline', async (req: Request, res: Response) => {
+    try {
+      const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
+      if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
+      const [updated] = await db.update(schema.nearMissWitnesses).set({ status: 'declined' }).where(eq(schema.nearMissWitnesses.id, req.params.id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to decline witness' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/actions
+  app.post('/api/near-miss-reports/:id/actions', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const parsed = schema.insertNearMissActionSchema.parse({ ...req.body, reportId: req.params.id });
+      const [action] = await db.insert(schema.nearMissActions).values(parsed).returning();
+      res.json({ success: true, data: action });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create action' });
+    }
+  });
+
+  // PUT /api/near-miss-actions/:id
+  app.put('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
+      const parsed = schema.updateNearMissActionSchema.parse({ ...req.body, updatedAt: new Date() });
+      const [updated] = await db.update(schema.nearMissActions).set(parsed).where(eq(schema.nearMissActions.id, req.params.id)).returning();
+      // Auto-transition report to 'actioned' when every action is complete
+      const allActions = await db.select({ status: schema.nearMissActions.status }).from(schema.nearMissActions).where(eq(schema.nearMissActions.reportId, existing.reportId));
+      const resolvedStatus = req.body.status ?? existing.status;
+      const allComplete = allActions.every(a => a.status === 'complete' || (a === allActions.find(x => x === a) && resolvedStatus === 'complete'));
+      if (allComplete && allActions.length > 0) {
+        const [parentReport] = await db.select({ status: schema.nearMissReports.status }).from(schema.nearMissReports).where(eq(schema.nearMissReports.id, existing.reportId));
+        if (parentReport && (parentReport.status === 'submitted' || parentReport.status === 'in_review')) {
+          await db.update(schema.nearMissReports).set({ status: 'actioned', updatedAt: new Date() }).where(eq(schema.nearMissReports.id, existing.reportId));
+        }
+      }
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update action' });
+    }
+  });
+
+  // DELETE /api/near-miss-actions/:id
+  app.delete('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
+      await db.delete(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete action' });
+    }
+  });
+
+  // GET /api/near-miss-reports/:id/pdf
+  app.get('/api/near-miss-reports/:id/pdf', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const [witnesses, actions] = await Promise.all([
+        db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.reportId, req.params.id)),
+        db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.reportId, req.params.id)),
+      ]);
+      let reporterName = report.reporterUserId;
+      try {
+        const [emp] = await db.select({ firstName: schema.employees.firstName, lastName: schema.employees.lastName }).from(schema.employees).where(eq(schema.employees.id, report.reporterUserId));
+        if (emp) reporterName = `${emp.firstName} ${emp.lastName}`.trim();
+      } catch { /* fallback to userId */ }
+
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="near-miss-${report.reportNumber}.pdf"`);
+      doc.pipe(res);
+
+      const severityColour: Record<string, string> = { low: '#22c55e', medium: '#3b82f6', high: '#f59e0b', critical: '#ef4444' };
+      const sevCol = severityColour[report.potentialSeverity] ?? '#6b7280';
+
+      doc.fontSize(18).fillColor('#111').text('Near Miss Report', { align: 'center' });
+      doc.fontSize(10).fillColor('#888').text('CONFIDENTIAL', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(14).fillColor('#111').text(report.reportNumber, { align: 'center' });
+      doc.moveDown(1);
+
+      doc.fontSize(10).fillColor('#111');
+      doc.text(`Date/Time: ${formatNZTime(report.incidentDatetime, 'full')}`);
+      doc.text(`Reporter: ${reporterName}`);
+      doc.text(`Location: ${report.locationAddress || (report.locationLat && report.locationLng ? `${report.locationLat}, ${report.locationLng}` : 'Not recorded')}`);
+      doc.text(`Category: ${report.category.replace(/_/g, ' ')}`);
+      doc.fillColor(sevCol).text(`Severity: ${report.potentialSeverity.toUpperCase()}`).fillColor('#111');
+      doc.text(`Status: ${report.status}`);
+      doc.moveDown(0.75);
+
+      doc.fontSize(11).text('Description', { underline: true });
+      doc.fontSize(10).text(report.description || '—');
+      doc.moveDown(0.75);
+
+      if (report.immediateActionTaken) {
+        doc.fontSize(11).text('Immediate Action Taken', { underline: true });
+        doc.fontSize(10).text(report.immediateActionTaken);
+        doc.moveDown(0.75);
+      }
+      if (report.proposedControl) {
+        doc.fontSize(11).text('Proposed Control', { underline: true });
+        doc.fontSize(10).text(report.proposedControl);
+        doc.moveDown(0.75);
+      }
+      if (actions.length > 0) {
+        doc.fontSize(11).text('Corrective Actions', { underline: true });
+        actions.forEach((a, i) => {
+          const done = a.completedAt ? ` (completed ${formatNZTime(a.completedAt, 'date')})` : '';
+          doc.fontSize(10).text(`${i + 1}. ${a.title} — ${a.status}${done}`);
+        });
+        doc.moveDown(0.75);
+      }
+      witnesses.forEach((w, i) => {
+        if (w.status !== 'signed') return;
+        doc.fontSize(11).text(`Witness ${i + 1}: ${w.witnessName || 'Staff member'}`, { underline: true });
+        doc.fontSize(9).fillColor('#555');
+        doc.text(`Signed: ${w.signedAt ? formatNZTime(w.signedAt, 'full') : '—'}`);
+        if (w.signedDevice) doc.text(`Device: ${w.signedDevice}`);
+        if (w.reportHashAtSigning) doc.text(`Report hash at signing: ${w.reportHashAtSigning}`);
+        if (w.witnessComment) doc.text(`Comment: ${w.witnessComment}`);
+        doc.fillColor('#111').moveDown(0.5);
+        if (w.signatureSvg) doc.fontSize(8).fillColor('#888').text('[Electronic signature on file]').fillColor('#111');
+        doc.moveDown(0.5);
+      });
+
+      doc.end();
+    } catch (error) {
+      console.error('[Near Miss PDF]', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to generate PDF' });
+    }
+  });
+
+  // Daily: flag overdue effectiveness reviews to the reporter's inbox
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const overdue = await db
+        .select()
+        .from(schema.nearMissReports)
+        .where(and(
+          eq(schema.nearMissReports.effectivenessReviewComplete, false),
+          lt(schema.nearMissReports.effectivenessReviewDate, now),
+          ne(schema.nearMissReports.status, 'closed'),
+        ));
+      for (const report of overdue) {
+        try {
+          await storage.createNotification({
+            userId: report.reporterUserId,
+            title: 'Near Miss Review Overdue',
+            message: `Effectiveness review for ${report.reportNumber} is overdue. Please complete it.`,
+            type: 'near_miss_review_overdue',
+            priority: 'high',
+            isRead: false,
+            metadata: { reportId: report.id, reportNumber: report.reportNumber },
+          });
+        } catch { /* individual notification failures must not stop the loop */ }
+      }
+    } catch { /* suppress cron errors to avoid crashing server */ }
+  }, 24 * 60 * 60 * 1000);
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   // ── Resend events webhook configuration reminder ─────────────────────────
   // Log the webhook URL and configuration status at startup so it's easy to

@@ -66,6 +66,8 @@ import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import PublicReview from "@/pages/PublicReview";
 import MulchDrops from "@/pages/MulchDrops";
+import NearMissReport from "@/pages/NearMissReport";
+import NearMissHistory from "@/pages/NearMissHistory";
 import EquipmentRegister from "@/pages/EquipmentRegister";
 import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
@@ -986,6 +988,27 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <JHAHistory />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/near-miss-report">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NearMissReport />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/near-miss-report/:id">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NearMissReport />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/near-miss-history">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NearMissHistory />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>

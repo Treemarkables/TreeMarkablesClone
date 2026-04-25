@@ -163,12 +163,18 @@ interface CalendarGridProps {
     hour: number,
     employeeId: string,
   ) => void;
+  draggingJob?: {
+    id: string;
+    durationHours: number;
+    customerName: string;
+  } | null;
 }
 
 export function CalendarGrid({
   selectedDate: externalDate,
   onDateChange,
   onJobDrop,
+  draggingJob,
 }: CalendarGridProps = {}) {
   const [internalDate, setInternalDate] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>("day");
@@ -177,6 +183,7 @@ export function CalendarGrid({
   const [showJobCard, setShowJobCard] = useState(false);
   const [dragOverSlot, setDragOverSlot] = useState<string | null>(null);
   const [dayViewDragOver, setDayViewDragOver] = useState<string | null>(null); // employeeId or 'unassigned'
+  const [dayViewDragHour, setDayViewDragHour] = useState<{ employeeId: string; hour: number } | null>(null);
   const [showRevBreakdown, setShowRevBreakdown] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -1159,27 +1166,45 @@ export function CalendarGrid({
                     className={`flex-1 relative transition-colors duration-100 ${dayViewDragOver === employee.id ? 'ring-2 ring-inset ring-blue-400' : ''}`}
                     style={{ backgroundColor: dayViewDragOver === employee.id ? gPalette.row : gPalette.row + "55" }}
                     onDragOver={(e) => {
-                      if (!dragRef.current) return;
                       e.preventDefault();
                       e.dataTransfer.dropEffect = "move";
                       setDayViewDragOver(employee.id);
+                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                      const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                      const mins = GANTT_START_H * 60 + pct * GANTT_HOURS * 60;
+                      const hour = Math.max(GANTT_START_H, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
+                      setDayViewDragHour((prev) =>
+                        prev && prev.employeeId === employee.id && prev.hour === hour
+                          ? prev
+                          : { employeeId: employee.id, hour },
+                      );
                     }}
                     onDragLeave={(e) => {
                       if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
                         setDayViewDragOver(null);
+                        setDayViewDragHour((prev) => (prev?.employeeId === employee.id ? null : prev));
                       }
                     }}
                     onDrop={(e) => {
                       e.preventDefault();
                       setDayViewDragOver(null);
-                      const drag = dragRef.current;
-                      if (!drag) return;
-                      dragRef.current = null;
+                      setDayViewDragHour(null);
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                       const mins = GANTT_START_H * 60 + pct * GANTT_HOURS * 60;
                       const hour = Math.max(GANTT_START_H, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
-                      handleInternalReschedule(drag.jobId, drag.employeeId, drag.assignmentId, drag.durationHours, hour, employee.id, currentDate);
+                      const drag = dragRef.current;
+                      if (drag) {
+                        dragRef.current = null;
+                        handleInternalReschedule(drag.jobId, drag.employeeId, drag.assignmentId, drag.durationHours, hour, employee.id, currentDate);
+                        return;
+                      }
+                      if (onJobDrop) {
+                        const externalJobId = e.dataTransfer.getData("jobId");
+                        if (externalJobId) {
+                          onJobDrop(externalJobId, currentDate, hour, employee.id);
+                        }
+                      }
                     }}
                   >
                     {/* Hour grid lines */}
@@ -1188,6 +1213,42 @@ export function CalendarGrid({
                         <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
                       ))}
                     </div>
+                    {/* Drag-over preview block — sized to the dragged job's duration */}
+                    {dayViewDragHour?.employeeId === employee.id && (() => {
+                      const h = dayViewDragHour.hour;
+                      const durationHours = Math.max(0.25, draggingJob?.durationHours ?? 1);
+                      const startMins = h * 60;
+                      const endMins = Math.min(startMins + durationHours * 60, GANTT_END_H * 60);
+                      const leftPct = ((startMins - GANTT_START_H * 60) / (GANTT_HOURS * 60)) * 100;
+                      const widthPct = ((endMins - startMins) / (GANTT_HOURS * 60)) * 100;
+                      const hourLabel = `${h % 12 === 0 ? 12 : h % 12}:00${h < 12 ? 'am' : 'pm'}`;
+                      const previewName = draggingJob?.customerName || "";
+                      return (
+                        <>
+                          <div
+                            className="absolute pointer-events-none rounded border-2 border-dashed border-blue-500 bg-blue-400/25 flex items-center justify-center px-1 overflow-hidden"
+                            style={{
+                              left: `${leftPct}%`,
+                              width: `${widthPct}%`,
+                              top: 4,
+                              bottom: 4,
+                            }}
+                          >
+                            {previewName && widthPct > 6 && (
+                              <span className="text-[10px] font-semibold text-blue-900 truncate">
+                                {previewName}
+                              </span>
+                            )}
+                          </div>
+                          <div
+                            className="absolute -top-1 z-20 pointer-events-none bg-blue-600 text-white text-[10px] font-semibold px-2 py-0.5 rounded shadow whitespace-nowrap"
+                            style={{ left: `${leftPct}%` }}
+                          >
+                            {employee.firstName} · {hourLabel}
+                          </div>
+                        </>
+                      );
+                    })()}
                     {/* Job blocks */}
                     {empDayItems.map(({ job, assignment }) => {
                       const eff = effectiveGanttMins(job, assignment);

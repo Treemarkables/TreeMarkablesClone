@@ -102,6 +102,10 @@ import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { CreateLeadFromMessageDialog } from "@/components/CreateLeadFromMessageDialog";
+import {
+  QuickAssignDialog,
+  type QuickAssignResult,
+} from "@/components/QuickAssignDialog";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -733,6 +737,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     null,
   );
   const [queueReasonInput, setQueueReasonInput] = useState<string>("");
+  const [pendingDrop, setPendingDrop] = useState<{
+    jobId: string;
+    jobLabel: string;
+    customerName: string;
+    address: string;
+    date: Date;
+    hour: number;
+    employeeId: string;
+    defaultDurationHours: number;
+  } | null>(null);
+  const [isConfirmingDrop, setIsConfirmingDrop] = useState(false);
+  const [draggingJob, setDraggingJob] = useState<{
+    id: string;
+    durationHours: number;
+    customerName: string;
+  } | null>(null);
   const isCreatingLeadJobRef = useRef(false);
   // Ref so event-listener closures always see the latest "actively editing a job" state
   const isActivelyEditingRef = useRef(false);
@@ -1931,8 +1951,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   // Called when a job is dragged from the right panel and dropped onto a specific staff row + time slot.
-  // Updates the job's scheduledDate and creates a staff assignment for the dropped employee.
-  const handleCalendarJobDrop = async (
+  // Opens the Quick Assign dialog so the user can confirm crew + duration before persisting.
+  const handleCalendarJobDrop = (
     jobId: string,
     date: Date,
     hour: number,
@@ -1943,24 +1963,52 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       toast({ title: "Job not found", variant: "destructive" });
       return;
     }
+    const labelParts = [
+      job.jobNumber ? `#${job.jobNumber}` : "",
+      job.customerName ?? "",
+    ].filter(Boolean);
+    setPendingDrop({
+      jobId,
+      jobLabel: labelParts.join(" — "),
+      customerName: job.customerName ?? "",
+      address: job.address ?? "",
+      date,
+      hour,
+      employeeId,
+      defaultDurationHours: job.estimatedDuration || 2,
+    });
+  };
+
+  // Persists the staff assignment(s) once the user confirms the Quick Assign dialog.
+  const confirmPendingDrop = async (result: QuickAssignResult) => {
+    if (!pendingDrop) return;
+    const { jobId, date, hour } = pendingDrop;
+    const job = jobsData?.data?.find((j: any) => j.id === jobId);
+    if (!job) {
+      setPendingDrop(null);
+      return;
+    }
+
+    const totalMinutes = result.durationHours * 60 + result.durationMinutes;
+    if (totalMinutes <= 0 || result.employeeIds.length === 0) {
+      setPendingDrop(null);
+      return;
+    }
+    const fractionalDurationHours = totalMinutes / 60;
 
     const nzDateStr = date.toLocaleDateString("en-CA", {
       timeZone: "Pacific/Auckland",
     });
-    const durationHours = job.estimatedDuration || 2;
-    const endHour = Math.min(hour + durationHours, 23);
     const startTimeStr = `${String(hour).padStart(2, "0")}:00`;
-    const endTimeStr = `${String(endHour).padStart(2, "0")}:00`;
-
     const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
-    const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
+    const endDateTime = new Date(
+      startDateTime.getTime() + totalMinutes * 60_000,
+    );
 
     const updates: any = {
       scheduledDate: startDateTime.toISOString(),
-      estimatedDuration: durationHours,
+      estimatedDuration: fractionalDurationHours,
     };
-
-    // Only advance status if not already scheduled/complete/archived
     if (
       job.status !== "scheduled" &&
       job.status !== "completed" &&
@@ -1970,27 +2018,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updates.status = "scheduled";
     }
 
+    setIsConfirmingDrop(true);
     try {
-      // 1. Update the job's scheduled date + status
       await fetch(`/api/jobs/${jobId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
 
-      // 2. Create a staff assignment for the specific employee row that was dropped onto
       await fetch(`/api/jobs/${jobId}/staff-assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          staffAssignments: [
-            {
-              employeeId,
-              startTime: startDateTime.toISOString(),
-              endTime: endDateTime.toISOString(),
-              notes: "",
-            },
-          ],
+          staffAssignments: result.employeeIds.map((employeeId) => ({
+            employeeId,
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            notes: "",
+          })),
           sendNotifications: false,
           sendClientNotification: false,
           addOnly: true,
@@ -1999,12 +2044,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      setPendingDrop(null);
     } catch {
       toast({
         title: "Scheduling Failed",
         description: "Could not schedule the job. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsConfirmingDrop(false);
     }
   };
 
@@ -2402,6 +2450,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         selectedDate={selectedDate}
                         onDateChange={setSelectedDate}
                         onJobDrop={handleCalendarJobDrop}
+                        draggingJob={draggingJob}
                       />
                     </Card>
                   </div>
@@ -2585,11 +2634,30 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData("jobId", job.id);
                                   e.dataTransfer.effectAllowed = "move";
+                                  // Compact custom drag ghost so the cursor isn't dragging the whole job card around.
+                                  const ghost = document.createElement("div");
+                                  ghost.style.cssText =
+                                    "position:absolute;top:-1000px;left:-1000px;padding:4px 10px;background:#1d4ed8;color:white;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2);pointer-events:none;";
+                                  const label = job.jobNumber
+                                    ? `#${job.jobNumber} ${job.customerName ?? ""}`
+                                    : job.customerName ?? "Job";
+                                  ghost.textContent = label.trim();
+                                  document.body.appendChild(ghost);
+                                  e.dataTransfer.setDragImage(ghost, 12, 12);
+                                  setTimeout(() => {
+                                    if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+                                  }, 0);
+                                  setDraggingJob({
+                                    id: job.id,
+                                    durationHours: job.estimatedDuration || 2,
+                                    customerName: job.customerName ?? "",
+                                  });
                                   // Prevent click from firing after drag
                                   e.currentTarget.dataset.dragging = "true";
                                 }}
                                 onDragEnd={(e) => {
                                   delete e.currentTarget.dataset.dragging;
+                                  setDraggingJob(null);
                                 }}
                                 onClick={(e) => {
                                   // Don't open job card if user just dragged
@@ -3374,6 +3442,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {pendingDrop && (
+        <QuickAssignDialog
+          open
+          jobLabel={pendingDrop.jobLabel}
+          customerName={pendingDrop.customerName}
+          address={pendingDrop.address}
+          droppedHour={pendingDrop.hour}
+          droppedEmployeeId={pendingDrop.employeeId}
+          employees={employees}
+          defaultDurationHours={pendingDrop.defaultDurationHours}
+          isSubmitting={isConfirmingDrop}
+          onCancel={() => {
+            if (!isConfirmingDrop) setPendingDrop(null);
+          }}
+          onConfirm={confirmPendingDrop}
+        />
+      )}
     </>
   );
 }

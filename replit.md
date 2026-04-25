@@ -54,6 +54,7 @@ This application is a comprehensive business management platform for Treemarkabl
 - **Proactive Business Reminders**: Hourly reminders for pending quotes, unassigned jobs, uninvoiced jobs, and stale leads.
 - **AI Chat Assistant**: Floating chat assistant using GPT-4o with function calling to query live business data and voice input.
 - **Visual Invoice Block Builder**: Drag-and-drop interface for customizing invoice layouts.
+- **Near Miss Reporting**: Full near-miss incident capture flow with multi-step wizard (incident details, controls & factors, corrective actions, witness sign-off), SVG signature canvas, severity/status tracking, PDF export, and automatic 30-day effectiveness review reminders. Routes: `/near-miss-report`, `/near-miss-history`.
 
 ## External Dependencies
 - **Database & Validation**: `drizzle-orm`, `drizzle-kit`, `@neondatabase/serverless`, `zod`
