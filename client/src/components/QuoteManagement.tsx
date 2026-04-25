@@ -401,7 +401,7 @@ export default function QuoteManagement({
               Create Quote
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {editingQuote ? "Edit Quote" : "Create New Quote"}
@@ -818,7 +818,7 @@ export default function QuoteManagement({
           open={!!previewingQuote}
           onOpenChange={() => setPreviewingQuote(null)}
         >
-          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 Quote Preview - #{previewingQuote.quoteNumber}

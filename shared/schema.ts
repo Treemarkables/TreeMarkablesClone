@@ -2239,8 +2239,25 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   paidAt: timestamp("paid_at"), // When payment was received
   paidNotes: text("paid_notes"), // Notes about how payment was received
+  sentDate: timestamp("sent_date"), // When invoice email was sent to customer
   xeroInvoiceId: text("xero_invoice_id"), // Xero invoice ID for synced invoices
   xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Invoice Sections — mirror of proposalSections, lets invoices carry photos +
+// narrative sections rendered on the customer-facing invoice page.
+export const invoiceSections = pgTable("invoice_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: 'cascade' }).notNull(),
+  sectionType: text("section_type").notNull(), // intro, photos, notes, terms, custom
+  title: text("title").notNull(),
+  content: text("content").default(""),
+  images: text("images").array().default([]),
+  sortOrder: integer("sort_order").notNull(),
+  isVisible: boolean("is_visible").default(true),
+  styling: jsonb("styling"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2371,6 +2388,22 @@ export const updateInvoiceLineItemSchema = insertInvoiceLineItemSchema.partial()
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
 export type UpdateInvoiceLineItem = z.infer<typeof updateInvoiceLineItemSchema>;
+
+// Invoice Section Schema Exports
+export const insertInvoiceSectionSchema = createInsertSchema(invoiceSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  images: z.array(z.string()).optional(),
+  content: z.string().optional(),
+});
+
+export const updateInvoiceSectionSchema = insertInvoiceSectionSchema.partial();
+
+export type InvoiceSection = typeof invoiceSections.$inferSelect;
+export type InsertInvoiceSection = z.infer<typeof insertInvoiceSectionSchema>;
+export type UpdateInvoiceSection = z.infer<typeof updateInvoiceSectionSchema>;
 
 export type XeroConnection = typeof xeroConnections.$inferSelect;
 export type InsertXeroConnection = z.infer<typeof insertXeroConnectionSchema>;
