@@ -717,7 +717,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Sidebar tab to open the job card on — set from the `?tab=` URL param when
   // a push notification deep-links to a specific section (e.g. the diary).
   const [initialSidebarTab, setInitialSidebarTab] = useState<
-    "details" | "billing" | "diary" | undefined
+    "details" | "billing" | "checklist" | undefined
   >(undefined);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: "",
@@ -902,10 +902,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         console.log("🔔 Job search result:", { found: !!job, jobId });
 
+        // Old push notifications used ?tab=diary — the dedicated Diary tab is
+        // gone but the diary still renders alongside Details, so silently fall
+        // back to "details" instead of dropping the user on a missing tab.
         const tabParam =
-          tab === "diary" || tab === "billing" || tab === "details"
-            ? (tab as "details" | "billing" | "diary")
-            : undefined;
+          tab === "diary"
+            ? ("details" as const)
+            : tab === "checklist" || tab === "billing" || tab === "details"
+              ? (tab as "details" | "billing" | "checklist")
+              : undefined;
 
         const openJob = (jobData: any) => {
           // Guard: Don't re-open if we're already editing this job

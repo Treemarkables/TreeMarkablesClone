@@ -65,6 +65,11 @@ import {
   type InspectionChecklistItem, type InsertInspectionChecklistItem, type UpdateInspectionChecklistItem,
   type VehicleInspection, type InsertVehicleInspection, type UpdateVehicleInspection,
   type InspectionResponse, type InsertInspectionResponse,
+  // Equipment Induction types
+  type InductionTemplate, type InsertInductionTemplate, type UpdateInductionTemplate,
+  type InductionChecklistItem, type InsertInductionChecklistItem, type UpdateInductionChecklistItem,
+  type EquipmentInduction, type InsertEquipmentInduction, type UpdateEquipmentInduction,
+  type InductionResponse, type InsertInductionResponse,
   // Marketing Campaign types
   type MarketingCampaign, type InsertMarketingCampaign
 } from "@shared/schema";
@@ -579,7 +584,32 @@ export interface IStorage {
   // Inspection Responses
   createInspectionResponse(response: InsertInspectionResponse): Promise<InspectionResponse>;
   getInspectionResponses(inspectionId: string): Promise<InspectionResponse[]>;
-  
+
+  // Equipment Induction System
+  createInductionTemplate(template: InsertInductionTemplate): Promise<InductionTemplate>;
+  getInductionTemplate(id: string): Promise<InductionTemplate | undefined>;
+  updateInductionTemplate(id: string, updates: UpdateInductionTemplate): Promise<InductionTemplate>;
+  deleteInductionTemplate(id: string): Promise<void>;
+  getAllInductionTemplates(): Promise<InductionTemplate[]>;
+  getInductionTemplatesByType(equipmentType: string): Promise<InductionTemplate[]>;
+
+  createInductionChecklistItem(item: InsertInductionChecklistItem): Promise<InductionChecklistItem>;
+  getInductionChecklistItem(id: string): Promise<InductionChecklistItem | undefined>;
+  updateInductionChecklistItem(id: string, updates: UpdateInductionChecklistItem): Promise<InductionChecklistItem>;
+  deleteInductionChecklistItem(id: string): Promise<void>;
+  getInductionChecklistItemsByTemplate(templateId: string): Promise<InductionChecklistItem[]>;
+  reorderInductionChecklistItems(templateId: string, itemIds: string[]): Promise<void>;
+
+  createEquipmentInduction(induction: InsertEquipmentInduction): Promise<EquipmentInduction>;
+  getEquipmentInduction(id: string): Promise<EquipmentInduction | undefined>;
+  updateEquipmentInduction(id: string, updates: UpdateEquipmentInduction): Promise<EquipmentInduction>;
+  getAllEquipmentInductions(filters?: { employeeId?: string; equipmentType?: string }): Promise<EquipmentInduction[]>;
+  getEquipmentInductionsByEmployee(employeeId: string): Promise<EquipmentInduction[]>;
+  getInductionStatusForEmployee(employeeId: string): Promise<Array<{ templateId: string; templateName: string; equipmentType: string | null; completedAt: Date | null; inductionId: string | null }>>;
+
+  createInductionResponse(response: InsertInductionResponse): Promise<InductionResponse>;
+  getInductionResponses(inductionId: string): Promise<InductionResponse[]>;
+
   // Registration & COF Expiry Checks
   getVehiclesWithExpiringDocs(daysAhead: number): Promise<Equipment[]>;
   getExpiredVehicles(): Promise<Equipment[]>;
@@ -4693,6 +4723,158 @@ class DatabaseStorage implements IStorage {
     return await db.select().from(schema.inspectionResponses)
       .where(eq(schema.inspectionResponses.inspectionId, inspectionId))
       .orderBy(schema.inspectionResponses.sortOrder);
+  }
+
+  // Equipment Induction System Implementation
+  async createInductionTemplate(template: InsertInductionTemplate): Promise<InductionTemplate> {
+    const [result] = await db.insert(schema.inductionTemplates).values(template).returning();
+    return result;
+  }
+
+  async getInductionTemplate(id: string): Promise<InductionTemplate | undefined> {
+    const [result] = await db.select().from(schema.inductionTemplates)
+      .where(eq(schema.inductionTemplates.id, id));
+    return result;
+  }
+
+  async updateInductionTemplate(id: string, updates: UpdateInductionTemplate): Promise<InductionTemplate> {
+    const [result] = await db.update(schema.inductionTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.inductionTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteInductionTemplate(id: string): Promise<void> {
+    await db.delete(schema.inductionTemplates).where(eq(schema.inductionTemplates.id, id));
+  }
+
+  async getAllInductionTemplates(): Promise<InductionTemplate[]> {
+    return await db.select().from(schema.inductionTemplates)
+      .where(eq(schema.inductionTemplates.isActive, true))
+      .orderBy(desc(schema.inductionTemplates.createdAt));
+  }
+
+  async getInductionTemplatesByType(equipmentType: string): Promise<InductionTemplate[]> {
+    return await db.select().from(schema.inductionTemplates)
+      .where(and(
+        eq(schema.inductionTemplates.isActive, true),
+        eq(schema.inductionTemplates.equipmentType, equipmentType),
+      ))
+      .orderBy(desc(schema.inductionTemplates.createdAt));
+  }
+
+  async createInductionChecklistItem(item: InsertInductionChecklistItem): Promise<InductionChecklistItem> {
+    const [result] = await db.insert(schema.inductionChecklistItems).values(item).returning();
+    return result;
+  }
+
+  async getInductionChecklistItem(id: string): Promise<InductionChecklistItem | undefined> {
+    const [result] = await db.select().from(schema.inductionChecklistItems)
+      .where(eq(schema.inductionChecklistItems.id, id));
+    return result;
+  }
+
+  async updateInductionChecklistItem(id: string, updates: UpdateInductionChecklistItem): Promise<InductionChecklistItem> {
+    const [result] = await db.update(schema.inductionChecklistItems)
+      .set(updates)
+      .where(eq(schema.inductionChecklistItems.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteInductionChecklistItem(id: string): Promise<void> {
+    await db.delete(schema.inductionChecklistItems).where(eq(schema.inductionChecklistItems.id, id));
+  }
+
+  async getInductionChecklistItemsByTemplate(templateId: string): Promise<InductionChecklistItem[]> {
+    return await db.select().from(schema.inductionChecklistItems)
+      .where(and(
+        eq(schema.inductionChecklistItems.templateId, templateId),
+        eq(schema.inductionChecklistItems.isActive, true),
+      ))
+      .orderBy(schema.inductionChecklistItems.sortOrder);
+  }
+
+  async reorderInductionChecklistItems(templateId: string, itemIds: string[]): Promise<void> {
+    for (let i = 0; i < itemIds.length; i++) {
+      await db.update(schema.inductionChecklistItems)
+        .set({ sortOrder: i })
+        .where(eq(schema.inductionChecklistItems.id, itemIds[i]));
+    }
+  }
+
+  async createEquipmentInduction(induction: InsertEquipmentInduction): Promise<EquipmentInduction> {
+    const [result] = await db.insert(schema.equipmentInductions).values(induction).returning();
+    return result;
+  }
+
+  async getEquipmentInduction(id: string): Promise<EquipmentInduction | undefined> {
+    const [result] = await db.select().from(schema.equipmentInductions)
+      .where(eq(schema.equipmentInductions.id, id));
+    return result;
+  }
+
+  async updateEquipmentInduction(id: string, updates: UpdateEquipmentInduction): Promise<EquipmentInduction> {
+    const [result] = await db.update(schema.equipmentInductions)
+      .set(updates)
+      .where(eq(schema.equipmentInductions.id, id))
+      .returning();
+    return result;
+  }
+
+  async getAllEquipmentInductions(filters?: { employeeId?: string; equipmentType?: string }): Promise<EquipmentInduction[]> {
+    const conditions = [];
+    if (filters?.employeeId) {
+      conditions.push(eq(schema.equipmentInductions.employeeId, filters.employeeId));
+    }
+    if (filters?.equipmentType) {
+      conditions.push(eq(schema.equipmentInductions.equipmentType, filters.equipmentType));
+    }
+
+    let query = db.select().from(schema.equipmentInductions);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    return await query.orderBy(desc(schema.equipmentInductions.inductionDate));
+  }
+
+  async getEquipmentInductionsByEmployee(employeeId: string): Promise<EquipmentInduction[]> {
+    return await db.select().from(schema.equipmentInductions)
+      .where(eq(schema.equipmentInductions.employeeId, employeeId))
+      .orderBy(desc(schema.equipmentInductions.inductionDate));
+  }
+
+  async getInductionStatusForEmployee(employeeId: string): Promise<Array<{ templateId: string; templateName: string; equipmentType: string | null; completedAt: Date | null; inductionId: string | null }>> {
+    const templates = await db.select().from(schema.inductionTemplates)
+      .where(eq(schema.inductionTemplates.isActive, true))
+      .orderBy(desc(schema.inductionTemplates.createdAt));
+
+    const inductions = await db.select().from(schema.equipmentInductions)
+      .where(eq(schema.equipmentInductions.employeeId, employeeId))
+      .orderBy(desc(schema.equipmentInductions.inductionDate));
+
+    return templates.map((t) => {
+      const latest = inductions.find((i) => i.templateId === t.id);
+      return {
+        templateId: t.id,
+        templateName: t.name,
+        equipmentType: t.equipmentType,
+        completedAt: latest?.completedAt ?? latest?.inductionDate ?? null,
+        inductionId: latest?.id ?? null,
+      };
+    });
+  }
+
+  async createInductionResponse(response: InsertInductionResponse): Promise<InductionResponse> {
+    const [result] = await db.insert(schema.inductionResponses).values(response).returning();
+    return result;
+  }
+
+  async getInductionResponses(inductionId: string): Promise<InductionResponse[]> {
+    return await db.select().from(schema.inductionResponses)
+      .where(eq(schema.inductionResponses.inductionId, inductionId))
+      .orderBy(schema.inductionResponses.sortOrder);
   }
 
   // Registration & COF Expiry Checks

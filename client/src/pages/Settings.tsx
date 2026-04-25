@@ -23,6 +23,7 @@ import {
   Mail,
   MessageSquare,
   ClipboardCheck,
+  GraduationCap,
   AlertTriangle,
   ShieldCheck,
   Wrench,
@@ -134,6 +135,14 @@ const settingsOptions = [
     icon: ClipboardCheck,
     color: "bg-teal-100 text-teal-600",
     path: "/settings/vehicle-inspections"
+  },
+  {
+    id: "equipment-inductions",
+    title: "Equipment Inductions",
+    description: "Induction checklists for each piece of equipment",
+    icon: GraduationCap,
+    color: "bg-teal-100 text-teal-600",
+    path: "/settings/equipment-inductions"
   },
   {
     id: "jha-templates",

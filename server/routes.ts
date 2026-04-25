@@ -22049,17 +22049,272 @@ Transcription: ${transcriptText}`;
         .set({ signature })
         .returning({ id: schema.vehicleInspections.id });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         updatedCount: result.length,
         message: `Successfully applied signature to ${result.length} inspections`
       });
     } catch (error) {
       console.error('Error applying signature:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Failed to apply signature' 
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to apply signature'
       });
+    }
+  });
+
+  // ========================================
+  // EQUIPMENT INDUCTION SYSTEM
+  // ========================================
+
+  app.get("/api/induction-templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllInductionTemplates();
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction templates' });
+    }
+  });
+
+  app.get("/api/induction-templates/by-type/:equipmentType", async (req, res) => {
+    try {
+      const templates = await storage.getInductionTemplatesByType(req.params.equipmentType);
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch templates by type' });
+    }
+  });
+
+  app.get("/api/induction-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getInductionTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Induction template not found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction template' });
+    }
+  });
+
+  app.post("/api/induction-templates", async (req, res) => {
+    try {
+      const validatedData = schema.insertInductionTemplateSchema.parse(req.body);
+      const template = await storage.createInductionTemplate(validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create induction template' });
+    }
+  });
+
+  app.patch("/api/induction-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Induction template not found' });
+      }
+      const validatedData = schema.updateInductionTemplateSchema.parse(req.body);
+      const template = await storage.updateInductionTemplate(req.params.id, validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update induction template' });
+    }
+  });
+
+  app.delete("/api/induction-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Induction template not found' });
+      }
+      await storage.deleteInductionTemplate(req.params.id);
+      res.json({ success: true, message: 'Induction template deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete induction template' });
+    }
+  });
+
+  app.get("/api/induction-templates/:templateId/items", async (req, res) => {
+    try {
+      const items = await storage.getInductionChecklistItemsByTemplate(req.params.templateId);
+      res.json({ success: true, data: items });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction checklist items' });
+    }
+  });
+
+  app.post("/api/induction-templates/:templateId/items", async (req, res) => {
+    try {
+      const validatedData = schema.insertInductionChecklistItemSchema.parse({ ...req.body, templateId: req.params.templateId });
+      const item = await storage.createInductionChecklistItem(validatedData);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create checklist item' });
+    }
+  });
+
+  app.patch("/api/induction-checklist-items/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionChecklistItem(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Checklist item not found' });
+      }
+      const validatedData = schema.updateInductionChecklistItemSchema.parse(req.body);
+      const item = await storage.updateInductionChecklistItem(req.params.id, validatedData);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update checklist item' });
+    }
+  });
+
+  app.delete("/api/induction-checklist-items/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionChecklistItem(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Checklist item not found' });
+      }
+      await storage.deleteInductionChecklistItem(req.params.id);
+      res.json({ success: true, message: 'Checklist item deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete checklist item' });
+    }
+  });
+
+  app.post("/api/induction-templates/:templateId/reorder", async (req, res) => {
+    try {
+      const { itemIds } = req.body;
+      await storage.reorderInductionChecklistItems(req.params.templateId, itemIds);
+      res.json({ success: true, message: 'Items reordered' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to reorder items' });
+    }
+  });
+
+  app.get("/api/equipment-inductions", async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.employeeId) filters.employeeId = req.query.employeeId as string;
+      if (req.query.equipmentType) filters.equipmentType = req.query.equipmentType as string;
+      const inductions = await storage.getAllEquipmentInductions(filters);
+      res.json({ success: true, data: inductions });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch inductions' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/employee/:employeeId/status", async (req, res) => {
+    try {
+      const status = await storage.getInductionStatusForEmployee(req.params.employeeId);
+      res.json({ success: true, data: status });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction status' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/employee/:employeeId", async (req, res) => {
+    try {
+      const inductions = await storage.getEquipmentInductionsByEmployee(req.params.employeeId);
+      res.json({ success: true, data: inductions });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch employee inductions' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/:id", async (req, res) => {
+    try {
+      const induction = await storage.getEquipmentInduction(req.params.id);
+      if (!induction) {
+        return res.status(404).json({ success: false, message: 'Induction not found' });
+      }
+      res.json({ success: true, data: induction });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction' });
+    }
+  });
+
+  app.post("/api/equipment-inductions", async (req, res) => {
+    try {
+      const validatedData = schema.insertEquipmentInductionSchema.parse(req.body);
+      const induction = await storage.createEquipmentInduction({
+        ...validatedData,
+        completedAt: new Date(),
+      } as any);
+      res.json({ success: true, data: induction });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create induction' });
+    }
+  });
+
+  app.patch("/api/equipment-inductions/:id", async (req, res) => {
+    try {
+      const existing = await storage.getEquipmentInduction(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Induction not found' });
+      }
+      const validatedData = schema.updateEquipmentInductionSchema.parse(req.body);
+      const induction = await storage.updateEquipmentInduction(req.params.id, validatedData);
+      res.json({ success: true, data: induction });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update induction' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/:inductionId/responses", async (req, res) => {
+    try {
+      const responses = await storage.getInductionResponses(req.params.inductionId);
+      res.json({ success: true, data: responses });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch responses' });
+    }
+  });
+
+  app.post("/api/equipment-inductions/:inductionId/responses", async (req, res) => {
+    try {
+      const validatedData = schema.insertInductionResponseSchema.parse({ ...req.body, inductionId: req.params.inductionId });
+      const response = await storage.createInductionResponse(validatedData);
+      res.json({ success: true, data: response });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create response' });
+    }
+  });
+
+  // Synchronous photo upload for induction step photos -> object storage
+  app.post('/api/induction-photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No photo file provided' });
+      }
+      const photoStorage = new PhotoStorageService();
+      const { url, thumbnailUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      res.json({ success: true, data: { url, thumbnailUrl } });
+    } catch (error) {
+      console.error('Error uploading induction photo:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error uploading photo' });
     }
   });
 

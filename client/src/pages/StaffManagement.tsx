@@ -51,9 +51,11 @@ import {
   Settings,
   ChevronLeft,
   Lock,
+  GraduationCap,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import StaffInductionsDialog from "@/components/StaffInductionsDialog";
 
 // Staff role options
 const STAFF_ROLES = [
@@ -913,12 +915,14 @@ function StaffCard({
   onEdit,
   onDelete,
   onSetPassword,
+  onInductions,
   isAdmin,
 }: {
   staff: StaffMember;
   onEdit: (staff: StaffMember) => void;
   onDelete: (staff: StaffMember) => void;
   onSetPassword: (staff: StaffMember) => void;
+  onInductions: (staff: StaffMember) => void;
   isAdmin: boolean;
 }) {
   const roleConfig = STAFF_ROLES.find((r) => r.value === staff.role);
@@ -961,6 +965,15 @@ function StaffCard({
             </Badge>
 
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onInductions(staff)}
+                data-testid={`button-inductions-${staff.id}`}
+                title="Inductions"
+              >
+                <GraduationCap className="w-4 h-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -1074,6 +1087,7 @@ export default function StaffManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [passwordStaff, setPasswordStaff] = useState<StaffMember | null>(null);
+  const [inductionsStaff, setInductionsStaff] = useState<StaffMember | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1412,6 +1426,7 @@ export default function StaffManagement() {
                 onEdit={setEditingStaff}
                 onDelete={handleDeleteStaff}
                 onSetPassword={setPasswordStaff}
+                onInductions={setInductionsStaff}
                 isAdmin={isAdmin}
               />
             ))}
@@ -1466,6 +1481,13 @@ export default function StaffManagement() {
         isOpen={!!passwordStaff}
         onClose={() => setPasswordStaff(null)}
         onSubmit={handleSetPassword}
+      />
+
+      {/* Inductions Dialog */}
+      <StaffInductionsDialog
+        staff={inductionsStaff}
+        open={!!inductionsStaff}
+        onClose={() => setInductionsStaff(null)}
       />
     </div>
   );

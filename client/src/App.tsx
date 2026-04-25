@@ -52,6 +52,8 @@ import { NotificationSettings } from "@/components/NotificationSettings";
 import NotificationPreferences from "@/pages/NotificationPreferences";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
+import EquipmentInductionSettings from "@/pages/EquipmentInductionSettings";
+import EquipmentInductionRunner from "@/pages/EquipmentInductionRunner";
 import SignatureCapture from "@/pages/SignatureCapture";
 import JHATemplates from "@/pages/JHATemplates";
 import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
@@ -1138,6 +1140,18 @@ function Router() {
         <SidebarLayout>
           <VehicleInspectionSettings />
         </SidebarLayout>
+      </Route>
+      <Route path="/settings/equipment-inductions">
+        <SidebarLayout>
+          <EquipmentInductionSettings />
+        </SidebarLayout>
+      </Route>
+      <Route path="/staff-induction/:employeeId/:templateId">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <EquipmentInductionRunner />
+          </SidebarLayout>
+        </AuthenticatedRoute>
       </Route>
       <Route path="/settings/jha-templates">
         <SidebarLayout>
