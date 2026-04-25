@@ -74,6 +74,78 @@ import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
+// ── Email-thread helpers ────────────────────────────────────────────────────
+// The diary stores sent and received emails as independent entries with no
+// parent/child link in the database. These helpers let the renderer infer the
+// direction of each email and stitch replies underneath their preceding sent
+// email so the UI can show one consolidated thread card per conversation.
+
+type EmailDirection = "sent" | "received" | "unknown";
+
+function getEmailDirection(entry: { title: string; content: string }): EmailDirection {
+  const titleLower = (entry.title || "").toLowerCase();
+  const contentLower = (entry.content || "").toLowerCase();
+  if (
+    titleLower.includes("sent") ||
+    contentLower.includes("email sent to") ||
+    contentLower.includes("sms sent to")
+  ) {
+    return "sent";
+  }
+  if (titleLower.includes("reply") || titleLower.includes("from")) {
+    return "received";
+  }
+  return "unknown";
+}
+
+function getEmailAddress(entry: { metadata?: any }): string | null {
+  const m = entry.metadata || {};
+  return m.emailAddress || m.recipient || m.fromEmail || null;
+}
+
+function cleanEmailMessage(
+  entry: { title: string; content: string },
+  direction: EmailDirection,
+): { text: string; recipient: string } {
+  let messageText = entry.content || "";
+  let recipientInfo = "";
+
+  if (direction === "sent" && messageText.includes("Message:")) {
+    const beforeMessage = messageText.split("Message:")[0];
+    if (beforeMessage.includes("Email sent to")) {
+      recipientInfo = beforeMessage.split("Email sent to")[1].trim();
+    } else if (beforeMessage.includes("SMS sent to")) {
+      recipientInfo = beforeMessage.split("SMS sent to")[1].trim();
+    }
+    messageText = messageText.split("Message:")[1].trim();
+    messageText = messageText
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<p>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+  } else if (direction === "received" && messageText.includes(":\n\n")) {
+    messageText = messageText.split(":\n\n")[1].trim();
+  }
+
+  if (direction === "received") {
+    messageText = messageText
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<p>/gi, "")
+      .replace(/<[^>]+>/g, "");
+    const fromIndex = messageText.search(/\n+From:\s*.+?[@<]/i);
+    if (fromIndex !== -1) messageText = messageText.substring(0, fromIndex);
+    const sentIndex = messageText.search(/\n+Sent:\s*.+?\d{4}/i);
+    if (sentIndex !== -1) messageText = messageText.substring(0, sentIndex);
+    messageText = messageText.trim();
+  }
+
+  return { text: messageText, recipient: recipientInfo };
+}
+
 // Component to display email activity (opens/clicks)
 function EmailActivity({ messageId }: { messageId: string }) {
   const [activity, setActivity] = useState<any>(null);
@@ -502,6 +574,7 @@ export function JobDiarySection({
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(
     null,
   );
+  const [diaryTab, setDiaryTab] = useState<"timeline" | "photos">("timeline");
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
@@ -1139,17 +1212,77 @@ export function JobDiarySection({
     return photos;
   }, [diaryEntries]);
 
-  // Group consecutive photo entries for compact display
+  // Photo entries with metadata, used by the Photos tab grid so each tile
+  // can show its timestamp and author and link back to the right gallery
+  // index on click.
+  const photoEntries = React.useMemo<
+    Array<{ url: string; timestamp: string; author: string; id: string }>
+  >(() => {
+    return diaryEntries
+      .filter((entry: DiaryEntry) => !!entry.photoUrl)
+      .map((entry: DiaryEntry) => ({
+        url: entry.photoUrl as string,
+        timestamp: entry.timestamp,
+        author: entry.author,
+        id: entry.id,
+      }));
+  }, [diaryEntries]);
+
+  // Group consecutive photo entries for compact display, and stitch
+  // sent emails together with the replies they received into a single
+  // email_thread group.
   interface GroupedEntry {
-    type: "single" | "photo_group";
+    type: "single" | "photo_group" | "email_thread";
     entries: DiaryEntry[];
     timestamp: string;
     author: string;
+    parent?: DiaryEntry;
+    replies?: DiaryEntry[];
   }
 
   const groupedEntries = React.useMemo(() => {
     const groups: GroupedEntry[] = [];
     let currentPhotoGroup: DiaryEntry[] = [];
+    // Pending received emails awaiting a parent sent email. Walk is
+    // newest-first, so when we encounter a sent email we look back through
+    // pendingReplies for any received emails (which are newer in time) to
+    // associate as its replies.
+    let pendingReplies: DiaryEntry[] = [];
+
+    const flushPhotoGroup = () => {
+      if (currentPhotoGroup.length > 0) {
+        groups.push({
+          type: "photo_group",
+          entries: [...currentPhotoGroup],
+          timestamp: currentPhotoGroup[0].timestamp,
+          author: currentPhotoGroup[0].author,
+        });
+        currentPhotoGroup = [];
+      }
+    };
+
+    const pushEmailThread = (parent: DiaryEntry | null, replies: DiaryEntry[]) => {
+      const sortedReplies = [...replies].sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+      });
+      const all = parent ? [parent, ...sortedReplies] : sortedReplies;
+      // Thread sits in the timeline at its most recent activity, so a
+      // freshly-arrived reply pulls the whole conversation to the top.
+      const latest = all.reduce((acc, e) => {
+        const t = new Date(e.timestamp).getTime();
+        return isNaN(t) ? acc : Math.max(acc, t);
+      }, 0);
+      groups.push({
+        type: "email_thread",
+        entries: all,
+        timestamp: latest > 0 ? new Date(latest).toISOString() : (parent?.timestamp ?? sortedReplies[0]?.timestamp ?? ""),
+        author: parent?.author ?? sortedReplies[0]?.author ?? "",
+        parent: parent ?? undefined,
+        replies: sortedReplies,
+      });
+    };
 
     diaryEntries.forEach((entry, index) => {
       const isPhotoEntry =
@@ -1175,47 +1308,73 @@ export function JobDiarySection({
             5 * 60 * 1000;
 
         if (!nextIsPhoto || !withinTimeWindow) {
-          // End of photo group
-          if (currentPhotoGroup.length > 0) {
-            groups.push({
-              type: "photo_group",
-              entries: [...currentPhotoGroup],
-              timestamp: currentPhotoGroup[0].timestamp,
-              author: currentPhotoGroup[0].author,
-            });
-            currentPhotoGroup = [];
-          }
+          flushPhotoGroup();
         }
-      } else {
-        // Flush any pending photo group
-        if (currentPhotoGroup.length > 0) {
-          groups.push({
-            type: "photo_group",
-            entries: [...currentPhotoGroup],
-            timestamp: currentPhotoGroup[0].timestamp,
-            author: currentPhotoGroup[0].author,
-          });
-          currentPhotoGroup = [];
-        }
-        // Add single entry
-        groups.push({
-          type: "single",
-          entries: [entry],
-          timestamp: entry.timestamp,
-          author: entry.author,
-        });
+        return;
       }
+
+      // Email threading — only applies to type === 'email'. SMS keeps the
+      // existing per-entry rendering.
+      if (entry.type === "email") {
+        flushPhotoGroup();
+        const direction = getEmailDirection(entry);
+        if (direction === "received") {
+          pendingReplies.push(entry);
+        } else {
+          // Treat 'sent' and 'unknown' as parent-style emails. Any pending
+          // replies whose address matches become this email's replies.
+          const parentAddr = getEmailAddress(entry);
+          let matched: DiaryEntry[] = [];
+          let leftover: DiaryEntry[] = [];
+          for (const r of pendingReplies) {
+            const rAddr = getEmailAddress(r);
+            // Pair on matching address; if either side has no address, fall
+            // back to assuming the reply belongs to the most recent parent.
+            if (!parentAddr || !rAddr || rAddr === parentAddr) {
+              matched.push(r);
+            } else {
+              leftover.push(r);
+            }
+          }
+          pendingReplies = leftover;
+          pushEmailThread(entry, matched);
+        }
+        return;
+      }
+
+      // Non-email, non-photo entry: flush photo group, keep pendingReplies
+      // (they may still be matched to an even older sent email further down
+      // in the timeline). Standalone single entry.
+      flushPhotoGroup();
+      groups.push({
+        type: "single",
+        entries: [entry],
+        timestamp: entry.timestamp,
+        author: entry.author,
+      });
     });
 
     // Flush any remaining photo group
-    if (currentPhotoGroup.length > 0) {
-      groups.push({
-        type: "photo_group",
-        entries: [...currentPhotoGroup],
-        timestamp: currentPhotoGroup[0].timestamp,
-        author: currentPhotoGroup[0].author,
-      });
+    flushPhotoGroup();
+
+    // Orphan replies (received emails with no preceding sent email in this
+    // job) — render each as its own thread group with no parent.
+    for (const r of pendingReplies) {
+      pushEmailThread(null, [r]);
     }
+    pendingReplies = [];
+
+    // Re-sort all groups by their effective timestamp so threads with a fresh
+    // reply float to the top of the diary instead of staying anchored at the
+    // original sent email's date.
+    groups.sort((a, b) => {
+      const ta = new Date(a.timestamp).getTime();
+      const tb = new Date(b.timestamp).getTime();
+      if (isNaN(tb) && isNaN(ta)) return 0;
+      if (isNaN(tb)) return 1;
+      if (isNaN(ta)) return -1;
+      return tb - ta;
+    });
 
     return groups;
   }, [diaryEntries]);
@@ -1778,6 +1937,48 @@ export function JobDiarySection({
               <Plus className="w-6 h-6" />
             </Button>
           </div>
+
+          {/* Diary view tabs — Timeline shows the chronological feed; Photos
+              gives crew quick access to every uploaded image at a glance. */}
+          <div className="mt-2 flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 -mx-2 px-2">
+            <button
+              type="button"
+              onClick={() => setDiaryTab("timeline")}
+              data-testid="tab-diary-timeline"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                diaryTab === "timeline"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Timeline
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiaryTab("photos")}
+              data-testid="tab-diary-photos"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                diaryTab === "photos"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Photos
+              {photoEntries.length > 0 && (
+                <span
+                  className={`inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] ${
+                    diaryTab === "photos"
+                      ? "bg-primary/15 text-primary"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  {photoEntries.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Confirmation-reply card: hoisted above the timeline so it shows
@@ -1814,7 +2015,63 @@ export function JobDiarySection({
             />
           )}
 
+        {/* Photos tab: grid of every uploaded photo on this job, click any
+            tile to open the existing fullscreen viewer (with swipe navigation). */}
+        {diaryTab === "photos" && (
+          <ScrollArea className="flex-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="text-xs text-muted-foreground">Loading...</div>
+              </div>
+            ) : photoEntries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Camera className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-2" />
+                <div className="text-sm text-muted-foreground">
+                  No photos uploaded yet
+                </div>
+                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Photos added to the diary will appear here.
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-2 pr-4">
+                {photoEntries.map((photo, idx) => {
+                  const galleryIdx = allPhotos.indexOf(photo.url);
+                  return (
+                    <button
+                      key={photo.id ?? `${photo.url}-${idx}`}
+                      type="button"
+                      onClick={() =>
+                        setViewingPhotoIndex(galleryIdx >= 0 ? galleryIdx : 0)
+                      }
+                      className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
+                      data-testid={`photo-tile-${photo.id ?? idx}`}
+                    >
+                      <img
+                        src={photo.url}
+                        alt={`Diary photo ${idx + 1}`}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="text-[10px] text-white whitespace-nowrap truncate">
+                          {formatInTimeZone(
+                            new Date(photo.timestamp),
+                            "Pacific/Auckland",
+                            "MMM d, h:mm a",
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        )}
+
         {/* Timeline */}
+        {diaryTab === "timeline" && (
         <ScrollArea className="flex-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -1829,6 +2086,255 @@ export function JobDiarySection({
           ) : (
             <div className="space-y-3 p-2 pr-4">
               {groupedEntries.map((group, groupIndex) => {
+                // Email thread rendering — one consolidated card containing the
+                // parent (sent) email plus all received replies stacked below.
+                if (group.type === "email_thread") {
+                  const parent = group.parent;
+                  const replies = group.replies ?? [];
+
+                  const openCalendarBookingFromEntry = (entry: DiaryEntry) => {
+                    const content = entry.content || "";
+                    const custName =
+                      jobData?.jobContactFirstName &&
+                      jobData?.jobContactLastName
+                        ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
+                        : jobData?.jobContactFirstName ||
+                          customerRecord?.name ||
+                          "Customer";
+                    const extractedTime = extractTimeFromText(content);
+                    const extractedDate = extractDateFromText(content);
+                    const fallbackDate = new Date();
+                    fallbackDate.setDate(fallbackDate.getDate() + 1);
+                    const dateStr =
+                      extractedDate || localDateStr(fallbackDate);
+
+                    setCalendarBookingEntry(entry);
+                    setCalendarBookingTitle(custName);
+                    setCalendarBookingDate(dateStr);
+                    setCalendarBookingTime(extractedTime);
+                    setCalendarBookingDuration("30");
+                    setCalendarBookingOpen(true);
+                  };
+
+                  const startReplyFromEntry = (entry: DiaryEntry) => {
+                    const replyEmail =
+                      entry.metadata?.emailAddress ||
+                      entry.metadata?.recipient ||
+                      entry.metadata?.fromEmail ||
+                      "";
+                    const originalSubject = (
+                      entry.content ||
+                      entry.title
+                        .replace("Email from ", "")
+                        .replace("Email sent: ", "")
+                    )
+                      .replace(/[\r\n]+/g, " ")
+                      .substring(0, 100);
+                    setReplyToEmail(replyEmail);
+                    setReplySubject(originalSubject);
+                    setActiveComposer("email");
+                  };
+
+                  const parentDirection = parent
+                    ? getEmailDirection(parent)
+                    : "unknown";
+                  const parentMsg = parent
+                    ? cleanEmailMessage(parent, parentDirection)
+                    : { text: "", recipient: "" };
+                  const parentRecipient =
+                    parentMsg.recipient ||
+                    parent?.metadata?.emailAddress ||
+                    parent?.metadata?.recipient ||
+                    "";
+
+                  return (
+                    <div
+                      key={`email-thread-${groupIndex}`}
+                      className="group"
+                      data-testid="diary-email-thread"
+                    >
+                      <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                        {parent && (
+                          <>
+                            {/* Parent email header */}
+                            <div className="flex items-start justify-between gap-2 px-3 py-2">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                <MdEmail className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+                                <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                                  Email
+                                </span>
+                                {parentRecipient && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                    to {parentRecipient}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
+                                  {formatInTimeZone(
+                                    new Date(parent.timestamp),
+                                    "Pacific/Auckland",
+                                    "h:mm a dd/MM/yy",
+                                  )}
+                                </span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm("Delete this email?")) {
+                                      deleteEntryMutation.mutate(parent.id);
+                                    }
+                                  }}
+                                  data-testid={`button-delete-email-thread-${parent.id}`}
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Parent body */}
+                            <div className="px-3 pb-3">
+                              <p
+                                className="text-xs leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200"
+                                style={{ wordBreak: "break-word" }}
+                              >
+                                {parentMsg.text}
+                              </p>
+                            </div>
+
+                            {/* Tracking + Book row */}
+                            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-gray-100 dark:border-gray-800">
+                              {parentDirection === "sent" ? (
+                                parent.metadata?.sendgridMessageId ? (
+                                  <EmailActivity
+                                    messageId={parent.metadata.sendgridMessageId}
+                                  />
+                                ) : (
+                                  <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                    <CheckCircle className="h-2.5 w-2.5" />
+                                    <span>Sent</span>
+                                  </div>
+                                )
+                              ) : (
+                                <div />
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCalendarBookingFromEntry(parent);
+                                }}
+                                data-testid={`button-calendar-book-email-thread-${parent.id}`}
+                              >
+                                <CalendarPlus className="w-3 h-3 mr-0.5" />
+                                Book
+                              </Button>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Replies — indented under a purple thread bar */}
+                        {replies.length > 0 && (
+                          <div
+                            className={`${parent ? "border-t border-gray-100 dark:border-gray-800" : ""} px-3 py-3 space-y-3`}
+                          >
+                            {replies.map((reply) => {
+                              const replyMsg = cleanEmailMessage(reply, "received");
+                              const senderName =
+                                reply.author && reply.author !== "System"
+                                  ? reply.author
+                                  : reply.metadata?.emailAddress ||
+                                    "customer";
+                              return (
+                                <div
+                                  key={reply.id}
+                                  className="border-l-2 border-purple-400 dark:border-purple-500 pl-3 ml-1"
+                                  data-testid={`email-thread-reply-${reply.id}`}
+                                >
+                                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                      <Reply className="w-3 h-3 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                                        Reply received
+                                      </span>
+                                      <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                        from {senderName}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
+                                        {formatInTimeZone(
+                                          new Date(reply.timestamp),
+                                          "Pacific/Auckland",
+                                          "h:mm a dd/MM/yy",
+                                        )}
+                                      </span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm("Delete this reply?")) {
+                                            deleteEntryMutation.mutate(reply.id);
+                                          }
+                                        }}
+                                        data-testid={`button-delete-reply-${reply.id}`}
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="rounded-md bg-purple-50 dark:bg-purple-900/30 px-3 py-2">
+                                    <p
+                                      className="text-xs leading-relaxed whitespace-pre-wrap break-words text-purple-900 dark:text-purple-100"
+                                      style={{ wordBreak: "break-word" }}
+                                    >
+                                      {replyMsg.text}
+                                    </p>
+                                  </div>
+                                  <div className="mt-1.5 flex items-center justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startReplyFromEntry(reply);
+                                      }}
+                                      data-testid={`button-reply-${reply.id}`}
+                                    >
+                                      <Reply className="w-3 h-3 mr-0.5" />
+                                      Reply
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openCalendarBookingFromEntry(reply);
+                                      }}
+                                      data-testid={`button-calendar-book-${reply.id}`}
+                                    >
+                                      <CalendarPlus className="w-3 h-3 mr-0.5" />
+                                      Book
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 // Photo group rendering
                 if (group.type === "photo_group") {
                   const photos = group.entries.filter((e) => e.photoUrl);
@@ -2811,6 +3317,7 @@ export function JobDiarySection({
             </div>
           )}
         </ScrollArea>
+        )}
 
         {/* Quick Actions */}
         <div className="flex-shrink-0 p-2 border-t bg-gray-50 dark:bg-gray-900">
