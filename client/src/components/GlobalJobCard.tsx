@@ -1745,7 +1745,10 @@ export function GlobalJobCard({
       "unsuccessfulReason",
       "categoryId",
       "internalNotes",
-      "customerConfirmed",
+      // NOTE: customerConfirmed is intentionally excluded from auto-save.
+      // It's saved immediately via direct apiRequest on click (see Customer Confirmed
+      // toggle handler) so the green tick on the Staff Schedule and dispatch board
+      // appears within ~200ms instead of after the 1.5s autosave debounce.
       // NOTE: etaNotificationRequested is intentionally excluded from auto-save.
       // It's saved immediately via direct apiRequest on click (see ETA toggle handler)
       // to prevent it from being tracked during form.reset() and triggering a
@@ -1897,7 +1900,7 @@ export function GlobalJobCard({
           // dispatch board's /api/jobs list). Without this, closing and re-opening the
           // job card uses the stale list entry (job prop) and resets the form with
           // pre-save values — making it look like the save never happened.
-          queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+          const patchListCache = (old: any) => {
             if (!old) return old;
             const data = old?.data ?? old;
             if (!Array.isArray(data)) return old; // skip single-job cache entries
@@ -1905,13 +1908,21 @@ export function GlobalJobCard({
               j.id === editingJob.id ? { ...j, ...changedData } : j,
             );
             return old?.data ? { ...old, data: updated } : updated;
-          });
+          };
+          queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, patchListCache);
+          // Also patch the date-scoped Staff Schedule / CalendarGrid cache so
+          // visual indicators (confirmation tick, status colour, etc.) update
+          // immediately rather than waiting for the 30s refetchInterval.
+          queryClient.setQueriesData({ queryKey: ["/api/jobs/for-date"] }, patchListCache);
           // Only invalidate the specific job — not the full list — to avoid forcing
           // the dispatch board (125+ jobs) to refetch on every 1.5-second auto-save.
           queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
           // If schedule-related fields changed, also refresh the date-scoped views
           // (Staff Schedule, CalendarGrid day view) so they immediately reflect the change.
-          const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status"];
+          // customerConfirmed is included because the staff schedule renders a
+          // confirmation tick driven by it — without invalidation, the next refetch
+          // (up to 30s away) is what makes the tick appear.
+          const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status", "customerConfirmed"];
           if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
             queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
             queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
@@ -6884,28 +6895,61 @@ The Treemarkables Team`;
                             <FormField
                               control={form.control}
                               name="customerConfirmed"
-                              render={({ field }) => (
-                                <FormItem className="flex-1">
-                                  <FormControl>
-                                    <div className={`flex items-center gap-2 p-2.5 rounded-md border select-none transition-colors cursor-pointer ${field.value ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
-                                      <Checkbox
-                                        id="customer-confirmed"
-                                        checked={!!field.value}
-                                        onCheckedChange={(checked) =>
-                                          field.onChange(checked === true)
-                                        }
-                                        data-testid="checkbox-customer-confirmed"
-                                      />
-                                      <label
-                                        htmlFor="customer-confirmed"
-                                        className={`text-sm font-medium leading-tight cursor-pointer select-none ${field.value ? "text-green-800 dark:text-green-200" : "text-gray-600 dark:text-gray-400"}`}
-                                      >
-                                        Customer confirmed
-                                      </label>
-                                    </div>
-                                  </FormControl>
-                                </FormItem>
-                              )}
+                              render={({ field }) => {
+                                // Saved immediately via direct apiRequest (NOT via
+                                // debounced auto-save) so the green tick on the Staff
+                                // Schedule + dispatch board updates within ~200ms.
+                                // customerConfirmed is excluded from autoSaveFieldsRef
+                                // for the same reason.
+                                const handleToggle = async (newValue: boolean) => {
+                                  field.onChange(newValue);
+                                  if (!editingJob?.id) return;
+                                  const patchListCache = (old: any) => {
+                                    if (!old) return old;
+                                    const data = old?.data ?? old;
+                                    if (!Array.isArray(data)) return old;
+                                    const updated = data.map((j: any) =>
+                                      j.id === editingJob.id ? { ...j, customerConfirmed: newValue } : j,
+                                    );
+                                    return old?.data ? { ...old, data: updated } : updated;
+                                  };
+                                  queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, patchListCache);
+                                  queryClient.setQueriesData({ queryKey: ["/api/jobs/for-date"] }, patchListCache);
+                                  try {
+                                    await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
+                                      customerConfirmed: newValue,
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+                                  } catch {
+                                    field.onChange(!newValue);
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+                                  }
+                                };
+                                return (
+                                  <FormItem className="flex-1">
+                                    <FormControl>
+                                      <div className={`flex items-center gap-2 p-2.5 rounded-md border select-none transition-colors cursor-pointer ${field.value ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
+                                        <Checkbox
+                                          id="customer-confirmed"
+                                          checked={!!field.value}
+                                          onCheckedChange={(checked) =>
+                                            handleToggle(checked === true)
+                                          }
+                                          data-testid="checkbox-customer-confirmed"
+                                        />
+                                        <label
+                                          htmlFor="customer-confirmed"
+                                          className={`text-sm font-medium leading-tight cursor-pointer select-none ${field.value ? "text-green-800 dark:text-green-200" : "text-gray-600 dark:text-gray-400"}`}
+                                        >
+                                          Customer confirmed
+                                        </label>
+                                      </div>
+                                    </FormControl>
+                                  </FormItem>
+                                );
+                              }}
                             />
 
                             {/* ETA Notification Requested Toggle */}

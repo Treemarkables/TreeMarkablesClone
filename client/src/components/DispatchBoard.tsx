@@ -669,6 +669,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
   const [jobFilter, setJobFilter] = useJobFilter();
+  const [onlyUnconfirmed, setOnlyUnconfirmed] = useState(false);
 
   const STATUS_TAB_FILTERS = [
     { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
@@ -1568,6 +1569,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           job.status === "lead" ||
           job.status === "quote" ||
           job.status === "work_order"
+        );
+      })
+      .filter((job) => {
+        if (!onlyUnconfirmed) return true;
+        // Awaiting-confirmation filter: only scheduled / work_order jobs that the
+        // customer has not confirmed.
+        return (
+          (job.status === "scheduled" || job.status === "work_order") &&
+          !job.customerConfirmed
         );
       })
       .filter((job) => {
@@ -2480,13 +2490,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             jobFilter === "work_order" ||
                             jobFilter === "all") &&
                             unconfirmedCount > 0 && (
-                              <Badge
-                                variant="outline"
-                                className="border-dashed text-amber-700 text-xs"
+                              <button
+                                type="button"
+                                onClick={() => setOnlyUnconfirmed((v) => !v)}
+                                aria-pressed={onlyUnconfirmed}
+                                title={onlyUnconfirmed ? "Clear filter" : "Show only jobs awaiting confirmation"}
                                 data-testid="badge-unconfirmed-count"
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
+                                  onlyUnconfirmed
+                                    ? "border-amber-500 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                    : "border-dashed border-amber-400 text-amber-700 hover:bg-amber-50"
+                                }`}
                               >
-                                {unconfirmedCount} awaiting confirmation
-                              </Badge>
+                                <span>{unconfirmedCount} awaiting confirmation</span>
+                                {onlyUnconfirmed && <X className="h-3 w-3" />}
+                              </button>
                             )}
                         </div>
 
