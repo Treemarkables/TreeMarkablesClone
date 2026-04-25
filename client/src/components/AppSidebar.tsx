@@ -12,6 +12,7 @@ import {
   Leaf,
   Bot,
   ChevronRight,
+  AlertTriangle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -20,6 +21,7 @@ import {
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -69,11 +71,13 @@ function SidebarNavContent({
 }) {
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const jhaActive = location === "/jha-assessment" || location === "/jha-history";
+  const nearMissActive = location === "/near-miss-report" || location === "/near-miss-history";
   const financeActive = ["/invoices", "/templates", "/settings/invoice-builder", "/settings/proposal-builder", "/equipment", "/time-tracking", "/unlinked-calls", "/integrations", "/reconciliation"].includes(location);
   const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics", "/profitability-calculator"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [jhaOpen, setJhaOpen] = useState(jhaActive);
+  const [nearMissOpen, setNearMissOpen] = useState(nearMissActive);
   const [financeOpen, setFinanceOpen] = useState(financeActive);
   const [opsOpen, setOpsOpen] = useState(opsActive);
 
@@ -84,6 +88,10 @@ function SidebarNavContent({
   useEffect(() => {
     if (jhaActive) setJhaOpen(true);
   }, [jhaActive]);
+
+  useEffect(() => {
+    if (nearMissActive) setNearMissOpen(true);
+  }, [nearMissActive]);
 
   useEffect(() => {
     if (financeActive) setFinanceOpen(true);
@@ -185,23 +193,27 @@ function SidebarNavContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
-              {/* Vehicle Inspection — collapsible group */}
+              {/* Vehicle Inspection — direct link with collapsible submenu */}
               <Collapsible open={vehicleOpen} onOpenChange={setVehicleOpen} className="group/vehicle-collapsible">
                 <SidebarMenuItem>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={vehicleActive} data-testid="collapsible-vehicle-inspection">
+                  <SidebarMenuButton asChild isActive={vehicleActive}>
+                    <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
                       <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-blue-100 text-blue-600">
                         <ClipboardCheck className="h-4 w-4" />
                       </span>
                       <span className="truncate">Vehicle Inspection</span>
-                      <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/vehicle-collapsible:rotate-90" />
-                    </SidebarMenuButton>
+                    </Link>
+                  </SidebarMenuButton>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuAction data-testid="collapsible-vehicle-inspection">
+                      <ChevronRight className="transition-transform duration-200 group-data-[state=open]/vehicle-collapsible:rotate-90" />
+                    </SidebarMenuAction>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/vehicle-inspection"}>
-                          <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
+                          <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection-new">
                             <span>New Inspection</span>
                           </Link>
                         </SidebarMenuSubButton>
@@ -242,6 +254,43 @@ function SidebarNavContent({
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/jha-history"}>
                           <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
+                            <span>History</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                    </SidebarMenuSub>
+                  </CollapsibleContent>
+                </SidebarMenuItem>
+              </Collapsible>
+
+              {/* Near Miss Reports — collapsible */}
+              <Collapsible open={nearMissOpen} onOpenChange={setNearMissOpen} className="group/nearmiss-collapsible">
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={nearMissActive}>
+                    <Link href="/near-miss-report" onClick={handleLinkClick} data-testid="link-near-miss-report">
+                      <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-amber-100 text-amber-600">
+                        <AlertTriangle className="h-4 w-4" />
+                      </span>
+                      <span className="truncate">Near Miss</span>
+                    </Link>
+                  </SidebarMenuButton>
+                  <CollapsibleTrigger asChild>
+                    <SidebarMenuAction data-testid="collapsible-near-miss">
+                      <ChevronRight className="transition-transform duration-200 group-data-[state=open]/nearmiss-collapsible:rotate-90" />
+                    </SidebarMenuAction>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent>
+                    <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/near-miss-report"}>
+                          <Link href="/near-miss-report" onClick={handleLinkClick} data-testid="link-near-miss-report-new">
+                            <span>New Report</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/near-miss-history"}>
+                          <Link href="/near-miss-history" onClick={handleLinkClick} data-testid="link-near-miss-history">
                             <span>History</span>
                           </Link>
                         </SidebarMenuSubButton>

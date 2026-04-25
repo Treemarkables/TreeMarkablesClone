@@ -215,8 +215,8 @@ export default function Equipment() {
 
   // Edit equipment mutation
   const editEquipmentMutation = useMutation({
-    mutationFn: (data: EquipmentFormData & { id: string }) => 
-      apiRequest("PATCH", `/api/equipment/${data.id}`, data),
+    mutationFn: (data: EquipmentFormData & { id: string }) =>
+      apiRequest("PUT", `/api/equipment/${data.id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/equipment"] });
       setIsEditEquipmentOpen(false);
@@ -359,7 +359,15 @@ export default function Equipment() {
 
   const onEdit = (data: EquipmentFormData) => {
     if (selectedEquipment) {
-      editEquipmentMutation.mutate({ ...data, id: selectedEquipment.id });
+      // Drizzle's auto-generated schema rejects "" on decimal columns
+      const payload = {
+        ...data,
+        purchasePrice: data.purchasePrice || undefined,
+        currentValue: data.currentValue || undefined,
+        dailyRentalCost: data.dailyRentalCost || undefined,
+        id: selectedEquipment.id,
+      };
+      editEquipmentMutation.mutate(payload);
     }
   };
 

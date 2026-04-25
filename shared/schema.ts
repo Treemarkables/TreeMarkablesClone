@@ -3659,5 +3659,117 @@ export const insertPendingOutboundMessageSchema = createInsertSchema(pendingOutb
 export type PendingOutboundMessage = typeof pendingOutboundMessages.$inferSelect;
 export type InsertPendingOutboundMessage = z.infer<typeof insertPendingOutboundMessageSchema>;
 
+// ==========================================
+// Near Miss Reporting Module
+// ==========================================
+// Lightweight incident-precursor capture flow under the JHA system.
+// Distinct from `safetyIncidents` above, which records actual incidents/injuries;
+// near-miss is the "almost happened" pre-event log used for proactive control
+// review and toolbox talks.
+
+export const nearMissReports = pgTable("near_miss_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportNumber: text("report_number").notNull().unique(), // NM-YYYY-####
+  reporterUserId: varchar("reporter_user_id").references(() => users.id).notNull(),
+  status: text("status").notNull().default("draft"), // draft, submitted, in_review, actioned, closed
+  jobId: varchar("job_id").references(() => jobs.id),
+  locationAddress: text("location_address"),
+  locationLat: decimal("location_lat", { precision: 10, scale: 7 }),
+  locationLng: decimal("location_lng", { precision: 10, scale: 7 }),
+  incidentDatetime: timestamp("incident_datetime").notNull(),
+  category: text("category").notNull(), // struck_by, fall_from_height, electrical, cut_laceration, vehicle, public_safety, drop_zone_breach, equipment_failure, manual_handling, other
+  potentialSeverity: text("potential_severity").notNull(), // low, medium, high, critical
+  description: text("description").notNull(),
+  immediateActionTaken: text("immediate_action_taken"),
+  equipmentInvolved: text("equipment_involved").array().default([]),
+  contributingFactors: text("contributing_factors").array().default([]), // communication, fatigue, weather, planning, training, equipment, other
+  peopleInvolved: jsonb("people_involved").default([]), // [{userId?, name}]
+  toolboxTalkFlag: boolean("toolbox_talk_flag").default(true),
+  proposedControl: text("proposed_control"),
+  submittedAt: timestamp("submitted_at"),
+  effectivenessReviewDate: timestamp("effectiveness_review_date"), // submittedAt + 30 days
+  effectivenessReviewComplete: boolean("effectiveness_review_complete").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const nearMissAttachments = pgTable("near_miss_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
+  type: text("type").notNull(), // photo, voice_note
+  filePath: text("file_path").notNull(),
+  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const nearMissWitnesses = pgTable("near_miss_witnesses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
+  witnessUserId: varchar("witness_user_id").references(() => users.id), // null for non-staff witnesses
+  witnessName: text("witness_name"), // free-text for non-users
+  status: text("status").notNull().default("pending"), // pending, signed, declined, no_witness
+  signatureSvg: text("signature_svg"), // SVG path data (not base64)
+  witnessComment: text("witness_comment"),
+  signedAt: timestamp("signed_at"),
+  signedLat: decimal("signed_lat", { precision: 10, scale: 7 }),
+  signedLng: decimal("signed_lng", { precision: 10, scale: 7 }),
+  signedDevice: text("signed_device"), // user agent string
+  reportHashAtSigning: text("report_hash_at_signing"), // SHA-256 of report content at signing time — detects post-sign tampering
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const nearMissActions = pgTable("near_miss_actions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  controlType: text("control_type"), // engineering, admin, ppe, substitution, elimination
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  dueDate: timestamp("due_date"),
+  status: text("status").notNull().default("open"), // open, in_progress, complete
+  linkedSopId: varchar("linked_sop_id"), // forward-compat: no FK constraint until sops table exists
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertNearMissReportSchema = createInsertSchema(nearMissReports).omit({
+  id: true,
+  reportNumber: true, // server generates
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateNearMissReportSchema = insertNearMissReportSchema.partial();
+
+export const insertNearMissAttachmentSchema = createInsertSchema(nearMissAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertNearMissWitnessSchema = createInsertSchema(nearMissWitnesses).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateNearMissWitnessSchema = insertNearMissWitnessSchema.partial();
+
+export const insertNearMissActionSchema = createInsertSchema(nearMissActions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateNearMissActionSchema = insertNearMissActionSchema.partial();
+
+export type NearMissReport = typeof nearMissReports.$inferSelect;
+export type InsertNearMissReport = z.infer<typeof insertNearMissReportSchema>;
+export type UpdateNearMissReport = z.infer<typeof updateNearMissReportSchema>;
+export type NearMissAttachment = typeof nearMissAttachments.$inferSelect;
+export type InsertNearMissAttachment = z.infer<typeof insertNearMissAttachmentSchema>;
+export type NearMissWitness = typeof nearMissWitnesses.$inferSelect;
+export type InsertNearMissWitness = z.infer<typeof insertNearMissWitnessSchema>;
+export type UpdateNearMissWitness = z.infer<typeof updateNearMissWitnessSchema>;
+export type NearMissAction = typeof nearMissActions.$inferSelect;
+export type InsertNearMissAction = z.infer<typeof insertNearMissActionSchema>;
+export type UpdateNearMissAction = z.infer<typeof updateNearMissActionSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';
