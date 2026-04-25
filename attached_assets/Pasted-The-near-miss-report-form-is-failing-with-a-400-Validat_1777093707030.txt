@@ -1,0 +1,25 @@
+The near-miss report form is failing with a 400 "Validation error" on POST /api/near-miss-reports. Two
+  issues:                                                                                                  
+                                                         
+  1. Date coercion (already fixed in the working tree, just needs the dev server restarted)                
+                                                                                                           
+  shared/schema.ts declares incidentDatetime as timestamp().notNull(), which drizzle-zod 0.7.0 maps to a   
+  strict z.date(). The front-end (client/src/pages/NearMissReport.tsx:385) sends an ISO string via new     
+  Date(...).toISOString(), so validation fails.                                                            
+                                                         
+  There's already an uncommitted edit in server/routes.ts (around line 24218) that wraps                   
+  insertNearMissReportSchema with z.coerce.date() overrides for incidentDatetime, submittedAt, and
+  effectivenessReviewDate. Please restart the "Start application" workflow so the new code is loaded, then 
+  commit that diff.                                      
+
+  2. Wrong foreign key on reporter_user_id                                                                 
+   
+  near_miss_reports.reporter_user_id is declared .references(() => users.id), but the app's actual user    
+  records live in the employees table — currentUser in AuthContext is an Employee, and the front-end sends
+  currentUser.id as the reporter. Once the validation error is past, inserts will fail with a foreign-key  
+  violation.                                             
+
+  Please change the reference in shared/schema.ts to employees.id and run the migration. Same fix likely   
+  needed on near_miss_witnesses.witness_user_id, near_miss_actions.assigned_to_user_id, and
+  near_miss_attachments.uploaded_by — they all reference users.id but are populated with employee IDs.     
+                                                         

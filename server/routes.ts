@@ -24213,6 +24213,15 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     return `${prefix}${String(seq).padStart(4, '0')}`;
   }
 
+  // Drizzle-zod's auto-generated schema requires Date objects for timestamp
+  // columns, but JSON serialisation always produces ISO strings. Coerce.
+  const nearMissReportInsert = schema.insertNearMissReportSchema.extend({
+    incidentDatetime: z.coerce.date(),
+    submittedAt: z.coerce.date().nullable().optional(),
+    effectivenessReviewDate: z.coerce.date().nullable().optional(),
+  });
+  const nearMissReportUpdate = nearMissReportInsert.partial();
+
   // GET /api/near-miss-reports
   app.get('/api/near-miss-reports', async (req: Request, res: Response) => {
     try {
@@ -24263,7 +24272,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   app.post('/api/near-miss-reports', async (req: Request, res: Response) => {
     try {
       const reportNumber = await generateNearMissReportNumber();
-      const parsed = schema.insertNearMissReportSchema.parse(req.body);
+      const parsed = nearMissReportInsert.parse(req.body);
       const [report] = await db.insert(schema.nearMissReports).values({ ...parsed, reportNumber }).returning();
       res.json({ success: true, data: report });
     } catch (error) {
@@ -24278,7 +24287,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
       const { reportNumber: _rn, ...updatePayload } = req.body;
-      const parsed = schema.updateNearMissReportSchema.parse({ ...updatePayload, updatedAt: new Date() });
+      const parsed = nearMissReportUpdate.parse({ ...updatePayload, updatedAt: new Date() });
       const [updated] = await db.update(schema.nearMissReports).set(parsed).where(eq(schema.nearMissReports.id, req.params.id)).returning();
       res.json({ success: true, data: updated });
     } catch (error) {
