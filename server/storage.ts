@@ -20,7 +20,8 @@ import {
   type Material, type InsertMaterial,
   type Service, type InsertService,
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
-  type Invoice, type InsertInvoice, type ServiceRequest, type InsertServiceRequest,
+  type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
+  type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
   type XeroConnection, type InsertXeroConnection,
   // Business Intelligence types
@@ -699,6 +700,15 @@ export interface IStorage {
   getAllInvoices(): Promise<Invoice[]>;
   updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
   deleteInvoice(id: string): Promise<void>;
+
+  // Invoice Section Management
+  createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection>;
+  getInvoiceSection(id: string): Promise<InvoiceSection | undefined>;
+  updateInvoiceSection(id: string, updates: UpdateInvoiceSection): Promise<InvoiceSection>;
+  getInvoiceSectionsByInvoice(invoiceId: string): Promise<InvoiceSection[]>;
+  deleteInvoiceSection(id: string): Promise<void>;
+  reorderInvoiceSections(invoiceId: string, sectionIds: string[]): Promise<InvoiceSection[]>;
+
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
   getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
   getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]>;
@@ -5107,6 +5117,46 @@ class DatabaseStorage implements IStorage {
     await db.delete(schema.invoices)
       .where(eq(schema.invoices.id, id));
   }
+
+  async createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection> {
+    const [created] = await db.insert(schema.invoiceSections).values(section).returning();
+    return created;
+  }
+
+  async getInvoiceSection(id: string): Promise<InvoiceSection | undefined> {
+    const [section] = await db.select().from(schema.invoiceSections).where(eq(schema.invoiceSections.id, id));
+    return section;
+  }
+
+  async updateInvoiceSection(id: string, updates: UpdateInvoiceSection): Promise<InvoiceSection> {
+    const [updated] = await db.update(schema.invoiceSections)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.invoiceSections.id, id))
+      .returning();
+    if (!updated) throw new Error("Invoice section not found");
+    return updated;
+  }
+
+  async getInvoiceSectionsByInvoice(invoiceId: string): Promise<InvoiceSection[]> {
+    return await db.select()
+      .from(schema.invoiceSections)
+      .where(eq(schema.invoiceSections.invoiceId, invoiceId))
+      .orderBy(schema.invoiceSections.sortOrder);
+  }
+
+  async deleteInvoiceSection(id: string): Promise<void> {
+    await db.delete(schema.invoiceSections).where(eq(schema.invoiceSections.id, id));
+  }
+
+  async reorderInvoiceSections(invoiceId: string, sectionIds: string[]): Promise<InvoiceSection[]> {
+    for (let i = 0; i < sectionIds.length; i++) {
+      await db.update(schema.invoiceSections)
+        .set({ sortOrder: i })
+        .where(eq(schema.invoiceSections.id, sectionIds[i]));
+    }
+    return this.getInvoiceSectionsByInvoice(invoiceId);
+  }
+
   async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
   async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
   async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> { return []; }

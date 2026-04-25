@@ -19,7 +19,7 @@ import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, inArray, and, gte, lt, ne } from "drizzle-orm";
-import { invoices, customers, jobs, documentTemplates } from "@shared/schema";
+import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
@@ -38,7 +38,8 @@ import {
   insertConversationSchema, updateConversationSchema,
   insertConversationMessageSchema, updateConversationMessageSchema,
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
-  insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
+  insertInvoiceSchema, insertInvoiceSectionSchema, updateInvoiceSectionSchema,
+  insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
   safetyIncidentInsertSchema, type InsertSafetyIncident,
   riskAssessmentInsertSchema, type InsertRiskAssessment,
@@ -8988,6 +8989,231 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     } catch (error) {
       console.error('Error deleting invoice:', error);
       res.status(500).json({ success: false, message: 'Error deleting invoice' });
+    }
+  });
+
+  // ========================================
+  // INVOICE SECTION MANAGEMENT (mirrors proposal sections)
+  // ========================================
+
+  app.get('/api/invoices/:invoiceId/sections', async (req: Request, res: Response) => {
+    try {
+      const sections = await storage.getInvoiceSectionsByInvoice(req.params.invoiceId);
+      const sectionsWithPhotos = sections.map(section => ({
+        ...section,
+        description: section.content || '',
+        photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => ({
+          id: `photo-${Date.now()}-${Math.random()}`,
+          url,
+          filename: url.split('/').pop() || 'photo',
+          type: 'before' as const,
+          category: 'documentation' as const,
+          capturedAt: new Date().toISOString(),
+        }))
+      }));
+      res.json({ success: true, data: sectionsWithPhotos, count: sectionsWithPhotos.length });
+    } catch (error) {
+      console.error('Error fetching invoice sections:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoice sections' });
+    }
+  });
+
+  app.post('/api/invoices/:invoiceId/sections', async (req: Request, res: Response) => {
+    try {
+      const sectionData = { ...req.body, invoiceId: req.params.invoiceId };
+      const validatedData = insertInvoiceSectionSchema.parse(sectionData);
+      const section = await storage.createInvoiceSection(validatedData);
+      res.status(201).json({ success: true, data: section, message: 'Invoice section created' });
+    } catch (error: any) {
+      console.error('Error creating invoice section:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ success: false, message: 'Invalid section data', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: 'Error creating invoice section' });
+    }
+  });
+
+  app.put('/api/invoices/sections/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateInvoiceSectionSchema.parse(req.body);
+      const section = await storage.updateInvoiceSection(req.params.id, validatedData);
+      res.json({ success: true, data: section, message: 'Invoice section updated' });
+    } catch (error: any) {
+      console.error('Error updating invoice section:', error);
+      if (error.message === 'Invoice section not found') {
+        return res.status(404).json({ success: false, message: 'Invoice section not found' });
+      }
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ success: false, message: 'Invalid section data', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: 'Error updating invoice section' });
+    }
+  });
+
+  app.delete('/api/invoices/sections/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteInvoiceSection(req.params.id);
+      res.json({ success: true, message: 'Invoice section deleted' });
+    } catch (error) {
+      console.error('Error deleting invoice section:', error);
+      res.status(500).json({ success: false, message: 'Error deleting invoice section' });
+    }
+  });
+
+  app.put('/api/invoices/:invoiceId/sections/reorder', async (req: Request, res: Response) => {
+    try {
+      const { sectionIds } = req.body;
+      if (!Array.isArray(sectionIds)) {
+        return res.status(400).json({ success: false, message: 'sectionIds must be an array' });
+      }
+      const sections = await storage.reorderInvoiceSections(req.params.invoiceId, sectionIds);
+      res.json({ success: true, data: sections, message: 'Invoice sections reordered' });
+    } catch (error) {
+      console.error('Error reordering invoice sections:', error);
+      res.status(500).json({ success: false, message: 'Error reordering invoice sections' });
+    }
+  });
+
+  // Public invoice endpoint (no auth) — used by customer-facing /invoice/:id/view page
+  app.get('/api/invoices/:id/public', async (req: Request, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const [customer, job, sections] = await Promise.all([
+        invoice.customerId ? storage.getCustomer(invoice.customerId) : Promise.resolve(null),
+        invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
+        storage.getInvoiceSectionsByInvoice(invoice.id),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          ...invoice,
+          customer: customer || null,
+          job: job || null,
+          sections: sections.map(s => ({
+            ...s,
+            images: Array.isArray(s.images) ? s.images : [],
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching public invoice:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoice' });
+    }
+  });
+
+  // Send invoice email — mirrors /api/proposals/:proposalId/send-email
+  app.post('/api/invoices/:invoiceId/send-email', async (req: Request, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { to, subject, message, cc } = req.body;
+
+      if (!to || !subject) {
+        return res.status(400).json({ success: false, message: 'Recipient email and subject are required' });
+      }
+
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const [customer, job] = await Promise.all([
+        invoice.customerId ? storage.getCustomer(invoice.customerId) : Promise.resolve(null),
+        invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
+      ]);
+
+      const baseUrl = `https://app.treemarkables.co.nz`;
+      const customerName = customer?.name || 'Valued Customer';
+      const invoiceViewUrl = `${baseUrl}/invoice/${invoiceId}/view`;
+
+      // Calculate total from line items table or fall back to invoice.amount
+      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId));
+      let subtotal = 0;
+      for (const li of dbLineItems) {
+        subtotal += parseFloat(li.totalPrice || '0');
+      }
+      if (subtotal === 0) {
+        subtotal = parseFloat((invoice as any).amount || '0');
+      }
+      const gst = subtotal * 0.15;
+      const total = subtotal + gst;
+
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <p>Dear ${customerName},</p>
+
+          <p>${message || `Please find your invoice attached. Payment can be made via bank transfer.`}</p>
+
+          <p><strong>Total due: $${total.toFixed(2)}</strong></p>
+
+          <p>View your invoice online here: <a href="${invoiceViewUrl}">${invoiceViewUrl}</a></p>
+
+          <p>Regards,<br>
+          Treemarkables</p>
+        </div>
+      `;
+
+      const emailResult = await emailService.sendEmail({
+        to,
+        cc,
+        subject,
+        html: htmlContent,
+        text: `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`,
+        jobNumber: job?.jobNumber,
+      });
+
+      if (!emailResult.success) {
+        return res.status(500).json({ success: false, message: 'Failed to send invoice email' });
+      }
+
+      console.log(`📧 Invoice ${invoice.invoiceNumber} email sent to ${to}${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
+
+      // Mark invoice as sent
+      await storage.updateInvoice(invoiceId, {
+        status: 'sent',
+        sentDate: new Date(),
+      } as any);
+
+      // Diary entry
+      if (invoice.jobId) {
+        try {
+          await storage.createJobDiaryEntry({
+            jobId: invoice.jobId,
+            entryType: 'email',
+            title: `Invoice Sent: ${invoice.invoiceNumber}`,
+            description: `Invoice "${invoice.jobTitle || invoice.invoiceNumber}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${total.toFixed(2)} NZD incl. GST`,
+            authorName: 'System',
+            metadata: {
+              invoiceId,
+              invoiceNumber: invoice.invoiceNumber,
+              recipient: to,
+              cc: cc || null,
+              total: total.toFixed(2),
+              sendgridMessageId: emailResult.messageId,
+            },
+          });
+        } catch (diaryError) {
+          console.error('Error creating diary entry for invoice email:', diaryError);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Invoice email sent successfully',
+        data: {
+          invoiceId,
+          invoiceNumber: invoice.invoiceNumber,
+          recipient: to,
+          sentAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('Error sending invoice email:', error);
+      res.status(500).json({ success: false, message: 'Error sending invoice email' });
     }
   });
 

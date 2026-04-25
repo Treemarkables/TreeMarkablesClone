@@ -1652,7 +1652,7 @@ export function ProposalBuilder({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-full sm:max-w-3xl h-screen sm:h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-0 w-full min-w-0 gap-0">
+        <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-0 w-full min-w-0 gap-0">
           {/* Modern Header with Gradient Accent */}
           <div
             className="flex-shrink-0 border-b bg-gradient-to-r from-primary/5 via-primary/3 to-transparent"
@@ -2971,7 +2971,7 @@ export function ProposalBuilder({
       {/* Preview Modal */}
       {showPreview && (
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
-          <DialogContent className="max-w-full sm:max-w-3xl h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0">
             <DialogHeader className="flex-shrink-0 p-3 sm:p-4 sticky top-0 bg-background z-[60]">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">

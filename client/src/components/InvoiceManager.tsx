@@ -597,7 +597,7 @@ export function InvoiceManager({ compact = false }: InvoiceManagerProps) {
           open={!!selectedInvoice}
           onOpenChange={() => setSelectedInvoice(null)}
         >
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)]">
             <DialogHeader>
               <DialogTitle data-testid="invoice-detail-title">
                 Invoice {selectedInvoice.invoiceNumber}
