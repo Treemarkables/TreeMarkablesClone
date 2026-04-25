@@ -3670,7 +3670,7 @@ export type InsertPendingOutboundMessage = z.infer<typeof insertPendingOutboundM
 export const nearMissReports = pgTable("near_miss_reports", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportNumber: text("report_number").notNull().unique(), // NM-YYYY-####
-  reporterUserId: varchar("reporter_user_id").references(() => users.id).notNull(),
+  reporterUserId: varchar("reporter_user_id").references(() => employees.id).notNull(),
   status: text("status").notNull().default("draft"), // draft, submitted, in_review, actioned, closed
   jobId: varchar("job_id").references(() => jobs.id),
   locationAddress: text("location_address"),
@@ -3698,14 +3698,14 @@ export const nearMissAttachments = pgTable("near_miss_attachments", {
   reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
   type: text("type").notNull(), // photo, voice_note
   filePath: text("file_path").notNull(),
-  uploadedBy: varchar("uploaded_by").references(() => users.id),
+  uploadedBy: varchar("uploaded_by").references(() => employees.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
 export const nearMissWitnesses = pgTable("near_miss_witnesses", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
-  witnessUserId: varchar("witness_user_id").references(() => users.id), // null for non-staff witnesses
+  witnessUserId: varchar("witness_user_id").references(() => employees.id), // null for non-staff witnesses
   witnessName: text("witness_name"), // free-text for non-users
   status: text("status").notNull().default("pending"), // pending, signed, declined, no_witness
   signatureSvg: text("signature_svg"), // SVG path data (not base64)
@@ -3724,7 +3724,7 @@ export const nearMissActions = pgTable("near_miss_actions", {
   title: text("title").notNull(),
   description: text("description"),
   controlType: text("control_type"), // engineering, admin, ppe, substitution, elimination
-  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => employees.id),
   dueDate: timestamp("due_date"),
   status: text("status").notNull().default("open"), // open, in_progress, complete
   linkedSopId: varchar("linked_sop_id"), // forward-compat: no FK constraint until sops table exists
