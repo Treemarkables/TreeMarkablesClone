@@ -1687,7 +1687,7 @@ export function InvoiceBuilder({
               {/* Preview Section */}
               <div className="border-t pt-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Preview</h3>
-                <div className="border rounded-lg p-0 sm:p-4 bg-white overflow-hidden">
+                <div className="border rounded-lg p-0 sm:p-4 bg-white">
                   <InvoiceTemplate
                     invoice={{
                       id: job.id,
