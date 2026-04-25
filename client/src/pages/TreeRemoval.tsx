@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
+import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors, Heart, TreePine, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -623,27 +624,7 @@ export default function TreeRemoval() {
         </div>
       </section>
 
-      {/* FAQ Section */}
-      <section className="py-16 bg-background">
-        <div className="max-w-4xl mx-auto px-6">
-          <h2 className="text-3xl font-bold text-foreground text-center mb-12">
-            Frequently Asked Questions
-          </h2>
-          
-          <div className="space-y-8">
-            
-            <div className="border-l-4 border-primary pl-6">
-              <h3 className="text-xl font-semibold text-foreground mb-3">
-                How soon can you remove my dangerous tree?
-              </h3>
-              <p className="text-muted-foreground">
-                Emergency hazardous tree removal within 2 hours. Non-urgent removals typically within 2-5 days. 
-                We prioritize safety threats and offer same-day assessments across Gisborne.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
+      <FAQSection />
 
       {/* Contact Section */}
       <ContactSection />

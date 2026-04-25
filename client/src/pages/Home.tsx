@@ -8,6 +8,7 @@ import CTASection from "@/components/CTASection";
 import Reviews from "@/components/Reviews";
 import GuaranteeSection from "@/components/GuaranteeSection";
 import ContactSection from "@/components/ContactSection";
+import FAQSection from "@/components/FAQSection";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 
@@ -88,6 +89,7 @@ export default function Home() {
       <CTASection />
       <Reviews />
       <GuaranteeSection />
+      <FAQSection />
       <ContactSection />
       <Footer />
     </div>
