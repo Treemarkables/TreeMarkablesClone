@@ -24219,6 +24219,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     incidentDatetime: z.coerce.date(),
     submittedAt: z.coerce.date().nullable().optional(),
     effectivenessReviewDate: z.coerce.date().nullable().optional(),
+    reporterSignedAt: z.coerce.date().nullable().optional(),
   });
   const nearMissReportUpdate = nearMissReportInsert.partial();
 
