@@ -88,8 +88,8 @@ function EmailActivity({ messageId }: { messageId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
-        <Clock className="h-3 w-3 animate-spin" />
+      <div className="flex items-center gap-2 mt-3 text-sm text-gray-500">
+        <Clock className="h-5 w-5 animate-spin" />
         <span>Loading email activity...</span>
       </div>
     );
@@ -97,30 +97,30 @@ function EmailActivity({ messageId }: { messageId: string }) {
 
   if (!activity || (activity.opens === 0 && activity.clicks === 0)) {
     return (
-      <div className="flex items-center gap-2 mt-2 text-xs text-gray-400">
-        <Mail className="h-3 w-3" />
+      <div className="flex items-center gap-2 mt-3 text-sm text-gray-400">
+        <Mail className="h-5 w-5" />
         <span>No opens or clicks yet</span>
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-3 mt-2 text-xs">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-3 text-base font-medium">
       {activity.opens > 0 && (
-        <div className="flex items-center gap-1 text-green-600">
-          <Eye className="h-3 w-3" />
+        <div className="flex items-center gap-2 text-green-600">
+          <Eye className="h-6 w-6" />
           <span>{activity.opens} {activity.opens === 1 ? 'open' : 'opens'}</span>
         </div>
       )}
       {activity.clicks > 0 && (
-        <div className="flex items-center gap-1 text-blue-600">
-          <MousePointerClick className="h-3 w-3" />
+        <div className="flex items-center gap-2 text-blue-600">
+          <MousePointerClick className="h-6 w-6" />
           <span>{activity.clicks} {activity.clicks === 1 ? 'click' : 'clicks'}</span>
         </div>
       )}
       {activity.lastEventAt && (
-        <div className="flex items-center gap-1 text-gray-500">
-          <Clock className="h-3 w-3" />
+        <div className="flex items-center gap-2 text-sm text-gray-500 font-normal">
+          <Clock className="h-4 w-4" />
           <span>Last activity: {format(new Date(activity.lastEventAt), 'MMM dd, HH:mm')}</span>
         </div>
       )}
