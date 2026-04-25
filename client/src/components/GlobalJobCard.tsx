@@ -55,6 +55,7 @@ import {
   Axe,
   Sprout,
   List,
+  ListChecks,
   Pencil,
   Star,
   RotateCcw,
@@ -100,6 +101,7 @@ import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
+import { JobChecklistPanel } from "./JobChecklistPanel";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -294,7 +296,7 @@ interface GlobalJobCardProps {
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
-  initialSidebarTab?: "details" | "billing" | "diary"; // Deep-link from push notifications
+  initialSidebarTab?: "details" | "billing" | "checklist"; // Deep-link from push notifications
 }
 
 export function GlobalJobCard({
@@ -4810,7 +4812,7 @@ The Treemarkables Team`;
             Billing
           </button>
           <button
-            className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
+            className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b inline-flex items-center justify-center gap-1.5 ${
               currentStatus === "completed"
                 ? "border-green-200"
                 : currentStatus === "work_order"
@@ -4825,7 +4827,7 @@ The Treemarkables Team`;
                           ? "border-red-200"
                           : "border-gray-200"
             } ${
-              sidebarTab === "diary"
+              sidebarTab === "checklist"
                 ? currentStatus === "completed"
                   ? "bg-green-500 text-white"
                   : currentStatus === "work_order"
@@ -4853,10 +4855,11 @@ The Treemarkables Team`;
                             ? "text-red-700 hover:bg-red-200"
                             : "text-gray-700 hover:bg-gray-200"
             }`}
-            onClick={() => setSidebarTab("diary")}
-            data-testid="sidebar-diary"
+            onClick={() => setSidebarTab("checklist")}
+            data-testid="sidebar-checklist"
           >
-            Diary
+            <ListChecks className="w-3.5 h-3.5" />
+            Checklist
           </button>
         </div>
 
@@ -4874,7 +4877,7 @@ The Treemarkables Team`;
               <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
                 {/* Pull-to-refresh wrapper: relative+overflow-hidden so indicator is clipped above until pulled */}
                 <div
-                  className={`flex-1 relative overflow-hidden ${sidebarTab !== "diary" ? "sm:border-r border-gray-300" : ""} ${sidebarTab === "diary" ? "sm:rounded-lg" : "sm:rounded-l-lg"} min-w-0`}
+                  className="flex-1 relative overflow-hidden sm:border-r border-gray-300 sm:rounded-l-lg min-w-0"
                 >
                   {/* Pull indicator — lives outside the scrollable div so it's not clipped by overflow-y-auto */}
                   {(jobCardPullDistance > 0 || jobCardIsRefreshing) && (
@@ -9186,37 +9189,16 @@ The Treemarkables Team`;
                     </div>
                   )}
 
-                  {sidebarTab === "diary" && (
+                  {sidebarTab === "checklist" && (
                     <>
                       {editingJob ? (
-                        <JobDiarySection
-                          jobId={editingJob.id}
-                          isServiceM8Style={true}
-                          onQuoteClick={(quoteNumber) => {
-                            setIsQuoteModalOpen(true);
-                          }}
-                          onInvoiceClick={(invoiceNumber) => {
-                            // Open InvoiceBuilder to view/send the invoice
-                            setIsInvoiceModalOpen(true);
-                          }}
-                          onProposalClick={(proposalNumber) => {
-                            // Find the proposal by number and open the viewer
-                            const proposals = jobProposalResponse?.data || [];
-                            const proposal = proposals.find(
-                              (p: any) => p.proposalNumber === proposalNumber,
-                            );
-                            if (proposal?.id) {
-                              setViewingProposalId(proposal.id);
-                              setIsProposalViewerOpen(true);
-                            }
-                          }}
-                        />
+                        <JobChecklistPanel jobId={editingJob.id} />
                       ) : (
                         <div className="p-4">
                           <div className="text-center py-8 text-gray-500">
-                            <FileText className="w-8 h-8 mx-auto mb-2" />
+                            <ListChecks className="w-8 h-8 mx-auto mb-2" />
                             <p className="text-sm">
-                              Save the job to view activity diary
+                              Save the job to track its compliance checklist
                             </p>
                           </div>
                         </div>
@@ -9226,7 +9208,11 @@ The Treemarkables Team`;
                   </div>
                 </div>
 
-                {sidebarTab !== "diary" && editingJob && (
+                {/* Right-hand diary panel — always visible alongside the
+                    sidebar tab (Details / Billing / Checklist). The
+                    dedicated full-width Diary tab was removed; this panel
+                    is the only diary view now. */}
+                {editingJob && (
                   <div className="hidden sm:block sm:flex-1 bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
                     <JobDiarySection
                       jobId={editingJob.id}

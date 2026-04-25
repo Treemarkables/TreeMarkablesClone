@@ -1905,6 +1905,114 @@ export type InspectionResponse = typeof inspectionResponses.$inferSelect;
 export type InsertInspectionResponse = z.infer<typeof insertInspectionResponseSchema>;
 
 // ========================================
+// EQUIPMENT INDUCTION SYSTEM
+// ========================================
+
+// Induction Templates - Customizable induction checklists per equipment type
+export const inductionTemplates = pgTable("induction_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  equipmentType: text("equipment_type"),
+  description: text("description"),
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const inductionChecklistItems = pgTable("induction_checklist_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => inductionTemplates.id, { onDelete: 'cascade' }).notNull(),
+  step: text("step").notNull(),
+  requiresPhoto: boolean("requires_photo").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  category: text("category"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const equipmentInductions = pgTable("equipment_inductions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  equipmentType: text("equipment_type"),
+  templateId: varchar("template_id").references(() => inductionTemplates.id),
+  templateName: text("template_name"),
+
+  inductionDate: timestamp("induction_date").notNull().defaultNow(),
+  inductedBy: varchar("inducted_by").notNull(),
+  inductorName: text("inductor_name").notNull(),
+
+  notes: text("notes"),
+  employeeSignature: text("employee_signature"),
+  trainerSignature: text("trainer_signature"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const inductionResponses = pgTable("induction_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inductionId: varchar("induction_id").references(() => equipmentInductions.id, { onDelete: 'cascade' }).notNull(),
+  checklistItemId: varchar("checklist_item_id").references(() => inductionChecklistItems.id, { onDelete: 'set null' }),
+
+  step: text("step").notNull(),
+  category: text("category"),
+  requiresPhoto: boolean("requires_photo").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+
+  acknowledged: boolean("acknowledged").notNull().default(false),
+  notes: text("notes"),
+  photos: text("photos").array().default([]),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqueInductionItem: unique().on(table.inductionId, table.checklistItemId),
+}));
+
+export const insertInductionTemplateSchema = createInsertSchema(inductionTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInductionChecklistItemSchema = createInsertSchema(inductionChecklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEquipmentInductionSchema = createInsertSchema(equipmentInductions).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export const insertInductionResponseSchema = createInsertSchema(inductionResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateInductionTemplateSchema = insertInductionTemplateSchema.partial();
+export const updateInductionChecklistItemSchema = insertInductionChecklistItemSchema.partial();
+export const updateEquipmentInductionSchema = insertEquipmentInductionSchema.partial();
+
+export type InductionTemplate = typeof inductionTemplates.$inferSelect;
+export type InsertInductionTemplate = z.infer<typeof insertInductionTemplateSchema>;
+export type UpdateInductionTemplate = z.infer<typeof updateInductionTemplateSchema>;
+
+export type InductionChecklistItem = typeof inductionChecklistItems.$inferSelect;
+export type InsertInductionChecklistItem = z.infer<typeof insertInductionChecklistItemSchema>;
+export type UpdateInductionChecklistItem = z.infer<typeof updateInductionChecklistItemSchema>;
+
+export type EquipmentInduction = typeof equipmentInductions.$inferSelect;
+export type InsertEquipmentInduction = z.infer<typeof insertEquipmentInductionSchema>;
+export type UpdateEquipmentInduction = z.infer<typeof updateEquipmentInductionSchema>;
+
+export type InductionResponse = typeof inductionResponses.$inferSelect;
+export type InsertInductionResponse = z.infer<typeof insertInductionResponseSchema>;
+
+// ========================================
 // COMMUNICATIONS SYSTEM SCHEMAS
 // ========================================
 
