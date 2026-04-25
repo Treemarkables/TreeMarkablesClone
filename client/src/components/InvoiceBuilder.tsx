@@ -79,6 +79,16 @@ interface CreatedInvoice {
   address: string;
 }
 
+interface InvoiceSectionDraft {
+  id?: string;
+  title: string;
+  content: string;
+  images: string[];
+  sortOrder: number;
+  sectionType: string;
+  isVisible: boolean;
+}
+
 export function InvoiceBuilder({
   isOpen,
   onClose,
@@ -111,6 +121,9 @@ export function InvoiceBuilder({
   const [editableNotes, setEditableNotes] = useState("");
   const [customDueDate, setCustomDueDate] = useState<string>("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
+  const [sections, setSections] = useState<InvoiceSectionDraft[]>([]);
+  const [deletedSectionIds, setDeletedSectionIds] = useState<string[]>([]);
+  const [photoUploadingIdx, setPhotoUploadingIdx] = useState<number | null>(null);
 
   // Fetch the customer fresh so invoiceCcEmail is always up-to-date,
   // even if the parent component cached stale customer data before the record was edited.
@@ -182,6 +195,8 @@ export function InvoiceBuilder({
       setInitializedJobId(null);
       setExistingInvoiceId(null);
       setCreatedInvoice(null);
+      setSections([]);
+      setDeletedSectionIds([]);
     }
   }, [isOpen]);
 
@@ -857,6 +872,185 @@ export function InvoiceBuilder({
     }
   };
 
+  // Load sections when an existing invoice is loaded
+  useEffect(() => {
+    if (!existingInvoiceId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/invoices/${existingInvoiceId}/sections`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const loaded: InvoiceSectionDraft[] = (data.data || []).map((s: any) => ({
+          id: s.id,
+          title: s.title || "",
+          content: s.content || s.description || "",
+          images: Array.isArray(s.images) ? s.images : [],
+          sortOrder: s.sortOrder ?? 0,
+          sectionType: s.sectionType || "custom",
+          isVisible: s.isVisible !== false,
+        }));
+        setSections(loaded);
+        setDeletedSectionIds([]);
+      } catch (err) {
+        console.error("Failed to load invoice sections:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [existingInvoiceId]);
+
+  // Section management
+  const handleAddSection = () => {
+    setSections((prev) => [
+      ...prev,
+      {
+        title: `Section ${prev.length + 1}`,
+        content: "",
+        images: [],
+        sortOrder: prev.length,
+        sectionType: "custom",
+        isVisible: true,
+      },
+    ]);
+  };
+
+  const handleRemoveSection = (idx: number) => {
+    setSections((prev) => {
+      const removed = prev[idx];
+      if (removed?.id) {
+        setDeletedSectionIds((d) => [...d, removed.id!]);
+      }
+      return prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, sortOrder: i }));
+    });
+  };
+
+  const handleUpdateSection = (
+    idx: number,
+    patch: Partial<InvoiceSectionDraft>,
+  ) => {
+    setSections((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    );
+  };
+
+  const handleSectionPhotoUpload = async (
+    idx: number,
+    files: FileList | null,
+  ) => {
+    if (!files || files.length === 0) return;
+    if (!job?.id) {
+      toast({
+        title: "Job required",
+        description: "Photos can only be attached to invoices linked to a job.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPhotoUploadingIdx(idx);
+    try {
+      const { compressImages } = await import("@/lib/imageCompression");
+      const compressedFiles = await compressImages(files, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.8,
+      });
+      const formData = new FormData();
+      for (let i = 0; i < compressedFiles.length; i++) {
+        formData.append("photos", compressedFiles[i]);
+      }
+      formData.append("type", "before");
+      formData.append("category", "documentation");
+
+      const response = await fetch(`/api/jobs/${job.id}/photos/batch`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const data = await response.json();
+      const urls: string[] = Array.isArray(data.photos) ? data.photos : [];
+      setSections((prev) =>
+        prev.map((s, i) =>
+          i === idx ? { ...s, images: [...s.images, ...urls] } : s,
+        ),
+      );
+    } catch (err) {
+      console.error("Photo upload error:", err);
+      toast({
+        title: "Photo upload failed",
+        description: "Could not upload photos. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoUploadingIdx(null);
+    }
+  };
+
+  const handleRemoveSectionPhoto = (idx: number, url: string) => {
+    setSections((prev) =>
+      prev.map((s, i) =>
+        i === idx ? { ...s, images: s.images.filter((u) => u !== url) } : s,
+      ),
+    );
+  };
+
+  // Persist sections after the invoice is saved/created
+  const persistSections = async (invoiceId: string) => {
+    try {
+      // Delete removed sections
+      await Promise.all(
+        deletedSectionIds.map((id) =>
+          fetch(`/api/invoices/sections/${id}`, {
+            method: "DELETE",
+            credentials: "include",
+          }),
+        ),
+      );
+
+      // Upsert each section
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        const payload = {
+          sectionType: s.sectionType || "custom",
+          title: s.title || `Section ${i + 1}`,
+          content: s.content || "",
+          images: s.images,
+          sortOrder: i,
+          isVisible: s.isVisible,
+        };
+        if (s.id) {
+          await fetch(`/api/invoices/sections/${s.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          });
+        } else {
+          await fetch(`/api/invoices/${invoiceId}/sections`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          });
+        }
+      }
+      setDeletedSectionIds([]);
+    } catch (err) {
+      console.error("Failed to persist invoice sections:", err);
+      toast({
+        title: "Section save failed",
+        description:
+          "The invoice saved, but one or more sections didn't persist.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Save invoice only
   const handleSaveInvoice = async (e?: React.MouseEvent) => {
     console.log("🎯 SAVE INVOICE CLICKED");
@@ -879,6 +1073,7 @@ export function InvoiceBuilder({
       );
       const updated = await updateInvoice();
       if (updated) {
+        await persistSections(existingInvoiceId);
         handleClose();
       }
       return;
@@ -887,6 +1082,8 @@ export function InvoiceBuilder({
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
+      const newId = invoice.id || invoice.invoiceId;
+      if (newId) await persistSections(newId);
       handleClose();
     }
   };
@@ -911,6 +1108,7 @@ export function InvoiceBuilder({
       console.log("📝 Existing invoice detected, updating before sending");
       const updated = await updateInvoice();
       if (updated) {
+        await persistSections(existingInvoiceId);
         console.log("📧 Invoice updated successfully, opening email composer");
         setShowEmailComposer(true);
       } else {
@@ -922,6 +1120,8 @@ export function InvoiceBuilder({
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
+      const newId = invoice.id || invoice.invoiceId;
+      if (newId) await persistSections(newId);
       console.log("📧 Invoice created successfully, opening email composer");
       setShowEmailComposer(true);
     } else {
@@ -1552,6 +1752,143 @@ export function InvoiceBuilder({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Sections (photos + narrative) — shown on the customer-facing invoice page */}
+              <div className="border-t pt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-blue-600" />
+                      Sections & Photos
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional. Each section appears on the customer-facing invoice link.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddSection}
+                    data-testid="button-add-invoice-section"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Section
+                  </Button>
+                </div>
+
+                {sections.length === 0 && (
+                  <div className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">
+                    No sections yet. Add one to attach photos or notes that the
+                    customer will see on the invoice link.
+                  </div>
+                )}
+
+                {sections.map((section, idx) => (
+                  <div
+                    key={section.id ?? `new-${idx}`}
+                    className="border rounded-lg p-3 space-y-3 bg-gray-50"
+                    data-testid={`invoice-section-${idx}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Input
+                        value={section.title}
+                        onChange={(e) =>
+                          handleUpdateSection(idx, { title: e.target.value })
+                        }
+                        placeholder="Section title"
+                        className="bg-white"
+                        data-testid={`input-section-title-${idx}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveSection(idx)}
+                        className="text-red-600 hover:text-red-700 flex-shrink-0"
+                        data-testid={`button-remove-section-${idx}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <Textarea
+                      value={section.content}
+                      onChange={(e) =>
+                        handleUpdateSection(idx, { content: e.target.value })
+                      }
+                      placeholder="Optional description shown above the photos"
+                      className="bg-white min-h-[60px]"
+                      data-testid={`textarea-section-content-${idx}`}
+                    />
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-sm font-medium">Photos</Label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) =>
+                            handleSectionPhotoUpload(idx, e.target.files)
+                          }
+                          className="hidden"
+                          id={`invoice-photo-upload-${idx}`}
+                        />
+                        <label htmlFor={`invoice-photo-upload-${idx}`}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={photoUploadingIdx === idx}
+                            asChild
+                            data-testid={`button-upload-section-photo-${idx}`}
+                          >
+                            <span>
+                              <Camera className="h-4 w-4 mr-2" />
+                              {photoUploadingIdx === idx
+                                ? "Uploading..."
+                                : "Add Photos"}
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+
+                      {section.images.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No photos yet.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {section.images.map((url) => (
+                            <div
+                              key={url}
+                              className="relative group rounded-md overflow-hidden border bg-white aspect-square"
+                            >
+                              <img
+                                src={url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRemoveSectionPhoto(idx, url)
+                                }
+                                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                data-testid={`button-remove-section-photo-${idx}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
 
               {/* Action Buttons */}
