@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
+import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Calendar, Target, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -782,6 +783,8 @@ export default function HedgeTrimming() {
           </div>
         </div>
       </section>
+
+      <FAQSection />
 
       {/* Contact Section */}
       <ContactSection />
