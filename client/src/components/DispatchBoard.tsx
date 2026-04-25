@@ -1572,9 +1572,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         );
       })
       .filter((job) => {
+        // Awaiting-confirmation filter only applies on the tabs where the badge
+        // is shown (scheduled / work_order / all). Without this scope, leaving
+        // the toggle on and switching to Leads / Quotes / Queue would silently
+        // hide every job in those tabs. Search bypasses the filter entirely so
+        // global search results aren't truncated to scheduled/work-order jobs.
         if (!onlyUnconfirmed) return true;
-        // Awaiting-confirmation filter: only scheduled / work_order jobs that the
-        // customer has not confirmed.
+        if (isSearching) return true;
+        const tabSupportsFilter =
+          jobFilter === "scheduled" ||
+          jobFilter === "work_order" ||
+          jobFilter === "all";
+        if (!tabSupportsFilter) return true;
         return (
           (job.status === "scheduled" || job.status === "work_order") &&
           !job.customerConfirmed
