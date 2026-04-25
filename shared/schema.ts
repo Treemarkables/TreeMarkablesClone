@@ -3686,6 +3686,8 @@ export const nearMissReports = pgTable("near_miss_reports", {
   peopleInvolved: jsonb("people_involved").default([]), // [{userId?, name}]
   toolboxTalkFlag: boolean("toolbox_talk_flag").default(true),
   proposedControl: text("proposed_control"),
+  reporterSignatureSvg: text("reporter_signature_svg"), // SVG — reporter / person involved sign-off
+  reporterSignedAt: timestamp("reporter_signed_at"),
   submittedAt: timestamp("submitted_at"),
   effectivenessReviewDate: timestamp("effectiveness_review_date"), // submittedAt + 30 days
   effectivenessReviewComplete: boolean("effectiveness_review_complete").default(false),

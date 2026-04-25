@@ -228,6 +228,11 @@ export default function NearMissReportPage() {
   const [witnesses, setWitnesses] = useState<Array<{ id?: string; witnessName: string; witnessUserId?: string; status: string; signatureSvg?: string }>>([]);
   const [capturedSigs, setCapturedSigs] = useState<Record<number, string>>({});
 
+  // Reporter / person-involved sign-off
+  const [reporterSigSvg, setReporterSigSvg] = useState<string | null>(null);
+  const [reporterSignedAt, setReporterSignedAt] = useState<string | null>(null);
+  const [reporterSigDraft, setReporterSigDraft] = useState<string | null>(null);
+
   // Equipment involved free-text
   const [equipmentInput, setEquipmentInput] = useState("");
   const [equipmentList, setEquipmentList] = useState<string[]>([]);
@@ -298,6 +303,8 @@ export default function NearMissReportPage() {
         signatureSvg: w.signatureSvg ?? undefined,
       }))
     );
+    setReporterSigSvg(r.reporterSignatureSvg ?? null);
+    setReporterSignedAt(r.reporterSignedAt ? new Date(r.reporterSignedAt).toISOString() : null);
     setIsDraft(r.status === "draft");
     setReportId(r.id);
   }, [existingData]);
@@ -392,6 +399,8 @@ export default function NearMissReportPage() {
       equipmentInvolved: equipmentList,
       contributingFactors: s2.contributingFactors ?? [],
       toolboxTalkFlag: s2.toolboxTalkFlag ?? true,
+      reporterSignatureSvg: reporterSigSvg,
+      reporterSignedAt: reporterSignedAt,
     };
   };
 
@@ -726,9 +735,80 @@ export default function NearMissReportPage() {
             </CardContent>
           </Card>
 
+          {/* Reporter / person involved sign-off */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Reporter Sign-Off</CardTitle>
+              <p className="text-xs text-muted-foreground">
+                {currentUser ? `${currentUser.firstName ?? ""} ${currentUser.lastName ?? ""}`.trim() || "Person involved" : "Person involved"} — sign to confirm this report is accurate.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {reporterSigSvg ? (
+                <div className="space-y-2">
+                  <div
+                    className="border rounded-md bg-white p-2 max-w-sm"
+                    dangerouslySetInnerHTML={{ __html: reporterSigSvg }}
+                  />
+                  {reporterSignedAt && (
+                    <p className="text-xs text-muted-foreground">
+                      Signed {format(new Date(reporterSignedAt), "d MMM yyyy 'at' h:mma")}
+                    </p>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setReporterSigSvg(null);
+                      setReporterSignedAt(null);
+                      setReporterSigDraft(null);
+                    }}
+                  >
+                    Re-sign
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <SignatureCanvas onCapture={svg => setReporterSigDraft(svg)} />
+                  {reporterSigDraft && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={async () => {
+                        const signedSvg = reporterSigDraft;
+                        const signedAt = new Date().toISOString();
+                        setReporterSigSvg(signedSvg);
+                        setReporterSignedAt(signedAt);
+                        setReporterSigDraft(null);
+                        if (reportId) {
+                          try {
+                            await saveMutation.mutateAsync({
+                              ...buildPayload(),
+                              reporterSignatureSvg: signedSvg,
+                              reporterSignedAt: signedAt,
+                            });
+                          } catch {
+                            toast({ title: "Could not save signature", variant: "destructive" });
+                          }
+                        }
+                      }}
+                      className="bg-amber-500 text-white hover:bg-amber-600"
+                    >
+                      Confirm Signature
+                    </Button>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           {/* Witnesses */}
           <Card>
-            <CardHeader><CardTitle className="text-base">Witnesses</CardTitle></CardHeader>
+            <CardHeader>
+              <CardTitle className="text-base">Witness (optional)</CardTitle>
+              <p className="text-xs text-muted-foreground">If someone else saw the near miss, add them and have them sign.</p>
+            </CardHeader>
             <CardContent className="space-y-4">
               {witnesses.map((w, i) => (
                 <div key={w.id ?? i} className="border rounded-md p-3 space-y-3">
