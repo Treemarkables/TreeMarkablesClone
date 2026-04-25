@@ -7,6 +7,7 @@ import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import treeRemovalScreenshot from "@assets/Screenshot_2026-04-26_at_3.00.42_AM_1777130742356.png";
 const heroImage = "/tree-removal-real.png";
 const philosophyVideo = "";
 
@@ -122,6 +123,17 @@ export default function TreeRemoval() {
             Gisborne's tree removal experts
           </h1>
         </div>
+      </section>
+
+      {/* Full-width screenshot */}
+      <section className="w-full">
+        <img
+          src={treeRemovalScreenshot}
+          alt="Treemarkables tree removal"
+          className="block w-full h-auto"
+          loading="lazy"
+          data-testid="img-tree-removal-screenshot"
+        />
       </section>
 
       {/* Emergency Alert Banner */}
