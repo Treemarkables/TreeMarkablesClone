@@ -8,12 +8,12 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Settings2, 
-  Users, 
-  Bell, 
-  Shield, 
-  Package, 
+import {
+  Settings2,
+  Users,
+  Bell,
+  Shield,
+  Package,
   FolderOpen,
   Building2,
   ListChecks,
@@ -26,7 +26,11 @@ import {
   AlertTriangle,
   ShieldCheck,
   Wrench,
-  LayoutTemplate
+  LayoutTemplate,
+  Clock,
+  Plug,
+  Banknote,
+  PhoneOff
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -168,6 +172,38 @@ const settingsOptions = [
     icon: LayoutTemplate,
     color: "bg-orange-100 text-orange-600",
     path: "/settings/proposal-builder"
+  },
+  {
+    id: "time-tracking",
+    title: "Time Tracking",
+    description: "Track hours, timesheets and crew time on jobs",
+    icon: Clock,
+    color: "bg-sky-100 text-sky-600",
+    path: "/time-tracking"
+  },
+  {
+    id: "integrations",
+    title: "Integrations",
+    description: "Connect Xero, Google and other third-party services",
+    icon: Plug,
+    color: "bg-lime-100 text-lime-600",
+    path: "/integrations"
+  },
+  {
+    id: "xero-reconciliation",
+    title: "Xero Reconciliation",
+    description: "Match invoices and payments with your Xero account",
+    icon: Banknote,
+    color: "bg-emerald-100 text-emerald-600",
+    path: "/reconciliation"
+  },
+  {
+    id: "unlinked-calls",
+    title: "Unlinked Calls",
+    description: "Review inbound calls not yet attached to a job or customer",
+    icon: PhoneOff,
+    color: "bg-rose-100 text-rose-600",
+    path: "/unlinked-calls"
   }
 ];
 

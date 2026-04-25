@@ -82,9 +82,12 @@ export default function VehicleInspection() {
     ? (templatesData as any).data
     : [];
 
-  // Fetch default template for selected vehicle
+  // Fetch default template for the selected vehicle's type (falls back to any default)
+  const selectedVehicleType = vehicles.find((v) => v.id === selectedVehicleId)?.type;
   const { data: defaultTemplateData } = useQuery({
-    queryKey: ["/api/inspection-templates/default", selectedVehicleId],
+    queryKey: selectedVehicleType
+      ? ["/api/inspection-templates/default", selectedVehicleType]
+      : ["/api/inspection-templates/default"],
     enabled: !!selectedVehicleId && !selectedTemplateId,
   });
   const defaultTemplate = (defaultTemplateData as any)?.data || null;
@@ -393,7 +396,7 @@ export default function VehicleInspection() {
             Vehicle Pre-Start Inspection
           </h1>
           <p className="text-muted-foreground">
-            Select vehicle and template to begin
+            Select vehicle to begin
           </p>
         </div>
 
@@ -426,72 +429,6 @@ export default function VehicleInspection() {
 
             {selectedVehicleId && (
               <>
-                {(() => {
-                  const selectedVehicle = vehicles.find(
-                    (v) => v.id === selectedVehicleId,
-                  );
-                  const hasDefaultTemplate =
-                    !!selectedVehicle?.defaultInspectionTemplateId;
-                  const templateName = hasDefaultTemplate
-                    ? templates.find(
-                        (t) =>
-                          t.id === selectedVehicle.defaultInspectionTemplateId,
-                      )?.name
-                    : defaultTemplate?.name;
-
-                  return hasDefaultTemplate ? (
-                    <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                      <div className="flex items-center gap-2">
-                        <CheckCircle2 className="h-4 w-4 text-green-600" />
-                        <div>
-                          <p className="text-sm font-medium text-green-900">
-                            Using: {templateName || "Assigned Template"}
-                          </p>
-                          <p className="text-xs text-green-700">
-                            This vehicle has a pre-assigned inspection template
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <Label htmlFor="template">
-                        Inspection Template (optional)
-                      </Label>
-                      <Select
-                        value={selectedTemplateId}
-                        onValueChange={setSelectedTemplateId}
-                      >
-                        <SelectTrigger
-                          className="text-base md:text-sm"
-                          data-testid="select-template"
-                        >
-                          <SelectValue
-                            placeholder={
-                              defaultTemplate
-                                ? `Using default: ${defaultTemplate.name}`
-                                : "Choose a template"
-                            }
-                          />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {templates.map((template) => (
-                            <SelectItem key={template.id} value={template.id}>
-                              {template.name}{" "}
-                              {template.isDefault && "(Default)"}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      {defaultTemplate && !selectedTemplateId && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Default template will be used
-                        </p>
-                      )}
-                    </div>
-                  );
-                })()}
-
                 <div>
                   <Label htmlFor="odometer">Odometer Reading (optional)</Label>
                   <Input
@@ -504,6 +441,15 @@ export default function VehicleInspection() {
                     data-testid="input-odometer"
                   />
                 </div>
+
+                {!selectedTemplateId && !defaultTemplate && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-md p-3 text-sm text-amber-900">
+                    No inspection template is assigned to this vehicle and no
+                    default template was found. Assign a template to this
+                    vehicle or mark a template as default in Vehicle Inspection
+                    Settings.
+                  </div>
+                )}
               </>
             )}
 

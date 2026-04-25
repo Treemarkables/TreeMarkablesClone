@@ -72,7 +72,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const jhaActive = location === "/jha-assessment" || location === "/jha-history";
   const nearMissActive = location === "/near-miss-report" || location === "/near-miss-history";
-  const financeActive = ["/invoices", "/templates", "/settings/invoice-builder", "/settings/proposal-builder", "/equipment", "/time-tracking", "/unlinked-calls", "/integrations", "/reconciliation"].includes(location);
+  const financeActive = ["/invoices", "/templates", "/equipment"].includes(location);
   const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics", "/profitability-calculator"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
@@ -344,38 +344,8 @@ function SidebarNavContent({
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/settings/invoice-builder"}>
-                            <Link href="/settings/invoice-builder" onClick={handleLinkClick} data-testid="link-invoice-builder"><span>Invoice Builder</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/settings/proposal-builder"}>
-                            <Link href="/settings/proposal-builder" onClick={handleLinkClick} data-testid="link-proposal-builder"><span>Proposal Builder</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/equipment"}>
                             <Link href="/equipment" onClick={handleLinkClick} data-testid="link-equipment"><span>Equipment</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/time-tracking"}>
-                            <Link href="/time-tracking" onClick={handleLinkClick} data-testid="link-time-tracking"><span>Time Tracking</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/integrations"}>
-                            <Link href="/integrations" onClick={handleLinkClick} data-testid="link-integrations"><span>Integrations</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/reconciliation"}>
-                            <Link href="/reconciliation" onClick={handleLinkClick} data-testid="link-reconciliation"><span>Xero Reconciliation</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/unlinked-calls"}>
-                            <Link href="/unlinked-calls" onClick={handleLinkClick} data-testid="link-unlinked-calls"><span>Unlinked Calls</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
