@@ -1900,7 +1900,7 @@ export function ProposalBuilderV2({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-full h-screen sm:h-[95vh] sm:max-w-5xl overflow-hidden flex flex-col p-0 gap-0">
+        <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 w-full">
           {/* ── Toolbar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
             {previewMode ? (
