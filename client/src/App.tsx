@@ -64,6 +64,7 @@ import ProposalViewer from "@/pages/ProposalViewer";
 import ProposalAccept from "@/pages/ProposalAccept";
 import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
+import InvoiceView from "@/pages/InvoiceView";
 import PublicReview from "@/pages/PublicReview";
 import MulchDrops from "@/pages/MulchDrops";
 import NearMissReport from "@/pages/NearMissReport";
@@ -825,6 +826,7 @@ function Router() {
       <Route path="/proposal/:proposalId/accept" component={ProposalAccept}/>
       <Route path="/proposal/:proposalId" component={ProposalViewer}/>
       <Route path="/quote/:quoteId" component={QuoteViewer}/>
+      <Route path="/invoice/:invoiceId/view" component={InvoiceView}/>
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       <Route path="/review/:token" component={PublicReview}/>
       
