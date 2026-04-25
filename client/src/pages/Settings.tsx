@@ -30,7 +30,9 @@ import {
   Clock,
   Plug,
   Banknote,
-  PhoneOff
+  PhoneOff,
+  Receipt,
+  FileStack
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -204,6 +206,22 @@ const settingsOptions = [
     icon: PhoneOff,
     color: "bg-rose-100 text-rose-600",
     path: "/unlinked-calls"
+  },
+  {
+    id: "invoices",
+    title: "Invoices",
+    description: "View and manage all customer invoices",
+    icon: Receipt,
+    color: "bg-amber-100 text-amber-600",
+    path: "/invoices"
+  },
+  {
+    id: "templates",
+    title: "Templates",
+    description: "Manage document, quote and proposal templates",
+    icon: FileStack,
+    color: "bg-fuchsia-100 text-fuchsia-600",
+    path: "/templates"
   }
 ];
 

@@ -70,14 +70,12 @@ function SidebarNavContent({
   logout: () => void;
 }) {
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
-  const jhaActive = location === "/jha-assessment" || location === "/jha-history";
-  const nearMissActive = location === "/near-miss-report" || location === "/near-miss-history";
-  const financeActive = ["/invoices", "/templates", "/equipment"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/metrics", "/profitability-calculator"].includes(location);
+  const safetyActive = ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
+  const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/equipment"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
-  const [jhaOpen, setJhaOpen] = useState(jhaActive);
-  const [nearMissOpen, setNearMissOpen] = useState(nearMissActive);
+  const [safetyOpen, setSafetyOpen] = useState(safetyActive);
   const [financeOpen, setFinanceOpen] = useState(financeActive);
   const [opsOpen, setOpsOpen] = useState(opsActive);
 
@@ -86,12 +84,8 @@ function SidebarNavContent({
   }, [vehicleActive]);
 
   useEffect(() => {
-    if (jhaActive) setJhaOpen(true);
-  }, [jhaActive]);
-
-  useEffect(() => {
-    if (nearMissActive) setNearMissOpen(true);
-  }, [nearMissActive]);
+    if (safetyActive) setSafetyOpen(true);
+  }, [safetyActive]);
 
   useEffect(() => {
     if (financeActive) setFinanceOpen(true);
@@ -230,16 +224,16 @@ function SidebarNavContent({
                 </SidebarMenuItem>
               </Collapsible>
 
-              {/* JHA — collapsible group */}
-              <Collapsible open={jhaOpen} onOpenChange={setJhaOpen} className="group/jha-collapsible">
+              {/* Safety — collapsible group (JHA + Near Miss) */}
+              <Collapsible open={safetyOpen} onOpenChange={setSafetyOpen} className="group/safety-collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton isActive={jhaActive} data-testid="collapsible-jha">
+                    <SidebarMenuButton data-testid="collapsible-safety">
                       <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
                         <Shield className="h-4 w-4" />
                       </span>
-                      <span>JHA</span>
-                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/jha-collapsible:rotate-90" />
+                      <span className="font-semibold">Safety</span>
+                      <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/safety-collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -247,51 +241,28 @@ function SidebarNavContent({
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/jha-assessment"}>
                           <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">
-                            <span>Assessment</span>
+                            <span>JHA Assessment</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/jha-history"}>
                           <Link href="/jha-history" onClick={handleLinkClick} data-testid="link-jha-history">
-                            <span>History</span>
+                            <span>JHA History</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
-                    </SidebarMenuSub>
-                  </CollapsibleContent>
-                </SidebarMenuItem>
-              </Collapsible>
-
-              {/* Near Miss Reports — collapsible */}
-              <Collapsible open={nearMissOpen} onOpenChange={setNearMissOpen} className="group/nearmiss-collapsible">
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={nearMissActive}>
-                    <Link href="/near-miss-report" onClick={handleLinkClick} data-testid="link-near-miss-report">
-                      <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-amber-100 text-amber-600">
-                        <AlertTriangle className="h-4 w-4" />
-                      </span>
-                      <span className="truncate">Near Miss</span>
-                    </Link>
-                  </SidebarMenuButton>
-                  <CollapsibleTrigger asChild>
-                    <SidebarMenuAction data-testid="collapsible-near-miss">
-                      <ChevronRight className="transition-transform duration-200 group-data-[state=open]/nearmiss-collapsible:rotate-90" />
-                    </SidebarMenuAction>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <SidebarMenuSub>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/near-miss-report"}>
-                          <Link href="/near-miss-report" onClick={handleLinkClick} data-testid="link-near-miss-report-new">
-                            <span>New Report</span>
+                          <Link href="/near-miss-report" onClick={handleLinkClick} data-testid="link-near-miss-report">
+                            <span>Near Miss Report</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/near-miss-history"}>
                           <Link href="/near-miss-history" onClick={handleLinkClick} data-testid="link-near-miss-history">
-                            <span>History</span>
+                            <span>Near Miss History</span>
                           </Link>
                         </SidebarMenuSubButton>
                       </SidebarMenuSubItem>
@@ -323,29 +294,24 @@ function SidebarNavContent({
                 <Collapsible open={financeOpen} onOpenChange={setFinanceOpen} className="group/finance-collapsible">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton isActive={financeActive} data-testid="collapsible-finance">
+                      <SidebarMenuButton data-testid="collapsible-finance">
                         <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
                           <Briefcase className="h-4 w-4" />
                         </span>
-                        <span>Finance & Admin</span>
+                        <span className="font-semibold">Finance & Admin</span>
                         <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/finance-collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent>
                       <SidebarMenuSub>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/invoices"}>
-                            <Link href="/invoices" onClick={handleLinkClick} data-testid="link-invoices"><span>Invoices</span></Link>
+                          <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
+                            <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/templates"}>
-                            <Link href="/templates" onClick={handleLinkClick} data-testid="link-templates"><span>Templates</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/equipment"}>
-                            <Link href="/equipment" onClick={handleLinkClick} data-testid="link-equipment"><span>Equipment</span></Link>
+                          <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>
+                            <Link href="/profitability-calculator" onClick={handleLinkClick} data-testid="link-profitability-calculator"><span>Profitability Calculator</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
@@ -365,11 +331,11 @@ function SidebarNavContent({
                 <Collapsible open={opsOpen} onOpenChange={setOpsOpen} className="group/ops-collapsible">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton isActive={opsActive} data-testid="collapsible-ops">
+                      <SidebarMenuButton data-testid="collapsible-ops">
                         <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
                           <BarChart3 className="h-4 w-4" />
                         </span>
-                        <span>Operations & Analysis</span>
+                        <span className="font-semibold">Operations & Analysis</span>
                         <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/ops-collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -421,13 +387,8 @@ function SidebarNavContent({
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/metrics"}>
-                            <Link href="/metrics" onClick={handleLinkClick} data-testid="link-metrics"><span>Metrics Dashboard</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/profitability-calculator"}>
-                            <Link href="/profitability-calculator" onClick={handleLinkClick} data-testid="link-profitability-calculator"><span>Profitability Calculator</span></Link>
+                          <SidebarMenuSubButton asChild isActive={location === "/equipment"}>
+                            <Link href="/equipment" onClick={handleLinkClick} data-testid="link-equipment"><span>Equipment</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                       </SidebarMenuSub>
