@@ -458,7 +458,7 @@ export function EmailComposerModal({
         .replace(
           /{invoiceLink}/g,
           invoiceData?.id
-            ? `${baseUrl}/invoice/${invoiceData.id}`
+            ? `${baseUrl}/invoice/${invoiceData.id}/view`
             : "View invoice in your customer portal",
         )
         .replace(
@@ -844,7 +844,7 @@ export function EmailComposerModal({
       .replace(
         /{invoiceLink}/g,
         invoiceData?.id
-          ? `${baseUrl}/invoice/${invoiceData.id}`
+          ? `${baseUrl}/invoice/${invoiceData.id}/view`
           : "View invoice in your customer portal",
       )
       .replace(
