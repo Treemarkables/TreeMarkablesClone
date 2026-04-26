@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface Photo {
@@ -47,7 +47,7 @@ export default function PhotoSlider({ photos }: PhotoSliderProps) {
                 aria-label={`Expand photo ${i + 1}`}
                 data-testid={`button-photo-${i}`}
               >
-                <div className="w-[260px] h-[260px] md:w-[320px] md:h-[320px] overflow-hidden rounded-lg bg-neutral-800">
+                <div className="w-[80vw] h-[80vw] sm:w-[300px] sm:h-[300px] md:w-[320px] md:h-[320px] overflow-hidden rounded-lg bg-neutral-800">
                   <img
                     src={photo.src}
                     alt={photo.alt}
@@ -90,14 +90,28 @@ export default function PhotoSlider({ photos }: PhotoSliderProps) {
         }}
       >
         <DialogContent
-          className="max-w-[95vw] w-auto p-0 bg-transparent border-0 shadow-none"
+          className="w-[95vw] max-w-none h-[90vh] p-0 bg-transparent border-0 shadow-none flex items-center justify-center"
           data-testid="modal-photo-expanded"
+          onClick={() => setExpandedIndex(null)}
         >
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpandedIndex(null);
+            }}
+            aria-label="Close"
+            className="absolute top-2 right-2 z-10 flex items-center justify-center w-10 h-10 md:w-12 md:h-12 rounded-full bg-black/70 hover:bg-black/90 text-white transition-colors shadow-lg"
+            data-testid="button-close-photo"
+          >
+            <X className="h-5 w-5 md:h-6 md:w-6" />
+          </button>
           {expandedIndex !== null && (
             <img
               src={photos[expandedIndex].src}
               alt={photos[expandedIndex].alt}
-              className="w-full max-h-[90vh] object-contain"
+              className="max-w-full max-h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
             />
           )}
         </DialogContent>

@@ -25099,6 +25099,148 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   console.log('');
   // ─────────────────────────────────────────────────────────────────────────
 
+  // ── Welcome video prompt ─────────────────────────────────────────────────
+  // Detects when a new-customer job has an affirmative reply in the diary,
+  // surfaces a modal in the diary view, and fires the existing "Welcome
+  // video" email template on confirm. State (sent/skipped) is tracked via
+  // diary entries so we don't re-prompt across reloads or sessions.
+  const AFFIRMATIVE_REGEX =
+    /\b(yes|yep|yeah|sure|please|confirm(?:ed)?)\b|sounds good|let'?s do it|let'?s go|book it in|booked in/i;
+
+  app.get('/api/jobs/:id/welcome-prompt-status', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      const job = await storage.getJob(jobId);
+      if (!job || !job.customerId) {
+        return res.json({ success: true, shouldPrompt: false });
+      }
+
+      const customer = await storage.getCustomer(job.customerId);
+      if (!customer || !customer.email) {
+        return res.json({ success: true, shouldPrompt: false, customerName: customer?.name });
+      }
+
+      // New customer = this is the customer's only job
+      const customerJobs = await storage.getJobsByCustomer(job.customerId);
+      const isNew = customerJobs.length === 1;
+
+      // Welcome video template lookup (case-insensitive name match)
+      const templates = await storage.getAllEmailTemplates();
+      const tpl = templates.find((t: any) =>
+        (t.name || '').toLowerCase() === 'welcome video' && t.isActive !== false,
+      );
+      const templateAvailable = !!tpl;
+
+      // Diary scan: prior sent/skipped + latest customer-authored email reply
+      const diary = await storage.getJobDiaryEntriesByJob(jobId);
+      const alreadyHandled = diary.some((e: any) =>
+        typeof e.title === 'string' &&
+        (e.title.startsWith('Welcome video sent') ||
+          e.title.startsWith('Welcome video skipped')),
+      );
+      const customerEmails = diary.filter((e: any) =>
+        e.entryType === 'email' && e.authorRole === 'customer',
+      );
+      const latest = customerEmails.sort((a: any, b: any) => {
+        const ta = new Date(a.createdAt).getTime();
+        const tb = new Date(b.createdAt).getTime();
+        return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
+      })[0];
+      const haystack = latest
+        ? `${latest.title || ''} ${latest.description || ''} ${latest.content || ''}`
+        : '';
+      const replyHasAffirmative = !!latest && AFFIRMATIVE_REGEX.test(haystack);
+
+      const shouldPrompt =
+        isNew && !alreadyHandled && templateAvailable && replyHasAffirmative;
+
+      res.json({
+        success: true,
+        shouldPrompt,
+        customerName: customer.name,
+        templateAvailable,
+      });
+    } catch (e: any) {
+      console.error('welcome-prompt-status error', e);
+      res.json({ success: false, shouldPrompt: false });
+    }
+  });
+
+  app.post('/api/jobs/:id/send-welcome-video', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      const job = await storage.getJob(jobId);
+      if (!job || !job.customerId) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const customer = await storage.getCustomer(job.customerId);
+      if (!customer || !customer.email) {
+        return res.status(400).json({ success: false, message: 'Customer email is missing' });
+      }
+
+      const templates = await storage.getAllEmailTemplates();
+      const tpl = templates.find((t: any) =>
+        (t.name || '').toLowerCase() === 'welcome video' && t.isActive !== false,
+      );
+      if (!tpl) {
+        return res.status(404).json({ success: false, message: 'Welcome video template not configured' });
+      }
+
+      // Render: substitute {customerName} per the template's single-brace syntax
+      const customerName = customer.name || 'there';
+      const subject = (tpl.subject || 'Welcome video').replace(/\{customerName\}/g, customerName);
+      const rawBody = (tpl.htmlContent || '').replace(/\{customerName\}/g, customerName);
+      // Convert newlines to <br> for HTML rendering — template stores plain text
+      const htmlBody = rawBody.replace(/\n/g, '<br>');
+
+      const result = await emailService.sendEmail({
+        to: customer.email,
+        subject,
+        html: htmlBody,
+        text: rawBody,
+        jobNumber: job.jobNumber,
+      });
+
+      if (!result.success) {
+        return res.status(500).json({ success: false, message: 'Email send failed' });
+      }
+
+      await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'email',
+        title: 'Welcome video sent',
+        description: `Welcome video email sent to ${customer.email}`,
+        authorName: 'System',
+        authorRole: 'system',
+      } as any);
+
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('send-welcome-video error', e);
+      res.status(500).json({ success: false, message: e.message || 'Send failed' });
+    }
+  });
+
+  app.post('/api/jobs/:id/dismiss-welcome-prompt', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'note',
+        title: 'Welcome video skipped',
+        description: 'User chose not to send the welcome video for this job',
+        authorName: 'System',
+        authorRole: 'system',
+      } as any);
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('dismiss-welcome-prompt error', e);
+      res.status(500).json({ success: false, message: e.message || 'Dismiss failed' });
+    }
+  });
+  // ─────────────────────────────────────────────────────────────────────────
+
   const httpServer = createServer(app);
 
   return httpServer;
