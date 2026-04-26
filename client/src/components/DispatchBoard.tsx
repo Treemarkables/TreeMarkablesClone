@@ -1,4 +1,4 @@
-import { useJobFilter, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
+import { useJobFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -669,7 +669,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
   const [jobFilter, setJobFilter] = useJobFilter();
-  const [onlyUnconfirmed, setOnlyUnconfirmed] = useState(false);
+  const [onlyUnconfirmed, setOnlyUnconfirmed] = useOnlyUnconfirmed();
+
+  const countUnconfirmed = (jobs: { status: string; customerConfirmed?: boolean }[]) =>
+    jobs.filter(
+      (j) => (j.status === "scheduled" || j.status === "work_order") && !j.customerConfirmed,
+    ).length;
 
   const STATUS_TAB_FILTERS = [
     { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
@@ -2284,11 +2289,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const scheduledJobs = todaysJobs.filter(
       (job) => job.status === "scheduled",
     ).length;
-    const unconfirmedCount = todaysJobs.filter(
-      (job) =>
-        (job.status === "scheduled" || job.status === "work_order") &&
-        !job.customerConfirmed,
-    ).length;
+    const unconfirmedCount = countUnconfirmed(todaysJobs);
 
     return (
       <Card data-testid="dispatch-summary-card">
@@ -2424,11 +2425,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   }
 
   const todaysJobs = getTodaysJobs();
-  const unconfirmedCount = todaysJobs.filter(
-    (job) =>
-      (job.status === "scheduled" || job.status === "work_order") &&
-      !job.customerConfirmed,
-  ).length;
+  const unconfirmedCount = countUnconfirmed(todaysJobs);
 
   return (
     <>
@@ -2506,7 +2503,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             unconfirmedCount > 0 && (
                               <button
                                 type="button"
-                                onClick={() => setOnlyUnconfirmed((v) => !v)}
+                                onClick={() => setOnlyUnconfirmed(!onlyUnconfirmed)}
                                 aria-pressed={onlyUnconfirmed}
                                 title={onlyUnconfirmed ? "Clear filter" : "Show only jobs awaiting confirmation"}
                                 data-testid="badge-unconfirmed-count"
