@@ -4,11 +4,12 @@ import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
-import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Settings, Search, Wrench, Trash2, ShieldCheck } from "lucide-react";
+import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Settings, Search, Wrench, Trash2, ShieldCheck, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import imgPath from "@assets/image_1777183012930.png";
+import InquiryForm from "@/components/InquiryForm";
+import stumpGrindingPoster from "@assets/generated_images/219E0642-32F7-4E1D-867F-8EF832B46D73_1_106_c.jpeg";
 const heroBackground = "/stump-grinding-hero.jpg";
 
 const reviews = [
@@ -173,27 +174,51 @@ export default function StumpGrinding() {
         </div>
       </section>
 
-      <img src={imgPath} alt="" className="w-full h-auto block" />
+      <section className="py-10 md:py-14 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
+          <InquiryForm />
+        </div>
+      </section>
 
-      {/* Stump Grinding Philosophy */}
-      <section className="py-20 bg-background">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                <Settings className="h-10 w-10 text-orange-600 dark:text-orange-400" />
+      <section className="w-full" data-testid="section-stump-grinding-gisborne">
+        <div className="grid grid-cols-1 md:grid-cols-2 items-stretch">
+          <div className="relative min-h-[280px] md:min-h-[560px] bg-black">
+            <video
+              className="absolute inset-0 w-full h-full object-cover"
+              muted
+              autoPlay
+              loop
+              playsInline
+              poster={stumpGrindingPoster}
+              data-testid="video-stump-grinding-timelapse"
+            >
+              <source src="/stump-grinding-timelapse.mp4" type="video/mp4" />
+            </video>
+          </div>
+          <div className="bg-white px-6 py-12 md:px-12 md:py-16 flex flex-col justify-center">
+            <div className="max-w-xl">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
+                Tree stump grinding Gisborne
+              </h2>
+              <div className="space-y-5 text-[15px] leading-relaxed text-gray-700">
+                <p>
+                  Got a stump that needs gone? We've got two stump grinders to handle any job in Gisborne — one compact narrow-access machine that fits through standard side gates and tight spots most operators can't reach, and the biggest stump grinder in Gisborne for taking on massive shelter belts, old gum stumps and rural clearing work.
+                </p>
+                <p>
+                  Whether it's one fruit tree stump down the side of the house or a paddock full of pine stumps on a lifestyle block, we'll grind it flush, tidy up the mulch, and leave your section ready to mow, plant or build on. Free quotes, fully insured, locally owned.
+                </p>
               </div>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
-              Complete Stump Removal
-            </h2>
-            <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
-              <p>
-                After a tree is cut down, the remaining stump can become an eyesore, a hazard and a haven for pests. Leaving stumps in the ground can invite termites and ants, cause tripping accidents and lead to unwanted regrowth. <span className="font-semibold text-foreground">Stump grinding is the fastest and most effective way</span> to reclaim your space and protect your property.
-              </p>
-              <p>
-                Treemarkables provides professional stump grinding services for homes, farms and commercial sites throughout Gisborne, Wairoa and the East Coast. Our powerful grinding equipment removes all traces of the old tree after <Link href="/tree-removal" className="text-primary hover:text-primary/80 underline">tree removal</Link>.
-              </p>
+              <div className="mt-7">
+                <Button
+                  onClick={handleGetQuote}
+                  size="lg"
+                  className="rounded-full px-6"
+                  data-testid="button-stump-grinding-quote"
+                >
+                  Get a free quote
+                  <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

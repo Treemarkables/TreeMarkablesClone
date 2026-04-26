@@ -1,16 +1,22 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
-import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors, Heart, TreePine, Leaf } from "lucide-react";
+import { Shield, Award, Clock, CheckCircle, Phone, Star, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Link } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
-import imgPath from "@assets/image_1777183012930.png";
+import InquiryForm from "@/components/InquiryForm";
+import ContactFormModal from "@/components/ContactFormModal";
+import PhotoSlider from "@/components/PhotoSlider";
+import sliderPhoto1 from "@assets/generated_images/E0AAF8BC-CFB4-4F84-ABE2-2B1493FE147D.jpeg";
+import sliderPhoto2 from "@assets/generated_images/C145D020-049C-4424-9E2F-A852B84FCA59_1_102_o.jpeg";
+import sliderPhoto3 from "@assets/generated_images/59A2C278-76AD-4BB7-A475-408D758C5760_1_102_a.jpeg";
+import worriedTreeImage from "@assets/generated_images/DCF3191F-E513-401F-AC8B-FF6F329C4A83_1_102_o.jpeg";
 
 export default function TreeRemoval() {
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+
   // Add Google tag event script for form submission tracking
   useEffect(() => {
     const script = document.createElement('script');
@@ -33,7 +39,7 @@ export default function TreeRemoval() {
   }, []);
 
   const handleGetQuote = () => {
-    document.getElementById('contact')?.scrollIntoView({ behavior: 'smooth' });
+    setIsQuoteModalOpen(true);
   };
 
   const handleCallNow = () => {
@@ -96,6 +102,10 @@ export default function TreeRemoval() {
         structuredData={structuredData}
       />
       <Header />
+      <ContactFormModal
+        open={isQuoteModalOpen}
+        onOpenChange={setIsQuoteModalOpen}
+      />
       {/* Hero Section */}
       <section className="relative h-[70vh] sm:h-[80vh] md:min-h-screen overflow-hidden">
         {/* Video Background */}
@@ -123,112 +133,54 @@ export default function TreeRemoval() {
         </div>
       </section>
 
-      <img src={imgPath} alt="" className="w-full h-auto block" />
+      <section className="py-10 md:py-14 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
+          <InquiryForm />
+        </div>
+      </section>
 
-      {/* Tree services grid */}
-      <section className="w-full" data-testid="section-services-grid">
-        <h2 className="sr-only">Tree services section for a Gisborne arborist business with five service cards using more accurate illustrative icons.</h2>
-        <div style={{ background: "#DCEFC8", padding: "40px 24px", fontFamily: "var(--font-sans)" }}>
-          <div style={{ textAlign: "center", marginBottom: "32px" }}>
-            <h2 style={{ fontSize: "22px", fontWeight: 500, color: "#3B6D11", margin: "0 0 12px", letterSpacing: "0.02em" }}>
-              Tree services in Gisborne &amp; surrounding suburbs
-            </h2>
-            <p style={{ fontSize: "14px", color: "#27500A", margin: "0 auto", maxWidth: "560px", lineHeight: 1.5 }}>
-              Proudly serving Gisborne and the wider Tairāwhiti region with professional arboricultural care.
-            </p>
+      <PhotoSlider
+        photos={[
+          { src: sliderPhoto1, alt: "Tree removal job in Gisborne" },
+          { src: sliderPhoto2, alt: "Tree removal crew working on a large tree" },
+          { src: sliderPhoto3, alt: "Tree removal before and after in Gisborne" },
+        ]}
+      />
+
+      <section className="w-full" data-testid="section-worried-tree">
+        <div className="grid grid-cols-1 md:grid-cols-2 items-stretch">
+          <div className="relative min-h-[280px] md:min-h-[560px]">
+            <img
+              src={worriedTreeImage}
+              alt="Large tree leaning over a Gisborne home before removal"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "12px" }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: "96px", height: "96px", borderRadius: "50%", background: "#EAF3DE", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                  <ellipse cx="30" cy="52" rx="14" ry="2" fill="#173404" opacity="0.2" />
-                  <path d="M30 8 C24 8 20 13 21 18 C16 18 13 22 14 27 C9 28 8 33 12 36 L48 36 C52 33 51 28 46 27 C47 22 44 18 39 18 C40 13 36 8 30 8 Z" fill="#639922" stroke="#173404" strokeWidth="1.5" />
-                  <path d="M22 16 Q26 14 30 15 M34 14 Q38 16 40 20 M16 24 Q20 22 24 24 M36 24 Q40 22 44 26 M26 30 Q30 28 34 30" stroke="#27500A" strokeWidth="1" fill="none" opacity="0.5" />
-                  <rect x="27" y="36" width="6" height="14" fill="#7A4A1F" stroke="#173404" strokeWidth="1.5" />
-                  <path d="M27 40 L33 40 M27 44 L33 44" stroke="#173404" strokeWidth="0.8" opacity="0.6" />
-                  <path d="M40 44 L48 36 L52 38 L46 46 L48 50 L44 52 Z" fill="#888780" stroke="#173404" strokeWidth="1.5" strokeLinejoin="round" />
-                  <line x1="44" y1="40" x2="50" y2="40" stroke="#173404" strokeWidth="0.8" />
-                </svg>
-              </div>
-              <div style={{ fontSize: "15px", fontWeight: 500, color: "#173404", marginBottom: "8px" }}>Tree removal</div>
-              <p style={{ fontSize: "12px", color: "#27500A", lineHeight: 1.5, margin: 0, padding: "0 4px" }}>Safe removal of hazardous or unwanted trees across Gisborne properties</p>
+          <div className="bg-white px-6 py-12 md:px-12 md:py-16 flex flex-col justify-center">
+            <div className="max-w-xl space-y-5 text-[15px] leading-relaxed text-gray-700">
+              <p>
+                Every Gisborne local knows the feeling. The wind picks up, the rain hits sideways, and suddenly that big gum, pine, or macrocarpa near the house doesn't feel so charming anymore. You're lying awake listening to it creak, wondering if tonight's the night a limb comes through the roof — or worse.
+              </p>
+              <p>
+                You're not being paranoid. After Cyclone Gabrielle, Fire and Emergency took around 1,800 storm-related calls in 24 hours. Trees that had stood for 50 years came down in a single night. Insurance claims, smashed roofs, blocked driveways — we've cleaned up plenty of "she'll be right" trees that weren't.
+              </p>
+              <p>
+                The good news: most of the time you can spot a problem tree well before it becomes a problem. Lean, deadwood in the canopy, lifting roots, cracks at the base, fungal growth on the trunk — these are the warning signs. The bad news: by the time you're worried enough to Google it, you're usually already overdue for a proper assessment.
+              </p>
+              <p>
+                We'll come out, climb it, and tell you straight — does it need to come down, can it be saved with a prune, or is it actually fine? No upsell, no scare tactics. If the tree's safe we'll tell you that too, free of charge.
+              </p>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: "96px", height: "96px", borderRadius: "50%", background: "#EAF3DE", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                  <ellipse cx="30" cy="54" rx="14" ry="2" fill="#173404" opacity="0.2" />
-                  <rect x="28" y="32" width="4" height="20" fill="#7A4A1F" stroke="#173404" strokeWidth="1.5" />
-                  <path d="M30 32 C20 32 14 24 18 16 C14 12 18 6 24 8 C26 4 34 4 36 8 C42 6 46 12 42 16 C46 24 40 32 30 32 Z" fill="#639922" stroke="#173404" strokeWidth="1.5" />
-                  <path d="M22 14 Q26 12 30 14 M34 12 Q38 14 40 18 M20 22 Q24 20 28 22 M32 22 Q36 20 40 24" stroke="#27500A" strokeWidth="1" fill="none" opacity="0.5" />
-                  <path d="M40 14 L52 6" stroke="#888780" strokeWidth="2.5" strokeLinecap="round" />
-                  <path d="M50 4 L54 8 L52 10 L48 6 Z" fill="#888780" stroke="#173404" strokeWidth="1.2" />
-                  <path d="M40 12 L44 16" stroke="#173404" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div style={{ fontSize: "15px", fontWeight: 500, color: "#173404", marginBottom: "8px" }}>Tree pruning</div>
-              <p style={{ fontSize: "12px", color: "#27500A", lineHeight: 1.5, margin: 0, padding: "0 4px" }}>Expert pruning to improve tree health, shape and longevity</p>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: "96px", height: "96px", borderRadius: "50%", background: "#EAF3DE", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                  <ellipse cx="30" cy="52" rx="20" ry="2" fill="#173404" opacity="0.2" />
-                  <line x1="4" y1="50" x2="56" y2="50" stroke="#7A4A1F" strokeWidth="1.5" />
-                  <path d="M6 50 L6 32 Q6 26 10 24 Q14 20 18 24 Q22 18 26 22 Q30 16 34 22 Q38 18 42 24 Q46 20 50 24 Q54 26 54 32 L54 50 Z" fill="#3B6D11" stroke="#173404" strokeWidth="1.5" strokeLinejoin="round" />
-                  <path d="M10 28 Q12 26 14 28 M16 24 Q18 22 20 24 M22 22 Q24 20 26 22 M28 20 Q30 18 32 20 M34 22 Q36 20 38 22 M40 24 Q42 22 44 24 M46 26 Q48 24 50 26" stroke="#27500A" strokeWidth="0.8" fill="none" opacity="0.7" />
-                  <path d="M12 36 Q14 34 16 36 M20 38 Q22 36 24 38 M28 36 Q30 34 32 36 M36 38 Q38 36 40 38 M44 36 Q46 34 48 36" stroke="#27500A" strokeWidth="0.8" fill="none" opacity="0.5" />
-                  <path d="M14 44 Q16 42 18 44 M22 46 Q24 44 26 46 M30 44 Q32 42 34 44 M38 46 Q40 44 42 46 M46 44 Q48 42 50 44" stroke="#27500A" strokeWidth="0.8" fill="none" opacity="0.4" />
-                  <path d="M14 16 L20 22 L18 24 L12 18 Z" fill="#B4B2A9" stroke="#173404" strokeWidth="1.2" />
-                  <path d="M16 18 L22 24" stroke="#444441" strokeWidth="0.8" />
-                  <rect x="11" y="13" width="4" height="6" fill="#444441" stroke="#173404" strokeWidth="0.8" transform="rotate(-45 13 16)" />
-                </svg>
-              </div>
-              <div style={{ fontSize: "15px", fontWeight: 500, color: "#173404", marginBottom: "8px" }}>Hedge trimming</div>
-              <p style={{ fontSize: "12px", color: "#27500A", lineHeight: 1.5, margin: 0, padding: "0 4px" }}>Tidy, well-shaped hedges for residential and rural properties</p>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: "96px", height: "96px", borderRadius: "50%", background: "#EAF3DE", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                  <ellipse cx="30" cy="54" rx="22" ry="2" fill="#173404" opacity="0.2" />
-                  <ellipse cx="12" cy="48" rx="4" ry="4" fill="#2C2C2A" stroke="#173404" strokeWidth="1.2" />
-                  <ellipse cx="48" cy="48" rx="4" ry="4" fill="#2C2C2A" stroke="#173404" strokeWidth="1.2" />
-                  <circle cx="12" cy="48" r="1.5" fill="#888780" />
-                  <circle cx="48" cy="48" r="1.5" fill="#888780" />
-                  <rect x="10" y="36" width="34" height="10" rx="2" fill="#BA7517" stroke="#173404" strokeWidth="1.5" />
-                  <rect x="14" y="32" width="22" height="6" rx="1" fill="#854F0B" stroke="#173404" strokeWidth="1.2" />
-                  <circle cx="44" cy="40" r="6" fill="#888780" stroke="#173404" strokeWidth="1.5" />
-                  <circle cx="44" cy="40" r="3.5" fill="#444441" stroke="#173404" strokeWidth="0.8" />
-                  <path d="M44 36 L44 38 M48 40 L46 40 M44 44 L44 42 M40 40 L42 40 M46.8 37.2 L45.5 38.5 M46.8 42.8 L45.5 41.5 M41.2 42.8 L42.5 41.5 M41.2 37.2 L42.5 38.5" stroke="#444441" strokeWidth="1" strokeLinecap="round" />
-                  <rect x="36" y="38" width="3" height="4" fill="#5C3A14" stroke="#173404" strokeWidth="1" />
-                  <path d="M22 32 L20 26 L24 24 L26 30" fill="none" stroke="#173404" strokeWidth="1" strokeLinecap="round" />
-                  <ellipse cx="22" cy="50" rx="4" ry="1.5" fill="#7A4A1F" stroke="#173404" strokeWidth="1" />
-                  <path d="M19 50 L19 48 M22 50 L22 47 M25 50 L25 48" stroke="#444441" strokeWidth="0.6" />
-                </svg>
-              </div>
-              <div style={{ fontSize: "15px", fontWeight: 500, color: "#173404", marginBottom: "8px" }}>Stump grinding</div>
-              <p style={{ fontSize: "12px", color: "#27500A", lineHeight: 1.5, margin: 0, padding: "0 4px" }}>Complete stump removal using specialised grinding equipment</p>
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ width: "96px", height: "96px", borderRadius: "50%", background: "#EAF3DE", margin: "0 auto 14px", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-                  <ellipse cx="30" cy="54" rx="22" ry="2" fill="#173404" opacity="0.2" />
-                  <line x1="2" y1="52" x2="58" y2="52" stroke="#7A4A1F" strokeWidth="1.5" />
-                  <path d="M6 6 Q10 4 14 6 Q18 2 24 6 Q28 4 32 8 L8 8 Q4 8 6 6 Z" fill="#888780" stroke="#173404" strokeWidth="1" opacity="0.8" />
-                  <line x1="12" y1="10" x2="10" y2="16" stroke="#185FA5" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-                  <line x1="18" y1="10" x2="16" y2="14" stroke="#185FA5" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-                  <line x1="24" y1="10" x2="22" y2="16" stroke="#185FA5" strokeWidth="1" strokeLinecap="round" opacity="0.6" />
-                  <path d="M14 52 L14 44 Q14 42 16 42 L20 42 Q22 42 22 44 L22 52" fill="#7A4A1F" stroke="#173404" strokeWidth="1.5" />
-                  <path d="M14 44 L18 38 L22 44 Z" fill="#5C3A14" stroke="#173404" strokeWidth="1.2" />
-                  <path d="M22 50 Q30 44 40 42 Q48 40 54 36" stroke="#7A4A1F" strokeWidth="5" strokeLinecap="round" fill="none" />
-                  <path d="M22 50 Q30 44 40 42 Q48 40 54 36" stroke="#5C3A14" strokeWidth="1" strokeLinecap="round" fill="none" opacity="0.6" />
-                  <ellipse cx="38" cy="38" rx="9" ry="6" fill="#3B6D11" stroke="#173404" strokeWidth="1.2" transform="rotate(-15 38 38)" />
-                  <ellipse cx="48" cy="32" rx="7" ry="5" fill="#3B6D11" stroke="#173404" strokeWidth="1.2" transform="rotate(-15 48 32)" />
-                  <ellipse cx="30" cy="42" rx="6" ry="4" fill="#27500A" stroke="#173404" strokeWidth="1" transform="rotate(-15 30 42)" />
-                  <path d="M32 36 Q34 34 36 36 M40 32 Q42 30 44 32 M46 28 Q48 26 50 28" stroke="#27500A" strokeWidth="0.8" fill="none" opacity="0.7" />
-                  <path d="M30 50 L26 46 M40 44 L36 46" stroke="#5C3A14" strokeWidth="1" strokeLinecap="round" />
-                </svg>
-              </div>
-              <div style={{ fontSize: "15px", fontWeight: 500, color: "#173404", marginBottom: "8px" }}>Storm damage</div>
-              <p style={{ fontSize: "12px", color: "#27500A", lineHeight: 1.5, margin: 0, padding: "0 4px" }}>Emergency response for fallen or damaged trees after weather events</p>
+            <div className="mt-7">
+              <Button
+                onClick={handleGetQuote}
+                size="lg"
+                className="rounded-full px-6"
+                data-testid="button-book-free-assessment"
+              >
+                Book a free assessment
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
             </div>
           </div>
         </div>
@@ -243,177 +195,49 @@ export default function TreeRemoval() {
         </div>
       </div>
 
-      {/* Tree Care Philosophy */}
-      <section className="py-8 md:py-16 bg-background">
-        <div className="max-w-6xl mx-auto px-6">
-          {/* Main Philosophy */}
-          <div className="text-center mb-16">
-            <div className="flex justify-center mb-6">
-              <div className="w-20 h-20 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                <Heart className="h-10 w-10 text-green-600 dark:text-green-400" data-testid="icon-philosophy-heart" />
+      {/* Why Gisborne homeowners choose Treemarkables */}
+      <section className="w-full py-14 md:py-20 px-5 md:px-6 bg-[#fafafa] text-[#1a1a1a]" data-testid="section-why-choose">
+        <div className="max-w-6xl mx-auto">
+          <h2 className="text-[26px] md:text-[32px] font-bold text-center text-black mb-8 md:mb-12">
+            Why Gisborne homeowners choose Treemarkables
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+            <div className="bg-white border border-[#eaeaea] rounded-xl p-8 text-center" data-testid="card-why-choose-emergency">
+              <div className="w-14 h-14 rounded-full bg-[#39FF14] inline-flex items-center justify-center mb-[18px]">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                </svg>
               </div>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-6">
-              Our Tree Care Philosophy
-            </h2>
-            <div className="max-w-4xl mx-auto space-y-4 text-lg text-muted-foreground">
-              <p>
-                At Treemarkables, we believe every tree has value. Our first priority is always 
-                <span className="font-semibold text-foreground"> tree preservation through expert pruning and care</span>.
-              </p>
-              <p>
-                We only recommend tree removal when it's absolutely necessary for safety or when 
-                there's no viable alternative to protect people and property.
+              <h3 className="text-lg font-semibold text-black mb-2.5">24/7 emergency response</h3>
+              <p className="text-[15px] leading-relaxed text-[#555]">
+                Storm damage or hazardous tree? We're on it day or night, anywhere in Tairāwhiti.
               </p>
             </div>
-          </div>
 
-          {/* Preference for Pruning */}
-          <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-8 mb-12">
-            <div className="flex items-start space-x-4">
-              <div className="flex-shrink-0">
-                <div className="w-12 h-12 bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center">
-                  <Scissors className="h-6 w-6 text-green-600 dark:text-green-400" data-testid="icon-pruning" />
-                </div>
+            <div className="bg-white border border-[#eaeaea] rounded-xl p-8 text-center" data-testid="card-why-choose-guarantee">
+              <div className="w-14 h-14 rounded-full bg-[#39FF14] inline-flex items-center justify-center mb-[18px]">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
               </div>
-              <div>
-                <h3 className="text-xl font-semibold text-foreground mb-3">
-                  Tree Pruning: Our Preferred Solution
-                </h3>
-                <p className="text-muted-foreground leading-relaxed mb-4">
-                  Professional <a href="/tree-pruning" className="text-primary hover:text-primary/80 underline">tree pruning</a> can solve most tree problems while preserving the tree's health and beauty. 
-                  We can address safety concerns, improve tree structure, remove diseased branches, and enhance 
-                  your property's appearance without removing the entire tree.
-                </p>
-                <div className="flex items-center space-x-2">
-                  <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
-                  <span className="text-sm font-medium text-foreground">
-                    Free assessment to explore pruning alternatives before considering removal
-                  </span>
-                </div>
-              </div>
+              <h3 className="text-lg font-semibold text-black mb-2.5">The Treemarkables guarantee</h3>
+              <p className="text-[15px] leading-relaxed text-[#555]">
+                If we haven't delivered on what we agreed, we'll come back and sort it. No questions, no fuss.
+              </p>
             </div>
-          </div>
 
-          {/* When Removal is Necessary */}
-          <div className="mb-12">
-            <h3 className="text-2xl font-bold text-foreground text-center mb-8">
-              When Tree Removal Becomes Necessary
-            </h3>
-            <p className="text-center text-muted-foreground mb-8 max-w-3xl mx-auto">
-              While we prefer to save trees whenever possible, there are situations where removal 
-              is the only safe and responsible option:
-            </p>
-            
-            <div className="grid md:grid-cols-3 gap-6">
-              <Card className="hover-elevate" data-testid="card-removal-reason-0">
-                <CardContent className="pt-6 pb-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                      <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" data-testid="icon-reason-0" />
-                    </div>
-                  </div>
-                  <h4 className="text-lg font-semibold text-foreground mb-3 text-center" data-testid="title-reason-0">
-                    Safety Hazards
-                  </h4>
-                  <p className="text-muted-foreground text-sm leading-relaxed text-center" data-testid="description-reason-0">
-                    When trees pose immediate danger to people, property, or power lines due to disease, damage, or structural weakness.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="hover-elevate" data-testid="card-removal-reason-1">
-                <CardContent className="pt-6 pb-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                      <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" data-testid="icon-reason-1" />
-                    </div>
-                  </div>
-                  <h4 className="text-lg font-semibold text-foreground mb-3 text-center" data-testid="title-reason-1">
-                    Irreversible Disease
-                  </h4>
-                  <p className="text-muted-foreground text-sm leading-relaxed text-center" data-testid="description-reason-1">
-                    Trees affected by severe disease that cannot be treated and may spread to healthy trees nearby.
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card className="hover-elevate" data-testid="card-removal-reason-2">
-                <CardContent className="pt-6 pb-6">
-                  <div className="flex justify-center mb-4">
-                    <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                      <AlertTriangle className="h-6 w-6 text-orange-600 dark:text-orange-400" data-testid="icon-reason-2" />
-                    </div>
-                  </div>
-                  <h4 className="text-lg font-semibold text-foreground mb-3 text-center" data-testid="title-reason-2">
-                    Structural Damage
-                  </h4>
-                  <p className="text-muted-foreground text-sm leading-relaxed text-center" data-testid="description-reason-2">
-                    Trees causing foundation damage, blocking essential infrastructure, or creating access issues that cannot be resolved through pruning.
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Call to Action */}
-          <div className="text-center bg-muted/30 rounded-lg p-8">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
-              Not Sure if Your Tree Needs to Be Removed?
-            </h3>
-            <p className="text-muted-foreground mb-6 max-w-2xl mx-auto">
-              Get a free consultation from our qualified arborists. We'll assess your tree's health 
-              and explore all possible solutions before recommending removal.
-            </p>
-            <Button 
-              onClick={handleGetQuote}
-              className="bg-primary text-primary-foreground hover:bg-primary/90"
-              data-testid="button-consultation"
-            >
-              Get Free Tree Assessment
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Service Details */}
-      <section className="py-16">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            <div>
-              <h2 className="text-3xl font-bold text-foreground mb-6" data-testid="text-service-title">
-                Why Gisborne Homeowners Choose Treemarkables
-              </h2>
-              <div className="space-y-5">
-                <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-foreground">Same-Day Emergency Response</h3>
-                    <p className="text-muted-foreground">Available 24/7 for storm damage and hazardous tree emergencies across Gisborne</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-foreground">Fully Insured & WorkSafe Compliant</h3>
-                    <p className="text-muted-foreground">Qualified NZ Arborists with comprehensive public liability insurance and safety certifications</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-foreground">No-Mess Cleanup Guarantee</h3>
-                    <p className="text-muted-foreground">Complete debris removal, stump grinding, and site restoration - your property left spotless</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <CheckCircle className="h-6 w-6 text-primary mt-1" />
-                  <div>
-                    <h3 className="font-semibold text-foreground">Locally Owned & Operated</h3>
-                    <p className="text-muted-foreground">Your trusted Gisborne tree care specialists since 2020</p>
-                  </div>
-                </div>
+            <div className="bg-white border border-[#eaeaea] rounded-xl p-8 text-center" data-testid="card-why-choose-local">
+              <div className="w-14 h-14 rounded-full bg-[#39FF14] inline-flex items-center justify-center mb-[18px]">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                  <circle cx="12" cy="10" r="3" />
+                </svg>
               </div>
+              <h3 className="text-lg font-semibold text-black mb-2.5">Locally owned &amp; operated</h3>
+              <p className="text-[15px] leading-relaxed text-[#555]">
+                Born and based in Gisborne. Your trusted local tree care team since day one.
+              </p>
             </div>
           </div>
         </div>
@@ -548,81 +372,44 @@ export default function TreeRemoval() {
         </div>
       </section>
 
-      {/* Related Services Section */}
-      <section className="py-16 bg-background">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h3 className="text-2xl font-bold text-foreground mb-6">
-              Complete Tree Care Services
-            </h3>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              After tree removal, you might need our other specialized services to complete your project.
-            </p>
+      <section className="w-full" data-testid="section-reliable-tree-removal">
+        <div className="grid grid-cols-1 md:grid-cols-2 items-stretch">
+          <div className="relative min-h-[280px] md:min-h-[560px]">
+            <img
+              src={sliderPhoto2}
+              alt="Treemarkables crew carrying out a tree removal in Gisborne"
+              className="absolute inset-0 w-full h-full object-cover"
+            />
           </div>
-          
-          <div className="grid md:grid-cols-3 gap-8">
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">
-                    <Scissors className="h-6 w-6 text-primary" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3">
-                  <Link href="/stump-grinding" className="hover:text-primary transition-colors">
-                    Stump Grinding
-                  </Link>
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Complete the job with professional stump removal, leaving your property clean and ready for landscaping.
-                </p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/stump-grinding">Learn More</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <TreePine className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3">
-                  <Link href="/tree-pruning" className="hover:text-primary transition-colors">
-                    Tree Pruning
-                  </Link>
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Keep your remaining trees healthy and safe with our expert pruning and maintenance services.
-                </p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/tree-pruning">Learn More</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6 text-center">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                    <Leaf className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3">
-                  <Link href="/hedge-trimming" className="hover:text-primary transition-colors">
-                    Hedge Trimming
-                  </Link>
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-4">
-                  Maintain your property's boundaries and aesthetics with professional hedge care and shaping.
-                </p>
-                <Button variant="outline" size="sm" asChild>
-                  <Link href="/hedge-trimming">Learn More</Link>
-                </Button>
-              </CardContent>
-            </Card>
+          <div className="bg-white px-6 py-12 md:px-12 md:py-16 flex flex-col justify-center">
+            <div className="max-w-xl space-y-5 text-[15px] leading-relaxed text-gray-700">
+              <p>
+                <span className="font-semibold text-gray-900">Looking for reliable Gisborne tree removal?</span> Treemarkables is a locally owned and operated tree removal company servicing Gisborne, Tairāwhiti and the wider East Coast.
+              </p>
+              <p>
+                Our qualified arborists handle everything from hazardous storm-damaged trees and emergency removals through to large-scale residential and commercial tree felling across Gisborne city, Wainui, Makaraka, Patutahi, Manutūkē, Te Karaka and Tolaga Bay.
+              </p>
+              <p>
+                With a 16-metre bucket truck, professional climbing crews, wood chippers and stump grinders on hand, we safely remove trees of any size — close to houses, near power lines, or on tight access sections.
+              </p>
+              <p>
+                Every Gisborne tree removal job includes a free on-site quote, full debris cleanup, and the Treemarkables guarantee: if we haven't delivered on what we agreed, we'll come back and sort it.
+              </p>
+              <p>
+                For fast, professional tree removal in Gisborne, get in touch today.
+              </p>
+            </div>
+            <div className="mt-7">
+              <Button
+                onClick={handleGetQuote}
+                size="lg"
+                className="rounded-full px-6"
+                data-testid="button-reliable-tree-removal-cta"
+              >
+                Get in touch
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </div>
           </div>
         </div>
       </section>

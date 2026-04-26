@@ -1,0 +1,113 @@
+<!--
+  Treemarkables — Why Gisborne homeowners choose us
+  Drop this <section> into your page where needed.
+  Brand colour: Neon Green #39FF14
+  Fully responsive. No external dependencies.
+-->
+
+<style>
+  .tm-trust {
+    width: 100%;
+    padding: 80px 24px;
+    background: #fafafa;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: #1a1a1a;
+    box-sizing: border-box;
+  }
+  .tm-trust *, .tm-trust *::before, .tm-trust *::after { box-sizing: border-box; }
+  .tm-trust__inner {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  .tm-trust__heading {
+    font-size: 32px;
+    font-weight: 700;
+    text-align: center;
+    margin: 0 0 48px;
+    color: #000;
+  }
+  .tm-trust__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+  }
+  .tm-trust__card {
+    background: #ffffff;
+    border: 1px solid #eaeaea;
+    border-radius: 12px;
+    padding: 32px 24px;
+    text-align: center;
+  }
+  .tm-trust__icon {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: #39FF14;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+  }
+  .tm-trust__card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 10px;
+    color: #000;
+  }
+  .tm-trust__card p {
+    font-size: 15px;
+    line-height: 1.6;
+    color: #555;
+    margin: 0;
+  }
+
+  @media (max-width: 900px) {
+    .tm-trust { padding: 56px 20px; }
+    .tm-trust__heading { font-size: 26px; margin-bottom: 32px; }
+    .tm-trust__grid { grid-template-columns: 1fr; gap: 16px; }
+  }
+</style>
+
+
+<section class="tm-trust">
+  <div class="tm-trust__inner">
+
+    <h2 class="tm-trust__heading">Why Gisborne homeowners choose Treemarkables</h2>
+
+    <div class="tm-trust__grid">
+
+      <div class="tm-trust__card">
+        <div class="tm-trust__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+          </svg>
+        </div>
+        <h3>24/7 emergency response</h3>
+        <p>Storm damage or hazardous tree? We're on it day or night, anywhere in Tairāwhiti.</p>
+      </div>
+
+      <div class="tm-trust__card">
+        <div class="tm-trust__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="m9 12 2 2 4-4"/>
+          </svg>
+        </div>
+        <h3>The Treemarkables guarantee</h3>
+        <p>If we haven't delivered on what we agreed, we'll come back and sort it. No questions, no fuss.</p>
+      </div>
+
+      <div class="tm-trust__card">
+        <div class="tm-trust__icon">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+            <circle cx="12" cy="10" r="3"/>
+          </svg>
+        </div>
+        <h3>Locally owned & operated</h3>
+        <p>Born and based in Gisborne. Your trusted local tree care team since day one.</p>
+      </div>
+
+    </div>
+  </div>
+</section>

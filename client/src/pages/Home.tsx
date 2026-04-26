@@ -11,7 +11,7 @@ import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
-import imgPath from "@assets/image_1777183012930.png";
+import InquiryForm from "@/components/InquiryForm";
 
 export default function Home() {
   // Add Google tag event script for form submission tracking
@@ -85,7 +85,11 @@ export default function Home() {
       <Header />
       <FloatingReviews />
       <Hero />
-      <img src={imgPath} alt="" className="w-full h-auto block" />
+      <section className="py-10 md:py-14 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
+          <InquiryForm />
+        </div>
+      </section>
       <ServicesOffered />
       <WhyChooseUs />
       <CTASection />
