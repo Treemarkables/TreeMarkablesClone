@@ -1,7 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { Check } from "lucide-react";
 import {
-  Check,
   Shield,
   ClipboardCheck,
   TriangleAlert,
@@ -9,127 +7,80 @@ import {
   Star,
 } from "lucide-react";
 
-interface DiaryEntry {
-  id: string;
-  entryType?: string;
-  entry_type?: string;
-  title?: string | null;
-  description?: string | null;
-  content?: string | null;
-  authorName?: string | null;
-  author_name?: string | null;
-  createdAt?: string | null;
-  created_at?: string | null;
-}
+// ----------------------------------------------------------------------------
+// Types
+// ----------------------------------------------------------------------------
 
 type ChecklistIcon = React.ComponentType<{ className?: string }>;
 
-interface ChecklistItem {
+type ChecklistItem = {
   id: string;
   label: string;
   triggers: string[];
+  completed: boolean;
   Icon: ChecklistIcon;
+};
+
+interface JobCompletionChecklistProps {
+  items?: ChecklistItem[];
 }
 
-// Each item is satisfied when a diary comment on the job contains any of its
-// trigger keywords. Supervisors already write notes during the job, so we
-// re-use that signal instead of building cross-system queries. Keyword
-// matching uses word boundaries so a note about "previewed pricing" doesn't
-// trigger the Review item.
-const CHECKLIST_ITEMS: ChecklistItem[] = [
+// ----------------------------------------------------------------------------
+// Default data — replace with props from your job context
+// ----------------------------------------------------------------------------
+
+const DEFAULT_ITEMS: ChecklistItem[] = [
   {
     id: "risk-assessment",
     label: "Risk assessment",
-    Icon: Shield,
     triggers: ["jha", "risk assessment", "ra done", "ra completed"],
+    completed: true,
+    Icon: Shield,
   },
   {
     id: "pre-start",
     label: "Pre-start",
-    Icon: ClipboardCheck,
     triggers: ["pre-start", "prestart", "pre start"],
+    completed: true,
+    Icon: ClipboardCheck,
   },
   {
     id: "signs-out",
     label: "Signs out",
-    Icon: TriangleAlert,
     triggers: ["signs out", "signs placed", "signage"],
+    completed: false,
+    Icon: TriangleAlert,
   },
   {
     id: "time-tracking",
     label: "Time tracking",
-    Icon: Clock,
     triggers: ["time tracking", "time entered", "hours logged"],
+    completed: false,
+    Icon: Clock,
   },
   {
-    id: "review",
+    id: "review-requested",
     label: "Review requested",
-    Icon: Star,
     triggers: ["review"],
+    completed: false,
+    Icon: Star,
   },
 ];
 
-// Escape regex specials in user-supplied keyword strings before composing
-// the word-boundary regex.
-function escapeRegex(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+// ----------------------------------------------------------------------------
+// Component
+// ----------------------------------------------------------------------------
 
-function buildKeywordRegex(keywords: string[]): RegExp {
-  const escaped = keywords.map(escapeRegex).join("|");
-  // \b doesn't fire on the - in pre-start, so allow either a word boundary or
-  // a non-word char on either side. Adequate for plain-English diary notes.
-  return new RegExp(`(^|\\W)(${escaped})(?=\\W|$)`, "i");
-}
-
-function entryMatches(entries: DiaryEntry[], keywords: string[]): boolean {
-  const re = buildKeywordRegex(keywords);
-  for (const entry of entries) {
-    const haystack = [
-      entry.title ?? "",
-      entry.description ?? "",
-      entry.content ?? "",
-    ]
-      .join("\n")
-      .trim();
-    if (!haystack) continue;
-    if (re.test(haystack)) return true;
-  }
-  return false;
-}
-
-export function JobChecklistPanel({ jobId }: { jobId: string }) {
-  const { data, isLoading } = useQuery<{
-    success?: boolean;
-    data?: DiaryEntry[];
-  }>({
-    queryKey: ["/api/jobs", jobId, "diary"],
-    queryFn: async () => {
-      const res = await fetch(`/api/jobs/${jobId}/diary`);
-      if (!res.ok) throw new Error("Failed to load diary entries");
-      return res.json();
-    },
-    staleTime: 30_000,
-  });
-
-  const entries = data?.data ?? [];
-
-  const itemsWithStatus = useMemo(
-    () =>
-      CHECKLIST_ITEMS.map((item) => ({
-        ...item,
-        completed: entryMatches(entries, item.triggers),
-      })),
-    [entries],
-  );
-
-  const completedCount = itemsWithStatus.filter((i) => i.completed).length;
-  const totalCount = itemsWithStatus.length;
+export function JobCompletionChecklist({
+  items = DEFAULT_ITEMS,
+}: JobCompletionChecklistProps) {
+  const completedCount = items.filter((item) => item.completed).length;
+  const totalCount = items.length;
   const percent =
     totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
   return (
-    <div className="p-4 w-full" data-testid="job-checklist-panel">
+    <div className="w-full">
       {/* Heading */}
       <div className="mb-5">
         <h2 className="text-lg font-semibold text-foreground mb-1">
@@ -137,7 +88,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         </h2>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Items tick off automatically when matching keywords appear in diary
-          notes.
+          notes. Tap any item to add a note manually.
         </p>
       </div>
 
@@ -164,33 +115,24 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
       </div>
 
       {/* Checklist items */}
-      {isLoading && entries.length === 0 ? (
-        <div className="text-xs text-muted-foreground py-2">
-          Loading diary…
-        </div>
-      ) : (
-        <div className="flex flex-col gap-2.5">
-          {itemsWithStatus.map((item) => (
-            <ChecklistRow key={item.id} item={item} />
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-2.5">
+        {items.map((item) => (
+          <ChecklistRow key={item.id} item={item} />
+        ))}
+      </div>
     </div>
   );
 }
 
-function ChecklistRow({
-  item,
-}: {
-  item: ChecklistItem & { completed: boolean };
-}) {
-  const { id, label, triggers, completed, Icon } = item;
+// ----------------------------------------------------------------------------
+// Row
+// ----------------------------------------------------------------------------
+
+function ChecklistRow({ item }: { item: ChecklistItem }) {
+  const { label, triggers, completed, Icon } = item;
 
   return (
-    <div
-      className="flex items-start gap-3.5 p-4 bg-card border border-border rounded-lg transition-colors hover:bg-accent/30"
-      data-testid={`checklist-item-${id}`}
-    >
+    <div className="flex items-start gap-3.5 p-4 bg-card border border-border rounded-lg transition-colors hover:bg-accent/30">
       {/* Tick circle */}
       <div className="shrink-0 mt-0.5">
         {completed ? (
@@ -246,3 +188,5 @@ function ChecklistRow({
     </div>
   );
 }
+
+export default JobCompletionChecklist;
