@@ -24,7 +24,7 @@ function GoogleG() {
 
 export default function FloatingReviews() {
   return (
-    <div className="fixed left-3 bottom-24 z-50 flex flex-col gap-2 pointer-events-none">
+    <div className="absolute left-3 bottom-3 sm:left-4 sm:bottom-4 z-20 flex flex-col gap-2 pointer-events-none origin-bottom-left scale-50">
 
       {/* Facebook */}
       <div className="pointer-events-auto flex items-center gap-2.5 bg-white rounded-xl px-3 py-2.5 shadow-lg border border-gray-100">
