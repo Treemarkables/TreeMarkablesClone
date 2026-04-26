@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -98,6 +100,7 @@ export default function ContactFormModal({
   onOpenChange,
 }: ContactFormModalProps) {
   const { toast } = useToast();
+  const [isSubmitted, setIsSubmitted] = useState(false);
 
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactFormSchema),
@@ -123,7 +126,7 @@ export default function ContactFormModal({
         });
       }
       form.reset();
-      onOpenChange(false);
+      setIsSubmitted(true);
     },
     onError: (error: Error) => {
       toast({
@@ -140,16 +143,47 @@ export default function ContactFormModal({
     contactMutation.mutate(data);
   };
 
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      setIsSubmitted(false);
+    }
+    onOpenChange(next);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="modal-contact-form">
         <DialogHeader>
-          <DialogTitle className="text-2xl">Send Us an Enquiry</DialogTitle>
+          <DialogTitle className="text-2xl">
+            {isSubmitted ? "Thanks — we'll be in touch" : "Send Us an Enquiry"}
+          </DialogTitle>
           <DialogDescription>
-            Fill out the form below and we'll respond within 24 hours with a free quote
+            {isSubmitted
+              ? "Your enquiry has been received. We'll respond within 24 hours with your free quote."
+              : "Fill out the form below and we'll respond within 24 hours with a free quote"}
           </DialogDescription>
         </DialogHeader>
 
+        {isSubmitted ? (
+          <div className="flex flex-col items-center text-center py-8 gap-4">
+            <CheckCircle2 className="h-14 w-14 text-primary" />
+            <p className="text-foreground">
+              Prefer to talk now? Call us on{" "}
+              <a href="tel:0272166882" className="font-semibold underline">
+                027-216-6882
+              </a>
+              .
+            </p>
+            <Button
+              type="button"
+              size="lg"
+              onClick={() => handleOpenChange(false)}
+              data-testid="button-close-success"
+            >
+              Close
+            </Button>
+          </div>
+        ) : (
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
@@ -351,6 +385,7 @@ export default function ContactFormModal({
             </div>
           </form>
         </Form>
+        )}
       </DialogContent>
     </Dialog>
   );

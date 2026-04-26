@@ -11,6 +11,7 @@ import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import imgPath from "@assets/image_1777183012930.png";
 
 export default function Home() {
   // Add Google tag event script for form submission tracking
@@ -84,16 +85,7 @@ export default function Home() {
       <Header />
       <FloatingReviews />
       <Hero />
-      <section className="py-8 bg-background border-b">
-        <div className="max-w-6xl mx-auto px-6">
-          <ul className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-foreground text-lg md:text-xl font-medium list-disc list-inside">
-            <li>Tree removal</li>
-            <li>Tree pruning</li>
-            <li>Stump grinding</li>
-            <li>Hedge trimming</li>
-          </ul>
-        </div>
-      </section>
+      <img src={imgPath} alt="" className="w-full h-auto block" />
       <ServicesOffered />
       <WhyChooseUs />
       <CTASection />

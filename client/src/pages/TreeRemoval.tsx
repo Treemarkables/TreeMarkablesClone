@@ -8,6 +8,7 @@ import { Shield, Award, Clock, CheckCircle, Phone, Star, AlertTriangle, Scissors
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
+import imgPath from "@assets/image_1777183012930.png";
 
 export default function TreeRemoval() {
   // Add Google tag event script for form submission tracking
@@ -122,16 +123,7 @@ export default function TreeRemoval() {
         </div>
       </section>
 
-      <section className="py-8 bg-background border-b">
-        <div className="max-w-6xl mx-auto px-6">
-          <ul className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-foreground text-lg md:text-xl font-medium list-disc list-inside">
-            <li>Tree removal</li>
-            <li>Tree pruning</li>
-            <li>Stump grinding</li>
-            <li>Hedge trimming</li>
-          </ul>
-        </div>
-      </section>
+      <img src={imgPath} alt="" className="w-full h-auto block" />
 
       {/* Tree services grid */}
       <section className="w-full" data-testid="section-services-grid">
