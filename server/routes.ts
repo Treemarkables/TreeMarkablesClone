@@ -2391,36 +2391,47 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         });
 
         // Step 4: auto-create a job with 'new' status (mirrors the manual
-        // "Create Job as Lead" path in Inbox).
+        // "Create Job as Lead" path in Inbox). If the customer already has a
+        // 'new'-status job, reuse it instead of creating a duplicate — repeat
+        // form submissions should refresh the existing lead, not pile up.
         let createdJob: any = undefined;
+        let reusedExistingJob = false;
         if (customer?.id) {
           try {
-            const jobNumber = await storage.getNextJobNumber();
-            createdJob = await storage.createJob({
-              customerId: customer.id,
-              jobNumber,
-              title: `Lead from ${trimmedName || 'website'}`,
-              description: message.trim(),
-              address: 'Address not specified',
-              status: 'new',
-              priority: 'medium' as const,
-              leadSource: 'website' as const,
-              totalAmount: '0.00',
-              metricsEligible: true,
-              metricsStartDate: new Date(),
-              jobContactPhone: isMobileNumber ? '' : cleanPhone,
-              jobContactMobile: isMobileNumber ? cleanPhone : '',
-            });
-            console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
+            const existingJobs = await storage.getJobsByCustomer(customer.id);
+            const existingNewJob = existingJobs.find(j => j.status === 'new');
+            if (existingNewJob) {
+              createdJob = existingNewJob;
+              reusedExistingJob = true;
+              console.log(`✅ Reusing existing new-status job #${existingNewJob.jobNumber} (${existingNewJob.id}) for customer ${customer.id} — repeat contact form submission`);
+            } else {
+              const jobNumber = await storage.getNextJobNumber();
+              createdJob = await storage.createJob({
+                customerId: customer.id,
+                jobNumber,
+                title: `Lead from ${trimmedName || 'website'}`,
+                description: message.trim(),
+                address: 'Address not specified',
+                status: 'new',
+                priority: 'medium' as const,
+                leadSource: 'website' as const,
+                totalAmount: '0.00',
+                metricsEligible: true,
+                metricsStartDate: new Date(),
+                jobContactPhone: isMobileNumber ? '' : cleanPhone,
+                jobContactMobile: isMobileNumber ? cleanPhone : '',
+              });
+              console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
 
-            if (isNewConversation) {
-              try {
-                await storage.updateConversation(conversation.id, {
-                  status: 'converted',
-                  conversionDate: new Date(),
-                });
-              } catch {
-                // non-critical
+              if (isNewConversation) {
+                try {
+                  await storage.updateConversation(conversation.id, {
+                    status: 'converted',
+                    conversionDate: new Date(),
+                  });
+                } catch {
+                  // non-critical
+                }
               }
             }
           } catch (autoJobErr) {
@@ -2428,10 +2439,12 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           }
         }
 
-        // Step 5: notify operators. If we created a job, fire the new-lead
-        // notification (deep-links to the job). Otherwise fall back to the
-        // generic conversation notification so something still pages us.
-        if (createdJob && customer?.id) {
+        // Step 5: notify operators. Brand new lead → new-lead notification
+        // (deep-links to the job's diary). Repeat submission on an existing
+        // open lead → follow-up notification so it reads as "they pinged us
+        // again" rather than a duplicate lead. Fallbacks cover the rare case
+        // where job creation failed entirely.
+        if (createdJob && customer?.id && !reusedExistingJob) {
           await notificationHelper.createNewLeadNotification({
             jobId: createdJob.id,
             jobNumber: createdJob.jobNumber,
@@ -2443,6 +2456,11 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
             messagePreview: message.trim(),
             conversationId: conversation.id,
           });
+        } else if (createdJob && customer?.id && reusedExistingJob) {
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
+            message.trim()
+          );
         } else if (isNewConversation) {
           await notificationHelper.createConversationNotification(conversation);
         } else {
