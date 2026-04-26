@@ -37,7 +37,6 @@ These files are owned by Replit Agent or are critical infrastructure:
 ## Workflow and deployment rules
 
 - **Never** modify Replit workflows or deployment settings
-- **Never** kill or restart the "Start application" workflow
 - Deployments are managed via Replit — do not attempt to deploy directly
 
 ---
@@ -68,11 +67,29 @@ These files are owned by Replit Agent or are critical infrastructure:
 
 ---
 
-## Coordination with Replit Agent
+## Branch workflow — coordinating with Replit Agent
 
-Replit Agent (the main chat interface) is the primary development agent and owns the overall architecture.
+Replit Agent commits to `main`. Claude works on the `claude` branch. This is the mechanism that prevents overwrites — Git surfaces real merge conflicts instead of silent clobbers.
 
-- Run `git log --oneline -10` before starting work to understand recent changes
-- Make targeted, surgical edits — not broad refactors
-- Never rewrite files that are currently working
-- If unsure whether a change conflicts with recent Replit Agent work, check git history first
+- Before starting work: `git checkout claude && git merge main` to catch up with any commits Replit Agent has made. Resolve conflicts now, not later.
+- Make all edits on `claude`. Never commit directly to `main`.
+- When work is ready to ship, ask the user before merging back to `main`. The user may prefer to merge via GitHub PR (push `claude` to `subrepl-k6pnm9de` and merge in the web UI) or locally.
+- Make targeted, surgical edits — not broad refactors. Never rewrite files that are currently working.
+
+---
+
+## Restarting the backend workflow
+
+After editing backend code under `server/`, restart the backend so the change takes effect. Replit's supervisor does **not** auto-respawn `shell.exec` workflows on crash, so this is two steps:
+
+```
+pkill -f "tsx server/index.ts" 2>/dev/null
+nohup npm run dev > /tmp/backend-dev.log 2>&1 &
+disown
+```
+
+This kills only the backend (`npm run dev` at the repo root → `tsx server/index.ts`) and starts a fresh, detached one. It does not touch the mockup sandbox vite (which runs `npm run dev` inside `artifacts/mockup-sandbox/`).
+
+Wait ~5 seconds, then verify with `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000` (expect `200`).
+
+Only restart when (a) you're on the `claude` branch, and (b) you just edited backend code. Don't restart speculatively.

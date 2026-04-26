@@ -29,7 +29,8 @@
       "Bash(git log *)",
       "Read(//home/runner/.claude/projects/**)",
       "Read(//home/runner/.claude/**)",
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "Bash(pkill:*)"
     ]
   }
 }
