@@ -72,6 +72,7 @@ import {
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
+import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
 // ── Email-thread helpers ────────────────────────────────────────────────────
@@ -603,6 +604,34 @@ export function JobDiarySection({
   const [selectedEmailTemplate, setSelectedEmailTemplate] =
     useState<string>("none");
   const [selectedSmsTemplate, setSelectedSmsTemplate] = useState<string>("");
+
+  // Welcome video prompt — surfaces when a NEW customer replies affirmatively
+  // to a quote-scheduling email and we have a "Welcome video" template ready
+  // to fire. Auto-opens once per session per job; the dismiss/sent state is
+  // tracked server-side via diary entries so it doesn't re-prompt on reload.
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
+  const [welcomeAutoOpened, setWelcomeAutoOpened] = useState(false);
+  const { data: welcomeStatus } = useQuery<{
+    success?: boolean;
+    shouldPrompt?: boolean;
+    customerName?: string;
+    templateAvailable?: boolean;
+  }>({
+    queryKey: ["/api/jobs", jobId, "welcome-prompt-status"],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/welcome-prompt-status`);
+      if (!res.ok) throw new Error("Failed to load welcome prompt status");
+      return res.json();
+    },
+    enabled: !!jobId,
+    staleTime: 30_000,
+  });
+  useEffect(() => {
+    if (welcomeStatus?.shouldPrompt && !welcomeAutoOpened) {
+      setWelcomeModalOpen(true);
+      setWelcomeAutoOpened(true);
+    }
+  }, [welcomeStatus?.shouldPrompt, welcomeAutoOpened]);
 
   // Hoisted confirmation-reply card: session-only dismiss. The persistent
   // hide state comes from a 'confirmation-reply-sent' diary entry — dismissing
@@ -3924,6 +3953,14 @@ export function JobDiarySection({
             </div>
           </DialogContent>
         </Dialog>
+        {welcomeStatus?.customerName && (
+          <WelcomeVideoModal
+            open={welcomeModalOpen}
+            onOpenChange={setWelcomeModalOpen}
+            jobId={jobId}
+            customerName={welcomeStatus.customerName}
+          />
+        )}
       </div>
     </PullToRefresh>
   );
