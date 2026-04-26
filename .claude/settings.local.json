@@ -28,7 +28,8 @@
       "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Account_Transactions_1776905495813.pdf\")",
       "Bash(git log *)",
       "Read(//home/runner/.claude/projects/**)",
-      "Read(//home/runner/.claude/**)"
+      "Read(//home/runner/.claude/**)",
+      "Bash(gh auth *)"
     ]
   }
 }
