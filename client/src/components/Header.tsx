@@ -58,7 +58,7 @@ export default function Header() {
   };
 
   const mainNavLinks = [
-    { href: "/home", label: "Home" },
+    { href: "/", label: "Home" },
     { href: "/blog", label: "Blog" }
   ];
 
@@ -71,12 +71,12 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm h-20 overflow-hidden" style={{ position: 'fixed', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full">
-        <div className="flex items-center justify-between h-full">
-          
+    <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm" style={{ position: 'fixed', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-20 overflow-hidden">
+
           {/* Logo and Brand */}
-          <Link href="/home" className="flex items-center hover-elevate h-full" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate h-full" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 

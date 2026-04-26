@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import FloatingReviews from "@/components/FloatingReviews";
 
 export default function Hero() {
   const handleGetQuote = () => {
@@ -36,6 +37,7 @@ export default function Hero() {
 
         </div>
       </div>
+      <FloatingReviews />
     </section>
   );
 }
