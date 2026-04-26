@@ -122,6 +122,17 @@ export default function TreeRemoval() {
         </div>
       </section>
 
+      <section className="py-8 bg-background border-b">
+        <div className="max-w-6xl mx-auto px-6">
+          <ul className="flex flex-wrap justify-center gap-x-8 gap-y-2 text-foreground text-lg md:text-xl font-medium list-disc list-inside">
+            <li>Tree removal</li>
+            <li>Tree pruning</li>
+            <li>Stump grinding</li>
+            <li>Hedge trimming</li>
+          </ul>
+        </div>
+      </section>
+
       {/* Tree services grid */}
       <section className="w-full" data-testid="section-services-grid">
         <h2 className="sr-only">Tree services section for a Gisborne arborist business with five service cards using more accurate illustrative icons.</h2>
