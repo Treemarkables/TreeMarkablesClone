@@ -2317,38 +2317,67 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         userAgent
       };
 
-      // Create conversation from contact form directly (bypass legacy lead saving)
+      // Auto-create a job/lead directly from the contact form. The customer
+      // explicitly asked for a quote, so we skip the manual "convert conversation
+      // to lead" step and notify the operator about the new lead immediately.
+      const trimmedName = name.trim();
+      const lowerEmail = email.trim().toLowerCase();
+      const cleanPhone = (phone || '').trim().replace(/-/g, '').replace(/\s/g, '');
+      const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
+
+      // Step 1: find or create the customer up front so the conversation, job,
+      // and notification can all be linked to the same record.
+      let customer: any = undefined;
       try {
-        // Check for existing open conversation from this contact
-        let conversation = await notificationHelper.findExistingOpenConversation(email.trim().toLowerCase());
+        if (cleanPhone) {
+          customer = await storage.findCustomerByPhone(cleanPhone);
+        }
+        if (!customer) {
+          customer = await storage.createCustomer({
+            name: trimmedName || 'Unknown',
+            email: lowerEmail,
+            phone: cleanPhone,
+            address: '',
+            contactPreference: 'email' as const,
+            notes: '',
+          });
+        }
+        if (isMobileNumber && cleanPhone && customer?.id) {
+          try {
+            await storage.updateCustomer(customer.id, { mobile: cleanPhone });
+          } catch {
+            // non-critical
+          }
+        }
+      } catch (customerErr) {
+        console.error('Error finding/creating customer for contact form:', customerErr);
+      }
+
+      try {
+        // Step 2: find an existing open conversation or create a new one,
+        // attached to the customer record above.
+        let conversation = await notificationHelper.findExistingOpenConversation(lowerEmail);
         let isNewConversation = !conversation;
 
         if (!conversation) {
-          // Create conversation title from message (first 100 chars) or use default
-          const conversationTitle = message.trim().length > 0 
+          const conversationTitle = message.trim().length > 0
             ? message.trim().substring(0, 100) + (message.length > 100 ? '...' : '')
-            : `New inquiry from ${name}`;
+            : `New inquiry from ${trimmedName}`;
 
           conversation = await storage.createConversation({
+            customerId: customer?.id,
             title: conversationTitle,
             status: 'open',
             priority: 'medium',
             source: 'web_form',
             tags: ['contact-form', 'website']
           });
-
-          // Create notification bell entry for new conversation only
-          await notificationHelper.createConversationNotification(conversation);
           console.log(`✅ Created new conversation for contact form submission: ${conversation.id}`);
         } else {
           console.log(`✅ Found existing open conversation for ${email}, adding message to: ${conversation.id}`);
-          await notificationHelper.notifyConversationReply(
-            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: name },
-            message.trim()
-          );
         }
 
-        // Create initial message in the conversation with contact details
+        // Step 3: append the inbound message to the conversation thread.
         const fullMessage = `Contact Form Submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone || 'Not provided'}\nHow they heard about us: ${hearAbout || 'Not specified'}\n\nMessage:\n${message.trim()}`;
 
         await storage.createConversationMessage({
@@ -2356,10 +2385,72 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           type: 'message',
           content: fullMessage,
           direction: 'inbound',
-          fromName: name.trim(),
-          fromContact: email.trim().toLowerCase(),
+          fromName: trimmedName,
+          fromContact: lowerEmail,
           platform: 'web_form'
         });
+
+        // Step 4: auto-create a job with 'new' status (mirrors the manual
+        // "Create Job as Lead" path in Inbox).
+        let createdJob: any = undefined;
+        if (customer?.id) {
+          try {
+            const jobNumber = await storage.getNextJobNumber();
+            createdJob = await storage.createJob({
+              customerId: customer.id,
+              jobNumber,
+              title: `Lead from ${trimmedName || 'website'}`,
+              description: message.trim(),
+              address: 'Address not specified',
+              status: 'new',
+              priority: 'medium' as const,
+              leadSource: 'website' as const,
+              totalAmount: '0.00',
+              metricsEligible: true,
+              metricsStartDate: new Date(),
+              jobContactPhone: isMobileNumber ? '' : cleanPhone,
+              jobContactMobile: isMobileNumber ? cleanPhone : '',
+            });
+            console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
+
+            if (isNewConversation) {
+              try {
+                await storage.updateConversation(conversation.id, {
+                  status: 'converted',
+                  conversionDate: new Date(),
+                });
+              } catch {
+                // non-critical
+              }
+            }
+          } catch (autoJobErr) {
+            console.error('Error auto-creating job lead from contact form:', autoJobErr);
+          }
+        }
+
+        // Step 5: notify operators. If we created a job, fire the new-lead
+        // notification (deep-links to the job). Otherwise fall back to the
+        // generic conversation notification so something still pages us.
+        if (createdJob && customer?.id) {
+          await notificationHelper.createNewLeadNotification({
+            jobId: createdJob.id,
+            jobNumber: createdJob.jobNumber,
+            customerId: customer.id,
+            customerName: trimmedName || 'Website visitor',
+            customerEmail: lowerEmail,
+            customerPhone: cleanPhone,
+            sourceLabel: 'website',
+            messagePreview: message.trim(),
+            conversationId: conversation.id,
+          });
+        } else if (isNewConversation) {
+          await notificationHelper.createConversationNotification(conversation);
+        } else {
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
+            message.trim()
+          );
+        }
 
       } catch (error) {
         console.error('Error creating conversation from contact form:', error);

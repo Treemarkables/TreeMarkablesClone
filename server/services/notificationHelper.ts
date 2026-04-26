@@ -414,6 +414,74 @@ export async function createConversationNotification(conversation: {
 }
 
 /**
+ * Create notification bell entry + push for a new lead (job auto-created from
+ * a customer-facing form). The bell deep-links to the job's diary tab so the
+ * operator lands directly on the lead.
+ */
+export async function createNewLeadNotification(params: {
+  jobId: string;
+  jobNumber: number | string;
+  customerId: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  sourceLabel: string;
+  messagePreview?: string;
+  conversationId?: string;
+}) {
+  try {
+    const clickAction = `/dispatch?job=${params.jobId}&tab=diary`;
+    const previewText = (params.messagePreview || '').trim();
+    const truncatedPreview = previewText.length > 200
+      ? previewText.substring(0, 200) + '...'
+      : previewText;
+    const bellMessage = truncatedPreview
+      ? `${params.customerName}: ${truncatedPreview}`
+      : `New lead from ${params.customerName}`;
+
+    await storage.createNotification({
+      title: `New ${params.sourceLabel} lead`,
+      message: bellMessage,
+      type: 'new_lead',
+      priority: 'high',
+      actionUrl: clickAction,
+      jobId: params.jobId,
+      customerId: params.customerId,
+      metadata: {
+        jobNumber: params.jobNumber,
+        source: params.sourceLabel,
+        conversationId: params.conversationId,
+        contactEmail: params.customerEmail,
+        contactPhone: params.customerPhone,
+      },
+    });
+
+    const contactBits = [params.customerPhone, params.customerEmail].filter(Boolean).join(' · ');
+    const pushBody = contactBits
+      ? `${params.customerName} (${contactBits})`
+      : params.customerName;
+
+    await pushToAdminsWithCustomerMessages({
+      title: `New ${params.sourceLabel} lead`,
+      body: pushBody,
+      clickAction,
+      data: {
+        type: 'new_lead',
+        jobId: params.jobId,
+        conversationId: params.conversationId || '',
+        source: params.sourceLabel,
+      },
+    });
+
+    console.log(`✅ Created new-lead notification for job ${params.jobId} (#${params.jobNumber})`);
+    return true;
+  } catch (error) {
+    console.error('Error creating new-lead notification:', error);
+    return false;
+  }
+}
+
+/**
  * Send push notification for a reply received on an existing conversation
  * Call this when a customer replies via email, SMS, or any channel
  */
