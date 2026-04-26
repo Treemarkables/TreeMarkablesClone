@@ -4,12 +4,11 @@ import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
-import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Settings, Search, Wrench, Trash2, ShieldCheck, ArrowRight } from "lucide-react";
+import { Shield, Clock, Star, Scissors, TreePine, Phone, AlertTriangle, Settings, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import InquiryForm from "@/components/InquiryForm";
-import stumpGrindingPoster from "@assets/generated_images/219E0642-32F7-4E1D-867F-8EF832B46D73_1_106_c.jpeg";
 const heroBackground = "/stump-grinding-hero.jpg";
 
 const reviews = [
@@ -189,10 +188,10 @@ export default function StumpGrinding() {
               autoPlay
               loop
               playsInline
-              poster={stumpGrindingPoster}
               data-testid="video-stump-grinding-timelapse"
             >
-              <source src="/stump-grinding-timelapse.mp4" type="video/mp4" />
+              <source src="/stump-video.mov" type="video/quicktime" />
+              <source src="/stump-video.mov" type="video/mp4" />
             </video>
           </div>
           <div className="bg-white px-6 py-12 md:px-12 md:py-16 flex flex-col justify-center">
@@ -224,264 +223,144 @@ export default function StumpGrinding() {
         </div>
       </section>
 
-      {/* When to Remove Stumps */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-foreground mb-6">
-              Why Stump Grinding Is Important
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              Professional stump grinding provides multiple benefits for your property's 
-              safety, appearance, and future landscaping potential.
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">
-                    <AlertTriangle className="h-6 w-6 text-red-600 dark:text-red-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Safety First
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Stumps in high-traffic areas are tripping hazards for children, visitors and pets. 
-                  Removing them makes lawns and paddocks safer to use.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center">
-                    <Leaf className="h-6 w-6 text-green-600 dark:text-green-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Pest Prevention
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Decaying stumps attract termites, ants and beetles. 
-                  Grinding removes their habitat and reduces the risk of infestations.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center">
-                    <TreePine className="h-6 w-6 text-blue-600 dark:text-blue-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Prevent Regrowth
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Grinding ensures the tree won't sprout new shoots from the remaining stump, 
-                  saving you from dealing with unwanted saplings.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center">
-                    <Star className="h-6 w-6 text-orange-600 dark:text-orange-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Aesthetic Enhancement
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Grinding eliminates the visual eyesore of stumps and 
-                  improves the look of your landscape.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="hover-elevate">
-              <CardContent className="pt-6 pb-6">
-                <div className="flex justify-center mb-4">
-                  <div className="w-12 h-12 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center">
-                    <MapPin className="h-6 w-6 text-purple-600 dark:text-purple-400" />
-                  </div>
-                </div>
-                <h4 className="text-lg font-semibold text-foreground mb-3 text-center">
-                  Landscaping Flexibility
-                </h4>
-                <p className="text-muted-foreground text-sm leading-relaxed text-center">
-                  Once the stump is gone, you have more space for new plantings, 
-                  garden beds or lawn expansion.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </section>
-
-      {/* Our Stump Grinding Process */}
-      <section className="py-20 bg-background">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-foreground mb-6">
-              Our Stump Grinding Process
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              We follow a systematic approach to ensure complete stump removal 
-              while protecting your property and surrounding landscape.
-            </p>
-          </div>
-          
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <Search className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <h4 className="text-lg font-semibold text-foreground mb-3">
-                1. Assessment
-              </h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                We evaluate the stump's size, species and location to determine the best approach. 
-                Hardwoods like gum or oak may require more time to grind than softwoods like pine.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <Settings className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <h4 className="text-lg font-semibold text-foreground mb-3">
-                2. Specialised Equipment
-              </h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Our modern stump grinders break down the stump below ground level, 
-                allowing you to replant or lay lawn over the area. We can grind to a depth suited to your future landscaping plans.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <Trash2 className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <h4 className="text-lg font-semibold text-foreground mb-3">
-                3. Debris Removal
-              </h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                We can remove the wood chips or leave them for you to use as mulch. 
-                The choice is yours.
-              </p>
-            </div>
-
-            <div className="text-center">
-              <div className="flex justify-center mb-4">
-                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                  <ShieldCheck className="h-8 w-8 text-primary" />
-                </div>
-              </div>
-              <h4 className="text-lg font-semibold text-foreground mb-3">
-                4. Safety & Care
-              </h4>
-              <p className="text-muted-foreground text-sm leading-relaxed">
-                Our team prioritises safety for your property and surrounding structures. 
-                We follow strict protocols to protect underground utilities and nearby plants.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* When to Grind a Stump */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-4xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-foreground mb-6">
-              When to Grind a Stump
-            </h2>
-            <p className="text-lg text-muted-foreground max-w-3xl mx-auto">
-              Timing matters when it comes to stump removal, especially in Gisborne's unique climate conditions.
-            </p>
-          </div>
-          
-          <div className="bg-background rounded-lg p-8 shadow-sm">
-            <div className="space-y-6">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <Clock className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground mb-2">Best Practice Timing</h4>
-                  <p className="text-muted-foreground leading-relaxed">
-                    It's best to grind stumps as soon as possible after <Link href="/tree-removal" className="text-primary hover:text-primary/80 underline">tree removal</Link>. 
-                    Fresh stumps are easier to grind, and quick removal minimises pest and fungal risks.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center flex-shrink-0 mt-1">
-                  <Leaf className="h-4 w-4 text-orange-600 dark:text-orange-400" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-foreground mb-2">Gisborne Climate Considerations</h4>
-                  <p className="text-muted-foreground leading-relaxed">
-                    In Gisborne's damp climate, untreated stumps can rot quickly and become breeding grounds for fungi and insects. 
-                    Our coastal conditions make prompt removal even more important for property health.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="text-center mt-12">
-            <h3 className="text-xl font-semibold text-foreground mb-4">
-              Don't Let Old Stumps Take Up Valuable Space
-            </h3>
-            <p className="text-muted-foreground mb-8 max-w-2xl mx-auto">
-              Contact Treemarkables for professional stump grinding services. We'll inspect your property 
-              and provide a free, no-obligation quote to get your yard back to pristine condition.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" onClick={handleGetQuote} className="text-lg px-6" data-testid="button-quote-process">
-                Get Free Quote
-              </Button>
-              <Button size="lg" variant="outline" onClick={handleCallNow} className="text-lg px-6" data-testid="button-call-process">
-                <Phone className="w-4 h-4 mr-2" />
-                Call Today
-              </Button>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Welcome Section */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-bold text-foreground mb-8">
-            A warm welcome from the team
+      {/* Stump grinding Gisborne — long-form article */}
+      <section className="w-full py-14 md:py-20 px-5 md:px-6 bg-white text-[#1a1a1a]" data-testid="section-stump-article">
+        <article className="max-w-[820px] mx-auto">
+          <h2 className="text-3xl md:text-[38px] font-bold leading-tight text-black mb-4">
+            Stump grinding Gisborne — fast, tidy, done right
           </h2>
-          <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-            We understand that stump removal is often the final step in a bigger project. 
-            Whether you're preparing for new landscaping, building, or just want a clean, 
-            safe yard, we make the process simple and stress-free.
+          <p className="text-[17px] md:text-[19px] leading-relaxed text-[#444] mb-10">
+            Got an old tree stump sitting in your lawn, paddock or driveway? Treemarkables provides professional stump grinding across Gisborne and Tairāwhiti — with the right gear for any job, big or small.
           </p>
-          <p className="text-lg text-muted-foreground leading-relaxed">
-            Our powerful equipment can access tight spaces while our experienced team 
-            ensures minimal disruption to your existing landscape and property.
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            After a tree comes down — whether from a storm, a removal job, or just clearing a section — the stump is usually the bit that gets left behind. And in Gisborne, where lifestyle blocks, coastal sections and big back lawns are the norm, leftover stumps are everywhere. Some have been sitting there for decades, slowly rotting, attracting pests, sprouting fresh shoots, and quietly costing the owner money every time the mower hits one.
           </p>
-        </div>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            That's where we come in. Whether it's a single stump in your front yard or a whole row of old shelter belt remnants on a rural block, we've got the gear and the experience to grind them flush, fast, and tidy.
+          </p>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            Two stump grinders. Any job, any access.
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            This is where most Gisborne tree companies fall short — they've got one machine, and if it doesn't fit through your gate or it can't handle the size, you're stuck. We've solved that problem by running two stump grinders, each built for a completely different job.
+          </p>
+
+          <h4 className="text-[18px] md:text-[19px] font-semibold text-black mt-8 mb-2.5">Compact narrow-access grinder</h4>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Our smaller machine is purpose-built for tight spots. It fits through standard side gates, narrow paths between houses, awkward courtyards, sloped backyards, and any of those hard-to-reach spots where bigger machines simply can't go. If your stump is tucked behind the shed, down the side of the house, or up a steep section, this is the machine for the job.
+          </p>
+
+          <h4 className="text-[18px] md:text-[19px] font-semibold text-black mt-8 mb-2.5">The biggest stump grinder in Gisborne</h4>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            When you've got massive shelter belt stumps, old gum or macrocarpa trunks a metre or more across, or a paddock full of pine stumps to clear, we bring in the heavy gear. Our largest grinder is the biggest stump grinder operating in Gisborne — and it gets through serious work in a fraction of the time other operators can manage. For rural blocks, lifestyle properties and large-scale clearing, this is the machine that earns its keep.
+          </p>
+
+          <div className="bg-[#f6fff3] border-l-4 border-[#39FF14] px-7 py-6 rounded-sm my-8">
+            <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333]">
+              Whatever your stump situation, we've got the right grinder for it — no compromises, no "sorry, we can't reach that one", no quoting you for half a job because the gear can't handle the rest.
+            </p>
+          </div>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            Why grind a stump instead of leaving it?
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Plenty of Gisborne homeowners think "she'll be right" and just leave the stump where it is. Fair enough — but here's why most regret it within a year or two:
+          </p>
+          <ul className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] list-disc pl-[22px] space-y-2.5 mb-6">
+            <li><strong className="text-black">They're a trip hazard.</strong> Especially for kids running around the lawn or guests at a backyard barbecue.</li>
+            <li><strong className="text-black">They damage mowers and ride-ons.</strong> One forgotten stump hidden in long grass can cost you hundreds in repairs.</li>
+            <li><strong className="text-black">They attract pests.</strong> Borer, termites and wood-rot fungi love a damp Gisborne stump — and they don't always stay in the stump.</li>
+            <li><strong className="text-black">They sucker and regrow.</strong> Willow, poplar, gum and wattle will throw up new shoots from a stump for years if it's not ground out properly.</li>
+            <li><strong className="text-black">They look terrible.</strong> A tidy lawn or paddock is worth real money come resale time.</li>
+            <li><strong className="text-black">They take up usable space.</strong> Want to build a deck, lay turf, plant a garden or pour concrete? The stump has to go first.</li>
+          </ul>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Stump grinding solves all of it in one job — usually in less than a day.
+          </p>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            How tree stump grinding actually works
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            A stump grinder is a heavy-duty machine with a rotating cutting wheel that chews the stump down below ground level — typically 150 to 300mm under the surface, depending on what you're planning to do with the area. The wheel works through the stump and the surface roots, turning the whole lot into a pile of fine wood mulch.
+          </p>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Once we're done, the mulch can either be raked back into the hole as backfill, or carted off-site — your call. From there, you can lay topsoil and seed grass over the area within a day or two, or get straight on with paving, planting or building. No chemicals, no waiting, no months of digging out roots by hand.
+          </p>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Compared to the alternatives — chemical stump killers (slow, messy, environmentally questionable) or excavation (expensive, destructive, leaves a massive hole) — grinding is faster, cleaner and cheaper for almost every job.
+          </p>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            Stumps we grind in Gisborne and Tairāwhiti
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            We grind every species you'll find on a Gisborne section, including:
+          </p>
+          <ul className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] list-disc pl-[22px] space-y-2.5 mb-6">
+            <li><strong className="text-black">Pine, macrocarpa and gum</strong> — common shelter belt species across rural Gisborne and the East Coast</li>
+            <li><strong className="text-black">Willow and poplar</strong> — frequent along riverbanks and farm boundaries, notorious for resprouting if not ground properly</li>
+            <li><strong className="text-black">Liquidambar, oak and plane</strong> — established residential trees with deep, awkward root flares</li>
+            <li><strong className="text-black">Pohutukawa and native species</strong> — handled with care, and with council consent where required</li>
+            <li><strong className="text-black">Fruit trees</strong> — old apples, plums, pears and citrus that have outlived their use</li>
+            <li><strong className="text-black">Stumps left by other contractors</strong> — happens all the time; we'll grind out what someone else couldn't finish</li>
+          </ul>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            No stump is too big and no spot is too tight. Between our two machines, we've got it covered.
+          </p>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            Why choose Treemarkables for stump grinding in Gisborne?
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            We're a locally owned and operated tree care company based right here in Gisborne. Stump grinding isn't a sideline for us — it's a core part of what we do, every week, across Tairāwhiti.
+          </p>
+          <ul className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] list-disc pl-[22px] space-y-2.5 mb-6">
+            <li><strong className="text-black">Two stump grinders</strong> — narrow-access for tight spots, plus the biggest grinder in Gisborne for the heavy stuff</li>
+            <li><strong className="text-black">Free, no-obligation quotes</strong> — we come to your property, eyeball the job, and give you a fair price up front</li>
+            <li><strong className="text-black">Qualified arborists and trained operators</strong> — not a bloke with a hire-shop grinder</li>
+            <li><strong className="text-black">Full insurance</strong> — public liability cover on every job</li>
+            <li><strong className="text-black">Tidy site at the end</strong> — mulch raked back into the hole or carted away, your choice</li>
+            <li><strong className="text-black">The Treemarkables guarantee</strong> — if we haven't delivered on what we agreed, we'll come back and sort it. No questions, no fuss.</li>
+          </ul>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            How much does stump grinding cost in Gisborne?
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Stump grinding pricing depends on a few things: the diameter of the stump, how deep you need it ground, how accessible the site is, and how many stumps need doing. Single residential stumps are usually a flat-rate job, while multiple stumps or rural work is priced as a package. We don't do over-the-phone guesses — they're never accurate, and they tend to either undersell the customer or oversell us.
+          </p>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            Send us a photo or two and we'll give you a real number, fast. Or we'll come out and have a look — no charge, no pressure.
+          </p>
+
+          <h3 className="text-[22px] md:text-[26px] font-bold leading-snug text-black mt-9 md:mt-12 mb-4">
+            Areas we cover
+          </h3>
+          <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-[18px]">
+            We provide stump grinding services across all of Gisborne and Tairāwhiti, including Gisborne city, Kaiti, Mangapapa, Elgin, Te Hapara, Wainui, Makaraka, Patutahi, Manutūkē, Te Karaka, Tolaga Bay, Tokomaru Bay, Ruatoria and surrounding rural and coastal areas. Not sure if you're in our patch? Give us a call — chances are we've worked nearby.
+          </p>
+
+          <div className="bg-[#fafafa] rounded-xl text-center px-6 py-10 mt-12">
+            <h4 className="text-[22px] md:text-2xl font-bold text-black mb-4">
+              Ready to get rid of that stump?
+            </h4>
+            <p className="text-[16px] md:text-[17px] leading-[1.7] text-[#333] mb-3">
+              Stop tripping over it. Stop dodging it with the mower. Get a free quote from the Gisborne stump grinding specialists.
+            </p>
+            <Button
+              onClick={handleGetQuote}
+              size="lg"
+              className="rounded-lg px-8"
+              data-testid="button-stump-article-cta"
+            >
+              Get a free quote
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+          </div>
+        </article>
       </section>
 
       {/* Simple Credentials */}
