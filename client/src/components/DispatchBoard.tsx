@@ -3018,6 +3018,27 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </div>
           </div>
           )}
+          {(jobFilter === "scheduled" ||
+            jobFilter === "work_order" ||
+            jobFilter === "all") &&
+            unconfirmedCount > 0 && (
+              <div className="bg-background border-b px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setOnlyUnconfirmed(!onlyUnconfirmed)}
+                  aria-pressed={onlyUnconfirmed}
+                  data-testid="badge-unconfirmed-count-mobile"
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    onlyUnconfirmed
+                      ? "border-amber-500 bg-amber-100 text-amber-800"
+                      : "border-dashed border-amber-400 bg-amber-50 text-amber-700"
+                  }`}
+                >
+                  <span>{unconfirmedCount} awaiting confirmation</span>
+                  {onlyUnconfirmed && <X className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+            )}
           </div>{/* end header group */}
 
           {/* Jobs List - scrollable area with pull-to-refresh */}
