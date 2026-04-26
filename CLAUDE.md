@@ -67,6 +67,23 @@ These files are owned by Replit Agent or are critical infrastructure:
 
 ---
 
+## Design system (marketing pages)
+
+| Concern | Convention |
+|---------|------------|
+| Brand neon-green | `#39FF14` — use for icon circles, accent borders/highlights, brand CTAs |
+| Header bar | Black background (`bg-black`), neon-green text/links, fixed `h-20`. Logo is `h-40` deliberately overflowing — keep `overflow-hidden` on the **top-bar flex row**, not on the `<header>` itself, or the mobile menu drop-down breaks |
+| Icon library | `lucide-react` only (not Heroicons / Material). Brand-specific icons via `react-icons/si` (e.g., `SiFacebook`) |
+| Standard CTA | Shadcn `<Button>` component. **Never** raw `<button>` with manual `hover:bg-*` / `active:bg-*` |
+| "Get a quote" / "Contact" CTAs | Open `<ContactFormModal>` pop-up (set `isQuoteModalOpen` state). Only the home page uses scroll-to-form via `handleGetQuote` — service pages use the modal |
+| Card layouts | `bg-card border border-border rounded-lg` — Shadcn theme tokens, auto-handle dark mode. Don't hand-pick gray-100/gray-700 dark variants |
+| Image gallery | Reuse `<PhotoSlider>` (`client/src/components/PhotoSlider.tsx`) — handles full-width slider + tap-to-expand modal, mobile-tuned (~80vw thumbs, ~95vw modal) |
+| Service-page layout | Hero (full bleed bg) → `<InquiryForm>` section (`bg-muted/30`) → `<PhotoSlider>` → image-left/text-right intro section → article/why-choose → testimonials → FAQ → contact. Stick to this rhythm so pages feel consistent |
+| Hero copy on service pages | Single `<h1>` per page, white text on dark/image bg, one primary CTA + phone CTA |
+| Page top padding | `pt-20` (or responsive `pt-16 md:pt-20 lg:pt-24`) to clear the fixed header |
+
+---
+
 ## Branch workflow — coordinating with Replit Agent
 
 Replit Agent commits to `main`. Claude works on the `claude` branch. This is the mechanism that prevents overwrites — Git surfaces real merge conflicts instead of silent clobbers.
