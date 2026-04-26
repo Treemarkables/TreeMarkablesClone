@@ -8,7 +8,7 @@ import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, Map
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import imgPath from "@assets/image_1777183012930.png";
+import InquiryForm from "@/components/InquiryForm";
 const heroImage = "/tree-pruning.jpg";
 
 interface Review {
@@ -172,7 +172,11 @@ export default function TreePruning() {
         </div>
       </section>
 
-      <img src={imgPath} alt="" className="w-full h-auto block" />
+      <section className="py-10 md:py-14 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
+          <InquiryForm />
+        </div>
+      </section>
 
       {/* Tree Care Philosophy */}
       <section className="py-20 bg-background">
