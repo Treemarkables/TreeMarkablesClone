@@ -50,6 +50,31 @@ export function useDispatchSearchOpen(): [boolean, (v: boolean) => void] {
   return [open, setDispatchSearchOpen];
 }
 
+// ── Only Unconfirmed Toggle ───────────────────────────────────────────────────
+let _onlyUnconfirmed = false;
+const _onlyUnconfirmedListeners = new Set<() => void>();
+
+function notifyOnlyUnconfirmed() {
+  _onlyUnconfirmedListeners.forEach((fn) => fn());
+}
+
+export function setOnlyUnconfirmed(v: boolean) {
+  _onlyUnconfirmed = v;
+  notifyOnlyUnconfirmed();
+}
+
+export function useOnlyUnconfirmed(): [boolean, (v: boolean) => void] {
+  const [v, setLocal] = useState(_onlyUnconfirmed);
+
+  useEffect(() => {
+    const sync = () => setLocal(_onlyUnconfirmed);
+    _onlyUnconfirmedListeners.add(sync);
+    return () => { _onlyUnconfirmedListeners.delete(sync); };
+  }, []);
+
+  return [v, setOnlyUnconfirmed];
+}
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 export const DISPATCH_STATUS_FILTERS = [
   { value: "lead",       label: "Lead" },
