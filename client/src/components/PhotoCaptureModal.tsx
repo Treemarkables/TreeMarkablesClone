@@ -276,7 +276,7 @@ export function PhotoCaptureModal({
                 >
                   <Upload className="w-8 h-8" />
                   <span className="text-base font-medium">
-                    Choose Multiple Files
+                    {isMobile ? "Choose from Library" : "Choose Multiple Files"}
                   </span>
                 </label>
               </div>
