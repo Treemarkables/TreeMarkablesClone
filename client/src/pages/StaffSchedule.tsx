@@ -1,9 +1,12 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
 import { addDays, format, isToday } from 'date-fns';
 import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply, MessageSquare } from 'lucide-react';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import type { Job as BaseJob, Employee } from '@shared/schema';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { apiRequest } from '@/lib/queryClient';
+import { useToast } from '@/hooks/use-toast';
 
 type Job = BaseJob & {
   confirmationReplySentAt?: string | Date | null;
@@ -175,6 +178,24 @@ export default function StaffSchedule() {
 
   const dateStr = nzDateStr(selectedDate);
   const isTodaySelected = isToday(selectedDate);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const setDayRoleMutation = useMutation({
+    mutationFn: async (vars: { employeeId: string; date: string; dayRole: 'A' | 'B' | null }) => {
+      const res = await apiRequest('PUT', '/api/staff-assignments/day-role', vars);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      queryClient.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey)
+          && q.queryKey[0] === '/api/jobs'
+          && q.queryKey[2] === 'staff-assignments',
+      });
+    },
+    onError: (e: Error) => toast({ title: 'Failed to set role', description: e.message, variant: 'destructive' }),
+  });
 
   // ── Queries ──
   // Use a date-scoped endpoint so we fetch only the few jobs for this day, not all 3500+
@@ -592,6 +613,23 @@ export default function StaffSchedule() {
                       <p className="text-[10px] text-gray-400 leading-tight">
                         {empSlots.length} job{empSlots.length !== 1 ? 's' : ''}
                       </p>
+                      {empSlots.length > 0 && (
+                        <ToggleGroup
+                          type="single"
+                          size="sm"
+                          value={(empSlots.find(s => s.assignment?.dayRole)?.assignment?.dayRole as 'A' | 'B' | undefined) ?? ''}
+                          onValueChange={(v) => setDayRoleMutation.mutate({
+                            employeeId: emp.id,
+                            date: dateStr,
+                            dayRole: v === 'A' || v === 'B' ? v : null,
+                          })}
+                          className="mt-1 justify-start"
+                          aria-label="Day role"
+                        >
+                          <ToggleGroupItem value="A" className="h-5 px-1.5 text-[10px]">A</ToggleGroupItem>
+                          <ToggleGroupItem value="B" className="h-5 px-1.5 text-[10px]">B</ToggleGroupItem>
+                        </ToggleGroup>
+                      )}
                     </div>
                   </div>
 
