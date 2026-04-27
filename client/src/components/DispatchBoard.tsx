@@ -92,6 +92,7 @@ import {
   addMinutes,
 } from "date-fns";
 import { nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
+import { statusAfterBooking } from "@shared/jobStatus";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -2038,13 +2039,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       scheduledDate: startDateTime.toISOString(),
       estimatedDuration: fractionalDurationHours,
     };
-    if (
-      job.status !== "scheduled" &&
-      job.status !== "completed" &&
-      job.status !== "invoiced" &&
-      job.status !== "archived"
-    ) {
-      updates.status = "scheduled";
+    const next = statusAfterBooking(job.status);
+    if (next && next !== job.status) {
+      updates.status = next;
     }
 
     setIsConfirmingDrop(true);
@@ -2186,16 +2183,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       specialInstructions: schedulingData.notes,
     };
 
-    // When booking a job in, advance its status to 'scheduled' if it isn't already
-    // (e.g. a quote that's been accepted and is now being scheduled)
-    if (
-      jobToSchedule &&
-      jobToSchedule.status !== "scheduled" &&
-      jobToSchedule.status !== "completed" &&
-      jobToSchedule.status !== "invoiced" &&
-      jobToSchedule.status !== "archived"
-    ) {
-      updates.status = "scheduled";
+    // Booking-driven status transition: lead → quote (site visit), quote
+    // or work_order → scheduled (work crew). statusAfterBooking returns
+    // null when the current status shouldn't change.
+    if (jobToSchedule) {
+      const next = statusAfterBooking(jobToSchedule.status);
+      if (next && next !== jobToSchedule.status) {
+        updates.status = next;
+      }
     }
 
     // Handle assignment based on mode (only if staff/team was actually selected)

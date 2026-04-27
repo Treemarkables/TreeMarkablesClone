@@ -85,6 +85,7 @@ import fs from "fs";
 import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime } from "@shared/dateUtils";
+import { statusAfterBooking } from "@shared/jobStatus";
 import { AutomatedTriggers } from "./services/automatedTriggers";
 import { workflowAutomationService } from "./services/workflowAutomation";
 import { businessIntelligenceService } from "./services/businessIntelligence";
@@ -8541,7 +8542,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
                   const job = await storage.createJob({
                     customerId: customer.id,
-                    status: jobData.urgency === 'emergency' ? 'in-progress' : 'scheduled',
+                    status: 'lead',
                     address: jobData.address || customer.address || 'TBD',
                     serviceType: jobData.serviceType || 'other',
                     priority: jobData.urgency === 'emergency' ? 'urgent' : 'normal',
@@ -12843,9 +12844,10 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Update job's assignedTeam (deduplicated)
       const employeeIds = uniqueEmployeeIds;
       if (job) {
+        const next = statusAfterBooking(job.status);
         await storage.updateJob(jobId, {
           assignedTeam: employeeIds,
-          status: 'scheduled'
+          ...(next ? { status: next } : {}),
         });
       }
 
@@ -24982,12 +24984,13 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         // Actual start/end wall-clock times are kept in scheduledStartTime/scheduledEndTime strings.
         const scheduledDate = new Date(targetDate);
         const equipsForJob = resolvedEquipmentByJob[pj.jobId] || [];
+        const next = statusAfterBooking(job.status);
         const updated = await storage.updateJob(pj.jobId, {
           scheduledDate,
           scheduledStartTime: pj.proposedStartTime || '08:00',
           scheduledEndTime: pj.proposedEndTime || '17:00',
           assignedTeam: pj.assignedStaffIds || [],
-          status: 'scheduled',
+          ...(next ? { status: next } : {}),
           ...(equipsForJob.length > 0 ? { equipment: equipsForJob } : {}),
         });
         updatedJobs.push(updated);
@@ -25530,11 +25533,12 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         return res.json({ success: true, shouldPrompt: false, customerName: customer?.name });
       }
 
-      // Only prompt while the job is still a fresh lead. Once a quote has
-      // been sent the job moves to 'quote' (and beyond), at which point the
-      // welcome-video acknowledgement is no longer relevant — the quote is
-      // the next customer touchpoint, not a welcome email.
-      const isLeadStatus = job.status === 'lead' || job.status === 'new';
+      // Prompt during early-funnel stages: 'lead' (no booking yet) and
+      // 'quote' (site visit booked but no proposal drafted — booking-driven
+      // status now flips lead → quote). The hasProposal guard below
+      // suppresses the prompt once a proposal exists.
+      const isEarlyStage =
+        job.status === 'lead' || job.status === 'new' || job.status === 'quote';
 
       // Site visit booked = a date is on the job. This is the "start of
       // communication" trigger the user wants — no booking, no prompt.
@@ -25566,7 +25570,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       );
 
       const shouldPrompt =
-        isLeadStatus &&
+        isEarlyStage &&
         siteVisitBooked &&
         isNew &&
         !hasProposal &&

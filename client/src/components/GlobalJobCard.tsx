@@ -339,7 +339,8 @@ export function GlobalJobCard({
   const [pendingLinkClient, setPendingLinkClient] = useState<Customer | null>(null);
 
   const { toast: _originalToast } = useToast();
-  const toast = () => {}; // Disabled - user preference: no toast notifications
+  // Disabled per user preference — stable reference prevents paste-handler effect from re-running on every render
+  const toast = useCallback(() => {}, []);
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { isAdmin, currentUser } = useAuth();
@@ -1160,6 +1161,38 @@ export function GlobalJobCard({
   // Keep ref updated with current job ID for clipboard paste handler
   useEffect(() => {
     currentJobIdRef.current = editingJob?.id || null;
+  }, [editingJob?.id]);
+
+  // Close all sub-dialogs when switching to a different job while the card stays mounted.
+  // Without this, a sub-dialog open for Job A (e.g. scheduling, description popup) would
+  // persist its overlay when the user clicks Job B — making the new card appear non-interactive.
+  const prevJobIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const newId = editingJob?.id;
+    if (prevJobIdRef.current !== undefined && prevJobIdRef.current !== newId) {
+      setDescriptionPopupOpen(false);
+      setInternalNotesPopupOpen(false);
+      setIsSchedulingModalOpen(false);
+      setIsEmailComposerOpen(false);
+      setIsSMSComposerOpen(false);
+      setIsQuoteModalOpen(false);
+      setIsInvoiceModalOpen(false);
+      setIsProposalViewerOpen(false);
+      setIsProposalBuilderOpen(false);
+      setIsProfitTrackerOpen(false);
+      setIsStaffTimeDialogOpen(false);
+      setIsExpenseDialogOpen(false);
+      setIsTimeTrackingOpen(false);
+      setIsPhotoCaptureOpen(false);
+      setIsSpeechToQuoteOpen(false);
+      setIsCatalogModalOpen(false);
+      setGearDialogOpen(false);
+      setCallPickerOpen(false);
+      setCancelBookingDialogOpen(false);
+      setLinkClientDialogOpen(false);
+    }
+    prevJobIdRef.current = newId;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingJob?.id]);
 
   // Auto-sync payment status from Xero when a job card opens
@@ -4477,11 +4510,11 @@ The Treemarkables Team`;
           {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
           <div className="flex items-center gap-3 sm:gap-4">
 
-            {/* Close button - Mobile only (hidden in inline mode) */}
+            {/* Close button - Dialog mode only (hidden when inline split-panel is used at lg+) */}
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden h-7 w-7 text-gray-600 hover:bg-gray-100"
+              className="lg:hidden h-7 w-7 text-gray-600 hover:bg-gray-100"
               onClick={onClose}
               data-testid="button-close-mobile"
             >
