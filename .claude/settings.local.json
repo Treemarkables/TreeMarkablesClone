@@ -32,7 +32,9 @@
       "Bash(gh auth *)",
       "Bash(pkill:*)",
       "Bash(git -C /home/runner/workspace log --oneline)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(nohup npm *)",
+      "Bash(disown)"
     ]
   }
 }

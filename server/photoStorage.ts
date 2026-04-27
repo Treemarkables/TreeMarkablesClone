@@ -35,13 +35,16 @@ async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
   const fontSize = Math.max(48, Math.round(w / 18));
   const padX = Math.round(fontSize * 0.6);
   const padY = Math.round(fontSize * 0.3);
-  const boxW = Math.round(label.length * fontSize * 0.62 + padX * 2);
+  const letterSpacing = 2;
+  const boxW = Math.round(
+    label.length * fontSize * 0.72 + (label.length - 1) * letterSpacing + padX * 2,
+  );
   const boxH = Math.round(fontSize + padY * 2);
   const offset = Math.round(fontSize * 0.6);
   const svg = `<svg width="${boxW}" height="${boxH}" xmlns="http://www.w3.org/2000/svg">
     <rect x="0" y="0" width="${boxW}" height="${boxH}" rx="${Math.round(boxH / 2)}" fill="rgba(0,0,0,0.65)"/>
     <text x="${padX}" y="${Math.round(fontSize + padY * 0.7)}" font-family="Inter, Arial, sans-serif"
-          font-size="${fontSize}" font-weight="700" fill="white" letter-spacing="2">${label}</text>
+          font-size="${fontSize}" font-weight="700" fill="white" letter-spacing="${letterSpacing}">${label}</text>
   </svg>`;
   return sharp(buffer)
     .composite([{ input: Buffer.from(svg), top: offset, left: offset }])

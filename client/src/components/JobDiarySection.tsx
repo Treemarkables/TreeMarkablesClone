@@ -3783,14 +3783,46 @@ export function JobDiarySection({
             <div className="p-4 border-t flex-shrink-0 flex gap-2">
               <Button
                 className="flex-1"
-                onClick={() => {
+                onClick={async () => {
                   if (
-                    viewingPhotoIndex !== null &&
-                    allPhotos[viewingPhotoIndex]
+                    viewingPhotoIndex === null ||
+                    !allPhotos[viewingPhotoIndex]
                   ) {
+                    return;
+                  }
+                  const url = allPhotos[viewingPhotoIndex];
+                  const filename = `job-photo-${viewingPhotoIndex + 1}-${Date.now()}.jpg`;
+                  try {
+                    const response = await fetch(url, { credentials: "include" });
+                    const rawBlob = await response.blob();
+                    const blob =
+                      rawBlob.type && rawBlob.type.startsWith("image/")
+                        ? rawBlob
+                        : new Blob([rawBlob], { type: "image/jpeg" });
+                    const file = new File([blob], filename, { type: blob.type });
+                    if (
+                      typeof navigator.canShare === "function" &&
+                      navigator.canShare({ files: [file] })
+                    ) {
+                      try {
+                        await navigator.share({ files: [file] });
+                        return;
+                      } catch (shareErr: any) {
+                        if (shareErr?.name === "AbortError") return;
+                      }
+                    }
+                    const blobUrl = URL.createObjectURL(blob);
                     const link = document.createElement("a");
-                    link.href = allPhotos[viewingPhotoIndex];
-                    link.download = `job-photo-${viewingPhotoIndex + 1}-${Date.now()}.jpg`;
+                    link.href = blobUrl;
+                    link.download = filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                  } catch {
+                    const link = document.createElement("a");
+                    link.href = url;
+                    link.download = filename;
                     document.body.appendChild(link);
                     link.click();
                     document.body.removeChild(link);
