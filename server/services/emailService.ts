@@ -97,13 +97,13 @@ class EmailService {
       const fromEmail = params.from || configuredFromEmail || this.defaultFromEmail;
       
       // Map attachments to Resend format
-      // Resend accepts 'filename', 'content', and 'contentType' only
-      // Note: Image attachments may display inline depending on email client behavior
+      // Resend SDK Attachment$1 interface uses camelCase: contentType, contentId
+      // parseAttachments() internally converts: contentType→content_type, contentId→content_id
       const resendAttachments = params.attachments?.map(att => ({
         filename: att.filename,
         content: Buffer.from(att.content, 'base64'),
         contentType: att.type,
-        ...(att.content_id ? { content_id: att.content_id } : {})
+        ...(att.content_id ? { contentId: att.content_id } : {})
       }));
 
       // Build email payload for Resend

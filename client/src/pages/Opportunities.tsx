@@ -300,6 +300,10 @@ export default function Opportunities() {
     mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
       console.log("🔵 Starting job/quote creation with data:", leadData);
 
+      // Capture the source conversation at mutation time so the closure below
+      // (mark-as-converted) isn't racing with the dialog closing.
+      const sourceConversationId = selectedConversation?.id;
+
       // First, create or find customer
       const customerRes = await apiRequest("POST", "/api/customers", {
         name: leadData.name,
@@ -315,7 +319,9 @@ export default function Opportunities() {
       const cleanPhone = (leadData.phone || "").replace(/\s/g, "");
       const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
 
-      // Create a job with status "quote" so it shows up on dispatch board
+      // Create a job with status "quote" so it shows up on dispatch board.
+      // conversationId threads through so the server can dedupe against an
+      // already-converted conversation and avoid inserting a second job row.
       const jobData = {
         customerId: customerId,
         title: leadData.name,
@@ -331,12 +337,27 @@ export default function Opportunities() {
         paidAmount: "0.00",
         jobContactPhone: isMobileNumber ? "" : leadData.phone || "",
         jobContactMobile: isMobileNumber ? leadData.phone || "" : "",
+        conversationId: sourceConversationId,
       };
 
       console.log("🔵 Creating job with data:", jobData);
       const jobRes = await apiRequest("POST", "/api/jobs", jobData);
       const jobResponseData = await jobRes.json();
       console.log("✅ Job created:", jobResponseData);
+
+      // Mark the source conversation as converted so the Create Job menu
+      // item is disabled on re-entry — mirrors GlobalJobCard.tsx:1958-1982.
+      if (sourceConversationId) {
+        try {
+          await apiRequest("PATCH", `/api/conversations/${sourceConversationId}`, {
+            status: "converted",
+          });
+          queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+        } catch (err) {
+          console.error("Failed to mark conversation as converted:", err);
+        }
+      }
+
       return jobResponseData;
     },
     onSuccess: () => {
@@ -792,8 +813,10 @@ export default function Opportunities() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem
+                          disabled={conversation.status === "converted"}
                           onClick={async (e) => {
                             e.stopPropagation();
+                            if (conversation.status === "converted") return;
                             setSelectedConversation(conversation);
 
                             // Fetch messages for this conversation to extract contact details

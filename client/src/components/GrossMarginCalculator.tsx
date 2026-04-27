@@ -138,8 +138,8 @@ export function GrossMarginCalculator({
   const staffTimeLaborCost = staffTimeEntries.reduce(
     (sum: number, entry: any) => {
       const hours = Number(entry.hours) || 0;
-      const rate = Number(entry.rate) || 0;
-      return sum + hours * rate;
+      const costRate = Number(entry.costRate ?? entry.rate) || 0;
+      return sum + hours * costRate;
     },
     0,
   );
@@ -241,13 +241,19 @@ export function GrossMarginCalculator({
     },
   });
 
-  // Calculate total revenue from job line items - read-only consumer
+  // Calculate total revenue from job line items — GST-exclusive, so gross
+  // margin compares ex-GST revenue against ex-GST costs. If a line item's
+  // unitPrice already includes GST, strip it before summing. Otherwise the
+  // margin would be inflated by the GST component, which belongs to IRD.
   const calculateJobLineItemsTotal = (jobLineItems: any[]): number => {
     if (!Array.isArray(jobLineItems)) return 0;
     return jobLineItems.reduce((sum, item) => {
       const quantity = parseFloat(item.quantity || 0);
       const unitPrice = parseFloat(item.unitPrice || 0);
-      return sum + quantity * unitPrice;
+      const lineTotal = quantity * unitPrice;
+      const isInclusive = item.priceIncludesTax === true;
+      const taxRate = (parseFloat(item.taxRate ?? 15) || 15) / 100;
+      return sum + (isInclusive ? lineTotal / (1 + taxRate) : lineTotal);
     }, 0);
   };
 
@@ -289,10 +295,12 @@ export function GrossMarginCalculator({
   const getJobPrice = (): number => {
     if (!job) return 0;
 
-    // First check invoices - the most authoritative source of revenue (ex-GST amount)
+    // First check invoices - the most authoritative source of revenue.
+    // invoice.amount is stored inc-GST (NZ 15%), so divide to get ex-GST revenue
+    // for internal margin calculations (consistent with getDashboardStats / getRevenueStats).
     if (jobInvoices.length > 0) {
       const totalInvoiced = jobInvoices.reduce((sum: number, inv: any) => {
-        return sum + (Number(inv.amount) || 0);
+        return sum + (Number(inv.amount) || 0) / 1.15;
       }, 0);
       if (totalInvoiced > 0) {
         return totalInvoiced;
@@ -321,13 +329,23 @@ export function GrossMarginCalculator({
       }
     }
 
-    // Fall back to job line items or job.totalAmount
+    // Fall back to job line items (already ex-GST via calculateJobLineItemsTotal),
+    // then job.subtotal (ex-GST by definition), then strip GST off totalAmount
+    // (which is stored inclusive of GST on the server).
     const jobLineItemsTotal = calculateJobLineItemsTotal(job?.lineItems || []);
-    return jobLineItemsTotal > 0
-      ? jobLineItemsTotal
-      : job?.totalAmount
-        ? parseFloat(job.totalAmount)
-        : 0;
+    if (jobLineItemsTotal > 0) return jobLineItemsTotal;
+
+    const subtotalStr = (job as any).subtotal;
+    if (subtotalStr) {
+      const subtotal = parseFloat(subtotalStr);
+      if (subtotal > 0) return subtotal;
+    }
+
+    if (job?.totalAmount) {
+      const taxRate = (parseFloat((job as any).taxRate || "15") || 15) / 100;
+      return parseFloat(job.totalAmount) / (1 + taxRate);
+    }
+    return 0;
   };
 
   const jobLineItemsCosts = calculateJobLineItemsCosts(job?.lineItems || []);
@@ -546,7 +564,7 @@ export function GrossMarginCalculator({
               </Card>
             ))}
             <div className="text-right pt-2 border-t">
-              <div className="text-sm text-gray-600">Total Revenue</div>
+              <div className="text-sm text-gray-600">Total Revenue (exc. GST)</div>
               <div className="text-lg font-bold text-green-700">
                 ${jobLineItemsTotal.toFixed(2)}
               </div>
@@ -575,7 +593,7 @@ export function GrossMarginCalculator({
           <h3 className="font-semibold mb-3">Cost Breakdown</h3>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between font-semibold text-green-700 border-b pb-2 mb-2">
-              <span>Job Revenue:</span>
+              <span>Job Revenue (exc. GST):</span>
               <span>${totalAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between">

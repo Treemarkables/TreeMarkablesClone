@@ -76,17 +76,20 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     ];
 
     const setup = async () => {
-      for (const [event, handlerKey] of eventMap) {
-        const handle = await TwilioVoice.addListener(event, (data) => {
-          const handler = optionsRef.current[handlerKey] as
-            | ((d: CallEvent) => void)
-            | undefined;
-          handler?.(data as CallEvent);
-        });
-        listenersRef.current.push(handle);
+      try {
+        for (const [event, handlerKey] of eventMap) {
+          const handle = await TwilioVoice.addListener(event, (data) => {
+            const handler = optionsRef.current[handlerKey] as
+              | ((d: CallEvent) => void)
+              | undefined;
+            handler?.(data as CallEvent);
+          });
+          listenersRef.current.push(handle);
+        }
+        await fetchTokenAndRegister();
+      } catch (err) {
+        console.warn("[TwilioVoice] Native plugin not available:", err);
       }
-
-      await fetchTokenAndRegister();
     };
 
     setup();

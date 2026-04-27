@@ -1,0 +1,465 @@
+{
+  "account_id": "215-149-0929",
+  "currency": "NZD",
+  "timezone": "Pacific/Auckland",
+  "location_targeting": {
+    "radius_km": 15,
+    "cities": [
+      "Gisborne"
+    ]
+  },
+  "campaigns": [
+    {
+      "name": "Treemarkables - Tree Removal",
+      "daily_budget": 18.0,
+      "status": "ENABLED",
+      "campaign_type": "SEARCH",
+      "ad_network": "GOOGLE_SEARCH",
+      "description": "High-intent tree removal searches in Gisborne area",
+      "bid_strategy": "MAXIMIZE_CONVERSIONS",
+      "bid_adjustments": {
+        "schedule": [
+          {
+            "day_of_week": "MONDAY",
+            "start_hour": 7,
+            "end_hour": 17,
+            "bid_modifier": 1.2
+          },
+          {
+            "day_of_week": "TUESDAY",
+            "start_hour": 7,
+            "end_hour": 17,
+            "bid_modifier": 1.2
+          },
+          {
+            "day_of_week": "WEDNESDAY",
+            "start_hour": 7,
+            "end_hour": 17,
+            "bid_modifier": 1.2
+          },
+          {
+            "day_of_week": "THURSDAY",
+            "start_hour": 7,
+            "end_hour": 17,
+            "bid_modifier": 1.2
+          },
+          {
+            "day_of_week": "FRIDAY",
+            "start_hour": 7,
+            "end_hour": 17,
+            "bid_modifier": 1.2
+          }
+        ]
+      },
+      "keywords": [
+        {
+          "text": "tree removal Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 3.5
+        },
+        {
+          "text": "tree removal near me",
+          "match_type": "PHRASE",
+          "bid_amount": 3.2
+        },
+        {
+          "text": "remove tree Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 3.0
+        },
+        {
+          "text": "tree felling Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 2.8
+        },
+        {
+          "text": "hazardous tree removal",
+          "match_type": "PHRASE",
+          "bid_amount": 3.5
+        },
+        {
+          "text": "large tree removal",
+          "match_type": "PHRASE",
+          "bid_amount": 2.9
+        },
+        {
+          "text": "dead tree removal",
+          "match_type": "PHRASE",
+          "bid_amount": 3.0
+        },
+        {
+          "text": "tree removal cost",
+          "match_type": "BROAD",
+          "bid_amount": 2.0
+        }
+      ],
+      "negative_keywords": [
+        "DIY",
+        "myself",
+        "cheap",
+        "free"
+      ],
+      "ads": [
+        {
+          "headline_1": "Professional Tree Removal Gisborne",
+          "headline_2": "Certified Arborists | Fully Insured",
+          "headline_3": "\u2713 Work Guaranteed | Safe Finish",
+          "description": "Hazardous or overgrown trees? Treemarkables removes trees safely with a guaranteed finish. Qualified crew, modern equipment, debris cleanup included. Free quote.",
+          "final_url": "https://treemarkables.co.nz/tree-removal"
+        },
+        {
+          "headline_1": "Tree Removal Today - Gisborne",
+          "headline_2": "Same-Day Quotes | Work Guaranteed",
+          "headline_3": "Dead/Fallen Trees? We're Ready",
+          "description": "Dangerous tree threatening your home? Fast removal, all work guaranteed. Emergency response available. Fully insured, professional cleanup.",
+          "final_url": "https://treemarkables.co.nz/tree-removal"
+        }
+      ]
+    },
+    {
+      "name": "Treemarkables - Tree Pruning",
+      "daily_budget": 13.0,
+      "status": "ENABLED",
+      "campaign_type": "SEARCH",
+      "ad_network": "GOOGLE_SEARCH",
+      "description": "Tree pruning and maintenance demand in Gisborne",
+      "bid_strategy": "MAXIMIZE_CONVERSIONS",
+      "bid_adjustments": {
+        "schedule": [
+          {
+            "day_of_week": "MONDAY",
+            "start_hour": 8,
+            "end_hour": 16,
+            "bid_modifier": 1.15
+          },
+          {
+            "day_of_week": "TUESDAY",
+            "start_hour": 8,
+            "end_hour": 16,
+            "bid_modifier": 1.15
+          },
+          {
+            "day_of_week": "WEDNESDAY",
+            "start_hour": 8,
+            "end_hour": 16,
+            "bid_modifier": 1.15
+          },
+          {
+            "day_of_week": "THURSDAY",
+            "start_hour": 8,
+            "end_hour": 16,
+            "bid_modifier": 1.15
+          },
+          {
+            "day_of_week": "FRIDAY",
+            "start_hour": 8,
+            "end_hour": 16,
+            "bid_modifier": 1.15
+          }
+        ]
+      },
+      "keywords": [
+        {
+          "text": "tree pruning Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 2.5
+        },
+        {
+          "text": "tree trimming Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 2.4
+        },
+        {
+          "text": "tree pruning near me",
+          "match_type": "PHRASE",
+          "bid_amount": 2.2
+        },
+        {
+          "text": "branch removal",
+          "match_type": "PHRASE",
+          "bid_amount": 1.8
+        },
+        {
+          "text": "crown reduction",
+          "match_type": "EXACT",
+          "bid_amount": 2.1
+        },
+        {
+          "text": "dead wooding",
+          "match_type": "EXACT",
+          "bid_amount": 2.0
+        },
+        {
+          "text": "professional tree trimming",
+          "match_type": "PHRASE",
+          "bid_amount": 2.3
+        }
+      ],
+      "negative_keywords": [
+        "DIY",
+        "myself",
+        "cheap"
+      ],
+      "ads": [
+        {
+          "headline_1": "Professional Tree Pruning - Gisborne",
+          "headline_2": "Healthy Trees | Results Guaranteed",
+          "headline_3": "Expert Arborists On Your Side",
+          "description": "Keep your trees healthy & safe. Expert pruning removes dead wood, improves structure. All work guaranteed. Free consultation.",
+          "final_url": "https://treemarkables.co.nz/tree-pruning"
+        },
+        {
+          "headline_1": "Shape Your Garden - Tree Trimming",
+          "headline_2": "Professional Results | Guaranteed",
+          "headline_3": "Transform Overgrown Trees",
+          "description": "Overgrown trees spoiling your view? Expert trimming & shaping guaranteed. Quick cleanup, competitive rates, free quote.",
+          "final_url": "https://treemarkables.co.nz/tree-pruning"
+        }
+      ]
+    },
+    {
+      "name": "Treemarkables - Stump Grinding",
+      "daily_budget": 9.0,
+      "status": "ENABLED",
+      "campaign_type": "SEARCH",
+      "ad_network": "GOOGLE_SEARCH",
+      "description": "Niche stump grinding service targeting existing stumps",
+      "bid_strategy": "MAXIMIZE_CONVERSIONS",
+      "bid_adjustments": {
+        "schedule": []
+      },
+      "keywords": [
+        {
+          "text": "stump grinding Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 2.0
+        },
+        {
+          "text": "stump removal",
+          "match_type": "PHRASE",
+          "bid_amount": 1.7
+        },
+        {
+          "text": "stump grinder",
+          "match_type": "EXACT",
+          "bid_amount": 1.5
+        },
+        {
+          "text": "remove tree stump",
+          "match_type": "PHRASE",
+          "bid_amount": 1.8
+        },
+        {
+          "text": "stump removal cost",
+          "match_type": "BROAD",
+          "bid_amount": 1.2
+        }
+      ],
+      "negative_keywords": [
+        "DIY",
+        "cheap"
+      ],
+      "ads": [
+        {
+          "headline_1": "Stump Grinding - Gisborne",
+          "headline_2": "Complete Removal | Work Guaranteed",
+          "headline_3": "Safety \u2713 Professional \u2713",
+          "description": "Old tree stumps? We grind them below ground. Guaranteed results\u2014your yard clean & hazard-free. Perfect for replanting or landscaping. Free estimate.",
+          "final_url": "https://treemarkables.co.nz/stump-grinding"
+        },
+        {
+          "headline_1": "Tree Removal + Stump Grinding",
+          "headline_2": "Complete Package | Guaranteed",
+          "headline_3": "No Stump Left Behind",
+          "description": "Remove the tree, grind the stump. All work guaranteed. One-stop cleanup, minimal disruption.",
+          "final_url": "https://treemarkables.co.nz/stump-grinding"
+        }
+      ]
+    },
+    {
+      "name": "Treemarkables - Hedge Trimming",
+      "daily_budget": 12.0,
+      "status": "ENABLED",
+      "campaign_type": "SEARCH",
+      "ad_network": "GOOGLE_SEARCH",
+      "description": "Regular hedge trimming and maintenance services",
+      "bid_strategy": "MAXIMIZE_CONVERSIONS",
+      "bid_adjustments": {
+        "schedule": [
+          {
+            "day_of_week": "FRIDAY",
+            "start_hour": 15,
+            "end_hour": 23,
+            "bid_modifier": 1.1
+          },
+          {
+            "day_of_week": "SATURDAY",
+            "start_hour": 0,
+            "end_hour": 23,
+            "bid_modifier": 1.1
+          },
+          {
+            "day_of_week": "SUNDAY",
+            "start_hour": 0,
+            "end_hour": 17,
+            "bid_modifier": 1.1
+          }
+        ]
+      },
+      "keywords": [
+        {
+          "text": "hedge trimming Gisborne",
+          "match_type": "EXACT",
+          "bid_amount": 1.8
+        },
+        {
+          "text": "hedge cutting",
+          "match_type": "PHRASE",
+          "bid_amount": 1.6
+        },
+        {
+          "text": "shrub trimming",
+          "match_type": "PHRASE",
+          "bid_amount": 1.5
+        },
+        {
+          "text": "hedge maintenance",
+          "match_type": "EXACT",
+          "bid_amount": 1.7
+        },
+        {
+          "text": "professional hedge trimming",
+          "match_type": "PHRASE",
+          "bid_amount": 1.9
+        }
+      ],
+      "negative_keywords": [
+        "DIY",
+        "cheap"
+      ],
+      "ads": [
+        {
+          "headline_1": "Regular Hedge Trimming - Gisborne",
+          "headline_2": "Healthy Hedges | Guaranteed Results",
+          "headline_3": "Professional Maintenance Service",
+          "description": "Overgrown hedges? Regular trimming keeps them healthy & neat. Guaranteed quality. Seasonal maintenance, competitive rates.",
+          "final_url": "https://treemarkables.co.nz/hedge-trimming"
+        },
+        {
+          "headline_1": "Tidy Hedges = Beautiful Property",
+          "headline_2": "Professional Cutting | Guaranteed",
+          "headline_3": "Transform Your Garden",
+          "description": "Messy hedges dragging down your property? Expert trimming guaranteed. Clean finish, quick turnaround.",
+          "final_url": "https://treemarkables.co.nz/hedge-trimming"
+        }
+      ]
+    },
+    {
+      "name": "Treemarkables - Emergency Tree Response",
+      "daily_budget": 8.0,
+      "status": "ENABLED",
+      "campaign_type": "SEARCH",
+      "ad_network": "GOOGLE_SEARCH",
+      "description": "Storm damage and emergency tree removal - high urgency",
+      "bid_strategy": "MAXIMIZE_CONVERSIONS",
+      "bid_adjustments": {
+        "schedule": [
+          {
+            "day_of_week": "MONDAY",
+            "start_hour": 17,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          },
+          {
+            "day_of_week": "TUESDAY",
+            "start_hour": 17,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          },
+          {
+            "day_of_week": "WEDNESDAY",
+            "start_hour": 17,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          },
+          {
+            "day_of_week": "THURSDAY",
+            "start_hour": 17,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          },
+          {
+            "day_of_week": "FRIDAY",
+            "start_hour": 17,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          },
+          {
+            "day_of_week": "SATURDAY",
+            "start_hour": 0,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          },
+          {
+            "day_of_week": "SUNDAY",
+            "start_hour": 0,
+            "end_hour": 23,
+            "bid_modifier": 1.3
+          }
+        ]
+      },
+      "keywords": [
+        {
+          "text": "emergency tree removal",
+          "match_type": "EXACT",
+          "bid_amount": 4.0
+        },
+        {
+          "text": "fallen tree removal",
+          "match_type": "EXACT",
+          "bid_amount": 3.8
+        },
+        {
+          "text": "storm damage removal",
+          "match_type": "PHRASE",
+          "bid_amount": 3.5
+        },
+        {
+          "text": "tree damage",
+          "match_type": "PHRASE",
+          "bid_amount": 2.5
+        },
+        {
+          "text": "emergency tree service",
+          "match_type": "PHRASE",
+          "bid_amount": 3.2
+        },
+        {
+          "text": "24 hour tree removal",
+          "match_type": "PHRASE",
+          "bid_amount": 3.0
+        }
+      ],
+      "negative_keywords": [
+        "DIY",
+        "cheap"
+      ],
+      "ads": [
+        {
+          "headline_1": "Emergency Tree Removal - Now!",
+          "headline_2": "Fast Response | Work Guaranteed",
+          "headline_3": "Fallen Trees? We're Ready",
+          "description": "Storm damage? Fallen tree blocking your driveway? All work guaranteed. Fast response, safe removal, full cleanup. Call now.",
+          "final_url": "https://treemarkables.co.nz/emergency-tree-removal"
+        },
+        {
+          "headline_1": "Don't Risk DIY Tree Removal",
+          "headline_2": "Professional Service | Guaranteed",
+          "headline_3": "Safe | Insured | Qualified",
+          "description": "Hazardous tree threatening your home? Trust qualified arborists. Work guaranteed. Fast assessment, safe removal, insurance-friendly documentation.",
+          "final_url": "https://treemarkables.co.nz/emergency-tree-removal"
+        }
+      ]
+    }
+  ]
+}

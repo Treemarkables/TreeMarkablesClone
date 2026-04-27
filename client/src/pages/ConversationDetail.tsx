@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Conversation, ConversationMessage } from "@shared/schema";
+import type { Conversation, ConversationMessage, Job } from "@shared/schema";
 import {
   ArrowLeft,
   Send,
@@ -114,7 +114,7 @@ export default function ConversationDetail() {
   const [showCreateOpportunity, setShowCreateOpportunity] = useState(false);
   const [showCreateJob, setShowCreateJob] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [isExtractingLead, setIsExtractingLead] = useState(false);
+
 
   // Create Opportunity form state
   const [leadForm, setLeadForm] = useState({
@@ -245,7 +245,7 @@ export default function ConversationDetail() {
     // Fallback: Use full first customer message as description if no Message: field found
     if (!description && messages.length > 0) {
       const firstCustomerMessage = messages.find(
-        (m) => m.sender === "customer",
+        (m) => m.direction === "inbound",
       );
       if (firstCustomerMessage?.content) {
         // Get content after stripping form fields
@@ -374,6 +374,33 @@ export default function ConversationDetail() {
       }
     });
 
+    // For SMS/phone conversations: use fromContact of first inbound message as phone/email
+    if (!phone && !email) {
+      const firstInboundMsg = messages.find((m) => m.direction === "inbound");
+      const contact = firstInboundMsg?.fromContact || "";
+      if (contact) {
+        if (contact.includes("@")) {
+          email = contact;
+        } else {
+          phone = contact;
+        }
+      }
+    } else if (!phone) {
+      const firstInboundMsg = messages.find((m) => m.direction === "inbound");
+      const contact = firstInboundMsg?.fromContact || "";
+      if (contact && !contact.includes("@")) {
+        phone = contact;
+      }
+    }
+
+    // Also use fromName of first inbound message as name fallback
+    if (!name) {
+      const firstInboundMsg = messages.find((m) => m.direction === "inbound");
+      if (firstInboundMsg?.fromName) {
+        name = firstInboundMsg.fromName.trim();
+      }
+    }
+
     // Last resort: If name is still empty but we have email, extract name from email
     if (!name && email) {
       const emailParts = email.split("@")[0]; // Get part before @
@@ -423,50 +450,6 @@ export default function ConversationDetail() {
     };
   };
 
-  // AI-powered extraction — sends all message content to the server for GPT extraction
-  const extractWithAI = async (): Promise<{
-    name: string;
-    firstName: string;
-    lastName: string;
-    email: string;
-    phone: string;
-    address: string;
-    description: string;
-    leadSource: string;
-  }> => {
-    // Combine conversation title + all message content into one text blob
-    const allText = [
-      conversation?.title ? `Subject: ${conversation.title}` : "",
-      ...messages.map((m) => m.content || ""),
-    ]
-      .filter(Boolean)
-      .join("\n\n");
-
-    try {
-      const response = await apiRequest(
-        "POST",
-        "/api/leads/extract-from-message",
-        { message: allText },
-      );
-      const parsed = await response.json();
-      const data = parsed.data || {};
-      const nameParts = (data.name || "").trim().split(/\s+/);
-      return {
-        name: data.name || "",
-        firstName: nameParts[0] || "",
-        lastName: nameParts.slice(1).join(" ") || "",
-        email: data.email || "",
-        phone: data.phone || "",
-        address: data.address || "",
-        description: data.description || "",
-        leadSource: "email",
-      };
-    } catch {
-      // Fall back to regex extraction if AI fails
-      return extractContactDetails();
-    }
-  };
-
   // Reply mutation
   const replyMutation = useMutation({
     mutationFn: async ({ content }: { content: string }) => {
@@ -514,6 +497,91 @@ export default function ConversationDetail() {
       toast({
         title: "Failed to create opportunity",
         description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Create Job mutation — actually creates a job and redirects to it
+  const createJobMutation = useMutation<Job, Error, typeof leadForm>({
+    mutationFn: async (formValues) => {
+      // First, create or find customer using values from the dialog form
+      const customerRes = await apiRequest("POST", "/api/customers", {
+        name: formValues.name,
+        email: formValues.email,
+        phone: formValues.phone,
+        address: formValues.address,
+      });
+      const customerData = (await customerRes.json()) as {
+        data: { id: string };
+      };
+      const customerId = customerData.data.id;
+
+      // Detect if phone is a mobile number (NZ mobiles start with 02, +642, etc.)
+      const cleanPhone = (formValues.phone || "").replace(/\s/g, "");
+      const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
+
+      // Carry leadSource through from the original conversation extraction so
+      // the new job records where the inquiry came from.
+      const extractedSource = extractContactDetails().leadSource || "website";
+
+      const jobData = {
+        customerId,
+        title: formValues.name || "Lead from conversation",
+        description:
+          formValues.serviceRequested || formValues.notes || "",
+        address: formValues.address || "",
+        status: "lead",
+        priority: formValues.urgency || "medium",
+        leadSource: extractedSource,
+        totalAmount: "0.00",
+        paidAmount: "0.00",
+        jobContactPhone: isMobileNumber ? "" : formValues.phone || "",
+        jobContactMobile: isMobileNumber ? formValues.phone || "" : "",
+        conversationId: conversationId,
+      };
+
+      const jobRes = await apiRequest("POST", "/api/jobs", jobData);
+      const jobResponseData = (await jobRes.json()) as { data: Job };
+      const job = jobResponseData.data;
+
+      // Mark the conversation as converted so the "Already Converted" state
+      // shows correctly on revisit. The job has already been created, so
+      // failure here is best-effort: surface a warning toast but still
+      // redirect the user to their new job rather than encouraging a retry
+      // that would create a duplicate job.
+      if (conversationId) {
+        try {
+          await apiRequest("PATCH", `/api/conversations/${conversationId}`, {
+            status: "converted",
+            conversionDate: new Date().toISOString(),
+          });
+        } catch (err) {
+          console.error("Failed to mark conversation converted:", err);
+          toast({
+            title: "Job created",
+            description:
+              "Couldn't update conversation status; you may see this conversation as unconverted.",
+            variant: "destructive",
+          });
+        }
+      }
+
+      return job;
+    },
+    onSuccess: (job) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/conversations", conversationId],
+      });
+      setShowCreateJob(false);
+      setLocation(job?.id ? `/dispatch?job=${job.id}` : "/dispatch");
+    },
+    onError: (error) => {
+      toast({
+        title: "Failed to create job",
+        description: error?.message || "Please try again.",
         variant: "destructive",
       });
     },
@@ -822,38 +890,29 @@ export default function ConversationDetail() {
 
             {/* Create Opportunity */}
             <button
-              onClick={async () => {
+              onClick={() => {
                 setShowManageMenu(false);
-                setIsExtractingLead(true);
-                const extracted = await extractWithAI();
-                setIsExtractingLead(false);
+                const extracted = extractContactDetails();
                 setLeadForm({
-                  name: extracted.name || "",
+                  name: extracted.name || conversation?.title || "New Lead",
                   email: extracted.email || "",
                   phone: extracted.phone || "",
                   address: extracted.address || "",
                   serviceRequested: extracted.description || "",
                   urgency: "medium",
                   status: "new",
-                  notes: `Opportunity from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ""}`,
+                  notes: `Opportunity from conversation: ${conversation?.title || ""}`,
                 });
                 setShowCreateOpportunity(true);
               }}
-              disabled={isExtractingLead}
-              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg disabled:opacity-50"
+              className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
               data-testid="button-create-opportunity"
             >
               <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                {isExtractingLead ? (
-                  <Loader2 className="h-5 w-5 text-white animate-spin" />
-                ) : (
-                  <UserPlus className="h-5 w-5 text-white" />
-                )}
+                <UserPlus className="h-5 w-5 text-white" />
               </div>
               <span className="text-base font-medium text-gray-900">
-                {isExtractingLead
-                  ? "Extracting details..."
-                  : "Create Opportunity"}
+                Create Opportunity
               </span>
             </button>
 
@@ -873,38 +932,29 @@ export default function ConversationDetail() {
               </div>
             ) : (
               <button
-                onClick={async () => {
+                onClick={() => {
                   setShowManageMenu(false);
-                  setIsExtractingLead(true);
-                  const extracted = await extractWithAI();
-                  setIsExtractingLead(false);
+                  const extracted = extractContactDetails();
                   setLeadForm({
-                    name: extracted.name || "",
+                    name: extracted.name || conversation?.title || "New Lead",
                     email: extracted.email || "",
                     phone: extracted.phone || "",
                     address: extracted.address || "",
                     serviceRequested: extracted.description || "",
                     urgency: "medium",
                     status: "new",
-                    notes: `Lead from conversation${extracted.firstName ? ` with ${extracted.firstName} ${extracted.lastName}`.trim() : ""}`,
+                    notes: `Lead from conversation: ${conversation?.title || ""}`,
                   });
                   setShowCreateJob(true);
                 }}
-                disabled={isExtractingLead}
-                className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg disabled:opacity-50"
+                className="w-full flex items-center gap-4 px-4 py-4 hover-elevate active-elevate-2 rounded-lg"
                 data-testid="button-create-job"
               >
                 <div className="flex-shrink-0 h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                  {isExtractingLead ? (
-                    <Loader2 className="h-5 w-5 text-white animate-spin" />
-                  ) : (
-                    <Briefcase className="h-5 w-5 text-white" />
-                  )}
+                  <Briefcase className="h-5 w-5 text-white" />
                 </div>
                 <span className="text-base font-medium text-gray-900">
-                  {isExtractingLead
-                    ? "Extracting details..."
-                    : "Create Job from Lead"}
+                  Create Job from Lead
                 </span>
               </button>
             )}
@@ -1232,33 +1282,11 @@ export default function ConversationDetail() {
               Cancel
             </Button>
             <Button
-              onClick={() => {
-                const extracted = extractContactDetails();
-
-                // Store job data in localStorage for dispatch board to pick up
-                localStorage.setItem(
-                  "pendingJobData",
-                  JSON.stringify({
-                    customerName: extracted.name,
-                    customerFirstName: extracted.firstName,
-                    customerLastName: extracted.lastName,
-                    customerEmail: extracted.email,
-                    customerPhone: extracted.phone,
-                    address: extracted.address,
-                    description: extracted.description,
-                    leadSource: extracted.leadSource || "website",
-                    status: "lead",
-                    fromConversation: true,
-                    conversationId: conversationId,
-                  }),
-                );
-
-                setShowCreateJob(false);
-                setLocation("/dispatch");
-              }}
+              onClick={() => createJobMutation.mutate(leadForm)}
+              disabled={createJobMutation.isPending}
               data-testid="button-submit-job"
             >
-              Create Job
+              {createJobMutation.isPending ? "Creating..." : "Create Job"}
             </Button>
           </DialogFooter>
         </DialogContent>

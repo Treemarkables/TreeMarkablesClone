@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Check, Star, Users, Clock, Shield, Award, Phone, Mail, Target, Plus, Minus } from "lucide-react";
 import { Link } from "wouter";
-import heroBackground from "@assets/p-4dcb7482-d484-e155-ba2d0fc3232ca844-2544003-v3__FitWzkwMCw0NTBd_1758052397900.jpg";
-import teamPhoto from "@assets/team-photo.jpg";
+const heroBackground = "/arborist-drone.jpg";
+const teamPhoto = "/team-photo.jpg";
 
 export default function SummerOffer() {
   // Add Google tag event script for form submission tracking

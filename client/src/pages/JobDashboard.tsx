@@ -75,6 +75,7 @@ interface ApiResponse<T> {
 // Display types that combine schema with UI requirements
 type DisplayJob = {
   id: string;
+  jobNumber?: string;
   title: string;
   customerId: string;
   status: string;
@@ -127,8 +128,9 @@ export default function JobDashboard({
 
   // Jobs pagination and search state
   const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [currentJobPage, setCurrentJobPage] = useState(1);
-  const [jobsPerPage, setJobsPerPage] = useState(10); // Show 10 jobs per page by default for faster loading
+  const [jobsPerPage, setJobsPerPage] = useState(10);
 
   // Bulk selection state
   const [selectedJobs, setSelectedJobs] = useState<Set<string>>(new Set());
@@ -159,19 +161,27 @@ export default function JobDashboard({
     },
   });
 
-  // Bulk archive jobs mutation (changed from delete to archive)
   const deleteJobsMutation = useMutation({
     mutationFn: async (jobIds: string[]) => {
-      return await apiRequest("PUT", "/api/jobs/bulk-archive", { jobIds });
+      const res = await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds });
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.refetchQueries({ queryKey: [jobsApiUrl] });
       setSelectedJobs(new Set());
+      if (result?.failed > 0) {
+        toast({
+          title: "Some jobs could not be deleted",
+          description: `${result.deleted} deleted, ${result.failed} failed.${result.errors?.length ? ` First error: ${result.errors[0]}` : ""}`,
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
-        title: "Archive Failed",
-        description: error.message || "Failed to archive jobs",
+        title: "Delete Failed",
+        description: error.message || "Failed to delete jobs",
         variant: "destructive",
       });
     },
@@ -242,15 +252,18 @@ export default function JobDashboard({
     }
   };
 
-  // Fetch jobs data with proper typing
+  // Build the URL for the current page — switches to the search endpoint when there is a query
+  const jobsApiUrl = debouncedSearch.trim()
+    ? `/api/jobs/search?q=${encodeURIComponent(debouncedSearch.trim())}&limit=${jobsPerPage}&offset=${(currentJobPage - 1) * jobsPerPage}&excludeArchived=false`
+    : `/api/jobs?limit=${jobsPerPage}&offset=${(currentJobPage - 1) * jobsPerPage}`;
+
+  // Fetch only the current page — server handles filtering, search, and pagination
   const { data: jobsResponse, isLoading: jobsLoading } = useQuery<
     ApiResponse<Job>
   >({
-    queryKey: ["/api/jobs?limit=10000"], // Increased limit to show all jobs
-    // Refetch on mount to ensure fresh data on PWA
-    refetchOnMount: "always",
-    // Disable caching for jobs list to always get fresh order
-    staleTime: 0,
+    queryKey: [jobsApiUrl],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   // Fetch leads data with proper typing
@@ -265,22 +278,18 @@ export default function JobDashboard({
     ApiResponse<Customer>
   >({
     queryKey: ["/api/customers"],
+    staleTime: 3 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
-  // Fetch quotes data to get pricing information
-  const { data: quotesResponse } = useQuery<ApiResponse<any>>({
-    queryKey: ["/api/quotes"],
-  });
-
-  // Fetch proposals data with sections to enable pricing calculation
-  const { data: proposalsResponse } = useQuery<ApiResponse<any>>({
-    queryKey: ["/api/proposals?includeSections=true"],
-  });
-
-  // Fetch invoices data to get final pricing (takes priority over quotes/proposals)
-  const { data: invoicesResponse } = useQuery<ApiResponse<any>>({
-    queryKey: ["/api/invoices"],
-  });
+  // Debounce the search input so we don't fire a server request on every keystroke
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(jobSearchQuery);
+      setCurrentJobPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [jobSearchQuery]);
 
   // Redirect crew users if they try to access restricted tabs
   useEffect(() => {
@@ -292,11 +301,9 @@ export default function JobDashboard({
 
   // Extract data from API responses with type safety
   const jobs = jobsResponse?.data || [];
+  const totalJobCount = (jobsResponse as any)?.total ?? 0;
   const leads = leadsResponse?.data || [];
   const customers = customersResponse?.data || [];
-  const quotes = quotesResponse?.data || [];
-  const proposals = proposalsResponse?.data || [];
-  const invoices = invoicesResponse?.data || [];
 
   // No mock data - use real data only
 
@@ -340,73 +347,8 @@ export default function JobDashboard({
     return customer?.name || "Unknown Customer";
   };
 
-  // Helper function to calculate proposal total from line items
-  const calculateProposalTotal = (proposal: any): number => {
-    if (!proposal?.sections || !Array.isArray(proposal.sections)) {
-      return 0;
-    }
-
-    let total = 0;
-    proposal.sections.forEach((section: any) => {
-      if (section.lineItems && Array.isArray(section.lineItems)) {
-        section.lineItems.forEach((item: any) => {
-          if (item.selected !== false) {
-            // Include item if not explicitly unselected
-            total += Number(item.totalPrice || 0);
-          }
-        });
-      }
-    });
-
-    return total;
-  };
-
-  // Helper function to get job price - priority: invoice → proposal → quote → job.totalAmount
+  // Get job price directly from job.totalAmount — fast, no cross-table lookups
   const getJobPrice = (job: Job): number => {
-    // FIRST: Check for invoice (final/billed amount takes priority)
-    const jobInvoices = invoices.filter((inv: any) => inv.jobId === job.id);
-    if (jobInvoices.length > 0) {
-      // Sort by creation date and get the most recent
-      const sortedInvoices = jobInvoices.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      const latestInvoice = sortedInvoices[0];
-      // Check various amount fields (totalIncludingGst, totalAmount, amount, subtotal)
-      const invoiceAmount =
-        latestInvoice.totalIncludingGst ||
-        latestInvoice.totalAmount ||
-        latestInvoice.amount ||
-        latestInvoice.subtotal;
-      if (invoiceAmount && Number(invoiceAmount) > 0) {
-        return Number(invoiceAmount);
-      }
-    }
-
-    // SECOND: Check proposals for this job
-    const jobProposals = proposals.filter((p: any) => p.jobId === job.id);
-    if (jobProposals.length > 0) {
-      // Sort by creation date and get the most recent
-      const sortedProposals = jobProposals.sort(
-        (a: any, b: any) =>
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-      );
-      const latestProposal = sortedProposals[0];
-      const proposalTotal = calculateProposalTotal(latestProposal);
-      if (proposalTotal > 0) {
-        return proposalTotal;
-      }
-    }
-
-    // THIRD: Check linked quote
-    if (job.quoteId) {
-      const linkedQuote = quotes.find((q: any) => q.id === job.quoteId);
-      if (linkedQuote?.amount) {
-        return Number(linkedQuote.amount);
-      }
-    }
-
-    // FOURTH: Fall back to job.totalAmount
     return job.totalAmount ? Number(job.totalAmount) : 0;
   };
 
@@ -414,6 +356,7 @@ export default function JobDashboard({
   const transformJobsForDisplay = (apiJobs: Job[]): DisplayJob[] => {
     return apiJobs.map((job) => ({
       id: job.id,
+      jobNumber: job.jobNumber || undefined,
       title: job.title || getCustomerName(job.customerId || ""),
       customerId: job.customerId || "",
       status: job.status || "unknown",
@@ -444,27 +387,12 @@ export default function JobDashboard({
   const allDisplayJobs: DisplayJob[] =
     jobs.length > 0 ? transformJobsForDisplay(jobs) : [];
 
-  // Filter jobs based on search query and exclude archived jobs
-  const filteredJobs = allDisplayJobs.filter((job) => {
-    // Always exclude archived jobs from the list
-    if (job.status === "archived") return false;
-
-    if (!jobSearchQuery.trim()) return true;
-    const query = jobSearchQuery.toLowerCase();
-    return (
-      job.title.toLowerCase().includes(query) ||
-      job.customer?.toLowerCase().includes(query) ||
-      job.location.toLowerCase().includes(query) ||
-      job.status.toLowerCase().includes(query) ||
-      job.priority.toLowerCase().includes(query)
-    );
-  });
-
-  // Paginate filtered jobs
-  const totalPages = Math.ceil(filteredJobs.length / jobsPerPage);
+  // Server already filters and paginates — just use the response directly
+  const filteredJobs = allDisplayJobs;
+  const paginatedJobs = allDisplayJobs;
+  const totalPages = Math.ceil(totalJobCount / jobsPerPage);
   const startIndex = (currentJobPage - 1) * jobsPerPage;
-  const endIndex = startIndex + jobsPerPage;
-  const paginatedJobs = filteredJobs.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + jobsPerPage, totalJobCount);
 
   // For overview tab, still show recent jobs (first 5)
   const displayJobs: DisplayJob[] = allDisplayJobs.slice(0, 5);
@@ -795,7 +723,7 @@ export default function JobDashboard({
                     className="text-2xl font-bold text-foreground mb-2"
                     data-testid="heading-all-jobs"
                   >
-                    All Jobs ({jobs.length.toLocaleString()})
+                    All Jobs ({totalJobCount.toLocaleString()})
                   </h2>
                   <p
                     className="text-muted-foreground"
@@ -929,12 +857,19 @@ export default function JobDashboard({
                                   onClick={(e) => e.stopPropagation()}
                                   data-testid={`checkbox-select-job-${job.id}`}
                                 />
-                                <h3
-                                  className="font-semibold text-foreground line-clamp-2"
-                                  data-testid={`text-job-customer-${job.id}`}
-                                >
-                                  {job.customer}
-                                </h3>
+                                <div>
+                                  <h3
+                                    className="font-semibold text-foreground line-clamp-2"
+                                    data-testid={`text-job-customer-${job.id}`}
+                                  >
+                                    {job.customer}
+                                  </h3>
+                                  {job.jobNumber && (
+                                    <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                                      #{job.jobNumber}
+                                    </p>
+                                  )}
+                                </div>
                               </div>
                               <div
                                 className="text-lg font-bold text-green-600 ml-2"
@@ -988,22 +923,15 @@ export default function JobDashboard({
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 pt-4 border-t">
                   <div className="space-y-1">
-                    {allDisplayJobs.length > 0 && (
-                      <>
-                        <p
-                          className="text-sm text-muted-foreground"
-                          data-testid="text-jobs-showing"
-                        >
-                          Showing {startIndex + 1}-
-                          {Math.min(endIndex, filteredJobs.length)} of{" "}
-                          {filteredJobs.length.toLocaleString()}
-                          {jobSearchQuery ? " filtered" : ""} jobs
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Total: {allDisplayJobs.length.toLocaleString()} jobs
-                          in database
-                        </p>
-                      </>
+                    {totalJobCount > 0 && (
+                      <p
+                        className="text-sm text-muted-foreground"
+                        data-testid="text-jobs-showing"
+                      >
+                        Showing {startIndex + 1}–{endIndex} of{" "}
+                        {totalJobCount.toLocaleString()}
+                        {debouncedSearch ? " results" : " jobs"}
+                      </p>
                     )}
                     <div className="flex items-center gap-2 mt-2">
                       <label className="text-xs text-muted-foreground">

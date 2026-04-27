@@ -157,12 +157,63 @@ After the app launches and you log in, check the Replit server logs for:
 
 ## Step 7 — Keep the app in sync
 
-After web app changes:
+After pulling new web code changes from Replit, run the sync helper:
+```bash
+./scripts/ios-sync.sh
+```
+
+Or manually:
 ```bash
 npm run build
 npx cap sync ios
 ```
 Then rebuild in Xcode (⌘R).
+
+---
+
+## Step 7b — Firebase Push Notifications (FCM)
+
+The app uses Firebase Cloud Messaging for push notifications (job alerts, quote acceptances, etc.).
+
+### 7b-1 — GoogleService-Info.plist
+1. Go to [Firebase Console](https://console.firebase.google.com) → your project
+2. Project Settings → Your apps → iOS app (Bundle ID: `com.treemarkables.app`)
+3. If no iOS app exists, click **Add app** → iOS → enter `com.treemarkables.app`
+4. Download **`GoogleService-Info.plist`**
+5. In Xcode: drag `GoogleService-Info.plist` into the `App` group (tick "Copy items if needed" + add to `App` target)
+
+### 7b-2 — Upload APNs key to Firebase
+1. Go to [Apple Developer Portal → Keys](https://developer.apple.com/account/resources/authkeys/list)
+2. Create a new key → tick **Apple Push Notifications service (APNs)** → download the `.p8` file
+3. Note your **Key ID** and **Team ID** (shown top-right on the portal)
+4. In Firebase Console → Project Settings → **Cloud Messaging** → Apple app configuration
+5. Upload the `.p8` file to both **Development** and **Production** APNs auth key slots
+6. Enter your Key ID and Team ID in both
+
+### 7b-3 — Add Firebase iOS SDK in Xcode
+1. In Xcode: **File → Add Package Dependencies**
+2. Enter URL: `https://github.com/firebase/firebase-ios-sdk`
+3. Click **Add Package**
+4. Select these two libraries and add them to the **App** target:
+   - `FirebaseCore`
+   - `FirebaseMessaging`
+
+### 7b-4 — Add AppDelegate+Firebase.swift
+1. Copy `ios-native/AppDelegate+Firebase.swift` from this repo into Xcode
+   - Drag it into the **App** group (same folder as AppDelegate.swift)
+   - Tick "Copy items if needed" + target "App"
+2. Open **AppDelegate.swift** in Xcode and add ONE line inside `application(_:didFinishLaunchingWithOptions:)`:
+
+```swift
+func application(_ application: UIApplication,
+  didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
+) -> Bool {
+    FirebaseSetup.configure(application)   // ← add this line
+    return true
+}
+```
+
+> That's it — Archive → TestFlight and push notifications will fire on device.
 
 ---
 
@@ -186,7 +237,7 @@ Then rebuild in Xcode (⌘R).
 | `TWILIO_API_KEY` | Twilio Console → API Keys → Create Standard | **iOS required** |
 | `TWILIO_API_SECRET` | Shown once at API Key creation | **iOS required** |
 | `TWILIO_CLIENT_IDENTITY` | Any string (default: `treemarkables-owner`) | Optional |
-| `HERO_PHONE_NUMBER` | Your real NZ mobile (+64...) | Optional fallback |
+| `OWNER_PHONE_NUMBER` | Your personal NZ mobile (+64...) — Twilio calls this back to connect you to the recorded call | Required for call recording |
 
 ---
 

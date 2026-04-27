@@ -446,7 +446,27 @@ export function ServiceJobForm({
                             name="newCustomerName"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Customer Name *</FormLabel>
+                                <div className="flex items-center justify-between">
+                                  <FormLabel>Customer Name *</FormLabel>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-auto py-0.5 px-2 text-xs text-muted-foreground"
+                                    data-testid="button-copy-to-contact"
+                                    onClick={() => {
+                                      const name = field.value?.trim() || "";
+                                      if (!name) return;
+                                      const parts = name.split(/\s+/);
+                                      const firstName = parts[0] || "";
+                                      const lastName = parts.slice(1).join(" ") || "";
+                                      form.setValue("jobContactFirstName", firstName);
+                                      form.setValue("jobContactLastName", lastName);
+                                    }}
+                                  >
+                                    Copy to contact
+                                  </Button>
+                                </div>
                                 <FormControl>
                                   <Input
                                     placeholder="Enter customer name"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useForm, useFieldArray, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -33,12 +33,12 @@ import {
   Calculator,
   Target,
   MoreHorizontal,
+
   UserCircle,
   Edit3,
   Image as ImageIcon,
   Package,
   Search,
-  Menu,
   Camera,
   AlertCircle,
   ChevronsUpDown,
@@ -55,12 +55,15 @@ import {
   Axe,
   Sprout,
   List,
+  ListChecks,
   Pencil,
   Star,
   RotateCcw,
   Crown,
   Lock,
   Bell,
+  BookOpen,
+  ListOrdered,
 } from "lucide-react";
 import {
   MdEmail,
@@ -74,12 +77,32 @@ import {
   MdCameraAlt,
   MdMoreHoriz,
 } from "react-icons/md";
+import {
+  CameraIcon,
+  SMSIcon,
+  EmailIcon,
+  MoreDotsIcon,
+  SpeechToQuoteIcon,
+  ScheduleIcon,
+  CallIcon,
+  QuoteIcon,
+  InvoiceIcon,
+  ProposalIcon,
+  TimeTrackingIcon,
+  ProfitTrackerIcon,
+  QueueJobIcon,
+  SendToXeroIcon,
+  ResendXeroIcon,
+  RequestReviewIcon,
+} from "./ActionIcons";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useAuth } from "@/contexts/AuthContext";
 import { AddressAutocomplete } from "./AddressAutocomplete";
-import { ProposalBuilder } from "./ProposalBuilder";
+import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
+import { JobChecklistPanel } from "./JobChecklistPanel";
+import { JobRoleCompletionCard } from "./JobRoleCompletionCard";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -95,6 +118,8 @@ import { PhotoCaptureModal } from "./PhotoCaptureModal";
 import { SpeechToQuote } from "./SpeechToQuote";
 import { CustomerAvatar } from "./CustomerAvatar";
 import { JobLocationMap } from "./JobLocationMap";
+import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { formatInTimeZone } from "date-fns-tz";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -104,6 +129,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -157,7 +188,8 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, ApiError } from "@/lib/queryClient";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import {
   insertJobSchema,
   type ChecklistItem,
@@ -167,6 +199,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
 import { LinkifyMultiline } from "@/lib/linkify";
+import { Link } from "wouter";
 
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema
@@ -192,6 +225,13 @@ const globalJobCardSchema = insertJobSchema
     jobContactEmail: z.union([z.string().email(), z.literal("")]).optional(),
     jobContactPhone: z.string().optional(),
     jobContactMobile: z.string().optional(),
+
+    // Tenant contact (opt-in secondary recipient for tenanted properties).
+    tenantContactFirstName: z.string().optional(),
+    tenantContactLastName: z.string().optional(),
+    tenantContactEmail: z.union([z.string().email(), z.literal("")]).optional(),
+    tenantContactPhone: z.string().optional(),
+    tenantContactMobile: z.string().optional(),
 
     // ServiceM8 Billing Fields
     billingAddress: z.string().optional(),
@@ -257,6 +297,7 @@ interface GlobalJobCardProps {
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
+  initialSidebarTab?: "details" | "billing" | "checklist"; // Deep-link from push notifications
 }
 
 export function GlobalJobCard({
@@ -270,15 +311,16 @@ export function GlobalJobCard({
   onJobCreated,
   onJobUpdated,
   renderInline = false,
+  initialSidebarTab,
 }: GlobalJobCardProps) {
   const [checklist, setChecklist] = useState<ChecklistItem[]>(
     Array.isArray(job?.checklist) ? job.checklist : [],
   );
   const [checklistCollapsed, setChecklistCollapsed] = useState(true);
   const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [activeTab, setActiveTab] = useState("details");
-  const [sidebarTab, setSidebarTab] = useState("details");
-  const [showMobileActions, setShowMobileActions] = useState(false);
+  const [activeTab, setActiveTab] = useState(initialSidebarTab ?? "details");
+  const [sidebarTab, setSidebarTab] = useState(initialSidebarTab ?? "details");
+  const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);
   const [customerSearchValue, setCustomerSearchValue] = useState("");
@@ -294,20 +336,22 @@ export function GlobalJobCard({
   const toast = () => {}; // Disabled - user preference: no toast notifications
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
-  const { isAdmin } = useAuth();
+  const { isAdmin, currentUser } = useAuth();
 
   // Fetch customers for the dropdown (needed upfront)
   const { data: customersData, isLoading: customersLoading } = useQuery({
     queryKey: ["/api/customers"],
     enabled: isOpen,
-    staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
-    refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
+    staleTime: 3 * 60 * 1000, // 3 minutes — customers rarely change while actively editing a job card
+    refetchOnWindowFocus: false,
   });
 
   // Must be declared BEFORE the useEffect at line ~236 that uses it in its dependency array
   const { data: checklistTemplatesData } = useQuery({
     queryKey: ["/api/checklist-templates"],
     enabled: isOpen,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
   const customers: Customer[] = useMemo(
@@ -342,6 +386,11 @@ export function GlobalJobCard({
       jobContactEmail: "",
       jobContactPhone: "",
       jobContactMobile: "",
+      tenantContactFirstName: "",
+      tenantContactLastName: "",
+      tenantContactEmail: "",
+      tenantContactPhone: "",
+      tenantContactMobile: "",
       address: "",
       leadSource: "",
       totalAmount: "0",
@@ -395,6 +444,11 @@ export function GlobalJobCard({
     watchedBillingContactEmail_raw,
     watchedJobContactEmail_raw,
     watchedBillingNameOverride_raw,
+    watchedTenantContactEmail_raw,
+    watchedTenantContactPhone_raw,
+    watchedTenantContactMobile_raw,
+    watchedTenantContactFirstName_raw,
+    watchedTenantContactLastName_raw,
   ] = useWatch({
     control: form.control,
     name: [
@@ -410,6 +464,11 @@ export function GlobalJobCard({
       "billingContactEmail",
       "jobContactEmail",
       "billingNameOverride",
+      "tenantContactEmail",
+      "tenantContactPhone",
+      "tenantContactMobile",
+      "tenantContactFirstName",
+      "tenantContactLastName",
     ],
   });
   const watchedCustomerId = (watchedCustomerId_raw as string) ?? "";
@@ -424,6 +483,11 @@ export function GlobalJobCard({
   const watchedBillingContactEmail = (watchedBillingContactEmail_raw as string) ?? "";
   const watchedJobContactEmail = (watchedJobContactEmail_raw as string) ?? "";
   const watchedBillingNameOverride = (watchedBillingNameOverride_raw as string) ?? "";
+  const watchedTenantContactEmail = (watchedTenantContactEmail_raw as string) ?? "";
+  const watchedTenantContactPhone = (watchedTenantContactPhone_raw as string) ?? "";
+  const watchedTenantContactMobile = (watchedTenantContactMobile_raw as string) ?? "";
+  const watchedTenantContactFirstName = (watchedTenantContactFirstName_raw as string) ?? "";
+  const watchedTenantContactLastName = (watchedTenantContactLastName_raw as string) ?? "";
   // lineItems is sourced from useFieldArray.fields (NOT form.watch) to avoid double-subscription
   const watchedLineItems = lineItemFields as any[];
   const selectedVipCustomer = customers.find((c) => c.id === watchedCustomerId);
@@ -517,6 +581,8 @@ export function GlobalJobCard({
   }, [jobId, mode, checklistTemplatesData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save state to prevent double-clicking
+  // useRef is synchronous so a second click in the same render cycle can't slip through
+  const isSavingRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Quote presentation method local state (for immediate UI update)
@@ -545,6 +611,13 @@ export function GlobalJobCard({
   const [showXeroResetConfirm, setShowXeroResetConfirm] = useState(false);
   const [bookingToCancel, setBookingToCancel] = useState<string | null>(null);
 
+  // Call picker state — shown when both job contact and tenant have a number
+  const [callPickerOpen, setCallPickerOpen] = useState(false);
+  const [callPickerOptions, setCallPickerOptions] = useState<{
+    job: { name: string; phone: string } | null;
+    tenant: { name: string; phone: string } | null;
+  }>({ job: null, tenant: null });
+
   // Description popup state
   const [descriptionPopupOpen, setDescriptionPopupOpen] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState("");
@@ -556,6 +629,7 @@ export function GlobalJobCard({
   const [internalNotesPopupOpen, setInternalNotesPopupOpen] = useState(false);
   const [internalNotesDraft, setInternalNotesDraft] = useState("");
   const [internalNotesFocused, setInternalNotesFocused] = useState(false);
+
   const [gearDialogOpen, setGearDialogOpen] = useState(false);
 
   // Double-tap detection for mobile description
@@ -588,10 +662,14 @@ export function GlobalJobCard({
     assignedTo: [] as string[],
     notes: "",
     sendClientNotification: false,
+    sendProposalEmail: false,
   });
   const [staffConflicts, setStaffConflicts] = useState<
     { employeeId: string; conflicts: any[] }[]
   >([]);
+  const [staffAvailabilityFor, setStaffAvailabilityFor] = useState<
+    { id: string; name: string } | null
+  >(null);
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
@@ -709,6 +787,45 @@ export function GlobalJobCard({
   const { data: employeesData } = useQuery({
     queryKey: ["/api/employees"],
     enabled: isOpen || isSchedulingModalOpen,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  // All staff assignments — used to highlight staff who are busy during the
+  // selected date/time window in the scheduling modal. Shares cache with the
+  // dispatch board and staff schedule queries.
+  const { data: allStaffAssignmentsData } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      employeeId: string;
+      jobId: string;
+      startTime: string | Date;
+      endTime: string | Date;
+    }>;
+  }>({
+    queryKey: ["/api/staff-assignments"],
+    enabled: isSchedulingModalOpen,
+    staleTime: 30_000,
+  });
+
+  // Email templates — used by the proposal-email checkbox so the user can edit
+  // the wording in Settings → Communication Templates rather than in code.
+  const { data: emailTemplatesData } = useQuery<{
+    success: boolean;
+    data: Array<{
+      id: string;
+      name: string;
+      category: string;
+      subject: string;
+      htmlContent: string;
+      isActive: boolean;
+      isDefault: boolean;
+    }>;
+  }>({
+    queryKey: ["/api/email-templates"],
+    enabled: isSchedulingModalOpen,
+    staleTime: 60_000,
   });
 
   // Fetch specific job by ID when editing (replaces fetching all 1000 jobs!)
@@ -718,6 +835,7 @@ export function GlobalJobCard({
     data: specificJobData,
     isLoading: isLoadingSpecificJob,
     isPending: isPendingSpecificJob,
+    refetch: refetchJob,
   } = useQuery({
     queryKey: ["/api/jobs", jobId || createdJobId],
     enabled:
@@ -727,6 +845,26 @@ export function GlobalJobCard({
       !job,
     staleTime: 30000, // Keep data fresh for 30 seconds to prevent refetch on tab switch
     refetchOnWindowFocus: false, // Don't refetch when switching tabs/focus
+  });
+
+  const handlePullRefresh = useCallback(async () => {
+    const id = jobId || createdJobId;
+    if (id) {
+      await queryClient.invalidateQueries({ queryKey: ["/api/jobs", id] });
+      await queryClient.refetchQueries({ queryKey: ["/api/jobs", id] });
+    } else {
+      await refetchJob();
+    }
+  }, [jobId, createdJobId, queryClient, refetchJob]);
+
+  const {
+    pullDistance: jobCardPullDistance,
+    isRefreshing: jobCardIsRefreshing,
+    shouldTrigger: jobCardShouldTrigger,
+    handlers: jobCardPullHandlers,
+  } = usePullToRefresh({
+    onRefresh: handlePullRefresh,
+    enabled: isMobile && mode === "edit",
   });
 
   // Lazy load templates - only when billing tab is active or invoice modal is open
@@ -741,12 +879,22 @@ export function GlobalJobCard({
 
   const { data: quoteTemplateData } = useQuery({
     queryKey: ["/api/templates/default/quote"],
-    enabled: isOpen && (activeTab === "billing" || sidebarTab === "billing"),
+    enabled: isOpen && (activeTab === "billing" || sidebarTab === "billing" || isQuoteModalOpen),
   });
 
   const { data: proposalTemplateData } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
     enabled: isOpen && isProposalViewerOpen,
+  });
+
+  // Fetch the individual proposal (with sections + photos) when the viewer opens.
+  // This uses the same /api/proposals/:id endpoint that the editor uses, which correctly
+  // maps section.images → section.photos. The batch query (jobProposalResponse) only has
+  // metadata and may have stale/missing photos.
+  const { data: viewingProposalData } = useQuery({
+    queryKey: ["/api/proposals", viewingProposalId],
+    enabled: isOpen && isProposalViewerOpen && !!viewingProposalId,
+    staleTime: 0,
   });
 
   // Lazy load materials and services - only when billing tab is active (desktop uses sidebarTab, mobile uses activeTab)
@@ -788,7 +936,9 @@ export function GlobalJobCard({
   // Immediately persist lineItems to the server so that any subsequent auto-save
   // invalidateQueries refetch doesn't wipe out unsaved local changes.
   const saveLineItemsNow = async (updatedItems: any[]) => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // Don't gate on the `mode` prop — it stays "create" for the whole session
+    // even after the job is created. editingJob?.id is the real signal.
+    if (!editingJob?.id) return;
     try {
       await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
         lineItems: updatedItems,
@@ -1334,6 +1484,11 @@ export function GlobalJobCard({
           editingJob.jobContactPhone || editingJobCustomer?.phone || "",
         jobContactMobile:
           editingJob.jobContactMobile || editingJobCustomer?.mobile || "",
+        tenantContactFirstName: editingJob.tenantContactFirstName || "",
+        tenantContactLastName: editingJob.tenantContactLastName || "",
+        tenantContactEmail: editingJob.tenantContactEmail || "",
+        tenantContactPhone: editingJob.tenantContactPhone || "",
+        tenantContactMobile: editingJob.tenantContactMobile || "",
         billingContactEmail: editingJob.billingContactEmail || "",
         billingContactPhone: editingJob.billingContactPhone || "",
         billingContactMobile: editingJob.billingContactMobile || "",
@@ -1363,6 +1518,10 @@ export function GlobalJobCard({
       isResettingRef.current = false;
       setFormLoadedJobId(editingJob.id);
       originalLoadedDataRef.current = { ...resetData };
+      // Capture the server's updatedAt as our concurrency baseline. Any stale
+      // cached editingJob will be caught by the server's 409 on next save.
+      baselineUpdatedAtRef.current =
+        editingJob.updatedAt ? new Date(editingJob.updatedAt).toISOString() : null;
 
       // Fix: Explicitly sync useFieldArray with line items after form reset
       if (editingJob.lineItems) {
@@ -1402,8 +1561,17 @@ export function GlobalJobCard({
           for (const field of changedFieldsRef.current) {
             changedData[field] = (formData as any)[field];
           }
-          apiRequest("PUT", `/api/jobs/${editingJob?.id}`, changedData)
-            .then(() => {
+          const deferredBody: Record<string, any> = { ...changedData };
+          if (baselineUpdatedAtRef.current) {
+            deferredBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+          }
+          apiRequest("PUT", `/api/jobs/${editingJob?.id}`, deferredBody)
+            .then(async (res) => {
+              const json = await res.json().catch(() => null);
+              const newUpdatedAt = json?.data?.updatedAt ?? json?.updatedAt;
+              if (newUpdatedAt) {
+                baselineUpdatedAtRef.current = new Date(newUpdatedAt).toISOString();
+              }
               console.log("✅ Deferred auto-save completed");
               // RC7 FIX: Guard so reset() watch callbacks aren't treated as user edits.
               isResettingRef.current = true;
@@ -1414,7 +1582,22 @@ export function GlobalJobCard({
               isResettingRef.current = false;
               hasUserChangedRef.current = false;
               changedFieldsRef.current.clear();
-              queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+              // RC12 FIX: Patch list caches so re-open shows saved values.
+              queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+                if (!old) return old;
+                const data = old?.data ?? old;
+                if (!Array.isArray(data)) return old;
+                const patched = data.map((j: any) =>
+                  j.id === editingJob?.id ? { ...j, ...changedData } : j,
+                );
+                return old?.data ? { ...old, data: patched } : patched;
+              });
+              queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob?.id] });
+              const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status"];
+              if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
+                queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+                queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
+              }
             })
             .catch((err) => {
               console.error("❌ Deferred auto-save failed:", err);
@@ -1433,6 +1616,44 @@ export function GlobalJobCard({
     editingJob?.id,
     customersLoading,
     initialData,
+  ]);
+
+  // Cross-device live sync: when the background poll brings fresh data for the already-loaded
+  // job (e.g. a change saved on mobile), selectively update form fields that the user hasn't
+  // locally edited on this device. This runs whenever editingJob changes for the SAME job ID,
+  // which is the scenario excluded by the same-job guard in the main load effect above.
+  useEffect(() => {
+    // Only run once the form is loaded for this specific job
+    if (!editingJob?.id || formLoadedJobId !== editingJob.id) return;
+    // Skip during reset or loading to avoid fighting with the main load effect
+    if (isResettingRef.current || isLoadingDataRef.current) return;
+
+    // Text fields that can be updated cross-device when the user hasn't edited them locally
+    const syncableTextFields: Array<{ key: string; getValue: () => string | null | undefined }> = [
+      { key: 'description', getValue: () => editingJob.description },
+      { key: 'notes', getValue: () => editingJob.notes },
+      { key: 'internalNotes', getValue: () => (editingJob as any).internalNotes },
+      { key: 'address', getValue: () => editingJob.address },
+    ];
+
+    for (const { key, getValue } of syncableTextFields) {
+      if (changedFieldsRef.current.has(key)) continue; // user is editing this field locally
+      const serverValue = getValue() ?? '';
+      const formValue = form.getValues(key as any) ?? '';
+      if (serverValue !== formValue) {
+        isResettingRef.current = true;
+        form.setValue(key as any, serverValue, { shouldDirty: false, shouldTouch: false });
+        isResettingRef.current = false;
+        console.log(`🔄 Cross-device sync: updated "${key}" from background poll`);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    editingJob?.description,
+    editingJob?.notes,
+    (editingJob as any)?.internalNotes,
+    editingJob?.address,
+    formLoadedJobId,
   ]);
 
   // Separate lightweight effect: keep selectedCustomerName in sync whenever the customer data
@@ -1508,6 +1729,11 @@ export function GlobalJobCard({
       "jobContactEmail",
       "jobContactPhone",
       "jobContactMobile",
+      "tenantContactFirstName",
+      "tenantContactLastName",
+      "tenantContactEmail",
+      "tenantContactPhone",
+      "tenantContactMobile",
       "billingAddress",
       "billingNameOverride",
       "invoiceDescription",
@@ -1521,14 +1747,18 @@ export function GlobalJobCard({
       "quotingMethod",
       "unsuccessfulReason",
       "categoryId",
-      "crewMembers",
-      "equipment",
       "internalNotes",
-      "customerConfirmed",
+      // NOTE: customerConfirmed is intentionally excluded from auto-save.
+      // It's saved immediately via direct apiRequest on click (see Customer Confirmed
+      // toggle handler) so the green tick on the Staff Schedule and dispatch board
+      // appears within ~200ms instead of after the 1.5s autosave debounce.
       // NOTE: etaNotificationRequested is intentionally excluded from auto-save.
       // It's saved immediately via direct apiRequest on click (see ETA toggle handler)
       // to prevent it from being tracked during form.reset() and triggering a
       // deferred auto-save loop ("Maximum update depth exceeded" crash).
+      // crewMembers and equipment are also excluded — they are arrays that
+      // form.reset() can re-emit as [], wiping DB state. Saved via explicit
+      // PUT in their add/remove handlers instead.
     ]),
   );
 
@@ -1537,9 +1767,22 @@ export function GlobalJobCard({
   // from firing watch callbacks that are mistakenly treated as user edits, which caused
   // an infinite autosave loop and silently overwrote contact fields with empty strings.
   const isResettingRef = useRef(false);
+  // Optimistic-concurrency baseline. Set from editingJob.updatedAt on load and
+  // advanced after every successful save. Sent as expectedUpdatedAt in every
+  // auto-save body so the server can reject stale writes with HTTP 409.
+  const baselineUpdatedAtRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // Gate on editingJob?.id rather than the `mode` prop. The prop stays
+    // "create" for the whole session when the modal is opened to create a
+    // new job — even after createJobMutation succeeds and the component
+    // transitions internally to an edit view with a real editingJob.id.
+    // Gating on mode meant the auto-save effect silently no-oped for every
+    // field the user touched after creation, so closing and reopening the
+    // job showed a blank form ("the data disappeared"). editingJob?.id is
+    // the authoritative signal: if we have a saved job in front of us,
+    // auto-save should be running regardless of how the modal was opened.
+    if (!editingJob?.id) return;
 
     // RC8 FIX: Capture job ID at effect-start time so the cleanup closure
     // uses the correct job ID even if editingJob has changed by cleanup time.
@@ -1550,6 +1793,10 @@ export function GlobalJobCard({
     let timeoutId: NodeJS.Timeout;
 
     const subscription = form.watch((values, { name }) => {
+      // Diagnostic: surface every watch firing so we can see what the form reports.
+      if (name && (name === 'tenantContactEmail' || name === 'tenantContactFirstName' || name === 'tenantContactLastName' || name === 'tenantContactPhone' || name === 'tenantContactMobile')) {
+        console.log(`🏠 watch fired for tenant field: ${name}, inWhitelist=${autoSaveFieldsRef.current.has(name)}, value=`, (values as any)[name]);
+      }
       if (!name || !autoSaveFieldsRef.current.has(name)) {
         return;
       }
@@ -1593,18 +1840,45 @@ export function GlobalJobCard({
         try {
           setIsAutoSaving(true);
           const formData = form.getValues();
+          const dirtyFields = form.formState.dirtyFields;
 
           const changedData: Record<string, any> = {};
+          const clearFields: string[] = [];
           for (const field of changedFieldsRef.current) {
-            changedData[field] = (formData as any)[field];
+            const val = (formData as any)[field];
+            changedData[field] = val;
+            // Only force-clear on the server if the user *actually* emptied the
+            // field (RHF marks it dirty). Async watch callbacks from form.reset()
+            // or the cross-device-sync form.setValue(..., shouldDirty:false) can
+            // leak into changedFieldsRef despite isResettingRef guards — without
+            // this check an empty synced value would end up in _clearFields and
+            // wipe a non-empty DB value via the server's force-null path.
+            const isEmpty = val === "" || val === null || val === undefined;
+            const userDirty = !!(dirtyFields as any)[field];
+            if (isEmpty && userDirty) {
+              clearFields.push(field);
+            }
+          }
+          if (clearFields.length > 0) {
+            changedData._clearFields = clearFields;
           }
 
           console.log("💾 Auto-saving ONLY changed fields...", {
             jobId: editingJob.id,
             changedFields: Array.from(changedFieldsRef.current),
+            clearFields,
           });
 
-          await apiRequest("PUT", `/api/jobs/${editingJob.id}`, changedData);
+          const saveBody: Record<string, any> = { ...changedData };
+          if (baselineUpdatedAtRef.current) {
+            saveBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+          }
+          const saveRes = await apiRequest("PUT", `/api/jobs/${editingJob.id}`, saveBody);
+          const saveJson = await saveRes.json().catch(() => null);
+          const savedUpdatedAt = saveJson?.data?.updatedAt ?? saveJson?.updatedAt;
+          if (savedUpdatedAt) {
+            baselineUpdatedAtRef.current = new Date(savedUpdatedAt).toISOString();
+          }
           console.log("✅ Auto-save completed successfully");
           setLastAutoSaveTime(new Date());
           hasUserChangedRef.current = false;
@@ -1625,18 +1899,68 @@ export function GlobalJobCard({
             const updated = { ...jobData, ...changedData };
             return old?.data ? { ...old, data: updated } : updated;
           });
-          queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+          // RC12 FIX: Also patch the job inside all list-shaped caches (e.g. the
+          // dispatch board's /api/jobs list). Without this, closing and re-opening the
+          // job card uses the stale list entry (job prop) and resets the form with
+          // pre-save values — making it look like the save never happened.
+          const patchListCache = (old: any) => {
+            if (!old) return old;
+            const data = old?.data ?? old;
+            if (!Array.isArray(data)) return old; // skip single-job cache entries
+            const updated = data.map((j: any) =>
+              j.id === editingJob.id ? { ...j, ...changedData } : j,
+            );
+            return old?.data ? { ...old, data: updated } : updated;
+          };
+          queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, patchListCache);
+          // Also patch the date-scoped Staff Schedule / CalendarGrid cache so
+          // visual indicators (confirmation tick, status colour, etc.) update
+          // immediately rather than waiting for the 30s refetchInterval.
+          queryClient.setQueriesData({ queryKey: ["/api/jobs/for-date"] }, patchListCache);
+          // Only invalidate the specific job — not the full list — to avoid forcing
+          // the dispatch board (125+ jobs) to refetch on every 1.5-second auto-save.
+          queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+          // If schedule-related fields changed, also refresh the date-scoped views
+          // (Staff Schedule, CalendarGrid day view) so they immediately reflect the change.
+          // customerConfirmed is included because the staff schedule renders a
+          // confirmation tick driven by it — without invalidation, the next refetch
+          // (up to 30s away) is what makes the tick appear.
+          const scheduleFields = ["scheduledDate", "scheduledStartTime", "scheduledEndTime", "assignedTeam", "status", "customerConfirmed"];
+          if (scheduleFields.some(f => changedData.hasOwnProperty(f))) {
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
+          }
         } catch (error) {
           console.error("❌ Auto-save failed:", error);
-          // RC5 FIX: Show toast so user knows their changes weren't saved.
-          // Do NOT clear changedFieldsRef — preserves fields for next retry attempt.
-          const failedFields = Array.from(changedFieldsRef.current);
-          toast({
-            title: "Changes not saved",
-            description: `Could not save: ${failedFields.join(", ")}. Will retry automatically.`,
-            variant: "destructive",
-          });
-          hasUserChangedRef.current = true; // Keep true so next watch triggers a retry
+          // 409 STALE_WRITE: the server has a newer version of this job than the
+          // baseline we loaded. Surface it, clear our pending edits (so we don't
+          // re-send them against a stale baseline on the next keystroke), and
+          // invalidate the query so the card reloads with the latest data.
+          if (error instanceof ApiError && error.status === 409) {
+            const body = error.body as { currentUpdatedAt?: string } | null;
+            if (body?.currentUpdatedAt) {
+              baselineUpdatedAtRef.current = new Date(body.currentUpdatedAt).toISOString();
+            }
+            hasUserChangedRef.current = false;
+            changedFieldsRef.current.clear();
+            toast({
+              title: "This job was updated on another device",
+              description: "Your last edit was not saved. Reloading the latest version.",
+              variant: "destructive",
+            });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+            queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+          } else {
+            // RC5 FIX: Show toast so user knows their changes weren't saved.
+            // Do NOT clear changedFieldsRef — preserves fields for next retry attempt.
+            const failedFields = Array.from(changedFieldsRef.current);
+            toast({
+              title: "Changes not saved",
+              description: `Could not save: ${failedFields.join(", ")}. Will retry automatically.`,
+              variant: "destructive",
+            });
+            hasUserChangedRef.current = true; // Keep true so next watch triggers a retry
+          }
         } finally {
           setIsAutoSaving(false);
         }
@@ -1664,17 +1988,164 @@ export function GlobalJobCard({
         for (const field of changedFieldsRef.current) {
           changedData[field] = (formData as any)[field];
         }
+        // Patch the caches BEFORE the keepalive fetch fires so that if the
+        // user reopens the same job within the staleTime window they see the
+        // freshly-typed values instead of the pre-save snapshot (which made
+        // their description "disappear" when reopening quickly after close).
+        queryClient.setQueryData(["/api/jobs", capturedJobId], (old: any) => {
+          if (!old) return old;
+          const jobData = old?.data ?? old;
+          const updated = { ...jobData, ...changedData };
+          return old?.data ? { ...old, data: updated } : updated;
+        });
+        queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+          if (!old) return old;
+          const data = old?.data ?? old;
+          if (!Array.isArray(data)) return old;
+          const updated = data.map((j: any) =>
+            j.id === capturedJobId ? { ...j, ...changedData } : j,
+          );
+          return old?.data ? { ...old, data: updated } : updated;
+        });
         // keepalive ensures the request completes even after the component
         // unmounts or the user navigates away mid-session.
+        // credentials: "include" matches apiRequest() so session cookies reach
+        // the server — without it, this request could 401 in edge cases where
+        // browsers tighten default cookie-sending rules.
+        const keepaliveBody: Record<string, any> = { ...changedData };
+        if (baselineUpdatedAtRef.current) {
+          keepaliveBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+        }
         fetch(`/api/jobs/${capturedJobId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(changedData),
+          body: JSON.stringify(keepaliveBody),
           keepalive: true,
+          credentials: "include",
         }).catch(() => {}); // best-effort, silent failure
       }
     };
   }, [form, mode, editingJob?.id, queryClient]);
+
+  // Unmount-flush for the description / internal-notes popups.
+  //
+  // The popups are controlled Radix Dialogs with their own draft state. They
+  // commit to the form via form.setValue on three paths: the Close button,
+  // onOpenChange (Esc / click-outside / programmatic-open-change), and the
+  // Save button. But onOpenChange does NOT fire when the parent unmounts the
+  // Dialog subtree — so if the user types in the popup and then closes the
+  // whole job card (or even the browser tab) without first dismissing the
+  // popup, the draft is never committed and is silently lost. This was the
+  // most common "description disappeared" complaint.
+  //
+  // Solution: track the popup state in a ref, and on unmount, if a popup was
+  // open with a draft that differs from the current form value, flush it via
+  // a keepalive PUT so the request survives the unmount.
+  const popupFlushRef = useRef<{
+    descriptionPopupOpen: boolean;
+    descriptionDraft: string;
+    internalNotesPopupOpen: boolean;
+    internalNotesDraft: string;
+    jobId: string | undefined;
+    mode: typeof mode;
+    getFormValue: (name: string) => any;
+  }>({
+    descriptionPopupOpen: false,
+    descriptionDraft: "",
+    internalNotesPopupOpen: false,
+    internalNotesDraft: "",
+    jobId: undefined,
+    mode,
+    getFormValue: (name: string) => form.getValues(name as any),
+  });
+  popupFlushRef.current = {
+    descriptionPopupOpen,
+    descriptionDraft,
+    internalNotesPopupOpen,
+    internalNotesDraft,
+    jobId: editingJob?.id,
+    mode,
+    getFormValue: (name: string) => form.getValues(name as any),
+  };
+
+  useEffect(() => {
+    return () => {
+      const snap = popupFlushRef.current;
+      // Same gating fix as the auto-save effect: don't check snap.mode (the
+      // prop stays "create" for the whole session even after a job is
+      // created). snap.jobId is the authoritative signal.
+      if (!snap.jobId) return;
+      const pending: Record<string, any> = {};
+      if (
+        snap.descriptionPopupOpen &&
+        snap.descriptionDraft !== (snap.getFormValue("description") ?? "")
+      ) {
+        pending.description = snap.descriptionDraft;
+      }
+      if (
+        snap.internalNotesPopupOpen &&
+        snap.internalNotesDraft !== (snap.getFormValue("internalNotes") ?? "")
+      ) {
+        pending.internalNotes = snap.internalNotesDraft;
+      }
+      if (Object.keys(pending).length === 0) return;
+
+      const jobId = snap.jobId;
+      queryClient.setQueryData(["/api/jobs", jobId], (old: any) => {
+        if (!old) return old;
+        const jobData = old?.data ?? old;
+        const updated = { ...jobData, ...pending };
+        return old?.data ? { ...old, data: updated } : updated;
+      });
+      queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, (old: any) => {
+        if (!old) return old;
+        const data = old?.data ?? old;
+        if (!Array.isArray(data)) return old;
+        const updated = data.map((j: any) =>
+          j.id === jobId ? { ...j, ...pending } : j,
+        );
+        return old?.data ? { ...old, data: updated } : updated;
+      });
+      const popupBody: Record<string, any> = { ...pending };
+      if (baselineUpdatedAtRef.current) {
+        popupBody.expectedUpdatedAt = baselineUpdatedAtRef.current;
+      }
+      fetch(`/api/jobs/${jobId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(popupBody),
+        keepalive: true,
+        credentials: "include",
+      }).catch(() => {});
+    };
+  }, [queryClient]);
+
+  // Mirror the description / internal-notes popup drafts into form state in
+  // near-real-time while the popup is open. Previously the draft only reached
+  // the form on Close/Esc/outside-click, which meant: if the user closed the
+  // whole modal with the popup still open, or the browser unmounted the
+  // component for any reason before the close handler ran, the typed text
+  // was never in form state and the auto-save system had no idea there was
+  // anything to save — the keepalive popup-flush was a fragile band-aid.
+  //
+  // With this, every keystroke in the popup flows through the normal form →
+  // watch → debounced auto-save path, plus gets covered by the auto-save
+  // unmount-flush on modal close. No new code paths for consumers.
+  useEffect(() => {
+    if (!descriptionPopupOpen) return;
+    const current = form.getValues("description") ?? "";
+    if (descriptionDraft !== current) {
+      form.setValue("description", descriptionDraft, { shouldDirty: true });
+    }
+  }, [descriptionDraft, descriptionPopupOpen, form]);
+
+  useEffect(() => {
+    if (!internalNotesPopupOpen) return;
+    const current = form.getValues("internalNotes") ?? "";
+    if (internalNotesDraft !== current) {
+      form.setValue("internalNotes", internalNotesDraft, { shouldDirty: true });
+    }
+  }, [internalNotesDraft, internalNotesPopupOpen, form]);
 
   // Immediately persist a customer change when the user explicitly picks one.
   // customerId is excluded from the debounced auto-save watcher (to prevent
@@ -1683,21 +2154,45 @@ export function GlobalJobCard({
     customerId: string,
     customerName: string,
   ) => {
-    if (mode !== "edit" || !editingJob?.id) return;
+    // Don't gate on the `mode` prop — it stays "create" for the whole session
+    // even after the job is created. editingJob?.id is the real signal.
+    if (!editingJob?.id) return;
     try {
       setIsAutoSaving(true);
-      await apiRequest("PUT", `/api/jobs/${editingJob.id}`, { customerId });
+      const body: Record<string, any> = { customerId };
+      if (baselineUpdatedAtRef.current) {
+        body.expectedUpdatedAt = baselineUpdatedAtRef.current;
+      }
+      const res = await apiRequest("PUT", `/api/jobs/${editingJob.id}`, body);
+      const json = await res.json().catch(() => null);
+      const newUpdatedAt = json?.data?.updatedAt ?? json?.updatedAt;
+      if (newUpdatedAt) {
+        baselineUpdatedAtRef.current = new Date(newUpdatedAt).toISOString();
+      }
       setLastAutoSaveTime(new Date());
       console.log(
         `✅ Customer saved immediately: ${customerName} (${customerId})`,
       );
     } catch (err) {
       console.error("Failed to save customer change:", err);
-      toast({
-        title: "Could not save customer change",
-        description: "Please hit Save manually.",
-        variant: "destructive",
-      });
+      if (err instanceof ApiError && err.status === 409) {
+        const body = err.body as { currentUpdatedAt?: string } | null;
+        if (body?.currentUpdatedAt) {
+          baselineUpdatedAtRef.current = new Date(body.currentUpdatedAt).toISOString();
+        }
+        toast({
+          title: "This job was updated on another device",
+          description: "Reloading the latest version — please re-pick the customer.",
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+      } else {
+        toast({
+          title: "Could not save customer change",
+          description: "Please hit Save manually.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsAutoSaving(false);
     }
@@ -1865,11 +2360,15 @@ export function GlobalJobCard({
 
   const updateJobMutation = useMutation({
     mutationFn: async (data: GlobalJobCardFormData) => {
-      if (!editingJob?.id) throw new Error("No job ID for update");
+      // Prefer an id explicitly baked into data (captures the job ID at the moment
+      // the user acts, so a subsequent modal-close that nulls editingJob cannot lose it)
+      const jobId = (data as any)._jobId || editingJob?.id;
+      if (!jobId) throw new Error("No job ID for update");
+      const { _jobId, ...payload } = data as any;
       const response = await apiRequest(
         "PUT",
-        `/api/jobs/${editingJob.id}`,
-        data,
+        `/api/jobs/${jobId}`,
+        payload,
       );
       return response.json();
     },
@@ -2141,6 +2640,12 @@ export function GlobalJobCard({
     ? (equipmentData as any).data
     : [];
 
+  // Build a map of equipment name → licenceRequired for inline job card inference
+  const equipmentLicenceMap: Record<string, string | null> = {};
+  for (const eq of allEquipment) {
+    if (eq.name) equipmentLicenceMap[eq.name] = eq.licenceRequired || null;
+  }
+
   // Create proposal mutation
   const createProposalMutation = useMutation({
     mutationFn: async () => {
@@ -2175,8 +2680,12 @@ export function GlobalJobCard({
         throw new Error("Job and customer are required");
       }
 
-      // Get line items from job record first, fallback to form values
-      const lineItems = editingJob.lineItems || form.getValues("lineItems") || [];
+      // Get line items — prefer DB value only if non-empty ([] is truthy so plain || fails)
+      const dbItems = editingJob.lineItems;
+      const lineItems =
+        dbItems && dbItems.length > 0
+          ? dbItems
+          : form.getValues("lineItems") || [];
       const totalAmount =
         lineItems.reduce((sum, item) => sum + (item.total || 0), 0) || 0;
       const quoteData = {
@@ -2204,7 +2713,11 @@ export function GlobalJobCard({
       // Update the job with the quote ID (preserve line items)
       if (result.data?.id && editingJob?.id) {
         try {
-          const lineItems = editingJob.lineItems || form.getValues("lineItems") || [];
+          const savedItems = editingJob.lineItems;
+          const lineItems =
+            savedItems && savedItems.length > 0
+              ? savedItems
+              : form.getValues("lineItems") || [];
           console.log("📝 Updating job with quoteId and line items:", {
             quoteId: result.data.id,
             lineItemsCount: lineItems.length,
@@ -2368,13 +2881,30 @@ export function GlobalJobCard({
     }
   };
 
+  const dialPhone = (phone: string) => {
+    const url = `tel:${phone.replace(/\s/g, "")}`;
+    // '_system' routes through Capacitor's bridge on native (iOS/Android)
+    // so tel: URLs reach the system dialer instead of being swallowed by
+    // the WebView. On web it falls through to a normal navigation.
+    const opened = window.open(url, "_system");
+    if (!opened) {
+      window.location.href = url;
+    }
+  };
+
   const handleCallClick = () => {
-    const phone =
-      form.getValues("jobContactMobile") ||
-      selectedCustomer?.mobile ||
-      form.getValues("jobContactPhone") ||
-      selectedCustomer?.phone;
-    if (!phone) {
+    const toStr = (v: unknown): string => (typeof v === "string" ? v : "");
+
+    const jobPhone =
+      toStr(form.getValues("jobContactMobile")) ||
+      toStr(selectedCustomer?.mobile) ||
+      toStr(form.getValues("jobContactPhone")) ||
+      toStr(selectedCustomer?.phone);
+    const tenantPhone =
+      toStr(form.getValues("tenantContactMobile")) ||
+      toStr(form.getValues("tenantContactPhone"));
+
+    if (!jobPhone && !tenantPhone) {
       toast({
         title: "No Phone Number",
         description: "No phone number available for this customer",
@@ -2382,12 +2912,21 @@ export function GlobalJobCard({
       });
       return;
     }
-    const a = document.createElement("a");
-    a.href = `tel:${phone}`;
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+
+    const jobName =
+      `${toStr(form.getValues("jobContactFirstName"))} ${toStr(form.getValues("jobContactLastName"))}`.trim() ||
+      toStr(selectedCustomer?.name) ||
+      "Job Contact";
+
+    const tenantName =
+      `${toStr(form.getValues("tenantContactFirstName"))} ${toStr(form.getValues("tenantContactLastName"))}`.trim() ||
+      "Tenant";
+
+    setCallPickerOptions({
+      job: { name: jobName, phone: jobPhone },
+      tenant: { name: tenantName, phone: tenantPhone },
+    });
+    setCallPickerOpen(true);
   };
 
   // Handle schedule click
@@ -2432,9 +2971,11 @@ export function GlobalJobCard({
           endDate: existingEndDate,
           startTime: startNZ.time, // NZ time, not UTC!
           duration: durationMinutes.toString(),
+          day2Duration: "",
           assignedTo: uniqueEmployeeIds,
           notes: firstAssignment.notes || "",
           sendClientNotification: false,
+          sendProposalEmail: false,
         });
       }
     } catch (error) {
@@ -2463,8 +3004,13 @@ export function GlobalJobCard({
       return;
     }
 
-    // Get line items from the job record (not from formData which might not be loaded yet)
-    const lineItems = editingJob?.lineItems || form.getValues("lineItems") || [];
+    // Get line items — prefer DB value only if it's non-empty, otherwise fall
+    // back to form state (empty-array [] is truthy so plain || doesn't work).
+    const dbLineItems = editingJob?.lineItems;
+    const lineItems =
+      dbLineItems && dbLineItems.length > 0
+        ? dbLineItems
+        : form.getValues("lineItems") || [];
     if (lineItems.length === 0) {
       toast({
         title: "No Line Items",
@@ -2559,6 +3105,13 @@ export function GlobalJobCard({
         variant: "destructive",
       });
       return;
+    }
+    // Commit any open description-popup draft so form state holds the latest
+    // typed value before InvoiceBuilder reads it. Without this, text entered
+    // via the popup (which doesn't touch form state until the popup closes)
+    // would be missed when the user clicks Invoice before dismissing it.
+    if (descriptionPopupOpen) {
+      form.setValue("description", descriptionDraft, { shouldDirty: true });
     }
     setIsInvoiceModalOpen(true);
   };
@@ -2718,6 +3271,61 @@ The Treemarkables Team`;
     editingJob?.id,
   ]);
 
+  // Advisory busy map: which employees already have an overlapping assignment
+  // on another job during the window the user is picking. Doesn't block
+  // selection — just lets us highlight the row.
+  const busyEmployees = useMemo(() => {
+    const map = new Map<string, { startTime: Date; endTime: Date }[]>();
+    const { date, startTime, duration, endDate, day2Duration } = schedulingData;
+    const assignments = allStaffAssignmentsData?.data ?? [];
+    if (!date || !startTime || !duration || assignments.length === 0) return map;
+    const durMs = parseInt(duration, 10) * 60_000;
+    if (!durMs || Number.isNaN(durMs)) return map;
+
+    // Build every [startUTC, endUTC] window the user's selection covers —
+    // mirrors how saveSchedule creates one assignment per day.
+    const isMultiDay = !!(endDate && endDate !== date);
+    const day2Ms = isMultiDay && day2Duration ? parseInt(day2Duration, 10) * 60_000 : durMs;
+    const lastDay = isMultiDay ? endDate : date;
+    const windows: { start: number; end: number }[] = [];
+    try {
+      const d = new Date(date + "T12:00:00Z");
+      const end = new Date(lastDay + "T12:00:00Z");
+      while (d <= end) {
+        const dayStr = d.toISOString().split("T")[0];
+        const isLast = dayStr === lastDay;
+        const thisMs = isMultiDay && isLast ? day2Ms : durMs;
+        const ws = nzTimeToUTC(dayStr, startTime).getTime();
+        windows.push({ start: ws, end: ws + thisMs });
+        d.setUTCDate(d.getUTCDate() + 1);
+      }
+    } catch {
+      return map;
+    }
+
+    const thisJobId = editingJob?.id;
+    for (const a of assignments) {
+      if (a.jobId && thisJobId && a.jobId === thisJobId) continue;
+      const aStart = new Date(a.startTime).getTime();
+      const aEnd = new Date(a.endTime).getTime();
+      if (Number.isNaN(aStart) || Number.isNaN(aEnd)) continue;
+      const overlaps = windows.some(w => aStart < w.end && aEnd > w.start);
+      if (!overlaps) continue;
+      const list = map.get(a.employeeId) ?? [];
+      list.push({ startTime: new Date(aStart), endTime: new Date(aEnd) });
+      map.set(a.employeeId, list);
+    }
+    return map;
+  }, [
+    schedulingData.date,
+    schedulingData.startTime,
+    schedulingData.duration,
+    schedulingData.endDate,
+    schedulingData.day2Duration,
+    allStaffAssignmentsData,
+    editingJob?.id,
+  ]);
+
   // Save schedule function
   const saveSchedule = async () => {
     if (!editingJob?.id) return;
@@ -2858,6 +3466,123 @@ The Treemarkables Team`;
           });
         }
 
+        // Fire the proposal email ("Can we schedule your job in for...") if requested.
+        // Runs independently of sendClientNotification — the user may want one, both, or neither.
+        if (schedulingData.sendProposalEmail) {
+          const proposalFirstName =
+            editingJob.jobContactFirstName ||
+            editingJobCustomer?.name?.split(" ")[0] ||
+            "there";
+          const proposalCustomerName =
+            editingJobCustomer?.name ||
+            [editingJob.jobContactFirstName, editingJob.jobContactLastName]
+              .filter(Boolean)
+              .join(" ") ||
+            proposalFirstName;
+          const proposalEmail =
+            editingJob.jobContactEmail ||
+            editingJob.billingContactEmail ||
+            editingJobCustomer?.email ||
+            "";
+          // schedulingData.date is a YYYY-MM-DD NZ calendar date from the
+          // date input. Parse the parts directly so format() prints that
+          // same day — appending "T...Z" treats it as UTC and rolls forward
+          // a day once rendered in NZ time.
+          const [dateY, dateM, dateD] = schedulingData.date
+            .split("-")
+            .map(Number);
+          const dateDisplay = format(
+            new Date(dateY, dateM - 1, dateD),
+            "EEEE d MMMM yyyy",
+          );
+          const timeDisplay = formatTime12Hour(schedulingData.startTime);
+
+          // Look up a user-editable "Proposed Booking" template. We match by
+          // name (case-insensitive, substring) so the user can name theirs
+          // anything containing "proposed booking" without further config.
+          const templates = emailTemplatesData?.data ?? [];
+          const proposalTemplate =
+            templates.find(
+              t => t.isActive && /proposed\s*booking/i.test(t.name),
+            ) || null;
+
+          // Fill the variables we have in hand. Uses the *picked* date/time,
+          // not the job's stale scheduledDate, so the email matches what the
+          // user just chose.
+          const substitute = (text: string) =>
+            (text || "")
+              .replace(/\{firstName\}/g, proposalFirstName)
+              .replace(/\{customerName\}/g, proposalCustomerName)
+              .replace(/\{scheduledDate\}/g, dateDisplay)
+              .replace(/\{scheduledTime\}/g, timeDisplay)
+              .replace(/\{jobAddress\}/g, editingJob.address || "")
+              .replace(/\{jobNumber\}/g, editingJob.jobNumber || "")
+              .replace(
+                /\{customerPhone\}/g,
+                editingJob.jobContactPhone || editingJobCustomer?.phone || "",
+              )
+              .replace(/\{email\}/g, proposalEmail);
+
+          const fallbackBody = `<p>Hi ${proposalFirstName},</p>
+<p>Can we schedule your job in for <strong>${dateDisplay}</strong> at <strong>${timeDisplay}</strong>?</p>
+<p>Please note this start time is approximate and may vary slightly on the day.</p>
+<p>Let us know if that works for you.</p>`;
+
+          const proposalSubject = proposalTemplate
+            ? substitute(proposalTemplate.subject) ||
+              `Proposed booking: ${dateDisplay} at ${timeDisplay}`
+            : `Proposed booking: ${dateDisplay} at ${timeDisplay}`;
+          const baseProposalBody = proposalTemplate
+            ? substitute(proposalTemplate.htmlContent) || fallbackBody
+            : fallbackBody;
+          // Appended reply instruction lets the inbound email parser
+          // (server/routes.ts, matches /I confirm booking J-\d+/) auto-flip
+          // customerConfirmed + log a diary entry.
+          const confirmInstruction = `<p style="color: #6b7280; font-size: 12px; margin-top: 16px;">To confirm this date, reply with: <strong>I confirm booking J-${editingJob.jobNumber}</strong></p>`;
+          const proposalBody = `${baseProposalBody}${confirmInstruction}`;
+
+          if (!proposalEmail) {
+            toast({
+              title: "No email address on file",
+              description:
+                "The proposal email wasn't sent because this job has no client email address.",
+              variant: "destructive",
+            });
+          } else {
+            try {
+              const proposalRes = await fetch("/api/emails/send", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  to: proposalEmail,
+                  subject: proposalSubject,
+                  body: proposalBody,
+                  jobId: editingJob.id,
+                  customerId: editingJob.customerId || undefined,
+                }),
+              });
+              const proposalJson = await proposalRes.json().catch(() => ({}));
+              if (!proposalRes.ok || proposalJson?.success === false) {
+                toast({
+                  title: "Proposal email failed",
+                  description:
+                    proposalJson?.message ||
+                    "The job was scheduled but the proposal email couldn't be sent.",
+                  variant: "destructive",
+                });
+              }
+            } catch (emailErr) {
+              console.error("Proposal email error:", emailErr);
+              toast({
+                title: "Proposal email failed",
+                description:
+                  "The job was scheduled but the proposal email couldn't be sent.",
+                variant: "destructive",
+              });
+            }
+          }
+        }
+
         // Update form's status to match database
         form.setValue("status", "scheduled");
 
@@ -2885,12 +3610,23 @@ The Treemarkables Team`;
         hasUserChangedRef.current = false;
         form.reset(form.getValues(), { keepValues: true, keepDirty: false });
 
-        // Refresh job data and staff assignments for dispatch board
-        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+        // Refresh job data and staff assignments for the calendar, dispatch
+        // board, and staff schedule. The calendar grid and dispatch board
+        // use parameterised keys like ["/api/jobs?limit=10000&offset=0"] and
+        // ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"],
+        // so a plain ["/api/jobs"] invalidation won't match them (TanStack
+        // compares array elements, not string prefixes). Use a predicate to
+        // catch every /api/jobs* variant so those views refetch immediately
+        // instead of waiting for the 30s refetchInterval.
         queryClient.invalidateQueries({
-          queryKey: ["/api/jobs", editingJob.id, "diary"],
+          predicate: (query) => {
+            const first = query.queryKey[0];
+            return typeof first === "string" && first.startsWith("/api/jobs");
+          },
         });
+        queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
 
         setIsSchedulingModalOpen(false);
         setSchedulingData({
@@ -2902,6 +3638,7 @@ The Treemarkables Team`;
           assignedTo: [],
           notes: "",
           sendClientNotification: false,
+          sendProposalEmail: false,
         });
         setStaffConflicts([]);
       } else {
@@ -2920,22 +3657,69 @@ The Treemarkables Team`;
     }
   };
 
+  const unscheduleJob = async () => {
+    if (!editingJob?.id) return;
+    try {
+      const prevDate = editingJob.scheduledDate;
+      const res = await fetch(`/api/jobs/${editingJob.id}/unschedule`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) throw new Error("Failed to unschedule job");
+      form.setValue("status", "work_order");
+      changedFieldsRef.current.clear();
+      hasUserChangedRef.current = false;
+      form.reset(form.getValues(), { keepValues: true, keepDirty: false });
+
+      // Create diary entry to record the unscheduling
+      try {
+        const dateStr = prevDate ? ` (was scheduled ${new Date(prevDate).toLocaleDateString("en-NZ", { day: "numeric", month: "long", year: "numeric" })})` : "";
+        await apiRequest("POST", `/api/jobs/${editingJob.id}/diary`, {
+          jobId: editingJob.id,
+          entryType: "note",
+          title: "Job Unscheduled",
+          description: `Job removed from the schedule${dateStr} and returned to work orders.`,
+          authorName: "System",
+          isPrivate: false,
+        });
+      } catch (diaryError) {
+        console.error("Failed to log unschedule to diary:", diaryError);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=10000&offset=0"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs?limit=500&offset=0&excludeCompleted=true&excludeArchived=true"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary-timeline"] });
+      setIsSchedulingModalOpen(false);
+      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false, sendProposalEmail: false });
+    } catch (error) {
+      console.error("Error unscheduling job:", error);
+      toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
+    }
+  };
+
   // Save button handlers
   const handleSave = async () => {
     console.log("🔴 SAVE BUTTON CLICKED");
 
-    // Prevent double-clicking
-    if (isSaving) {
+    // Prevent double-clicking — ref check is synchronous, state check covers the visual guard
+    if (isSavingRef.current || isSaving) {
       console.log("Save already in progress, ignoring duplicate click");
       return;
     }
+    isSavingRef.current = true;
 
     // Commit any open popup drafts before reading form values.
     // Without this, clicking Save while a popup is open loses the typed text.
     // Do NOT call setDescriptionPopupOpen(false) here — closing the Radix Dialog mid-save
     // triggers focus management that disrupts the create→edit split-screen transition.
     // The popup is closed in createJobMutation.onSuccess after the transition completes.
-    if (descriptionPopupOpen && descriptionDraft) {
+    if (descriptionPopupOpen) {
       form.setValue("description", descriptionDraft, { shouldDirty: true });
     }
     // RC10 FIX: Mirror the description sync for internal notes popup.
@@ -2963,8 +3747,8 @@ The Treemarkables Team`;
         );
         form.setValue("isNewCustomer", false);
       }
-      // CRITICAL: Preserve original description if form description is empty
-      if (!formData.description && editingJob.description) {
+      // Preserve original description only if the field was never touched (not intentionally cleared)
+      if (!formData.description && editingJob.description && !form.formState.dirtyFields.description) {
         console.warn("⚠️ description was empty - restoring from editingJob");
         form.setValue("description", editingJob.description);
       }
@@ -3039,6 +3823,7 @@ The Treemarkables Team`;
             : "Please fill in all required fields",
         variant: "destructive",
       });
+      isSavingRef.current = false;
       return;
     }
 
@@ -3055,7 +3840,13 @@ The Treemarkables Team`;
       if (formData.newCustomerEmail) {
         formData.jobContactEmail = formData.newCustomerEmail;
       }
-      formData.jobContactPhone = formData.newCustomerPhone || "";
+      // Only overwrite jobContactPhone if newCustomerPhone has a real value
+      // (mirrors the RC1 fix for email above). Previously this wiped any phone
+      // the user had typed directly into the jobContactPhone field when they
+      // hadn't also filled in the New Customer Phone field.
+      if (formData.newCustomerPhone) {
+        formData.jobContactPhone = formData.newCustomerPhone;
+      }
       // Copy new customer address to job address if job address is empty.
       // newCustomerAddress saves to the customer record but the job needs its own copy.
       if (!formData.address && (formData as any).newCustomerAddress) {
@@ -3118,8 +3909,19 @@ The Treemarkables Team`;
         variant: "destructive",
       });
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
+  };
+
+  // Picking a customer (new or existing) on a fresh job card commits the card
+  // immediately and transitions to split-screen edit mode — no Save click needed.
+  // Deferred so form.setValue calls from the onSelect handler flush first.
+  const autoSaveOnCustomerPick = () => {
+    if (mode !== "create") return;
+    if (createdJobId) return;
+    if (isSavingRef.current || isSaving) return;
+    setTimeout(() => handleSave(), 0);
   };
 
   // Callback for ProposalBuilder to request job save (returns job ID)
@@ -3137,10 +3939,19 @@ The Treemarkables Team`;
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
       const names = formData.newCustomerName.split(" ");
-      formData.jobContactFirstName = names[0] || "";
-      formData.jobContactLastName = names.slice(1).join(" ") || "";
-      formData.jobContactEmail = formData.newCustomerEmail || "";
-      formData.jobContactPhone = formData.newCustomerPhone || "";
+      // Preserve any jobContact* value the user typed directly. Fall back to
+      // parsing the new customer name only if the direct field is empty.
+      formData.jobContactFirstName = formData.jobContactFirstName || names[0] || "";
+      formData.jobContactLastName = formData.jobContactLastName || names.slice(1).join(" ") || "";
+      // Only overwrite email/phone if the newCustomer* source has a real
+      // value — previously these lines wiped user-typed jobContact values
+      // whenever the New Customer fields were left blank.
+      if (formData.newCustomerEmail) {
+        formData.jobContactEmail = formData.newCustomerEmail;
+      }
+      if (formData.newCustomerPhone) {
+        formData.jobContactPhone = formData.newCustomerPhone;
+      }
       if (!formData.address && (formData as any).newCustomerAddress) {
         formData.address = (formData as any).newCustomerAddress;
       }
@@ -3218,15 +4029,16 @@ The Treemarkables Team`;
   };
 
   const handleSaveAndClose = async () => {
-    // Prevent double-clicking
-    if (isSaving) {
+    // Prevent double-clicking — ref check is synchronous, state check covers the visual guard
+    if (isSavingRef.current || isSaving) {
       console.log("Save already in progress, ignoring duplicate click");
       return;
     }
+    isSavingRef.current = true;
 
     // Commit any open popup drafts before reading form values.
     // Do NOT close the popups here — see handleSave comment for why.
-    if (descriptionPopupOpen && descriptionDraft) {
+    if (descriptionPopupOpen) {
       form.setValue("description", descriptionDraft, { shouldDirty: true });
     }
     // RC10 FIX: Mirror for internal notes popup.
@@ -3236,18 +4048,27 @@ The Treemarkables Team`;
 
     const formData = form.getValues();
 
-    // CRITICAL: Preserve original description if form description is empty (edit mode)
-    if (mode === "edit" && !formData.description && editingJob?.description) {
+    // Preserve original description only if the field was never touched (not intentionally cleared)
+    if (mode === "edit" && !formData.description && editingJob?.description && !form.formState.dirtyFields.description) {
       formData.description = editingJob.description;
     }
 
     // Map new customer fields to job contact fields for backend compatibility
     if (formData.isNewCustomer && formData.newCustomerName) {
       const names = formData.newCustomerName.split(" ");
-      formData.jobContactFirstName = names[0] || "";
-      formData.jobContactLastName = names.slice(1).join(" ") || "";
-      formData.jobContactEmail = formData.newCustomerEmail || "";
-      formData.jobContactPhone = formData.newCustomerPhone || "";
+      // Preserve any jobContact* value the user typed directly. Fall back to
+      // parsing the new customer name only if the direct field is empty.
+      formData.jobContactFirstName = formData.jobContactFirstName || names[0] || "";
+      formData.jobContactLastName = formData.jobContactLastName || names.slice(1).join(" ") || "";
+      // Only overwrite email/phone if the newCustomer* source has a real
+      // value — previously these lines wiped user-typed jobContact values
+      // whenever the New Customer fields were left blank.
+      if (formData.newCustomerEmail) {
+        formData.jobContactEmail = formData.newCustomerEmail;
+      }
+      if (formData.newCustomerPhone) {
+        formData.jobContactPhone = formData.newCustomerPhone;
+      }
       if (!formData.address && (formData as any).newCustomerAddress) {
         formData.address = (formData as any).newCustomerAddress;
       }
@@ -3268,6 +4089,8 @@ The Treemarkables Team`;
           "newCustomerAddress",
         ];
 
+        const clearFields: string[] = [];
+        const dirtyFields = form.formState.dirtyFields;
         for (const [key, value] of Object.entries(formData)) {
           if (skipFields.includes(key)) continue;
           const origVal = originalData[key];
@@ -3277,7 +4100,19 @@ The Treemarkables Team`;
           }
           if (JSON.stringify(value) !== JSON.stringify(origVal)) {
             changedData[key] = value;
+            // Same defense as the auto-save: only mark a field as a *force
+            // clear* if the user actually dirtied it. A sync-induced empty
+            // value (form.setValue with shouldDirty:false) would otherwise
+            // slip into _clearFields and wipe a non-empty DB value.
+            const isEmpty = value === "" || value === null || value === undefined;
+            const userDirty = !!(dirtyFields as any)[key];
+            if (isEmpty && userDirty) {
+              clearFields.push(key);
+            }
           }
+        }
+        if (clearFields.length > 0) {
+          changedData._clearFields = clearFields;
         }
 
         if (formData.isNewCustomer) {
@@ -3301,6 +4136,7 @@ The Treemarkables Team`;
     } catch (error) {
       console.error("Save and close failed:", error);
     } finally {
+      isSavingRef.current = false;
       setIsSaving(false);
     }
   };
@@ -3389,16 +4225,19 @@ The Treemarkables Team`;
   // Get current status - use editingJob.status directly to avoid showing stale form data during loading
   // In create mode, use form.watch since there's no editingJob yet
   // IMPORTANT: This line accesses editingJob, so it must come AFTER the loading check above
+  // Prefer watchedStatus (form state) over editingJob?.status so the header
+  // badge flips the instant the dropdown changes. editingJob is derived from
+  // the `job` prop, which is a stale snapshot captured when the parent
+  // (e.g. StaffSchedule) opened the modal — it doesn't refresh after the
+  // update mutation succeeds, so reading from it made the badge stay on the
+  // old status until the user closed and reopened the modal.
   const currentStatus =
-    mode === "edit" ? editingJob?.status : watchedStatus;
+    mode === "edit" ? (watchedStatus || editingJob?.status) : watchedStatus;
 
   if (jobLoading) {
     const loadingContent = (
       <div className="flex items-center justify-center h-full w-full bg-gray-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading job details...</p>
-        </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
 
@@ -3408,7 +4247,10 @@ The Treemarkables Team`;
           loadingContent
         ) : (
           <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-            <DialogContent className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+            <DialogContent
+              className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
+              style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+            >
               {loadingContent}
             </DialogContent>
           </Dialog>
@@ -3445,12 +4287,38 @@ The Treemarkables Team`;
       {/* ServiceM8-style Header - White with colored status badge */}
       <div
         className="border-b border-gray-200 bg-white px-2 sm:px-3 md:px-4 py-0.5 sm:py-1 flex-shrink-0 rounded-t-lg"
-        style={{ marginTop: "env(safe-area-inset-top, 0px)" }}
       >
-        <div className="flex items-center justify-between gap-2 sm:gap-4">
-          {/* Left: Job Title, Status, Price & Payment Badge — stacked to prevent truncation */}
+        <div className="flex items-center justify-between gap-2 sm:gap-4 relative">
+          {/* Centred status badge — absolutely positioned so it floats in the middle of the header */}
+          {currentStatus && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <Badge
+                className={`pointer-events-auto text-xs whitespace-nowrap rounded-full ${
+                  currentStatus === "completed"
+                    ? "bg-green-600 hover:bg-green-700 text-white"
+                    : currentStatus === "work_order"
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : currentStatus === "quote"
+                        ? "bg-orange-500 hover:bg-orange-600 text-white"
+                        : currentStatus === "lead"
+                          ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                          : currentStatus === "scheduled"
+                            ? "bg-purple-600 hover:bg-purple-700 text-white"
+                            : currentStatus === "unsuccessful"
+                              ? "bg-red-600 hover:bg-red-700 text-white"
+                              : "bg-gray-600 hover:bg-gray-700 text-white"
+                }`}
+                data-testid="badge-job-status"
+              >
+                {currentStatus.charAt(0).toUpperCase() +
+                  currentStatus.slice(1)}
+              </Badge>
+            </div>
+          )}
+
+          {/* Left: Job Title, Price & Payment Badge — stacked to prevent truncation */}
           <div className="flex flex-col justify-center flex-1 min-w-0">
-            {/* Row 1: Job number + status badge */}
+            {/* Row 1: Job number only */}
             <div className="flex items-center gap-1 sm:gap-2">
               <h1
                 className="text-base sm:text-xl md:text-2xl font-bold text-gray-900 whitespace-nowrap tracking-tight"
@@ -3460,29 +4328,6 @@ The Treemarkables Team`;
                   ? "New Job"
                   : `Job ${editingJob?.jobNumber || ""}`}
               </h1>
-              {currentStatus && (
-                <Badge
-                  className={`text-xs whitespace-nowrap rounded-full ${
-                    currentStatus === "completed"
-                      ? "bg-green-600 hover:bg-green-700 text-white"
-                      : currentStatus === "work_order"
-                        ? "bg-blue-600 hover:bg-blue-700 text-white"
-                        : currentStatus === "quote"
-                          ? "bg-orange-500 hover:bg-orange-600 text-white"
-                          : currentStatus === "lead"
-                            ? "bg-cyan-600 hover:bg-cyan-700 text-white"
-                            : currentStatus === "scheduled"
-                              ? "bg-blue-600 hover:bg-blue-700 text-white"
-                              : currentStatus === "unsuccessful"
-                                ? "bg-red-600 hover:bg-red-700 text-white"
-                                : "bg-gray-600 hover:bg-gray-700 text-white"
-                  }`}
-                  data-testid="badge-job-status"
-                >
-                  {currentStatus.charAt(0).toUpperCase() +
-                    currentStatus.slice(1)}
-                </Badge>
-              )}
             </div>
             {/* Row 2: Price + Payment status badge (only rendered when there's something to show) */}
             {mode === "edit" &&
@@ -3560,235 +4405,6 @@ The Treemarkables Team`;
 
           {/* Right: Actions Menu (Mobile), Close Button (Mobile), Save Button & Auto-save Indicator */}
           <div className="flex items-center gap-3 sm:gap-4">
-            {/* Actions Menu - Mobile only (hidden in inline/split-screen mode) */}
-            {!renderInline && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden h-7 w-7 text-gray-600 hover:bg-gray-100"
-                    data-testid="button-actions-menu-mobile"
-                  >
-                    <Menu className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-64">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSpeechToQuoteContext("full");
-                      setIsSpeechToQuoteOpen(true);
-                    }}
-                    data-testid="menu-item-speech-to-quote-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-purple-400 to-purple-600 shadow-md mr-3">
-                      <Mic className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Speech to Quote</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleEmailClick}
-                    data-testid="menu-item-email-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-sky-400 to-blue-600 shadow-md mr-3">
-                      <Mail className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Email</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsSMSComposerOpen(true)}
-                    data-testid="menu-item-sms-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-green-400 to-green-600 shadow-md mr-3">
-                      <MessageSquare
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">SMS</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleCallClick}
-                    data-testid="menu-item-call-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-400 to-cyan-600 shadow-md mr-3">
-                      <Phone className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Call</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleScheduleClick}
-                    data-testid="menu-item-schedule-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-indigo-400 to-indigo-600 shadow-md mr-3">
-                      <Calendar
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Schedule</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={handleQuoteClick}
-                    data-testid="menu-item-quote-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-md mr-3">
-                      <Receipt
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Quote</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={handleInvoiceClick}
-                    data-testid="menu-item-invoice-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-600 shadow-md mr-3">
-                      <CreditCard
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Invoice</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={async () => {
-                      if (!selectedCustomer?.id) {
-                        toast({
-                          title: "Customer Required",
-                          description:
-                            "Please select a customer before creating a proposal.",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-
-                      // Save job first to ensure address/description changes are persisted
-                      if (mode === "edit" && editingJob?.id) {
-                        try {
-                          const formData = form.getValues();
-                          await updateJobMutation.mutateAsync(formData);
-                        } catch (error) {
-                          toast({
-                            title: "Save Failed",
-                            description:
-                              "Please resolve any errors before creating a proposal",
-                            variant: "destructive",
-                          });
-                          return;
-                        }
-                      }
-
-                      // Check if there's an existing proposal and load it
-                      const existingProposal = jobProposalResponse?.data?.[0];
-                      if (existingProposal) {
-                        setEditingProposalId(existingProposal.id);
-                      }
-                      setIsProposalBuilderOpen(true);
-                    }}
-                    data-testid="menu-item-proposal-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-pink-400 to-pink-600 shadow-md mr-3">
-                      <Presentation
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Proposal</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setIsTimeTrackingOpen(true)}
-                    data-testid="menu-item-time-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 shadow-md mr-3">
-                      <Clock className="h-6 w-6 text-white" strokeWidth={2.5} />
-                    </div>
-                    <span className="font-medium">Time Tracking</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsProfitTrackerOpen(true)}
-                    data-testid="menu-item-profit-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-teal-400 to-teal-600 shadow-md mr-3">
-                      <DollarSign
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Profit Tracker</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => setIsPhotoCaptureOpen(true)}
-                    data-testid="menu-item-camera-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-violet-400 to-violet-600 shadow-md mr-3">
-                      <Camera
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">Camera</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => sendToXeroMutation.mutate()}
-                    disabled={
-                      !editingJob?.id ||
-                      mode === "create" ||
-                      editingJob?.status !== "completed" ||
-                      editingJob?.xeroStatus === "sent" ||
-                      sendToXeroMutation.isPending
-                    }
-                    data-testid="menu-item-send-xero-mobile"
-                    className="py-3"
-                  >
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-slate-400 to-slate-600 shadow-md mr-3">
-                      <FileText
-                        className="h-6 w-6 text-white"
-                        strokeWidth={2.5}
-                      />
-                    </div>
-                    <span className="font-medium">
-                      {sendToXeroMutation.isPending
-                        ? "Sending..."
-                        : editingJob?.xeroStatus === "sent"
-                          ? "Sent to Xero"
-                          : "Send to Xero"}
-                    </span>
-                  </DropdownMenuItem>
-                  {editingJob?.xeroStatus === "sent" && (
-                    <DropdownMenuItem
-                      onClick={() => setShowXeroResetConfirm(true)}
-                      disabled={resetXeroSyncMutation.isPending}
-                      className="py-3"
-                    >
-                      <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-amber-400 to-amber-600 shadow-md mr-3">
-                        <RotateCcw
-                          className="h-6 w-6 text-white"
-                          strokeWidth={2.5}
-                        />
-                      </div>
-                      <span className="font-medium">Re-send to Xero</span>
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
 
             {/* Close button - Mobile only (hidden in inline mode) */}
             <Button
@@ -4009,6 +4625,40 @@ The Treemarkables Team`;
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleEmailClick}>
+                  <MdEmail className="w-4 h-4 mr-2" />
+                  Email
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!editingJob?.id || mode === "create"}
+                  onClick={() => handleInvoiceClick()}
+                  data-testid="more-menu-invoice"
+                >
+                  <CreditCard className="w-4 h-4 mr-2" />
+                  Invoice
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={!selectedCustomer?.id}
+                  onClick={async () => {
+                    if (!selectedCustomer?.id) return;
+                    if (mode === "edit" && editingJob?.id) {
+                      try {
+                        await updateJobMutation.mutateAsync(form.getValues());
+                      } catch {
+                        toast({ title: "Save Failed", description: "Please resolve any errors before creating a proposal", variant: "destructive" });
+                        return;
+                      }
+                    }
+                    const existingProposal = jobProposalResponse?.data?.[0];
+                    if (existingProposal) setEditingProposalId(existingProposal.id);
+                    setIsProposalBuilderOpen(true);
+                  }}
+                  data-testid="more-menu-proposal"
+                >
+                  <Presentation className="w-4 h-4 mr-2" />
+                  Proposal
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handlePrintClick}>
                   <Printer className="w-4 h-4 mr-2" />
                   Print
@@ -4026,7 +4676,7 @@ The Treemarkables Team`;
                   disabled={
                     !editingJob?.id ||
                     mode === "create" ||
-                    editingJob?.status !== "completed" ||
+                    currentStatus !== "completed" ||
                     editingJob?.xeroStatus === "sent" ||
                     sendToXeroMutation.isPending
                   }
@@ -4057,162 +4707,6 @@ The Treemarkables Team`;
             </DropdownMenu>
           </div>
 
-          {/* Mobile: Essential Actions Dropdown */}
-          <div className="md:hidden flex items-center gap-1">
-            <DropdownMenu
-              open={showMobileActions}
-              onOpenChange={setShowMobileActions}
-            >
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-11 px-3 text-xs"
-                  data-testid="button-mobile-actions"
-                >
-                  <Menu className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuItem
-                  onClick={handleEmailClick}
-                  data-testid="menu-item-email-mobile"
-                >
-                  <Mail className="w-4 h-4 mr-2" />
-                  Email
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsSMSComposerOpen(true)}
-                  data-testid="menu-item-sms-mobile"
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" />
-                  SMS
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleCallClick}
-                  data-testid="menu-item-call-mobile"
-                >
-                  <Phone className="w-4 h-4 mr-2" />
-                  Call
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleScheduleClick}
-                  data-testid="menu-item-schedule-mobile"
-                >
-                  <Calendar className="w-4 h-4 mr-2" />
-                  Schedule
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={handleQuoteClick}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-quote-mobile"
-                >
-                  <Receipt className="w-4 h-4 mr-2" />
-                  Quote
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={handleInvoiceClick}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-invoice-mobile"
-                >
-                  <CreditCard className="w-4 h-4 mr-2" />
-                  Invoice
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={async () => {
-                    // Save job first to ensure address/description changes are persisted
-                    if (mode === "edit" && editingJob?.id) {
-                      try {
-                        const formData = form.getValues();
-                        await updateJobMutation.mutateAsync(formData);
-                      } catch (error) {
-                        toast({
-                          title: "Save Failed",
-                          description:
-                            "Please resolve any errors before creating a proposal",
-                          variant: "destructive",
-                        });
-                        return;
-                      }
-                    }
-
-                    // Check if there's an existing proposal and load it
-                    const existingProposal = jobProposalResponse?.data?.[0];
-                    if (existingProposal) {
-                      setEditingProposalId(existingProposal.id);
-                    }
-                    setIsProposalBuilderOpen(true);
-                  }}
-                  disabled={!selectedCustomer?.id}
-                  data-testid="menu-item-proposal-mobile"
-                >
-                  <Presentation className="w-4 h-4 mr-2" />
-                  Proposal
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setIsTimeTrackingOpen(true)}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-time-mobile"
-                >
-                  <Clock className="w-4 h-4 mr-2" />
-                  Time Tracking
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsProfitTrackerOpen(true)}
-                  disabled={!editingJob?.id || mode === "create"}
-                  data-testid="menu-item-profit-mobile"
-                >
-                  <DollarSign className="w-4 h-4 mr-2" />
-                  Profit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => setIsPhotoCaptureOpen(true)}
-                  data-testid="menu-item-camera-mobile"
-                >
-                  <Camera className="w-4 h-4 mr-2" />
-                  Camera
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => sendToXeroMutation.mutate()}
-                  disabled={
-                    !editingJob?.id ||
-                    mode === "create" ||
-                    editingJob?.status !== "completed" ||
-                    editingJob?.xeroStatus === "sent" ||
-                    sendToXeroMutation.isPending
-                  }
-                  data-testid="menu-item-send-xero-mobile"
-                >
-                  <FileText className="w-4 h-4 mr-2" />
-                  {sendToXeroMutation.isPending
-                    ? "Sending..."
-                    : editingJob?.xeroStatus === "sent"
-                      ? "Sent to Xero"
-                      : "Send to Xero"}
-                </DropdownMenuItem>
-                {editingJob?.xeroStatus === "sent" && (
-                  <DropdownMenuItem
-                    onClick={() => setShowXeroResetConfirm(true)}
-                    disabled={resetXeroSyncMutation.isPending}
-                  >
-                    <RotateCcw className="w-4 h-4 mr-2 text-amber-600" />
-                    Re-send to Xero
-                  </DropdownMenuItem>
-                )}
-                {editingJob?.status === "completed" && (
-                  <DropdownMenuItem
-                    onClick={handleRequestReviewClick}
-                    data-testid="menu-item-request-review-mobile"
-                  >
-                    <Star className="w-4 h-4 mr-2" />
-                    Request Review
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
         </div>
       </div>
 
@@ -4227,11 +4721,11 @@ The Treemarkables Team`;
                 : currentStatus === "work_order"
                   ? "border-blue-200"
                   : currentStatus === "scheduled"
-                    ? "border-blue-200"
+                    ? "border-purple-200"
                     : currentStatus === "quote"
                       ? "border-orange-200"
                       : currentStatus === "lead"
-                        ? "border-cyan-200"
+                        ? "border-yellow-200"
                         : currentStatus === "unsuccessful"
                           ? "border-red-200"
                           : "border-gray-200"
@@ -4242,11 +4736,11 @@ The Treemarkables Team`;
                   : currentStatus === "work_order"
                     ? "bg-blue-500 text-white"
                     : currentStatus === "scheduled"
-                      ? "bg-blue-500 text-white"
+                      ? "bg-purple-500 text-white"
                       : currentStatus === "quote"
                         ? "bg-orange-500 text-white"
                         : currentStatus === "lead"
-                          ? "bg-cyan-500 text-white"
+                          ? "bg-yellow-500 text-white"
                           : currentStatus === "unsuccessful"
                             ? "bg-red-500 text-white"
                             : "bg-gray-500 text-white"
@@ -4255,11 +4749,11 @@ The Treemarkables Team`;
                   : currentStatus === "work_order"
                     ? "text-blue-700 hover:bg-blue-200"
                     : currentStatus === "scheduled"
-                      ? "text-blue-700 hover:bg-blue-200"
+                      ? "text-purple-700 hover:bg-purple-200"
                       : currentStatus === "quote"
                         ? "text-orange-700 hover:bg-orange-200"
                         : currentStatus === "lead"
-                          ? "text-cyan-700 hover:bg-cyan-200"
+                          ? "text-yellow-700 hover:bg-yellow-200"
                           : currentStatus === "unsuccessful"
                             ? "text-red-700 hover:bg-red-200"
                             : "text-gray-700 hover:bg-gray-200"
@@ -4276,11 +4770,11 @@ The Treemarkables Team`;
                 : currentStatus === "work_order"
                   ? "border-blue-200"
                   : currentStatus === "scheduled"
-                    ? "border-blue-200"
+                    ? "border-purple-200"
                     : currentStatus === "quote"
                       ? "border-orange-200"
                       : currentStatus === "lead"
-                        ? "border-cyan-200"
+                        ? "border-yellow-200"
                         : currentStatus === "unsuccessful"
                           ? "border-red-200"
                           : "border-gray-200"
@@ -4291,11 +4785,11 @@ The Treemarkables Team`;
                   : currentStatus === "work_order"
                     ? "bg-blue-500 text-white"
                     : currentStatus === "scheduled"
-                      ? "bg-blue-500 text-white"
+                      ? "bg-purple-500 text-white"
                       : currentStatus === "quote"
                         ? "bg-orange-500 text-white"
                         : currentStatus === "lead"
-                          ? "bg-cyan-500 text-white"
+                          ? "bg-yellow-500 text-white"
                           : currentStatus === "unsuccessful"
                             ? "bg-red-500 text-white"
                             : "bg-gray-500 text-white"
@@ -4304,11 +4798,11 @@ The Treemarkables Team`;
                   : currentStatus === "work_order"
                     ? "text-blue-700 hover:bg-blue-200"
                     : currentStatus === "scheduled"
-                      ? "text-blue-700 hover:bg-blue-200"
+                      ? "text-purple-700 hover:bg-purple-200"
                       : currentStatus === "quote"
                         ? "text-orange-700 hover:bg-orange-200"
                         : currentStatus === "lead"
-                          ? "text-cyan-700 hover:bg-cyan-200"
+                          ? "text-yellow-700 hover:bg-yellow-200"
                           : currentStatus === "unsuccessful"
                             ? "text-red-700 hover:bg-red-200"
                             : "text-gray-700 hover:bg-gray-200"
@@ -4319,32 +4813,32 @@ The Treemarkables Team`;
             Billing
           </button>
           <button
-            className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b ${
+            className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b inline-flex items-center justify-center gap-1.5 ${
               currentStatus === "completed"
                 ? "border-green-200"
                 : currentStatus === "work_order"
                   ? "border-blue-200"
                   : currentStatus === "scheduled"
-                    ? "border-blue-200"
+                    ? "border-purple-200"
                     : currentStatus === "quote"
                       ? "border-orange-200"
                       : currentStatus === "lead"
-                        ? "border-cyan-200"
+                        ? "border-yellow-200"
                         : currentStatus === "unsuccessful"
                           ? "border-red-200"
                           : "border-gray-200"
             } ${
-              sidebarTab === "diary"
+              sidebarTab === "checklist"
                 ? currentStatus === "completed"
                   ? "bg-green-500 text-white"
                   : currentStatus === "work_order"
                     ? "bg-blue-500 text-white"
                     : currentStatus === "scheduled"
-                      ? "bg-blue-500 text-white"
+                      ? "bg-purple-500 text-white"
                       : currentStatus === "quote"
                         ? "bg-orange-500 text-white"
                         : currentStatus === "lead"
-                          ? "bg-cyan-500 text-white"
+                          ? "bg-yellow-500 text-white"
                           : currentStatus === "unsuccessful"
                             ? "bg-red-500 text-white"
                             : "bg-gray-500 text-white"
@@ -4353,19 +4847,20 @@ The Treemarkables Team`;
                   : currentStatus === "work_order"
                     ? "text-blue-700 hover:bg-blue-200"
                     : currentStatus === "scheduled"
-                      ? "text-blue-700 hover:bg-blue-200"
+                      ? "text-purple-700 hover:bg-purple-200"
                       : currentStatus === "quote"
                         ? "text-orange-700 hover:bg-orange-200"
                         : currentStatus === "lead"
-                          ? "text-cyan-700 hover:bg-cyan-200"
+                          ? "text-yellow-700 hover:bg-yellow-200"
                           : currentStatus === "unsuccessful"
                             ? "text-red-700 hover:bg-red-200"
                             : "text-gray-700 hover:bg-gray-200"
             }`}
-            onClick={() => setSidebarTab("diary")}
-            data-testid="sidebar-diary"
+            onClick={() => setSidebarTab("checklist")}
+            data-testid="sidebar-checklist"
           >
-            Diary
+            <ListChecks className="w-3.5 h-3.5" />
+            Checklist
           </button>
         </div>
 
@@ -4381,9 +4876,34 @@ The Treemarkables Team`;
               data-form="job-form"
             >
               <div className="flex flex-col sm:flex-row h-full w-full min-w-0">
+                {/* Pull-to-refresh wrapper: relative+overflow-hidden so indicator is clipped above until pulled */}
                 <div
-                  className={`flex-1 bg-white ${sidebarTab !== "diary" ? "sm:border-r border-gray-300" : ""} p-3 sm:p-4 overflow-y-auto overflow-x-hidden ${sidebarTab === "diary" ? "sm:rounded-lg" : "sm:rounded-l-lg"} min-w-0`}
+                  className="flex-1 relative overflow-hidden sm:border-r border-gray-300 sm:rounded-l-lg min-w-0"
                 >
+                  {/* Pull indicator — lives outside the scrollable div so it's not clipped by overflow-y-auto */}
+                  {(jobCardPullDistance > 0 || jobCardIsRefreshing) && (
+                    <div
+                      className="absolute top-0 left-0 right-0 flex items-center justify-center pointer-events-none z-50"
+                      style={{ transform: `translateY(${Math.min(jobCardPullDistance, 64) - 44}px)`, transition: jobCardIsRefreshing ? 'transform 0.2s ease' : 'none' }}
+                    >
+                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full bg-white shadow-md border border-gray-200 text-xs font-medium ${jobCardShouldTrigger ? 'text-primary' : 'text-gray-500'}`}>
+                        <RotateCcw
+                          className={`w-3.5 h-3.5 ${jobCardIsRefreshing ? 'animate-spin' : ''}`}
+                          style={{ transform: !jobCardIsRefreshing ? `rotate(${Math.min(jobCardPullDistance * 4, 360)}deg)` : undefined }}
+                        />
+                        {jobCardIsRefreshing ? 'Refreshing…' : jobCardShouldTrigger ? 'Release to refresh' : 'Pull to refresh'}
+                      </div>
+                    </div>
+                  )}
+                  {/* Scrollable content — receives transform so it pushes down revealing the indicator */}
+                  <div
+                    className="bg-white h-full p-3 sm:p-4 overflow-y-auto overflow-x-hidden"
+                    style={{
+                      transform: jobCardIsRefreshing ? 'translateY(52px)' : jobCardPullDistance > 0 ? `translateY(${Math.min(jobCardPullDistance, 64)}px)` : undefined,
+                      transition: jobCardIsRefreshing || jobCardPullDistance === 0 ? 'transform 0.25s ease' : 'none',
+                    }}
+                    {...jobCardPullHandlers}
+                  >
                   {sidebarTab === "details" && (
                     <div className="space-y-3 md:space-y-4">
                       {/* ETA Notification Banner */}
@@ -4791,9 +5311,9 @@ The Treemarkables Team`;
                                       : currentStatus === "quote"
                                         ? "bg-indigo-100 text-indigo-700"
                                         : currentStatus === "lead"
-                                          ? "bg-cyan-100 text-cyan-700"
+                                          ? "bg-yellow-100 text-yellow-700"
                                           : currentStatus === "scheduled"
-                                            ? "bg-blue-100 text-blue-700"
+                                            ? "bg-purple-100 text-purple-700"
                                             : currentStatus === "unsuccessful"
                                               ? "bg-red-100 text-red-700"
                                               : "bg-gray-100 text-gray-600"
@@ -4850,83 +5370,8 @@ The Treemarkables Team`;
                                 )}
                             </div>
 
-                            {/* Row 3: Address */}
-                            {watchedAddress && (
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                                <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                <span className="truncate">
-                                  {watchedAddress}
-                                </span>
-                              </div>
-                            )}
                           </div>
 
-                          {/* Action Buttons Row */}
-                          <div className="grid grid-cols-2 gap-2 mt-4">
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-green-500 hover:bg-green-600 text-white rounded-full"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                handleCallClick();
-                              }}
-                              data-testid="button-servicem8-call"
-                            >
-                              <Phone className="h-4 w-4 mr-1.5" />
-                              Call
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-blue-500 hover:bg-blue-600 text-white rounded-full"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setIsSMSComposerOpen(true);
-                              }}
-                              data-testid="button-servicem8-message"
-                            >
-                              <MessageSquare className="h-4 w-4 mr-1.5" />
-                              Message
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-amber-500 hover:bg-amber-600 text-white rounded-full"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                const address = form.getValues("address");
-                                if (address) {
-                                  window.open(
-                                    `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(address)}`,
-                                    "_blank",
-                                  );
-                                }
-                              }}
-                              data-testid="button-servicem8-navigate"
-                            >
-                              <MapPin className="h-4 w-4 mr-1.5" />
-                              Navigate
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              className="w-full bg-indigo-500 hover:bg-indigo-600 text-white rounded-full relative"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                setIsPhotoCaptureOpen(true);
-                              }}
-                              data-testid="button-servicem8-photos"
-                            >
-                              <Camera className="h-4 w-4 mr-1.5" />
-                              Photos
-                              {pendingPhotos.length > 0 && (
-                                <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center">
-                                  {pendingPhotos.length}
-                                </span>
-                              )}
-                            </Button>
-                          </div>
                         </div>
                       )}
 
@@ -5171,7 +5616,7 @@ The Treemarkables Team`;
                                     : currentStatus === "quote"
                                       ? "bg-indigo-100 text-indigo-700"
                                       : currentStatus === "lead"
-                                        ? "bg-cyan-100 text-cyan-700"
+                                        ? "bg-yellow-100 text-yellow-700"
                                         : currentStatus === "scheduled"
                                           ? "bg-blue-100 text-blue-700"
                                           : currentStatus === "unsuccessful"
@@ -5326,6 +5771,7 @@ The Treemarkables Team`;
                                                   customerSearchValue,
                                                 );
                                                 setCustomerSearchOpen(false);
+                                                autoSaveOnCustomerPick();
                                               }}
                                               className="text-blue-600 cursor-pointer"
                                             >
@@ -5491,6 +5937,7 @@ The Treemarkables Team`;
                                                       customer.id,
                                                       customer.name,
                                                     );
+                                                    autoSaveOnCustomerPick();
                                                   }}
                                                 >
                                                   <Check
@@ -5661,6 +6108,7 @@ The Treemarkables Team`;
                                                   customer.id,
                                                   customer.name,
                                                 );
+                                                autoSaveOnCustomerPick();
                                               }}
                                             >
                                               <Check
@@ -5733,39 +6181,6 @@ The Treemarkables Team`;
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
-                            <div className="flex items-center justify-end mb-3 gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={() => {
-                                  setSpeechToQuoteContext("job-description");
-                                  setIsSpeechToQuoteOpen(true);
-                                }}
-                                data-testid="button-speech-job-description"
-                              >
-                                <Mic className="h-4 w-4 mr-1" />
-                                <span className="text-xs">Voice</span>
-                              </Button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setChecklistCollapsed((c) => !c);
-                                }}
-                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
-                              >
-                                <List className="h-3 w-3" />
-                                Checklist
-                                {checklist.length > 0
-                                  ? ` (${checklist.length})`
-                                  : ""}
-                                <ChevronDown
-                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
-                                />
-                              </button>
-                            </div>
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                               <div className="space-y-2 mb-3">
@@ -5854,61 +6269,52 @@ The Treemarkables Team`;
                                 name="description"
                                 render={({ field }) => (
                                   <FormItem>
-                                    <div
-                                      className="flex items-center justify-between cursor-pointer"
-                                      onClick={() => {
-                                        setDescriptionDraft(
-                                          formLoadedJobId === editingJob?.id
-                                            ? field.value || ""
-                                            : field.value ||
-                                                editingJob?.description ||
-                                                "",
-                                        );
-                                        setDescriptionPopupOpen(true);
-                                      }}
-                                    >
+                                    <div className="flex items-center justify-between mb-2">
                                       <span className="text-blue-600 font-medium flex items-center gap-2">
                                         <MessageSquare className="h-4 w-4" />
                                         Job Description
                                       </span>
-                                      <ChevronDown className="h-4 w-4 text-gray-400" />
+                                      <div className="flex items-center gap-2">
+                                        {field.value && (
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              form.setValue("description", "", { shouldDirty: true });
+                                            }}
+                                            className="flex items-center gap-1 text-xs font-medium text-red-500 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                            Clear
+                                          </button>
+                                        )}
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSpeechToQuoteContext("job-description");
+                                            setIsSpeechToQuoteOpen(true);
+                                          }}
+                                          className="flex items-center gap-1 text-xs font-medium text-purple-600 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                          data-testid="button-speech-job-description"
+                                        >
+                                          <Mic className="h-3 w-3" />
+                                          Voice
+                                        </button>
+                                      </div>
                                     </div>
                                     <FormControl>
-                                      <>
-                                        <input type="hidden" {...field} />
-                                        {(formLoadedJobId === editingJob?.id
-                                          ? field.value
-                                          : field.value ||
-                                            editingJob?.description) && (
-                                          <div
-                                            ref={descriptionTextareaRef}
-                                            className="text-sm text-gray-600 mt-2 cursor-pointer whitespace-pre-wrap break-words line-clamp-6"
-                                            onClick={() => {
-                                              setDescriptionDraft(
-                                                formLoadedJobId ===
-                                                  editingJob?.id
-                                                  ? field.value || ""
-                                                  : field.value ||
-                                                      editingJob?.description ||
-                                                      "",
-                                              );
-                                              setDescriptionPopupOpen(true);
-                                            }}
-                                            data-testid="div-description-display"
-                                          >
-                                            <LinkifyMultiline
-                                              text={
-                                                formLoadedJobId ===
-                                                editingJob?.id
-                                                  ? field.value || ""
-                                                  : field.value ||
-                                                    editingJob?.description ||
-                                                    ""
-                                              }
-                                            />
-                                          </div>
-                                        )}
-                                      </>
+                                      <Textarea
+                                        {...field}
+                                        value={
+                                          formLoadedJobId === editingJob?.id
+                                            ? field.value || ""
+                                            : field.value ||
+                                              editingJob?.description ||
+                                              ""
+                                        }
+                                        className="min-h-[150px] text-sm text-gray-600 resize-none border-gray-200"
+                                        placeholder="Add a job description..."
+                                        data-testid="textarea-job-description"
+                                      />
                                     </FormControl>
                                   </FormItem>
                                 )}
@@ -6164,9 +6570,16 @@ The Treemarkables Team`;
                                         // status field so we never accidentally overwrite address or
                                         // other fields with stale form state captured mid-transition.
                                         // The server safeguard preserves all other DB values.
-                                        if (mode === "edit" && editingJob?.id) {
+                                        if (editingJob?.id) {
+                                          // Capture job ID now — if the modal closes before the
+                                          // mutation completes, editingJob becomes null and the
+                                          // status save would silently fail without _jobId.
+                                          // NOTE: check editingJob?.id (not mode prop) so that jobs
+                                          // created in "create" mode and then saved also get their
+                                          // status persisted when changed before closing.
+                                          const capturedJobId = editingJob.id;
                                           updateJobMutation.mutate({
-                                            id: editingJob.id,
+                                            _jobId: capturedJobId,
                                             status: value,
                                           } as GlobalJobCardFormData);
                                         }
@@ -6376,10 +6789,11 @@ The Treemarkables Team`;
                               )}
                             />
                           </div>
-                          {/* Quote Presentation Method - only show for jobs with quotes/proposals */}
-                          {mode === "edit" &&
+                          {/* Quote Presentation Method - show for existing jobs and newly-created jobs */}
+                          {(mode === "edit" || !!createdJobId) &&
                             editingJob &&
                             [
+                              "lead",
                               "quote",
                               "scheduled",
                               "work_order",
@@ -6479,113 +6893,147 @@ The Treemarkables Team`;
                             )}
                         </div>
 
-                        {/* Customer Confirmed Toggle */}
+                        {/* Customer Confirmed + ETA Notification — side by side */}
                         {mode === "edit" && (
-                          <FormField
-                            control={form.control}
-                            name="customerConfirmed"
-                            render={({ field }) => (
-                              <FormItem>
-                                <FormControl>
-                                  <div className="flex items-center gap-2 p-2 rounded-md border border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                    <Checkbox
-                                      id="customer-confirmed"
-                                      checked={!!field.value}
-                                      onCheckedChange={(checked) =>
-                                        field.onChange(checked === true)
-                                      }
-                                      data-testid="checkbox-customer-confirmed"
-                                    />
-                                    <label
-                                      htmlFor="customer-confirmed"
-                                      className="text-sm font-medium text-green-800 dark:text-green-200 leading-none cursor-pointer select-none"
-                                    >
-                                      Customer confirmed this booking
-                                    </label>
-                                  </div>
-                                </FormControl>
-                              </FormItem>
-                            )}
-                          />
-                        )}
-
-                        {/* ETA Notification Requested Toggle */}
-                        {/* Saved immediately via direct apiRequest (NOT via debounced auto-save)
-                            to prevent it from triggering a deferred auto-save loop on form.reset().
-                            etaNotificationRequested is intentionally excluded from autoSaveFieldsRef. */}
-                        {mode === "edit" && (
-                          <FormField
-                            control={form.control}
-                            name="etaNotificationRequested"
-                            render={({ field }) => {
-                              const handleToggle = async (newValue: boolean) => {
-                                field.onChange(newValue); // update form state for UI only
-                                if (editingJob?.id) {
+                          <div className="flex gap-2">
+                            <FormField
+                              control={form.control}
+                              name="customerConfirmed"
+                              render={({ field }) => {
+                                // Saved immediately via direct apiRequest (NOT via
+                                // debounced auto-save) so the green tick on the Staff
+                                // Schedule + dispatch board updates within ~200ms.
+                                // customerConfirmed is excluded from autoSaveFieldsRef
+                                // for the same reason.
+                                const handleToggle = async (newValue: boolean) => {
+                                  field.onChange(newValue);
+                                  if (!editingJob?.id) return;
+                                  const patchListCache = (old: any) => {
+                                    if (!old) return old;
+                                    const data = old?.data ?? old;
+                                    if (!Array.isArray(data)) return old;
+                                    const updated = data.map((j: any) =>
+                                      j.id === editingJob.id ? { ...j, customerConfirmed: newValue } : j,
+                                    );
+                                    return old?.data ? { ...old, data: updated } : updated;
+                                  };
+                                  queryClient.setQueriesData({ queryKey: ["/api/jobs"] }, patchListCache);
+                                  queryClient.setQueriesData({ queryKey: ["/api/jobs/for-date"] }, patchListCache);
                                   try {
                                     await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
-                                      etaNotificationRequested: newValue,
+                                      customerConfirmed: newValue,
                                     });
-                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
                                   } catch {
-                                    field.onChange(!newValue); // revert on failure
+                                    field.onChange(!newValue);
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+                                    queryClient.invalidateQueries({ queryKey: ["/api/jobs/for-date"] });
                                   }
-                                }
-                              };
-                              return (
-                                <FormItem>
-                                  <FormControl>
-                                    {/* RC13 FIX: onClick moved OFF the outer div and onto Bell + span only.
-                                        Radix UI Checkbox dispatches synthetic click events on its hidden
-                                        <input> which bubble up through a parent div onClick, causing
-                                        handleToggle to fire twice (once from onCheckedChange, once from
-                                        the bubbled synthetic click). By moving onClick to the Bell icon
-                                        and label text only (siblings of Checkbox, not parents), Radix
-                                        internal events can never reach these handlers. */}
-                                    <div
-                                      className={`flex items-center gap-2 p-2 rounded-md border select-none transition-colors ${
-                                        field.value
-                                          ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950"
-                                          : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"
-                                      }`}
-                                    >
-                                      <Bell
-                                        className={`h-4 w-4 flex-shrink-0 cursor-pointer ${field.value ? "text-amber-600" : "text-gray-400"}`}
-                                        onClick={() => handleToggle(!field.value)}
-                                      />
-                                      <span
-                                        className={`text-sm font-medium leading-none cursor-pointer flex-1 ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
-                                        onClick={() => handleToggle(!field.value)}
-                                      >
-                                        {field.value
-                                          ? "Customer wants ETA notification"
-                                          : "Notify customer of arrival time"}
-                                      </span>
-                                      <Checkbox
-                                        checked={!!field.value}
-                                        onCheckedChange={(checked) =>
-                                          handleToggle(checked === true)
-                                        }
-                                        className="ml-auto"
-                                        data-testid="checkbox-eta-notification"
-                                      />
-                                    </div>
-                                  </FormControl>
-                                </FormItem>
-                              );
-                            }}
-                          />
+                                };
+                                return (
+                                  <FormItem className="flex-1">
+                                    <FormControl>
+                                      <div className={`flex items-center gap-2 p-2.5 rounded-md border select-none transition-colors cursor-pointer ${field.value ? "border-green-300 bg-green-50 dark:border-green-700 dark:bg-green-950" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
+                                        <Checkbox
+                                          id="customer-confirmed"
+                                          checked={!!field.value}
+                                          onCheckedChange={(checked) =>
+                                            handleToggle(checked === true)
+                                          }
+                                          data-testid="checkbox-customer-confirmed"
+                                        />
+                                        <label
+                                          htmlFor="customer-confirmed"
+                                          className={`text-sm font-medium leading-tight cursor-pointer select-none ${field.value ? "text-green-800 dark:text-green-200" : "text-gray-600 dark:text-gray-400"}`}
+                                        >
+                                          Customer confirmed
+                                        </label>
+                                      </div>
+                                    </FormControl>
+                                  </FormItem>
+                                );
+                              }}
+                            />
+
+                            {/* ETA Notification Requested Toggle */}
+                            {/* Saved immediately via direct apiRequest (NOT via debounced auto-save)
+                                to prevent it from triggering a deferred auto-save loop on form.reset().
+                                etaNotificationRequested is intentionally excluded from autoSaveFieldsRef. */}
+                            <FormField
+                              control={form.control}
+                              name="etaNotificationRequested"
+                              render={({ field }) => {
+                                const handleToggle = async (newValue: boolean) => {
+                                  field.onChange(newValue);
+                                  if (editingJob?.id) {
+                                    try {
+                                      await apiRequest("PUT", `/api/jobs/${editingJob.id}`, {
+                                        etaNotificationRequested: newValue,
+                                      });
+                                      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+                                    } catch {
+                                      field.onChange(!newValue);
+                                    }
+                                  }
+                                };
+                                return (
+                                  <FormItem className="flex-1">
+                                    <FormControl>
+                                      {/* RC13 FIX: onClick on span only (not outer div) to prevent
+                                          Radix synthetic click bubbling causing double-toggle. */}
+                                      <div className={`flex items-center gap-2 p-2.5 rounded-md border select-none transition-colors ${field.value ? "border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950" : "border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900"}`}>
+                                        <Checkbox
+                                          checked={!!field.value}
+                                          onCheckedChange={(checked) =>
+                                            handleToggle(checked === true)
+                                          }
+                                          data-testid="checkbox-eta-notification"
+                                        />
+                                        <span
+                                          className={`text-sm font-medium leading-tight cursor-pointer flex-1 ${field.value ? "text-amber-800 dark:text-amber-200" : "text-gray-600 dark:text-gray-400"}`}
+                                          onClick={() => handleToggle(!field.value)}
+                                        >
+                                          Notify on arrival
+                                        </span>
+                                      </div>
+                                    </FormControl>
+                                  </FormItem>
+                                );
+                              }}
+                            />
+                          </div>
                         )}
 
                         {/* ServiceM8-Style Gear List Card - show in both create and edit modes */}
                         {allEquipment.length > 0 && (
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:bg-transparent md:shadow-none md:border-0 md:p-0 md:rounded-none space-y-3">
-                            <div className="flex items-center gap-2">
-                              <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-                                <Package className="h-4 w-4 text-gray-600" />
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+                                  <Package className="h-4 w-4 text-gray-600" />
+                                </div>
+                                <h3 className="font-bold text-gray-900">
+                                  Gear List
+                                </h3>
                               </div>
-                              <h3 className="font-bold text-gray-900">
-                                Gear List
-                              </h3>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setChecklistCollapsed((c) => !c);
+                                }}
+                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                              >
+                                <List className="h-3 w-3" />
+                                Checklist
+                                {checklist.length > 0
+                                  ? ` (${checklist.length})`
+                                  : ""}
+                                <ChevronDown
+                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
+                                />
+                              </button>
                             </div>
 
                             {/* Multi-select button for equipment */}
@@ -6736,6 +7184,7 @@ The Treemarkables Team`;
                                     key={item.id}
                                     variant="secondary"
                                     className="h-6 text-xs bg-gray-100 text-gray-800 hover:bg-gray-200 cursor-pointer flex items-center gap-1"
+                                    title={equipmentLicenceMap[item.equipment] ? `Requires: ${equipmentLicenceMap[item.equipment]}` : undefined}
                                     onClick={() => {
                                       const currentList =
                                         mode === "edit"
@@ -6785,6 +7234,11 @@ The Treemarkables Team`;
                                     }}
                                   >
                                     {item.equipment}
+                                    {equipmentLicenceMap[item.equipment] && (
+                                      <span className="text-[9px] text-orange-600 font-medium ml-0.5 hidden sm:inline">
+                                        ·{equipmentLicenceMap[item.equipment]}
+                                      </span>
+                                    )}
                                     <X className="w-3 h-3" />
                                   </Badge>
                                 ))}
@@ -6796,39 +7250,6 @@ The Treemarkables Team`;
                         {/* Desktop Job Scope - below Gear List */}
                         <div className="hidden md:block">
                           <div className="space-y-3">
-                            <div className="flex items-center justify-end gap-2">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
-                                onClick={() => {
-                                  setSpeechToQuoteContext("job-description");
-                                  setIsSpeechToQuoteOpen(true);
-                                }}
-                                data-testid="button-speech-job-description-desktop"
-                              >
-                                <Mic className="h-4 w-4 mr-1" />
-                                <span className="text-xs">Voice</span>
-                              </Button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setChecklistCollapsed((c) => !c);
-                                }}
-                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
-                              >
-                                <List className="h-3 w-3" />
-                                Checklist
-                                {checklist.length > 0
-                                  ? ` (${checklist.length})`
-                                  : ""}
-                                <ChevronDown
-                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
-                                />
-                              </button>
-                            </div>
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                               <div className="space-y-2">
@@ -7062,9 +7483,21 @@ The Treemarkables Team`;
                                   <span className="text-xs text-gray-500 font-medium">
                                     Job Description
                                   </span>
-                                  <Edit3 className="h-3 w-3 text-gray-400" />
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSpeechToQuoteContext("job-description");
+                                      setIsSpeechToQuoteOpen(true);
+                                    }}
+                                    className="flex items-center gap-1 text-xs font-medium text-purple-600 border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                    data-testid="button-speech-job-description-desktop"
+                                  >
+                                    <Mic className="h-3 w-3" />
+                                    Voice
+                                  </button>
                                 </div>
-                                <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[40px]">
+                                <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[120px]">
                                   {(formLoadedJobId === editingJob?.id
                                     ? watchedDescription
                                     : watchedDescription ||
@@ -7181,12 +7614,9 @@ The Treemarkables Team`;
                                             {staffName}
                                           </span>
                                           <span className="text-xs text-gray-500">
-                                            {(() => {
-                                              try {
-                                                const d = new Date(editingJob.scheduledDate!);
-                                                return isNaN(d.getTime()) ? "" : format(d, "h:mm a");
-                                              } catch { return ""; }
-                                            })()}
+                                            {editingJob.scheduledStartTime
+                                              ? formatTime12Hour(editingJob.scheduledStartTime)
+                                              : ""}
                                           </span>
                                         </div>
                                       );
@@ -7271,117 +7701,233 @@ The Treemarkables Team`;
                           </div>
                         </div>
 
-                        {/* Contacts */}
+                        {/* Contacts — two tabs: Job Contact (primary, used by automations)
+                            and Tenant Details (opt-in, for tenanted properties). */}
                         <div>
                           <div className="flex items-center gap-2 mb-3">
                             <UserCircle className="w-4 h-4 text-gray-600" />
                             <label className="text-xs font-medium text-gray-600">
-                              Job Contact
+                              Contacts
                             </label>
                           </div>
-                          <div className="grid grid-cols-2 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="jobContactFirstName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="First Name"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactLastName"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Last Name"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
-                          <div className="mt-3 space-y-2">
-                            <FormField
-                              control={form.control}
-                              name="jobContactEmail"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Email"
-                                      type="email"
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactMobile"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Mobile (02x...)"
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        field.onChange(val);
-                                      }}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                            <FormField
-                              control={form.control}
-                              name="jobContactPhone"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Phone (Landline)"
-                                      onChange={(e) => {
-                                        const val = e.target.value;
-                                        field.onChange(val);
+                          <Tabs defaultValue="job" className="w-full">
+                            <TabsList className="grid w-full grid-cols-2 h-8">
+                              <TabsTrigger value="job" className="text-xs" data-testid="tab-job-contact">
+                                Job Contact
+                              </TabsTrigger>
+                              <TabsTrigger value="tenant" className="text-xs" data-testid="tab-tenant-details">
+                                Tenant Details
+                              </TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="job" className="mt-3">
+                              <div className="grid grid-cols-2 gap-3">
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactFirstName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="First Name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactLastName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Last Name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactEmail"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Email"
+                                          type="email"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactMobile"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Mobile"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            field.onChange(val);
+                                          }}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="jobContactPhone"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Phone (Landline)"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            field.onChange(val);
 
-                                        // Auto-route mobile numbers to mobile field
-                                        const cleaned = val
-                                          .replace(/\s/g, "")
-                                          .replace(/^\+64/, "0");
-                                        if (/^0?2[0-9]/.test(cleaned)) {
-                                          form.setValue(
-                                            "jobContactMobile",
-                                            val,
-                                            { shouldDirty: true },
-                                          );
-                                          form.setValue("jobContactPhone", "", {
-                                            shouldDirty: true,
-                                          });
-                                        }
-                                      }}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
+                                            // Auto-route mobile numbers to mobile field
+                                            const cleaned = val
+                                              .replace(/\s/g, "")
+                                              .replace(/^\+64/, "0");
+                                            if (/^0?2[0-9]/.test(cleaned)) {
+                                              form.setValue(
+                                                "jobContactMobile",
+                                                val,
+                                                { shouldDirty: true },
+                                              );
+                                              form.setValue("jobContactPhone", "", {
+                                                shouldDirty: true,
+                                              });
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </TabsContent>
+                            <TabsContent value="tenant" className="mt-3">
+                              <p className="text-[11px] text-gray-500 mb-2">
+                                Used only when you manually pick Tenant as the recipient in the Email or SMS composer. Automations continue to use the Job Contact.
+                              </p>
+                              <div className="grid grid-cols-2 gap-3">
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactFirstName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="First Name"
+                                          data-testid="input-tenant-first-name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactLastName"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Last Name"
+                                          data-testid="input-tenant-last-name"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                              <div className="mt-3 space-y-2">
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactEmail"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Email"
+                                          type="email"
+                                          data-testid="input-tenant-email"
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactMobile"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Mobile"
+                                          data-testid="input-tenant-mobile"
+                                          onChange={(e) => field.onChange(e.target.value)}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                                <FormField
+                                  control={form.control}
+                                  name="tenantContactPhone"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormControl>
+                                        <Input
+                                          {...field}
+                                          className="h-9 text-base md:text-sm"
+                                          placeholder="Phone (Landline)"
+                                          data-testid="input-tenant-phone"
+                                          onChange={(e) => {
+                                            const val = e.target.value;
+                                            field.onChange(val);
+                                            // Auto-route mobile numbers to the tenant mobile field
+                                            const cleaned = val
+                                              .replace(/\s/g, "")
+                                              .replace(/^\+64/, "0");
+                                            if (/^0?2[0-9]/.test(cleaned)) {
+                                              form.setValue("tenantContactMobile", val, { shouldDirty: true });
+                                              form.setValue("tenantContactPhone", "", { shouldDirty: true });
+                                            }
+                                          }}
+                                        />
+                                      </FormControl>
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+                            </TabsContent>
+                          </Tabs>
                         </div>
                       </div>
                     </div>
@@ -7441,24 +7987,25 @@ The Treemarkables Team`;
                             )}
                           />
 
-                          <div className="grid grid-cols-1 gap-3">
-                            <FormField
-                              control={form.control}
-                              name="billingAddress"
-                              render={({ field }) => (
-                                <FormItem>
-                                  <FormControl>
-                                    <Input
-                                      {...field}
-                                      className="h-9 text-base md:text-sm"
-                                      placeholder="Billing Address"
-                                      disabled={watchedSameAsJobAddress}
-                                    />
-                                  </FormControl>
-                                </FormItem>
-                              )}
-                            />
-                          </div>
+                          {!watchedSameAsJobAddress && (
+                            <div className="grid grid-cols-1 gap-3">
+                              <FormField
+                                control={form.control}
+                                name="billingAddress"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormControl>
+                                      <Input
+                                        {...field}
+                                        className="h-9 text-base md:text-sm"
+                                        placeholder="Billing Address"
+                                      />
+                                    </FormControl>
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -8643,46 +9190,33 @@ The Treemarkables Team`;
                     </div>
                   )}
 
-                  {sidebarTab === "diary" && (
+                  {sidebarTab === "checklist" && (
                     <>
                       {editingJob ? (
-                        <JobDiarySection
-                          jobId={editingJob.id}
-                          isServiceM8Style={true}
-                          onQuoteClick={(quoteNumber) => {
-                            setIsQuoteModalOpen(true);
-                          }}
-                          onInvoiceClick={(invoiceNumber) => {
-                            // Open InvoiceBuilder to view/send the invoice
-                            setIsInvoiceModalOpen(true);
-                          }}
-                          onProposalClick={(proposalNumber) => {
-                            // Find the proposal by number and open the viewer
-                            const proposals = jobProposalResponse?.data || [];
-                            const proposal = proposals.find(
-                              (p: any) => p.proposalNumber === proposalNumber,
-                            );
-                            if (proposal?.id) {
-                              setViewingProposalId(proposal.id);
-                              setIsProposalViewerOpen(true);
-                            }
-                          }}
-                        />
+                        <>
+                          <JobRoleCompletionCard jobId={editingJob.id} />
+                          <JobChecklistPanel jobId={editingJob.id} />
+                        </>
                       ) : (
                         <div className="p-4">
                           <div className="text-center py-8 text-gray-500">
-                            <FileText className="w-8 h-8 mx-auto mb-2" />
+                            <ListChecks className="w-8 h-8 mx-auto mb-2" />
                             <p className="text-sm">
-                              Save the job to view activity diary
+                              Save the job to track its compliance checklist
                             </p>
                           </div>
                         </div>
                       )}
                     </>
                   )}
+                  </div>
                 </div>
 
-                {sidebarTab !== "diary" && editingJob && (
+                {/* Right-hand diary panel — always visible alongside the
+                    sidebar tab (Details / Billing / Checklist). The
+                    dedicated full-width Diary tab was removed; this panel
+                    is the only diary view now. */}
+                {editingJob && (
                   <div className="hidden sm:block sm:flex-1 bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
                     <JobDiarySection
                       jobId={editingJob.id}
@@ -8711,6 +9245,275 @@ The Treemarkables Team`;
         </div>
       </div>
 
+      {/* Mobile Fixed Bottom Action Toolbar - ServiceM8 style */}
+      {!renderInline && (
+        <div className="md:hidden flex-shrink-0 bg-white border-t border-gray-200 flex items-stretch sticky bottom-0 z-50 safe-area-inset-bottom"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          {/* Photo */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 group"
+            onClick={() => setIsPhotoCaptureOpen(true)}
+            data-testid="toolbar-btn-photo"
+          >
+            <CameraIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
+            <span className="text-[10px] text-gray-500 font-medium">Photo</span>
+          </button>
+
+          {/* Call */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 group"
+            onClick={handleCallClick}
+            data-testid="toolbar-btn-call"
+          >
+            <CallIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
+            <span className="text-[10px] text-gray-500 font-medium">Call</span>
+          </button>
+
+          {/* SMS */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 group"
+            onClick={() => setIsSMSComposerOpen(true)}
+            data-testid="toolbar-btn-sms"
+          >
+            <SMSIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
+            <span className="text-[10px] text-gray-500 font-medium">SMS</span>
+          </button>
+
+          {/* Email */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 group"
+            onClick={handleEmailClick}
+            data-testid="toolbar-btn-email"
+          >
+            <EmailIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
+            <span className="text-[10px] text-gray-500 font-medium">Email</span>
+          </button>
+
+          {/* More */}
+          <button
+            type="button"
+            className="flex-1 flex flex-col items-center justify-center py-3 gap-1.5 group"
+            onClick={() => setShowMoreActionsSheet(true)}
+            data-testid="toolbar-btn-more"
+          >
+            <MoreDotsIcon className="h-12 w-12 drop-shadow group-active:scale-90 transition-transform duration-100" />
+            <span className="text-[10px] text-gray-500 font-medium">More</span>
+          </button>
+        </div>
+      )}
+
+      {/* More Actions Bottom Sheet Modal */}
+      <Sheet open={showMoreActionsSheet} onOpenChange={setShowMoreActionsSheet}>
+        <SheetContent side="bottom" className="p-0 rounded-t-2xl max-h-[75vh] flex flex-col">
+          <div className="px-4 pt-3 pb-2 border-b border-gray-100 flex-shrink-0">
+            <div className="w-10 h-1 bg-gray-300 rounded-full mx-auto mb-3" />
+            <SheetHeader>
+              <SheetTitle className="text-base font-semibold text-center">Actions</SheetTitle>
+            </SheetHeader>
+          </div>
+          <div className="overflow-y-auto flex-1 p-4" style={{ paddingBottom: "env(safe-area-inset-bottom, 16px)" }}>
+            <div className="grid grid-cols-4 gap-3">
+              {/* Speech to Quote */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors group"
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  setSpeechToQuoteContext("full");
+                  setIsSpeechToQuoteOpen(true);
+                }}
+                data-testid="more-sheet-speech-to-quote"
+              >
+                <SpeechToQuoteIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Speech to Quote</span>
+              </button>
+
+              {/* Schedule */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors group"
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleScheduleClick();
+                }}
+                data-testid="more-sheet-schedule"
+              >
+                <ScheduleIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Schedule</span>
+              </button>
+
+              {/* Quote */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleQuoteClick();
+                }}
+                data-testid="more-sheet-quote"
+              >
+                <QuoteIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Quote</span>
+              </button>
+
+              {/* Invoice */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleInvoiceClick();
+                }}
+                data-testid="more-sheet-invoice"
+              >
+                <InvoiceIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Invoice</span>
+              </button>
+
+              {/* Proposal */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={!selectedCustomer?.id}
+                onClick={async () => {
+                  setShowMoreActionsSheet(false);
+                  if (mode === "edit" && editingJob?.id) {
+                    try {
+                      const formData = form.getValues();
+                      await updateJobMutation.mutateAsync(formData);
+                    } catch (error) {
+                      toast({
+                        title: "Save Failed",
+                        description: "Please resolve any errors before creating a proposal",
+                        variant: "destructive",
+                      });
+                      return;
+                    }
+                  }
+                  const existingProposal = jobProposalResponse?.data?.[0];
+                  if (existingProposal) {
+                    setEditingProposalId(existingProposal.id);
+                  }
+                  setIsProposalBuilderOpen(true);
+                }}
+                data-testid="more-sheet-proposal"
+              >
+                <ProposalIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Proposal</span>
+              </button>
+
+              {/* Time Tracking */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  setIsTimeTrackingOpen(true);
+                }}
+                data-testid="more-sheet-time-tracking"
+              >
+                <TimeTrackingIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Time Tracking</span>
+              </button>
+
+              {/* Profit Tracker */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  setIsProfitTrackerOpen(true);
+                }}
+                data-testid="more-sheet-profit-tracker"
+              >
+                <ProfitTrackerIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Profit Tracker</span>
+              </button>
+
+              {/* Queue Job */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={!editingJob?.id || mode === "create"}
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  handleQueueClick();
+                }}
+                data-testid="more-sheet-queue-job"
+              >
+                <QueueJobIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Queue Job</span>
+              </button>
+
+              {/* Send to Xero */}
+              <button
+                type="button"
+                className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                disabled={
+                  !editingJob?.id ||
+                  mode === "create" ||
+                  currentStatus !== "completed" ||
+                  editingJob?.xeroStatus === "sent" ||
+                  sendToXeroMutation.isPending
+                }
+                onClick={() => {
+                  setShowMoreActionsSheet(false);
+                  sendToXeroMutation.mutate();
+                }}
+                data-testid="more-sheet-send-xero"
+              >
+                <SendToXeroIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">
+                  {sendToXeroMutation.isPending ? "Sending..." : "Send to Xero"}
+                </span>
+              </button>
+
+              {/* Re-send to Xero (conditional) */}
+              {editingJob?.xeroStatus === "sent" && (
+                <button
+                  type="button"
+                  className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
+                  disabled={resetXeroSyncMutation.isPending}
+                  onClick={() => {
+                    setShowMoreActionsSheet(false);
+                    setShowXeroResetConfirm(true);
+                  }}
+                  data-testid="more-sheet-resend-xero"
+                >
+                  <ResendXeroIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                  <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Re-send to Xero</span>
+                </button>
+              )}
+
+              {/* Request Review (conditional on completed status) */}
+              {editingJob?.status === "completed" && (
+                <button
+                  type="button"
+                  className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors group"
+                  onClick={() => {
+                    setShowMoreActionsSheet(false);
+                    handleRequestReviewClick();
+                  }}
+                  data-testid="more-sheet-request-review"
+                >
+                  <RequestReviewIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
+                  <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Request Review</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
       {/* Email Composer Modal */}
       {isEmailComposerOpen && (
         <EmailComposerModal
@@ -8722,6 +9525,12 @@ The Treemarkables Team`;
               watchedBillingContactEmail || editingJob?.billingContactEmail,
             jobContactEmail:
               watchedJobContactEmail || editingJob?.jobContactEmail,
+            tenantContactEmail:
+              watchedTenantContactEmail || editingJob?.tenantContactEmail,
+            tenantContactFirstName:
+              watchedTenantContactFirstName || editingJob?.tenantContactFirstName,
+            tenantContactLastName:
+              watchedTenantContactLastName || editingJob?.tenantContactLastName,
           }}
           customEmail={
             emailContext !== "invoice"
@@ -9010,14 +9819,24 @@ The Treemarkables Team`;
         <SMSComposerModal
           isOpen={isSMSComposerOpen}
           onClose={() => setIsSMSComposerOpen(false)}
-          job={editingJob}
+          job={{
+            ...editingJob,
+            tenantContactPhone:
+              watchedTenantContactPhone || editingJob?.tenantContactPhone,
+            tenantContactMobile:
+              watchedTenantContactMobile || editingJob?.tenantContactMobile,
+            tenantContactFirstName:
+              watchedTenantContactFirstName || editingJob?.tenantContactFirstName,
+            tenantContactLastName:
+              watchedTenantContactLastName || editingJob?.tenantContactLastName,
+          }}
           customer={selectedCustomer}
         />
       )}
 
       {/* Proposal Builder */}
       {isProposalBuilderOpen && (
-        <ProposalBuilder
+        <ProposalBuilderV2
           isOpen={isProposalBuilderOpen}
           onClose={() => {
             setIsProposalBuilderOpen(false);
@@ -9048,112 +9867,37 @@ The Treemarkables Team`;
         />
       )}
 
-      {/* Quote Management Modal */}
-      {isQuoteModalOpen && editingJob && quoteTemplate && (
-        <Dialog open={isQuoteModalOpen} onOpenChange={setIsQuoteModalOpen}>
-          <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto p-0">
-            <DialogHeader className="p-3 sm:p-6 border-b">
-              <div className="flex justify-center sm:justify-end">
-                <div className="flex gap-1 sm:gap-2 w-full sm:w-auto">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveQuote}
-                    data-testid="button-save-quote"
-                    className="bg-green-600 hover:bg-green-700 text-white h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <FileText className="w-4 h-4 mr-1" />
-                    <span>Save</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {}}
-                    data-testid="button-copy-quote"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Copy className="w-4 h-4 mr-1" />
-                    <span>Copy</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setIsQuoteModalOpen(false);
-                      handleEmailClick("quote");
-                    }}
-                    data-testid="button-email-quote"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Mail className="w-4 h-4 mr-1" />
-                    <span>Email</span>
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {}}
-                    data-testid="button-download-quote"
-                    className="h-9 text-xs sm:text-sm px-2 sm:px-4 flex-1 sm:flex-none"
-                  >
-                    <Download className="w-4 h-4 mr-1" />
-                    <span>PDF</span>
-                  </Button>
-                </div>
-              </div>
-            </DialogHeader>
-            <div className="p-3 sm:p-6">
-              {(() => {
-                // Use editingJob.lineItems first (loaded from database), fallback to form values
-                const lineItemsSource =
-                  editingJob.lineItems || form.getValues("lineItems") || [];
-                const mappedLineItems = lineItemsSource.map((item) => {
-                  const quantity = item.quantity || 1;
-                  const unitPrice = item.unitPrice || 0;
-                  const total = quantity * unitPrice;
-                  return {
-                    id: item.id,
-                    description: item.description,
-                    quantity: quantity,
-                    unitPrice: unitPrice,
-                    unit: "each",
-                    total: total,
-                    priceIncludesTax: item.priceIncludesTax || false,
-                  };
-                });
-                const totalAmount = mappedLineItems.reduce(
-                  (sum, item) => sum + item.total,
-                  0,
-                );
-
-                return (
-                  <QuoteTemplate
-                    template={quoteTemplate}
-                    quote={{
-                      id: editingJob.id,
-                      quoteNumber: `QTE-${editingJob.jobNumber || Date.now()}`,
-                      amount: String(totalAmount),
-                      status: "draft",
-                      customerId: selectedCustomer?.id || "",
-                      jobId: editingJob.id,
-                      description:
-                        form.getValues("description") || editingJob.description || "",
-                      validUntil: new Date(
-                        Date.now() + 30 * 24 * 60 * 60 * 1000,
-                      ),
-                      terms:
-                        quoteTemplate?.paymentTerms ||
-                        "Payment due within 30 days",
-                      createdAt: new Date(),
-                      updatedAt: new Date(),
-                    }}
-                    customer={selectedCustomer || undefined}
-                    lineItems={mappedLineItems}
-                    showActions={false}
-                  />
-                );
-              })()}
-            </div>
-          </DialogContent>
-        </Dialog>
+      {/* Quote Builder — proposal-builder-style UI in quote mode.
+          Sends by email with a PDF attachment and a mailto "Accept Quote"
+          button (no public viewer link). */}
+      {isQuoteModalOpen && editingJob && (
+        <ProposalBuilderV2
+          kind="quote"
+          isOpen={isQuoteModalOpen}
+          onClose={() => {
+            setIsQuoteModalOpen(false);
+            if (editingJob?.id) {
+              queryClient.invalidateQueries({
+                queryKey: ["/api/jobs", editingJob.id, "diary-timeline"],
+              });
+              queryClient.invalidateQueries({
+                queryKey: ["/api/jobs", editingJob.id, "diary"],
+              });
+              queryClient.invalidateQueries({ queryKey: ["/api/proposals"] });
+            }
+          }}
+          jobId={editingJob?.id}
+          customerId={selectedCustomer?.id}
+          mode="create"
+          jobDescription={watchedDescription}
+          lineItems={watchedLineItems}
+          customEmail={
+            watchedJobContactEmail ||
+            editingJob?.jobContactEmail ||
+            undefined
+          }
+          onRequestJobSave={handleRequestJobSave}
+        />
       )}
 
       {/* Invoice Builder Modal */}
@@ -9164,7 +9908,34 @@ The Treemarkables Team`;
           <InvoiceBuilder
             isOpen={isInvoiceModalOpen}
             onClose={() => setIsInvoiceModalOpen(false)}
-            job={editingJob}
+            // Merge live form values over editingJob. editingJob reflects the
+            // last-saved server state, which lags by up to 1.5s behind typing
+            // (the auto-save debounce). Without this, descriptions (and other
+            // text fields) typed right before clicking Invoice would be
+            // missed by InvoiceBuilder's initializer.
+            job={{
+              ...editingJob,
+              // `??` (not `||`) so an intentional user clear ("") isn't
+              // silently replaced by the stale cached value.
+              description:
+                form.getValues("description") ?? editingJob.description,
+              notes: form.getValues("notes") ?? editingJob.notes,
+              address: form.getValues("address") ?? editingJob.address,
+              billingAddress:
+                form.getValues("billingAddress") ?? editingJob.billingAddress,
+              billingContactEmail:
+                form.getValues("billingContactEmail") ??
+                editingJob.billingContactEmail,
+              billingNameOverride:
+                form.getValues("billingNameOverride") ??
+                editingJob.billingNameOverride,
+              jobContactFirstName:
+                form.getValues("jobContactFirstName") ??
+                editingJob.jobContactFirstName,
+              jobContactLastName:
+                form.getValues("jobContactLastName") ??
+                editingJob.jobContactLastName,
+            }}
             customer={{
               ...selectedCustomer,
               // Use billing name override from form (current unsaved value) first, then saved value, then customer name
@@ -9178,9 +9949,12 @@ The Treemarkables Team`;
         ) : (
           <Dialog
             open={isInvoiceModalOpen}
-            onOpenChange={setIsInvoiceModalOpen}
+            onOpenChange={(open) => { if (!open) setIsInvoiceModalOpen(false); }}
           >
-            <DialogContent className="flex items-center justify-center min-h-[200px]">
+            <DialogContent
+              className="flex items-center justify-center min-h-[200px]"
+              onEscapeKeyDown={(e) => e.stopPropagation()}
+            >
               <div className="text-center space-y-2">
                 <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full mx-auto" />
                 <p className="text-sm text-muted-foreground">
@@ -9224,11 +9998,11 @@ The Treemarkables Team`;
         open={isSchedulingModalOpen}
         onOpenChange={setIsSchedulingModalOpen}
       >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col p-0">
+          <DialogHeader className="px-6 pt-6 pb-2 flex-shrink-0">
             <h2 className="text-lg font-semibold">Schedule Job</h2>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="space-y-4 px-6 py-2 overflow-y-auto flex-1 min-h-0">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Start Date</label>
@@ -9401,11 +10175,25 @@ The Treemarkables Team`;
                     const isSelected = schedulingData.assignedTo.includes(
                       employee.id,
                     );
+                    const conflicts = busyEmployees.get(employee.id);
+                    const isBusy = !!conflicts && conflicts.length > 0;
+                    const busyTooltip = isBusy
+                      ? `Already booked: ${conflicts
+                          .map(c => {
+                            const s = utcToNZTime(c.startTime).time;
+                            const e = utcToNZTime(c.endTime).time;
+                            return `${formatTime12Hour(s)}–${formatTime12Hour(e)}`;
+                          })
+                          .join(", ")}`
+                      : undefined;
 
+                    const employeeName = `${employee.firstName} ${employee.lastName}`;
                     return (
                       <div
                         key={employee.id}
-                        className="flex items-center space-x-2"
+                        className={`flex items-center space-x-2 rounded-sm px-1 ${
+                          isBusy ? "bg-amber-50 border border-amber-200" : ""
+                        }`}
                       >
                         <input
                           type="checkbox"
@@ -9429,13 +10217,38 @@ The Treemarkables Team`;
                           htmlFor={`staff-${employee.id}`}
                           className="text-sm flex-1 cursor-pointer"
                         >
-                          {employee.firstName} {employee.lastName}
+                          {employeeName}
                           {employee.position && (
                             <span className="text-xs text-muted-foreground ml-1">
                               ({employee.position})
                             </span>
                           )}
+                          {isBusy && (
+                            <span
+                              className="ml-2 inline-flex items-center rounded-sm bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800 border border-amber-300"
+                              title={busyTooltip}
+                              data-testid={`badge-staff-busy-${employee.id}`}
+                            >
+                              Busy
+                            </span>
+                          )}
                         </label>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={() =>
+                            setStaffAvailabilityFor({
+                              id: employee.id,
+                              name: employeeName,
+                            })
+                          }
+                          data-testid={`btn-staff-calendar-${employee.id}`}
+                          title={`View ${employeeName}'s calendar`}
+                        >
+                          <Calendar className="h-4 w-4 text-blue-600" />
+                        </Button>
                       </div>
                     );
                   })
@@ -9464,6 +10277,43 @@ The Treemarkables Team`;
               </label>
             </div>
 
+            {/* Proposal Email Option — asks the customer to confirm the proposed date/time.
+                Uses the "Proposed Booking" template from Settings → Communication Templates
+                when present; falls back to a built-in message otherwise. */}
+            <div className="flex items-start space-x-2 p-3 bg-amber-50 dark:bg-amber-950 rounded-md border border-amber-200 dark:border-amber-800">
+              <Checkbox
+                id="proposal-email"
+                checked={schedulingData.sendProposalEmail}
+                onCheckedChange={(checked) =>
+                  setSchedulingData((prev) => ({
+                    ...prev,
+                    sendProposalEmail: checked === true,
+                  }))
+                }
+                data-testid="checkbox-send-proposal-email"
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <label
+                  htmlFor="proposal-email"
+                  className="text-sm font-medium leading-none cursor-pointer select-none"
+                >
+                  Send proposal email asking client to confirm this date and time
+                </label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Uses the "Proposed Booking" template from{" "}
+                  <Link
+                    href="/settings/templates"
+                    className="underline hover:text-foreground"
+                  >
+                    Communication Templates
+                  </Link>
+                  . Variables: {"{firstName}"}, {"{scheduledDate}"},{" "}
+                  {"{scheduledTime}"}, {"{jobAddress}"}, {"{jobNumber}"}.
+                </p>
+              </div>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Notes</label>
               <Textarea
@@ -9479,44 +10329,82 @@ The Treemarkables Team`;
               />
             </div>
           </div>
-          <div className="flex justify-end space-x-2 pt-4">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsSchedulingModalOpen(false);
-                setSchedulingData({
-                  date: "",
-                  endDate: "",
-                  startTime: "",
-                  duration: "",
-                  day2Duration: "",
-                  assignedTo: [],
-                  notes: "",
-                  sendClientNotification: false,
-                });
-              }}
-              data-testid="btn-cancel-schedule"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={saveSchedule}
-              disabled={
-                !schedulingData.date ||
-                !schedulingData.startTime ||
-                !schedulingData.duration ||
-                schedulingData.assignedTo.length === 0
-              }
-              data-testid="btn-save-schedule"
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Schedule {schedulingData.assignedTo.length} Staff Member
-              {schedulingData.assignedTo.length !== 1 ? "s" : ""}
-            </Button>
+          <div className="flex justify-between gap-2 px-6 py-4 border-t flex-wrap flex-shrink-0">
+            {/* Unschedule button — only shown when job already has a scheduled date */}
+            <div>
+              {editingJob?.scheduledDate && (
+                <Button
+                  variant="outline"
+                  onClick={unscheduleJob}
+                  data-testid="btn-unschedule"
+                  className="text-red-600 border-red-300"
+                >
+                  Unschedule
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsSchedulingModalOpen(false);
+                  setSchedulingData({
+                    date: "",
+                    endDate: "",
+                    startTime: "",
+                    duration: "",
+                    day2Duration: "",
+                    assignedTo: [],
+                    notes: "",
+                    sendClientNotification: false,
+                    sendProposalEmail: false,
+                  });
+                }}
+                data-testid="btn-cancel-schedule"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={saveSchedule}
+                disabled={
+                  !schedulingData.date ||
+                  !schedulingData.startTime ||
+                  !schedulingData.duration ||
+                  schedulingData.assignedTo.length === 0
+                }
+                data-testid="btn-save-schedule"
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Schedule {schedulingData.assignedTo.length} Staff Member
+                {schedulingData.assignedTo.length !== 1 ? "s" : ""}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Staff Availability Calendar — opened from the Schedule modal's staff list.
+          Google Calendar only overlays when the viewer is looking at their own row. */}
+      <CalendarAvailabilityModal
+        isOpen={!!staffAvailabilityFor}
+        onClose={() => setStaffAvailabilityFor(null)}
+        employeeId={staffAvailabilityFor?.id}
+        employeeName={staffAvailabilityFor?.name}
+        includeGoogleCalendar={
+          !!staffAvailabilityFor && !!currentUser && staffAvailabilityFor.id === currentUser.id
+        }
+        onSlotPick={(slotStart) => {
+          const dateStr = formatInTimeZone(slotStart, "Pacific/Auckland", "yyyy-MM-dd");
+          const timeStr = formatInTimeZone(slotStart, "Pacific/Auckland", "HH:mm");
+          setSchedulingData((prev) => ({
+            ...prev,
+            date: dateStr,
+            startTime: timeStr,
+            endDate: prev.endDate && prev.endDate < dateStr ? "" : prev.endDate,
+          }));
+        }}
+      />
 
       {/* Time Tracking Modal */}
       {isTimeTrackingOpen && editingJob && (
@@ -9660,7 +10548,16 @@ The Treemarkables Team`;
       ) : (
         // Dialog rendering for mobile and standalone use
         <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-          <DialogContent className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl">
+          <DialogContent
+            className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+            onEscapeKeyDown={(e) => {
+              if (isInvoiceModalOpen) e.preventDefault();
+            }}
+            onInteractOutside={(e) => {
+              if (isInvoiceModalOpen) e.preventDefault();
+            }}
+          >
             {jobCardContent}
           </DialogContent>
         </Dialog>
@@ -9905,6 +10802,60 @@ The Treemarkables Team`;
         </DialogContent>
       </Dialog>
 
+      {/* Call Contact Picker — pick between Job Contact and Tenant */}
+      <AlertDialog open={callPickerOpen} onOpenChange={setCallPickerOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Who would you like to call?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Choose which contact to dial for this job.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-col gap-2 sm:space-x-0">
+            <AlertDialogAction
+              onClick={() => {
+                if (callPickerOptions.job?.phone) {
+                  dialPhone(callPickerOptions.job.phone);
+                }
+              }}
+              disabled={!callPickerOptions.job?.phone}
+              data-testid="call-picker-job"
+              className="w-full justify-start"
+            >
+              <span className="truncate text-left">
+                Job Contact — {callPickerOptions.job?.name || "Unknown"}
+                {callPickerOptions.job?.phone
+                  ? ` · ${callPickerOptions.job.phone}`
+                  : " · no number"}
+              </span>
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={() => {
+                if (callPickerOptions.tenant?.phone) {
+                  dialPhone(callPickerOptions.tenant.phone);
+                }
+              }}
+              disabled={!callPickerOptions.tenant?.phone}
+              data-testid="call-picker-tenant"
+              className="w-full justify-start"
+            >
+              <span className="truncate text-left">
+                Tenant — {callPickerOptions.tenant?.name || "Unknown"}
+                {callPickerOptions.tenant?.phone
+                  ? ` · ${callPickerOptions.tenant.phone}`
+                  : " · no number"}
+              </span>
+            </AlertDialogAction>
+            <AlertDialogCancel
+              className="w-full mt-0"
+              data-testid="call-picker-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* Booking Cancellation Confirmation Dialog */}
       <AlertDialog
         open={cancelBookingDialogOpen}
@@ -10023,16 +10974,13 @@ The Treemarkables Team`;
           </DialogHeader>
           <div className="p-4">
             {(() => {
-              const proposals = jobProposalResponse?.data || [];
-              const viewingProposal = proposals.find(
-                (p: any) => p.id === viewingProposalId,
-              );
+              const viewingProposal = (viewingProposalData as any)?.data;
 
               if (!viewingProposal) {
                 return (
                   <div className="text-center py-8 text-gray-500">
                     <FileText className="w-8 h-8 mx-auto mb-2" />
-                    <p>Proposal not found</p>
+                    <p>Loading proposal...</p>
                   </div>
                 );
               }

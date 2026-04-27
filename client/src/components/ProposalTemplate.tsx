@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef, forwardRef } from 'react';
+import { useState, forwardRef } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { format } from 'date-fns';
-import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare } from 'lucide-react';
+import { FileText, Download, Mail, Copy, Image as ImageIcon, MapPin, Phone, Mail as MailIcon, Calendar, MessageSquare, MousePointerClick } from 'lucide-react';
 import type { DocumentTemplate, Proposal, Customer } from '@shared/schema';
 import { LinkifiedText } from '@/utils/linkify';
-import logoUrl from '@assets/treelogo_1761690528797.webp';
+import { ProposalReviewsWidget } from '@/components/ProposalReviewsWidget';
 
 interface ProposalLineItem {
   id: string;
@@ -36,12 +36,15 @@ interface ProposalLineItem {
 interface ProposalPhoto {
   id: string;
   url: string;
+  thumbnailUrl?: string;
   filename: string;
   type: string;
   category: string;
   notes?: string;
   capturedAt: string;
 }
+
+type SectionType = "fixed" | "subtotalOnly" | "multipleChoice" | "optional";
 
 interface ProposalSection {
   id: string;
@@ -50,6 +53,7 @@ interface ProposalSection {
   photos: ProposalPhoto[];
   lineItems: ProposalLineItem[];
   sortOrder: number;
+  sectionType?: SectionType;
 }
 
 interface ProposalTemplateProps {
@@ -71,60 +75,24 @@ interface ProposalTemplateProps {
   onOptionalToggle?: (lineItemId: string, selected: boolean) => void;
 }
 
-// Lazy loading image component using Intersection Observer with zero layout shift
-function LazyImage({ src, alt, className }: { src: string; alt: string; className: string }) {
-  const [shouldLoad, setShouldLoad] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting && !shouldLoad) {
-            setShouldLoad(true);
-            observer.disconnect();
-          }
-        });
-      },
-      {
-        rootMargin: '100px', // Start loading 100px before image enters viewport
-        threshold: 0.01
-      }
-    );
-
-    if (containerRef.current) {
-      observer.observe(containerRef.current);
-    }
-
-    return () => {
-      observer.disconnect();
-    };
-  }, [shouldLoad]);
-
-  // Preload image and fade in when ready
-  useEffect(() => {
-    if (shouldLoad && !isLoaded) {
-      const img = new Image();
-      img.onload = () => {
-        setIsLoaded(true);
-      };
-      img.src = src;
-    }
-  }, [shouldLoad, src, isLoaded]);
+// Photo thumbnail — fills its square aspect-ratio container completely
+function LazyImage({ src, alt }: { src: string; alt: string; className?: string }) {
+  const [hasError, setHasError] = useState(false);
 
   return (
-    <div ref={containerRef} className="relative w-full bg-gray-100" style={{ paddingBottom: '100%' }}>
-      {/* Placeholder - always rendered to maintain aspect ratio */}
-      <div className={`absolute inset-0 bg-gray-100 transition-opacity duration-300 ${isLoaded ? 'opacity-0' : 'opacity-100'}`} />
-      {/* Real image - fades in when loaded */}
-      {shouldLoad && (
+    <div className="relative w-full bg-gray-100" style={{ paddingBottom: '100%' }}>
+      {hasError ? (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <ImageIcon className="w-5 h-5 text-gray-300" />
+        </div>
+      ) : (
         <img
           src={src}
           alt={alt}
-          className={`${className} absolute inset-0 transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+          className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
           decoding="async"
+          onError={() => setHasError(true)}
         />
       )}
     </div>
@@ -150,6 +118,11 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   onOptionalToggle
 }, ref) => {
   const [isLoading, setIsLoading] = useState(false);
+  const logoUrl = (template.logoUrl as string | null | undefined) || "/treemarkables-logo.png";
+  const logoSize = ((template as { logoSize?: number }).logoSize) ?? 40;
+  const rawAlign = (template as { logoAlignment?: string }).logoAlignment;
+  const logoAlignment: "left" | "center" | "right" =
+    rawAlign === "center" || rawAlign === "right" ? rawAlign : "left";
 
   // Calculate totals from all sections
   const calculateTotals = () => {
@@ -157,11 +130,16 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
     let gstAmount = 0;
     
     sections.forEach(section => {
+      const secType = (section.sectionType ?? 'fixed') as string;
+      const sectionIsInteractive = secType === 'optional' || secType === 'multipleChoice';
       (section.lineItems || []).forEach(item => {
-        // Check if this item is selected - use state override if available, otherwise use original
+        // Optional items (individual isOptional flag OR entire section is interactive) are
+        // excluded from the total by default — only included once the customer explicitly
+        // toggles them on via selectedOptionalItems.
+        const defaultSelected = !item.isOptional && !sectionIsInteractive && item.selected !== false;
         const isItemSelected = selectedOptionalItems[item.id] !== undefined 
           ? selectedOptionalItems[item.id] 
-          : item.selected;
+          : defaultSelected;
         
         if (isItemSelected) {
           let itemPrice = 0;
@@ -180,19 +158,15 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
           const isInclusive = item.priceIncludesTax || false;
           const gstRate = 0.15; // 15% GST for New Zealand
           
-          console.log(`💰 Item: ${item.description}, Price: ${itemPrice}, priceIncludesTax: ${item.priceIncludesTax}, isInclusive: ${isInclusive}`);
-          
           if (isInclusive) {
             // Price includes GST - extract the ex-GST amount
             const exGst = itemPrice / (1 + gstRate);
             subtotalExGst += exGst;
             gstAmount += itemPrice - exGst;
-            console.log(`  ✅ GST INCLUSIVE: exGst=${exGst}, gstAmount=${itemPrice - exGst}`);
           } else {
             // Price excludes GST - add it
             subtotalExGst += itemPrice;
             gstAmount += itemPrice * gstRate;
-            console.log(`  ✅ GST EXCLUSIVE: subtotal=${itemPrice}, gstAmount=${itemPrice * gstRate}`);
           }
         }
       });
@@ -207,8 +181,6 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
     const gstOnDiscounted = subtotalAfterDiscount * gstRate;
     const totalAmount = subtotalAfterDiscount + gstOnDiscounted;
     
-    console.log(`📊 FINAL TOTALS: subtotal=${subtotalExGst}, discount=${discountAmount}, subtotalAfterDiscount=${subtotalAfterDiscount}, gst=${gstOnDiscounted}, total=${totalAmount}`);
-
     return {
       subtotal: subtotalExGst,
       discount: discountAmount,
@@ -246,7 +218,7 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
   const isExpired = expiryDate && expiryDate < new Date();
 
   return (
-    <div ref={ref} className={`max-w-4xl mx-auto bg-white w-full ${className}`}>
+    <div ref={ref} className={`max-w-4xl mx-auto bg-white w-full overflow-x-hidden ${className}`}>
       {/* Action Bar */}
       {showActions && (
         <div className="flex justify-end items-center mb-6 p-4 bg-gray-50 rounded-lg">
@@ -280,88 +252,138 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
       )}
 
       <Card className="shadow-lg">
-        {/* Header with Logo */}
-        <CardHeader className="p-4 sm:p-8 border-b border-gray-200 bg-gradient-to-r from-orange-50 to-white">
-          <div className="flex items-center justify-between flex-wrap gap-4">
-            <div>
-              <img 
-                src={logoUrl} 
-                alt="Treemarkables Logo" 
-                className="h-16 sm:h-20 w-auto object-contain"
+        {/* Header with Logo — size and alignment follow the template settings */}
+        <CardHeader className="p-4 sm:p-6 border-b border-gray-200">
+          {logoAlignment === "center" ? (
+            <div className="flex flex-col items-center gap-3 text-center">
+              <img
+                src={logoUrl}
+                alt="Company Logo"
+                className="w-auto object-contain"
+                style={{ height: `${logoSize}px`, maxHeight: 160 }}
                 data-testid="img-company-logo"
               />
+              <div className="min-w-0">
+                {template.companyAddress && (
+                  <p className="text-sm text-gray-700 break-words">{template.companyAddress}</p>
+                )}
+                {template.companyPhone && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyPhone}</p>
+                )}
+                {template.companyEmail && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyEmail}</p>
+                )}
+                {template.gstNumber && (
+                  <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
+                )}
+              </div>
             </div>
-            <div className="text-right">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1">PROPOSAL</h2>
-              <p className="text-sm text-gray-600" data-testid="text-proposal-number">
-                #{proposal.proposalNumber}
-              </p>
-              {job?.jobNumber && (
-                <p className="text-xs text-gray-600 mt-0.5">
-                  Job #{job.jobNumber}
-                </p>
-              )}
-              {proposal.createdAt && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
-                </p>
-              )}
-              {expiryDate && (
-                <p className={`text-xs mt-1 ${isExpired ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
-                  {isExpired ? 'Expired:' : 'Valid until:'} {format(expiryDate, 'dd MMM yyyy')}
-                </p>
-              )}
+          ) : (
+            <div
+              className={`flex flex-col sm:items-center sm:justify-between gap-3 ${
+                logoAlignment === "right" ? "sm:flex-row-reverse" : "sm:flex-row"
+              }`}
+            >
+              <div className="shrink-0">
+                <img
+                  src={logoUrl}
+                  alt="Company Logo"
+                  className="w-auto object-contain"
+                  style={{ height: `${logoSize}px`, maxHeight: 160 }}
+                  data-testid="img-company-logo"
+                />
+              </div>
+              <div className={`min-w-0 ${logoAlignment === "right" ? "sm:text-left" : "sm:text-right"}`}>
+                {template.companyAddress && (
+                  <p className="text-sm text-gray-700 break-words">{template.companyAddress}</p>
+                )}
+                {template.companyPhone && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyPhone}</p>
+                )}
+                {template.companyEmail && (
+                  <p className="text-sm text-gray-600 mt-0.5 break-all">{template.companyEmail}</p>
+                )}
+                {template.gstNumber && (
+                  <p className="text-xs text-gray-500 mt-0.5">GST Number: {template.gstNumber}</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </CardHeader>
         
         <CardContent className="p-0">
-          {/* Customer Information */}
-          {customer && (
-            <div className="p-4 sm:p-8 border-b border-gray-200">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Proposal For</h3>
-              <div className="bg-gray-50 rounded-lg p-3 sm:p-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                  <div>
+          {/* Customer + Proposal Info Row — matches the builder layout */}
+          <div className="p-4 sm:p-6 border-b border-gray-200">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              {/* Left: Customer box */}
+              <div className="bg-gray-50 rounded-lg p-3 sm:p-4 flex-1 min-w-0">
+                {customer ? (
+                  <>
                     <h4 className="font-semibold text-gray-900 text-sm sm:text-base break-words" data-testid="text-customer-name">
                       {customer.name}
                     </h4>
                     {(job?.address || customer.address) && (
-                      <div className="flex items-start gap-2 text-gray-700 mt-2 text-sm sm:text-base">
-                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 mt-1" />
-                        <p className="break-words">{job?.address || customer.address}</p>
+                      <div className="flex items-start gap-2 text-gray-700 mt-2 text-sm">
+                        <MapPin className="w-3 h-3 sm:w-4 sm:h-4 shrink-0 mt-0.5" />
+                        <p className="break-words">
+                          {[
+                            job?.address || customer.address,
+                            job?.city || customer.city,
+                            job?.region || customer.region,
+                          ].filter(Boolean).join(', ')}
+                        </p>
                       </div>
                     )}
-                  </div>
-                  <div className="space-y-1">
                     {customer.email && (
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mt-1">
                         <MailIcon className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
                         <span className="break-all">{customer.email}</span>
                       </div>
                     )}
                     {customer.phone && (
-                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600">
+                      <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mt-1">
                         <Phone className="w-3 h-3 sm:w-4 sm:h-4 shrink-0" />
                         <span className="break-all">{customer.phone}</span>
                       </div>
                     )}
-                  </div>
-                </div>
+                  </>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">No customer selected</p>
+                )}
+              </div>
+
+              {/* Right: Proposal reference info */}
+              <div className="text-right shrink-0">
+                <p className="text-base font-bold text-gray-900" data-testid="text-proposal-number">
+                  Proposal #{proposal.proposalNumber}
+                </p>
+                {job?.jobNumber && (
+                  <p className="text-sm text-gray-600 mt-0.5">Job #{job.jobNumber}</p>
+                )}
+                {proposal.createdAt && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    {format(new Date(proposal.createdAt), 'dd MMM yyyy')}
+                  </p>
+                )}
+                {expiryDate && (
+                  <p className={`text-xs mt-1 ${isExpired ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                    {isExpired ? 'Expired:' : 'Valid until:'} {format(expiryDate, 'dd MMM yyyy')}
+                  </p>
+                )}
               </div>
             </div>
-          )}
+          </div>
 
           {/* Proposal Sections */}
           {sections.map((section, sectionIndex) => (
-            <div key={section.id} className="p-4 sm:p-8 border-b border-gray-200">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4 break-words" data-testid={`text-section-title-${sectionIndex}`}>
+            <div key={section.id} className="p-4 sm:p-5 border-b border-gray-200">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3 break-words" data-testid={`text-section-title-${sectionIndex}`}>
                 {section.title}
               </h3>
 
               {/* Section Description */}
               {section.description && (
-                <div className="mb-2 sm:mb-6">
+                <div className="mb-2 sm:mb-3">
                   <p className="text-gray-700 text-xs sm:text-base whitespace-pre-wrap break-words">
                     <LinkifiedText text={section.description} />
                   </p>
@@ -370,9 +392,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
 
               {/* Section Photos */}
               {(section.photos || []).length > 0 && (
-                <div className="mb-4 sm:mb-6">
-                  <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Documentation</h4>
-                  <div className="grid grid-cols-4 md:grid-cols-4 gap-1 sm:gap-1.5">
+                <div className="mb-3 sm:mb-4">
+                  <div className="grid grid-cols-8 gap-1 sm:gap-1.5">
                     {(section.photos || []).map((photo, photoIndex) => (
                       <div 
                         key={photo.id} 
@@ -386,15 +407,16 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                           const modal = document.createElement('div');
                           modal.className = 'fixed inset-0 z-[200] flex items-center justify-center bg-black/95';
                           
-                          // Create close button
+                          // Create close button — fixed positioning so it always sits above imgContainer
                           const closeBtn = document.createElement('button');
                           closeBtn.innerHTML = '×';
-                          closeBtn.className = 'absolute top-4 right-4 text-white text-4xl w-12 h-12 flex items-center justify-center hover:bg-white/20 rounded-full transition-colors z-10';
-                          closeBtn.onclick = () => modal.remove();
-                          
-                          // Create image container
+                          closeBtn.className = 'text-white text-4xl w-14 h-14 flex items-center justify-center bg-black/40 rounded-full transition-colors';
+                          closeBtn.style.cssText = 'position:fixed;right:1rem;top:max(1rem,env(safe-area-inset-top));z-index:201;pointer-events:auto;';
+                          closeBtn.onclick = (e) => { e.stopPropagation(); modal.remove(); document.removeEventListener('keydown', handleKeyDown); };
+
+                          // Create image container — no position:relative so it doesn't compete with closeBtn
                           const imgContainer = document.createElement('div');
-                          imgContainer.className = 'relative w-full h-full flex items-center justify-center p-4 sm:p-16';
+                          imgContainer.className = 'w-full h-full flex items-center justify-center p-4 sm:p-16';
                           
                           // Create image element
                           const img = document.createElement('img');
@@ -471,12 +493,22 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                             }
                           });
                           
-                          // Clean up on close
-                          modal.onclick = () => {
+                          // Guard against ghost clicks on mobile: the same tap that opens the
+                          // modal fires a synthetic click ~300ms later and would close it instantly.
+                          const openedAt = Date.now();
+                          const safeClose = () => {
+                            if (Date.now() - openedAt < 400) return;
                             document.removeEventListener('keydown', handleKeyDown);
                             modal.remove();
                           };
-                          
+                          // Close on background tap only (not on image — tap to zoom is natural)
+                          modal.onclick = safeClose;
+
+                          // Stop pointer/mouse events from bubbling to document so Radix Dialog
+                          // doesn't interpret them as an "outside click" and close the proposal viewer.
+                          modal.addEventListener('pointerdown', (e) => e.stopPropagation());
+                          modal.addEventListener('mousedown', (e) => e.stopPropagation());
+
                           // Assemble modal
                           imgContainer.appendChild(img);
                           modal.appendChild(closeBtn);
@@ -503,152 +535,340 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
               )}
 
               {/* Section Line Items */}
-              {(section.lineItems || []).length > 0 && (
-                <div className="mb-4 sm:mb-6">
-                  <h4 className="font-medium text-gray-900 text-sm sm:text-base mb-3">Services & Pricing</h4>
-                  <div className="w-full overflow-x-auto">
-                    <div className="inline-block min-w-full align-middle">
+              {(section.lineItems || []).length > 0 && (() => {
+                const secType: SectionType = section.sectionType ?? "fixed";
+                const isInteractive = (secType === "optional" || secType === "multipleChoice") && onOptionalToggle;
+                const isMultipleChoice = secType === "multipleChoice";
+                const isSubtotalOnly = secType === "subtotalOnly";
+
+                // For subtotalOnly: compute the section subtotal and show one row
+                if (isSubtotalOnly) {
+                  const sectionSubtotal = (section.lineItems || []).reduce((sum, item) => {
+                    const p = item.pricingType === "fixed" && item.fixedPrice
+                      ? Number(item.fixedPrice)
+                      : Number(item.totalPrice);
+                    return sum + (p || 0);
+                  }, 0);
+                  return (
+                    <div className="mb-4 sm:mb-6">
+                      <div className="w-full overflow-x-auto">
+                        <div className="inline-block min-w-full align-middle">
+                          <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">{section.title || "Items"}</th>
+                                <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Subtotal</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr className="bg-gray-50">
+                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm text-gray-700">Included works — {(section.lineItems || []).length} item{(section.lineItems || []).length !== 1 ? "s" : ""}</td>
+                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(sectionSubtotal)}</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="mb-4 sm:mb-6">
+                    {isInteractive && (
+                      <div className="flex items-center gap-2.5 bg-orange-50 border border-orange-200 rounded-lg px-3 py-3 mb-3">
+                        <MousePointerClick className="w-5 h-5 text-orange-500 shrink-0" />
+                        <p className="text-sm font-semibold text-orange-700">
+                          {isMultipleChoice
+                            ? "Tap an option to select it — only your chosen option will be added to the total"
+                            : "Tap the options you'd like to add — they'll be reflected in the total below"}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* ── Mobile card layout (interactive sections only — non-interactive always uses the table) ── */}
+                    <div className={`${isInteractive ? 'sm:hidden' : 'hidden'} space-y-2`}>
+                      {(section.lineItems || []).map((item, index) => {
+                        let displayPrice: number = Number(item.totalPrice) || 0;
+                        const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
+                        if (item.pricingType === 'choice' && effectiveChoiceId) {
+                          const sel = item.choices?.find(c => c.id === effectiveChoiceId);
+                          if (sel) displayPrice = Number(sel.price) * Number(item.quantity);
+                        } else if (item.pricingType === 'fixed' && item.fixedPrice) {
+                          displayPrice = Number(item.fixedPrice);
+                        }
+                        const defaultSelected = !item.isOptional && !isInteractive && item.selected !== false;
+                        const isItemSelected = selectedOptionalItems[item.id] !== undefined
+                          ? selectedOptionalItems[item.id] : defaultSelected;
+                        const isItemToggleable = isInteractive || item.isOptional;
+                        const handleToggle = () => {
+                          if (!isItemToggleable || !onOptionalToggle) return;
+                          if (isMultipleChoice) {
+                            (section.lineItems || []).forEach(li => {
+                              if (li.id !== item.id) onOptionalToggle(li.id, false);
+                            });
+                            onOptionalToggle(item.id, !isItemSelected);
+                          } else {
+                            onOptionalToggle(item.id, !isItemSelected);
+                          }
+                        };
+                        return (
+                          <div
+                            key={item.id}
+                            className={`border rounded-lg p-3 overflow-hidden transition-colors ${isItemToggleable && isItemSelected ? 'bg-green-50 border-green-300' : isInteractive ? 'bg-white border-gray-200' : 'bg-white border-gray-200'} ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}`}
+                            data-testid={`row-line-item-${sectionIndex}-${index}`}
+                            onClick={handleToggle}
+                          >
+                            {/* Interactive: side-by-side layout with big circle on right */}
+                            {isInteractive ? (
+                              <div className="flex items-center gap-3">
+                                <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                                  <div className={`font-medium text-sm break-words [overflow-wrap:anywhere] ${isItemSelected ? 'text-gray-900' : 'text-gray-500'}`}>
+                                    <LinkifiedText text={item.description} />
+                                  </div>
+                                  {item.notes && (
+                                    <div className={`text-xs break-words [overflow-wrap:anywhere] ${isItemSelected ? 'text-gray-600' : 'text-gray-400'}`}>
+                                      <LinkifiedText text={item.notes} />
+                                    </div>
+                                  )}
+                                  <div className={`text-xs ${isItemSelected ? 'text-gray-500' : 'text-gray-400'}`}>Qty: {item.quantity}</div>
+                                  <div className={`text-base font-semibold ${isItemSelected ? 'text-green-700' : 'text-gray-400'}`}>
+                                    {formatCurrency(displayPrice)}
+                                  </div>
+                                </div>
+                                <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={handleToggle}
+                                    aria-pressed={isItemSelected}
+                                    className={`inline-flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-full border-[3px] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-green-300 ${isItemSelected ? 'bg-green-500 border-green-500 text-white shadow-lg scale-105' : 'bg-white border-gray-300 text-gray-400 hover:border-green-400 hover:text-green-500 hover:shadow-md'}`}
+                                  >
+                                    {isItemSelected ? (
+                                      <>
+                                        <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                        <span className="text-[9px] font-bold leading-none">ADDED</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                                        <span className="text-[9px] font-semibold leading-none">{isMultipleChoice ? "SELECT" : "ADD"}</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex flex-col gap-2 min-w-0">
+                              <div className={`font-medium text-sm break-words [overflow-wrap:anywhere] text-gray-900`}>
+                                <LinkifiedText text={item.description} />
+                              </div>
+                              {item.notes && (
+                                <div className={`text-xs break-words [overflow-wrap:anywhere] text-gray-600`}>
+                                  <LinkifiedText text={item.notes} />
+                                </div>
+                              )}
+                              <div className={`text-xs text-gray-500`}>
+                                Qty: {item.quantity}
+                              </div>
+                              <div className={`text-base font-semibold break-words ${isItemToggleable ? (isItemSelected ? 'text-green-700' : 'text-gray-400') : 'text-gray-900'}`}>
+                                {formatCurrency(displayPrice)}
+                              </div>
+                              {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
+                                <div className="text-xs min-w-0" onClick={(e) => e.stopPropagation()}>
+                                  <p className="text-gray-600 font-medium mb-1">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
+                                  <ul className="flex flex-col gap-1.5">
+                                    {item.choices.map(choice => {
+                                      const isChoiceSelected = choice.id === (selectedChoices[item.id] || item.selectedChoiceId);
+                                      return (
+                                        <li
+                                          key={choice.id}
+                                          className={`flex items-start gap-2 p-2 rounded-md border ${isChoiceSelected ? 'border-green-300 bg-green-50 font-medium text-green-700' : 'border-gray-200 text-gray-700'} ${allowChoiceSelection ? 'cursor-pointer' : ''}`}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (allowChoiceSelection && onChoiceSelect) onChoiceSelect(item.id, choice.id);
+                                          }}
+                                        >
+                                          {allowChoiceSelection ? (
+                                            <input type="radio" name={`choice-${item.id}`} checked={isChoiceSelected} onChange={(e) => { e.stopPropagation(); onChoiceSelect?.(item.id, choice.id); }} className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer shrink-0" />
+                                          ) : <span className="shrink-0">•</span>}
+                                          <div className="flex-1 min-w-0 flex flex-col gap-0.5 break-words [overflow-wrap:anywhere]">
+                                            <span>{choice.label}</span>
+                                            <span className="text-gray-600">{formatCurrency(Number(choice.price) || 0)}</span>
+                                            {choice.description && <span className="text-gray-500 text-[11px]">{choice.description}</span>}
+                                          </div>
+                                        </li>
+                                      );
+                                    })}
+                                  </ul>
+                                </div>
+                              )}
+                              {item.isOptional && !isInteractive && (
+                                <div className="flex items-center justify-between flex-wrap gap-2">
+                                  <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                    {isItemSelected ? "Included" : "Optional"}
+                                  </Badge>
+                                  {onOptionalToggle && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); onOptionalToggle(item.id, !isItemSelected); }}
+                                      className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 font-medium ${isItemSelected ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-500'}`}
+                                    >
+                                      {isItemSelected ? "Included" : "+ Add"}
+                                    </button>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* ── Table layout (always visible for non-interactive; desktop-only for interactive) ── */}
+                    <div className={`${isInteractive ? 'hidden sm:block' : 'block'} w-full overflow-x-auto`}>
                       <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-left text-xs sm:text-sm font-semibold text-gray-900">Service</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900">Qty</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden sm:table-cell">Rate</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900">Price</th>
-                            <th className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm font-semibold text-gray-900 hidden md:table-cell">Optional</th>
+                            {isInteractive && (
+                              <th className="border border-gray-200 px-2 py-3 text-center text-sm font-semibold text-gray-900 w-24">Select</th>
+                            )}
+                            <th className="border border-gray-200 px-4 py-3 text-left text-sm font-semibold text-gray-900">Line Item</th>
+                            <th className="border border-gray-200 px-3 py-3 text-center text-sm font-semibold text-gray-900 w-14">Qty</th>
+                            <th className="hidden sm:table-cell border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">Rate</th>
+                            <th className="border border-gray-200 px-4 py-3 text-right text-sm font-semibold text-gray-900">Price</th>
+                            {!isInteractive && (
+                              <th className="hidden sm:table-cell border border-gray-200 px-4 py-3 text-center text-sm font-semibold text-gray-900">Optional</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody>
                           {(section.lineItems || []).map((item, index) => {
-                            let displayPrice = item.totalPrice;
+                            let displayPrice: number = Number(item.totalPrice) || 0;
                             const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
                             if (item.pricingType === 'choice' && effectiveChoiceId) {
                               const selectedChoice = item.choices?.find(c => c.id === effectiveChoiceId);
                               if (selectedChoice) {
-                                displayPrice = selectedChoice.price * item.quantity;
+                                displayPrice = Number(selectedChoice.price) * Number(item.quantity);
                               }
                             } else if (item.pricingType === 'fixed' && item.fixedPrice) {
-                              displayPrice = item.fixedPrice;
+                              displayPrice = Number(item.fixedPrice);
                             }
-
-                            // Check if this item is selected (use state override if available, otherwise use original)
-                            // All items can be selected/deselected by the customer, not just optional ones
-                            const isItemSelected = selectedOptionalItems[item.id] !== undefined 
-                              ? selectedOptionalItems[item.id] 
-                              : item.selected;
-                            
-                            // Determine if this row is clickable - all rows are clickable in customer selection mode
-                            const isRowClickable = allowChoiceSelection && onOptionalToggle;
-                            
-                            const handleRowClick = () => {
-                              if (isRowClickable) {
+                            const defaultSelected = !item.isOptional && !isInteractive && item.selected !== false;
+                            const isItemSelected = selectedOptionalItems[item.id] !== undefined
+                              ? selectedOptionalItems[item.id]
+                              : defaultSelected;
+                            const isItemToggleable = isInteractive || item.isOptional;
+                            const handleToggle = () => {
+                              if (!isItemToggleable || !onOptionalToggle) return;
+                              if (isMultipleChoice) {
+                                (section.lineItems || []).forEach(li => {
+                                  if (li.id !== item.id) onOptionalToggle(li.id, false);
+                                });
+                                onOptionalToggle(item.id, !isItemSelected);
+                              } else {
                                 onOptionalToggle(item.id, !isItemSelected);
                               }
                             };
-
                             return (
-                              <tr 
-                                key={item.id} 
-                                className={`
-                                  ${isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'} 
-                                  ${!isItemSelected && item.isOptional ? 'opacity-60' : ''}
-                                  ${isRowClickable ? 'cursor-pointer hover:bg-green-100 transition-colors' : ''}
-                                `} 
+                              <tr
+                                key={item.id}
+                                className={`transition-colors ${isItemToggleable && isItemSelected ? 'bg-green-50' : 'even:bg-gray-50'} ${isItemToggleable && onOptionalToggle ? 'cursor-pointer' : ''}`}
                                 data-testid={`row-line-item-${sectionIndex}-${index}`}
-                                onClick={handleRowClick}
+                                onClick={handleToggle}
                               >
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-gray-900">
-                                  <div className="flex items-start gap-2">
-                                    {/* Checkbox for selection */}
-                                    {isRowClickable && (
-                                      <input 
-                                        type="checkbox" 
-                                        checked={isItemSelected}
-                                        onChange={(e) => {
-                                          e.stopPropagation();
-                                          onOptionalToggle(item.id, e.target.checked);
-                                        }}
-                                        className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer shrink-0 rounded border-gray-300"
-                                      />
+                                {isInteractive && (
+                                  <td className="border border-gray-200 px-2 py-3 text-center align-middle" onClick={(e) => e.stopPropagation()}>
+                                    <button
+                                      type="button"
+                                      onClick={handleToggle}
+                                      aria-pressed={isItemSelected}
+                                      className={`inline-flex flex-col items-center justify-center gap-1 w-16 h-16 rounded-full border-[3px] transition-all duration-200 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-green-300 ${isItemSelected ? 'bg-green-500 border-green-500 text-white shadow-lg scale-105' : 'bg-white border-gray-300 text-gray-400 hover:border-green-400 hover:text-green-500 hover:shadow-md hover:scale-105'}`}
+                                      style={{ minWidth: "4rem", minHeight: "4rem" }}
+                                    >
+                                      {isItemSelected ? (
+                                        <>
+                                          <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                                          <span className="text-[10px] font-bold leading-none">ADDED</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <svg className="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
+                                          <span className="text-[10px] font-semibold leading-none">{isMultipleChoice ? "SELECT" : "ADD"}</span>
+                                        </>
+                                      )}
+                                    </button>
+                                  </td>
+                                )}
+                                <td className="border border-gray-200 px-4 py-3 text-gray-900">
+                                  <div className="flex-1">
+                                    <span className={`font-medium text-sm break-words ${isInteractive && !isItemSelected ? 'text-gray-400' : 'text-gray-900'}`}>
+                                      <LinkifiedText text={item.description} />
+                                    </span>
+                                    {item.notes && (
+                                      <p className={`text-xs mt-1 break-words ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-600'}`}>
+                                        <LinkifiedText text={item.notes} />
+                                      </p>
                                     )}
-                                    <div className="flex-1">
-                                      <span className="font-medium text-xs sm:text-sm break-words">
-                                        <LinkifiedText text={item.description} />
-                                      </span>
-                                      {item.notes && (
-                                        <p className="text-xs text-gray-600 mt-1 break-words">
-                                          <LinkifiedText text={item.notes} />
-                                        </p>
-                                      )}
-                                      {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
-                                        <div className="mt-2 text-xs" onClick={(e) => e.stopPropagation()}>
-                                          <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
-                                          <ul className="ml-1 space-y-1.5 mt-1">
-                                            {item.choices.map(choice => {
-                                              const effectiveChoiceId = selectedChoices[item.id] || item.selectedChoiceId;
-                                              const isSelected = choice.id === effectiveChoiceId;
-                                              return (
-                                                <li 
-                                                  key={choice.id} 
-                                                  className={`flex items-start gap-2 ${isSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (allowChoiceSelection && onChoiceSelect) {
-                                                      onChoiceSelect(item.id, choice.id);
-                                                    }
-                                                  }}
-                                                >
-                                                  {allowChoiceSelection ? (
-                                                    <input 
-                                                      type="radio" 
-                                                      name={`choice-${item.id}`}
-                                                      checked={isSelected}
-                                                      onChange={(e) => {
-                                                        e.stopPropagation();
-                                                        onChoiceSelect?.(item.id, choice.id);
-                                                      }}
-                                                      className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer"
-                                                    />
-                                                  ) : (
-                                                    <span>•</span>
-                                                  )}
-                                                  <span className="flex-1">
-                                                    {choice.label} - {formatCurrency(choice.price)}
-                                                    {choice.description && (
-                                                      <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>
-                                                    )}
-                                                  </span>
-                                                </li>
-                                              );
-                                            })}
-                                          </ul>
-                                        </div>
-                                      )}
-                                      {item.isOptional && !isRowClickable && (
-                                        <div className="mt-1 md:hidden">
-                                          <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                            {isItemSelected ? "Included" : "Optional"}
-                                          </Badge>
-                                        </div>
-                                      )}
-                                    </div>
+                                    {item.pricingType === 'choice' && item.choices && item.choices.length > 0 && (
+                                      <div className="mt-2 text-xs" onClick={(e) => e.stopPropagation()}>
+                                        <p className="text-gray-600 font-medium">{allowChoiceSelection ? 'Select an option:' : 'Options:'}</p>
+                                        <ul className="ml-1 space-y-1.5 mt-1">
+                                          {item.choices.map(choice => {
+                                            const isChoiceSelected = choice.id === (selectedChoices[item.id] || item.selectedChoiceId);
+                                            return (
+                                              <li
+                                                key={choice.id}
+                                                className={`flex items-start gap-2 ${isChoiceSelected ? 'font-medium text-green-700' : 'text-gray-600'} break-words ${allowChoiceSelection ? 'cursor-pointer hover:bg-green-50 p-1.5 rounded-md transition-colors' : ''}`}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  if (allowChoiceSelection && onChoiceSelect) onChoiceSelect(item.id, choice.id);
+                                                }}
+                                              >
+                                                {allowChoiceSelection ? (
+                                                  <input type="radio" name={`choice-${item.id}`} checked={isChoiceSelected} onChange={(e) => { e.stopPropagation(); onChoiceSelect?.(item.id, choice.id); }} className="mt-0.5 h-4 w-4 text-green-600 focus:ring-green-500 cursor-pointer" />
+                                                ) : <span>•</span>}
+                                                <span className="flex-1">
+                                                  {choice.label} - {formatCurrency(Number(choice.price) || 0)}
+                                                  {choice.description && <span className="block text-gray-500 text-[10px] mt-0.5">{choice.description}</span>}
+                                                </span>
+                                              </li>
+                                            );
+                                          })}
+                                        </ul>
+                                      </div>
+                                    )}
+                                    {item.isOptional && !isInteractive && (
+                                      <div className="mt-1 md:hidden">
+                                        <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
+                                          {isItemSelected ? "Included" : "Optional"}
+                                        </Badge>
+                                      </div>
+                                    )}
                                   </div>
                                 </td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700">{item.quantity}</td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center text-xs sm:text-sm text-gray-700 hidden sm:table-cell">{formatCurrency(item.unitPrice)}</td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-right text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{formatCurrency(displayPrice)}</td>
-                                <td className="border border-gray-200 px-2 sm:px-4 py-2 sm:py-3 text-center hidden md:table-cell">
-                                  {item.isOptional && !isRowClickable && (
-                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                      {isItemSelected ? "Included" : "Optional"}
-                                    </Badge>
-                                  )}
-                                  {isRowClickable && (
-                                    <Badge variant={isItemSelected ? "default" : "secondary"} className="text-xs">
-                                      {isItemSelected ? "Selected" : "Click to select"}
-                                    </Badge>
-                                  )}
+                                <td className={`border border-gray-200 px-3 py-3 text-center text-sm whitespace-nowrap ${isInteractive ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-400') : 'text-gray-700'}`}>
+                                  {item.quantity}
                                 </td>
+                                <td className={`hidden sm:table-cell border border-gray-200 px-4 py-3 text-center text-sm ${isInteractive && !isItemSelected ? 'text-gray-300' : 'text-gray-700'}`}>
+                                  {formatCurrency(Number(item.unitPrice) || 0)}
+                                </td>
+                                <td className={`border border-gray-200 px-4 py-3 text-right text-sm whitespace-nowrap ${isItemToggleable ? (isItemSelected ? 'font-bold text-green-700' : 'text-gray-300') : 'font-semibold text-gray-900'}`}>
+                                  {formatCurrency(displayPrice)}
+                                </td>
+                                {!isInteractive && (
+                                  <td className="hidden sm:table-cell border border-gray-200 px-4 py-3 text-center">
+                                    {item.isOptional && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); if (onOptionalToggle) onOptionalToggle(item.id, !isItemSelected); }}
+                                        className={`text-xs px-3 py-1 rounded-full border transition-all duration-150 font-medium ${isItemSelected ? 'bg-green-500 border-green-500 text-white' : 'bg-white border-gray-300 text-gray-500 hover:border-green-400 hover:text-green-600'}`}
+                                      >
+                                        {isItemSelected ? "Included" : "+ Add"}
+                                      </button>
+                                    )}
+                                  </td>
+                                )}
                               </tr>
                             );
                           })}
@@ -656,8 +876,8 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
                       </table>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           ))}
 
@@ -690,8 +910,13 @@ export const ProposalTemplate = forwardRef<HTMLDivElement, ProposalTemplateProps
             </div>
           </div>
 
+          <ProposalReviewsWidget />
+
           {/* Footer */}
           <div className="p-3 sm:p-4 pt-2">
+            {template.paymentTerms && (
+              <p className="text-center text-xs text-gray-500 mb-2">{template.paymentTerms}</p>
+            )}
             <div className="text-center text-xs sm:text-sm text-gray-600">
               <p>Thank you for choosing {template.companyName || 'Treemarkables LTD'}!</p>
               <p className="mt-1">Professional tree services you can trust.</p>

@@ -1,5 +1,7 @@
 import { db } from './db';
-import { emailTemplates, smsTemplates } from '../shared/schema';
+import { emailTemplates, smsTemplates, documentTemplates } from '../shared/schema';
+import { DEFAULT_INVOICE_BLOCKS } from '../shared/schema';
+import { eq, isNull } from 'drizzle-orm';
 
 const starterEmailTemplates = [
   {
@@ -208,9 +210,26 @@ export async function seedTemplates() {
   }
 }
 
+export async function seedDefaultBlockConfig(): Promise<void> {
+  try {
+    const templates = await db.select().from(documentTemplates).where(eq(documentTemplates.type, 'invoice'));
+    for (const tpl of templates) {
+      if (!tpl.blockConfig || (Array.isArray(tpl.blockConfig) && (tpl.blockConfig as unknown[]).length === 0)) {
+        await db.update(documentTemplates)
+          .set({ blockConfig: DEFAULT_INVOICE_BLOCKS as unknown[] })
+          .where(eq(documentTemplates.id, tpl.id));
+        console.log(`✅ Seeded default block_config for template: ${tpl.name}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ Error seeding default block_config:', error);
+  }
+}
+
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
   seedTemplates()
+    .then(() => seedDefaultBlockConfig())
     .then(() => process.exit(0))
     .catch((error) => {
       console.error(error);

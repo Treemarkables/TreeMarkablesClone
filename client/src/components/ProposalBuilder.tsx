@@ -206,7 +206,7 @@ export function ProposalBuilder({
   const [sections, setSections] = useState<ProposalSectionData[]>([
     {
       id: "section-1",
-      title: "Tree Removal Services",
+      title: "Job Description",
       description: "",
       photos: [],
       lineItems: [],
@@ -284,7 +284,7 @@ export function ProposalBuilder({
       // Build the initial section
       const initialSection: ProposalSectionData = {
         id: "section-1",
-        title: job.serviceType || "Tree Removal Services",
+        title: job.serviceType || "Job Description",
         description: descriptionValue,
         photos: [],
         lineItems: job.lineItems
@@ -1652,7 +1652,7 @@ export function ProposalBuilder({
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-full sm:max-w-5xl h-screen sm:h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-0 w-full min-w-0 gap-0">
+        <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-x-hidden overflow-y-hidden flex flex-col p-0 w-full min-w-0 gap-0">
           {/* Modern Header with Gradient Accent */}
           <div
             className="flex-shrink-0 border-b bg-gradient-to-r from-primary/5 via-primary/3 to-transparent"
@@ -2244,6 +2244,15 @@ export function ProposalBuilder({
                                                 parseFloat(e.target.value) || 0,
                                             }))
                                           }
+                                          onBlur={() => {
+                                            if (
+                                              currentLineItem.description?.trim() &&
+                                              (currentLineItem.quantity || 0) > 0 &&
+                                              (currentLineItem.unitPrice || 0) > 0
+                                            ) {
+                                              addLineItemToSection(section.id);
+                                            }
+                                          }}
                                           className="min-h-[44px] text-base"
                                           data-testid={`input-line-item-price-${section.id}`}
                                         />
@@ -2284,6 +2293,14 @@ export function ProposalBuilder({
                                               parseFloat(e.target.value) || 0,
                                           }))
                                         }
+                                        onBlur={() => {
+                                          if (
+                                            currentLineItem.description?.trim() &&
+                                            (currentLineItem.fixedPrice || 0) > 0
+                                          ) {
+                                            addLineItemToSection(section.id);
+                                          }
+                                        }}
                                         className="min-h-[44px] text-base"
                                         data-testid={`input-fixed-price-${section.id}`}
                                       />
@@ -2954,7 +2971,7 @@ export function ProposalBuilder({
       {/* Preview Modal */}
       {showPreview && (
         <Dialog open={showPreview} onOpenChange={setShowPreview}>
-          <DialogContent className="max-w-full sm:max-w-6xl h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0">
             <DialogHeader className="flex-shrink-0 p-3 sm:p-4 sticky top-0 bg-background z-[60]">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex-1 min-w-0">
@@ -2998,7 +3015,7 @@ export function ProposalBuilder({
               </div>
             </DialogHeader>
 
-            <div className="flex-1 overflow-auto p-4 sm:p-6">
+            <div className="flex-1 overflow-auto p-4 pr-8 sm:p-6 sm:pr-12">
               {(() => {
                 const previewData = getPreviewData();
                 return (
@@ -3017,7 +3034,25 @@ export function ProposalBuilder({
                       initializeSmsForm();
                       setShowSmsDialog(true);
                     }}
-                    onDownload={() => console.log("Download proposal")}
+                    onDownload={async () => {
+                      const pid = draftProposalId || proposalId;
+                      if (!pid) return;
+                      try {
+                        const res = await fetch(`/api/proposals/${pid}/pdf`);
+                        if (!res.ok) throw new Error("PDF failed");
+                        const blob = await res.blob();
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        a.href = url;
+                        a.download = `Proposal-${pid}.pdf`;
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+                        URL.revokeObjectURL(url);
+                      } catch {
+                        toast({ title: "Download failed", description: "Could not generate PDF.", variant: "destructive" });
+                      }
+                    }}
                     onCopy={() => console.log("Copy proposal")}
                   />
                 );

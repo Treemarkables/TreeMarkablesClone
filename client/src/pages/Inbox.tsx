@@ -57,7 +57,7 @@ import { LeadFormDialog } from "@/components/LeadFormDialog";
 // Form schema extending insertLeadSchema with required validation
 const createLeadFormSchema = insertLeadSchema.extend({
   name: z.string().min(1, "Name is required"),
-  phone: z.string().min(1, "Phone is required"),
+  phone: z.string().optional().default(""),
   status: z.string().default("new"),
   urgency: z
     .enum(["low", "medium", "high", "emergency"])
@@ -69,7 +69,7 @@ export default function Inbox() {
   const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [sourceFilter, setSourceFilter] = useState<string>("all"); // Add source filter
+  const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [selectedConversation, setSelectedConversation] =
     useState<Conversation | null>(null);
   const [showCreateJobDialog, setShowCreateJobDialog] = useState(false);
@@ -77,6 +77,9 @@ export default function Inbox() {
     useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Track which conversation is currently being AI-extracted
+  const [extractingJobConvId, setExtractingJobConvId] = useState<string | null>(null);
+  const [extractingOppConvId, setExtractingOppConvId] = useState<string | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -138,13 +141,37 @@ export default function Inbox() {
 
   const conversations: Conversation[] = conversationsResponse?.data || [];
 
+  // AI extraction helper — fetches conversation messages then calls the extract endpoint
+  const extractLeadData = async (conversation: Conversation) => {
+    try {
+      const messagesRes = await fetch(`/api/conversations/${conversation.id}/messages`);
+      const messagesData = await messagesRes.json();
+      const messages: Array<{ content?: string }> = messagesData.data || [];
+
+      const allText = [
+        conversation.title ? `Subject: ${conversation.title}` : "",
+        ...messages.map((m) => m.content || ""),
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      const extractRes = await apiRequest("POST", "/api/leads/extract-from-message", { message: allText });
+      const parsed = await extractRes.json();
+      return parsed.data || {};
+    } catch {
+      return {};
+    }
+  };
+
   // Create Opportunity mutation
   const createOpportunityMutation = useMutation({
-    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
+    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema> & { conversationId?: string }) => {
       return apiRequest("POST", "/api/leads", leadData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setShowCreateOpportunityDialog(false);
       opportunityForm.reset();
     },
@@ -159,14 +186,18 @@ export default function Inbox() {
 
   // Create Job as Lead mutation
   const createJobMutation = useMutation({
-    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema>) => {
-      return apiRequest("POST", "/api/leads", { ...leadData, status: "new" });
+    mutationFn: async (leadData: z.infer<typeof createLeadFormSchema> & { conversationId?: string }) => {
+      const res = await apiRequest("POST", "/api/leads", { ...leadData, status: "new" });
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/leads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       setShowCreateJobDialog(false);
       jobForm.reset();
-      setLocation("/dispatch");
+      const jobId = data?.data?.id;
+      setLocation(jobId ? `/dispatch?job=${jobId}` : "/dispatch");
     },
     onError: () => {
       toast({
@@ -176,6 +207,50 @@ export default function Inbox() {
       });
     },
   });
+
+  // Opens the "Create Job as Lead" dialog with AI-extracted data pre-filled
+  const handleExtractAndOpenJobDialog = async (conversation: Conversation) => {
+    setExtractingJobConvId(conversation.id);
+    try {
+      const extracted = await extractLeadData(conversation);
+      setSelectedConversation(conversation);
+      jobForm.reset({
+        name: extracted.name || conversation.title || "New Lead",
+        email: extracted.email || "",
+        phone: extracted.phone || "",
+        address: extracted.address || "",
+        serviceRequested: extracted.description || "",
+        urgency: "medium",
+        status: "new",
+        notes: `Lead from conversation: ${conversation.title || ""}`,
+      });
+      setShowCreateJobDialog(true);
+    } finally {
+      setExtractingJobConvId(null);
+    }
+  };
+
+  // Opens the "Create Opportunity" dialog with AI-extracted data pre-filled
+  const handleExtractAndOpenOppDialog = async (conversation: Conversation) => {
+    setExtractingOppConvId(conversation.id);
+    try {
+      const extracted = await extractLeadData(conversation);
+      setSelectedConversation(conversation);
+      opportunityForm.reset({
+        name: extracted.name || conversation.title || "New Lead",
+        email: extracted.email || "",
+        phone: extracted.phone || "",
+        address: extracted.address || "",
+        serviceRequested: extracted.description || "",
+        urgency: "medium",
+        status: "new",
+        notes: `Opportunity from conversation: ${conversation.title || ""}`,
+      });
+      setShowCreateOpportunityDialog(true);
+    } finally {
+      setExtractingOppConvId(null);
+    }
+  };
 
   // Bulk delete mutation
   const bulkDeleteMutation = useMutation({
@@ -553,44 +628,36 @@ export default function Inbox() {
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedConversation(conversation);
-                          jobForm.reset({
-                            name: conversation.title || "",
-                            email: "",
-                            phone: "",
-                            address: "",
-                            serviceRequested: "",
-                            urgency: "medium",
-                            status: "new",
-                            notes: `From quote request: ${conversation.title || ""}`,
-                          });
-                          setShowCreateJobDialog(true);
+                          handleExtractAndOpenJobDialog(conversation);
                         }}
+                        disabled={extractingJobConvId === conversation.id}
                         data-testid={`menuitem-create-job-${conversation.id}`}
                       >
-                        <Briefcase className="h-4 w-4 mr-2" />
-                        Create Job as Lead
+                        {extractingJobConvId === conversation.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <Briefcase className="h-4 w-4 mr-2" />
+                        )}
+                        {extractingJobConvId === conversation.id
+                          ? "Extracting..."
+                          : "Create Job as Lead"}
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={(e) => {
                           e.stopPropagation();
-                          setSelectedConversation(conversation);
-                          opportunityForm.reset({
-                            name: conversation.title || "",
-                            email: "",
-                            phone: "",
-                            address: "",
-                            serviceRequested: "",
-                            urgency: "medium",
-                            status: "new",
-                            notes: `Converted from quote request: ${conversation.title || ""}`,
-                          });
-                          setShowCreateOpportunityDialog(true);
+                          handleExtractAndOpenOppDialog(conversation);
                         }}
+                        disabled={extractingOppConvId === conversation.id}
                         data-testid={`menuitem-create-opportunity-${conversation.id}`}
                       >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Create Opportunity
+                        {extractingOppConvId === conversation.id ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <UserPlus className="h-4 w-4 mr-2" />
+                        )}
+                        {extractingOppConvId === conversation.id
+                          ? "Extracting..."
+                          : "Create Opportunity"}
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -606,12 +673,16 @@ export default function Inbox() {
         open={showCreateJobDialog}
         onOpenChange={setShowCreateJobDialog}
         title="Create Job as Lead"
-        description="Create a new job lead that will be sent to dispatch"
+        description="Review the extracted details and create a job lead"
         submitLabel="Create Job Lead"
         isSubmitting={createJobMutation.isPending}
         form={jobForm}
         onSubmit={(values) =>
-          createJobMutation.mutate({ ...values, status: "new" })
+          createJobMutation.mutate({
+            ...values,
+            status: "new",
+            conversationId: selectedConversation?.id,
+          } as z.infer<typeof createLeadFormSchema> & { conversationId?: string })
         }
         includeStatus={false}
         testIdPrefix="inbox-job"
@@ -622,11 +693,16 @@ export default function Inbox() {
         open={showCreateOpportunityDialog}
         onOpenChange={setShowCreateOpportunityDialog}
         title="Create Opportunity"
-        description="Add a new lead to your sales pipeline"
+        description="Review the extracted details and add to your pipeline"
         submitLabel="Create Opportunity"
         isSubmitting={createOpportunityMutation.isPending}
         form={opportunityForm}
-        onSubmit={(values) => createOpportunityMutation.mutate(values)}
+        onSubmit={(values) =>
+          createOpportunityMutation.mutate({
+            ...values,
+            conversationId: selectedConversation?.id,
+          } as z.infer<typeof createLeadFormSchema> & { conversationId?: string })
+        }
         includeStatus={true}
         testIdPrefix="inbox-opportunity"
       />

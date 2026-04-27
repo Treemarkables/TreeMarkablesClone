@@ -1,0 +1,43 @@
+---                                                                                                                               
+  Schema drift cleanup — needs your attention                                                                                       
+                                             
+  shared/schema.ts and the live DB have drifted. Running npm run db:push is currently dangerous because drizzle's table-rename      
+  heuristic mis-identifies the session table (express-session, 922 live rows) as a rename target for new schema-only tables —       
+  answering "rename" on that prompt would drop your auth sessions.
+                                                                                                                                    
+  Root causes (fix these first, in order)                                                                                           
+   
+  1. drizzle.config.ts doesn't include shared/timeTracking.ts.                                                                      
+  Three tables (daily_time_entries, job_time_entries, staff_rates, ~36k rows total) are defined in shared/timeTracking.ts and used
+  by server/timeTrackingService.ts, server/manHoursService.ts, server/xeroRoutes.ts. Drizzle currently has no idea they exist.      
+   
+  Change:                                                                                                                           
+  schema: ["./shared/schema.ts", "./shared/timeTracking.ts"],
+                                                             
+  2. session table is external (managed by connect-pg-simple), should not be in drizzle's scope.
+                                                                                                                                    
+  Add to drizzle.config.ts:
+  tablesFilter: ["!session"],                                                                                                       
+                                                         
+  After config is fixed
+                                                                                                                                    
+  Run npm run db:push. The rename prompt should NOT appear. What WILL be pushed (all additive, all safe):                           
+                                                                                                                                    
+  - New tables: equipment_inductions, induction_checklist_items, induction_responses, induction_templates, invoice_sections,        
+  pending_outbound_messages — these are in-progress features already wired into server/storage.ts.
+  - Missing FK constraints on proposals, quotes, reviews, review_requests, review_submissions, risk_assessments, safety_incidents,  
+  template_*, tree_markers, vehicle_inspections, service_requests, report_analytics, job_time_entries (after fix #1).               
+  - Missing indexes: call_records_*, customers_normalized_phone_idx, tree_markers_job_id_idx.
+                                                                                                                                    
+  Verification                                           
+                                                                                                                                    
+  Before pushing: pg_dump --schema-only "$DATABASE_URL" > /tmp/before.sql                                                           
+  After: pg_dump --schema-only "$DATABASE_URL" > /tmp/after.sql; diff /tmp/before.sql /tmp/after.sql
+  Confirm only additive changes (CREATE TABLE / ALTER TABLE ADD COLUMN / ADD CONSTRAINT / CREATE INDEX) — no DROP, no RENAME.       
+                                                                                                                                    
+  What NOT to touch                                                                                                                 
+                                                                                                                                    
+  Five columns were already added to the live DB via direct ALTER TABLE (out-of-band, on Claude's branch) for an unrelated feature: 
+  job_staff_assignments.day_role, jobs.role_a_completed_at, jobs.role_a_completed_by, jobs.role_b_completed_at,
+  jobs.role_b_completed_by. These are already in shared/schema.ts on the claude branch and in the DB — drizzle should see them as   
+  "no diff."                                             

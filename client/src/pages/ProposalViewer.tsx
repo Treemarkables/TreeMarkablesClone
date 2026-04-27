@@ -3,11 +3,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
+import { ArrowLeft, Download, Mail, Check, Clock, Eye } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
+import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import logoUrl from "@assets/treelogo_1761690528797.webp";
+import type { DocumentBlock, DocumentTemplate } from "@shared/schema";
 
 interface ProposalViewerProps {}
 
@@ -20,22 +21,32 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const [selectedChoices, setSelectedChoices] = useState<
     Record<string, string>
   >({});
+  const [selectedOptionalItems, setSelectedOptionalItems] = useState<
+    Record<string, boolean>
+  >({});
+
+  // Detect preview mode (?preview=true) — staff use this to review without
+  // triggering the "viewed" status or accidentally accepting.
+  const isPreviewMode =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("preview") === "true";
 
   const handleChoiceSelect = (lineItemId: string, choiceId: string) => {
     setSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }));
   };
 
+  const handleOptionalToggle = (lineItemId: string, selected: boolean) => {
+    setSelectedOptionalItems((prev) => ({ ...prev, [lineItemId]: selected }));
+  };
+
   const handleBackClick = () => {
-    // Check if there's a page to go back to in the history
     if (window.history.length > 1) {
       window.history.back();
     } else {
-      // Fallback to dispatch board if no history
       setLocation("/dispatch");
     }
   };
 
-  // First try to fetch proposal directly by ID
   const {
     data: proposalResponse,
     isLoading: proposalLoading,
@@ -45,16 +56,13 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     enabled: !!proposalId,
   });
 
-  // If direct fetch fails (404), try to find proposal by job ID
   const { data: proposalsByJobResponse, isLoading: proposalsByJobLoading } =
     useQuery({
       queryKey: ["/api/proposals", { jobId: proposalId }],
       queryFn: async () => {
         try {
           const response = await fetch(`/api/proposals?jobId=${proposalId}`);
-          if (!response.ok) {
-            return { success: false, data: [], count: 0 };
-          }
+          if (!response.ok) return { success: false, data: [], count: 0 };
           return response.json();
         } catch (error) {
           console.error("Error fetching proposals by job ID:", error);
@@ -64,34 +72,46 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       enabled: !!proposalId && !proposalLoading && !proposalResponse?.success,
     });
 
-  // Use either direct proposal or first proposal found by job ID
+  const fallbackProposalId =
+    !proposalResponse?.success &&
+    proposalsByJobResponse?.success &&
+    proposalsByJobResponse.data?.length > 0
+      ? proposalsByJobResponse.data[0].id
+      : null;
+
+  const { data: fallbackFullResponse, isLoading: fallbackLoading } = useQuery({
+    queryKey: ["/api/proposals", fallbackProposalId],
+    enabled: !!fallbackProposalId && fallbackProposalId !== proposalId,
+  });
+
   const actualProposalResponse = proposalResponse?.success
     ? proposalResponse
-    : proposalsByJobResponse?.success && proposalsByJobResponse.data.length > 0
-      ? { success: true, data: proposalsByJobResponse.data[0] }
-      : proposalResponse;
+    : fallbackFullResponse?.success
+      ? fallbackFullResponse
+      : proposalsByJobResponse?.success && proposalsByJobResponse.data?.length > 0
+        ? { success: true, data: proposalsByJobResponse.data[0] }
+        : proposalResponse;
 
-  const actualLoading = proposalLoading || proposalsByJobLoading;
+  const actualLoading = proposalLoading || proposalsByJobLoading || fallbackLoading;
 
-  // Fetch customer data if proposal has customerId
   const { data: customerResponse } = useQuery({
     queryKey: ["/api/customers", actualProposalResponse?.data?.customerId],
     enabled: !!actualProposalResponse?.data?.customerId,
   });
 
-  // Fetch job data if proposal has jobId
   const { data: jobResponse } = useQuery({
     queryKey: ["/api/jobs", actualProposalResponse?.data?.jobId],
     enabled: !!actualProposalResponse?.data?.jobId,
   });
 
-  // Fetch default proposal template
   const { data: templateResponse } = useQuery({
     queryKey: ["/api/templates/default/proposal"],
   });
 
-  // Mark proposal as viewed when loaded (only once per session)
+  // Mark proposal as viewed when loaded — skip entirely in preview mode so
+  // staff can review without affecting the proposal's status.
   useEffect(() => {
+    if (isPreviewMode) return;
     const actualId = actualProposalResponse?.data?.id;
     if (actualId && !viewedRef.current) {
       fetch(`/api/proposals/${actualId}/viewed`, {
@@ -105,18 +125,11 @@ export default function ProposalViewer({}: ProposalViewerProps) {
           console.error("Failed to mark proposal as viewed:", err),
         );
     }
-  }, [actualProposalResponse?.data?.id]);
+  }, [actualProposalResponse?.data?.id, isPreviewMode]);
 
-  // Accept proposal mutation
   const acceptProposalMutation = useMutation({
     mutationFn: async () => {
       const actualId = actualProposalResponse?.data?.id || proposalId;
-      console.log(
-        "Accepting proposal:",
-        actualId,
-        "with selected choices:",
-        selectedChoices,
-      );
       const response = await apiRequest(
         "POST",
         `/api/proposals/${actualId}/accept`,
@@ -130,8 +143,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
       return response;
     },
     onSuccess: (response: any) => {
-      console.log("Proposal accepted successfully:", response);
-      // Refresh proposal data to show updated status
       queryClient.invalidateQueries({
         queryKey: ["/api/proposals", proposalId],
       });
@@ -142,8 +153,6 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     },
     onError: (error: any) => {
       console.error("Proposal acceptance error:", error);
-
-      // If already accepted, refresh the proposal to show updated status
       if (error.message?.includes("already been accepted")) {
         queryClient.invalidateQueries({
           queryKey: ["/api/proposals", proposalId],
@@ -166,13 +175,20 @@ export default function ProposalViewer({}: ProposalViewerProps) {
     },
   });
 
-  const handleAcceptProposal = () => {
+  const handleAcceptClick = () => {
+    if (isPreviewMode) {
+      toast({
+        title: "Preview Mode",
+        description: "Acceptance is disabled in preview mode.",
+      });
+      return;
+    }
     acceptProposalMutation.mutate();
   };
 
   if (actualLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-gray-600">Loading proposal...</p>
@@ -183,7 +199,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   if (!actualProposalResponse?.success || !actualProposalResponse?.data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <h1 className="text-xl font-semibold text-gray-900 mb-2">
@@ -209,7 +225,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
 
   const proposal = actualProposalResponse.data;
   const customer = customerResponse?.data;
-  const job = jobResponse?.data; // Same pattern as customer
+  const job = jobResponse?.data;
   const template = templateResponse?.data || {
     id: "default",
     name: "Default Template",
@@ -228,7 +244,22 @@ export default function ProposalViewer({}: ProposalViewerProps) {
   const isAccepted = proposal.status === "accepted";
 
   return (
-    <div className="min-h-screen bg-gray-50 w-full overflow-x-hidden">
+    <div className="min-h-screen bg-white w-full overflow-x-hidden">
+      {/* Preview mode banner */}
+      {isPreviewMode && (
+        <div className="bg-amber-50 border-b border-amber-300 px-4 py-2 text-center">
+          <div className="flex items-center justify-center gap-2 text-amber-800 text-sm font-medium">
+            <Eye className="w-4 h-4" />
+            Admin Preview — viewing as staff. Proposal status will not be
+            affected. Add{" "}
+            <span className="font-mono text-xs bg-amber-100 px-1 rounded">
+              ?preview=true
+            </span>{" "}
+            to any proposal URL to use preview mode.
+          </div>
+        </div>
+      )}
+
       {/* Header with safe area padding for mobile notch/Dynamic Island */}
       <div
         className="sticky top-0 z-50 bg-white border-b border-gray-200 w-full shadow-sm"
@@ -265,7 +296,7 @@ export default function ProposalViewer({}: ProposalViewerProps) {
             <div className="flex gap-2 shrink-0">
               {!isAccepted && !isExpired && (
                 <Button
-                  onClick={handleAcceptProposal}
+                  onClick={handleAcceptClick}
                   disabled={acceptProposalMutation.isPending}
                   className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-none"
                   size="sm"
@@ -289,7 +320,29 @@ export default function ProposalViewer({}: ProposalViewerProps) {
                 <Mail className="w-4 h-4 mr-2" />
                 Email
               </Button>
-              <Button variant="outline" size="sm" className="hidden sm:flex">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  if (!proposalId) return;
+                  try {
+                    const actualId = proposal?.id || proposalId;
+                    const res = await fetch(`/api/proposals/${actualId}/pdf`);
+                    if (!res.ok) throw new Error("Failed to generate PDF");
+                    const blob = await res.blob();
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `Proposal-${proposal?.proposalNumber || actualId}.pdf`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                  } catch {
+                    toast({ title: "Download failed", description: "Could not generate PDF. Please try again.", variant: "destructive" });
+                  }
+                }}
+              >
                 <Download className="w-4 h-4 mr-2" />
                 Download PDF
               </Button>
@@ -341,20 +394,44 @@ export default function ProposalViewer({}: ProposalViewerProps) {
         )}
 
         <div className="px-2 sm:px-4">
-          <ProposalTemplate
-            template={template}
-            proposal={proposal}
-            customer={customer}
-            job={job}
-            sections={proposal.sections || []}
-            showActions={false}
-            className="bg-white"
-            allowChoiceSelection={!isAccepted && !isExpired}
-            selectedChoices={selectedChoices}
-            onChoiceSelect={handleChoiceSelect}
-          />
+          {(() => {
+            const blocks: DocumentBlock[] | null =
+              Array.isArray(proposal.blockConfig) && proposal.blockConfig.length > 0
+                ? (proposal.blockConfig as DocumentBlock[])
+                : null;
+            if (blocks) {
+              return (
+                <BlockRenderedProposal
+                  proposal={proposal}
+                  customer={customer}
+                  job={job}
+                  template={template as unknown as DocumentTemplate}
+                  blocks={blocks}
+                  selectedChoices={selectedChoices}
+                  selectedOptionalItems={selectedOptionalItems}
+                />
+              );
+            }
+            return (
+              <ProposalTemplate
+                template={template}
+                proposal={proposal}
+                customer={customer}
+                job={job}
+                sections={proposal.sections || []}
+                showActions={false}
+                className="bg-white"
+                allowChoiceSelection={!isAccepted && !isExpired}
+                selectedChoices={selectedChoices}
+                onChoiceSelect={handleChoiceSelect}
+                selectedOptionalItems={selectedOptionalItems}
+                onOptionalToggle={!isAccepted && !isExpired ? handleOptionalToggle : undefined}
+              />
+            );
+          })()}
         </div>
       </div>
+
     </div>
   );
 }

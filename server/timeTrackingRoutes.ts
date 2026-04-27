@@ -484,5 +484,111 @@ export function setupTimeTrackingRoutes(app: any) {
     }
   });
 
+  // POST /api/jobs/:id/time-to-line-items
+  // Converts all saved time entries for a job into job line items billed at charge-out rate
+  app.post('/api/jobs/:id/time-to-line-items', async (req: Request, res: Response) => {
+    try {
+      const { id: jobId } = req.params;
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Get all time entries for the job (uses the same storage method as the modal)
+      const rawEntries = await storage.getJobStaffTimeEntries(jobId);
+      if (!rawEntries || rawEntries.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'No time entries found for this job'
+        });
+      }
+
+      // Fetch Labour catalogue items to find charge-up rates by employee name
+      const labourItems = await storage.getMaterialsByCategory('Labour');
+
+      // Helper: find "[Name] charge up rate" item for a given first name
+      const findChargeUpRate = (firstName: string) => {
+        const needle = firstName.toLowerCase();
+        return labourItems.find((item) => {
+          const n = item.name.toLowerCase();
+          return n.includes(needle) && (n.includes('charge up') || n.includes('charge-up') || n.includes('chargeup'));
+        });
+      };
+
+      // Group entries by employee, summing hours
+      const grouped: Record<string, { employeeName: string; firstName: string; totalHours: number; fallbackRate: number }> = {};
+      for (const entry of rawEntries) {
+        const key = entry.employeeId;
+        const hours = parseFloat(String(entry.hours)) || 0;
+        const rate = parseFloat(String(entry.rate)) || 0;
+        if (!grouped[key]) {
+          const employee = await storage.getEmployee(entry.employeeId);
+          const firstName = employee?.firstName || '';
+          const employeeName = employee
+            ? `${employee.firstName} ${employee.lastName}`
+            : entry.employeeId;
+          grouped[key] = { employeeName, firstName, totalHours: 0, fallbackRate: rate };
+        }
+        grouped[key].totalHours += hours;
+        if (rate > grouped[key].fallbackRate) grouped[key].fallbackRate = rate;
+      }
+
+      // Build new line items — use charge-up rate item name + price from catalogue
+      const newLineItems = Object.values(grouped).map((g) => {
+        const hours = Math.round(g.totalHours * 100) / 100;
+        const chargeUpItem = findChargeUpRate(g.firstName);
+        const rate = chargeUpItem
+          ? parseFloat(String(chargeUpItem.price))
+          : g.fallbackRate;
+        const description = chargeUpItem ? chargeUpItem.name : `Labour – ${g.employeeName}`;
+        const total = Math.round(hours * rate * 100) / 100;
+        return {
+          id: crypto.randomUUID(),
+          description,
+          quantity: hours,
+          unitPrice: rate,
+          total,
+          unitCost: 0,
+          totalCost: 0,
+          costExGst: 0,
+          markup: 0,
+          priceExGst: rate,
+          totalExGst: total,
+          taxRate: 15,
+          itemCode: chargeUpItem?.itemNumber || 'Labour',
+        };
+      });
+
+      // Replace any existing charge-up rate line items (remove old ones, add fresh)
+      const existingLineItems: any[] = Array.isArray(job.lineItems) ? job.lineItems : [];
+      const nonLabourItems = existingLineItems.filter((item: any) => {
+        const desc = (item.description || '').toLowerCase();
+        return !(desc.includes('charge up') || desc.includes('charge-up') || desc.includes('chargeup') || desc.includes('labour –'));
+      });
+      const mergedLineItems = [...nonLabourItems, ...newLineItems];
+
+      // Recalculate total
+      const subtotal = mergedLineItems.reduce((sum: number, item: any) => {
+        return sum + (parseFloat(String(item.total || 0)) || 0);
+      }, 0);
+
+      await storage.updateJob(jobId, {
+        lineItems: mergedLineItems,
+        totalAmount: subtotal.toFixed(2),
+      } as any);
+
+      res.json({
+        success: true,
+        message: `Added ${newLineItems.length} labour line item(s) to the job`,
+        addedItems: newLineItems,
+        newTotal: subtotal,
+      });
+    } catch (error) {
+      console.error('Error converting time entries to line items:', error);
+      res.status(500).json({ success: false, message: 'Failed to convert time entries to line items' });
+    }
+  });
+
   console.log('⏰ Time tracking API routes registered');
 }

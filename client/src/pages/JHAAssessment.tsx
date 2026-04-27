@@ -31,7 +31,6 @@ import {
   Save,
   CheckCircle2,
   Camera,
-  Upload,
   Loader2,
   Search,
   Plus,
@@ -48,7 +47,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
-import jhaHeaderImage from "@assets/generated_images/JHA_Risk_Assessment_Header_017c01a5.png";
+import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
+import { compressImage } from "@/lib/imageCompression";
+const jhaHeaderImage = "/treemarkables-logo-header.png";
 
 // ThinkSafe-style JHA form schema
 const jhaFormSchema = z.object({
@@ -90,6 +91,9 @@ export default function JHAAssessment() {
   const [searchTerm, setSearchTerm] = useState("");
   const [sharedSignature, setSharedSignature] = useState<string>("");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<File[]>([]);
+  const [pendingPreviewUrls, setPendingPreviewUrls] = useState<string[]>([]);
   const [showCustomHazardForm, setShowCustomHazardForm] = useState(false);
   const [customHazardName, setCustomHazardName] = useState("");
   const [customControls, setCustomControls] = useState<string[]>([""]);
@@ -210,14 +214,68 @@ export default function JHAAssessment() {
     mutationFn: async (
       data: JHAFormValues & { sharedSignature: string; photos: string[] },
     ) => {
-      if (isEditing && assessmentId) {
-        return apiRequest(
-          "PATCH",
-          `/api/jha/assessments/${assessmentId}`,
-          data,
+      // Editing an existing JHA with only a new signature added: use the
+      // dedicated append endpoint so we don't re-validate/rewrite the whole
+      // assessment. This is by far the most common "edit" — a worker joined
+      // the job after the initial signing and needs to sign too.
+      if (isEditing && assessmentId && data.sharedSignature) {
+        const res = await fetch(
+          `/api/jha/assessments/${assessmentId}/signatures`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({
+              signatureDataUrl: data.sharedSignature,
+              workerName: data.teamLeader || undefined,
+            }),
+          },
         );
+        if (!res.ok) {
+          const body = await res.text();
+          console.error("JHA append-signature failed", res.status, body);
+          let message = `${res.status} ${res.statusText}`;
+          try {
+            const parsed = JSON.parse(body);
+            if (parsed.message) message = parsed.message;
+          } catch {}
+          throw new Error(message);
+        }
+        return res;
       }
-      return apiRequest("POST", "/api/jha/assessments", data);
+
+      const url =
+        isEditing && assessmentId
+          ? `/api/jha/assessments/${assessmentId}`
+          : `/api/jha/assessments`;
+      const method = isEditing && assessmentId ? "PATCH" : "POST";
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) {
+        const body = await res.text();
+        console.error("JHA save failed", res.status, body);
+        console.error("JHA save payload:", data);
+        let message = `${res.status} ${res.statusText}`;
+        try {
+          const parsed = JSON.parse(body);
+          if (parsed.errors && Array.isArray(parsed.errors)) {
+            message = parsed.errors
+              .map(
+                (e: any) =>
+                  `${(e.path || []).join(".")}: ${e.message} (got ${JSON.stringify(e.received)})`,
+              )
+              .join(" | ");
+          } else if (parsed.message) {
+            message = parsed.message;
+          }
+        } catch {}
+        throw new Error(message);
+      }
+      return res;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jha/assessments"] });
@@ -231,6 +289,62 @@ export default function JHAAssessment() {
       });
     },
   });
+
+  const uploadJhaPhotoMutation = useMutation({
+    mutationFn: async (file: File): Promise<{ photoUrl: string }> => {
+      let fileToUpload = file;
+      if (file.type.startsWith("image/")) {
+        try {
+          fileToUpload = await compressImage(file);
+        } catch {
+          // fall back to original
+        }
+      }
+      const formData = new FormData();
+      formData.append("photo", fileToUpload);
+      const res = await fetch(`/api/jha/assessments/${assessmentId}/photos`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const err: { message?: string } = await res.json();
+        throw new Error(err.message ?? "Failed to upload photo");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setPhotos((prev) => [...prev, data.photoUrl]);
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Upload Failed",
+        description: error.message || "Failed to upload photo. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handlePhotoCapture = () => setShowPhotoModal(true);
+
+  const handlePendingPhotos = (files: File[], previewUrls: string[]) => {
+    if (isEditing && assessmentId) {
+      files.forEach((file) => uploadJhaPhotoMutation.mutate(file));
+    } else {
+      setPendingPhotoFiles((prev) => [...prev, ...files]);
+      setPendingPreviewUrls((prev) => [...prev, ...previewUrls]);
+    }
+  };
+
+  const handleRemovePhoto = (index: number, isPending: boolean) => {
+    if (isPending) {
+      setPendingPhotoFiles((prev) => prev.filter((_, i) => i !== index));
+      setPendingPreviewUrls((prev) => prev.filter((_, i) => i !== index));
+    } else {
+      setPhotos((prev) => prev.filter((_, i) => i !== index));
+    }
+  };
 
   const toggleHazard = (hazard: (typeof hazardTemplates)[0]) => {
     const current = selectedHazards;
@@ -364,11 +478,7 @@ export default function JHAAssessment() {
     return "Insignificant Risk";
   };
 
-  const handlePhotoCapture = () => {
-    // In a real app, this would open camera
-  };
-
-  const handleSubmit = (data: JHAFormValues) => {
+  const handleSubmit = async (data: JHAFormValues) => {
     console.log("🔍 Form submit triggered", {
       hazardCount: data.selectedHazards?.length,
       hasSignature: !!sharedSignature,
@@ -411,11 +521,45 @@ export default function JHAAssessment() {
       return;
     }
 
+    // Upload any pending photos before creating the assessment
+    let finalPhotos = [...photos];
+    if (!isEditing && pendingPhotoFiles.length > 0) {
+      for (const file of pendingPhotoFiles) {
+        let fileToUpload = file;
+        if (file.type.startsWith("image/")) {
+          try {
+            fileToUpload = await compressImage(file);
+          } catch {
+            // fall back to original
+          }
+        }
+        const formData = new FormData();
+        formData.append("photo", fileToUpload);
+        const res = await fetch("/api/jha/photos/upload", {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          const err: { message?: string } = await res.json();
+          toast({
+            title: "Photo Upload Failed",
+            description: err.message ?? "Failed to upload a photo. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
+        const result: { photoUrl: string } = await res.json();
+        finalPhotos.push(result.photoUrl);
+      }
+    }
+
     console.log("✅ Validation passed, submitting form");
     createAssessmentMutation.mutate({
       ...data,
       sharedSignature: sharedSignature || "",
-      photos,
+      photos: finalPhotos,
     });
   };
 
@@ -441,15 +585,11 @@ export default function JHAAssessment() {
       </div>
 
       {/* JHA Risk Assessment Header */}
-      <div className="mb-4 overflow-hidden rounded-lg shadow-md h-[150px] md:h-[250px]">
+      <div className="mb-4 overflow-hidden rounded-lg shadow-md w-full h-[120px] md:h-[160px]">
         <img
           src={jhaHeaderImage}
           alt="Job Hazard Analysis Risk Assessment"
-          className="w-full h-full"
-          style={{
-            objectFit: "cover",
-            objectPosition: "center",
-          }}
+          className="w-full h-full object-cover object-center block"
         />
       </div>
 
@@ -465,18 +605,16 @@ export default function JHAAssessment() {
           className="space-y-4"
         >
           {/* Header */}
-          <Card>
-            <CardHeader className="bg-gradient-to-r from-cyan-500 to-teal-500 text-white">
-              <CardTitle className="text-2xl">
-                {isEditing ? "Edit Job Hazard Analysis" : "Job Hazard Analysis"}
-              </CardTitle>
-              <CardDescription className="text-white/90">
-                {isEditing
-                  ? "Update assessment details or add additional signatures"
-                  : "Complete this form before starting work"}
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          <div>
+            <h2 className="text-2xl font-semibold">
+              {isEditing ? "Edit Job Hazard Analysis" : "Job Hazard Analysis"}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {isEditing
+                ? "Update assessment details or add additional signatures"
+                : "Complete this form before starting work"}
+            </p>
+          </div>
 
           {/* Job Details */}
           <Card>
@@ -1086,43 +1224,76 @@ export default function JHAAssessment() {
             </CardContent>
           </Card>
 
-          {/* Image */}
+          {/* Photos */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Image</CardTitle>
+              <CardTitle className="text-lg">Photos</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="destructive"
-                  onClick={handlePhotoCapture}
-                  data-testid="button-capture"
-                >
-                  <Camera className="mr-2 h-4 w-4" />
-                  Capture
-                </Button>
-                <Button
-                  type="button"
-                  className="bg-cyan-500 hover:bg-cyan-600"
-                  data-testid="button-choose"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Choose
-                </Button>
-              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handlePhotoCapture}
+                disabled={uploadJhaPhotoMutation.isPending}
+                data-testid="button-add-photo"
+              >
+                <Camera className="mr-2 h-4 w-4" />
+                {uploadJhaPhotoMutation.isPending ? "Uploading..." : "Add Photo"}
+              </Button>
+
               {photos.length > 0 && (
                 <div className="grid grid-cols-3 gap-2">
-                  {photos.map((photo, idx) => (
-                    <div
-                      key={idx}
-                      className="aspect-square bg-gray-200 rounded-lg"
-                    ></div>
+                  {photos.map((photoUrl, idx) => (
+                    <div key={idx} className="relative aspect-square">
+                      <img
+                        src={photoUrl}
+                        alt={`Assessment photo ${idx + 1}`}
+                        className="w-full h-full object-cover rounded-lg"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-1 right-1 h-6 w-6"
+                        onClick={() => handleRemovePhoto(idx, false)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {pendingPreviewUrls.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {pendingPreviewUrls.map((previewUrl, idx) => (
+                    <div key={idx} className="relative aspect-square">
+                      <img
+                        src={previewUrl}
+                        alt={`Pending photo ${idx + 1}`}
+                        className="w-full h-full object-cover rounded-lg opacity-70"
+                      />
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="icon"
+                        className="absolute top-1 right-1 h-6 w-6"
+                        onClick={() => handleRemovePhoto(idx, true)}
+                      >
+                        <X className="w-3 h-3" />
+                      </Button>
+                    </div>
                   ))}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          <PhotoCaptureModal
+            isOpen={showPhotoModal}
+            onClose={() => setShowPhotoModal(false)}
+            onPendingPhotos={handlePendingPhotos}
+          />
 
           {/* Existing Signatures */}
           {isEditing &&

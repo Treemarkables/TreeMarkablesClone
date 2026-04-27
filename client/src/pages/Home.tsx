@@ -7,8 +7,10 @@ import CTASection from "@/components/CTASection";
 import Reviews from "@/components/Reviews";
 import GuaranteeSection from "@/components/GuaranteeSection";
 import ContactSection from "@/components/ContactSection";
+import FAQSection from "@/components/FAQSection";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
+import InquiryForm from "@/components/InquiryForm";
 
 export default function Home() {
   // Add Google tag event script for form submission tracking
@@ -69,7 +71,7 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-background pt-16 md:pt-20 lg:pt-24">
+    <div>
       <SEO 
         title="Tree Removal & Arborist Services Gisborne | Treemarkables"
         description="Local arborists specialising in safe tree removal, pruning, stump grinding and hedge trimming across Gisborne, Wairoa and the East Coast. Get a free quote today."
@@ -81,11 +83,17 @@ export default function Home() {
       />
       <Header />
       <Hero />
+      <section className="py-10 md:py-14 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
+          <InquiryForm />
+        </div>
+      </section>
       <ServicesOffered />
       <WhyChooseUs />
       <CTASection />
       <Reviews />
       <GuaranteeSection />
+      <FAQSection />
       <ContactSection />
       <Footer />
     </div>

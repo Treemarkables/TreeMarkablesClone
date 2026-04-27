@@ -4,18 +4,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Receipt, AlertCircle } from "lucide-react";
 import { Link } from "wouter";
-import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
 
 interface InvoiceViewerProps {}
 
 export default function InvoiceViewer({}: InvoiceViewerProps) {
   const { invoiceId } = useParams();
-  
+
   // Fetch invoice data with embedded customer and job data (optimized - single API call)
   const { data: invoiceResponse, isLoading: invoiceLoading } = useQuery({
     queryKey: [`/api/invoices/${invoiceId}`],
     enabled: !!invoiceId,
   });
+
+  // Fetch default invoice template so the logo reflects whatever was uploaded
+  // in Settings → Company (single source of truth across all surfaces).
+  const { data: templateResponse } = useQuery({
+    queryKey: ["/api/templates/default/invoice"],
+  });
+  const logoUrl = (templateResponse as { data?: { logoUrl?: string } } | undefined)?.data?.logoUrl || "/treemarkables-logo.png";
 
   if (invoiceLoading) {
     return (

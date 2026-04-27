@@ -22,14 +22,36 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const DEV_AUTO_LOGIN = import.meta.env.DEV; // Only true in development mode
 const DEV_ADMIN_ID = 'admin-test-001';
 
+const STORAGE_KEY = 'treemarkables_user';
+
+function loadStoredUser(): Employee | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Employee) : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUserState] = useState<Employee | null>(null);
-  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(false);
+  const storedUser = loadStoredUser();
+  const [currentUser, setCurrentUserState] = useState<Employee | null>(storedUser);
+  // If we already have a cached user, skip the loading gate so the app shows immediately
+  const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(!!storedUser);
   const [devAutoLoginAttempted, setDevAutoLoginAttempted] = useState(false);
   const [, setLocation] = useLocation();
   const consecutive401sRef = useRef<number>(0);
 
-  const { data: meResponse, isLoading: authQueryLoading, isFetching } = useQuery<{ success: boolean; data: Employee | null }>({
+  const setCurrentUser = (user: Employee | null) => {
+    setCurrentUserState(user);
+    if (user) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); } catch {}
+    } else {
+      try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    }
+  };
+
+  const { data: meResponse, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -48,14 +70,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       return await res.json();
     },
-    retry: 2, // Retry twice on network errors (not 401s) to tolerate transient issues
-    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000), // Exponential backoff
-    // CRITICAL: Never cache authentication state
-    staleTime: 0,
-    gcTime: 0,
-    refetchInterval: false, // Disable auto-polling - only check on mount/focus
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    retry: 2,
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 5000),
+    staleTime: 5 * 60 * 1000,   // treat auth as fresh for 5 min — no background churn
+    gcTime: 10 * 60 * 1000,      // keep in cache 10 min so re-navigation is instant
+    refetchInterval: false,
+    refetchOnMount: true,         // only refetch if stale (not 'always')
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,    // don't thrash the 401 counter on overnight sleep/wake cycles
   });
 
   const loginMutation = useMutation({
@@ -71,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.success && data.data) {
         console.log('Login Success - User Data:', data.data);
         console.log('Login Success - Role:', data.data.role, typeof data.data.role);
-        setCurrentUserState(data.data);
+        setCurrentUser(data.data);
         // Set the query data directly instead of invalidating to prevent race condition
         queryClient.setQueryData(['/api/auth/me'], { success: true, data: data.data });
       }
@@ -85,7 +107,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     onSuccess: () => {
       // Clear all user state
-      setCurrentUserState(null);
+      setCurrentUser(null);
       
       // Clear ALL query cache to prevent stale data
       queryClient.clear();
@@ -140,55 +162,63 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [DEV_AUTO_LOGIN, devAutoLoginAttempted, initialAuthCheckComplete, currentUser, loginMutation.isPending]);
 
+  // Bookkeeping-only effect: mark the initial auth check complete once the
+  // query has produced a result (success, 401, or network error). Kept
+  // separate so its deps don't retrigger the auth-reactor effect below.
   useEffect(() => {
-    // Mark initial check as complete once we have a response
-    if (meResponse !== undefined && !initialAuthCheckComplete) {
+    if ((meResponse !== undefined || authQueryError) && !initialAuthCheckComplete) {
+      if (authQueryError) {
+        console.error('[Auth] Auth query failed with network error — treating as unauthenticated');
+      }
       setInitialAuthCheckComplete(true);
     }
+  }, [meResponse, authQueryError, initialAuthCheckComplete]);
 
-    // CRITICAL: Ignore stale responses while a fresh query is in progress
-    // This prevents race conditions where an old unauthenticated response
-    // arrives after a successful login
-    if (isFetching) {
-      return;
-    }
+  // Read currentUser via a ref inside the reactor effect so we don't need it
+  // as a dep — otherwise setting currentUser from inside the effect would
+  // retrigger the effect and re-increment the 401 counter on the same response.
+  const currentUserRef = useRef(currentUser);
+  useEffect(() => { currentUserRef.current = currentUser; }, [currentUser]);
 
-    // If server returns not authenticated
-    if (meResponse?.success === false) {
+  // Auth reactor: depends ONLY on meResponse so it runs exactly once per new
+  // /api/auth/me response. Previous version also depended on isFetching /
+  // currentUser / initialAuthCheckComplete, which caused the 401 counter to
+  // tick up on unrelated re-renders (e.g. background refetches on network
+  // reconnect), producing overnight-logout and log-in-twice symptoms.
+  useEffect(() => {
+    if (meResponse === undefined) return;
+    const user = currentUserRef.current;
+
+    if (meResponse.success === false) {
+      // Don't clear user state if they just logged in (within last 10 seconds)
+      // to tolerate a stale 401 arriving after a successful login.
+      const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
+      if (timeSinceLogin < 10000) {
+        console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
+        consecutive401sRef.current = 0;
+        return;
+      }
+
       consecutive401sRef.current += 1;
-      
-      if (currentUser) {
-        // CRITICAL FIX: Don't clear user state if they just logged in (within last 10 seconds)
-        // This prevents race condition where stale 401 response arrives after successful login
-        const timeSinceLogin = Date.now() - lastLoginTimeRef.current;
-        if (timeSinceLogin < 10000) {
-          console.log('🛡️ Ignoring 401 response - user just logged in', timeSinceLogin + 'ms ago');
-          consecutive401sRef.current = 0;
-          return;
-        }
-        
-        // Only log out after multiple consecutive 401s to tolerate transient network issues
+
+      if (user) {
         if (consecutive401sRef.current >= 3) {
-          console.warn('⚠️ Multiple consecutive 401s detected - logging out user');
+          console.warn('⚠️ Multiple consecutive 401s detected - session expired');
+          // Clear state but NOT localStorage — preserve stored user so next login is instant
           setCurrentUserState(null);
           consecutive401sRef.current = 0;
-          // Don't clear the entire query cache - just let the user re-login
-          // This prevents data loss if the 401 was a temporary network/cookie issue
         } else {
           console.log(`🔄 Transient 401 detected (${consecutive401sRef.current}/3) - not logging out yet`);
         }
       }
-    } 
-    // If server returns authenticated user data
-    else if (meResponse?.success === true && meResponse.data) {
-      consecutive401sRef.current = 0; // Reset failure counter on successful auth
-      
-      if (!currentUser || currentUser.id !== meResponse.data.id) {
+    } else if (meResponse.success === true && meResponse.data) {
+      consecutive401sRef.current = 0;
+      if (!user || user.id !== meResponse.data.id) {
         console.log('✅ Setting authenticated user:', meResponse.data.role);
-        setCurrentUserState(meResponse.data);
+        setCurrentUser(meResponse.data);
       }
     }
-  }, [meResponse, currentUser, initialAuthCheckComplete, isFetching]);
+  }, [meResponse]);
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
@@ -204,7 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAdmin,
         isCrew,
         isAuthenticated,
-        isLoading: !initialAuthCheckComplete || authQueryLoading,
+        isLoading: !initialAuthCheckComplete,
         login,
         loginPending: loginMutation.isPending,
         logout,

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { useQuery } from "@tanstack/react-query";
 import {
   Clock,
@@ -287,6 +287,7 @@ export default function MetricsDashboard() {
     return new Intl.NumberFormat("en-NZ", {
       style: "currency",
       currency: "NZD",
+      maximumFractionDigits: 0,
     }).format(amount);
   };
 
@@ -414,24 +415,32 @@ export default function MetricsDashboard() {
         const todayStr = today.toISOString().split("T")[0];
         return { from: todayStr, to: todayStr };
       }
-      case "mon-fri": {
-        const dayOfWeek = today.getDay();
-        const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      case "7": {
+        // This Week: Monday of the current week → today
+        const dow = today.getDay(); // 0=Sun, 1=Mon … 6=Sat
+        const diffToMonday = dow === 0 ? -6 : 1 - dow;
         const monday = new Date(today);
         monday.setDate(today.getDate() + diffToMonday);
-        const friday = new Date(monday);
-        friday.setDate(monday.getDate() + 4);
         return {
           from: monday.toISOString().split("T")[0],
-          to: friday.toISOString().split("T")[0],
-        };
-      }
-      case "7":
-        fromDate.setDate(today.getDate() - 7);
-        return {
-          from: fromDate.toISOString().split("T")[0],
           to: today.toISOString().split("T")[0],
         };
+      }
+      case "mon-fri": {
+        // Last Week: previous Monday → previous Sunday
+        const dow = today.getDay(); // 0=Sun
+        const diffToThisMonday = dow === 0 ? -6 : 1 - dow;
+        const thisMonday = new Date(today);
+        thisMonday.setDate(today.getDate() + diffToThisMonday);
+        const lastMonday = new Date(thisMonday);
+        lastMonday.setDate(thisMonday.getDate() - 7);
+        const lastSunday = new Date(thisMonday);
+        lastSunday.setDate(thisMonday.getDate() - 1);
+        return {
+          from: lastMonday.toISOString().split("T")[0],
+          to: lastSunday.toISOString().split("T")[0],
+        };
+      }
       case "30":
         fromDate.setDate(today.getDate() - 30);
         return {
@@ -474,6 +483,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Data queries with date filtering
@@ -491,6 +501,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const {
@@ -507,6 +518,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   // Revenue breakdown query - fetches list of jobs that make up the revenue
@@ -603,6 +615,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   // Quote Method Analytics - on-site vs sent-later acceptance rates
@@ -644,6 +657,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   const { data: leadSourceData, isLoading: leadSourceLoading } = useQuery<
@@ -658,6 +672,7 @@ export default function MetricsDashboard() {
         .then((res) => res.json())
         .then((res) => res.data);
     },
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: quotePresentationData, isLoading: quotePresentationLoading } =
@@ -675,6 +690,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   const { data: manHoursMetrics, isLoading: manHoursLoading } =
@@ -688,6 +704,7 @@ export default function MetricsDashboard() {
           .then((res) => res.json())
           .then((res) => res.data);
       },
+      staleTime: 5 * 60 * 1000,
     });
 
   // Service Performance query
@@ -698,6 +715,7 @@ export default function MetricsDashboard() {
         fetch("/api/analytics/service-performance")
           .then((res) => res.json())
           .then((res) => res.data),
+      staleTime: 5 * 60 * 1000,
     });
 
   // Unsuccessful Jobs Analytics query
@@ -735,6 +753,7 @@ export default function MetricsDashboard() {
         fetch("/api/analytics/unsuccessful-jobs")
           .then((res) => res.json())
           .then((res) => res.data),
+      staleTime: 5 * 60 * 1000,
     });
 
   // Xero Profit & Loss query
@@ -1008,30 +1027,16 @@ export default function MetricsDashboard() {
   const estimatedStaleValue =
     staleQuotesCount * (revenueStats?.averageJobValue || 0);
 
-  // Only show full-page spinner on the very first load (no data yet at all).
-  // When switching date ranges, keep existing data visible while new data fetches.
-  const hasInitialData =
-    dashboardStats !== undefined ||
-    revenueStats !== undefined ||
-    quoteAnalytics !== undefined;
-
   // Show a subtle inline indicator when re-fetching after a date range change
-  const isRefreshing = (statsFetching || revenueFetching) && hasInitialData;
-  if (!hasInitialData && (statsLoading || revenueLoading || quotesLoading)) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-orange-500"></div>
-      </div>
-    );
-  }
+  const isRefreshing = statsFetching || revenueFetching;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-orange-50 to-blue-50 overflow-x-hidden w-full max-w-full">
+    <div className="min-h-screen bg-white overflow-x-hidden w-full max-w-full">
       {/* CEO Overview Header */}
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-3 sm:px-4 py-3">
         <div className="flex items-center justify-between gap-3 max-w-7xl mx-auto">
           <div className="flex items-center gap-3">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <LogoSidebarTrigger size={36} />
             <div className="flex items-center gap-2">
               <BarChart3 className="h-6 w-6 text-blue-600" />
               <h1 className="text-lg sm:text-xl font-bold text-gray-900">
@@ -1054,8 +1059,8 @@ export default function MetricsDashboard() {
               size="icon"
               onClick={() => window.location.reload()}
             >
-              <Loader2
-                className={`h-4 w-4 ${isExporting ? "animate-spin" : ""}`}
+              <RefreshCw
+                className={`h-4 w-4 ${isRefreshing ? "animate-spin" : ""}`}
               />
             </Button>
           </div>
@@ -1223,7 +1228,7 @@ export default function MetricsDashboard() {
                   drilldownKey?: "revenue" | "jobs" | "winrate" | "quotes";
                 }[] = [
                   {
-                    label: "Revenue",
+                    label: "Revenue (exc. GST)",
                     value: formatCurrency(appRevenue).replace("NZ$", "$"),
                     sub: `${revenueStats?.jobsWithInvoices || 0} invoiced jobs`,
                     drilldownKey: "revenue",
@@ -2902,6 +2907,174 @@ export default function MetricsDashboard() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Revenue Goal Calculator */}
+          <div>
+            <Card className="overflow-hidden">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Calculator className="h-5 w-5 text-blue-600" />
+                    <CardTitle className="text-base font-semibold">Revenue Goal Calculator</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+                    <Button
+                      variant={calcPeriod === "weekly" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => handlePeriodChange("weekly")}
+                      className="h-7 px-3 text-xs"
+                    >
+                      Weekly
+                    </Button>
+                    <Button
+                      variant={calcPeriod === "monthly" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => handlePeriodChange("monthly")}
+                      className="h-7 px-3 text-xs"
+                    >
+                      Monthly
+                    </Button>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Change any field — the others update automatically.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Primary inputs row */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Revenue Target */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Revenue Target
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        value={calcRevenueTarget}
+                        onChange={(e) => handleRevenueChange(Number(e.target.value) || 0)}
+                        className="pl-7 text-base font-semibold"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">{calcPeriod === "weekly" ? "per week" : "per month"}</p>
+                  </div>
+
+                  {/* Avg Job Value */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Avg Job Value
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        value={calcAvgJobValue}
+                        onChange={(e) => handleAvgJobChange(Number(e.target.value) || 0)}
+                        className="pl-7 text-base font-semibold"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground">exc. GST per job</p>
+                  </div>
+
+                  {/* Conversion Rate */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                      Quote Win Rate
+                    </label>
+                    <div className="relative">
+                      <Input
+                        type="number"
+                        value={calcConversionRate}
+                        onChange={(e) => handleConversionChange(Number(e.target.value) || 0)}
+                        className="pr-7 text-base font-semibold"
+                        min={0}
+                        max={100}
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">quotes that become jobs</p>
+                  </div>
+                </div>
+
+                {/* Divider with arrow */}
+                <div className="flex items-center gap-3">
+                  <div className="flex-1 border-t border-dashed border-gray-200" />
+                  <span className="text-xs text-muted-foreground font-medium">you need</span>
+                  <div className="flex-1 border-t border-dashed border-gray-200" />
+                </div>
+
+                {/* Derived outputs row */}
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Jobs Needed */}
+                  <div className="bg-blue-50 dark:bg-blue-950/30 rounded-lg p-3 space-y-1">
+                    <label className="text-xs font-medium text-blue-700 dark:text-blue-400 uppercase tracking-wide">
+                      Jobs to Complete
+                    </label>
+                    <div className="flex items-baseline gap-1">
+                      <Input
+                        type="number"
+                        value={calcJobsNeeded}
+                        onChange={(e) => handleJobsChange(Number(e.target.value) || 0)}
+                        className="text-2xl font-bold text-blue-700 dark:text-blue-300 border-0 bg-transparent p-0 h-auto focus-visible:ring-0 w-full"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      = {formatCurrency(calcRevenueTarget)} ÷ {formatCurrency(calcAvgJobValue)}
+                    </p>
+                  </div>
+
+                  {/* Quotes Needed */}
+                  <div className="bg-orange-50 dark:bg-orange-950/30 rounded-lg p-3 space-y-1">
+                    <label className="text-xs font-medium text-orange-700 dark:text-orange-400 uppercase tracking-wide">
+                      Quotes to Send
+                    </label>
+                    <div className="flex items-baseline gap-1">
+                      <Input
+                        type="number"
+                        value={calcQuotesNeeded}
+                        onChange={(e) => handleQuotesChange(Number(e.target.value) || 0)}
+                        className="text-2xl font-bold text-orange-700 dark:text-orange-300 border-0 bg-transparent p-0 h-auto focus-visible:ring-0 w-full"
+                        min={0}
+                      />
+                    </div>
+                    <p className="text-xs text-orange-600 dark:text-orange-400">
+                      at {calcConversionRate}% win rate
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daily breakdown */}
+                <div className="bg-gray-50 dark:bg-muted/30 rounded-lg p-3">
+                  <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Daily breakdown (5-day week)</p>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div>
+                      <p className="text-lg font-bold text-gray-900 dark:text-foreground">
+                        {formatCurrency(Math.round(calcRevenueTarget / (calcPeriod === "weekly" ? 5 : 22)))}
+                      </p>
+                      <p className="text-xs text-muted-foreground">per day</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900 dark:text-foreground">
+                        {(calcJobsNeeded / (calcPeriod === "weekly" ? 5 : 22)).toFixed(1)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">jobs/day</p>
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold text-gray-900 dark:text-foreground">
+                        {(calcQuotesNeeded / (calcPeriod === "weekly" ? 5 : 22)).toFixed(1)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">quotes/day</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
         </div>
       </div>
 
@@ -3305,7 +3478,7 @@ export default function MetricsDashboard() {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-lg p-3 text-center">
                 <div className="text-xs text-green-600 dark:text-green-500 mb-1">
-                  Total Revenue
+                  Total Revenue (exc. GST)
                 </div>
                 <div className="text-xl font-bold text-green-700 dark:text-green-400">
                   {formatCurrency(revenueStats?.totalRevenue || 0)}

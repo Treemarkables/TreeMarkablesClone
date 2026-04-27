@@ -2,12 +2,14 @@ import { useEffect } from "react";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
+import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
 import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
-import heroImage from "@assets/tree_pruning_hero.jpg";
+import InquiryForm from "@/components/InquiryForm";
+const heroImage = "/tree-pruning.jpg";
 
 interface Review {
   id: string;
@@ -141,7 +143,7 @@ export default function TreePruning() {
   };
 
   return (
-    <div className="min-h-screen bg-background pt-16 md:pt-20 lg:pt-24">
+    <div className="min-h-screen bg-background pt-20">
       <SEO 
         title="Tree Pruning Gisborne – Qualified Arborists"
         description="Improve tree health and safety with our expert tree pruning services. Treemarkables offers crown reduction and shaping across Gisborne and the wider East Coast. Free assessments available."
@@ -170,6 +172,11 @@ export default function TreePruning() {
         </div>
       </section>
 
+      <section className="py-10 md:py-14 bg-muted/30">
+        <div className="max-w-2xl mx-auto px-6">
+          <InquiryForm />
+        </div>
+      </section>
 
       {/* Tree Care Philosophy */}
       <section className="py-20 bg-background">
@@ -588,6 +595,8 @@ export default function TreePruning() {
           </div>
         </div>
       </section>
+
+      <FAQSection />
 
       {/* Contact Section */}
       <ContactSection />

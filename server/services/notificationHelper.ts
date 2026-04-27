@@ -291,12 +291,80 @@ export async function findExistingOpenConversation(contact: string): Promise<any
 }
 
 /**
- * Create notification bell entry for new conversation
+ * Notify admins about an inbound SMS reply from a known customer
+ */
+export async function notifyCustomerSmsReply(customerName: string, messageBody: string, jobNumber?: string) {
+  try {
+    const title = jobNumber
+      ? `SMS from ${customerName} — Job #${jobNumber}`
+      : `SMS from ${customerName}`;
+    const body = messageBody.slice(0, 120) + (messageBody.length > 120 ? '…' : '');
+    return await pushToAdminsWithCustomerMessages({
+      title,
+      body,
+      clickAction: '/conversations',
+      data: { type: 'sms_reply', customerName, jobNumber: jobNumber || '' },
+    });
+  } catch (error) {
+    console.error('Error notifying SMS reply:', error);
+    return 0;
+  }
+}
+
+/**
+ * Send a push notification to all admin employees who have customerMessages enabled
+ */
+async function pushToAdminsWithCustomerMessages(options: NotificationOptions) {
+  try {
+    const employees = await storage.getAllEmployees();
+    const admins = employees.filter(emp => emp.role === 'admin');
+    let sent = 0;
+    for (const admin of admins) {
+      const prefs = await storage.getNotificationPreferences(admin.id);
+      if (prefs?.customerMessages !== false) {
+        const result = await notifyEmployee(admin.id, options);
+        if (result) sent++;
+      }
+    }
+    return sent;
+  } catch (error) {
+    console.error('Error pushing to admins:', error);
+    return 0;
+  }
+}
+
+/**
+ * For a conversation, return the jobId of the most recent non-archived job
+ * for its customer. Used so push notifications about a reply can deep-link
+ * to the job card's diary tab once the conversation has been converted to a
+ * lead/job, instead of back to the generic Conversations list.
+ *
+ * Fetches the conversation from storage to read customerId — callers pass
+ * partial objects without FKs, so we can't rely on them for the lookup.
+ */
+async function getConversationJobId(conversationId: string): Promise<string | null> {
+  try {
+    const full = await storage.getConversation(conversationId);
+    const customerId = full?.customerId;
+    if (!customerId) return null;
+    const jobs = await storage.getJobsByCustomer(customerId);
+    const active = jobs.find(
+      (j: any) => j.status !== 'archived' && j.status !== 'unsuccessful',
+    );
+    return (active ?? jobs[0])?.id ?? null;
+  } catch (error) {
+    console.error('Error looking up job for conversation:', error);
+    return null;
+  }
+}
+
+/**
+ * Create notification bell entry for new conversation AND send push notification
  * Call this after successfully creating a conversation from real channels (not seed data)
  */
-export async function createConversationNotification(conversation: { 
-  id: string; 
-  title: string | null; 
+export async function createConversationNotification(conversation: {
+  id: string;
+  title: string | null;
   source: string | null;
   serviceType?: string | null;
   priority?: string | null;
@@ -314,10 +382,176 @@ export async function createConversationNotification(conversation: {
         serviceType: conversation.serviceType
       }
     });
-    console.log(`✅ Created notification bell entry for new conversation: ${conversation.id} (${conversation.source})`);
+
+    const sourceLabel = conversation.source === 'email' ? 'Email' :
+                        conversation.source === 'sms' ? 'SMS' :
+                        conversation.source === 'phone' ? 'Call' :
+                        conversation.source || 'Message';
+
+    const jobId = await getConversationJobId(conversation.id);
+    const clickAction = jobId
+      ? `/dispatch?job=${jobId}&tab=diary`
+      : `/conversation/${conversation.id}`;
+
+    await pushToAdminsWithCustomerMessages({
+      title: `New ${sourceLabel} Inquiry`,
+      body: conversation.title || 'New customer inquiry received',
+      clickAction,
+      data: {
+        type: 'new_conversation',
+        conversationId: conversation.id,
+        source: conversation.source || '',
+        jobId: jobId || '',
+      },
+    });
+
+    console.log(`✅ Created notification bell + push for new conversation: ${conversation.id} (${conversation.source})`);
     return true;
   } catch (error) {
     console.error('Error creating conversation notification:', error);
+    return false;
+  }
+}
+
+/**
+ * Create notification bell entry + push for a new lead (job auto-created from
+ * a customer-facing form). The bell deep-links to the job's diary tab so the
+ * operator lands directly on the lead.
+ */
+export async function createNewLeadNotification(params: {
+  jobId: string;
+  jobNumber: number | string;
+  customerId: string;
+  customerName: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  sourceLabel: string;
+  messagePreview?: string;
+  conversationId?: string;
+}) {
+  try {
+    const clickAction = `/dispatch?job=${params.jobId}&tab=diary`;
+    const previewText = (params.messagePreview || '').trim();
+    const truncatedPreview = previewText.length > 200
+      ? previewText.substring(0, 200) + '...'
+      : previewText;
+    const bellMessage = truncatedPreview
+      ? `${params.customerName}: ${truncatedPreview}`
+      : `New lead from ${params.customerName}`;
+
+    await storage.createNotification({
+      title: `New ${params.sourceLabel} lead`,
+      message: bellMessage,
+      type: 'new_lead',
+      priority: 'high',
+      actionUrl: clickAction,
+      jobId: params.jobId,
+      customerId: params.customerId,
+      metadata: {
+        jobNumber: params.jobNumber,
+        source: params.sourceLabel,
+        conversationId: params.conversationId,
+        contactEmail: params.customerEmail,
+        contactPhone: params.customerPhone,
+      },
+    });
+
+    const contactBits = [params.customerPhone, params.customerEmail].filter(Boolean).join(' · ');
+    const pushBody = contactBits
+      ? `${params.customerName} (${contactBits})`
+      : params.customerName;
+
+    await pushToAdminsWithCustomerMessages({
+      title: `New ${params.sourceLabel} lead`,
+      body: pushBody,
+      clickAction,
+      data: {
+        type: 'new_lead',
+        jobId: params.jobId,
+        conversationId: params.conversationId || '',
+        source: params.sourceLabel,
+      },
+    });
+
+    console.log(`✅ Created new-lead notification for job ${params.jobId} (#${params.jobNumber})`);
+    return true;
+  } catch (error) {
+    console.error('Error creating new-lead notification:', error);
+    return false;
+  }
+}
+
+/**
+ * Send push notification for a reply received on an existing conversation
+ * Call this when a customer replies via email, SMS, or any channel
+ */
+export async function notifyConversationReply(conversation: {
+  id: string;
+  title: string | null;
+  source: string | null;
+  customerName?: string | null;
+}, replyPreview?: string) {
+  try {
+    // De-dup: skip if a notification for this conversation was already created in the last 24h.
+    // Match on conversationId in metadata rather than the exact action URL, since the URL
+    // now varies (job-card diary vs conversation page) depending on whether the conversation
+    // has been converted to a job.
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentNotifications = await storage.getNotificationsCreatedSince(since);
+    const alreadyNotified = recentNotifications.some(
+      (n) =>
+        n.type === 'new_conversation' &&
+        (n.metadata as any)?.conversationId === conversation.id,
+    );
+    if (alreadyNotified) {
+      console.log(`✅ Skipping duplicate conversation reply notification for: ${conversation.id}`);
+      return true;
+    }
+
+    const sourceLabel = conversation.source === 'email' ? 'Email' :
+                        conversation.source === 'sms' ? 'SMS' :
+                        conversation.source === 'phone' ? 'Call' :
+                        conversation.source || 'Message';
+
+    const senderName = conversation.customerName || conversation.title || 'Customer';
+    const bodyText = replyPreview
+      ? `${senderName}: ${replyPreview.slice(0, 100)}${replyPreview.length > 100 ? '…' : ''}`
+      : `${senderName} replied via ${sourceLabel}`;
+
+    const jobId = await getConversationJobId(conversation.id);
+    const clickAction = jobId
+      ? `/dispatch?job=${jobId}&tab=diary`
+      : `/conversation/${conversation.id}`;
+
+    await storage.createNotification({
+      title: `${sourceLabel} reply from ${senderName}`,
+      message: bodyText,
+      type: 'new_conversation',
+      priority: 'medium',
+      actionUrl: clickAction,
+      metadata: {
+        conversationId: conversation.id,
+        source: conversation.source,
+        jobId: jobId || undefined,
+      }
+    });
+
+    const sent = await pushToAdminsWithCustomerMessages({
+      title: `${sourceLabel} Reply — ${senderName}`,
+      body: bodyText,
+      clickAction,
+      data: {
+        type: 'conversation_reply',
+        conversationId: conversation.id,
+        source: conversation.source || '',
+        jobId: jobId || '',
+      },
+    });
+
+    console.log(`✅ Sent conversation reply push to ${sent} admin(s): ${conversation.id}`);
+    return true;
+  } catch (error) {
+    console.error('Error sending conversation reply notification:', error);
     return false;
   }
 }

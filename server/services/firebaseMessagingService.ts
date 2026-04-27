@@ -1,38 +1,37 @@
-// Firebase Cloud Messaging service for sending push notifications
+// Firebase Cloud Messaging service using Firebase Admin SDK
 import admin from 'firebase-admin';
 
 class FirebaseMessagingService {
   private initialized = false;
 
-  // Initialize Firebase Admin SDK
-  initialize() {
-    if (this.initialized) {
-      return;
+  private init(): boolean {
+    if (this.initialized) return true;
+
+    const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+    if (!serviceAccountStr) {
+      console.warn('⚠️  Firebase service account not configured - push notifications disabled');
+      return false;
     }
 
     try {
-      const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-      
-      if (!serviceAccount) {
-        console.warn('⚠️  Firebase service account not configured - push notifications disabled');
-        return;
+      const sa = JSON.parse(serviceAccountStr);
+      if (sa.private_key && sa.private_key.includes('\\n')) {
+        sa.private_key = sa.private_key.replace(/\\n/g, '\n');
       }
 
-      // Parse the service account JSON
-      const serviceAccountData = JSON.parse(serviceAccount);
-
-      admin.initializeApp({
-        credential: admin.credential.cert(serviceAccountData),
-      });
+      if (!admin.apps.length) {
+        admin.initializeApp({ credential: admin.credential.cert(sa) });
+      }
 
       this.initialized = true;
-      console.log('✅ Firebase Admin SDK initialized for push notifications');
+      console.log('✅ Firebase Admin SDK initialized for project:', sa.project_id);
+      return true;
     } catch (error) {
       console.error('❌ Error initializing Firebase Admin SDK:', error);
+      return false;
     }
   }
 
-  // Send notification to a single device
   async sendToDevice(token: string, notification: {
     title: string;
     body: string;
@@ -40,48 +39,45 @@ class FirebaseMessagingService {
     clickAction?: string;
     data?: Record<string, string>;
   }): Promise<boolean> {
-    if (!this.initialized) {
-      this.initialize();
-    }
-
-    if (!this.initialized) {
-      console.warn('Firebase not initialized - skipping notification');
-      return false;
-    }
+    if (!this.init()) return false;
 
     try {
-      const message = {
+      const message: admin.messaging.Message = {
+        token,
         notification: {
           title: notification.title,
           body: notification.body,
-          icon: notification.icon || '/icon-192.png',
         },
         data: notification.data || {},
-        webpush: notification.clickAction ? {
-          fcmOptions: {
-            link: notification.clickAction,
-          },
-        } : undefined,
-        token: token,
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { sound: 'default', badge: 1 } },
+        },
+        android: {
+          priority: 'high',
+          notification: { sound: 'default' },
+        },
       };
 
-      const response = await admin.messaging().send(message);
-      console.log('✅ Notification sent successfully:', response);
+      const result = await admin.messaging().send(message);
+      console.log('✅ FCM notification sent:', result);
       return true;
-    } catch (error: any) {
-      // Handle invalid token errors
-      if (error.code === 'messaging/invalid-registration-token' || 
-          error.code === 'messaging/registration-token-not-registered') {
-        console.log('❌ Invalid FCM token - should be removed from database:', token);
+    } catch (error: unknown) {
+      const err = error as { code?: string; message?: string };
+
+      if (
+        err.code === 'messaging/registration-token-not-registered' ||
+        err.code === 'messaging/invalid-registration-token'
+      ) {
+        console.log('❌ FCM token no longer valid (stale/deregistered):', token.substring(0, 20) + '...');
         return false;
       }
-      
-      console.error('❌ Error sending notification:', error);
+
+      console.error('❌ FCM send failed:', err.code, err.message);
       return false;
     }
   }
 
-  // Send notification to multiple devices
   async sendToMultipleDevices(tokens: string[], notification: {
     title: string;
     body: string;
@@ -89,20 +85,7 @@ class FirebaseMessagingService {
     clickAction?: string;
     data?: Record<string, string>;
   }): Promise<{ success: number; failure: number; invalidTokens: string[] }> {
-    if (!this.initialized) {
-      this.initialize();
-    }
-
-    if (!this.initialized) {
-      console.warn('Firebase not initialized - skipping notifications');
-      return { success: 0, failure: tokens.length, invalidTokens: [] };
-    }
-
-    const results = {
-      success: 0,
-      failure: 0,
-      invalidTokens: [] as string[],
-    };
+    const results = { success: 0, failure: 0, invalidTokens: [] as string[] };
 
     for (const token of tokens) {
       const sent = await this.sendToDevice(token, notification);
@@ -117,7 +100,6 @@ class FirebaseMessagingService {
     return results;
   }
 
-  // Send notification for job assignment
   async sendJobAssignmentNotification(token: string, data: {
     jobNumber: string;
     jobTitle: string;
@@ -126,17 +108,13 @@ class FirebaseMessagingService {
     address?: string;
   }): Promise<boolean> {
     return this.sendToDevice(token, {
-      title: `🌳 New Job Assignment`,
+      title: 'New Job Assignment',
       body: `Job #${data.jobNumber}: ${data.jobTitle}\n${data.scheduledDate} at ${data.scheduledTime}`,
       clickAction: '/dispatch',
-      data: {
-        type: 'job_assignment',
-        jobNumber: data.jobNumber,
-      },
+      data: { type: 'job_assignment', jobNumber: data.jobNumber },
     });
   }
 
-  // Send notification for schedule change
   async sendScheduleChangeNotification(token: string, data: {
     jobNumber: string;
     jobTitle: string;
@@ -144,45 +122,35 @@ class FirebaseMessagingService {
     newDateTime: string;
   }): Promise<boolean> {
     return this.sendToDevice(token, {
-      title: `📅 Schedule Changed`,
+      title: 'Schedule Changed',
       body: `Job #${data.jobNumber} rescheduled\nFrom: ${data.oldDateTime}\nTo: ${data.newDateTime}`,
       clickAction: '/dispatch',
-      data: {
-        type: 'schedule_change',
-        jobNumber: data.jobNumber,
-      },
+      data: { type: 'schedule_change', jobNumber: data.jobNumber },
     });
   }
 
-  // Send notification for new lead
   async sendNewLeadNotification(token: string, data: {
     customerName: string;
     source?: string;
   }): Promise<boolean> {
     return this.sendToDevice(token, {
-      title: `📞 New Lead`,
+      title: 'New Lead',
       body: `New inquiry from ${data.customerName}${data.source ? ` via ${data.source}` : ''}`,
       clickAction: '/conversations',
-      data: {
-        type: 'new_lead',
-      },
+      data: { type: 'new_lead' },
     });
   }
 
-  // Send notification for invoice payment
   async sendInvoicePaymentNotification(token: string, data: {
     invoiceNumber: string;
     amount: string;
     customerName: string;
   }): Promise<boolean> {
     return this.sendToDevice(token, {
-      title: `💰 Payment Received`,
+      title: 'Payment Received',
       body: `${data.customerName} paid ${data.amount}\nInvoice #${data.invoiceNumber}`,
       clickAction: '/invoices',
-      data: {
-        type: 'invoice_payment',
-        invoiceNumber: data.invoiceNumber,
-      },
+      data: { type: 'invoice_payment', invoiceNumber: data.invoiceNumber },
     });
   }
 }

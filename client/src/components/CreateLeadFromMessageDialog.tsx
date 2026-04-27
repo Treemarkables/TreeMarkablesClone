@@ -66,40 +66,55 @@ export function CreateLeadFromMessageDialog({
   useEffect(() => {
     if (!open) return;
 
-    console.log("📸 Paste handler setup - dialog open:", open);
-
     const handlePaste = (e: ClipboardEvent) => {
-      console.log("📸 Paste event detected!");
       const items = e.clipboardData?.items;
-      console.log("📸 Clipboard items:", items?.length);
-      if (!items) return;
+      const files = e.clipboardData?.files;
 
-      for (let i = 0; i < items.length; i++) {
-        console.log("📸 Item", i, "type:", items[i].type);
-        if (items[i].type.indexOf("image") !== -1) {
-          const file = items[i].getAsFile();
-          console.log("📸 Got image file:", file?.name, file?.size);
-          if (file) {
-            setSelectedImage(file);
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              console.log("📸 Image loaded, setting preview");
-              setImagePreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-            setExtractedData(null);
-            // Auto-switch to screenshot tab when image is pasted
-            setActiveTab("screenshot");
-            e.preventDefault();
+      let imageFile: File | null = null;
+
+      if (items) {
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith("image/")) {
+            const file = item.getAsFile();
+            if (file) {
+              imageFile = file;
+              break;
+            }
+          }
+        }
+      }
+
+      if (!imageFile && files) {
+        for (const file of Array.from(files)) {
+          if (file.type.startsWith("image/")) {
+            imageFile = file;
             break;
           }
         }
       }
+
+      if (!imageFile) return;
+
+      // Claim the paste so no other handler (e.g. GlobalJobCard) also grabs it
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      setSelectedImage(imageFile);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(imageFile);
+      setExtractedData(null);
+      setActiveTab("screenshot");
     };
 
-    document.addEventListener("paste", handlePaste);
-    return () => document.removeEventListener("paste", handlePaste);
-  }, [open, toast]);
+    // Capture phase + window target so we run before document-level handlers
+    // registered by other open modals.
+    window.addEventListener("paste", handlePaste, { capture: true });
+    return () =>
+      window.removeEventListener("paste", handlePaste, { capture: true });
+  }, [open]);
 
   const extractFromTextMutation = useMutation({
     mutationFn: async (data: { message: string; phone?: string }) => {

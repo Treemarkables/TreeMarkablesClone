@@ -1,7 +1,7 @@
 import Imap from 'imap';
 import { simpleParser } from 'mailparser';
 import { db } from '../db';
-import { jobs, jobDiaryEntries, customers } from '../../shared/schema';
+import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 
 interface ParsedEmailReply {
@@ -56,6 +56,19 @@ class GmailReplyService {
 
     return new Promise((resolve, reject) => {
       const imap = new Imap(this.imapConfig);
+      let settled = false;
+      const settle = (fn: () => void) => {
+        if (!settled) { settled = true; fn(); }
+      };
+
+      // Use .on (not .once) so that every error event is caught — IMAP can emit
+      // multiple error events during its lifecycle (connect phase, fetch phase,
+      // teardown). A second uncaught error event would become an uncaughtException.
+      imap.on('error', (err: Error) => {
+        console.error('📧 IMAP connection error:', err);
+        try { imap.destroy(); } catch (_) {}
+        settle(() => reject(err));
+      });
 
       imap.once('ready', () => {
         // Use '[Gmail]/All Mail' so we catch emails delivered to any label or routing
@@ -65,7 +78,7 @@ class GmailReplyService {
           if (err) {
             console.error('📧 Error opening Gmail All Mail folder:', err);
             imap.end();
-            reject(err);
+            settle(() => reject(err));
             return;
           }
 
@@ -80,14 +93,14 @@ class GmailReplyService {
             if (err) {
               console.error('📧 Gmail search error:', err);
               imap.end();
-              reject(err);
+              settle(() => reject(err));
               return;
             }
 
             if (!results || results.length === 0) {
               console.log('📧 No new email replies found');
               imap.end();
-              resolve();
+              settle(() => resolve());
               return;
             }
 
@@ -157,48 +170,49 @@ class GmailReplyService {
 
             fetch.once('error', (err) => {
               console.error('📧 Fetch error:', err);
-              reject(err);
+              settle(() => reject(err));
             });
 
             fetch.once('end', async () => {
-              // Wait for all emails to finish parsing
-              await Promise.all(parsePromises);
-              
-              console.log(`📧 Finished parsing ${emailsToProcess.length} email(s), processing now...`);
-              
-              // Process all collected emails and track successfully processed UIDs
-              const successfulUids: number[] = [];
-              
-              for (const email of emailsToProcess) {
-                const success = await this.processEmailReply(email);
-                if (success && email.uid) {
-                  successfulUids.push(email.uid);
+              try {
+                // Wait for all emails to finish parsing
+                await Promise.all(parsePromises);
+                
+                console.log(`📧 Finished parsing ${emailsToProcess.length} email(s), processing now...`);
+                
+                // Process all collected emails and track successfully processed UIDs
+                const successfulUids: number[] = [];
+                
+                for (const email of emailsToProcess) {
+                  const success = await this.processEmailReply(email);
+                  if (success && email.uid) {
+                    successfulUids.push(email.uid);
+                  }
                 }
-              }
 
-              // ONLY mark as seen after successful processing
-              if (successfulUids.length > 0) {
-                for (const uid of successfulUids) {
-                  imap.addFlags(uid, ['\\Seen'], (err) => {
-                    if (err) {
-                      console.error(`📧 Error marking email UID ${uid} as read:`, err);
-                    }
-                  });
+                // ONLY mark as seen after successful processing
+                if (successfulUids.length > 0) {
+                  for (const uid of successfulUids) {
+                    imap.addFlags(uid, ['\\Seen'], (err) => {
+                      if (err) {
+                        console.error(`📧 Error marking email UID ${uid} as read:`, err);
+                      }
+                    });
+                  }
+                  console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
                 }
-                console.log(`📧 Marked ${successfulUids.length} email(s) as read after successful processing`);
-              }
 
-              console.log(`📧 Successfully processed ${successfulUids.length} of ${emailsToProcess.length} email reply(ies)`);
-              imap.end();
-              resolve();
+                console.log(`📧 Successfully processed ${successfulUids.length} of ${emailsToProcess.length} email reply(ies)`);
+                imap.end();
+                settle(() => resolve());
+              } catch (err) {
+                console.error('📧 Error processing fetched emails:', err);
+                try { imap.end(); } catch (_) {}
+                settle(() => reject(err));
+              }
             });
           });
         });
-      });
-
-      imap.once('error', (err) => {
-        console.error('📧 IMAP connection error:', err);
-        reject(err);
       });
 
       imap.once('end', () => {
@@ -320,7 +334,22 @@ class GmailReplyService {
         try {
           const notificationHelper = await import('./notificationHelper.js');
           const { storage } = await import('../storage.js');
-          
+
+          // DEDUP GUARD: If this exact messageId already exists in any conversation message, skip entirely.
+          // This is the primary fix for the "keeps reappearing" bug — the same Gmail email was being
+          // inserted into conversation_messages on every poll cycle.
+          if (email.messageId) {
+            const existingMsg = await db
+              .select({ id: conversationMessages.id })
+              .from(conversationMessages)
+              .where(sql`${conversationMessages.metadata}->>'messageId' = ${email.messageId}`)
+              .limit(1);
+            if (existingMsg.length > 0) {
+              console.log(`📧 Conversation message already exists for messageId: ${email.messageId} - skipping`);
+              return true;
+            }
+          }
+
           // Check for existing open conversation from this email
           let conversation = await notificationHelper.findExistingOpenConversation(email.from.trim().toLowerCase());
           
@@ -332,24 +361,52 @@ class GmailReplyService {
           
           if (conversation) {
             console.log(`📧 ✅ Found existing conversation for ${email.from}: ${conversation.id}`);
+            await notificationHelper.notifyConversationReply(
+              { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
+              cleanedBody
+            );
           } else {
-            // Create new conversation for this lead
-            console.log(`📧 Creating new conversation for lead: ${email.from}`);
-            const conversationTitle = cleanedBody.length > 0 
-              ? cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '')
-              : `Re: ${email.subject}`;
-            
-            conversation = await storage.createConversation({
-              title: conversationTitle,
-              status: 'open',
-              priority: 'medium',
-              source: 'email',
-              tags: ['email-reply', 'lead']
-            });
-            
-            // Create notification bell entry for new conversation
-            await notificationHelper.createConversationNotification(conversation);
-            console.log(`📧 ✅ Created new conversation for email from lead: ${conversation.id}`);
+            // No open conversation — check if ANY conversation (even closed/converted) already has a
+            // message from this sender. If so, reopen that one rather than creating a duplicate.
+            // This prevents ghost conversations coming back every poll after the user dismisses them.
+            const allConvs = await storage.getAllConversations({});
+            let priorConv: any = null;
+            for (const c of allConvs) {
+              const msgs = await storage.getConversationMessages(c.id);
+              if (msgs.some((m: any) => m.fromContact?.toLowerCase() === email.from.trim().toLowerCase())) {
+                priorConv = c;
+                break;
+              }
+            }
+
+            if (priorConv) {
+              // Reopen the prior conversation instead of creating a new one
+              console.log(`📧 Reopening prior conversation for ${email.from}: ${priorConv.id}`);
+              await storage.updateConversation(priorConv.id, { status: 'open' });
+              conversation = { ...priorConv, status: 'open' };
+              await notificationHelper.notifyConversationReply(
+                { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
+                cleanedBody
+              );
+            } else {
+              // Truly new lead — create a fresh conversation
+              console.log(`📧 Creating new conversation for lead: ${email.from}`);
+              const conversationTitle = cleanedBody.length > 0 
+                ? cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '')
+                : `Re: ${email.subject}`;
+              
+              conversation = await storage.createConversation({
+                title: conversationTitle,
+                status: 'open',
+                priority: 'medium',
+                source: 'email',
+                tags: ['email-reply', 'lead']
+              });
+              
+              // Create notification bell entry for new conversation
+              await notificationHelper.createConversationNotification(conversation);
+              console.log(`📧 ✅ Created new conversation for email from lead: ${conversation.id}`);
+            }
           }
           
           // Create conversation message
@@ -428,20 +485,30 @@ class GmailReplyService {
         console.log(`📧 ✅ Added email reply to job diary - Job #${job.jobNumber}, Customer: ${customer.name}`);
         
         // Create notification for email reply so it appears in notification bell
+        // De-dup: skip if an email_reply notification for this job was already created in the last 24h
+        // (includes archived records so the guard survives a "Clear all")
         try {
           const { storage } = await import('../storage.js');
-          const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
-          
-          await storage.createNotification({
-            title: `📧 Email Reply from ${customer.name}`,
-            message: emailPreview || `Re: ${email.subject}`,
-            type: 'email_reply',
-            priority: 'medium',
-            jobId: job.id,
-            customerId: job.customerId,
-            actionUrl: `/dispatch?job=${job.id}`
-          });
-          console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
+          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+          const jobAlreadyNotified = recentNotifs.some(
+            (n) => n.type === 'email_reply' && n.jobId === job.id
+          );
+          if (!jobAlreadyNotified) {
+            const emailPreview = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
+            await storage.createNotification({
+              title: `📧 Email Reply from ${customer.name}`,
+              message: emailPreview || `Re: ${email.subject}`,
+              type: 'email_reply',
+              priority: 'medium',
+              jobId: job.id,
+              customerId: job.customerId,
+              actionUrl: `/dispatch?job=${job.id}`
+            });
+            console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
+          } else {
+            console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber}`);
+          }
         } catch (notifError) {
           console.error('Error creating email reply notification:', notifError);
         }
@@ -488,6 +555,10 @@ class GmailReplyService {
           console.log(`📧 ✅ Created new conversation for email reply: ${conversation.id}`);
         } else {
           console.log(`📧 ✅ Found existing open conversation for ${email.from}, adding message to: ${conversation.id}`);
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'email', customerName: senderName },
+            cleanedBody
+          );
         }
         
         // Create conversation message with optional job info

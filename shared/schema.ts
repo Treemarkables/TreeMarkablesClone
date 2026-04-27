@@ -214,6 +214,7 @@ export const customers = pgTable("customers", {
   isVipMember: boolean("is_vip_member").default(false),
   vipMemberSince: timestamp("vip_member_since"),
   vipDiscountPercent: decimal("vip_discount_percent", { precision: 5, scale: 2 }),
+  invoiceCcEmail: text("invoice_cc_email"), // Auto-CC this address on every invoice email
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -344,6 +345,7 @@ export const jobs = pgTable("jobs", {
   scheduledStartTime: text("scheduled_start_time"), // e.g., "08:00"
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
+  workOrderAt: timestamp("work_order_at"), // Timestamp set when the job first transitions to status 'work_order' (i.e. quote accepted). Used by the Dispatch Board to FIFO-sort work orders by acceptance time; stable across subsequent edits.
   status: text("status").notNull().default('quote'), // lead, quote, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
@@ -407,6 +409,11 @@ export const jobs = pgTable("jobs", {
   // Global Job Card Fields
   checklist: jsonb("checklist").$type<ChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "text": "Task description", "completed": false}]
   equipmentChecklist: jsonb("equipment_checklist").$type<EquipmentChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "equipment": "Chainsaw", "checked": false, "checkedAt": "timestamp", "checkedBy": "name"}]
+  // Per-job role completion. Truth = presence of *CompletedAt timestamps. *CompletedBy is the employee id (nullable).
+  roleACompletedAt: timestamp("role_a_completed_at"),
+  roleACompletedBy: varchar("role_a_completed_by"),
+  roleBCompletedAt: timestamp("role_b_completed_at"),
+  roleBCompletedBy: varchar("role_b_completed_by"),
   notes: text("notes"), // Job notes and comments
   internalNotes: text("internal_notes"), // Staff-only internal notes — never shown to customers
   lineItems: jsonb("line_items").$type<ServiceM8LineItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
@@ -447,7 +454,16 @@ export const jobs = pgTable("jobs", {
   jobContactEmail: text("job_contact_email"),
   jobContactPhone: text("job_contact_phone"),
   jobContactMobile: text("job_contact_mobile"),
-  
+
+  // Tenant Contact Information — used for properties where the customer is an
+  // organisation (or absent owner) and a tenant lives on-site. Automations
+  // continue to use Job Contact; this is an opt-in secondary recipient.
+  tenantContactFirstName: text("tenant_contact_first_name"),
+  tenantContactLastName: text("tenant_contact_last_name"),
+  tenantContactEmail: text("tenant_contact_email"),
+  tenantContactPhone: text("tenant_contact_phone"),
+  tenantContactMobile: text("tenant_contact_mobile"),
+
   // GST/Tax System (New Zealand 15% GST)
   taxMode: text("tax_mode").default('tax_exclusive'), // cost_markup, tax_inclusive, tax_exclusive
   taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default('15.00'), // 15% GST
@@ -473,8 +489,13 @@ export const jobs = pgTable("jobs", {
   inQueue: boolean("in_queue").default(false),
   queueReason: text("queue_reason"), // Weather Hold, Awaiting Permit, Customer Not Ready, Awaiting Quote Approval, Materials Needed, Crew Unavailable, Other
 
+  // Loom Video
+  loomVideoUrl: text("loom_video_url"),
+
   // Customer confirmation
   customerConfirmed: boolean("customer_confirmed").default(false),
+  customerConfirmedAt: timestamp("customer_confirmed_at"),
+  customerConfirmationMethod: text("customer_confirmation_method"), // 'manual' | 'sms' | 'email'
   etaNotificationRequested: boolean("eta_notification_requested").default(false),
 
   createdAt: timestamp("created_at").defaultNow(),
@@ -579,6 +600,7 @@ export const proposals = pgTable("proposals", {
   signedDate: timestamp("signed_date"),
   templateUsed: text("template_used"),
   branding: jsonb("branding"), // logo, colors, fonts
+  blockConfig: jsonb("block_config"), // DocumentBlock[] — layout for the block-based renderer; null falls back to DEFAULT_PROPOSAL_BLOCKS
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).default("0.00"),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).default("0.00"),
   gstAmount: decimal("gst_amount", { precision: 10, scale: 2 }).default("0.00"),
@@ -723,6 +745,7 @@ export const reviews = pgTable("reviews", {
   keywords: text("keywords").array(),
   isPublic: boolean("is_public").default(true),
   platformReviewId: text("platform_review_id"),
+  photoUrls: text("photo_urls").array(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -1049,6 +1072,9 @@ export const businessSettings = pgTable("business_settings", {
   // Analytics Defaults
   defaultGrossMarginPct: decimal("default_gross_margin_pct", { precision: 5, scale: 2 }).notNull().default("0"),
 
+  // AI Dispatch Settings
+  dailyRevenueTarget: decimal("daily_revenue_target", { precision: 10, scale: 2 }).default("3500"),
+
   // Invoice Settings
   invoicePaymentDays: integer("invoice_payment_days").default(7),
 
@@ -1155,6 +1181,7 @@ export const notifications = pgTable("notifications", {
   expiresAt: timestamp("expires_at"), // Optional expiration date
   createdAt: timestamp("created_at").defaultNow().notNull(),
   readAt: timestamp("read_at"), // When notification was read
+  archived: boolean("archived").default(false).notNull(), // Archived (hidden) but kept for de-dup
 });
 
 // Notification Insert Schema
@@ -1162,6 +1189,7 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   id: true,
   createdAt: true,
   readAt: true,
+  archived: true,
 });
 
 // Notification Update Schema (for marking as read, etc.)
@@ -1246,9 +1274,12 @@ export const employees = pgTable("employees", {
   status: text("status").notNull().default("active"), // active, inactive, on_leave
   skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
   certifications: text("certifications").array().default([]), // ISA, CTSP, etc.
+  licences: text("licences").array().default([]), // EWP Ticket, Class 2 Licence, Chainsaw Unit Standard, etc.
   skills: text("skills").array().default([]), // chainsaw, bucket_truck, climbing, etc.
   hourlyRate: decimal("hourly_rate", { precision: 10, scale: 2 }), // Internal cost rate
   chargeOutRate: decimal("charge_out_rate", { precision: 10, scale: 2 }), // Rate billed to customers
+  costLineItemNumber: text("cost_line_item_number"), // itemNumber of Labour catalog item used for cost tracking
+  chargeOutLineItemNumber: text("charge_out_line_item_number"), // itemNumber of Labour catalog item used for invoicing
   availableHours: text("available_hours"), // JSON: {"mon": "8-17", "tue": "8-17", ...}
   emergencyContact: text("emergency_contact"),
   emergencyContactPhone: text("emergency_contact_phone"),
@@ -1360,6 +1391,7 @@ export const jobStaffAssignments = pgTable("job_staff_assignments", {
   
   // Assignment details
   role: text("role"), // lead, operator, ground_crew, driver
+  dayRole: text("day_role"), // 'A' | 'B' | null — set once per (employeeId, NZ-date), propagated to every assignment row that day
   status: text("status").notNull().default("assigned"), // assigned, confirmed, in_progress, completed, cancelled
   notificationSent: boolean("notification_sent").notNull().default(false),
   notificationSentAt: timestamp("notification_sent_at"),
@@ -1378,9 +1410,11 @@ export const insertJobStaffAssignmentSchema = createInsertSchema(jobStaffAssignm
   createdAt: true,
   updatedAt: true,
 });
+export const updateJobStaffAssignmentSchema = insertJobStaffAssignmentSchema.partial();
 
 export type JobStaffAssignment = typeof jobStaffAssignments.$inferSelect;
 export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSchema>;
+export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSchema>;
 
 // Job Template Schema  
 export const jobTemplates = pgTable("job_templates", {
@@ -1608,6 +1642,12 @@ export const equipment = pgTable("equipment", {
   
   // Inspection template assignment
   defaultInspectionTemplateId: varchar("default_inspection_template_id"),
+  
+  // Licence/ticket required to operate this equipment
+  licenceRequired: text("licence_required"), // e.g. "EWP Ticket", "Class 2 Licence", "Chainsaw Unit Standard"
+  
+  // Whether this equipment requires a pre-start inspection (e.g. vehicles with motors)
+  requiresPreStart: boolean("requires_pre_start").notNull().default(false),
   
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
@@ -1871,6 +1911,114 @@ export type UpdateVehicleInspection = z.infer<typeof updateVehicleInspectionSche
 
 export type InspectionResponse = typeof inspectionResponses.$inferSelect;
 export type InsertInspectionResponse = z.infer<typeof insertInspectionResponseSchema>;
+
+// ========================================
+// EQUIPMENT INDUCTION SYSTEM
+// ========================================
+
+// Induction Templates - Customizable induction checklists per equipment type
+export const inductionTemplates = pgTable("induction_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  equipmentType: text("equipment_type"),
+  description: text("description"),
+  isDefault: boolean("is_default").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  createdBy: varchar("created_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const inductionChecklistItems = pgTable("induction_checklist_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  templateId: varchar("template_id").references(() => inductionTemplates.id, { onDelete: 'cascade' }).notNull(),
+  step: text("step").notNull(),
+  requiresPhoto: boolean("requires_photo").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  category: text("category"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const equipmentInductions = pgTable("equipment_inductions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").notNull(),
+  employeeName: text("employee_name").notNull(),
+  equipmentType: text("equipment_type"),
+  templateId: varchar("template_id").references(() => inductionTemplates.id),
+  templateName: text("template_name"),
+
+  inductionDate: timestamp("induction_date").notNull().defaultNow(),
+  inductedBy: varchar("inducted_by").notNull(),
+  inductorName: text("inductor_name").notNull(),
+
+  notes: text("notes"),
+  employeeSignature: text("employee_signature"),
+  trainerSignature: text("trainer_signature"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+});
+
+export const inductionResponses = pgTable("induction_responses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  inductionId: varchar("induction_id").references(() => equipmentInductions.id, { onDelete: 'cascade' }).notNull(),
+  checklistItemId: varchar("checklist_item_id").references(() => inductionChecklistItems.id, { onDelete: 'set null' }),
+
+  step: text("step").notNull(),
+  category: text("category"),
+  requiresPhoto: boolean("requires_photo").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+
+  acknowledged: boolean("acknowledged").notNull().default(false),
+  notes: text("notes"),
+  photos: text("photos").array().default([]),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  uniqueInductionItem: unique().on(table.inductionId, table.checklistItemId),
+}));
+
+export const insertInductionTemplateSchema = createInsertSchema(inductionTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertInductionChecklistItemSchema = createInsertSchema(inductionChecklistItems).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertEquipmentInductionSchema = createInsertSchema(equipmentInductions).omit({
+  id: true,
+  createdAt: true,
+  completedAt: true,
+});
+
+export const insertInductionResponseSchema = createInsertSchema(inductionResponses).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const updateInductionTemplateSchema = insertInductionTemplateSchema.partial();
+export const updateInductionChecklistItemSchema = insertInductionChecklistItemSchema.partial();
+export const updateEquipmentInductionSchema = insertEquipmentInductionSchema.partial();
+
+export type InductionTemplate = typeof inductionTemplates.$inferSelect;
+export type InsertInductionTemplate = z.infer<typeof insertInductionTemplateSchema>;
+export type UpdateInductionTemplate = z.infer<typeof updateInductionTemplateSchema>;
+
+export type InductionChecklistItem = typeof inductionChecklistItems.$inferSelect;
+export type InsertInductionChecklistItem = z.infer<typeof insertInductionChecklistItemSchema>;
+export type UpdateInductionChecklistItem = z.infer<typeof updateInductionChecklistItemSchema>;
+
+export type EquipmentInduction = typeof equipmentInductions.$inferSelect;
+export type InsertEquipmentInduction = z.infer<typeof insertEquipmentInductionSchema>;
+export type UpdateEquipmentInduction = z.infer<typeof updateEquipmentInductionSchema>;
+
+export type InductionResponse = typeof inductionResponses.$inferSelect;
+export type InsertInductionResponse = z.infer<typeof insertInductionResponseSchema>;
 
 // ========================================
 // COMMUNICATIONS SYSTEM SCHEMAS
@@ -2207,8 +2355,25 @@ export const invoices = pgTable("invoices", {
   notes: text("notes"),
   paidAt: timestamp("paid_at"), // When payment was received
   paidNotes: text("paid_notes"), // Notes about how payment was received
+  sentDate: timestamp("sent_date"), // When invoice email was sent to customer
   xeroInvoiceId: text("xero_invoice_id"), // Xero invoice ID for synced invoices
   xeroSyncedAt: timestamp("xero_synced_at"), // When invoice was last synced to Xero
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Invoice Sections — mirror of proposalSections, lets invoices carry photos +
+// narrative sections rendered on the customer-facing invoice page.
+export const invoiceSections = pgTable("invoice_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceId: varchar("invoice_id").references(() => invoices.id, { onDelete: 'cascade' }).notNull(),
+  sectionType: text("section_type").notNull(), // intro, photos, notes, terms, custom
+  title: text("title").notNull(),
+  content: text("content").default(""),
+  images: text("images").array().default([]),
+  sortOrder: integer("sort_order").notNull(),
+  isVisible: boolean("is_visible").default(true),
+  styling: jsonb("styling"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -2339,6 +2504,22 @@ export const updateInvoiceLineItemSchema = insertInvoiceLineItemSchema.partial()
 export type InvoiceLineItem = typeof invoiceLineItems.$inferSelect;
 export type InsertInvoiceLineItem = z.infer<typeof insertInvoiceLineItemSchema>;
 export type UpdateInvoiceLineItem = z.infer<typeof updateInvoiceLineItemSchema>;
+
+// Invoice Section Schema Exports
+export const insertInvoiceSectionSchema = createInsertSchema(invoiceSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  images: z.array(z.string()).optional(),
+  content: z.string().optional(),
+});
+
+export const updateInvoiceSectionSchema = insertInvoiceSectionSchema.partial();
+
+export type InvoiceSection = typeof invoiceSections.$inferSelect;
+export type InsertInvoiceSection = z.infer<typeof insertInvoiceSectionSchema>;
+export type UpdateInvoiceSection = z.infer<typeof updateInvoiceSectionSchema>;
 
 export type XeroConnection = typeof xeroConnections.$inferSelect;
 export type InsertXeroConnection = z.infer<typeof insertXeroConnectionSchema>;
@@ -2592,11 +2773,18 @@ export const documentTemplates = pgTable("document_templates", {
   headerLayout: jsonb("header_layout"), // Logo position, company info layout
   footerText: text("footer_text"),
   paymentTerms: text("payment_terms").default("Payment due within 7 days"),
+  // Section visibility and ordering config (invoice/quote/proposal)
+  sectionConfig: jsonb("section_config"),
+  // Block-based visual builder config (replaces sectionConfig for invoice templates)
+  blockConfig: jsonb("block_config"),
   
   // Template Styling
   primaryColor: text("primary_color").default("#f97316"), // Orange from Treemarkables brand
   secondaryColor: text("secondary_color").default("#3b82f6"), // Blue
   logoUrl: text("logo_url"), // Path to logo file
+  logoSize: integer("logo_size").default(40), // Logo height in px (20-200)
+  logoAlignment: text("logo_alignment").default("left"), // 'left' | 'center' | 'right'
+  headerColor: text("header_color").default("#ffffff"), // Header background colour
   
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -2764,6 +2952,210 @@ export const insertGeneratedDocumentPhotoSchema = createInsertSchema(generatedDo
   id: true,
   createdAt: true,
 });
+
+// Section config type for invoice/quote/proposal templates
+export interface InvoiceSectionConfig {
+  id: string;
+  label: string;
+  visible: boolean;
+  locked: boolean; // if true, cannot be hidden
+}
+
+// =====================================
+// DOCUMENT BLOCK BUILDER TYPES
+// =====================================
+
+export type DocumentBlockType =
+  | 'header'
+  | 'companyInfo'
+  | 'billTo'
+  | 'invoiceMeta'
+  | 'jobDescription'
+  | 'lineItems'
+  | 'totals'
+  | 'payment'
+  | 'divider'
+  | 'customText'
+  | 'footer'
+  | 'proposalMeta'
+  | 'lineItemsWithChoices'
+  | 'photoGallery'
+  | 'acceptance';
+
+export interface DocumentBlockConfigHeader {
+  logoAlignment: 'left' | 'center' | 'right';
+  headerColor: string;
+  showCompanyName: boolean;
+}
+
+export interface DocumentBlockConfigCompanyInfo {
+  showName: boolean;
+  showAddress: boolean;
+  showPhone: boolean;
+  showEmail: boolean;
+  showGST: boolean;
+}
+
+export interface DocumentBlockConfigBillTo {
+  label: string;
+  showEmail: boolean;
+  showAddress: boolean;
+}
+
+export interface DocumentBlockConfigInvoiceMeta {
+  showInvoiceNumber: boolean;
+  showIssueDate: boolean;
+  showDueDate: boolean;
+  showJobNumber: boolean;
+  labelInvoice: string;
+  labelIssueDate: string;
+  labelDueDate: string;
+}
+
+export interface DocumentBlockConfigJobDescription {
+  label: string;
+}
+
+export interface DocumentBlockConfigLineItems {
+  labelDescription: string;
+  labelQty: string;
+  labelRate: string;
+  labelAmount: string;
+  showQty: boolean;
+  showRate: boolean;
+  descColPct?: number;
+}
+
+export interface DocumentBlockConfigTotals {
+  showSubtotal: boolean;
+  showGST: boolean;
+  labelSubtotal: string;
+  labelGST: string;
+  labelTotal: string;
+}
+
+export interface DocumentBlockConfigPayment {
+  label: string;
+  showBank: boolean;
+  showAccountNumber: boolean;
+  showAccountName: boolean;
+  showDueDate: boolean;
+  showTerms: boolean;
+}
+
+export interface DocumentBlockConfigDivider {
+  color: string;
+  thickness: number; // px
+}
+
+export interface DocumentBlockConfigCustomText {
+  text: string;
+  fontSize: 'xs' | 'sm' | 'base';
+  align: 'left' | 'center' | 'right';
+}
+
+export interface DocumentBlockConfigFooter {
+  showCompanyName: boolean;
+  showAddress: boolean;
+  showPhone: boolean;
+  showEmail: boolean;
+  showGST: boolean;
+  showPaymentTerms: boolean;
+}
+
+// Proposal-flavoured block configs. Data (numbers, line items, photos,
+// signatures) comes from the render context at render time; these configs
+// only hold labels and toggles the builder exposes.
+
+export interface DocumentBlockConfigProposalMeta {
+  showProposalNumber: boolean;
+  showIssueDate: boolean;
+  showExpiryDate: boolean;
+  showJobNumber: boolean;
+  labelProposal: string;
+  labelIssueDate: string;
+  labelExpiryDate: string;
+}
+
+export interface DocumentBlockConfigLineItemsWithChoices {
+  labelDescription: string;
+  labelQty: string;
+  labelRate: string;
+  labelAmount: string;
+  showQty: boolean;
+  showRate: boolean;
+  showOptionalToggle: boolean;
+  showChoiceSelector: boolean;
+  descColPct?: number;
+}
+
+export interface DocumentBlockConfigPhotoGallery {
+  label: string;
+  layout: 'grid' | 'single' | 'slideshow';
+  columns: 1 | 2 | 3 | 4;
+  showCaptions: boolean;
+  aspectRatio: 'square' | '4:3' | '16:9' | 'auto';
+}
+
+export interface DocumentBlockConfigAcceptance {
+  label: string;
+  buttonText: string;
+  requireSignature: boolean;
+  signaturePromptText: string;
+  termsText?: string;
+  showAcceptedStamp: boolean;
+}
+
+export type DocumentBlockConfig =
+  | DocumentBlockConfigHeader
+  | DocumentBlockConfigCompanyInfo
+  | DocumentBlockConfigBillTo
+  | DocumentBlockConfigInvoiceMeta
+  | DocumentBlockConfigJobDescription
+  | DocumentBlockConfigLineItems
+  | DocumentBlockConfigTotals
+  | DocumentBlockConfigPayment
+  | DocumentBlockConfigDivider
+  | DocumentBlockConfigCustomText
+  | DocumentBlockConfigFooter
+  | DocumentBlockConfigProposalMeta
+  | DocumentBlockConfigLineItemsWithChoices
+  | DocumentBlockConfigPhotoGallery
+  | DocumentBlockConfigAcceptance;
+
+export interface DocumentBlock {
+  id: string;
+  type: DocumentBlockType;
+  order: number;
+  visible: boolean;
+  config: DocumentBlockConfig;
+}
+
+export const DEFAULT_INVOICE_BLOCKS: DocumentBlock[] = [
+  { id: 'header-default', type: 'header', order: 0, visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
+  { id: 'companyInfo-default', type: 'companyInfo', order: 1, visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
+  { id: 'invoiceMeta-default', type: 'invoiceMeta', order: 2, visible: true, config: { showInvoiceNumber: true, showIssueDate: true, showDueDate: true, showJobNumber: true, labelInvoice: 'Invoice #', labelIssueDate: 'Issue Date', labelDueDate: 'Due Date' } },
+  { id: 'billTo-default', type: 'billTo', order: 3, visible: true, config: { label: 'Bill To', showEmail: true, showAddress: true } },
+  { id: 'jobDescription-default', type: 'jobDescription', order: 4, visible: true, config: { label: 'Description' } },
+  { id: 'lineItems-default', type: 'lineItems', order: 5, visible: true, config: { labelDescription: 'Service', labelQty: 'Qty', labelRate: 'Rate', labelAmount: 'Price', showQty: true, showRate: true, descColPct: 60 } },
+  { id: 'totals-default', type: 'totals', order: 6, visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
+  { id: 'payment-default', type: 'payment', order: 7, visible: true, config: { label: 'Payment Information', showBank: true, showAccountNumber: true, showAccountName: true, showDueDate: true, showTerms: true } },
+  { id: 'footer-default', type: 'footer', order: 8, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: true } },
+];
+
+export const DEFAULT_PROPOSAL_BLOCKS: DocumentBlock[] = [
+  { id: 'header-default', type: 'header', order: 0, visible: true, config: { logoAlignment: 'left', headerColor: '#ffffff', showCompanyName: true } },
+  { id: 'companyInfo-default', type: 'companyInfo', order: 1, visible: true, config: { showName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true } },
+  { id: 'proposalMeta-default', type: 'proposalMeta', order: 2, visible: true, config: { showProposalNumber: true, showIssueDate: true, showExpiryDate: true, showJobNumber: true, labelProposal: 'Proposal #', labelIssueDate: 'Issue Date', labelExpiryDate: 'Valid Until' } },
+  { id: 'billTo-default', type: 'billTo', order: 3, visible: true, config: { label: 'Prepared For', showEmail: true, showAddress: true } },
+  { id: 'jobDescription-default', type: 'jobDescription', order: 4, visible: true, config: { label: 'Overview' } },
+  { id: 'photoGallery-default', type: 'photoGallery', order: 5, visible: true, config: { label: 'Site Photos', layout: 'grid', columns: 2, showCaptions: true, aspectRatio: '4:3' } },
+  { id: 'lineItemsWithChoices-default', type: 'lineItemsWithChoices', order: 6, visible: true, config: { labelDescription: 'Service', labelQty: 'Qty', labelRate: 'Rate', labelAmount: 'Price', showQty: true, showRate: true, showOptionalToggle: true, showChoiceSelector: true, descColPct: 60 } },
+  { id: 'totals-default', type: 'totals', order: 7, visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
+  { id: 'customText-default', type: 'customText', order: 8, visible: true, config: { text: 'Terms & Conditions', fontSize: 'sm', align: 'left' } },
+  { id: 'acceptance-default', type: 'acceptance', order: 9, visible: true, config: { label: 'Accept This Proposal', buttonText: 'Accept & Sign', requireSignature: true, signaturePromptText: 'By signing below you agree to the above scope and pricing.', showAcceptedStamp: true } },
+  { id: 'footer-default', type: 'footer', order: 10, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: false } },
+];
 
 // TypeScript Types
 export type InsertDocumentTemplate = z.infer<typeof insertDocumentTemplateSchema>;
@@ -3386,6 +3778,149 @@ export const assistantMessages = pgTable("assistant_messages", {
 export const insertAssistantMessageSchema = createInsertSchema(assistantMessages).omit({ id: true, createdAt: true });
 export type AssistantMessage = typeof assistantMessages.$inferSelect;
 export type InsertAssistantMessage = z.infer<typeof insertAssistantMessageSchema>;
+
+// ========================================
+// PENDING OUTBOUND MESSAGES
+// Draft customer messages awaiting owner approval before sending
+// ========================================
+export const pendingOutboundMessages = pgTable("pending_outbound_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  proposalId: varchar("proposal_id"),
+  proposalNumber: text("proposal_number"),
+  recipientName: text("recipient_name"),
+  recipientPhone: text("recipient_phone"),
+  recipientEmail: text("recipient_email"),
+  message: text("message").notNull(),
+  channel: text("channel").notNull().default('sms'), // 'sms' or 'email'
+  status: text("status").notNull().default('pending'), // 'pending', 'approved', 'rejected', 'sent'
+  sentAt: timestamp("sent_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const insertPendingOutboundMessageSchema = createInsertSchema(pendingOutboundMessages).omit({
+  id: true,
+  createdAt: true,
+  sentAt: true,
+});
+
+export type PendingOutboundMessage = typeof pendingOutboundMessages.$inferSelect;
+export type InsertPendingOutboundMessage = z.infer<typeof insertPendingOutboundMessageSchema>;
+
+// ==========================================
+// Near Miss Reporting Module
+// ==========================================
+// Lightweight incident-precursor capture flow under the JHA system.
+// Distinct from `safetyIncidents` above, which records actual incidents/injuries;
+// near-miss is the "almost happened" pre-event log used for proactive control
+// review and toolbox talks.
+
+export const nearMissReports = pgTable("near_miss_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportNumber: text("report_number").notNull().unique(), // NM-YYYY-####
+  reporterUserId: varchar("reporter_user_id").references(() => employees.id).notNull(),
+  status: text("status").notNull().default("draft"), // draft, submitted, in_review, actioned, closed
+  jobId: varchar("job_id").references(() => jobs.id),
+  locationAddress: text("location_address"),
+  locationLat: decimal("location_lat", { precision: 10, scale: 7 }),
+  locationLng: decimal("location_lng", { precision: 10, scale: 7 }),
+  incidentDatetime: timestamp("incident_datetime").notNull(),
+  category: text("category").notNull(), // struck_by, fall_from_height, electrical, cut_laceration, vehicle, public_safety, drop_zone_breach, equipment_failure, manual_handling, other
+  potentialSeverity: text("potential_severity").notNull(), // low, medium, high, critical
+  description: text("description").notNull(),
+  immediateActionTaken: text("immediate_action_taken"),
+  equipmentInvolved: text("equipment_involved").array().default([]),
+  contributingFactors: text("contributing_factors").array().default([]), // communication, fatigue, weather, planning, training, equipment, other
+  peopleInvolved: jsonb("people_involved").default([]), // [{userId?, name}]
+  toolboxTalkFlag: boolean("toolbox_talk_flag").default(true),
+  proposedControl: text("proposed_control"),
+  reporterSignatureSvg: text("reporter_signature_svg"), // SVG — reporter / person involved sign-off
+  reporterSignedAt: timestamp("reporter_signed_at"),
+  submittedAt: timestamp("submitted_at"),
+  effectivenessReviewDate: timestamp("effectiveness_review_date"), // submittedAt + 30 days
+  effectivenessReviewComplete: boolean("effectiveness_review_complete").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const nearMissAttachments = pgTable("near_miss_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
+  type: text("type").notNull(), // photo, voice_note
+  filePath: text("file_path").notNull(),
+  uploadedBy: varchar("uploaded_by").references(() => employees.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const nearMissWitnesses = pgTable("near_miss_witnesses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
+  witnessUserId: varchar("witness_user_id").references(() => employees.id), // null for non-staff witnesses
+  witnessName: text("witness_name"), // free-text for non-users
+  status: text("status").notNull().default("pending"), // pending, signed, declined, no_witness
+  signatureSvg: text("signature_svg"), // SVG path data (not base64)
+  witnessComment: text("witness_comment"),
+  signedAt: timestamp("signed_at"),
+  signedLat: decimal("signed_lat", { precision: 10, scale: 7 }),
+  signedLng: decimal("signed_lng", { precision: 10, scale: 7 }),
+  signedDevice: text("signed_device"), // user agent string
+  reportHashAtSigning: text("report_hash_at_signing"), // SHA-256 of report content at signing time — detects post-sign tampering
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const nearMissActions = pgTable("near_miss_actions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  reportId: varchar("report_id").references(() => nearMissReports.id, { onDelete: "cascade" }).notNull(),
+  title: text("title").notNull(),
+  description: text("description"),
+  controlType: text("control_type"), // engineering, admin, ppe, substitution, elimination
+  assignedToUserId: varchar("assigned_to_user_id").references(() => employees.id),
+  dueDate: timestamp("due_date"),
+  status: text("status").notNull().default("open"), // open, in_progress, complete
+  linkedSopId: varchar("linked_sop_id"), // forward-compat: no FK constraint until sops table exists
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const insertNearMissReportSchema = createInsertSchema(nearMissReports).omit({
+  id: true,
+  reportNumber: true, // server generates
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateNearMissReportSchema = insertNearMissReportSchema.partial();
+
+export const insertNearMissAttachmentSchema = createInsertSchema(nearMissAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertNearMissWitnessSchema = createInsertSchema(nearMissWitnesses).omit({
+  id: true,
+  createdAt: true,
+});
+export const updateNearMissWitnessSchema = insertNearMissWitnessSchema.partial();
+
+export const insertNearMissActionSchema = createInsertSchema(nearMissActions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateNearMissActionSchema = insertNearMissActionSchema.partial();
+
+export type NearMissReport = typeof nearMissReports.$inferSelect;
+export type InsertNearMissReport = z.infer<typeof insertNearMissReportSchema>;
+export type UpdateNearMissReport = z.infer<typeof updateNearMissReportSchema>;
+export type NearMissAttachment = typeof nearMissAttachments.$inferSelect;
+export type InsertNearMissAttachment = z.infer<typeof insertNearMissAttachmentSchema>;
+export type NearMissWitness = typeof nearMissWitnesses.$inferSelect;
+export type InsertNearMissWitness = z.infer<typeof insertNearMissWitnessSchema>;
+export type UpdateNearMissWitness = z.infer<typeof updateNearMissWitnessSchema>;
+export type NearMissAction = typeof nearMissActions.$inferSelect;
+export type InsertNearMissAction = z.infer<typeof insertNearMissActionSchema>;
+export type UpdateNearMissAction = z.infer<typeof updateNearMissActionSchema>;
 
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

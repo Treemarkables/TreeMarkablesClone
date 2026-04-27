@@ -92,7 +92,7 @@ const getJobStatusColor = (status?: string) => {
     case "quote":
       return "#f97316"; // orange-500
     case "lead":
-      return "#06b6d4"; // cyan-500
+      return "#ca8a04"; // yellow-600
     default:
       return "#f97316"; // orange-500 for proposals
   }

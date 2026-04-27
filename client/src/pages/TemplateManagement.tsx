@@ -42,9 +42,60 @@ import {
   FileText,
   Receipt,
   DollarSign,
+  ChevronUp,
+  ChevronDown,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
-import type { DocumentTemplate, InsertDocumentTemplate } from "@shared/schema";
+import type { DocumentTemplate, InsertDocumentTemplate, InvoiceSectionConfig } from "@shared/schema";
+import { InvoiceTemplate } from "@/components/InvoiceTemplate";
+
+const MOCK_INVOICE = {
+  id: "preview",
+  invoiceNumber: "INV-0042",
+  customerId: "preview",
+  amount: 1500,
+  status: "draft" as const,
+  dueDate: new Date(Date.now() + 7 * 86400000).toISOString(),
+  issueDate: new Date().toISOString(),
+  notes: "Tree removal and stump grinding at the property.",
+};
+
+const MOCK_CUSTOMER = {
+  id: "preview",
+  name: "Jane Smith",
+  email: "jane@example.com",
+  address: "45 Palm Drive, Gisborne",
+  phone: "021 555 0123",
+  createdAt: new Date().toISOString(),
+};
+
+const MOCK_LINE_ITEMS = [
+  { id: "1", description: "Tree Removal (Large Totara)", quantity: 1, unitPrice: 800, total: 800 },
+  { id: "2", description: "Stump Grinding", quantity: 2, unitPrice: 200, total: 400 },
+  { id: "3", description: "Site Cleanup & Green Waste Disposal", quantity: 1, unitPrice: 300, total: 300 },
+];
+
+const DEFAULT_SECTIONS: InvoiceSectionConfig[] = [
+  { id: "header",      label: "Header & Logo",          visible: true, locked: true },
+  { id: "billTo",      label: "Bill To",                visible: true, locked: false },
+  { id: "description", label: "Description / Notes",    visible: true, locked: false },
+  { id: "lineItems",   label: "Services & Line Items",  visible: true, locked: false },
+  { id: "totals",      label: "Totals & GST",           visible: true, locked: true },
+  { id: "payment",     label: "Payment Information",    visible: true, locked: false },
+  { id: "footer",      label: "Business Footer",        visible: true, locked: false },
+];
+
+function normaliseSections(raw: unknown): InvoiceSectionConfig[] {
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_SECTIONS.map(s => ({ ...s }));
+  // Merge saved sections with defaults so new sections are appended
+  const savedIds = (raw as InvoiceSectionConfig[]).map(s => s.id);
+  const merged = [
+    ...(raw as InvoiceSectionConfig[]),
+    ...DEFAULT_SECTIONS.filter(d => !savedIds.includes(d.id)),
+  ];
+  return merged;
+}
 
 const templateFormSchema = z.object({
   name: z.string().min(1, "Template name is required"),
@@ -60,6 +111,10 @@ const templateFormSchema = z.object({
   paymentTerms: z.string().default("Payment due within 7 days"),
   primaryColor: z.string().default("#f97316"),
   secondaryColor: z.string().default("#3b82f6"),
+  headerColor: z.string().default("#ffffff"),
+  logoUrl: z.string().nullable().optional(),
+  logoSize: z.number().min(20).max(200).default(40),
+  logoAlignment: z.enum(["left", "center", "right"]).default("left"),
 });
 
 type TemplateFormData = z.infer<typeof templateFormSchema>;
@@ -72,19 +127,42 @@ export default function TemplateManagement() {
     useState<DocumentTemplate | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
-  // Fetch all templates
-  const {
-    data: templates = [],
-    isLoading,
-    refetch,
-  } = useQuery({
-    queryKey: ["/api/templates"],
-    queryFn: async () => {
-      const response = await apiRequest("GET", "/api/templates");
-      const result = await response.json();
-      return result.data || [];
+  const form = useForm<TemplateFormData>({
+    resolver: zodResolver(templateFormSchema),
+    defaultValues: {
+      name: "",
+      type: "quote",
+      description: "",
+      isDefault: false,
+      isActive: true,
+      companyName: "Treemarkables LTD",
+      companyAddress: "Hauroa rd\nGisborne, 4010",
+      companyEmail: "quotes@treemarkables.nz",
+      companyPhone: "027 216 6882",
+      gstNumber: "131-047-592-GST004",
+      paymentTerms: "Payment due within 7 days",
+      primaryColor: "#f97316",
+      secondaryColor: "#3b82f6",
+      headerColor: "#ffffff",
+      logoUrl: null,
+      logoSize: 40,
+      logoAlignment: "left",
     },
   });
+
+  const [sections, setSections] = useState<InvoiceSectionConfig[]>(() =>
+    DEFAULT_SECTIONS.map(s => ({ ...s }))
+  );
+
+  // Fetch all templates
+  const {
+    data: templatesResponse,
+    isLoading,
+    refetch,
+  } = useQuery<{ success: boolean; data: DocumentTemplate[] }>({
+    queryKey: ["/api/templates"],
+  });
+  const templates: DocumentTemplate[] = templatesResponse?.data ?? [];
 
   // Create template mutation
   const createTemplateMutation = useMutation({
@@ -137,35 +215,60 @@ export default function TemplateManagement() {
     },
   });
 
-  const form = useForm<TemplateFormData>({
-    resolver: zodResolver(templateFormSchema),
-    defaultValues: {
-      name: "",
-      type: "quote",
-      description: "",
-      isDefault: false,
-      isActive: true,
-      companyName: "Treemarkables LTD",
-      companyAddress: "Hauroa rd\nGisborne, 4010",
-      companyEmail: "quotes@treemarkables.nz",
-      companyPhone: "027 216 6882",
-      gstNumber: "131-047-592-GST004",
-      paymentTerms: "Payment due within 7 days",
-      primaryColor: "#f97316",
-      secondaryColor: "#3b82f6",
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      const response = await apiRequest("PUT", `/api/templates/${id}`, { isActive });
+      return response.json();
+    },
+    onSuccess: () => {
+      refetch();
+    },
+    onError: () => {
+      toast({ title: "Error updating template status", variant: "destructive" });
     },
   });
 
+  const watchedValues = form.watch();
+
+  // Build a live preview template from the current form state + sections
+  const previewTemplate = {
+    id: "preview",
+    name: watchedValues.name || "Preview Template",
+    type: watchedValues.type || "invoice",
+    description: watchedValues.description || null,
+    isDefault: watchedValues.isDefault ?? false,
+    isActive: watchedValues.isActive ?? true,
+    companyName: watchedValues.companyName || "Treemarkables LTD",
+    companyAddress: watchedValues.companyAddress || "213 Stanley Road, Gisborne",
+    companyEmail: watchedValues.companyEmail || "quotes@treemarkables.nz",
+    companyPhone: watchedValues.companyPhone || "027 216 6882",
+    gstNumber: watchedValues.gstNumber || "131-047-592",
+    paymentTerms: watchedValues.paymentTerms || "Payment due within 7 days",
+    primaryColor: watchedValues.primaryColor || "#f97316",
+    secondaryColor: watchedValues.secondaryColor || "#3b82f6",
+    headerColor: watchedValues.headerColor || "#ffffff",
+    headerLayout: null,
+    footerText: null,
+    logoUrl: watchedValues.logoUrl || null,
+    logoSize: watchedValues.logoSize ?? 40,
+    logoAlignment: watchedValues.logoAlignment ?? "left",
+    sectionConfig: sections,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
   const onSubmit = (data: TemplateFormData) => {
+    const payload = { ...data, sectionConfig: sections };
     if (editingTemplate) {
-      updateTemplateMutation.mutate({ id: editingTemplate.id, data });
+      updateTemplateMutation.mutate({ id: editingTemplate.id, data: payload });
     } else {
-      createTemplateMutation.mutate(data);
+      createTemplateMutation.mutate(payload as TemplateFormData);
     }
   };
 
   const handleEdit = (template: DocumentTemplate) => {
     setEditingTemplate(template);
+    setSections(normaliseSections(template.sectionConfig));
     form.reset({
       name: template.name,
       type: template.type as "quote" | "proposal" | "invoice",
@@ -180,12 +283,17 @@ export default function TemplateManagement() {
       paymentTerms: template.paymentTerms || "Payment due within 7 days",
       primaryColor: template.primaryColor || "#f97316",
       secondaryColor: template.secondaryColor || "#3b82f6",
+      headerColor: (template.headerColor as string) || "#ffffff",
+      logoUrl: template.logoUrl || null,
+      logoSize: template.logoSize ?? 40,
+      logoAlignment: (template.logoAlignment as "left" | "center" | "right") ?? "left",
     });
     setIsDialogOpen(true);
   };
 
   const handleCreate = () => {
     setEditingTemplate(null);
+    setSections(DEFAULT_SECTIONS.map(s => ({ ...s })));
     form.reset({
       name: "",
       type: "quote",
@@ -200,8 +308,34 @@ export default function TemplateManagement() {
       paymentTerms: "Payment due within 7 days",
       primaryColor: "#f97316",
       secondaryColor: "#3b82f6",
+      headerColor: "#ffffff",
+      logoUrl: null,
+      logoSize: 40,
+      logoAlignment: "left",
     });
     setIsDialogOpen(true);
+  };
+
+  const moveSection = (index: number, direction: -1 | 1) => {
+    const next = index + direction;
+    if (next < 0 || next >= sections.length) return;
+    setSections(prev => {
+      const arr = [...prev];
+      [arr[index], arr[next]] = [arr[next], arr[index]];
+      return arr;
+    });
+  };
+
+  const toggleSection = (index: number) => {
+    setSections(prev =>
+      prev.map((s, i) => (i === index ? { ...s, visible: !s.visible } : s))
+    );
+  };
+
+  const renameSection = (index: number, label: string) => {
+    setSections(prev =>
+      prev.map((s, i) => (i === index ? { ...s, label } : s))
+    );
   };
 
   const filteredTemplates = templates.filter(
@@ -259,12 +393,16 @@ export default function TemplateManagement() {
               Create Template
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-[95vw] w-full max-h-[95vh] p-0 overflow-hidden flex flex-col">
+            <DialogHeader className="px-6 pt-5 pb-3 border-b flex-shrink-0">
               <DialogTitle>
                 {editingTemplate ? "Edit Template" : "Create New Template"}
               </DialogTitle>
             </DialogHeader>
+            {/* Split pane: form left, preview right */}
+            <div className="flex flex-1 min-h-0 overflow-hidden">
+              {/* Form panel */}
+              <div className="w-full lg:w-[420px] flex-shrink-0 overflow-y-auto border-r px-6 py-4">
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
@@ -379,13 +517,18 @@ export default function TemplateManagement() {
                 </div>
 
                 <Tabs defaultValue="company" className="w-full">
-                  <TabsList className="grid w-full grid-cols-3">
-                    <TabsTrigger value="company">Company Info</TabsTrigger>
+                  <TabsList className="grid w-full grid-cols-5">
+                    <TabsTrigger value="company">Company</TabsTrigger>
                     <TabsTrigger value="styling">Styling</TabsTrigger>
                     <TabsTrigger value="terms">Terms</TabsTrigger>
+                    <TabsTrigger value="sections">Sections</TabsTrigger>
+                    <TabsTrigger value="preview">Preview</TabsTrigger>
                   </TabsList>
 
                   <TabsContent value="company" className="space-y-4">
+                    <div className="rounded-md border border-dashed px-3 py-2.5 text-xs text-muted-foreground">
+                      Company logo is managed globally in <span className="font-medium">Settings → Company</span> and applies to every proposal, quote, invoice, PDF and email.
+                    </div>
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
@@ -476,6 +619,33 @@ export default function TemplateManagement() {
                     <div className="grid grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
+                        name="headerColor"
+                        render={({ field }) => (
+                          <FormItem className="col-span-2">
+                            <FormLabel>Header Background Color</FormLabel>
+                            <FormControl>
+                              <div className="flex gap-2">
+                                <Input
+                                  type="color"
+                                  {...field}
+                                  value={field.value || "#ffffff"}
+                                  className="w-20"
+                                  data-testid="input-header-color"
+                                />
+                                <Input
+                                  {...field}
+                                  value={field.value || "#ffffff"}
+                                  placeholder="#ffffff"
+                                  data-testid="input-header-color-text"
+                                />
+                              </div>
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
                         name="primaryColor"
                         render={({ field }) => (
                           <FormItem>
@@ -546,6 +716,84 @@ export default function TemplateManagement() {
                       )}
                     />
                   </TabsContent>
+
+                  <TabsContent value="sections" className="space-y-3">
+                    <p className="text-sm text-muted-foreground">
+                      Click any section name to rename it. Toggle sections on or off, and use the arrows to reorder them on the document.
+                      Locked sections (like the header and totals) cannot be hidden.
+                    </p>
+                    <div className="space-y-2" data-testid="section-list">
+                      {sections.map((section, index) => (
+                        <div
+                          key={section.id}
+                          className={`flex items-center gap-3 p-3 rounded-md border ${
+                            section.visible ? "bg-card" : "bg-muted/40 opacity-60"
+                          }`}
+                          data-testid={`section-row-${section.id}`}
+                        >
+                          <GripVertical className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <input
+                            className="flex-1 text-sm font-medium bg-transparent border-0 outline-none focus:bg-background focus:border focus:border-input focus:rounded focus:px-2 focus:py-0.5 transition-all min-w-0"
+                            value={section.label}
+                            onChange={e => renameSection(index, e.target.value)}
+                            placeholder="Section name"
+                            aria-label={`Rename ${section.label} section`}
+                          />
+                          {section.locked && (
+                            <Badge variant="secondary" className="text-xs">Always on</Badge>
+                          )}
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              disabled={index === 0}
+                              onClick={() => moveSection(index, -1)}
+                              data-testid={`button-section-up-${section.id}`}
+                            >
+                              <ChevronUp className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              type="button"
+                              size="icon"
+                              variant="ghost"
+                              disabled={index === sections.length - 1}
+                              onClick={() => moveSection(index, 1)}
+                              data-testid={`button-section-down-${section.id}`}
+                            >
+                              <ChevronDown className="h-4 w-4" />
+                            </Button>
+                            <Switch
+                              checked={section.visible}
+                              disabled={section.locked}
+                              onCheckedChange={() => toggleSection(index)}
+                              data-testid={`switch-section-${section.id}`}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="preview" className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
+                      <Badge variant="secondary" className="text-xs">Sample data</Badge>
+                    </div>
+                    <div className="overflow-y-auto rounded-md border" style={{ maxHeight: "55vh" }}>
+                      <InvoiceTemplate
+                        template={previewTemplate as any}
+                        invoice={MOCK_INVOICE}
+                        customer={MOCK_CUSTOMER as any}
+                        lineItems={MOCK_LINE_ITEMS}
+                        description="Tree removal and stump grinding at the property. All debris removed and site left clean."
+                        jobAddress="45 Palm Drive, Gisborne"
+                        billingName="Jane Smith"
+                        sectionConfig={sections}
+                      />
+                    </div>
+                  </TabsContent>
                 </Tabs>
 
                 <div className="flex justify-end gap-2 pt-4">
@@ -571,6 +819,32 @@ export default function TemplateManagement() {
                 </div>
               </form>
             </Form>
+              </div>{/* end form panel */}
+
+              {/* Live preview panel — only on very wide screens; smaller screens use the Preview tab */}
+              <div className="hidden xl:flex flex-1 flex-col overflow-y-auto bg-muted/30 p-5 gap-3">
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
+                  <Badge variant="secondary" className="text-xs">Sample data</Badge>
+                </div>
+                <div
+                  style={{ transformOrigin: "top left", transform: "scale(0.72)", width: "138.9%", pointerEvents: "none" }}
+                  className="select-none"
+                >
+                  <InvoiceTemplate
+                    template={previewTemplate as any}
+                    invoice={MOCK_INVOICE}
+                    customer={MOCK_CUSTOMER as any}
+                    lineItems={MOCK_LINE_ITEMS}
+                    description="Tree removal and stump grinding at the property. All debris removed and site left clean."
+                    jobAddress="45 Palm Drive, Gisborne"
+                    billingName="Jane Smith"
+                    sectionConfig={sections}
+                  />
+                </div>
+              </div>
+            </div>{/* end split pane */}
           </DialogContent>
         </Dialog>
       </div>
@@ -673,13 +947,19 @@ export default function TemplateManagement() {
                         <span className="font-medium">Company:</span>
                         <span>{template.companyName}</span>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="font-medium">Status:</span>
-                        <Badge
-                          variant={template.isActive ? "default" : "secondary"}
-                        >
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="font-medium text-muted-foreground">Status:</span>
+                        <Switch
+                          checked={template.isActive}
+                          disabled={toggleActiveMutation.isPending}
+                          onCheckedChange={(checked) =>
+                            toggleActiveMutation.mutate({ id: template.id, isActive: checked })
+                          }
+                          data-testid={`switch-template-active-${template.id}`}
+                        />
+                        <span className={template.isActive ? "text-foreground" : "text-muted-foreground"}>
                           {template.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                        </span>
                       </div>
                       <div className="flex justify-between items-center pt-2">
                         <div className="flex gap-1">

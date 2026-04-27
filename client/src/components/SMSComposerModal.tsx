@@ -7,7 +7,11 @@ import {
   Send,
   Link,
   FileText,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { format as formatDate } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
+import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -68,6 +72,41 @@ export function SMSComposerModal({
   const queryClient = useQueryClient();
   const [characterCount, setCharacterCount] = useState(0);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("custom");
+  const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
+  // Recipient selector: "job" uses the Job Contact (default, used by automations),
+  // "tenant" routes manual sends to the Tenant contact for tenanted properties.
+  const [recipientMode, setRecipientMode] = useState<"job" | "tenant">("job");
+
+  // Derived candidates. Mobile is preferred since SMS requires a mobile number.
+  const jobContactPhoneCandidate: string =
+    (job?.jobContactMobile as string) ||
+    (job?.jobContactPhone as string) ||
+    (customer?.mobile as string) ||
+    (customer?.phone as string) ||
+    "";
+  const tenantContactPhoneCandidate: string =
+    (job?.tenantContactMobile as string) ||
+    (job?.tenantContactPhone as string) ||
+    "";
+
+  // First-name candidates used to swap the salutation in the SMS body on toggle.
+  const jobContactFirstNameCandidate: string =
+    (job?.jobContactFirstName as string) ||
+    (customer?.firstName as string) ||
+    "";
+  const tenantContactFirstNameCandidate: string =
+    (job?.tenantContactFirstName as string) || "";
+
+  // Rewrite the salutation at the start of the SMS body ("Hi X,", "Hey X", etc.)
+  // to use `newFirstName`. Preserves the rest of the message.
+  const swapSmsGreetingName = (newFirstName: string) => {
+    if (!newFirstName) return;
+    const current = form.getValues("message") || "";
+    const GREETING_RE = /^(\s*(?:Hi|Hello|Hey|Kia ora|Dear)\s+)([^,.!?\n]+)(?=[,.!?\n]|$)/i;
+    if (!GREETING_RE.test(current)) return;
+    const next = current.replace(GREETING_RE, `$1${newFirstName}`);
+    form.setValue("message", next, { shouldDirty: true, shouldValidate: true });
+  };
 
   // Fetch SMS templates
   const { data: smsTemplatesData } = useQuery({
@@ -107,7 +146,13 @@ export function SMSComposerModal({
   // Only auto-generate message for invoice context
   useEffect(() => {
     if (isOpen && invoiceData && customer) {
-      const defaultMessage = `Hi ${customer.name || "there"}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
+      // Prefer job contact first name, fall back to customer name
+      const recipientFirstName =
+        job?.jobContactFirstName ||
+        customer.firstName ||
+        customer.name?.split(" ")[0] ||
+        "there";
+      const defaultMessage = `Hi ${recipientFirstName}, invoice ${invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")} for $${invoiceData.amount || "0.00"} ready. View: ${window.location.origin}/invoice/${invoiceData.id || "preview"}`;
       form.setValue("message", defaultMessage);
       setCharacterCount(defaultMessage.length);
     }
@@ -149,13 +194,22 @@ export function SMSComposerModal({
     if (template) {
       let message = template.message || "";
 
-      // Get contact name - use job contact if available, otherwise customer
-      const contactName =
-        job?.jobContactFirstName && job?.jobContactLastName
-          ? `${job.jobContactFirstName} ${job.jobContactLastName}`
-          : customer?.name || "";
+      // Get contact name — prefer job contact fields, fall back to customer record
+      let contactName = "";
+      if (job?.jobContactFirstName && job?.jobContactLastName) {
+        contactName = `${job.jobContactFirstName} ${job.jobContactLastName}`;
+      } else if (job?.jobContactFirstName) {
+        contactName = job.jobContactFirstName;
+      } else if (customer?.firstName && customer?.lastName) {
+        contactName = `${customer.firstName} ${customer.lastName}`;
+      } else if (customer?.name) {
+        contactName = customer.name;
+      }
       const firstName =
-        job?.jobContactFirstName || customer?.name?.split(" ")[0] || "";
+        job?.jobContactFirstName ||
+        customer?.firstName ||
+        customer?.name?.split(" ")[0] ||
+        "";
 
       // Replace placeholders with actual values (support both snake_case and camelCase formats)
       message = message.replace(/\{customer_name\}/gi, contactName);
@@ -194,6 +248,33 @@ export function SMSComposerModal({
     setCharacterCount(watchedMessage?.length || 0);
   }, [watchedMessage]);
 
+  // Insert a time phrase from the availability modal at the current caret position,
+  // falling back to appending if the textarea isn't mounted.
+  const handleSlotPick = (slotStart: Date) => {
+    const nz = toZonedTime(slotStart, "Pacific/Auckland");
+    // Compact form to preserve SMS segment count: "Tue 25 Nov 2 PM"
+    const phrase = formatDate(nz, "EEE d MMM h a");
+    const ta = document.querySelector(
+      '[data-testid="textarea-message"]',
+    ) as HTMLTextAreaElement | null;
+    const current = form.getValues("message") || "";
+
+    if (ta) {
+      const start = ta.selectionStart ?? current.length;
+      const end = ta.selectionEnd ?? current.length;
+      const next = current.slice(0, start) + phrase + current.slice(end);
+      form.setValue("message", next, { shouldDirty: true, shouldValidate: true });
+      requestAnimationFrame(() => {
+        ta.focus();
+        const pos = start + phrase.length;
+        ta.setSelectionRange(pos, pos);
+      });
+    } else {
+      const next = current ? `${current} ${phrase}` : phrase;
+      form.setValue("message", next, { shouldDirty: true, shouldValidate: true });
+    }
+  };
+
   const sendSMSMutation = useMutation({
     mutationFn: async (data: SMSFormData) => {
       return apiRequest("POST", "/api/sms/send", {
@@ -229,6 +310,7 @@ export function SMSComposerModal({
   };
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-lg p-0">
         <DialogHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-t-lg">
@@ -256,6 +338,51 @@ export function SMSComposerModal({
             onSubmit={form.handleSubmit(handleSend)}
             className="space-y-4 p-6"
           >
+            {/* Recipient selector — switches the phone field between Job Contact and Tenant */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-medium text-gray-600">Send to:</span>
+              <div className="inline-flex rounded-md border overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecipientMode("job");
+                    form.setValue("phone", jobContactPhoneCandidate, { shouldDirty: true, shouldValidate: true });
+                    if (jobContactFirstNameCandidate) {
+                      swapSmsGreetingName(jobContactFirstNameCandidate);
+                    }
+                  }}
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${
+                    recipientMode === "job"
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                  data-testid="btn-sms-recipient-job"
+                >
+                  Job Contact
+                </button>
+                <button
+                  type="button"
+                  disabled={!tenantContactPhoneCandidate}
+                  onClick={() => {
+                    setRecipientMode("tenant");
+                    form.setValue("phone", tenantContactPhoneCandidate, { shouldDirty: true, shouldValidate: true });
+                    if (tenantContactFirstNameCandidate) {
+                      swapSmsGreetingName(tenantContactFirstNameCandidate);
+                    }
+                  }}
+                  title={!tenantContactPhoneCandidate ? "No tenant phone on this job" : "Send to the tenant instead"}
+                  className={`px-3 py-1 text-xs font-medium transition-colors border-l ${
+                    recipientMode === "tenant"
+                      ? "bg-purple-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  } ${!tenantContactPhoneCandidate ? "opacity-40 cursor-not-allowed" : ""}`}
+                  data-testid="btn-sms-recipient-tenant"
+                >
+                  Tenant
+                </button>
+              </div>
+            </div>
+
             {/* Phone Number Field */}
             <FormField
               control={form.control}
@@ -362,17 +489,30 @@ export function SMSComposerModal({
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel>Message</FormLabel>
-                    <MicrophoneButton
-                      onTranscript={(transcript) => {
-                        const currentValue = form.getValues("message");
-                        const newValue = currentValue
-                          ? `${currentValue} ${transcript}`
-                          : transcript;
-                        form.setValue("message", newValue);
-                      }}
-                      size="sm"
-                      variant="ghost"
-                    />
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0"
+                        onClick={() => setIsAvailabilityOpen(true)}
+                        title="Check your Google Calendar availability"
+                        data-testid="button-sms-check-availability"
+                      >
+                        <CalendarIcon className="h-4 w-4" />
+                      </Button>
+                      <MicrophoneButton
+                        onTranscript={(transcript) => {
+                          const currentValue = form.getValues("message");
+                          const newValue = currentValue
+                            ? `${currentValue} ${transcript}`
+                            : transcript;
+                          form.setValue("message", newValue);
+                        }}
+                        size="sm"
+                        variant="ghost"
+                      />
+                    </div>
                   </div>
                   <FormControl>
                     <Textarea
@@ -434,5 +574,11 @@ export function SMSComposerModal({
         </Form>
       </DialogContent>
     </Dialog>
+    <CalendarAvailabilityModal
+      isOpen={isAvailabilityOpen}
+      onClose={() => setIsAvailabilityOpen(false)}
+      onSlotPick={handleSlotPick}
+    />
+    </>
   );
 }

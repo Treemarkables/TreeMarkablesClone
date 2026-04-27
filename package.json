@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx server/index.ts",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "NODE_ENV=production node dist/index.js",
+    "start": "NODE_ENV=production node launcher.mjs",
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
@@ -93,6 +93,7 @@
     "heic-convert": "^2.1.0",
     "imap": "^0.8.17",
     "input-otp": "^1.4.2",
+    "jose": "^6.2.2",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.453.0",
     "mailparser": "^3.9.0",
@@ -107,6 +108,7 @@
     "passport-local": "^1.0.0",
     "pdfkit": "^0.17.2",
     "pg": "^8.18.0",
+    "puppeteer": "^24.40.0",
     "react": "^18.3.1",
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",

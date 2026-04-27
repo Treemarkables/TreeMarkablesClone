@@ -327,7 +327,7 @@ export function AddressAutocomplete({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative px-4">
       <div className="relative">
         <Input
           ref={inputRef}

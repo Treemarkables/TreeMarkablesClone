@@ -20,7 +20,8 @@ import {
   type Material, type InsertMaterial,
   type Service, type InsertService,
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
-  type Invoice, type InsertInvoice, type ServiceRequest, type InsertServiceRequest,
+  type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
+  type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
   type XeroConnection, type InsertXeroConnection,
   // Business Intelligence types
@@ -64,6 +65,11 @@ import {
   type InspectionChecklistItem, type InsertInspectionChecklistItem, type UpdateInspectionChecklistItem,
   type VehicleInspection, type InsertVehicleInspection, type UpdateVehicleInspection,
   type InspectionResponse, type InsertInspectionResponse,
+  // Equipment Induction types
+  type InductionTemplate, type InsertInductionTemplate, type UpdateInductionTemplate,
+  type InductionChecklistItem, type InsertInductionChecklistItem, type UpdateInductionChecklistItem,
+  type EquipmentInduction, type InsertEquipmentInduction, type UpdateEquipmentInduction,
+  type InductionResponse, type InsertInductionResponse,
   // Marketing Campaign types
   type MarketingCampaign, type InsertMarketingCampaign
 } from "@shared/schema";
@@ -91,6 +97,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
   findCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  findCustomerByName(name: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
   getAllCustomers(): Promise<Customer[]>;
@@ -252,6 +259,7 @@ export interface IStorage {
     employeeId: string;
     hours: number;
     rate: number;
+    costRate?: number;
     date?: string;
   }): Promise<Job>;
   removeStaffTimeEntry(jobId: string, employeeId: string, date?: string): Promise<Job>;
@@ -278,6 +286,7 @@ export interface IStorage {
   createReview(review: InsertReview): Promise<Review>;
   getReview(id: string): Promise<Review | undefined>;
   updateReview(id: string, updates: Partial<InsertReview>): Promise<Review>;
+  deleteReview(id: string): Promise<void>;
   getReviewsByCustomer(customerId: string): Promise<Review[]>;
   getAllReviews(): Promise<Review[]>;
   
@@ -418,6 +427,7 @@ export interface IStorage {
   markNotificationAsRead(id: string): Promise<Notification>;
   markAllNotificationsAsRead(userId?: string): Promise<void>;
   deleteNotification(id: string): Promise<void>;
+  deleteAllNotifications(userId?: string): Promise<void>;
   getNotificationSummary(userId?: string): Promise<NotificationSummary>;
   deleteExpiredNotifications(): Promise<void>;
 
@@ -426,6 +436,12 @@ export interface IStorage {
   getPendingNotifications(beforeTime?: Date): Promise<schema.NotificationQueueItem[]>;
   markNotificationSent(id: string): Promise<void>;
   markNotificationFailed(id: string, error: string): Promise<void>;
+
+  // Pending Outbound Messages (holding messages awaiting owner approval)
+  createPendingOutboundMessage(msg: schema.InsertPendingOutboundMessage): Promise<schema.PendingOutboundMessage>;
+  getPendingOutboundMessages(status?: string): Promise<schema.PendingOutboundMessage[]>;
+  getPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined>;
+  updatePendingOutboundMessage(id: string, updates: Partial<schema.PendingOutboundMessage>): Promise<schema.PendingOutboundMessage>;
 
   // Employee Management
   createEmployee(employee: InsertEmployee): Promise<Employee>;
@@ -446,6 +462,7 @@ export interface IStorage {
   getScheduleEventsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<ScheduleEvent[]>;
   getScheduleEventsByJob(jobId: string): Promise<ScheduleEvent[]>;
   deleteScheduleEvent(id: string): Promise<void>;
+  deleteScheduleEventsByJob(jobId: string): Promise<void>;
 
   // Job Staff Assignment Management
   createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment>;
@@ -567,7 +584,32 @@ export interface IStorage {
   // Inspection Responses
   createInspectionResponse(response: InsertInspectionResponse): Promise<InspectionResponse>;
   getInspectionResponses(inspectionId: string): Promise<InspectionResponse[]>;
-  
+
+  // Equipment Induction System
+  createInductionTemplate(template: InsertInductionTemplate): Promise<InductionTemplate>;
+  getInductionTemplate(id: string): Promise<InductionTemplate | undefined>;
+  updateInductionTemplate(id: string, updates: UpdateInductionTemplate): Promise<InductionTemplate>;
+  deleteInductionTemplate(id: string): Promise<void>;
+  getAllInductionTemplates(): Promise<InductionTemplate[]>;
+  getInductionTemplatesByType(equipmentType: string): Promise<InductionTemplate[]>;
+
+  createInductionChecklistItem(item: InsertInductionChecklistItem): Promise<InductionChecklistItem>;
+  getInductionChecklistItem(id: string): Promise<InductionChecklistItem | undefined>;
+  updateInductionChecklistItem(id: string, updates: UpdateInductionChecklistItem): Promise<InductionChecklistItem>;
+  deleteInductionChecklistItem(id: string): Promise<void>;
+  getInductionChecklistItemsByTemplate(templateId: string): Promise<InductionChecklistItem[]>;
+  reorderInductionChecklistItems(templateId: string, itemIds: string[]): Promise<void>;
+
+  createEquipmentInduction(induction: InsertEquipmentInduction): Promise<EquipmentInduction>;
+  getEquipmentInduction(id: string): Promise<EquipmentInduction | undefined>;
+  updateEquipmentInduction(id: string, updates: UpdateEquipmentInduction): Promise<EquipmentInduction>;
+  getAllEquipmentInductions(filters?: { employeeId?: string; equipmentType?: string }): Promise<EquipmentInduction[]>;
+  getEquipmentInductionsByEmployee(employeeId: string): Promise<EquipmentInduction[]>;
+  getInductionStatusForEmployee(employeeId: string): Promise<Array<{ templateId: string; templateName: string; equipmentType: string | null; completedAt: Date | null; inductionId: string | null }>>;
+
+  createInductionResponse(response: InsertInductionResponse): Promise<InductionResponse>;
+  getInductionResponses(inductionId: string): Promise<InductionResponse[]>;
+
   // Registration & COF Expiry Checks
   getVehiclesWithExpiringDocs(daysAhead: number): Promise<Equipment[]>;
   getExpiredVehicles(): Promise<Equipment[]>;
@@ -688,6 +730,15 @@ export interface IStorage {
   getAllInvoices(): Promise<Invoice[]>;
   updateInvoice(id: string, updates: Partial<InsertInvoice>): Promise<Invoice>;
   deleteInvoice(id: string): Promise<void>;
+
+  // Invoice Section Management
+  createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection>;
+  getInvoiceSection(id: string): Promise<InvoiceSection | undefined>;
+  updateInvoiceSection(id: string, updates: UpdateInvoiceSection): Promise<InvoiceSection>;
+  getInvoiceSectionsByInvoice(invoiceId: string): Promise<InvoiceSection[]>;
+  deleteInvoiceSection(id: string): Promise<void>;
+  reorderInvoiceSections(invoiceId: string, sectionIds: string[]): Promise<InvoiceSection[]>;
+
   createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest>;
   getServiceRequest(id: string): Promise<ServiceRequest | undefined>;
   getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]>;
@@ -1019,19 +1070,44 @@ class DatabaseStorage implements IStorage {
   async findCustomerByPhone(phone: string): Promise<Customer | undefined> {
     // Normalize phone number: remove all non-digit characters
     const normalizedInput = this.normalizePhone(phone);
-    
+
     if (!normalizedInput) {
       return undefined;
     }
-    
+
     // Use indexed normalizedPhone column for efficient lookup
     const [customer] = await db
       .select()
       .from(schema.customers)
       .where(eq(schema.customers.normalizedPhone, normalizedInput))
       .limit(1);
-    
+
     return customer || undefined;
+  }
+
+  async findCustomerByName(name: string): Promise<Customer | undefined> {
+    const normalized = (name ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!normalized) return undefined;
+
+    // Case- and whitespace-insensitive match on customers.name. Prefer an
+    // active record; fall back to any match so the caller can reactivate
+    // rather than duplicate. Whitespace collapsing matches the grouping
+    // logic used by the bulk dedupe job.
+    const nameExpr = sql`TRIM(LOWER(REGEXP_REPLACE(${schema.customers.name}, '\s+', ' ', 'g')))`;
+
+    const [active] = await db
+      .select()
+      .from(schema.customers)
+      .where(sql`${nameExpr} = ${normalized} AND ${schema.customers.isActive} IS DISTINCT FROM FALSE`)
+      .limit(1);
+    if (active) return active;
+
+    const [any] = await db
+      .select()
+      .from(schema.customers)
+      .where(sql`${nameExpr} = ${normalized}`)
+      .limit(1);
+    return any || undefined;
   }
 
   async updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer> {
@@ -1517,6 +1593,11 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createJob(job: InsertJob): Promise<Job> {
+    // Stamp workOrderAt when a job is created directly at work_order status
+    // (e.g. from proposal acceptance paths that skip the lead/quote stages).
+    if (job.status === 'work_order' && !(job as any).workOrderAt) {
+      (job as any).workOrderAt = new Date();
+    }
     const [newJob] = await db.insert(schema.jobs).values(job).returning();
     return newJob;
   }
@@ -1532,8 +1613,20 @@ class DatabaseStorage implements IStorage {
   }
 
   async updateJob(id: string, updates: Partial<InsertJob>): Promise<Job> {
+    // Stamp workOrderAt once, the first time a job transitions to 'work_order'.
+    // Only set if the caller hasn't provided one and the job doesn't already have it.
+    const finalUpdates: Partial<InsertJob> = { ...updates };
+    if (updates.status === 'work_order' && !(updates as any).workOrderAt) {
+      const existingRows = await db.select({ workOrderAt: schema.jobs.workOrderAt })
+        .from(schema.jobs)
+        .where(eq(schema.jobs.id, id));
+      const existing = Array.isArray(existingRows) ? existingRows[0] : undefined;
+      if (!existing?.workOrderAt) {
+        (finalUpdates as any).workOrderAt = new Date();
+      }
+    }
     const [job] = await db.update(schema.jobs)
-      .set({ ...updates, updatedAt: new Date() })
+      .set({ ...finalUpdates, updatedAt: new Date() })
       .where(eq(schema.jobs.id, id))
       .returning();
     return job;
@@ -1598,7 +1691,26 @@ class DatabaseStorage implements IStorage {
       conditions.push(ne(schema.jobs.status, 'unsuccessful'));
     }
     const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
-    
+
+    // Subquery: most-recent 'confirmation-reply-sent' diary entry timestamp per job.
+    // Tracks when WE sent an acknowledgement back to the customer after they confirmed.
+    const replySentSql = sql<Date | null>`(
+      SELECT MAX(${schema.jobDiaryEntries.createdAt})
+      FROM ${schema.jobDiaryEntries}
+      WHERE ${schema.jobDiaryEntries.jobId} = ${schema.jobs.id}
+        AND ${schema.jobDiaryEntries.tags} @> ARRAY['confirmation-reply-sent']::text[]
+    )`;
+
+    // Subquery: most-recent inbound customer reply per job. Surfaces natural-language
+    // replies (e.g. "happy with that date") that don't trip the strict auto-confirm
+    // regex, so dispatch can see a reply is in even when customerConfirmed stays false.
+    const customerReplySql = sql<Date | null>`(
+      SELECT MAX(${schema.jobDiaryEntries.createdAt})
+      FROM ${schema.jobDiaryEntries}
+      WHERE ${schema.jobDiaryEntries.jobId} = ${schema.jobs.id}
+        AND ${schema.jobDiaryEntries.tags} @> ARRAY['customer-reply']::text[]
+    )`;
+
     // Query with LEFT JOIN to include customer phone data
     const jobsQuery = whereClause
       ? db.select({
@@ -1607,6 +1719,8 @@ class DatabaseStorage implements IStorage {
           customerEmail: schema.customers.email,
           customerPhone: schema.customers.phone,
           customerMobile: schema.customers.mobile,
+          confirmationReplySentAt: replySentSql,
+          customerReplyReceivedAt: customerReplySql,
         })
         .from(schema.jobs)
         .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
@@ -1620,29 +1734,33 @@ class DatabaseStorage implements IStorage {
           customerEmail: schema.customers.email,
           customerPhone: schema.customers.phone,
           customerMobile: schema.customers.mobile,
+          confirmationReplySentAt: replySentSql,
+          customerReplyReceivedAt: customerReplySql,
         })
         .from(schema.jobs)
         .leftJoin(schema.customers, eq(schema.jobs.customerId, schema.customers.id))
         .orderBy(desc(schema.jobs.createdAt))
         .limit(limit)
         .offset(offset);
-    
+
     // Get total count (for pagination)
     const countQuery = whereClause
       ? db.select({ count: sql<number>`count(*)` }).from(schema.jobs).where(whereClause)
       : db.select({ count: sql<number>`count(*)` }).from(schema.jobs);
-    
+
     const [results, totalResult] = await Promise.all([
       jobsQuery,
       countQuery
     ]);
-    
+
     // Transform results to include customer data in job object
     const jobs = results.map((row: any) => ({
       ...row.job,
       customerName: row.customerName,
       customerEmail: row.customerEmail,
       customerPhone: row.customerPhone || row.customerMobile,
+      confirmationReplySentAt: row.confirmationReplySentAt,
+      customerReplyReceivedAt: row.customerReplyReceivedAt,
     }));
     
     const total = Number(totalResult[0]?.count) || 0;
@@ -1715,21 +1833,28 @@ class DatabaseStorage implements IStorage {
 
   async deleteJob(id: string): Promise<boolean> {
     try {
-      // Delete all related records first (in order to avoid foreign key constraints)
-      
-      // 1. Delete diary entries
+      // Clear every table that FK-references jobs.id before deleting the job
       await db.delete(schema.jobDiaryEntries).where(eq(schema.jobDiaryEntries.jobId, id));
-      
-      // 2. Delete proposals
       await db.delete(schema.proposals).where(eq(schema.proposals.jobId, id));
-      
-      // 3. Delete staff assignments
       await db.delete(schema.jobStaffAssignments).where(eq(schema.jobStaffAssignments.jobId, id));
-      
-      // 4. Delete communications
       await db.delete(schema.communications).where(eq(schema.communications.jobId, id));
-      
-      // Finally, delete the job itself
+      await db.delete(schema.activities).where(eq(schema.activities.jobId, id));
+      await db.delete(schema.callRecords).where(eq(schema.callRecords.jobId, id));
+      await db.delete(schema.dailyJobNotes).where(eq(schema.dailyJobNotes.jobId, id));
+      await db.delete(schema.equipmentCheckouts).where(eq(schema.equipmentCheckouts.jobId, id));
+      await db.delete(schema.generatedDocuments).where(eq(schema.generatedDocuments.jobId, id));
+      await db.delete(schema.inventoryTransactions).where(eq(schema.inventoryTransactions.jobId, id));
+      await db.delete(schema.invoices).where(eq(schema.invoices.jobId, id));
+      await db.delete(schema.jhaAssessments).where(eq(schema.jhaAssessments.jobId, id));
+      await db.delete(schema.photos).where(eq(schema.photos.jobId, id));
+      await db.delete(schema.quotes).where(eq(schema.quotes.jobId, id));
+      await db.delete(schema.reviewRequests).where(eq(schema.reviewRequests.jobId, id));
+      await db.delete(schema.reviewSubmissions).where(eq(schema.reviewSubmissions.jobId, id));
+      await db.delete(schema.reviews).where(eq(schema.reviews.jobId, id));
+      await db.delete(schema.riskAssessments).where(eq(schema.riskAssessments.jobId, id));
+      await db.delete(schema.safetyIncidents).where(eq(schema.safetyIncidents.jobId, id));
+      await db.delete(schema.treeMarkers).where(eq(schema.treeMarkers.jobId, id));
+
       const result = await db.delete(schema.jobs).where(eq(schema.jobs.id, id));
       return (result.rowCount || 0) > 0;
     } catch (error) {
@@ -1783,6 +1908,7 @@ class DatabaseStorage implements IStorage {
     employeeId: string;
     hours: number;
     rate: number;
+    costRate?: number;
     date?: string;
   }): Promise<Job> {
     const job = await this.getJob(jobId);
@@ -2330,14 +2456,25 @@ class DatabaseStorage implements IStorage {
   async calculateAndUpdateGrossMargin(jobId: string): Promise<Job> {
     const job = await this.getJob(jobId);
     if (!job) throw new Error("Job not found");
-    
-    const totalRevenue = parseFloat(job.totalAmount?.toString() || "0");
+
+    // job.totalAmount is GST-inclusive (it's stored as subtotal + gstAmount —
+    // see PUT /api/jobs/:id). All cost fields are GST-exclusive. So compare
+    // ex-GST revenue to ex-GST costs; otherwise the margin gets inflated by
+    // the GST component, which is owed to IRD, not revenue.
+    const taxRate = parseFloat(job.taxRate?.toString() || "15");
+    const subtotalExGst = parseFloat(job.subtotal?.toString() || "0");
+    const totalAmountIncGst = parseFloat(job.totalAmount?.toString() || "0");
+    const totalRevenue =
+      subtotalExGst > 0
+        ? subtotalExGst
+        : totalAmountIncGst / (1 + taxRate / 100);
+
     const laborCosts = parseFloat(job.actualLaborCosts?.toString() || job.laborCosts?.toString() || "0");
     const materialsCosts = parseFloat(job.actualMaterialsCosts?.toString() || job.materialsCosts?.toString() || "0");
     const equipmentCosts = parseFloat(job.equipmentCosts?.toString() || "0");
     const subcontractorCosts = parseFloat(job.subcontractorCosts?.toString() || "0");
     const otherCosts = parseFloat(job.otherCosts?.toString() || "0");
-    
+
     const totalCosts = laborCosts + materialsCosts + equipmentCosts + subcontractorCosts + otherCosts;
     const grossProfit = totalRevenue - totalCosts;
     const grossMargin = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
@@ -2425,11 +2562,27 @@ class DatabaseStorage implements IStorage {
   async getActivitiesByLead(leadId: string): Promise<Activity[]> { return []; }
   async getActivitiesByJob(jobId: string): Promise<Activity[]> { return []; }
   async getAllActivities(limit?: number): Promise<Activity[]> { return []; }
-  async createReview(review: InsertReview): Promise<Review> { throw new Error("Not implemented"); }
-  async getReview(id: string): Promise<Review | undefined> { return undefined; }
-  async updateReview(id: string, updates: Partial<InsertReview>): Promise<Review> { throw new Error("Not implemented"); }
-  async getReviewsByCustomer(customerId: string): Promise<Review[]> { return []; }
-  async getAllReviews(): Promise<Review[]> { return []; }
+  async createReview(review: InsertReview): Promise<Review> {
+    const [row] = await db.insert(schema.reviews).values(review).returning();
+    return row;
+  }
+  async getReview(id: string): Promise<Review | undefined> {
+    const [row] = await db.select().from(schema.reviews).where(eq(schema.reviews.id, id));
+    return row;
+  }
+  async updateReview(id: string, updates: Partial<InsertReview>): Promise<Review> {
+    const [row] = await db.update(schema.reviews).set(updates).where(eq(schema.reviews.id, id)).returning();
+    return row;
+  }
+  async deleteReview(id: string): Promise<void> {
+    await db.delete(schema.reviews).where(eq(schema.reviews.id, id));
+  }
+  async getReviewsByCustomer(customerId: string): Promise<Review[]> {
+    return await db.select().from(schema.reviews).where(eq(schema.reviews.customerId, customerId));
+  }
+  async getAllReviews(): Promise<Review[]> {
+    return await db.select().from(schema.reviews);
+  }
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> { throw new Error("Not implemented"); }
   async getCampaign(id: string): Promise<Campaign | undefined> { return undefined; }
   async updateCampaign(id: string, updates: Partial<InsertCampaign>): Promise<Campaign> { throw new Error("Not implemented"); }
@@ -2524,38 +2677,36 @@ class DatabaseStorage implements IStorage {
     
     const averageQuoteValue = quotesWithValue > 0 ? totalQuoteValue / quotesWithValue : 0;
     
-    // Calculate total revenue from COMPLETED JOBS (by completion date or scheduled date)
-    // Use invoice amounts linked to completed jobs, since job.totalAmount is often not populated
-    let completedJobsForRevenue = allJobs.filter(job => job.status === 'completed');
-    if (fromDate || toDate) {
-      completedJobsForRevenue = completedJobsForRevenue.filter(job => {
-        // Use completedDate if available, otherwise fall back to scheduledDate, then createdAt
-        const jobDate = job.completedDate ? new Date(job.completedDate) :
-                        job.scheduledDate ? new Date(job.scheduledDate) :
-                        job.createdAt ? new Date(job.createdAt) : null;
-        if (!jobDate) return false;
-        if (fromDate && jobDate < fromDate) return false;
-        if (toDate && jobDate > toDate) return false;
-        return true;
-      });
-    }
+    // INVOICE-FIRST: Revenue for the period = invoices whose issueDate falls in the window.
+    // This ensures the Revenue card always matches "what was invoiced this week/month".
+    const periodInvoices = allInvoices.filter(inv => {
+      if (inv.status === 'cancelled' || !inv.jobId) return false;
+      if (!fromDate && !toDate) return true;
+      const anchor = inv.issueDate ? new Date(inv.issueDate) :
+                     inv.createdAt ? new Date(inv.createdAt) : null;
+      if (!anchor) return false;
+      if (fromDate && anchor < fromDate) return false;
+      if (toDate) {
+        const endOfDay = new Date(toDate);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        if (anchor >= endOfDay) return false;
+      }
+      return true;
+    });
+    const periodInvoiceJobIds = new Set(periodInvoices.map(inv => inv.jobId!));
+    let completedJobsForRevenue = allJobs.filter(job => periodInvoiceJobIds.has(job.id));
     
     // Build a set of completed job IDs for the period
     const completedJobIds = new Set(completedJobsForRevenue.map(job => job.id));
     
-    // Sum invoice amounts for these completed jobs (prefer invoice amount over job.totalAmount)
+    // Sum invoice amounts directly from the period invoices (already date-filtered above).
+    // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST (NZ 15%),
+    // so divide to strip the tax. Customer-facing invoice renders keep inc-GST.
     let totalRevenue = 0;
-    for (const job of completedJobsForRevenue) {
-      // Find invoice for this job
-      const jobInvoice = allInvoices.find(inv => inv.jobId === job.id && inv.status !== 'cancelled');
-      if (jobInvoice && parseFloat(jobInvoice.amount?.toString() || '0') > 0) {
-        totalRevenue += parseFloat(jobInvoice.amount?.toString() || '0');
-      } else {
-        // Fall back to job.totalAmount if no invoice
-        totalRevenue += parseFloat(job.totalAmount?.toString() || '0');
-      }
+    for (const inv of periodInvoices) {
+      totalRevenue += parseFloat(inv.amount?.toString() || '0') / 1.15;
     }
-    const completedJobs = filteredJobs.filter(job => job.status === 'completed');
+    const completedJobs = filteredJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
     // Still track invoices for the count display
     let filteredInvoices = allInvoices.filter(inv => inv.status !== 'cancelled');
@@ -2641,36 +2792,43 @@ class DatabaseStorage implements IStorage {
   }
 
   async getRevenueStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all completed jobs and invoices
+    // INVOICE-FIRST APPROACH: Revenue is recognised when an invoice is issued.
+    // We filter by invoice issueDate so that "This Week" revenue exactly matches
+    // invoices sent this week — regardless of when the job was originally scheduled.
     const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 });
     const allInvoices = await this.getAllInvoices();
-    const completedJobs = allJobs.filter(job => job.status === 'completed');
-    
-    // Filter by date range if provided.
-    // Use COALESCE(completedDate, scheduledDate, createdAt) so that completed jobs without
-    // a completedDate stamp are still included when their scheduledDate/createdAt falls in range.
-    let filteredJobs = completedJobs;
-    if (fromDate || toDate) {
-      filteredJobs = completedJobs.filter(job => {
-        const jobDate = job.completedDate ? new Date(job.completedDate) :
-                        job.scheduledDate ? new Date(job.scheduledDate) :
-                        job.createdAt    ? new Date(job.createdAt)    : null;
-        if (!jobDate) return false;
-        if (fromDate && jobDate < fromDate) return false;
-        if (toDate && jobDate > toDate) return false;
-        return true;
-      });
-    }
-    
-    // Create a map of job IDs to invoice amounts (non-cancelled invoices only)
-    const jobInvoiceMap = new Map<string, number>();
-    for (const invoice of allInvoices) {
-      if (invoice.status !== 'cancelled' && invoice.jobId) {
-        const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-        const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
-        jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+
+    // Step 1: select invoices that fall in the requested date window.
+    const activeInvoices = allInvoices.filter(inv => {
+      if (inv.status === 'cancelled') return false;
+      if (!inv.jobId) return false;
+      if (!fromDate && !toDate) return true; // "all time" — include everything
+      // Anchor on issueDate; fall back to createdAt so invoices without an issueDate still count.
+      const anchor = inv.issueDate ? new Date(inv.issueDate) :
+                     inv.createdAt ? new Date(inv.createdAt) : null;
+      if (!anchor) return false;
+      if (fromDate && anchor < fromDate) return false;
+      // toDate is end-of-day inclusive: add 1 day so same-day invoices are not excluded.
+      if (toDate) {
+        const endOfDay = new Date(toDate);
+        endOfDay.setDate(endOfDay.getDate() + 1);
+        if (anchor >= endOfDay) return false;
       }
+      return true;
+    });
+
+    // Step 2: build revenue and job-id maps from those invoices.
+    // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST (NZ 15%),
+    // so divide to strip the tax. Margin/profit calculations below all flow from this map.
+    const jobInvoiceMap = new Map<string, number>(); // jobId → total invoiced amount (ex-GST)
+    for (const inv of activeInvoices) {
+      const amount = parseFloat(inv.amount?.toString() || '0') / 1.15;
+      jobInvoiceMap.set(inv.jobId!, (jobInvoiceMap.get(inv.jobId!) || 0) + amount);
     }
+
+    // Step 3: collect the matching jobs (for cost calculations).
+    const jobIdSet = new Set(jobInvoiceMap.keys());
+    const filteredJobs = allJobs.filter(job => jobIdSet.has(job.id));
     
     // Calculate totals for ALL jobs (for revenue/job count)
     let totalRevenue = 0;
@@ -2868,16 +3026,17 @@ class DatabaseStorage implements IStorage {
     const rejectedStatuses = ['unsuccessful'];
     
     // Filter jobs that have quote presentation method set
+    // Include both 'lead' and 'quote' status — the presentation method is set during the quoting process
     const jobsWithMethod = filteredJobs.filter(j => 
       (j as any).quotePresentationMethod && 
-      (j.status !== 'lead' && j.status !== 'archived')
+      j.status !== 'archived'
     );
     
     // On-site quotes analytics
     const onSiteJobs = jobsWithMethod.filter(j => (j as any).quotePresentationMethod === 'on_site');
     const onSiteAccepted = onSiteJobs.filter(j => acceptedStatuses.includes(j.status || ''));
     const onSiteRejected = onSiteJobs.filter(j => rejectedStatuses.includes(j.status || ''));
-    const onSitePending = onSiteJobs.filter(j => j.status === 'quote');
+    const onSitePending = onSiteJobs.filter(j => j.status === 'quote' || j.status === 'lead');
     const onSiteTotal = onSiteAccepted.length + onSiteRejected.length;
     const onSiteAcceptanceRate = onSiteTotal > 0 ? (onSiteAccepted.length / onSiteTotal) * 100 : 0;
     
@@ -2885,7 +3044,7 @@ class DatabaseStorage implements IStorage {
     const sentLaterJobs = jobsWithMethod.filter(j => (j as any).quotePresentationMethod === 'sent_later');
     const sentLaterAccepted = sentLaterJobs.filter(j => acceptedStatuses.includes(j.status || ''));
     const sentLaterRejected = sentLaterJobs.filter(j => rejectedStatuses.includes(j.status || ''));
-    const sentLaterPending = sentLaterJobs.filter(j => j.status === 'quote');
+    const sentLaterPending = sentLaterJobs.filter(j => j.status === 'quote' || j.status === 'lead');
     const sentLaterTotal = sentLaterAccepted.length + sentLaterRejected.length;
     const sentLaterAcceptanceRate = sentLaterTotal > 0 ? (sentLaterAccepted.length / sentLaterTotal) * 100 : 0;
     
@@ -2956,10 +3115,6 @@ class DatabaseStorage implements IStorage {
 
   async getLeadSourceAnalysis(fromDate?: Date, toDate?: Date): Promise<any[]> {
     try {
-      // Fetch business settings for default gross margin fallback
-      const [bizSettings] = await db.select().from(schema.businessSettings).limit(1);
-      const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
-
       // Date filtering strategy:
       // - If a job has completedDate set, filter by that (most accurate)
       // - For completed jobs without completedDate: use updatedAt as proxy (updateJob always stamps it)
@@ -2979,56 +3134,66 @@ class DatabaseStorage implements IStorage {
         jobConditions.push(sql`COALESCE(${schema.jobs.completedDate}, ${schema.jobs.updatedAt}, ${schema.jobs.scheduledDate}, ${schema.jobs.createdAt}) <= ${toDate}`);
       }
 
-      const jobs = await db
-        .select()
-        .from(schema.jobs)
-        .where(and(...jobConditions));
-
-      const completedJobsInRange = jobs.filter(j => j.status === 'completed');
-
+      // Phase 1: three independent queries — run in parallel.
+      //   (a) business settings (for default margin fallback)
+      //   (b) jobs in the date window (drives counts/revenue)
+      //   (c) all completed/invoiced jobs ever (drives the all-time margin fallback)
       // ── All-time margin pass ──────────────────────────────────────────────
-      // Gross margin is a historical benchmark: fetch ALL completed jobs (no date
-      // filter) so that the margin column is always populated regardless of which
-      // date window the user is viewing. Counts/revenue still use the date window.
-      const allCompletedJobs = await db
-        .select()
-        .from(schema.jobs)
-        .where(and(
-          sql`${schema.jobs.status} = 'completed'`,
+      // Gross margin is a historical benchmark: we fetch ALL completed/invoiced jobs
+      // (no date filter) so that the margin column is always populated regardless of
+      // which date window the user is viewing. Counts/revenue still use the date window.
+      const [bizSettingsRows, jobs, allCompletedJobs] = await Promise.all([
+        db.select().from(schema.businessSettings).limit(1),
+        db.select().from(schema.jobs).where(and(...jobConditions)),
+        db.select().from(schema.jobs).where(and(
+          sql`${schema.jobs.status} IN ('completed', 'invoiced')`,
           sql`${schema.jobs.status} != 'archived'`
-        ));
+        )),
+      ]);
+      const bizSettings = bizSettingsRows[0];
+      const defaultMarginPct = parseFloat(bizSettings?.defaultGrossMarginPct?.toString() || '0') || 0;
 
-      // Build invoice map for all completed jobs
+      const completedJobsInRange = jobs.filter(j => j.status === 'completed' || j.status === 'invoiced');
+
+      // Phase 2: four dependent queries — all depend on phase 1, but are independent of
+      // each other, so run in parallel. Previously these were four sequential awaits.
       const allCompletedIds = allCompletedJobs.map(j => j.id);
-      let allTimeInvoices: any[] = [];
-      if (allCompletedIds.length > 0) {
-        allTimeInvoices = await db
-          .select()
-          .from(schema.invoices)
-          .where(and(
-            sql`${schema.invoices.status} != 'cancelled'`,
-            inArray(schema.invoices.jobId, allCompletedIds)
-          ));
-      }
+      const qualifyingJobIds = jobs.map(j => j.id);
+      const [allTimeInvoices, allTimeProposals, allInvoices, proposals] = await Promise.all([
+        allCompletedIds.length > 0
+          ? db.select().from(schema.invoices).where(and(
+              sql`${schema.invoices.status} != 'cancelled'`,
+              inArray(schema.invoices.jobId, allCompletedIds)
+            ))
+          : Promise.resolve([] as any[]),
+        allCompletedIds.length > 0
+          ? db.select().from(schema.proposals).where(inArray(schema.proposals.jobId, allCompletedIds))
+          : Promise.resolve([] as any[]),
+        qualifyingJobIds.length > 0
+          ? db.select().from(schema.invoices).where(and(
+              sql`${schema.invoices.status} != 'cancelled'`,
+              inArray(schema.invoices.jobId, qualifyingJobIds)
+            ))
+          : Promise.resolve([] as any[]),
+        qualifyingJobIds.length > 0
+          ? db.select().from(schema.proposals).where(inArray(schema.proposals.jobId, qualifyingJobIds))
+          : Promise.resolve([] as any[]),
+      ]);
+      // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
+      // (NZ 15%), so divide to strip the tax.
       const allTimeInvoiceMap = new Map<string, number>();
       for (const inv of allTimeInvoices) {
         if (inv.jobId) {
-          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + (parseFloat(inv.amount?.toString() || '0')));
+          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + (parseFloat(inv.amount?.toString() || '0') / 1.15));
         }
       }
 
-      // Fetch proposal amounts for all completed jobs (for revenue fallback)
-      let allTimeProposals: any[] = [];
-      if (allCompletedIds.length > 0) {
-        allTimeProposals = await db
-          .select()
-          .from(schema.proposals)
-          .where(inArray(schema.proposals.jobId, allCompletedIds));
-      }
+      // Proposal amounts for all completed jobs (for revenue fallback) — fetched above in phase 2.
+      // proposal.totalAmount is inc-GST (customer-facing total); strip GST for internal metrics.
       const allTimeProposalMap = new Map<string, number>();
       for (const p of allTimeProposals) {
         if (p.jobId && p.totalAmount) {
-          const amt = parseFloat(p.totalAmount?.toString() || '0');
+          const amt = parseFloat(p.totalAmount?.toString() || '0') / 1.15;
           if (amt > (allTimeProposalMap.get(p.jobId) || 0)) allTimeProposalMap.set(p.jobId, amt);
         }
       }
@@ -3042,9 +3207,10 @@ class DatabaseStorage implements IStorage {
         const acc = allTimeMarginMap.get(source)!;
 
         const invoiceRev = allTimeInvoiceMap.get(job.id) || 0;
+        // job.totalAmount is inc-GST; strip GST so the margin % is consistent with the ex-GST revenue column.
         const revenueForMargin =
           invoiceRev > 0 ? invoiceRev
-          : parseFloat(job.totalAmount?.toString() || '0') || 0
+          : (parseFloat(job.totalAmount?.toString() || '0') / 1.15) || 0
           || (allTimeProposalMap.get(job.id) || 0);
 
         if (revenueForMargin <= 0) continue;
@@ -3078,38 +3244,21 @@ class DatabaseStorage implements IStorage {
       }
       // ─────────────────────────────────────────────────────────────────────
 
-      // Fetch ALL invoices for these qualifying jobs (not date-filtered —
-      // we want the real revenue for jobs worked on in the period).
-      const qualifyingJobIds = jobs.map(j => j.id);
-      let allInvoices: any[] = [];
-      if (qualifyingJobIds.length > 0) {
-        allInvoices = await db
-          .select()
-          .from(schema.invoices)
-          .where(and(
-            sql`${schema.invoices.status} != 'cancelled'`,
-            inArray(schema.invoices.jobId, qualifyingJobIds)
-          ));
-      }
+      // Invoices for these qualifying jobs (not date-filtered — we want the real
+      // revenue for jobs worked on in the period) — fetched above in phase 2.
 
-      // Map job IDs → total invoiced amount
+      // Map job IDs → total invoiced amount (ex-GST).
+      // invoice.amount is inc-GST (NZ 15%); internal metrics show ex-GST per business rule.
       const jobInvoiceMap = new Map<string, number>();
       for (const invoice of allInvoices) {
         if (invoice.jobId) {
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
         }
       }
 
-      // Fetch ALL proposals for these qualifying jobs
-      let proposals: any[] = [];
-      if (qualifyingJobIds.length > 0) {
-        proposals = await db
-          .select()
-          .from(schema.proposals)
-          .where(inArray(schema.proposals.jobId, qualifyingJobIds));
-      }
+      // Proposals for these qualifying jobs — fetched above in phase 2.
 
       // Create a map of job IDs that have proposals in the date range
       const jobsWithProposals = new Set<string>();
@@ -3119,11 +3268,12 @@ class DatabaseStorage implements IStorage {
         }
       });
 
-      // Create a map of job IDs to their highest proposal amounts (for quoted value)
+      // Create a map of job IDs to their highest proposal amounts (for quoted value).
+      // proposal.totalAmount is inc-GST; strip GST for internal metrics.
       const jobProposalAmountMap = new Map<string, number>();
       for (const proposal of proposals) {
         if (proposal.jobId && proposal.totalAmount) {
-          const proposalAmount = parseFloat(proposal.totalAmount?.toString() || '0');
+          const proposalAmount = parseFloat(proposal.totalAmount?.toString() || '0') / 1.15;
           const existingAmount = jobProposalAmountMap.get(proposal.jobId) || 0;
           // Use the highest proposal amount for each job
           if (proposalAmount > existingAmount) {
@@ -3236,13 +3386,13 @@ class DatabaseStorage implements IStorage {
           existing.totalCosts += totalCosts;
           existing.totalProfit += (invoiceRevenue - totalCosts);
 
-          // Revenue fallback chain for margin calculation:
+          // Revenue fallback chain for margin calculation (all ex-GST):
           // 1. Invoice amount (most accurate — what was actually billed)
-          // 2. job.totalAmount (synced from invoice when created)
-          // 3. Highest proposal amount (quote value — useful for recently completed jobs not yet invoiced)
+          // 2. job.totalAmount (synced from invoice when created) — stored inc-GST, strip GST
+          // 3. Highest proposal amount (quote value — already stripped above)
           const revenueForMargin =
             invoiceRevenue > 0 ? invoiceRevenue
-            : parseFloat(job.totalAmount?.toString() || '0') || 0
+            : (parseFloat(job.totalAmount?.toString() || '0') / 1.15) || 0
             || (jobProposalAmountMap.get(job.id) || 0);
 
           if (revenueForMargin > 0) {
@@ -3362,8 +3512,8 @@ class DatabaseStorage implements IStorage {
       if (toDate) {
         conditions.push(sql`${schema.jobs.createdAt} <= ${toDate}`);
       }
-      // Only include jobs that have had a quote (not leads or archived)
-      conditions.push(sql`${schema.jobs.status} NOT IN ('lead', 'archived')`);
+      // Exclude only archived jobs — lead and quote status are both valid quoting stages
+      conditions.push(sql`${schema.jobs.status} NOT IN ('archived')`);
 
       // Get all jobs with optional date filtering
       const jobs = await db
@@ -3381,7 +3531,7 @@ class DatabaseStorage implements IStorage {
       // Status definitions for conversion tracking
       const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
       const rejectedStatuses = ['unsuccessful'];
-      const pendingStatuses = ['quote'];
+      const pendingStatuses = ['quote', 'lead'];
 
       // Group jobs by presentation method
       const methodStats = new Map<string, {
@@ -3750,9 +3900,11 @@ class DatabaseStorage implements IStorage {
   }
   async getAllNotifications(userId?: string, limit?: number): Promise<NotificationWithDetails[]> {
     let query = db.select().from(schema.notifications);
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      query = query.where(eq(schema.notifications.userId, userId)) as any;
+      conditions.push(eq(schema.notifications.userId, userId));
     }
+    query = query.where(and(...conditions)) as any;
     if (limit) {
       query = query.limit(limit) as any;
     }
@@ -3790,7 +3942,7 @@ class DatabaseStorage implements IStorage {
     );
   }
   async getUnreadNotifications(userId?: string): Promise<NotificationWithDetails[]> {
-    const conditions = [eq(schema.notifications.isRead, false)];
+    const conditions = [eq(schema.notifications.isRead, false), eq(schema.notifications.archived, false)];
     if (userId) {
       conditions.push(eq(schema.notifications.userId, userId));
     }
@@ -3818,28 +3970,42 @@ class DatabaseStorage implements IStorage {
     return updatedNotification;
   }
   async markAllNotificationsAsRead(userId?: string): Promise<void> {
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      await db.update(schema.notifications)
-        .set({ isRead: true, readAt: new Date() })
-        .where(eq(schema.notifications.userId, userId));
-    } else {
-      await db.update(schema.notifications)
-        .set({ isRead: true, readAt: new Date() });
+      conditions.push(eq(schema.notifications.userId, userId));
     }
+    await db.update(schema.notifications)
+      .set({ isRead: true, readAt: new Date() })
+      .where(and(...conditions));
   }
   async deleteNotification(id: string): Promise<void> {
-    await db.delete(schema.notifications).where(eq(schema.notifications.id, id));
+    // Archive instead of delete — keeps the record for reminder de-dup so the
+    // same reminder isn't immediately recreated on the next hourly check.
+    await db.update(schema.notifications)
+      .set({ archived: true })
+      .where(eq(schema.notifications.id, id));
+  }
+  async deleteAllNotifications(userId?: string): Promise<void> {
+    // Archive instead of delete — keeps records for reminder de-dup so the
+    // same reminders aren't immediately recreated on the next hourly check.
+    const conditions = [eq(schema.notifications.archived, false)];
+    if (userId) {
+      conditions.push(eq(schema.notifications.userId, userId));
+    }
+    await db.update(schema.notifications)
+      .set({ archived: true })
+      .where(and(...conditions));
   }
   async getNotificationSummary(userId?: string): Promise<NotificationSummary> {
-    // Get all notifications for the user (or all if no userId)
-    let query = db.select().from(schema.notifications);
-    
-    // Only add where clause if userId is provided
+    // Get all non-archived notifications for the user (or all if no userId)
+    const conditions = [eq(schema.notifications.archived, false)];
     if (userId) {
-      query = query.where(eq(schema.notifications.userId, userId)) as any;
+      conditions.push(eq(schema.notifications.userId, userId));
     }
-    
-    const rawNotifications = await query.orderBy(desc(schema.notifications.createdAt));
+    const rawNotifications = await db.select()
+      .from(schema.notifications)
+      .where(and(...conditions))
+      .orderBy(desc(schema.notifications.createdAt));
     
     // Filter out notifications for completed jobs
     const allNotifications = await this.filterCompletedJobNotifications(rawNotifications);
@@ -3918,6 +4084,36 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.notificationQueue.id, id));
   }
 
+  // Pending Outbound Messages
+  async createPendingOutboundMessage(msg: schema.InsertPendingOutboundMessage): Promise<schema.PendingOutboundMessage> {
+    const [created] = await db.insert(schema.pendingOutboundMessages).values(msg).returning();
+    return created;
+  }
+
+  async getPendingOutboundMessages(status?: string): Promise<schema.PendingOutboundMessage[]> {
+    if (status) {
+      return await db.select().from(schema.pendingOutboundMessages)
+        .where(eq(schema.pendingOutboundMessages.status, status))
+        .orderBy(desc(schema.pendingOutboundMessages.createdAt));
+    }
+    return await db.select().from(schema.pendingOutboundMessages)
+      .orderBy(desc(schema.pendingOutboundMessages.createdAt));
+  }
+
+  async getPendingOutboundMessage(id: string): Promise<schema.PendingOutboundMessage | undefined> {
+    const [msg] = await db.select().from(schema.pendingOutboundMessages)
+      .where(eq(schema.pendingOutboundMessages.id, id));
+    return msg || undefined;
+  }
+
+  async updatePendingOutboundMessage(id: string, updates: Partial<schema.PendingOutboundMessage>): Promise<schema.PendingOutboundMessage> {
+    const [updated] = await db.update(schema.pendingOutboundMessages)
+      .set(updates)
+      .where(eq(schema.pendingOutboundMessages.id, id))
+      .returning();
+    return updated;
+  }
+
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
     const [newEmployee] = await db.insert(schema.employees).values(employee).returning();
     return newEmployee;
@@ -3932,7 +4128,7 @@ class DatabaseStorage implements IStorage {
     // Order by role to prioritize admin over crew in case of duplicate emails
     const [employee] = await db.select()
       .from(schema.employees)
-      .where(eq(schema.employees.email, email))
+      .where(sql`lower(${schema.employees.email}) = lower(${email})`)
       .orderBy(sql`CASE WHEN ${schema.employees.role} = 'admin' THEN 0 WHEN ${schema.employees.role} = 'crew' THEN 1 ELSE 2 END`)
       .limit(1);
     return employee || undefined;
@@ -4026,6 +4222,10 @@ class DatabaseStorage implements IStorage {
   
   async deleteScheduleEvent(id: string): Promise<void> {
     await db.delete(schema.scheduleEvents).where(eq(schema.scheduleEvents.id, id));
+  }
+
+  async deleteScheduleEventsByJob(jobId: string): Promise<void> {
+    await db.delete(schema.scheduleEvents).where(eq(schema.scheduleEvents.jobId, jobId));
   }
 
   async createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment> {
@@ -4525,6 +4725,158 @@ class DatabaseStorage implements IStorage {
       .orderBy(schema.inspectionResponses.sortOrder);
   }
 
+  // Equipment Induction System Implementation
+  async createInductionTemplate(template: InsertInductionTemplate): Promise<InductionTemplate> {
+    const [result] = await db.insert(schema.inductionTemplates).values(template).returning();
+    return result;
+  }
+
+  async getInductionTemplate(id: string): Promise<InductionTemplate | undefined> {
+    const [result] = await db.select().from(schema.inductionTemplates)
+      .where(eq(schema.inductionTemplates.id, id));
+    return result;
+  }
+
+  async updateInductionTemplate(id: string, updates: UpdateInductionTemplate): Promise<InductionTemplate> {
+    const [result] = await db.update(schema.inductionTemplates)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.inductionTemplates.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteInductionTemplate(id: string): Promise<void> {
+    await db.delete(schema.inductionTemplates).where(eq(schema.inductionTemplates.id, id));
+  }
+
+  async getAllInductionTemplates(): Promise<InductionTemplate[]> {
+    return await db.select().from(schema.inductionTemplates)
+      .where(eq(schema.inductionTemplates.isActive, true))
+      .orderBy(desc(schema.inductionTemplates.createdAt));
+  }
+
+  async getInductionTemplatesByType(equipmentType: string): Promise<InductionTemplate[]> {
+    return await db.select().from(schema.inductionTemplates)
+      .where(and(
+        eq(schema.inductionTemplates.isActive, true),
+        eq(schema.inductionTemplates.equipmentType, equipmentType),
+      ))
+      .orderBy(desc(schema.inductionTemplates.createdAt));
+  }
+
+  async createInductionChecklistItem(item: InsertInductionChecklistItem): Promise<InductionChecklistItem> {
+    const [result] = await db.insert(schema.inductionChecklistItems).values(item).returning();
+    return result;
+  }
+
+  async getInductionChecklistItem(id: string): Promise<InductionChecklistItem | undefined> {
+    const [result] = await db.select().from(schema.inductionChecklistItems)
+      .where(eq(schema.inductionChecklistItems.id, id));
+    return result;
+  }
+
+  async updateInductionChecklistItem(id: string, updates: UpdateInductionChecklistItem): Promise<InductionChecklistItem> {
+    const [result] = await db.update(schema.inductionChecklistItems)
+      .set(updates)
+      .where(eq(schema.inductionChecklistItems.id, id))
+      .returning();
+    return result;
+  }
+
+  async deleteInductionChecklistItem(id: string): Promise<void> {
+    await db.delete(schema.inductionChecklistItems).where(eq(schema.inductionChecklistItems.id, id));
+  }
+
+  async getInductionChecklistItemsByTemplate(templateId: string): Promise<InductionChecklistItem[]> {
+    return await db.select().from(schema.inductionChecklistItems)
+      .where(and(
+        eq(schema.inductionChecklistItems.templateId, templateId),
+        eq(schema.inductionChecklistItems.isActive, true),
+      ))
+      .orderBy(schema.inductionChecklistItems.sortOrder);
+  }
+
+  async reorderInductionChecklistItems(templateId: string, itemIds: string[]): Promise<void> {
+    for (let i = 0; i < itemIds.length; i++) {
+      await db.update(schema.inductionChecklistItems)
+        .set({ sortOrder: i })
+        .where(eq(schema.inductionChecklistItems.id, itemIds[i]));
+    }
+  }
+
+  async createEquipmentInduction(induction: InsertEquipmentInduction): Promise<EquipmentInduction> {
+    const [result] = await db.insert(schema.equipmentInductions).values(induction).returning();
+    return result;
+  }
+
+  async getEquipmentInduction(id: string): Promise<EquipmentInduction | undefined> {
+    const [result] = await db.select().from(schema.equipmentInductions)
+      .where(eq(schema.equipmentInductions.id, id));
+    return result;
+  }
+
+  async updateEquipmentInduction(id: string, updates: UpdateEquipmentInduction): Promise<EquipmentInduction> {
+    const [result] = await db.update(schema.equipmentInductions)
+      .set(updates)
+      .where(eq(schema.equipmentInductions.id, id))
+      .returning();
+    return result;
+  }
+
+  async getAllEquipmentInductions(filters?: { employeeId?: string; equipmentType?: string }): Promise<EquipmentInduction[]> {
+    const conditions = [];
+    if (filters?.employeeId) {
+      conditions.push(eq(schema.equipmentInductions.employeeId, filters.employeeId));
+    }
+    if (filters?.equipmentType) {
+      conditions.push(eq(schema.equipmentInductions.equipmentType, filters.equipmentType));
+    }
+
+    let query = db.select().from(schema.equipmentInductions);
+    if (conditions.length > 0) {
+      query = query.where(and(...conditions)) as any;
+    }
+    return await query.orderBy(desc(schema.equipmentInductions.inductionDate));
+  }
+
+  async getEquipmentInductionsByEmployee(employeeId: string): Promise<EquipmentInduction[]> {
+    return await db.select().from(schema.equipmentInductions)
+      .where(eq(schema.equipmentInductions.employeeId, employeeId))
+      .orderBy(desc(schema.equipmentInductions.inductionDate));
+  }
+
+  async getInductionStatusForEmployee(employeeId: string): Promise<Array<{ templateId: string; templateName: string; equipmentType: string | null; completedAt: Date | null; inductionId: string | null }>> {
+    const templates = await db.select().from(schema.inductionTemplates)
+      .where(eq(schema.inductionTemplates.isActive, true))
+      .orderBy(desc(schema.inductionTemplates.createdAt));
+
+    const inductions = await db.select().from(schema.equipmentInductions)
+      .where(eq(schema.equipmentInductions.employeeId, employeeId))
+      .orderBy(desc(schema.equipmentInductions.inductionDate));
+
+    return templates.map((t) => {
+      const latest = inductions.find((i) => i.templateId === t.id);
+      return {
+        templateId: t.id,
+        templateName: t.name,
+        equipmentType: t.equipmentType,
+        completedAt: latest?.completedAt ?? latest?.inductionDate ?? null,
+        inductionId: latest?.id ?? null,
+      };
+    });
+  }
+
+  async createInductionResponse(response: InsertInductionResponse): Promise<InductionResponse> {
+    const [result] = await db.insert(schema.inductionResponses).values(response).returning();
+    return result;
+  }
+
+  async getInductionResponses(inductionId: string): Promise<InductionResponse[]> {
+    return await db.select().from(schema.inductionResponses)
+      .where(eq(schema.inductionResponses.inductionId, inductionId))
+      .orderBy(schema.inductionResponses.sortOrder);
+  }
+
   // Registration & COF Expiry Checks
   async getVehiclesWithExpiringDocs(daysAhead: number): Promise<Equipment[]> {
     const futureDate = new Date();
@@ -4947,6 +5299,46 @@ class DatabaseStorage implements IStorage {
     await db.delete(schema.invoices)
       .where(eq(schema.invoices.id, id));
   }
+
+  async createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection> {
+    const [created] = await db.insert(schema.invoiceSections).values(section).returning();
+    return created;
+  }
+
+  async getInvoiceSection(id: string): Promise<InvoiceSection | undefined> {
+    const [section] = await db.select().from(schema.invoiceSections).where(eq(schema.invoiceSections.id, id));
+    return section;
+  }
+
+  async updateInvoiceSection(id: string, updates: UpdateInvoiceSection): Promise<InvoiceSection> {
+    const [updated] = await db.update(schema.invoiceSections)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(schema.invoiceSections.id, id))
+      .returning();
+    if (!updated) throw new Error("Invoice section not found");
+    return updated;
+  }
+
+  async getInvoiceSectionsByInvoice(invoiceId: string): Promise<InvoiceSection[]> {
+    return await db.select()
+      .from(schema.invoiceSections)
+      .where(eq(schema.invoiceSections.invoiceId, invoiceId))
+      .orderBy(schema.invoiceSections.sortOrder);
+  }
+
+  async deleteInvoiceSection(id: string): Promise<void> {
+    await db.delete(schema.invoiceSections).where(eq(schema.invoiceSections.id, id));
+  }
+
+  async reorderInvoiceSections(invoiceId: string, sectionIds: string[]): Promise<InvoiceSection[]> {
+    for (let i = 0; i < sectionIds.length; i++) {
+      await db.update(schema.invoiceSections)
+        .set({ sortOrder: i })
+        .where(eq(schema.invoiceSections.id, sectionIds[i]));
+    }
+    return this.getInvoiceSectionsByInvoice(invoiceId);
+  }
+
   async createServiceRequest(request: InsertServiceRequest): Promise<ServiceRequest> { throw new Error("Not implemented"); }
   async getServiceRequest(id: string): Promise<ServiceRequest | undefined> { return undefined; }
   async getServiceRequestsByCustomer(customerId: string): Promise<ServiceRequest[]> { return []; }
@@ -5944,17 +6336,28 @@ class DatabaseStorage implements IStorage {
       // Get control measures for each step using raw SQL for proper join
       for (const step of result.steps) {
         const controls = await db.execute(
-          sql`SELECT sc.id, sc.step_id, sc.control_measure_template_id, 
-              sc.description, sc.hierarchy_level, sc.is_implemented, 
+          sql`SELECT sc.id, sc.step_id, sc.control_measure_template_id,
+              sc.description, sc.hierarchy_level, sc.is_implemented,
               sc.sort_order, sc.created_at, cm.description as control_measure
           FROM jha_step_controls sc
-          LEFT JOIN jha_control_measure_templates cm 
+          LEFT JOIN jha_control_measure_templates cm
             ON sc.control_measure_template_id = cm.id
           WHERE sc.step_id = ${step.id}
           ORDER BY sc.sort_order`
         );
-        
-        step.controlMeasures = controls.rows.map((c: any) => c.control_measure || '');
+
+        // Return objects (not bare strings) so the edit form can round-trip
+        // controlMeasureTemplateId and description when re-saving — e.g. when
+        // adding an extra signature to an already-saved JHA.
+        step.controlMeasures = controls.rows.map((c: any) => ({
+          id: c.id,
+          stepId: c.step_id,
+          controlMeasureTemplateId: c.control_measure_template_id,
+          description: c.control_measure || c.description || '',
+          hierarchyLevel: c.hierarchy_level,
+          isImplemented: c.is_implemented,
+          sortOrder: c.sort_order,
+        }));
       }
     }
 

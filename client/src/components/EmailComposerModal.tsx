@@ -48,7 +48,11 @@ import {
   MicOff,
   AlertCircle,
   Loader2,
+  Calendar as CalendarIcon,
 } from "lucide-react";
+import { CalendarAvailabilityModal } from "./CalendarAvailabilityModal";
+import { format as formatDate } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 import { InvoiceTemplate } from "./InvoiceTemplate";
 import { QuoteTemplate } from "./QuoteTemplate";
 import { ProposalTemplate } from "./ProposalTemplate";
@@ -63,6 +67,7 @@ interface EmailComposerModalProps {
   proposalData?: any;
   templateType?: "invoice" | "quote" | "proposal";
   customEmail?: string;
+  defaultCc?: string;
 }
 
 interface EmailTemplate {
@@ -83,6 +88,7 @@ export function EmailComposerModal({
   proposalData,
   templateType,
   customEmail,
+  defaultCc,
 }: EmailComposerModalProps) {
   // Safe amount formatter - handles strings, numbers, null, undefined
   const formatAmount = (value: any): string => {
@@ -116,8 +122,83 @@ export function EmailComposerModal({
   const queryClient = useQueryClient();
   const [hasInitialized, setHasInitialized] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isAvailabilityOpen, setIsAvailabilityOpen] = useState(false);
+  // Recipient selector: "job" routes to the Job Contact (default, used by all automations),
+  // "tenant" routes to the Tenant Details contact for tenanted properties. Toggle only
+  // affects this modal's To field — nothing server-side changes.
+  const [recipientMode, setRecipientMode] = useState<"job" | "tenant">("job");
   const recognitionRef = useRef<any>(null);
   const emailBodyRef = useRef<HTMLDivElement>(null);
+
+  // Derived recipient candidates from the job prop. Tenant may be unset.
+  const jobContactEmailCandidate: string =
+    (job?.jobContactEmail as string) ||
+    (customer?.email as string) ||
+    "";
+  const tenantContactEmailCandidate: string =
+    (job?.tenantContactEmail as string) || "";
+
+  // First-name candidates used to swap the greeting line when the recipient toggle changes.
+  const jobContactFirstNameCandidate: string =
+    (job?.jobContactFirstName as string) ||
+    (customer?.firstName as string) ||
+    "";
+  const tenantContactFirstNameCandidate: string =
+    (job?.tenantContactFirstName as string) || "";
+
+  // Replace the greeting name in the first <p> that looks like a salutation
+  // ("Hi X,", "Hello X,", "Hey X", "Kia ora X", "Dear X"). Keeps the rest of
+  // the body untouched so user edits are preserved.
+  const swapGreetingName = (newFirstName: string) => {
+    if (!emailBodyRef.current || !newFirstName) return;
+    const body = emailBodyRef.current;
+    const paragraphs = Array.from(body.querySelectorAll("p"));
+    const GREETING_RE = /^(\s*(?:Hi|Hello|Hey|Kia ora|Dear)\s+)([^,.!?\n]+)(?=[,.!?\n]|$)/i;
+    for (const p of paragraphs) {
+      const text = p.textContent ?? "";
+      if (GREETING_RE.test(text)) {
+        p.textContent = text.replace(GREETING_RE, `$1${newFirstName}`);
+        setEmailData((prev) => ({ ...prev, body: body.innerHTML }));
+        return;
+      }
+    }
+  };
+
+  // Insert a new paragraph with `text` right after the greeting line
+  // (the first <p> with non-empty text — usually "Hi {firstName},").
+  // Falls back to prepending at the start if there's no recognisable greeting.
+  const insertAfterGreeting = (text: string) => {
+    if (!emailBodyRef.current) return;
+    const body = emailBodyRef.current;
+
+    // Clear placeholder if present
+    if (body.innerHTML.includes("Compose your email...")) {
+      body.innerHTML = "";
+    }
+
+    const newP = document.createElement("p");
+    newP.textContent = text;
+
+    const paragraphs = Array.from(body.querySelectorAll("p"));
+    const greetingP = paragraphs.find(
+      (p) => (p.textContent ?? "").trim().length > 0,
+    );
+
+    if (greetingP && greetingP.parentNode) {
+      greetingP.parentNode.insertBefore(newP, greetingP.nextSibling);
+    } else {
+      body.insertBefore(newP, body.firstChild);
+    }
+
+    setEmailData((prev) => ({ ...prev, body: body.innerHTML }));
+  };
+
+  const handleSlotPick = (slotStart: Date) => {
+    const nz = toZonedTime(slotStart, "Pacific/Auckland");
+    // e.g. "Tuesday 25 November at 2 PM"
+    const phrase = formatDate(nz, "EEEE d MMMM 'at' h a");
+    insertAfterGreeting(phrase);
+  };
 
   // Fetch email templates from database
   const { data: dbTemplates = [] } = useQuery({
@@ -267,6 +348,8 @@ export function EmailComposerModal({
         });
       }
       if (proposalData) {
+        // URL returns application/pdf (binary). Smart Attachments intentionally
+        // attach the PDF — use ?format=html on the endpoint if HTML is ever needed.
         attachmentsList.push({
           name: `Treemarkables LTD Proposal ${proposalData.proposalNumber || "PROP-" + job.jobNumber}`,
           type: "proposal",
@@ -298,9 +381,11 @@ export function EmailComposerModal({
             customer.email ||
             customer.jobContactEmail);
 
-      // Extract first name from customer data
+      // Extract first name — prefer job contact fields, fall back to customer record
       let firstName = "there";
-      if (customer.firstName) {
+      if (job?.jobContactFirstName) {
+        firstName = job.jobContactFirstName;
+      } else if (customer.firstName) {
         firstName = customer.firstName;
       } else if (customer.name) {
         // If name is stored as "LastName, FirstName", extract first name
@@ -315,9 +400,16 @@ export function EmailComposerModal({
       }
 
       // Also keep full name for other templates that might need it
+      // Prefer job contact fields, fall back to customer record
       let customerName = "Valued Customer";
-      if (customer.firstName && customer.lastName) {
+      if (job?.jobContactFirstName && job?.jobContactLastName) {
+        customerName = `${job.jobContactFirstName} ${job.jobContactLastName}`.trim();
+      } else if (job?.jobContactFirstName) {
+        customerName = job.jobContactFirstName;
+      } else if (customer.firstName && customer.lastName) {
         customerName = `${customer.firstName} ${customer.lastName}`.trim();
+      } else if (customer.firstName) {
+        customerName = customer.firstName;
       } else if (customer.name) {
         customerName = customer.name;
       }
@@ -366,7 +458,7 @@ export function EmailComposerModal({
         .replace(
           /{invoiceLink}/g,
           invoiceData?.id
-            ? `${baseUrl}/invoice/${invoiceData.id}`
+            ? `${baseUrl}/invoice/${invoiceData.id}/view`
             : "View invoice in your customer portal",
         )
         .replace(
@@ -408,9 +500,14 @@ export function EmailComposerModal({
         .replace(/{contactName}/g, "Treemarkables Team")
         .replace(/{contactPhone}/g, "0272166882");
 
+      // When there are multiple saved invoice emails (chips UI), start CC empty so
+      // the user selects which ones to include. For a single address, pre-populate as before.
+      const savedEmailCount = defaultCc
+        ? defaultCc.split(",").map((e) => e.trim()).filter(Boolean).length
+        : 0;
       setEmailData({
         to: billingEmail || "",
-        cc: "",
+        cc: savedEmailCount > 1 ? "" : (defaultCc || ""),
         subject: populatedSubject,
         body: populatedBody,
         selectedTemplate: template.id,
@@ -452,6 +549,7 @@ export function EmailComposerModal({
     templateType,
     hasInitialized,
     jobInvoice,
+    defaultCc,
   ]);
 
   // When job invoice loads asynchronously (after init ran), auto-attach if the active template needs it
@@ -680,9 +778,11 @@ export function EmailComposerModal({
     const template = EMAIL_TEMPLATES.find((t) => t.id === templateId);
     if (!template) return;
 
-    // Extract first name
+    // Extract first name — prefer job contact fields, fall back to customer record
     let firstName = "there";
-    if (customer?.firstName) {
+    if (job?.jobContactFirstName) {
+      firstName = job.jobContactFirstName;
+    } else if (customer?.firstName) {
       firstName = customer.firstName;
     } else if (customer?.name) {
       if (customer.name.includes(",")) {
@@ -693,9 +793,19 @@ export function EmailComposerModal({
       }
     }
 
-    const customerName =
-      customer?.name ||
-      `${customer?.firstName || ""} ${customer?.lastName || ""}`.trim();
+    // Full name — prefer job contact fields, fall back to customer record
+    let customerName = "Valued Customer";
+    if (job?.jobContactFirstName && job?.jobContactLastName) {
+      customerName = `${job.jobContactFirstName} ${job.jobContactLastName}`.trim();
+    } else if (job?.jobContactFirstName) {
+      customerName = job.jobContactFirstName;
+    } else if (customer?.firstName && customer?.lastName) {
+      customerName = `${customer.firstName} ${customer.lastName}`.trim();
+    } else if (customer?.firstName) {
+      customerName = customer.firstName;
+    } else if (customer?.name) {
+      customerName = customer.name;
+    }
 
     // Use current domain for links (works in both dev and production)
     const baseUrl = window.location.origin;
@@ -734,7 +844,7 @@ export function EmailComposerModal({
       .replace(
         /{invoiceLink}/g,
         invoiceData?.id
-          ? `${baseUrl}/invoice/${invoiceData.id}`
+          ? `${baseUrl}/invoice/${invoiceData.id}/view`
           : "View invoice in your customer portal",
       )
       .replace(
@@ -1331,6 +1441,54 @@ export function EmailComposerModal({
         <div className="flex-1 flex flex-col gap-2 sm:gap-2 overflow-y-auto p-2 sm:p-3">
           {/* Email Fields */}
           <div className="space-y-1 sm:space-y-1.5">
+            {/* Recipient selector — switches the "To" field between Job Contact and Tenant */}
+            <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
+              <span className="text-xs sm:col-span-1 sm:text-right font-medium text-gray-600">
+                Send to:
+              </span>
+              <div className="sm:col-span-11 inline-flex rounded-md border overflow-hidden w-fit">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRecipientMode("job");
+                    setEmailData((prev) => ({ ...prev, to: jobContactEmailCandidate }));
+                    if (jobContactFirstNameCandidate) {
+                      swapGreetingName(jobContactFirstNameCandidate);
+                    }
+                  }}
+                  className={`px-3 py-1 text-xs font-medium transition-colors ${
+                    recipientMode === "job"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  }`}
+                  data-testid="btn-recipient-job"
+                >
+                  Job Contact
+                </button>
+                <button
+                  type="button"
+                  disabled={!tenantContactEmailCandidate}
+                  onClick={() => {
+                    setRecipientMode("tenant");
+                    setEmailData((prev) => ({ ...prev, to: tenantContactEmailCandidate }));
+                    // If the tenant has a first name, swap the greeting. Otherwise leave it —
+                    // the user can edit manually.
+                    if (tenantContactFirstNameCandidate) {
+                      swapGreetingName(tenantContactFirstNameCandidate);
+                    }
+                  }}
+                  title={!tenantContactEmailCandidate ? "No tenant email on this job" : "Send to the tenant instead"}
+                  className={`px-3 py-1 text-xs font-medium transition-colors border-l ${
+                    recipientMode === "tenant"
+                      ? "bg-blue-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  } ${!tenantContactEmailCandidate ? "opacity-40 cursor-not-allowed" : ""}`}
+                  data-testid="btn-recipient-tenant"
+                >
+                  Tenant
+                </button>
+              </div>
+            </div>
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
               <Label
                 htmlFor="email-to"
@@ -1350,6 +1508,52 @@ export function EmailComposerModal({
                 data-testid="input-email-to"
               />
             </div>
+
+            {/* Saved invoice recipient chips — shown when customer has multiple saved emails */}
+            {(() => {
+              const savedEmails = defaultCc
+                ? defaultCc.split(",").map((e) => e.trim()).filter(Boolean)
+                : [];
+              if (savedEmails.length === 0) return null;
+              return (
+                <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-start">
+                  <Label className="text-xs sm:col-span-1 sm:text-right font-medium pt-1">
+                    Saved:
+                  </Label>
+                  <div className="sm:col-span-11 flex flex-wrap gap-1.5">
+                    {savedEmails.map((email) => {
+                      const ccEmails = emailData.cc.split(",").map((e) => e.trim()).filter(Boolean);
+                      const isActive = ccEmails.includes(email) || emailData.to === email;
+                      const toggle = () => {
+                        setEmailData((prev) => {
+                          const current = prev.cc.split(",").map((e) => e.trim()).filter(Boolean);
+                          const next = isActive
+                            ? current.filter((e) => e !== email)
+                            : [...current, email];
+                          return { ...prev, cc: next.join(", ") };
+                        });
+                      };
+                      return (
+                        <button
+                          key={email}
+                          type="button"
+                          onClick={toggle}
+                          className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full border transition-colors ${
+                            isActive
+                              ? "bg-blue-600 text-white border-blue-600"
+                              : "bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600"
+                          }`}
+                        >
+                          {isActive && <Check className="w-3 h-3" />}
+                          {email}
+                        </button>
+                      );
+                    })}
+                    <span className="text-xs text-gray-400 self-center">click to add/remove from CC</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="flex flex-col sm:grid sm:grid-cols-12 gap-1 sm:gap-2 sm:items-center">
               <Label
@@ -1529,6 +1733,17 @@ export function EmailComposerModal({
             <div className="w-px h-6 bg-gray-300 mx-1" />
             <Button
               type="button"
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setIsAvailabilityOpen(true)}
+              title="Check your Google Calendar availability"
+              data-testid="button-check-availability"
+            >
+              <CalendarIcon className="w-4 h-4" />
+            </Button>
+            <Button
+              type="button"
               variant={isListening ? "default" : "ghost"}
               size="icon"
               className={`h-8 w-8 ${isListening ? "bg-red-500 hover:bg-red-600 text-white" : ""}`}
@@ -1585,6 +1800,13 @@ export function EmailComposerModal({
           </div>
         </div>
       </DialogContent>
+
+      {/* Calendar Availability Modal */}
+      <CalendarAvailabilityModal
+        isOpen={isAvailabilityOpen}
+        onClose={() => setIsAvailabilityOpen(false)}
+        onSlotPick={handleSlotPick}
+      />
 
       {/* Document Preview Modal */}
       {showPreview.type && showPreview.data && (

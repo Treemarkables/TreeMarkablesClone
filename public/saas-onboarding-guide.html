@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Treemarkables Platform — SaaS Subscriber Onboarding Guide</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #1a1a2e;
+      background: #fff;
+    }
+
+    /* Cover Page */
+    .cover {
+      min-height: 100vh;
+      background: linear-gradient(135deg, #0f3460 0%, #16213e 50%, #0f3460 100%);
+      color: white;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 60px 40px;
+      page-break-after: always;
+    }
+    .cover-logo {
+      font-size: 56px;
+      margin-bottom: 20px;
+    }
+    .cover h1 {
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 16px;
+      color: #fff;
+    }
+    .cover h2 {
+      font-size: 20px;
+      font-weight: 400;
+      color: #e9c46a;
+      margin-bottom: 40px;
+    }
+    .cover-meta {
+      font-size: 13px;
+      color: #a8d8ea;
+      margin-top: 40px;
+      border-top: 1px solid rgba(255,255,255,0.2);
+      padding-top: 20px;
+      width: 100%;
+      max-width: 600px;
+    }
+    .cover-badge {
+      display: inline-block;
+      background: rgba(233,196,106,0.2);
+      border: 1px solid #e9c46a;
+      color: #e9c46a;
+      padding: 6px 18px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 30px;
+    }
+
+    /* Page Layout */
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 50px 60px;
+    }
+    @media print {
+      .page { padding: 30px 40px; }
+      .cover { min-height: 100vh; }
+    }
+
+    /* TOC */
+    .toc {
+      background: #f8f9ff;
+      border: 1px solid #e0e6f0;
+      border-radius: 8px;
+      padding: 30px 40px;
+      margin: 30px 0 50px;
+    }
+    .toc h2 { font-size: 20px; color: #0f3460; margin-bottom: 20px; border-bottom: 2px solid #e9c46a; padding-bottom: 10px; }
+    .toc ol { padding-left: 20px; }
+    .toc li { margin: 8px 0; }
+    .toc a { color: #0f3460; text-decoration: none; font-weight: 500; }
+    .toc a:hover { text-decoration: underline; }
+    .toc .sub { font-size: 13px; color: #666; margin-left: 10px; }
+
+    /* Section Headers */
+    h1.section-title {
+      font-size: 28px;
+      color: #0f3460;
+      border-bottom: 3px solid #e9c46a;
+      padding-bottom: 12px;
+      margin: 50px 0 25px;
+    }
+    h2.section-sub {
+      font-size: 20px;
+      color: #16213e;
+      margin: 35px 0 15px;
+      border-left: 4px solid #e9c46a;
+      padding-left: 12px;
+    }
+    h3.section-h3 {
+      font-size: 16px;
+      color: #0f3460;
+      margin: 25px 0 10px;
+      font-weight: 700;
+    }
+    p { margin-bottom: 12px; color: #2d3748; }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0 25px;
+      font-size: 13px;
+    }
+    th {
+      background: #0f3460;
+      color: white;
+      padding: 10px 12px;
+      text-align: left;
+      font-weight: 600;
+    }
+    td {
+      padding: 9px 12px;
+      border-bottom: 1px solid #e0e6f0;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f8f9ff; }
+    tr:hover td { background: #eef2ff; }
+
+    /* Integration Cards */
+    .integration-card {
+      border: 1px solid #e0e6f0;
+      border-radius: 8px;
+      margin: 20px 0 30px;
+      overflow: hidden;
+    }
+    .integration-header {
+      background: linear-gradient(90deg, #0f3460 0%, #16213e 100%);
+      color: white;
+      padding: 12px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .integration-header .icon { font-size: 22px; }
+    .integration-header h3 { font-size: 16px; font-weight: 700; }
+    .integration-header .badge {
+      margin-left: auto;
+      font-size: 11px;
+      padding: 2px 10px;
+      border-radius: 12px;
+      font-weight: 600;
+    }
+    .badge-required { background: #e9c46a; color: #1a1a2e; }
+    .badge-optional { background: #2a9d8f; color: white; }
+    .integration-body { padding: 15px 20px; }
+    .integration-body table { margin: 8px 0 0; }
+
+    /* Checklist */
+    .checklist {
+      list-style: none;
+      padding: 0;
+      margin: 15px 0;
+    }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f0f0;
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .checklist .step-num {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      background: #0f3460;
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .checklist .step-content { flex: 1; }
+    .checklist .step-title { font-weight: 600; color: #0f3460; }
+    .checklist .step-desc { font-size: 12px; color: #666; margin-top: 3px; }
+    .checklist .step-time {
+      flex-shrink: 0;
+      font-size: 11px;
+      background: #f0f4ff;
+      color: #4a5568;
+      padding: 2px 8px;
+      border-radius: 10px;
+      height: fit-content;
+      margin-top: 2px;
+    }
+
+    /* Code blocks */
+    code {
+      background: #f1f5f9;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #d63384;
+    }
+    pre {
+      background: #1e293b;
+      color: #e2e8f0;
+      padding: 16px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 12px;
+      margin: 10px 0 20px;
+      line-height: 1.8;
+    }
+
+    /* Alert boxes */
+    .alert {
+      border-radius: 6px;
+      padding: 14px 18px;
+      margin: 15px 0;
+      font-size: 13px;
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .alert-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+    .alert-warning { background: #fffbeb; border-left: 4px solid #f59e0b; color: #78350f; }
+    .alert-info { background: #eff6ff; border-left: 4px solid #3b82f6; color: #1e40af; }
+    .alert-success { background: #f0fdf4; border-left: 4px solid #22c55e; color: #14532d; }
+    .alert-danger { background: #fef2f2; border-left: 4px solid #ef4444; color: #7f1d1d; }
+
+    /* Env var table */
+    .env-group {
+      margin: 20px 0;
+    }
+    .env-group-header {
+      background: #16213e;
+      color: white;
+      padding: 8px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      border-radius: 4px 4px 0 0;
+    }
+    .env-group table { margin: 0; }
+    .env-group table td:first-child { font-family: monospace; font-size: 12px; color: #d63384; background: #fdf2f8; }
+    .env-group table tr:last-child td { border-bottom: none; }
+
+    /* Cost table */
+    .cost-total {
+      background: #0f3460;
+      color: white;
+      font-weight: 700;
+    }
+    .cost-total td { color: white !important; background: #0f3460 !important; }
+
+    /* Footer */
+    .doc-footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #e0e6f0;
+      text-align: center;
+      font-size: 12px;
+      color: #999;
+    }
+
+    /* Print styles */
+    @media print {
+      .no-print { display: none; }
+      h1.section-title { page-break-before: always; }
+      .integration-card { page-break-inside: avoid; }
+    }
+
+    /* Tier table */
+    .tier-card {
+      border: 1px solid #e0e6f0;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 10px;
+      flex: 1;
+    }
+    .tier-header {
+      padding: 16px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 15px;
+    }
+    .tier-starter .tier-header { background: #dbeafe; color: #1e40af; }
+    .tier-pro .tier-header { background: #0f3460; color: white; }
+    .tier-enterprise .tier-header { background: #1a1a2e; color: #e9c46a; }
+    .tier-body { padding: 16px; font-size: 13px; }
+    .tier-price { font-size: 24px; font-weight: 800; text-align: center; margin: 8px 0; }
+    .tier-features { list-style: none; }
+    .tier-features li { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+    .tier-features li::before { content: '✓ '; color: #22c55e; font-weight: bold; }
+    .tiers-row { display: flex; gap: 0; margin: 20px 0; }
+  </style>
+</head>
+<body>
+
+<!-- ===== COVER PAGE ===== -->
+<div class="cover">
+  <div class="cover-logo">🌳</div>
+  <div class="cover-badge">Internal Operations Document — Confidential</div>
+  <h1>Treemarkables Job Management Platform</h1>
+  <h2>SaaS Subscriber Onboarding Guide</h2>
+  <p style="color:#a8d8ea;max-width:600px;font-size:15px;line-height:1.7;">
+    A complete reference for setting up every third-party integration when onboarding a new subscriber to the job management platform. Includes account requirements, credentials, step-by-step setup, environment variables, and cost estimates.
+  </p>
+  <div class="cover-meta">
+    <p>Version 1.0 &nbsp;·&nbsp; April 2026 &nbsp;·&nbsp; Prepared for Treemarkables Ltd</p>
+    <p style="margin-top:6px;">For internal use by the platform owner and designated operations staff only.</p>
+  </div>
+</div>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div class="page">
+
+  <!-- TABLE OF CONTENTS -->
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#overview">Platform Overview</a></li>
+      <li><a href="#model">Subscription &amp; Infrastructure Model</a></li>
+      <li><a href="#tiers">Suggested Subscription Tiers</a></li>
+      <li><a href="#integrations">Integration Inventory</a>
+        <span class="sub"> — 14 integrations, full credential &amp; cost breakdown</span>
+      </li>
+      <li><a href="#checklist">New Subscriber Onboarding Checklist</a></li>
+      <li><a href="#envvars">Environment Variables Master Reference</a></li>
+      <li><a href="#costs">Estimated Monthly Cost Summary</a></li>
+      <li><a href="#maintenance">Ongoing Maintenance Notes</a></li>
+    </ol>
+  </div>
+
+
+  <!-- ===== SECTION 1: OVERVIEW ===== -->
+  <h1 class="section-title" id="overview">1. Platform Overview</h1>
+
+  <p>The <strong>Treemarkables Job Management Platform</strong> is a comprehensive, mobile-first business management system built specifically for New Zealand-based arborist and tree service companies. It is built on a modern web stack (React + Node.js + PostgreSQL) and includes a native iOS app via Apple Capacitor.</p>
+
+  <h2 class="section-sub">What the platform does</h2>
+  <table>
+    <thead><tr><th>Module</th><th>Capability</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Job Management</strong></td><td>Full job lifecycle — leads, quotes, proposals, scheduling, dispatch, completion, invoicing. Dispatch board with ServiceM8-style layout. AI-powered smart scheduling.</td></tr>
+      <tr><td><strong>Customer &amp; Sales</strong></td><td>Lead tracking, customer CRM, VIP membership, quote builder, interactive proposals with customer option selection, conversion analytics.</td></tr>
+      <tr><td><strong>Scheduling</strong></td><td>AI Smart Dispatch (GPT-4o), staff licence matching, equipment licence checks, daily revenue targeting, Google Calendar sync.</td></tr>
+      <tr><td><strong>Communications</strong></td><td>SMS (SMS Everyone NZ), transactional email (Resend), Gmail reply capture, Twilio voice calls + call recording, AI-generated quote messages.</td></tr>
+      <tr><td><strong>Crew &amp; Equipment</strong></td><td>Staff management, licence/ticket tracking, equipment register, pre-start vehicle inspections, time tracking with charge-out rates.</td></tr>
+      <tr><td><strong>Invoicing &amp; Accounting</strong></td><td>Invoice builder, line items from time tracking, Xero sync, GST-inclusive pricing in NZD.</td></tr>
+      <tr><td><strong>Marketing</strong></td><td>Mailchimp customer sync, Meta (Facebook/Instagram) ad campaign manager, automated review posting, marketing planner.</td></tr>
+      <tr><td><strong>AI Features</strong></td><td>AI chat assistant (GPT-4o with live business data), speech-to-quote (Whisper), AI dispatch, AI text extraction from Facebook messages.</td></tr>
+      <tr><td><strong>Notifications</strong></td><td>Push notifications via Firebase (job assignments, schedule changes, new leads, invoice payments), SMS alerts, email alerts.</td></tr>
+      <tr><td><strong>iOS App</strong></td><td>Native iOS app via Capacitor — CallKit integration with Twilio, push notifications via APNs/FCM, camera access, PWA install.</td></tr>
+      <tr><td><strong>Operations</strong></td><td>Route optimisation, weather integration, mulch drops tracker, safety reporting, job diary, photo documentation.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-sub">Target subscriber</h2>
+  <p>NZ-based arborist or tree service businesses with 2–20 staff. Ideally owner-operated businesses wanting to replace paper-based, spreadsheet, or ServiceM8 workflows with a purpose-built system.</p>
+
+
+  <!-- ===== SECTION 2: MODEL ===== -->
+  <h1 class="section-title" id="model">2. Subscription &amp; Infrastructure Model</h1>
+
+  <h2 class="section-sub">How the platform is hosted</h2>
+  <p>The platform currently runs as a single-tenant deployment per subscriber — each subscriber gets their own isolated environment with their own database and API credentials. This means there is no data co-mingling between subscribers, and each subscriber's credentials are fully separate.</p>
+
+  <div class="alert alert-info">
+    <span class="alert-icon">ℹ️</span>
+    <div><strong>Current Architecture:</strong> Single codebase deployed per subscriber using environment variables to isolate credentials. Future versions may move to a multi-tenant architecture with shared hosting and per-subscriber database schemas.</div>
+  </div>
+
+  <h2 class="section-sub">What you manage centrally (Platform Owner)</h2>
+  <ul style="padding-left:20px;margin-bottom:15px;">
+    <li style="margin:6px 0;">The codebase and deployments (Replit or other hosting)</li>
+    <li style="margin:6px 0;">The iOS app on Apple App Store / TestFlight (one app, subscriber logs in)</li>
+    <li style="margin:6px 0;">OpenAI API key (shared or per-subscriber with usage limits)</li>
+    <li style="margin:6px 0;">Firebase project (one project, one service account, all subscriber devices register under it)</li>
+    <li style="margin:6px 0;">Addy.co.nz API key (can be shared — rate limits per key)</li>
+    <li style="margin:6px 0;">Resend sending domain (centralised domain, subscriber gets their own from-address)</li>
+    <li style="margin:6px 0;">Platform support, updates, and bug fixes</li>
+  </ul>
+
+  <h2 class="section-sub">What is set up per subscriber</h2>
+  <ul style="padding-left:20px;margin-bottom:15px;">
+    <li style="margin:6px 0;">PostgreSQL database (separate Neon project)</li>
+    <li style="margin:6px 0;">Xero Custom Connection (subscriber's own Xero organisation)</li>
+    <li style="margin:6px 0;">SMS Everyone account (subscriber's business name as Sender ID)</li>
+    <li style="margin:6px 0;">Twilio subaccount with a dedicated NZ phone number</li>
+    <li style="margin:6px 0;">Gmail account for reply capture (or subscriber's own Gmail)</li>
+    <li style="margin:6px 0;">Mailchimp audience (if subscriber uses email marketing)</li>
+    <li style="margin:6px 0;">Meta page access token (if subscriber uses Facebook/Instagram marketing)</li>
+    <li style="margin:6px 0;">Google Calendar OAuth (subscriber's own Google account)</li>
+  </ul>
+
+  <h2 class="section-sub">Billing model suggestion</h2>
+  <table>
+    <thead><tr><th>Fee type</th><th>Recommended approach</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Platform subscription</strong></td><td>Fixed monthly fee in NZD (see tiers section). You keep the margin between your fee and the actual third-party costs.</td></tr>
+      <tr><td><strong>SMS costs</strong></td><td>Either include a credit bundle in the plan, or pass through actual SMS Everyone costs with a small markup. SMS credits are pre-purchased.</td></tr>
+      <tr><td><strong>AI usage</strong></td><td>Include an allowance (e.g. 10,000 tokens/day) in the plan. Heavy AI users may need a higher tier.</td></tr>
+      <tr><td><strong>Xero subscription</strong></td><td>Subscriber pays Xero directly — this is their own accounting software. Not part of your platform fee.</td></tr>
+      <tr><td><strong>Apple Developer fee</strong></td><td>You pay the $149 USD/year fee (shared across all subscribers). Amortise into your pricing.</td></tr>
+    </tbody>
+  </table>
+
+
+  <!-- ===== SECTION 3: TIERS ===== -->
+  <h1 class="section-title" id="tiers">3. Suggested Subscription Tiers</h1>
+
+  <div class="tiers-row">
+    <div class="tier-card tier-starter">
+      <div class="tier-header">Starter</div>
+      <div class="tier-body">
+        <div class="tier-price" style="color:#1e40af;">$149<span style="font-size:13px;font-weight:400;">/mo NZD</span></div>
+        <ul class="tier-features">
+          <li>Job management &amp; dispatch</li>
+          <li>Customer &amp; quote management</li>
+          <li>SMS &amp; email (100 SMS/mo included)</li>
+          <li>Invoicing (no Xero sync)</li>
+          <li>2 staff accounts</li>
+          <li>iOS app access</li>
+          <li>Push notifications</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tier-card tier-pro">
+      <div class="tier-header">Professional ⭐</div>
+      <div class="tier-body">
+        <div class="tier-price">$299<span style="font-size:13px;font-weight:400;">/mo NZD</span></div>
+        <ul class="tier-features" style="color:#e2e8f0;">
+          <li>Everything in Starter</li>
+          <li>Xero accounting sync</li>
+          <li>Twilio voice + call recording</li>
+          <li>AI Smart Dispatch</li>
+          <li>AI chat assistant</li>
+          <li>Google Calendar sync</li>
+          <li>500 SMS/mo included</li>
+          <li>Up to 10 staff accounts</li>
+          <li>Mailchimp sync</li>
+        </ul>
+      </div>
+    </div>
+    <div class="tier-card tier-enterprise">
+      <div class="tier-header">Enterprise</div>
+      <div class="tier-body">
+        <div class="tier-price" style="color:#e9c46a;">$499<span style="font-size:13px;font-weight:400;">/mo NZD</span></div>
+        <ul class="tier-features" style="color:#cbd5e0;">
+          <li>Everything in Professional</li>
+          <li>Unlimited staff accounts</li>
+          <li>Meta ad campaign manager</li>
+          <li>Unlimited SMS (fair use)</li>
+          <li>Priority support</li>
+          <li>Custom branding</li>
+          <li>Dedicated onboarding call</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warning">
+    <span class="alert-icon">⚠️</span>
+    <div>These suggested prices are indicative only. Review actual costs per subscriber (Section 7) before finalising pricing. Ensure your plan price covers third-party costs plus your labour and hosting overhead.</div>
+  </div>
+
+
+  <!-- ===== SECTION 4: INTEGRATIONS ===== -->
+  <h1 class="section-title" id="integrations">4. Integration Inventory</h1>
+
+  <p>Every integration used by the platform is documented below. For each one you will find: what it does, who sets it up, what credentials are needed, and estimated monthly cost per subscriber.</p>
+
+  <!-- 4.1 PostgreSQL -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">🗄️</span>
+      <h3>PostgreSQL Database (Neon)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Stores all subscriber data — jobs, customers, staff, invoices, diary entries, settings, etc. Each subscriber must have their own isolated database.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Neon serverless PostgreSQL (neon.tech) — one project per subscriber</td></tr>
+          <tr><td>Who creates</td><td>Platform owner (you)</td></tr>
+          <tr><td>Credentials needed</td><td><code>DATABASE_URL</code> — full connection string from Neon dashboard</td></tr>
+          <tr><td>Free tier</td><td>Yes — 0.5 GB storage, 190 compute hours/month. Sufficient for small subscribers.</td></tr>
+          <tr><td>Paid tier</td><td>~NZD $22/month for the Launch plan (10 GB storage, autoscaling)</td></tr>
+          <tr><td>Setup time</td><td>5 minutes — create project in Neon, copy connection string, run migrations</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Go to <strong>neon.tech</strong> → Create account → New Project → select region closest to NZ (e.g. AWS ap-southeast-2 Sydney)</li>
+        <li>Copy the connection string from the project dashboard</li>
+        <li>Set it as <code>DATABASE_URL</code> in the subscriber's environment</li>
+        <li>Run <code>npm run db:push</code> to create all tables</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 4.2 Xero -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">💹</span>
+      <h3>Xero Accounting</h3>
+      <span class="badge badge-optional">Optional — Pro+ tier</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Syncs invoices, creates/matches customer contacts in Xero, pushes job invoices as accounts receivable (ACCREC) invoices. Uses Xero Custom Connection (machine-to-machine, no user OAuth required).</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Subscriber must have an active Xero organisation subscription (they pay Xero separately)</td></tr>
+          <tr><td>Who creates</td><td>You set up the Custom Connection app in the subscriber's Xero Developer Portal</td></tr>
+          <tr><td>Credentials needed</td><td><code>XERO_CLIENT_ID</code>, <code>XERO_CLIENT_SECRET</code></td></tr>
+          <tr><td>Token type</td><td>Client Credentials (expires every 30 minutes — auto-refreshed by the platform)</td></tr>
+          <tr><td>Cost to you</td><td>$0 — Xero API access is free. Subscriber pays Xero for their plan (~$50–100/month).</td></tr>
+          <tr><td>Setup time</td><td>20 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Log in to <strong>developer.xero.com</strong> using the subscriber's Xero account</li>
+        <li>Go to <strong>My Apps → New App</strong></li>
+        <li>Select <strong>Custom Connection</strong> (not standard/partner)</li>
+        <li>Grant scopes: <code>accounting.contacts accounting.transactions accounting.settings</code> (add payroll scopes if needed)</li>
+        <li>Copy Client ID and Client Secret into the subscriber's environment</li>
+        <li>In the platform Settings → Xero, click "Connect to Xero" to verify the connection</li>
+        <li>Set the Xero Sales Account Code (default: <strong>200</strong>) and Tax Type (default: <strong>OUTPUT2</strong> for 15% GST)</li>
+      </ol>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div>Custom Connection tokens expire every 30 minutes. The platform auto-refreshes them. However, if the <code>XERO_CLIENT_ID</code>/<code>XERO_CLIENT_SECRET</code> are rotated or the scopes change in Xero Developer Portal, you must hit the "Refresh Token" button in Settings → Xero to get a new token with updated scopes.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.3 SMS Everyone -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">💬</span>
+      <h3>SMS Everyone NZ (Primary SMS)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Sends SMS messages to customers — booking confirmations, quote follow-ups, appointment reminders, marketing campaigns. Also captures customer SMS replies and logs them to the job diary.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>SMS Everyone NZ business account (smseveryone.co.nz)</td></tr>
+          <tr><td>Who creates</td><td>You create on behalf of subscriber, or subscriber creates themselves</td></tr>
+          <tr><td>Credentials needed</td><td><code>SMSEVERYONE_USERNAME</code>, <code>SMSEVERYONE_PASSWORD</code>, <code>SMSEVERYONE_SENDER_ID</code></td></tr>
+          <tr><td>Sender ID</td><td>Business name shown to recipients (e.g. "Treemarkables"). Must be approved — allow 1–3 business days.</td></tr>
+          <tr><td>Cost per SMS</td><td>~$0.09–0.12 NZD per SMS (bulk discounts available)</td></tr>
+          <tr><td>Pre-purchase</td><td>Credits are pre-purchased. Recommend starting with 500–1000 credit bundle.</td></tr>
+          <tr><td>Setup time</td><td>30 minutes (plus 1–3 days for Sender ID approval)</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Go to <strong>smseveryone.co.nz</strong> → Sign up for a business account</li>
+        <li>Verify email and complete business registration</li>
+        <li>Apply for a custom Sender ID (subscriber's business name) — takes 1–3 business days</li>
+        <li>Purchase SMS credits (start with at least 500)</li>
+        <li>Get API username and password from account settings</li>
+        <li>Set <code>SMSEVERYONE_USERNAME</code>, <code>SMSEVERYONE_PASSWORD</code>, <code>SMSEVERYONE_SENDER_ID</code> in subscriber environment</li>
+      </ol>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div>The platform tries the <code>.co.nz</code> endpoint first, then falls back to <code>.com</code>. Both endpoints use the same credentials.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.4 Twilio -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">📞</span>
+      <h3>Twilio (Voice &amp; Call Recording)</h3>
+      <span class="badge badge-optional">Optional — Pro+ tier</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Provides a dedicated NZ phone number for the subscriber. Customer calls are forwarded to Twilio, which records the call, transcribes it via Whisper AI, and optionally rings the iOS app via CallKit (Twilio Voice SDK). The subscriber's personal mobile rings via carrier forwarding — customers never know Twilio is involved.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Twilio main account or subaccount (recommended: one subaccount per subscriber)</td></tr>
+          <tr><td>Who creates</td><td>Platform owner (you) — create a Twilio subaccount under your main account</td></tr>
+          <tr><td>Credentials needed</td><td><code>TWILIO_ACCOUNT_SID</code>, <code>TWILIO_AUTH_TOKEN</code>, <code>TWILIO_API_KEY</code>, <code>TWILIO_API_KEY_SECRET</code>, <code>TWILIO_PHONE_NUMBER</code>, <code>TWILIO_TWIML_APP_SID</code></td></tr>
+          <tr><td>NZ phone number cost</td><td>~$2.50 USD/month for a local NZ number</td></tr>
+          <tr><td>Voice call cost</td><td>~$0.013 USD/minute to receive calls</td></tr>
+          <tr><td>Call recording</td><td>Included — stored in Twilio for 90 days by default</td></tr>
+          <tr><td>Setup time</td><td>45–60 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Log in to <strong>twilio.com/console</strong> → Create a Subaccount for the subscriber</li>
+        <li>Note the subaccount SID and Auth Token</li>
+        <li>Buy a New Zealand phone number in the subaccount</li>
+        <li>Create an API Key &amp; Secret (recommended over Auth Token for production)</li>
+        <li>Create a TwiML App with the platform's voice webhook URL: <code>https://[subscriber-domain]/api/twilio/voice</code></li>
+        <li>Note the TwiML App SID</li>
+        <li>Set all credentials in the subscriber's environment</li>
+        <li>In Settings → Business, enter the subscriber's personal phone number for call forwarding</li>
+        <li>Subscriber sets up carrier call forwarding: personal mobile → Twilio NZ number</li>
+      </ol>
+      <div class="alert alert-danger">
+        <span class="alert-icon">🔴</span>
+        <div><strong>Important:</strong> The Twilio webhook secret (<code>HERO_WEBHOOK_SECRET</code> in the current deployment) must be set to validate Twilio webhook signatures. Do not skip this step.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.5 Resend -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">📧</span>
+      <h3>Resend (Transactional Email)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Sends all outgoing emails — quote/proposal emails, invoice emails, booking confirmations, general customer communications. Emails are sent from a verified domain (e.g. <code>info@updates.treemarkables.co.nz</code>) with the subscriber's business name as the sender.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Resend.com account — free up to 3,000 emails/month and 100/day</td></tr>
+          <tr><td>Who creates</td><td>Platform owner (you) — can use a single Resend account with multiple sending domains</td></tr>
+          <tr><td>Credentials needed</td><td><code>RESEND_API_KEY</code></td></tr>
+          <tr><td>Domain verification</td><td>Add DNS records to the subscriber's sending domain (e.g. <code>updates.subscriberdomain.co.nz</code>)</td></tr>
+          <tr><td>Free tier</td><td>3,000 emails/month — sufficient for most small subscribers</td></tr>
+          <tr><td>Paid tier</td><td>~$22 NZD/month for 50,000 emails/month (Pro plan)</td></tr>
+          <tr><td>Setup time</td><td>15 minutes (plus DNS propagation: up to 48 hours)</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Log in to <strong>resend.com</strong> → Add a Sending Domain for the subscriber</li>
+        <li>Add the provided DNS records (TXT + MX) to the subscriber's domain registrar</li>
+        <li>Wait for DNS propagation (usually 15–60 minutes, up to 48 hours)</li>
+        <li>Verify the domain in Resend dashboard</li>
+        <li>Create an API key scoped to the verified domain</li>
+        <li>Update the <code>fromEmail</code> value in <code>server/resendClient.ts</code> with the subscriber's business name and domain</li>
+        <li>Set <code>RESEND_API_KEY</code> in subscriber environment</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 4.6 Gmail -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">📬</span>
+      <h3>Gmail (Email Reply Capture)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> The platform monitors a Gmail inbox via IMAP and automatically captures customer email replies. Captured replies are logged to the relevant job diary as diary entries, and linked to the customer record. Outgoing emails can also be sent via Gmail/SMTP as a fallback.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Standard Gmail or Google Workspace account</td></tr>
+          <tr><td>Who creates</td><td>Subscriber (their own Gmail), or you create a dedicated platform Gmail for them</td></tr>
+          <tr><td>Credentials needed</td><td><code>GMAIL_USER</code> (email address), <code>GMAIL_APP_PASSWORD</code> (16-character App Password)</td></tr>
+          <tr><td>2FA requirement</td><td>Google account must have 2-Factor Authentication enabled before App Password can be generated</td></tr>
+          <tr><td>Cost</td><td>Free (standard Gmail) or from $8 USD/month for Google Workspace</td></tr>
+          <tr><td>Setup time</td><td>10 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Log in to <strong>myaccount.google.com</strong> with the subscriber's Gmail account</li>
+        <li>Go to <strong>Security → 2-Step Verification</strong> → Enable it</li>
+        <li>Go to <strong>Security → App passwords</strong> → Create a new App Password</li>
+        <li>Select App: "Mail", Device: "Other (Custom name)" → enter "Treemarkables Platform"</li>
+        <li>Copy the 16-character App Password</li>
+        <li>Set <code>GMAIL_USER</code> = Gmail address, <code>GMAIL_APP_PASSWORD</code> = App Password in subscriber environment</li>
+        <li>Enable IMAP in Gmail Settings → See All Settings → Forwarding and POP/IMAP → Enable IMAP</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 4.7 OpenAI -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">🤖</span>
+      <h3>OpenAI (AI Features)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Powers the AI Business Assistant (GPT-4o with function calling for live business data), Speech-to-Quote (Whisper audio transcription), AI Smart Dispatch (GPT-4o schedule optimisation), and Facebook message text extraction.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>OpenAI API account (platform.openai.com)</td></tr>
+          <tr><td>Who creates</td><td>Platform owner (can share one key across subscribers, or create per-subscriber)</td></tr>
+          <tr><td>Credentials needed</td><td><code>OPENAI_API_KEY</code></td></tr>
+          <tr><td>Models used</td><td>GPT-4o (chat &amp; dispatch), Whisper (audio transcription)</td></tr>
+          <tr><td>Cost estimate</td><td>~$5–20 NZD/month per active subscriber depending on AI usage frequency</td></tr>
+          <tr><td>Usage limits</td><td>Set per-key spending limits in OpenAI dashboard to prevent runaway costs</td></tr>
+          <tr><td>Setup time</td><td>5 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Log in to <strong>platform.openai.com</strong> → API Keys → Create new secret key</li>
+        <li>Set a monthly spend limit for the key (recommended: $20–50 USD/subscriber)</li>
+        <li>Set <code>OPENAI_API_KEY</code> in subscriber environment</li>
+        <li>Optionally, use one shared key and monitor usage by Project in the OpenAI dashboard</li>
+      </ol>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div>The platform uses <strong>GPT-4o</strong> (not temperature-controlled). Do not use older models — GPT-5+ does not accept the <code>temperature</code> parameter and will error if passed.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.8 Firebase -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">🔔</span>
+      <h3>Firebase Cloud Messaging (Push Notifications)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Sends real-time push notifications to the iOS (and Android) app — job assignments, schedule changes, new leads, invoice payments, quote acceptances. Uses Firebase Admin SDK with a service account JSON.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Firebase project (console.firebase.google.com) — can be shared across subscribers</td></tr>
+          <tr><td>Who creates</td><td>Platform owner — one Firebase project for all subscribers (or per-subscriber for isolation)</td></tr>
+          <tr><td>Credentials needed</td><td><code>FIREBASE_SERVICE_ACCOUNT</code> (full JSON service account as a single-line string)</td></tr>
+          <tr><td>APNs key</td><td>Apple Push Notification service key must be uploaded to Firebase for iOS notifications</td></tr>
+          <tr><td>Cost</td><td>Firebase Spark (free) plan supports up to 1M notifications/month. Sufficient for all small subscribers.</td></tr>
+          <tr><td>Setup time</td><td>30 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Go to <strong>console.firebase.google.com</strong> → Select or create a project</li>
+        <li>Go to <strong>Project Settings → Service Accounts</strong> → Generate new private key</li>
+        <li>Download the JSON file → minify it to a single line (remove newlines except in <code>private_key</code>)</li>
+        <li>Set as <code>FIREBASE_SERVICE_ACCOUNT</code> in subscriber environment</li>
+        <li>Go to <strong>Project Settings → Cloud Messaging → Apple app configuration</strong></li>
+        <li>Upload the APNs authentication key (Key ID <strong>D44XQ29XZM</strong>, Team ID <strong>7Q57T2KAH9</strong> for current deployment)</li>
+        <li>Register the iOS app with bundle ID <code>com.treemarkables.app</code></li>
+      </ol>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div>The APNs key is linked to the Apple Developer account. If you onboard a subscriber with a different bundle ID, you need a new Firebase app registration and potentially a new APNs key. APNs keys do not expire but can be revoked — keep them secure.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.9 Addy.co.nz -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">📍</span>
+      <h3>Addy.co.nz (NZ Address Autocomplete)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Powers the address autocomplete field in job and customer forms. Searches NZ addresses in real-time using the Addy Solutions API. Falls back to mock data if the API is unavailable.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Addy.co.nz API account</td></tr>
+          <tr><td>Who creates</td><td>Platform owner (can share one key across subscribers)</td></tr>
+          <tr><td>Credentials needed</td><td><code>ADDY_API_KEY</code></td></tr>
+          <tr><td>Cost</td><td>Pay-per-lookup — ~$0.01–0.02 NZD per address search. Estimate $3–10/month per active subscriber.</td></tr>
+          <tr><td>Rate limits</td><td>Shared key has shared rate limits. Separate keys per subscriber recommended for heavy volume.</td></tr>
+          <tr><td>Setup time</td><td>5 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Go to <strong>addy.co.nz</strong> → Sign up for a developer account</li>
+        <li>Generate an API key in the account dashboard</li>
+        <li>Set <code>ADDY_API_KEY</code> in subscriber environment</li>
+        <li>The address search in the platform currently filters to Gisborne territory — update the territory parameter in <code>server/services/addressService.ts</code> to match the subscriber's region</li>
+      </ol>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div>The current codebase filters address searches to <strong>Gisborne</strong> territory only. For subscribers outside Gisborne, update the <code>territory</code> parameter in <code>server/services/addressService.ts</code> or remove it to search nationwide.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.10 Google Calendar -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">📅</span>
+      <h3>Google Calendar</h3>
+      <span class="badge badge-optional">Optional — Pro+ tier</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Automatically syncs scheduled jobs to the subscriber's Google Calendar. Creates calendar events when jobs are scheduled, updates them when rescheduled, and removes them when cancelled. Staff assignments and job details are included in the event description.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Standard Google account</td></tr>
+          <tr><td>Who creates</td><td>Subscriber authorises their own Google account via OAuth in the platform settings</td></tr>
+          <tr><td>Credentials needed</td><td>OAuth access token — managed via Replit Google Calendar Connector (no manual credential setup)</td></tr>
+          <tr><td>Cost</td><td>Free</td></tr>
+          <tr><td>Token expiry</td><td>Access tokens expire every hour — automatically refreshed by the platform</td></tr>
+          <tr><td>Setup time</td><td>5 minutes (subscriber authorises their own account)</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>In the platform's Replit environment, connect the Google Calendar integration via the Integrations panel</li>
+        <li>Subscriber logs into their Google account and grants calendar access</li>
+        <li>Calendar sync is immediately active — test by scheduling a job</li>
+      </ol>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div>All calendar events are created in NZ timezone (Pacific/Auckland). The subscriber's calendar must also be set to NZ timezone to display times correctly.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.11 Mailchimp -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">🐒</span>
+      <h3>Mailchimp (Email Marketing)</h3>
+      <span class="badge badge-optional">Optional — Pro+ tier</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Syncs the subscriber's customer list to a Mailchimp audience. Customers are synced with name, email, phone, and address data. Allows the subscriber to run email marketing campaigns directly from Mailchimp using their customer data.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Mailchimp account (subscriber's own)</td></tr>
+          <tr><td>Who creates</td><td>Subscriber creates their own Mailchimp account</td></tr>
+          <tr><td>Credentials needed</td><td><code>MAILCHIMP_API_KEY</code>, <code>MAILCHIMP_AUDIENCE_ID</code> (set in platform Business Settings)</td></tr>
+          <tr><td>Cost</td><td>Free for up to 500 contacts. $25–75 USD/month for larger lists.</td></tr>
+          <tr><td>GDPR/Privacy</td><td>Subscriber is responsible for customer consent for marketing emails</td></tr>
+          <tr><td>Setup time</td><td>15 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Subscriber creates or logs into <strong>mailchimp.com</strong></li>
+        <li>Go to <strong>Account → Extras → API keys</strong> → Create a key</li>
+        <li>Note the Audience ID from <strong>Audience → Manage Audience → Settings → Audience name and defaults</strong></li>
+        <li>In the platform Settings → Marketing, enter the API Key and Audience ID</li>
+        <li>Click "Sync Customers" to do the initial sync</li>
+      </ol>
+    </div>
+  </div>
+
+  <!-- 4.12 Meta -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">📘</span>
+      <h3>Meta Marketing (Facebook/Instagram)</h3>
+      <span class="badge badge-optional">Optional — Enterprise tier</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Manages Facebook and Instagram ad campaigns directly from the platform. Can create campaigns, monitor performance, and automatically post customer reviews to the subscriber's Facebook page. Uses the Meta Graph API.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Facebook Business Manager account with a Facebook Page and Ad Account</td></tr>
+          <tr><td>Who creates</td><td>Subscriber creates their own Facebook Business/Ad account</td></tr>
+          <tr><td>Credentials needed</td><td><code>FACEBOOK_PAGE_ACCESS_TOKEN</code>, <code>FACEBOOK_PAGE_ID</code>, <code>FACEBOOK_AD_ACCOUNT_ID</code></td></tr>
+          <tr><td>Token type</td><td>Page Access Token — long-lived (never expires if extended properly)</td></tr>
+          <tr><td>Ad spend</td><td>Subscriber's own ad budget — paid to Meta. Not included in your platform fee.</td></tr>
+          <tr><td>Setup time</td><td>30–60 minutes</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Subscriber goes to <strong>developers.facebook.com</strong> → Create App → Business type</li>
+        <li>Add "Facebook Login" and "Pages API" products</li>
+        <li>Generate a short-lived user token, then exchange for a Page Access Token using the Graph API Explorer</li>
+        <li>Extend the token to a long-lived token (60 days, or use System User token for never-expiring)</li>
+        <li>Find the Page ID from the Facebook Page's About section</li>
+        <li>Find the Ad Account ID from Facebook Business Manager → Ad Accounts</li>
+        <li>Set all three credentials in subscriber environment</li>
+      </ol>
+      <div class="alert alert-warning">
+        <span class="alert-icon">⚠️</span>
+        <div>Page Access Tokens expire after 60 days unless converted to System User tokens. Set a calendar reminder to refresh tokens, or use a System User token (never expires) created in Facebook Business Manager.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.13 Apple Developer -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">🍎</span>
+      <h3>Apple Developer / TestFlight / App Store</h3>
+      <span class="badge badge-required">Required (iOS app)</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Distributes the native iOS app (built with Capacitor) to subscribers via TestFlight (beta testing) or the App Store. The APNs authentication key from this account is also required for Firebase push notifications to work on iOS.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Apple Developer Program — individual or organisation</td></tr>
+          <tr><td>Who creates</td><td>Platform owner (you) — one developer account serves all subscribers</td></tr>
+          <tr><td>Current bundle ID</td><td><code>com.treemarkables.app</code></td></tr>
+          <tr><td>Current Team ID</td><td><code>7Q57T2KAH9</code></td></tr>
+          <tr><td>APNs Key ID</td><td><code>D44XQ29XZM</code></td></tr>
+          <tr><td>Annual cost</td><td>$149 USD/year (~$250 NZD/year) — amortise across subscribers</td></tr>
+          <tr><td>TestFlight invite</td><td>Each subscriber is added as a TestFlight external tester via their Apple ID</td></tr>
+          <tr><td>Setup time</td><td>App Store review takes 1–3 days for new builds. TestFlight: hours.</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Per-subscriber setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>Get subscriber's Apple ID email address</li>
+        <li>In <strong>App Store Connect</strong> → TestFlight → External Testers → Add subscriber's Apple ID</li>
+        <li>Subscriber accepts TestFlight invitation on their iPhone → installs the app</li>
+        <li>Subscriber logs in with their platform username/password (not Apple ID)</li>
+        <li>Push notification permissions are requested on first launch</li>
+      </ol>
+      <div class="alert alert-info">
+        <span class="alert-icon">ℹ️</span>
+        <div>For full App Store distribution (not TestFlight), the app must pass Apple's review. The current app is Treemarkables-branded — for whitelabelled subscribers you may need a separate app binary and App Store listing.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4.14 Google Cloud Storage -->
+  <div class="integration-card">
+    <div class="integration-header">
+      <span class="icon">🗂️</span>
+      <h3>Google Cloud Storage (Photo Storage)</h3>
+      <span class="badge badge-required">Required</span>
+    </div>
+    <div class="integration-body">
+      <p><strong>Purpose:</strong> Stores job site photos uploaded via the iOS app or web dashboard. Photos are stored with automatic thumbnail generation. Served via public URLs for in-app display.</p>
+      <table>
+        <thead><tr><th>Item</th><th>Detail</th></tr></thead>
+        <tbody>
+          <tr><td>Account type</td><td>Managed via Replit Object Storage (backed by Google Cloud Storage)</td></tr>
+          <tr><td>Who creates</td><td>Platform owner — enable via Replit Object Storage in the project settings</td></tr>
+          <tr><td>Credentials needed</td><td>Automatically managed by Replit — no manual credential setup required</td></tr>
+          <tr><td>Storage structure</td><td><code>public/</code> for served assets, <code>.private/</code> for private files</td></tr>
+          <tr><td>Cost</td><td>Included in Replit plan for small usage. ~$0.023 USD per GB stored per month for larger volumes.</td></tr>
+          <tr><td>Setup time</td><td>2 minutes — enable in Replit project settings</td></tr>
+        </tbody>
+      </table>
+      <h3 class="section-h3">Setup steps</h3>
+      <ol style="padding-left:20px;font-size:13px;">
+        <li>In the Replit project → click <strong>Object Storage</strong> in the left panel</li>
+        <li>Click <strong>Create Bucket</strong> — it creates automatically with environment variables set</li>
+        <li>No further configuration needed — photo upload APIs use the bucket automatically</li>
+      </ol>
+    </div>
+  </div>
+
+
+  <!-- ===== SECTION 5: CHECKLIST ===== -->
+  <h1 class="section-title" id="checklist">5. New Subscriber Onboarding Checklist</h1>
+
+  <p>Use this checklist for every new subscriber sign-up. Work through each step in order. Estimated total setup time: <strong>3–5 hours</strong> (spread over 1–3 business days due to DNS propagation and Sender ID approval).</p>
+
+  <h2 class="section-sub">Day 1 — Core Infrastructure</h2>
+  <ul class="checklist">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <div class="step-title">Provision database</div>
+        <div class="step-desc">Create a new Neon project → copy DATABASE_URL → run <code>npm run db:push</code> to create all tables</div>
+      </div>
+      <div class="step-time">5 min</div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <div class="step-title">Deploy subscriber environment</div>
+        <div class="step-desc">Fork/copy the Replit project for the subscriber → set DATABASE_URL → test that the app starts</div>
+      </div>
+      <div class="step-time">15 min</div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <div class="step-title">Configure Resend email domain</div>
+        <div class="step-desc">Add subscriber's sending domain in Resend → get DNS records → add DNS records at their registrar → wait for propagation</div>
+      </div>
+      <div class="step-time">15 min + wait</div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <div class="step-title">Set up Gmail reply capture</div>
+        <div class="step-desc">Enable 2FA on Gmail → generate App Password → enable IMAP → set GMAIL_USER and GMAIL_APP_PASSWORD</div>
+      </div>
+      <div class="step-time">10 min</div>
+    </li>
+    <li>
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <div class="step-title">Set OpenAI API key</div>
+        <div class="step-desc">Create or reuse API key with spending limit → set OPENAI_API_KEY</div>
+      </div>
+      <div class="step-time">5 min</div>
+    </li>
+    <li>
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <div class="step-title">Set Firebase service account</div>
+        <div class="step-desc">Download service account JSON → minify → set FIREBASE_SERVICE_ACCOUNT → register subscriber's iOS devices in Firebase</div>
+      </div>
+      <div class="step-time">15 min</div>
+    </li>
+    <li>
+      <div class="step-num">7</div>
+      <div class="step-content">
+        <div class="step-title">Enable Object Storage</div>
+        <div class="step-desc">Enable Replit Object Storage for the subscriber's project → verify photos can upload</div>
+      </div>
+      <div class="step-time">5 min</div>
+    </li>
+    <li>
+      <div class="step-num">8</div>
+      <div class="step-content">
+        <div class="step-title">Register subscriber on TestFlight</div>
+        <div class="step-desc">Add subscriber's Apple ID as a TestFlight external tester → they accept invite and install the app on iPhone</div>
+      </div>
+      <div class="step-time">10 min</div>
+    </li>
+    <li>
+      <div class="step-num">9</div>
+      <div class="step-content">
+        <div class="step-title">Apply for SMS Sender ID</div>
+        <div class="step-desc">Register SMS Everyone account → apply for custom Sender ID using subscriber's business name (1–3 days approval)</div>
+      </div>
+      <div class="step-time">30 min + wait</div>
+    </li>
+  </ul>
+
+  <h2 class="section-sub">Day 2 — Communications &amp; Accounting</h2>
+  <ul class="checklist">
+    <li>
+      <div class="step-num">10</div>
+      <div class="step-content">
+        <div class="step-title">Verify Resend domain</div>
+        <div class="step-desc">Confirm DNS records have propagated → verify domain in Resend → generate API key → set RESEND_API_KEY</div>
+      </div>
+      <div class="step-time">10 min</div>
+    </li>
+    <li>
+      <div class="step-num">11</div>
+      <div class="step-content">
+        <div class="step-title">Configure Twilio voice (Pro+ only)</div>
+        <div class="step-desc">Create Twilio subaccount → buy NZ number → create TwiML App → create API Key → configure all Twilio env vars → instruct subscriber to set up carrier call forwarding</div>
+      </div>
+      <div class="step-time">45 min</div>
+    </li>
+    <li>
+      <div class="step-num">12</div>
+      <div class="step-content">
+        <div class="step-title">Set up Xero connection (Pro+ only)</div>
+        <div class="step-desc">Log into subscriber's Xero Developer Portal → create Custom Connection app → grant accounting scopes → copy Client ID &amp; Secret → test connection in platform Settings → Xero</div>
+      </div>
+      <div class="step-time">20 min</div>
+    </li>
+    <li>
+      <div class="step-num">13</div>
+      <div class="step-content">
+        <div class="step-title">Set Addy.co.nz region</div>
+        <div class="step-desc">Update territory parameter in addressService.ts to match subscriber's region → set ADDY_API_KEY</div>
+      </div>
+      <div class="step-time">5 min</div>
+    </li>
+    <li>
+      <div class="step-num">14</div>
+      <div class="step-content">
+        <div class="step-title">Connect Google Calendar (Pro+ only)</div>
+        <div class="step-desc">Subscriber authorises their Google account via the platform's integrations panel → test by scheduling a job and checking calendar</div>
+      </div>
+      <div class="step-time">5 min</div>
+    </li>
+  </ul>
+
+  <h2 class="section-sub">Day 3 — Data Entry &amp; Handover</h2>
+  <ul class="checklist">
+    <li>
+      <div class="step-num">15</div>
+      <div class="step-content">
+        <div class="step-title">Activate SMS credentials</div>
+        <div class="step-desc">Confirm Sender ID approval → set SMSEVERYONE_USERNAME, SMSEVERYONE_PASSWORD, SMSEVERYONE_SENDER_ID → send a test SMS</div>
+      </div>
+      <div class="step-time">10 min</div>
+    </li>
+    <li>
+      <div class="step-num">16</div>
+      <div class="step-content">
+        <div class="step-title">Configure business settings</div>
+        <div class="step-desc">In platform Settings: business name, address, GST number, daily revenue target, invoice payment terms, job categories, staff members with charge-out rates</div>
+      </div>
+      <div class="step-time">30 min</div>
+    </li>
+    <li>
+      <div class="step-num">17</div>
+      <div class="step-content">
+        <div class="step-title">Import existing customers &amp; jobs (if any)</div>
+        <div class="step-desc">If migrating from ServiceM8 or spreadsheets, import customer and job data via API or manual entry</div>
+      </div>
+      <div class="step-time">Variable</div>
+    </li>
+    <li>
+      <div class="step-num">18</div>
+      <div class="step-content">
+        <div class="step-title">Configure Mailchimp (Pro+, optional)</div>
+        <div class="step-desc">Subscriber provides Mailchimp API key and audience ID → enter in Settings → Marketing → do initial customer sync</div>
+      </div>
+      <div class="step-time">15 min</div>
+    </li>
+    <li>
+      <div class="step-num">19</div>
+      <div class="step-content">
+        <div class="step-title">Configure Meta (Enterprise, optional)</div>
+        <div class="step-desc">Generate and extend Facebook Page Access Token → get Page ID and Ad Account ID → set in environment</div>
+      </div>
+      <div class="step-time">45 min</div>
+    </li>
+    <li>
+      <div class="step-num">20</div>
+      <div class="step-content">
+        <div class="step-title">Subscriber handover &amp; training</div>
+        <div class="step-desc">Walkthrough call: add first job, schedule it, send a quote, create an invoice. Provide access credentials and support contact.</div>
+      </div>
+      <div class="step-time">1–2 hours</div>
+    </li>
+  </ul>
+
+
+  <!-- ===== SECTION 6: ENV VARS ===== -->
+  <h1 class="section-title" id="envvars">6. Environment Variables Master Reference</h1>
+
+  <p>Every environment variable used by the platform, grouped by integration. Column "Set by" indicates whether you (the platform owner) set this variable, or whether it comes from the subscriber.</p>
+
+  <div class="env-group">
+    <div class="env-group-header">Database</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>DATABASE_URL</td><td>Full PostgreSQL connection string (Neon). Format: <code>postgresql://user:pass@host/dbname?sslmode=require</code></td><td>Owner (per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Xero Accounting</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>XERO_CLIENT_ID</td><td>Client ID from Xero Custom Connection app in subscriber's Xero Developer Portal</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>XERO_CLIENT_SECRET</td><td>Client Secret from the same Xero Custom Connection app</td><td>Owner (per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">SMS — SMS Everyone NZ</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>SMSEVERYONE_USERNAME</td><td>SMS Everyone account username</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>SMSEVERYONE_PASSWORD</td><td>SMS Everyone account password</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>SMSEVERYONE_SENDER_ID</td><td>Approved sender name shown to recipients (e.g. "Treemarkables")</td><td>Owner (per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Telephony — Twilio</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>TWILIO_ACCOUNT_SID</td><td>Twilio subaccount SID (starts with AC)</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>TWILIO_AUTH_TOKEN</td><td>Twilio subaccount auth token (use API Key instead for production)</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>TWILIO_API_KEY</td><td>Twilio API Key SID (starts with SK) — preferred over Auth Token</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>TWILIO_API_KEY_SECRET</td><td>Twilio API Key Secret (used in twilioClient.ts for authentication)</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>TWILIO_PHONE_NUMBER</td><td>The Twilio NZ phone number (e.g. <code>+6499999999</code>)</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>TWILIO_TWIML_APP_SID</td><td>TwiML App SID for voice SDK (starts with AP)</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>HERO_WEBHOOK_SECRET</td><td>Secret for validating Twilio webhook signatures</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>HERO_PHONE_NUMBER</td><td>Subscriber's personal mobile number for call forwarding</td><td>Subscriber</td></tr>
+        <tr><td>TELNYX_API_KEY</td><td>Telnyx fallback telephony (if used instead of Twilio)</td><td>Owner (optional)</td></tr>
+        <tr><td>VONAGE_NUMBER</td><td>Vonage backup number (if used)</td><td>Owner (optional)</td></tr>
+        <tr><td>VONAGE_FORWARD_TO_NUMBER</td><td>Number to forward Vonage calls to</td><td>Owner (optional)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Email — Resend</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>RESEND_API_KEY</td><td>Resend API key (starts with <code>re_</code>)</td><td>Owner (shared or per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Email — Gmail Reply Capture</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>GMAIL_USER</td><td>Gmail address to monitor for customer replies</td><td>Owner or Subscriber</td></tr>
+        <tr><td>GMAIL_APP_PASSWORD</td><td>16-character Google App Password (not the account password)</td><td>Owner or Subscriber</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">AI — OpenAI</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>OPENAI_API_KEY</td><td>OpenAI secret key (starts with <code>sk-</code>). Used for GPT-4o and Whisper.</td><td>Owner (shared or per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Push Notifications — Firebase</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>FIREBASE_SERVICE_ACCOUNT</td><td>Full Firebase service account JSON as a single-line minified string. Includes project_id, private_key, client_email.</td><td>Owner (shared)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">NZ Address Autocomplete — Addy.co.nz</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>ADDY_API_KEY</td><td>Addy Solutions API key for NZ address autocomplete</td><td>Owner (shared or per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Marketing — Meta (Facebook/Instagram)</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>FACEBOOK_PAGE_ACCESS_TOKEN</td><td>Long-lived Page Access Token for subscriber's Facebook Page</td><td>Subscriber → Owner sets in env</td></tr>
+        <tr><td>FACEBOOK_PAGE_ID</td><td>Numeric ID of subscriber's Facebook Page</td><td>Subscriber → Owner sets in env</td></tr>
+        <tr><td>FACEBOOK_AD_ACCOUNT_ID</td><td>Numeric Ad Account ID from Facebook Business Manager</td><td>Subscriber → Owner sets in env</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="env-group">
+    <div class="env-group-header">Authentication</div>
+    <table>
+      <thead><tr><th>Variable</th><th>Description</th><th>Set by</th></tr></thead>
+      <tbody>
+        <tr><td>HERO_PASSWORD</td><td>Owner/admin password for the platform. Set this to a strong unique password per subscriber.</td><td>Owner (per subscriber)</td></tr>
+        <tr><td>SESSION_SECRET</td><td>Express session secret. Generate a random 32+ character string per deployment.</td><td>Owner (per subscriber)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+
+  <!-- ===== SECTION 7: COSTS ===== -->
+  <h1 class="section-title" id="costs">7. Estimated Monthly Cost Summary</h1>
+
+  <p>All costs are approximate and in NZD. Actual costs vary based on subscriber usage. These are <strong>your costs</strong> — what you pay to run the platform for one active subscriber per month.</p>
+
+  <table>
+    <thead><tr><th>Integration</th><th>Tier Required</th><th>Fixed Cost/mo (NZD)</th><th>Variable Cost</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Neon PostgreSQL</strong></td><td>All</td><td>$0 – $22</td><td>—</td><td>Free tier covers most small subscribers. Upgrade for more storage.</td></tr>
+      <tr><td><strong>Resend Email</strong></td><td>All</td><td>$0 – $22</td><td>—</td><td>Free for 3,000 emails/mo. Most subscribers stay on free tier.</td></tr>
+      <tr><td><strong>Gmail</strong></td><td>All</td><td>$0</td><td>—</td><td>Free with standard Gmail account.</td></tr>
+      <tr><td><strong>OpenAI</strong></td><td>All</td><td>$8 – $25</td><td>Per token</td><td>Depends on AI chat and dispatch usage. Set spending limit per subscriber.</td></tr>
+      <tr><td><strong>SMS Everyone NZ</strong></td><td>All</td><td>$0</td><td>$0.12/SMS</td><td>Pre-purchased credits. 500 SMS = ~$60. Estimate 100–300 SMS/month per subscriber.</td></tr>
+      <tr><td><strong>Addy.co.nz</strong></td><td>All</td><td>$0</td><td>~$0.015/lookup</td><td>~$3–10/month per active subscriber.</td></tr>
+      <tr><td><strong>Firebase FCM</strong></td><td>All</td><td>$0</td><td>—</td><td>Spark free plan: 1M notifications/month. Practically free.</td></tr>
+      <tr><td><strong>Replit hosting</strong></td><td>All</td><td>$30 – $60</td><td>—</td><td>Per Replit deployment. Share across multiple subscribers if on higher plans.</td></tr>
+      <tr><td><strong>Twilio Voice</strong></td><td>Pro+</td><td>$4</td><td>~$0.02/min</td><td>NZ number ~$2.50 USD/mo. Call recording included. ~50 mins/month = ~$1 USD extra.</td></tr>
+      <tr><td><strong>Xero API</strong></td><td>Pro+</td><td>$0</td><td>—</td><td>API access is free. Subscriber pays for their own Xero plan ($50–100/month directly).</td></tr>
+      <tr><td><strong>Google Calendar</strong></td><td>Pro+</td><td>$0</td><td>—</td><td>Free.</td></tr>
+      <tr><td><strong>Mailchimp</strong></td><td>Pro+</td><td>$0 – $40</td><td>—</td><td>Free for &lt;500 contacts. Subscriber's own account.</td></tr>
+      <tr><td><strong>Meta API</strong></td><td>Enterprise</td><td>$0</td><td>—</td><td>API access is free. Subscriber pays their own ad budget to Meta directly.</td></tr>
+      <tr><td><strong>Apple Developer</strong></td><td>All (iOS)</td><td>$1.75</td><td>—</td><td>$149 USD/year amortised across all subscribers. One account covers all.</td></tr>
+      <tr><td><strong>Google Cloud Storage</strong></td><td>All</td><td>$0 – $10</td><td>Per GB stored</td><td>Included in Replit plan for small usage.</td></tr>
+    </tbody>
+    <tfoot>
+      <tr class="cost-total"><td colspan="2"><strong>Estimated total (Starter subscriber)</strong></td><td><strong>~$50–120 NZD/mo</strong></td><td></td><td>Excluding subscriber's own Xero/Mailchimp/Meta costs</td></tr>
+      <tr class="cost-total"><td colspan="2"><strong>Estimated total (Pro subscriber)</strong></td><td><strong>~$80–150 NZD/mo</strong></td><td></td><td>With Twilio, Xero, Calendar, Mailchimp</td></tr>
+    </tfoot>
+  </table>
+
+  <div class="alert alert-success">
+    <span class="alert-icon">💡</span>
+    <div><strong>Margin example:</strong> If you charge a Pro subscriber $299 NZD/month and your costs are $150 NZD/month, your gross margin is ~$149 NZD/month per subscriber. At 10 subscribers: ~$1,490 NZD/month recurring revenue above costs.</div>
+  </div>
+
+
+  <!-- ===== SECTION 8: MAINTENANCE ===== -->
+  <h1 class="section-title" id="maintenance">8. Ongoing Maintenance Notes</h1>
+
+  <h2 class="section-sub">Token &amp; Credential Renewal Schedule</h2>
+  <table>
+    <thead><tr><th>Integration</th><th>Expiry / Renewal</th><th>Action required</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Xero</strong></td><td>Token expires every 30 min — auto-refreshed</td><td>No action. If scopes change in Xero Developer Portal, manually hit "Refresh Token" in platform Settings → Xero.</td></tr>
+      <tr><td><strong>Twilio API Key</strong></td><td>Never expires (unless manually rotated)</td><td>Rotate annually as security best practice. Update <code>TWILIO_API_KEY</code> and <code>TWILIO_API_KEY_SECRET</code>.</td></tr>
+      <tr><td><strong>Gmail App Password</strong></td><td>Never expires (unless 2FA is disabled or manually revoked)</td><td>If subscriber changes their Google password or disables 2FA, a new App Password must be generated.</td></tr>
+      <tr><td><strong>Facebook Page Token</strong></td><td>Expires in 60 days (short-lived) or never (long-lived System User token)</td><td>Set calendar reminder at 50 days to regenerate if using standard long-lived token. Switch to System User token for never-expiring tokens.</td></tr>
+      <tr><td><strong>OpenAI API Key</strong></td><td>Never expires</td><td>Monitor spending via OpenAI dashboard. Rotate if compromised.</td></tr>
+      <tr><td><strong>Firebase Service Account</strong></td><td>Never expires (key file)</td><td>Keep secure. Regenerate if compromised via Firebase Console → Service Accounts.</td></tr>
+      <tr><td><strong>APNs Key</strong></td><td>Never expires unless revoked</td><td>Keep the .p8 key file secure. Revoked keys break all iOS push notifications instantly. Do not delete from Apple Developer portal.</td></tr>
+      <tr><td><strong>Resend API Key</strong></td><td>Never expires</td><td>Rotate annually. Update <code>RESEND_API_KEY</code> in environment.</td></tr>
+      <tr><td><strong>Google Calendar OAuth</strong></td><td>Access token: 1 hour (auto-refreshed) | Refresh token: never expires unless revoked</td><td>No action normally. If subscriber revokes access in Google Account settings, they must re-authorise via the platform.</td></tr>
+      <tr><td><strong>Apple Developer Program</strong></td><td>Annual renewal ($149 USD)</td><td>Set calendar reminder 30 days before annual renewal date. Lapsed membership = App Store/TestFlight access revoked for all subscribers.</td></tr>
+    </tbody>
+  </table>
+
+  <h2 class="section-sub">What to do when Xero token fails</h2>
+  <ol style="padding-left:20px;font-size:13px;margin-bottom:20px;">
+    <li style="margin:6px 0;">Go to platform Settings → Xero</li>
+    <li style="margin:6px 0;">Click "Disconnect" → then "Connect to Xero" again</li>
+    <li style="margin:6px 0;">If scopes have changed: click "Refresh Token" and check the scopes shown</li>
+    <li style="margin:6px 0;">If credentials have been regenerated: update <code>XERO_CLIENT_ID</code> and <code>XERO_CLIENT_SECRET</code> in the subscriber's environment and restart the server</li>
+  </ol>
+
+  <h2 class="section-sub">Platform update process</h2>
+  <ol style="padding-left:20px;font-size:13px;margin-bottom:20px;">
+    <li style="margin:6px 0;">Test the update in your own development environment first</li>
+    <li style="margin:6px 0;">If schema changes are included, prepare migration instructions</li>
+    <li style="margin:6px 0;">Deploy to each subscriber's environment (Replit: pull latest → restart)</li>
+    <li style="margin:6px 0;">Run <code>npm run db:push</code> if there are schema changes</li>
+    <li style="margin:6px 0;">Notify subscribers of any changes that affect their workflow</li>
+  </ol>
+
+  <h2 class="section-sub">SMS credit monitoring</h2>
+  <p>SMS Everyone credits are pre-purchased and will run out without warning. To avoid service disruption:</p>
+  <ul style="padding-left:20px;font-size:13px;margin-bottom:20px;">
+    <li style="margin:6px 0;">Check credit balance monthly via the SMS Everyone dashboard or API (<code>/api/credits</code>)</li>
+    <li style="margin:6px 0;">Set a low-balance email alert in the SMS Everyone account settings</li>
+    <li style="margin:6px 0;">Include SMS credits in your subscriber monthly fee (pre-purchase on their behalf) or bill them separately when credits run low</li>
+  </ul>
+
+  <h2 class="section-sub">iOS app updates &amp; TestFlight</h2>
+  <ul style="padding-left:20px;font-size:13px;margin-bottom:20px;">
+    <li style="margin:6px 0;">Build a new iOS binary when significant updates are ready: <code>npm run build</code> → <code>npx cap sync ios</code> → Archive in Xcode → Upload to App Store Connect</li>
+    <li style="margin:6px 0;">TestFlight builds expire after 90 days — upload a new build before expiry</li>
+    <li style="margin:6px 0;">App Store review required for public releases (1–3 days). TestFlight builds available within hours.</li>
+    <li style="margin:6px 0;">For emergency patches, TestFlight is the fastest path — invite testers and distribute without App Store review</li>
+  </ul>
+
+  <h2 class="section-sub">Address territory configuration</h2>
+  <p>The address autocomplete is currently configured to search <strong>Gisborne</strong> territory only. When onboarding a subscriber in a different region:</p>
+  <ul style="padding-left:20px;font-size:13px;margin-bottom:20px;">
+    <li style="margin:6px 0;">Edit <code>server/services/addressService.ts</code> line 27 — change <code>territory=Gisborne</code> to the subscriber's region or remove the parameter for nationwide search</li>
+    <li style="margin:6px 0;">Valid NZ territories include: Auckland, Wellington, Canterbury, Waikato, Bay of Plenty, Manawatu-Whanganui, Otago, Gisborne, Nelson, Hawke's Bay, Taranaki, Southland, Marlborough, West Coast, Tasman</li>
+  </ul>
+
+  <div class="doc-footer">
+    <p>Treemarkables Job Management Platform — SaaS Subscriber Onboarding Guide v1.0 — April 2026</p>
+    <p style="margin-top:4px;">CONFIDENTIAL — For internal operations use only. Do not distribute to subscribers.</p>
+  </div>
+
+</div>
+
+<!-- Print button (hidden when printing) -->
+<div class="no-print" style="position:fixed;bottom:24px;right:24px;z-index:999;">
+  <button onclick="window.print()" style="background:#0f3460;color:white;border:none;padding:12px 24px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.2);">
+    🖨️ Print / Save as PDF
+  </button>
+</div>
+
+</body>
+</html>

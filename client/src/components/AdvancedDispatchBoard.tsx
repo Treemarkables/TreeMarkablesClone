@@ -233,9 +233,9 @@ export function AdvancedDispatchBoard({
 
   // Get customer name with enhanced display logic
   const getCustomerName = (customerId: string, jobData?: any) => {
-    // Return placeholder if customers data hasn't loaded yet
+    // Return empty string while customers data is loading
     if (!customersData || customersLoading) {
-      return "Loading...";
+      return "";
     }
 
     const customer = (customersData as any)?.data?.find(
@@ -310,12 +310,12 @@ export function AdvancedDispatchBoard({
     switch (status) {
       case "lead":
         return {
-          bgColor: "bg-blue-50 border-blue-200",
-          textColor: "text-blue-700",
-          indicatorColor: "bg-blue-500",
+          bgColor: "bg-yellow-50 border-yellow-200",
+          textColor: "text-yellow-700",
+          indicatorColor: "bg-yellow-500",
           label: "Lead",
-          dotColor: "bg-blue-400",
-          hexColor: "#3b82f6",
+          dotColor: "bg-yellow-400",
+          hexColor: "#ca8a04",
         };
       case "quote":
         return {
@@ -438,7 +438,7 @@ export function AdvancedDispatchBoard({
       >
         {/* Status circle with letter */}
         <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-base flex-shrink-0"
           style={{ backgroundColor: styling.hexColor }}
         >
           {getStatusLetter(job.status)}

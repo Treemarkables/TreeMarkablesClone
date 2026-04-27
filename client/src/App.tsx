@@ -3,9 +3,9 @@ import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider, Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@/components/ui/sidebar";
+import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { AppSidebar } from "@/components/AppSidebar";
-import { AIAssistantChat } from "@/components/AIAssistantChat";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import Login from "@/pages/Login";
@@ -49,8 +49,11 @@ import SettingsPreferences from "@/pages/SettingsPreferences";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import { NotificationSettings } from "@/components/NotificationSettings";
+import NotificationPreferences from "@/pages/NotificationPreferences";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
+import EquipmentInductionSettings from "@/pages/EquipmentInductionSettings";
+import EquipmentInductionRunner from "@/pages/EquipmentInductionRunner";
 import SignatureCapture from "@/pages/SignatureCapture";
 import JHATemplates from "@/pages/JHATemplates";
 import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
@@ -63,21 +66,29 @@ import ProposalViewer from "@/pages/ProposalViewer";
 import ProposalAccept from "@/pages/ProposalAccept";
 import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
+import InvoiceView from "@/pages/InvoiceView";
 import PublicReview from "@/pages/PublicReview";
-import ActivityDashboard from "@/pages/ActivityDashboard";
 import MulchDrops from "@/pages/MulchDrops";
-import DailyBriefing from "@/pages/DailyBriefing";
+import NearMissReport from "@/pages/NearMissReport";
+import NearMissHistory from "@/pages/NearMissHistory";
+import EquipmentRegister from "@/pages/EquipmentRegister";
+import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
+import DocumentBuilderPage from "@/pages/DocumentBuilderPage";
+import SettingsCompany from "@/pages/SettingsCompany";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import UnlinkedCalls from "@/pages/UnlinkedCalls";
 import Reconciliation from "@/pages/Reconciliation";
+import ProfitabilityCalculator from "@/pages/ProfitabilityCalculator";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Bot } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User } from "lucide-react";
+import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useSSE } from "@/hooks/useSSE";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 // ScrollToTop component to reset scroll position on navigation
@@ -153,15 +164,31 @@ function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
 function SidebarContent({ children }: { children: React.ReactNode | ((activeTab: string, onTabChange: (tab: string) => void) => React.ReactNode) }) {
   const { isCrew, isAdmin, logout } = useAuth();
   const [activeTab, setActiveTab] = useState("jobs");
+  // Live push: invalidate queries instantly when server broadcasts a change
+  useSSE();
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [location, setLocation] = useLocation();
   const [dispatchDate, setDispatchDate] = useState(new Date());
+
+  // Sync activeTab highlight with the current URL
+  useEffect(() => {
+    if (location.startsWith("/settings")) {
+      setActiveTab("settings");
+    }
+  }, [location]);
   
   // Check if we're on dispatch page
   const isDispatchPage = location === '/dispatch';
-  
+  const [dispatchFilter, setDispatchFilter] = useJobFilter();
+  const [dispatchSearchOpen, setDispatchSearchOpen] = useDispatchSearchOpen();
+
+  // Close search strip when leaving dispatch page
+  useEffect(() => {
+    if (!isDispatchPage) setDispatchSearchOpen(false);
+  }, [isDispatchPage]);
+
   // Fetch jobs data for dispatch header
   const { data: jobsResponse } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/jobs'],
@@ -190,57 +217,191 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
     
     setTimeout(() => setIsRefreshing(false), 500);
   };
+
+  // Bridge for iOS Capacitor: the native Swift layer injects the FCM token
+  // into the WKWebView via evaluateJavaScript dispatching 'nativeFcmToken'.
+  // index.html captures it early into window.__pendingNativeFcmToken so it
+  // is never lost even if React hasn't mounted yet. We drain it here once
+  // the authenticated layout is ready, and keep listening for future refreshes.
+  useEffect(() => {
+    const registerNativeToken = async (token: string) => {
+      try {
+        console.log('📱 Registering native iOS FCM token with server...');
+        const res = await fetch('/api/notifications/register-token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({ token, deviceInfo: 'iOS Capacitor' }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          console.log('✅ Native iOS FCM token registered successfully');
+        } else {
+          console.warn('⚠️ FCM token registration failed:', data.message);
+        }
+      } catch (err) {
+        console.error('❌ Error registering native FCM token:', err);
+      }
+    };
+
+    // Drain any token captured before React mounted (window global)
+    const w = window as Window & { __pendingNativeFcmToken?: string };
+    const fromWindow = w.__pendingNativeFcmToken;
+    if (fromWindow) {
+      w.__pendingNativeFcmToken = undefined;
+      registerNativeToken(fromWindow);
+    } else {
+      // Fallback: token stored in localStorage by the Swift bridge
+      try {
+        const fromStorage = localStorage.getItem('__nativeFcmToken');
+        if (fromStorage) {
+          localStorage.removeItem('__nativeFcmToken');
+          registerNativeToken(fromStorage);
+        }
+      } catch (_) {}
+    }
+
+    // Keep listening for future token refreshes (Firebase rotates tokens occasionally)
+    const handler = (e: Event) => {
+      const token = (e as CustomEvent<string>).detail;
+      if (token) registerNativeToken(token);
+    };
+
+    window.addEventListener('nativeFcmToken', handler);
+    return () => window.removeEventListener('nativeFcmToken', handler);
+  }, []);
   
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-screen overflow-hidden w-full">
       <AppSidebar activeTab={activeTab} onTabChange={setActiveTab} />
-        <div className="flex flex-col flex-1 min-w-0 min-h-0">
-          {/* Mobile header - sidebar toggle, refresh, and actions */}
-          <header className="md:hidden flex items-center justify-between px-2 border-b bg-white" style={{ paddingTop: 'max(2rem, calc(env(safe-area-inset-top) + 1rem))' }}>
-            <div className="flex items-center gap-2">
-              <SidebarTrigger 
-                data-testid="button-sidebar-toggle" 
-                className="h-22 w-22 [&>svg]:h-12 [&>svg]:w-12 [&>svg]:text-emerald-500 hover:[&>svg]:text-emerald-600 [&>svg]:stroke-[2.5]"
-              />
-            </div>
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden">
+          {/* Mobile header - sidebar toggle, logo, and actions */}
+          <header
+            className="md:hidden flex items-center gap-3 px-3 py-3 border-b bg-white"
+            style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 0.5rem)", paddingRight: "calc(env(safe-area-inset-right, 0px) + 0.75rem)" }}
+          >
+            <LogoSidebarTrigger size={44} />
+            {/* Notifications Bell — standalone so flex-1 spacer gives it room from actions */}
+            {isAdmin && <div className="shrink-0"><NotificationBell /></div>}
+
+            {/* Spacer: pushes action buttons to the right, away from the bell */}
+            <div className="flex-1" />
             
             <div className="flex items-center gap-2">
-              {/* Notifications Bell - Mobile */}
-              {isAdmin && <NotificationBell />}
-              
-              {/* Ask AI Button - Mobile */}
-              <Tooltip>
-                <TooltipTrigger asChild>
+
+              {/* Dispatch controls — only shown on /dispatch */}
+              {isDispatchPage && (
+                <>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        data-testid="create-new-button-mobile"
+                        className="rounded-full text-green-700 border-green-400 bg-green-100 shrink-0 h-12 w-12"
+                      >
+                        <Plus className="h-7 w-7 text-green-700" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-lead"))}
+                        data-testid="create-lead-button-mobile"
+                      >
+                        Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-quote"))}
+                        data-testid="create-quote-button-mobile"
+                      >
+                        Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
+                        data-testid="create-wo-button-mobile"
+                      >
+                        Work Order
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-invoice"))}
+                        data-testid="create-invoice-button-mobile"
+                      >
+                        Invoice
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+
                   <Button
-                    variant="ghost"
+                    variant="outline"
                     size="icon"
-                    onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
-                    data-testid="button-ask-ai-mobile"
-                    className="text-primary"
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    data-testid="paste-message-button-mobile"
+                    className="rounded-full text-orange-600 border-orange-400 bg-orange-100 shrink-0 h-12 w-12"
                   >
-                    <Bot className="h-5 w-5" />
+                    <MessageSquare className="h-7 w-7 text-orange-600" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Ask AI</p></TooltipContent>
-              </Tooltip>
-              
-              {/* Refresh Button - Mobile */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    data-testid="button-mobile-refresh"
-                  >
-                    <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Refresh all data</p>
-                </TooltipContent>
-              </Tooltip>
+
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-11 w-11 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-muted-foreground"}`}
+                        data-testid="mobile-filter-dropdown-trigger"
+                      >
+                        <Filter className="h-7 w-7" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="mobile-filter-all">
+                        All
+                      </DropdownMenuItem>
+                      {DISPATCH_STATUS_FILTERS.map(tab => (
+                        <DropdownMenuItem
+                          key={tab.value}
+                          onClick={() => setDispatchFilter(tab.value)}
+                          data-testid={`mobile-filter-tab-${tab.value}`}
+                        >
+                          {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              )}
+
+              {/* Search toggle (dispatch page) or Refresh (other pages) — Mobile */}
+              {isDispatchPage ? (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    if (dispatchSearchOpen) setDispatchSearchOpen(false);
+                    else setDispatchSearchOpen(true);
+                  }}
+                  data-testid="mobile-search-toggle"
+                  className="text-muted-foreground h-11 w-11"
+                >
+                  {dispatchSearchOpen ? <X className="h-7 w-7" /> : <Search className="h-7 w-7" />}
+                </Button>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      data-testid="button-mobile-refresh"
+                    >
+                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh all data</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
@@ -260,9 +421,8 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               {isAdmin && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" size="sm" className="flex items-center gap-1" data-testid="button-account-dropdown-mobile">
-                      Account
-                      <ChevronDown className="h-16 w-16" />
+                    <Button variant="ghost" size="icon" className="h-11 w-11 shrink-0" data-testid="button-account-dropdown-mobile">
+                      <User className="h-6 w-6" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-64">
@@ -331,45 +491,125 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           
           {/* Desktop header - full menu */}
           <header className="hidden md:flex items-center justify-between p-2 border-b bg-white">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <LogoSidebarTrigger size={36} />
             
             <div className="flex items-center gap-2">
               {/* Notifications Bell */}
               <NotificationBell />
               
-              {/* Ask AI Button - Desktop */}
-              <Tooltip>
-                <TooltipTrigger asChild>
+              {/* Dispatch action buttons (desktop) or Refresh — same slot */}
+              {isDispatchPage ? (
+                <>
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
-                    data-testid="button-ask-ai"
-                    className="text-primary"
+                    onClick={() => {
+                      const input = document.querySelector<HTMLInputElement>('[data-testid="desktop-job-search-input"]');
+                      if (input) { input.focus(); input.select(); }
+                      setDispatchSearchOpen(!dispatchSearchOpen);
+                    }}
+                    data-testid="desktop-search-toggle"
+                    className="text-black"
                   >
-                    <Bot className="h-5 w-5" />
+                    <Search className="h-5 w-5" />
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Ask AI</p></TooltipContent>
-              </Tooltip>
-              
-              {/* Refresh Button - Desktop */}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={handleRefresh}
-                    disabled={isRefreshing}
-                    data-testid="button-desktop-refresh"
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className={`gap-1.5 ${dispatchFilter !== "all" ? "text-[#1877F2]" : "text-black"}`}
+                        data-testid="desktop-filter-dropdown-trigger"
+                      >
+                        <Filter className="h-4 w-4" />
+                        {DISPATCH_STATUS_FILTERS.find(t => t.value === dispatchFilter)?.label ?? "All"}
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setDispatchFilter("all")} data-testid="desktop-filter-all">
+                        All
+                      </DropdownMenuItem>
+                      {DISPATCH_STATUS_FILTERS.map(tab => (
+                        <DropdownMenuItem
+                          key={tab.value}
+                          onClick={() => setDispatchFilter(tab.value)}
+                          data-testid={`desktop-filter-tab-${tab.value}`}
+                        >
+                          {tab.label}
+                        </DropdownMenuItem>
+                      ))}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.dispatchEvent(new CustomEvent("dispatch-paste"))}
+                    data-testid="paste-message-button-desktop"
+                    className="text-black gap-1.5"
                   >
-                    <RefreshCw className={`h-20 w-20 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <MessageSquare className="h-4 w-4" />
+                    Paste
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Refresh all data</p>
-                </TooltipContent>
-              </Tooltip>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        data-testid="create-new-button-desktop"
+                        className="text-black gap-1.5"
+                      >
+                        <Plus className="h-4 w-4" />
+                        New
+                        <ChevronDown className="h-3 w-3" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-lead"))}
+                        data-testid="create-lead-button-desktop"
+                      >
+                        Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-quote"))}
+                        data-testid="create-quote-button-desktop"
+                      >
+                        Quote
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-job"))}
+                        data-testid="create-wo-button-desktop"
+                      >
+                        Work Order
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => window.dispatchEvent(new CustomEvent("dispatch-new-invoice"))}
+                        data-testid="create-invoice-button-desktop"
+                      >
+                        Invoice
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={handleRefresh}
+                      disabled={isRefreshing}
+                      data-testid="button-desktop-refresh"
+                    >
+                      <RefreshCw className={`h-5 w-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Refresh all data</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
               
               {/* Logout Button - Crew Only */}
               {isCrew && (
@@ -448,16 +688,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
               </DropdownMenu>
               )}
               
-              {/* Global New Job Button */}
+              {/* Global New Job Button — hidden on dispatch */}
+              {!isDispatchPage && (
               <Button 
                 size="sm" 
                 onClick={() => {
-                  if (location === '/dispatch') {
-                    // Already on dispatch — fire a custom event so DispatchBoard opens create flow immediately
-                    window.dispatchEvent(new CustomEvent('dispatch-new-job'));
-                  } else {
-                    setLocation('/dispatch?newJob=true');
-                  }
+                  setLocation('/dispatch?newJob=true');
                 }}
                 data-testid="global-new-job-btn"
                 className="bg-amber-500 hover:bg-amber-600 text-white"
@@ -465,10 +701,11 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
                 <Plus className="h-8 w-8 mr-1" />
                 New Job
               </Button>
+              )}
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col pb-20 md:pb-0 md:pt-6" style={{ paddingBottom: 'max(5rem, calc(env(safe-area-inset-bottom) + 2rem))' }}>
-            <div className="md:pb-0">
+          <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+            <div className="h-full flex flex-col md:pb-0">
               {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
             </div>
           </main>
@@ -523,8 +760,26 @@ function Router() {
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [setLocation]);
   
-  // Render Home directly at / with no redirect — better for SEO (no "Page with redirect" in Search Console)
+  // On native Capacitor app, skip public website and go straight to login
+  // Authenticated users hitting '/' go straight to the dispatch board (handles PWA launches,
+  // back-button presses, iframe restarts, and any other navigation that lands on the root URL)
   if (location === '/') {
+    // While we're still checking auth, show a neutral spinner rather than flashing the public
+    // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center min-h-screen bg-background">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+        </div>
+      );
+    }
+    if (isAuthenticated) {
+      return <Redirect to="/dispatch" />;
+    }
+    const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
+    if (isNative) {
+      return <Redirect to="/login" />;
+    }
     return <Home />;
   }
   
@@ -562,21 +817,22 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/profitability-calculator">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <ProfitabilityCalculator />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/customer-portal" component={CustomerPortal}/>
       <Route path="/proposal/:proposalId/accept" component={ProposalAccept}/>
       <Route path="/proposal/:proposalId" component={ProposalViewer}/>
       <Route path="/quote/:quoteId" component={QuoteViewer}/>
+      <Route path="/invoice/:invoiceId/view" component={InvoiceView}/>
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       <Route path="/review/:token" component={PublicReview}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
-      <Route path="/overview">
-        <ProtectedRoute>
-          <SidebarLayout>
-            <ActivityDashboard />
-          </SidebarLayout>
-        </ProtectedRoute>
-      </Route>
       <Route path="/pipeline">
         <ProtectedRoute>
           <SidebarLayout>
@@ -739,6 +995,27 @@ function Router() {
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>
+      <Route path="/near-miss-report">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NearMissReport />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/near-miss-report/:id">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NearMissReport />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/near-miss-history">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NearMissHistory />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
       <Route path="/dispatch-board">
         {() => <Redirect to="/dispatch" />}
       </Route>
@@ -773,14 +1050,6 @@ function Router() {
         </AuthenticatedRoute>
       </Route>
 
-      {/* Daily Briefing - accessible to all logged-in users */}
-      <Route path="/daily-briefing">
-        <AuthenticatedRoute>
-          <SidebarLayout>
-            <DailyBriefing />
-          </SidebarLayout>
-        </AuthenticatedRoute>
-      </Route>
       <Route path="/history">
         <ProtectedRoute>
           <SidebarLayout>
@@ -824,10 +1093,7 @@ function Router() {
       </Route>
       <Route path="/settings/company">
         <SidebarLayout>
-          <SettingsPlaceholder 
-            title="Company Info"
-            description="Business details, contact information and branding"
-          />
+          <SettingsCompany />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">
@@ -856,6 +1122,7 @@ function Router() {
               <p className="text-muted-foreground mt-2">Control which events trigger notifications and how you receive them</p>
             </div>
             <NotificationSettings />
+            <NotificationPreferences />
           </div>
         </SidebarLayout>
       </Route>
@@ -874,6 +1141,18 @@ function Router() {
           <VehicleInspectionSettings />
         </SidebarLayout>
       </Route>
+      <Route path="/settings/equipment-inductions">
+        <SidebarLayout>
+          <EquipmentInductionSettings />
+        </SidebarLayout>
+      </Route>
+      <Route path="/staff-induction/:employeeId/:templateId">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <EquipmentInductionRunner />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
       <Route path="/settings/jha-templates">
         <SidebarLayout>
           <JHATemplates />
@@ -885,12 +1164,44 @@ function Router() {
         </SidebarLayout>
       </Route>
 
+      <Route path="/settings/equipment-register">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <EquipmentRegister />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/ai-scheduler">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <AIDispatchScheduler />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/settings/checklist-template">
         <SidebarLayout>
           <ChecklistTemplatePage />
         </SidebarLayout>
       </Route>
-      
+
+      <Route path="/settings/invoice-builder">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <DocumentBuilderPage documentKind="invoice" />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
+      <Route path="/settings/proposal-builder">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <DocumentBuilderPage documentKind="proposal" />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+
       <Route path="/developer">
         <SidebarLayout>
           <Developer />
@@ -902,11 +1213,6 @@ function Router() {
   );
 }
 
-function AuthenticatedOverlays() {
-  const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) return null;
-  return <AIAssistantChat />;
-}
 
 function App() {
   // Initialize Firebase on app startup for push notifications
@@ -928,7 +1234,6 @@ function App() {
               <ScrollToTop />
               <Toaster />
               <InstallPrompt />
-              <AuthenticatedOverlays />
               <Router />
             </TwilioCallProvider>
           </AuthProvider>

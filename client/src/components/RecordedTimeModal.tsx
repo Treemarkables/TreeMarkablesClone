@@ -27,6 +27,7 @@ import {
   Trash2,
   Users,
   Search,
+  Receipt,
 } from "lucide-react";
 
 interface TimeEntry {
@@ -203,30 +204,10 @@ export function RecordedTimeModal({
       });
     }
 
-    // Track staff without rates
-    const staffWithoutRates: string[] = [];
-
-    // Staff to item number mapping
-    const staffItemNumbers: Record<string, string> = {
-      dan: "1",
-      kalsey: "4",
-      jack: "5",
-      josh: "3",
-      jullian: "14",
-      julian: "14",
-    };
-
-    // Create one pending entry for each selected staff member with mapped rate
+    // Create one pending entry for each selected staff member using their assigned line items
     const newTimeEntries: TimeEntry[] = newEntry.staffIds.map((staffId) => {
       const staff = employees.find((e: any) => e.id === staffId);
-      const staffFirstName = (staff?.firstName || "").toLowerCase().trim();
-
-      // Look up the item number for this staff member
-      const itemNumber = staffItemNumbers[staffFirstName] || "";
-
-      if (!itemNumber) {
-        staffWithoutRates.push(`${staff?.firstName} ${staff?.lastName}`);
-      }
+      const itemNumber = staff?.chargeOutLineItemNumber || "";
 
       return {
         id: `pending-${Date.now()}-${Math.random()}-${staffId}`,
@@ -241,15 +222,6 @@ export function RecordedTimeModal({
     });
 
     setPendingEntries((prev) => [...prev, ...newTimeEntries]);
-
-    // Show warning if some staff don't have matching rates
-    if (staffWithoutRates.length > 0) {
-      toast({
-        title: "Warning",
-        description: `${staffWithoutRates.join(", ")} ${staffWithoutRates.length === 1 ? "does" : "do"} not have a matching labour rate set up. Please add a rate in Settings.`,
-        variant: "destructive",
-      });
-    }
 
     // Reset form but keep it open for adding more entries
     setNewEntry({ staffIds: [], duration: "1" });
@@ -284,6 +256,29 @@ export function RecordedTimeModal({
       toast({
         title: "Error",
         description: "Failed to delete time entry",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Convert saved time entries to job line items
+  const timeToLineItemsMutation = useMutation({
+    mutationFn: async () => {
+      return await apiRequest("POST", `/api/jobs/${jobId}/time-to-line-items`, {});
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["time-entries", jobId] });
+      toast({
+        title: "Labour added to job",
+        description: data?.message || "Time entries have been added as line items.",
+      });
+      onClose();
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add time entries to invoice",
         variant: "destructive",
       });
     },
@@ -352,6 +347,14 @@ export function RecordedTimeModal({
           entryDate: today,
           hours: entry.duration,
           rate: rateItem?.price || parseFloat(entry.rate.split(" ")[0]) || 75,
+          costRate: (() => {
+            const costLineItem = materialsAndServices.find(
+              (item: any) => item.itemNumber === staff?.costLineItemNumber
+            );
+            return costLineItem
+              ? parseFloat(costLineItem.price)
+              : parseFloat(staff?.hourlyRate || "0") || 0;
+          })(),
           startTime: entry.start,
 
           // ServiceM8 features
@@ -583,27 +586,11 @@ export function RecordedTimeModal({
                     className="p-1 hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between"
                     data-testid={`entry-${entry.id}`}
                   >
-                    <div className="flex-1 grid grid-cols-3 gap-1">
+                    <div className="flex-1 grid grid-cols-2 gap-1">
                       <div>
                         <div className="text-[8px] text-gray-500">Staff</div>
                         <div className="font-medium text-[10px]">
                           {entry.staffName}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[8px] text-gray-500">Pay Rate</div>
-                        <div className="text-[10px]">
-                          {(() => {
-                            const staff = employees.find(
-                              (e: any) => e.id === entry.staffId,
-                            );
-                            const rate = staff?.hourlyRate
-                              ? parseFloat(staff.hourlyRate)
-                              : 0;
-                            return rate > 0
-                              ? `$${rate.toFixed(2)}/hr`
-                              : "Not set";
-                          })()}
                         </div>
                       </div>
                       <div>
@@ -631,10 +618,21 @@ export function RecordedTimeModal({
           {/* Existing Saved Entries */}
           {existingEntries.length > 0 && (
             <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="bg-emerald-50 border-b border-emerald-200 px-1.5 py-1">
+              <div className="bg-emerald-50 border-b border-emerald-200 px-1.5 py-1 flex items-center justify-between gap-2">
                 <h4 className="font-medium text-emerald-900 text-xs">
                   Saved Today ({existingEntries.length})
                 </h4>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={() => timeToLineItemsMutation.mutate()}
+                  disabled={timeToLineItemsMutation.isPending}
+                  className="h-7 text-xs px-2 gap-1"
+                  data-testid="button-bill-time-to-invoice"
+                >
+                  <Receipt className="h-3 w-3" />
+                  {timeToLineItemsMutation.isPending ? "Adding…" : "Add to Invoice"}
+                </Button>
               </div>
 
               <div className="divide-y divide-gray-100">
@@ -644,27 +642,11 @@ export function RecordedTimeModal({
                     className="p-1 bg-white hover:bg-gray-50 flex flex-col sm:flex-row gap-1 sm:items-center sm:justify-between"
                     data-testid={`saved-entry-${entry.id}`}
                   >
-                    <div className="flex-1 grid grid-cols-3 gap-1">
+                    <div className="flex-1 grid grid-cols-2 gap-1">
                       <div>
                         <div className="text-[8px] text-gray-500">Staff</div>
                         <div className="font-medium text-[10px]">
                           {entry.employeeName}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-[8px] text-gray-500">Pay Rate</div>
-                        <div className="text-[10px]">
-                          {(() => {
-                            const staff = employees.find(
-                              (e: any) => e.id === entry.employeeId,
-                            );
-                            const rate = staff?.hourlyRate
-                              ? parseFloat(staff.hourlyRate)
-                              : 0;
-                            return rate > 0
-                              ? `$${rate.toFixed(2)}/hr`
-                              : "Not set";
-                          })()}
                         </div>
                       </div>
                       <div>

@@ -8,7 +8,8 @@ import {
 import { Phone, Mail, ChevronDown } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
-import logoImage from "@assets/treemarkables-logo-horizontal.png";
+import logoImage from "@assets/logo-11_1775755479888.png";
+import ContactFormModal from "@/components/ContactFormModal";
 
 // Declare gtag and gtag_report_conversion for TypeScript
 declare global {
@@ -20,6 +21,7 @@ declare global {
 
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
 
   const toggleMenu = () => {
     setIsMenuOpen(prev => !prev);
@@ -29,7 +31,7 @@ export default function Header() {
     setIsMenuOpen(false);
   };
 
-  
+
   const handlePhoneClick = (e: React.MouseEvent) => {
     e.preventDefault();
     if (window.gtag) {
@@ -42,8 +44,9 @@ export default function Header() {
       window.location.href = 'tel:0272166882';
     }, 100);
   };
-  
-  const handleEmailClick = () => {
+
+  const handleEmailClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     if (window.gtag) {
       window.gtag('event', 'click', {
         'event_category': 'Lead Generation',
@@ -51,6 +54,7 @@ export default function Header() {
         'value': 1
       });
     }
+    setIsContactModalOpen(true);
   };
 
   const mainNavLinks = [
@@ -67,16 +71,16 @@ export default function Header() {
   ];
 
   return (
-    <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm h-28" style={{ position: 'fixed', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 h-full">
-        <div className="flex items-center justify-between h-full">
-          
+    <header className="bg-black fixed top-0 left-0 right-0 z-[100] shadow-sm" style={{ position: 'fixed', WebkitTransform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="flex items-center justify-between h-20 overflow-hidden">
+
           {/* Logo and Brand */}
-          <Link href="/" className="flex items-center hover-elevate group h-full" data-testid="link-home">
+          <Link href="/" className="flex items-center hover-elevate h-full" data-testid="link-home">
             <img 
               src={logoImage} 
               alt="Treemarkables" 
-              className="h-52 w-auto object-contain transition-all duration-200"
+              className="h-40 w-auto object-contain"
               data-testid="logo-image"
             />
           </Link>
@@ -135,14 +139,15 @@ export default function Header() {
             </a>
 
             {/* Email Button - Rounded Green */}
-            <a 
-              href="/contact" 
+            <button
+              type="button"
               onClick={handleEmailClick}
               className="flex items-center justify-center w-11 h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 bg-[#39FF14] hover:bg-[#32CD32] rounded-full transition-all duration-200 shadow-lg hover:shadow-xl"
               data-testid="link-email-header"
+              aria-label="Open contact form"
             >
               <Mail className="h-5 w-5 lg:h-6 lg:w-6 text-black" />
-            </a>
+            </button>
 
             
             {/* Mobile Menu Button - Only show on very small screens */}
@@ -221,20 +226,34 @@ export default function Header() {
                   <span className="font-mono">Call: 027-216-6882</span>
                 </a>
                 
-                <a 
-                  href="/contact" 
+                <button
+                  type="button"
                   className="flex items-center justify-center space-x-3 text-base text-black bg-[#39FF14] px-4 py-4 rounded-full border-2 border-[#32CD32] hover:bg-[#32CD32] hover:border-[#2EB82E] transition-all duration-200 font-bold shadow-md tracking-tight"
                   data-testid="link-email-mobile"
-                  onClick={closeMenu}
+                  onClick={() => {
+                    closeMenu();
+                    if (window.gtag) {
+                      window.gtag('event', 'click', {
+                        'event_category': 'Lead Generation',
+                        'event_label': 'Email Click - Header Mobile',
+                        'value': 1,
+                      });
+                    }
+                    setIsContactModalOpen(true);
+                  }}
                 >
                   <Mail className="h-5 w-5" />
                   <span className="font-mono text-sm">Get a Quote</span>
-                </a>
+                </button>
               </div>
             </div>
           </nav>
         </div>
       </div>
+      <ContactFormModal
+        open={isContactModalOpen}
+        onOpenChange={setIsContactModalOpen}
+      />
     </header>
   );
 }

@@ -38,6 +38,7 @@ export default function SettingsPreferences() {
   const [defaultGrossMarginPct, setDefaultGrossMarginPct] =
     useState<string>("");
   const [invoicePaymentDays, setInvoicePaymentDays] = useState<string>("7");
+  const [dailyRevenueTarget, setDailyRevenueTarget] = useState<string>("3500");
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -53,6 +54,8 @@ export default function SettingsPreferences() {
     setDefaultGrossMarginPct(pct > 0 ? String(pct) : "");
     const days = settings?.data?.invoicePaymentDays ?? 7;
     setInvoicePaymentDays(String(days));
+    const target = parseFloat(settings?.data?.dailyRevenueTarget || "3500") || 3500;
+    setDailyRevenueTarget(String(target));
   }, [settings]);
 
   // Mutation to update settings
@@ -81,6 +84,7 @@ export default function SettingsPreferences() {
   const handleSave = () => {
     const marginValue = parseFloat(defaultGrossMarginPct) || 0;
     const daysValue = parseInt(invoicePaymentDays, 10);
+    const targetValue = parseFloat(dailyRevenueTarget) || 3500;
     updateSettingsMutation.mutate({
       metricsStartDate: metricsStartDate
         ? metricsStartDate.toISOString()
@@ -89,6 +93,7 @@ export default function SettingsPreferences() {
         marginValue >= 0 && marginValue <= 100 ? marginValue : 0,
       invoicePaymentDays:
         !isNaN(daysValue) && daysValue >= 1 && daysValue <= 365 ? daysValue : 7,
+      dailyRevenueTarget: targetValue > 0 ? targetValue : 3500,
     });
   };
 
@@ -313,6 +318,35 @@ export default function SettingsPreferences() {
                   <strong>{marginNum}%</strong> gross margin in analytics.
                 </p>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label
+                htmlFor="daily-revenue-target"
+                className="text-base font-medium flex items-center gap-2"
+              >
+                Daily Revenue Target (NZD)
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Used by AI Smart Dispatch and the Dispatch Board revenue progress bar. Set to your typical daily revenue goal.
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <div className="relative w-40">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                  <Input
+                    id="daily-revenue-target"
+                    type="number"
+                    min="0"
+                    step="100"
+                    value={dailyRevenueTarget}
+                    onChange={(e) => setDailyRevenueTarget(e.target.value)}
+                    placeholder="3500"
+                    className="pl-7"
+                    data-testid="input-daily-revenue-target"
+                  />
+                </div>
+                <span className="text-sm text-muted-foreground">NZD per day</span>
+              </div>
             </div>
 
             <div className="flex gap-3 pt-4">

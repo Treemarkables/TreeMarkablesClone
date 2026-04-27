@@ -1,3 +1,5 @@
+import { useJobFilter, useDispatchSearchOpen, useOnlyUnconfirmed } from "@/lib/dispatchHeaderStore";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +34,7 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
+import type { ImperativePanelHandle } from "react-resizable-panels";
 import {
   Calendar,
   Clock,
@@ -70,6 +73,11 @@ import {
   ChevronDown,
   UserPlus,
   Bell,
+  UserCog,
+  CircleDollarSign,
+  Wrench,
+  CalendarCheck,
+  Reply,
 } from "lucide-react";
 import { useState, useMemo, useEffect, useRef } from "react";
 import {
@@ -94,6 +102,10 @@ import { JobCardErrorBoundary } from "@/components/JobCardErrorBoundary";
 import { CustomerAvatar } from "@/components/CustomerAvatar";
 import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { CreateLeadFromMessageDialog } from "@/components/CreateLeadFromMessageDialog";
+import {
+  QuickAssignDialog,
+  type QuickAssignResult,
+} from "@/components/QuickAssignDialog";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -161,12 +173,16 @@ interface JobAssignment {
   notes?: string;
   specialInstructions?: string; // Added for compatibility with GlobalJobCard
   lastActivityAt?: string; // For activity-based sorting
+  workOrderAt?: string; // Timestamp stamped once when the job first became a work order — used for FIFO sorting on the Work Order tab
+  createdAt?: string; // Immutable job-creation timestamp — fallback for FIFO sorting when workOrderAt is NULL (legacy jobs)
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
   scheduledEndDate?: string; // For multi-day jobs
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
   customerConfirmed?: boolean; // Whether the customer has confirmed the booking
+  confirmationReplySentAt?: string | null; // Timestamp of our acknowledgement reply to the customer's confirmation
+  customerReplyReceivedAt?: string | null; // Timestamp of most-recent inbound customer reply (any email/SMS reply tagged customer-reply)
   etaNotificationRequested?: boolean; // Whether staff need to notify this customer of arrival time
 }
 
@@ -224,7 +240,7 @@ const staffColorPalette = [
   "bg-pink-500", // Pink
   "bg-indigo-500", // Indigo
   "bg-rose-500", // Rose
-  "bg-cyan-500", // Cyan
+  "bg-yellow-500", // Yellow
   "bg-amber-500", // Amber
   "bg-violet-500", // Violet
   "bg-lime-500", // Lime
@@ -239,6 +255,22 @@ const formatCurrency = (amount: number) => {
     maximumFractionDigits: 0,
   }).format(amount);
 };
+
+// Staff accent palette — same order used in StaffSchedule Gantt view
+const STAFF_PALETTE = [
+  { dot: '#3b82f6' }, // blue
+  { dot: '#10b981' }, // emerald
+  { dot: '#f97316' }, // orange
+  { dot: '#a855f7' }, // purple
+  { dot: '#ec4899' }, // pink
+  { dot: '#eab308' }, // yellow
+  { dot: '#14b8a6' }, // teal
+  { dot: '#ef4444' }, // red
+];
+
+function crewInitials(firstName?: string, lastName?: string) {
+  return `${(firstName ?? '')[0] ?? ''}${(lastName ?? '')[0] ?? ''}`.toUpperCase() || '?';
+}
 
 // Calculate total price from job data
 const calculateJobTotal = (job: any): number => {
@@ -523,6 +555,23 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       .map((emp, index) => transformEmployeeToStaffMember(emp, index));
   }, [employees]);
 
+  // Map employeeId → Employee for fast lookup in job cards
+  const employeeMap = useMemo(() => {
+    const m = new Map<string, Employee>();
+    employees.forEach(e => m.set(e.id, e));
+    return m;
+  }, [employees]);
+
+  // Map employeeId → palette colour (sorted crew, same order as StaffSchedule)
+  const crewPaletteMap = useMemo(() => {
+    const m = new Map<string, { dot: string }>();
+    const crew = employees
+      .filter(e => e.isActive && e.role !== 'admin')
+      .sort((a, b) => (a.firstName ?? '').localeCompare(b.firstName ?? ''));
+    crew.forEach((e, i) => m.set(e.id, STAFF_PALETTE[i % STAFF_PALETTE.length]));
+    return m;
+  }, [employees]);
+
   // Fetch job templates for template selection
   const { data: templatesResponse } = useQuery<ApiResponse<JobTemplate>>({
     queryKey: ["/api/job-templates"],
@@ -605,10 +654,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     today.setHours(0, 0, 0, 0); // Start of day
     return today;
   });
+
+
   const [selectedJob, setSelectedJob] = useState<JobAssignment | null>(null);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isDeepSearchActive, setIsDeepSearchActive] = useState<boolean>(false);
+  const [showMobileSearch, setShowMobileSearch] = useDispatchSearchOpen();
   const [deepSearchResults, setDeepSearchResults] = useState<JobAssignment[]>(
     [],
   );
@@ -616,14 +668,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     useState<boolean>(false);
   const [assignmentMode, setAssignmentMode] =
     useState<AssignmentMode>("individual");
-  const [jobFilter, setJobFilter] = useState<string>("all");
+  const [jobFilter, setJobFilter] = useJobFilter();
+  const [onlyUnconfirmed, setOnlyUnconfirmed] = useOnlyUnconfirmed();
+
+  const countUnconfirmed = (jobs: { status: string; customerConfirmed?: boolean }[]) =>
+    jobs.filter(
+      (j) => (j.status === "scheduled" || j.status === "work_order") && !j.customerConfirmed,
+    ).length;
 
   const STATUS_TAB_FILTERS = [
-    { value: "lead", label: "Lead" },
-    { value: "queue", label: "Queue" },
-    { value: "quote", label: "Quote" },
-    { value: "work_order", label: "W/O" },
-    { value: "scheduled", label: "Scheduled" },
+    { value: "lead",       label: "Lead",      Icon: UserCog,         pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "queue",      label: "Queue",     Icon: Inbox,           pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "quote",      label: "Quote",     Icon: CircleDollarSign,pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "work_order", label: "W/O",       Icon: Wrench,          pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
+    { value: "scheduled",  label: "Scheduled", Icon: CalendarCheck,   pill: "bg-blue-50 text-[#1877F2]",  pillActive: "bg-[#1877F2] text-white" },
   ];
 
   const filterMeta: Record<string, { title: string; subtitle: string }> = {
@@ -650,8 +708,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [globalJobCardMode, setGlobalJobCardMode] = useState<"create" | "edit">(
     "create",
   );
+  const leftDispatchPanelRef = useRef<ImperativePanelHandle>(null);
+
+  // Imperatively resize the left panel when the job card panel opens/closes.
+  // defaultSize on an already-mounted ResizablePanel has no effect, so we use
+  // the imperative API to drive the 100 ↔ 50 transition.
+  useEffect(() => {
+    leftDispatchPanelRef.current?.resize(showGlobalJobCard ? 50 : 100);
+  }, [showGlobalJobCard]);
+
   const [jobToEdit, setJobToEdit] = useState<JobAssignment | null>(null);
   const [initialJobData, setInitialJobData] = useState<any>(null);
+  // Sidebar tab to open the job card on — set from the `?tab=` URL param when
+  // a push notification deep-links to a specific section (e.g. the diary).
+  const [initialSidebarTab, setInitialSidebarTab] = useState<
+    "details" | "billing" | "checklist" | undefined
+  >(undefined);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: "",
     customerPhone: "",
@@ -671,7 +743,50 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     null,
   );
   const [queueReasonInput, setQueueReasonInput] = useState<string>("");
+  const [pendingDrop, setPendingDrop] = useState<{
+    jobId: string;
+    jobLabel: string;
+    customerName: string;
+    address: string;
+    date: Date;
+    hour: number;
+    employeeId: string;
+    defaultDurationHours: number;
+  } | null>(null);
+  const [isConfirmingDrop, setIsConfirmingDrop] = useState(false);
+  const [draggingJob, setDraggingJob] = useState<{
+    id: string;
+    durationHours: number;
+    customerName: string;
+  } | null>(null);
   const isCreatingLeadJobRef = useRef(false);
+  // Ref so event-listener closures always see the latest "actively editing a job" state
+  const isActivelyEditingRef = useRef(false);
+
+  // Swipe-to-navigate refs
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
+
+  const handleSwipeTouchStart = (e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+  };
+
+  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      if (deltaX < 0) {
+        setSelectedDate(d => addDays(d, 1));
+      } else {
+        setSelectedDate(d => subDays(d, 1));
+      }
+    }
+  };
+
   const [showSchedulingModal, setShowSchedulingModal] = useState(false);
   const [jobToSchedule, setJobToSchedule] = useState<JobAssignment | null>(
     null,
@@ -702,22 +817,39 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       try {
         const parsed = JSON.parse(pendingData);
         console.log("📋 Found pending job data from conversation:", parsed);
-
-        // Store the initial data to pass to GlobalJobCard
         setInitialJobData(parsed);
-
-        // Open the global job card in create mode
         setShowGlobalJobCard(true);
         setGlobalJobCardMode("create");
-
-        // Clear localStorage so it doesn't keep popping up
         localStorage.removeItem("pendingJobData");
       } catch (error) {
         console.error("Error parsing pending job data:", error);
         localStorage.removeItem("pendingJobData");
       }
     }
+
+    // Open a specific job card when navigating from Create Lead flows
+    const pendingJobId = sessionStorage.getItem("dispatch_open_job");
+    if (pendingJobId) {
+      sessionStorage.removeItem("dispatch_open_job");
+      fetch(`/api/jobs/${pendingJobId}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          const jobData = data?.data ?? data;
+          if (jobData?.id) {
+            setShowGlobalJobCard(true);
+            setGlobalJobCardMode("edit");
+            setJobToEdit(jobData as JobAssignment);
+          }
+        })
+        .catch(console.error);
+    }
   }, []); // Run only on mount
+
+  // Keep the ref in sync so event-listener closures always see the latest editing state
+  useEffect(() => {
+    isActivelyEditingRef.current =
+      showGlobalJobCard && globalJobCardMode === "edit" && !!jobToEdit?.id;
+  }, [showGlobalJobCard, globalJobCardMode, jobToEdit]);
 
   // Clear deep search and search query whenever the user navigates away from the dispatch board,
   // so they start fresh on return instead of seeing stale deep-search results.
@@ -742,7 +874,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       if (newJob === "true") {
         window.history.replaceState({}, "", "/dispatch");
         setJobToEdit(null);
-        setInitialJobData(null);
+        setInitialJobData({ status: "work_order" });
         setGlobalJobCardMode("create");
         setShowGlobalJobCard(true);
         return;
@@ -775,6 +907,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         console.log("🔔 Job search result:", { found: !!job, jobId });
 
+        // Old push notifications used ?tab=diary — the dedicated Diary tab is
+        // gone but the diary still renders alongside Details, so silently fall
+        // back to "details" instead of dropping the user on a missing tab.
+        const tabParam =
+          tab === "diary"
+            ? ("details" as const)
+            : tab === "checklist" || tab === "billing" || tab === "details"
+              ? (tab as "details" | "billing" | "checklist")
+              : undefined;
+
         const openJob = (jobData: any) => {
           // Guard: Don't re-open if we're already editing this job
           if (showGlobalJobCard && jobToEdit?.id === jobId) {
@@ -782,6 +924,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
             return;
           }
           window.history.replaceState({}, "", "/dispatch");
+          setInitialSidebarTab(tabParam);
           setShowGlobalJobCard(true);
           setGlobalJobCardMode("edit");
           setJobToEdit(jobData as JobAssignment);
@@ -833,8 +976,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
     // Handle the "New Job" orange header button firing a custom event when already on /dispatch
     const handleNewJobEvent = () => {
+      // Guard: never wipe out a job that is actively being edited (use ref for fresh state)
+      if (isActivelyEditingRef.current) {
+        return;
+      }
       setJobToEdit(null);
-      setInitialJobData(null);
+      setInitialJobData({ status: "work_order" });
       setGlobalJobCardMode("create");
       setShowGlobalJobCard(true);
     };
@@ -843,6 +990,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     window.addEventListener("popstate", handleUrlChange);
     window.addEventListener("dispatch-new-job", handleNewJobEvent);
 
+    const handleNewLeadEvent = () => handleCreateLead();
+    const handleNewQuoteEvent = () => handleCreateQuote();
+    const handleNewInvoiceEvent = () => handleCreateInvoice();
+    const handlePasteEvent = () => setShowCreateFromMessageDialog(true);
+    window.addEventListener("dispatch-new-lead", handleNewLeadEvent);
+    window.addEventListener("dispatch-new-quote", handleNewQuoteEvent);
+    window.addEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
+    window.addEventListener("dispatch-paste", handlePasteEvent);
+
     return () => {
       window.removeEventListener(
         "notification-navigation",
@@ -850,6 +1006,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       );
       window.removeEventListener("popstate", handleUrlChange);
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
+      window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
+      window.removeEventListener("dispatch-new-quote", handleNewQuoteEvent);
+      window.removeEventListener("dispatch-new-invoice", handleNewInvoiceEvent);
+      window.removeEventListener("dispatch-paste", handlePasteEvent);
     };
   }, [jobsData, location]); // Re-run when jobs data loads OR location changes
 
@@ -969,7 +1129,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const customerName =
           apiJob.customerId && customerMap.has(apiJob.customerId)
             ? customerMap.get(apiJob.customerId)
-            : apiJob.clientName || apiJob.title || "No Customer";
+            : apiJob.clientName || apiJob.title || "";
 
         jobAssignments.push({
           id: apiJob.id,
@@ -996,10 +1156,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: staffId,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          workOrderAt: apiJob.workOrderAt,
+          createdAt: apiJob.createdAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
+          confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
+          customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
           totalAmount:
@@ -1059,7 +1223,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const customerName =
           apiJob.customerId && customerMap.has(apiJob.customerId)
             ? customerMap.get(apiJob.customerId)
-            : apiJob.clientName || apiJob.title || "No Customer";
+            : apiJob.clientName || apiJob.title || "";
 
         jobAssignments.push({
           id: apiJob.id,
@@ -1082,10 +1246,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           staffId: undefined,
           specialInstructions: apiJob.specialInstructions,
           lastActivityAt: apiJob.lastActivityAt,
+          workOrderAt: apiJob.workOrderAt,
+          createdAt: apiJob.createdAt,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
           customerConfirmed: apiJob.customerConfirmed || false,
+          confirmationReplySentAt: apiJob.confirmationReplySentAt || null,
+          customerReplyReceivedAt: apiJob.customerReplyReceivedAt || null,
           etaNotificationRequested: apiJob.etaNotificationRequested || false,
           subtotal: apiJob.subtotal || "0",
           totalAmount:
@@ -1200,7 +1368,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getJobStatusColor = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || "";
     if (serviceType.includes("lead") || serviceType.includes("inquiry"))
-      return "bg-cyan-600";
+      return "bg-yellow-500";
     if (serviceType.includes("quote") || serviceType.includes("proposal"))
       return "bg-orange-600";
 
@@ -1222,7 +1390,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case "quote":
         return "bg-orange-600";
       case "lead":
-        return "bg-cyan-600";
+        return "bg-yellow-500";
       default:
         return "bg-gray-600";
     }
@@ -1232,7 +1400,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const getJobStatusColorValue = (job: JobAssignment) => {
     const serviceType = job.serviceType?.toLowerCase() || "";
     if (serviceType.includes("lead") || serviceType.includes("inquiry"))
-      return "#06b6d4"; // cyan-500
+      return "#ca8a04"; // yellow-600
     if (serviceType.includes("quote") || serviceType.includes("proposal"))
       return "#f97316"; // orange-500
 
@@ -1255,7 +1423,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       case "quote":
         return "#f97316"; // orange-500
       case "lead":
-        return "#06b6d4"; // cyan-500
+        return "#ca8a04"; // yellow-600
       default:
         return "#6b7280"; // gray-500
     }
@@ -1389,26 +1557,46 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (job.status === "unsuccessful" || job.status === "archived")
           return false;
 
+        // When searching, ignore the tab filter — search is global across all active jobs
+        // (including queued jobs). Completed/invoiced are still excluded here; Deep Search
+        // covers those.
+        if (isSearching) {
+          return job.status !== "completed" && job.status !== "invoiced";
+        }
+
         // Queued jobs belong exclusively to the Queue tab
         if (jobFilter === "queue") return job.inQueue === true;
         if (job.inQueue) return false;
 
-        // When a specific tab is selected, always scope to that tab (even while searching)
+        // When a specific tab is selected, scope to that tab
         if (jobFilter === "lead") return job.status === "lead";
         if (jobFilter === "quote") return job.status === "quote";
         if (jobFilter === "work_order") return job.status === "work_order";
         if (jobFilter === "scheduled") return job.status === "scheduled";
-
-        // 'all' tab while searching: show all non-terminal active statuses
-        if (isSearching) {
-          return job.status !== "completed" && job.status !== "invoiced";
-        }
 
         // 'all' tab, no search: only the three most actionable statuses
         return (
           job.status === "lead" ||
           job.status === "quote" ||
           job.status === "work_order"
+        );
+      })
+      .filter((job) => {
+        // Awaiting-confirmation filter only applies on the tabs where the badge
+        // is shown (scheduled / work_order / all). Without this scope, leaving
+        // the toggle on and switching to Leads / Quotes / Queue would silently
+        // hide every job in those tabs. Search bypasses the filter entirely so
+        // global search results aren't truncated to scheduled/work-order jobs.
+        if (!onlyUnconfirmed) return true;
+        if (isSearching) return true;
+        const tabSupportsFilter =
+          jobFilter === "scheduled" ||
+          jobFilter === "work_order" ||
+          jobFilter === "all";
+        if (!tabSupportsFilter) return true;
+        return (
+          (job.status === "scheduled" || job.status === "work_order") &&
+          !job.customerConfirmed
         );
       })
       .filter((job) => {
@@ -1492,7 +1680,32 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         const diff = scoreJob(b) - scoreJob(a);
         if (diff !== 0) return diff;
       }
-      // Sort by most recently active (descending) — jobs with recent messages or changes appear at top
+
+      // Work Order tab: FIFO by when the job first became a work order (oldest conversion at top),
+      // then priority as tiebreaker. Falls back to createdAt (not lastActivityAt) for legacy
+      // jobs that predate the workOrderAt column — lastActivityAt gets bumped on every email,
+      // note, or edit, which caused those jobs to reshuffle whenever they were touched.
+      // createdAt is immutable so positions stay stable.
+      if (jobFilter === "work_order") {
+        const getAcceptedTime = (job: JobAssignment): number => {
+          if (job.workOrderAt) return new Date(job.workOrderAt).getTime();
+          if (job.createdAt) return new Date(job.createdAt).getTime();
+          return Infinity;
+        };
+        const tDiff = getAcceptedTime(a) - getAcceptedTime(b); // ASC: oldest first
+        if (tDiff !== 0) return tDiff;
+        const priorityRank: Record<string, number> = {
+          urgent: 0,
+          high: 1,
+          medium: 2,
+          low: 3,
+        };
+        const pa = priorityRank[a.priority] ?? 4;
+        const pb = priorityRank[b.priority] ?? 4;
+        return pa - pb; // urgent first on ties
+      }
+
+      // Default: sort by most recently active (descending) — jobs with recent messages or changes appear at top
       const getActivityTime = (job: JobAssignment): number => {
         const activity = job.lastActivityAt
           ? new Date(job.lastActivityAt).getTime()
@@ -1767,8 +1980,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   // Called when a job is dragged from the right panel and dropped onto a specific staff row + time slot.
-  // Updates the job's scheduledDate and creates a staff assignment for the dropped employee.
-  const handleCalendarJobDrop = async (
+  // Opens the Quick Assign dialog so the user can confirm crew + duration before persisting.
+  const handleCalendarJobDrop = (
     jobId: string,
     date: Date,
     hour: number,
@@ -1779,24 +1992,52 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       toast({ title: "Job not found", variant: "destructive" });
       return;
     }
+    const labelParts = [
+      job.jobNumber ? `#${job.jobNumber}` : "",
+      job.customerName ?? "",
+    ].filter(Boolean);
+    setPendingDrop({
+      jobId,
+      jobLabel: labelParts.join(" — "),
+      customerName: job.customerName ?? "",
+      address: job.address ?? "",
+      date,
+      hour,
+      employeeId,
+      defaultDurationHours: job.estimatedDuration || 2,
+    });
+  };
+
+  // Persists the staff assignment(s) once the user confirms the Quick Assign dialog.
+  const confirmPendingDrop = async (result: QuickAssignResult) => {
+    if (!pendingDrop) return;
+    const { jobId, date, hour } = pendingDrop;
+    const job = jobsData?.data?.find((j: any) => j.id === jobId);
+    if (!job) {
+      setPendingDrop(null);
+      return;
+    }
+
+    const totalMinutes = result.durationHours * 60 + result.durationMinutes;
+    if (totalMinutes <= 0 || result.employeeIds.length === 0) {
+      setPendingDrop(null);
+      return;
+    }
+    const fractionalDurationHours = totalMinutes / 60;
 
     const nzDateStr = date.toLocaleDateString("en-CA", {
       timeZone: "Pacific/Auckland",
     });
-    const durationHours = job.estimatedDuration || 2;
-    const endHour = Math.min(hour + durationHours, 23);
     const startTimeStr = `${String(hour).padStart(2, "0")}:00`;
-    const endTimeStr = `${String(endHour).padStart(2, "0")}:00`;
-
     const startDateTime = nzTimeToUTC(nzDateStr, startTimeStr);
-    const endDateTime = nzTimeToUTC(nzDateStr, endTimeStr);
+    const endDateTime = new Date(
+      startDateTime.getTime() + totalMinutes * 60_000,
+    );
 
     const updates: any = {
       scheduledDate: startDateTime.toISOString(),
-      estimatedDuration: durationHours,
+      estimatedDuration: fractionalDurationHours,
     };
-
-    // Only advance status if not already scheduled/complete/archived
     if (
       job.status !== "scheduled" &&
       job.status !== "completed" &&
@@ -1806,27 +2047,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updates.status = "scheduled";
     }
 
+    setIsConfirmingDrop(true);
     try {
-      // 1. Update the job's scheduled date + status
       await fetch(`/api/jobs/${jobId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       });
 
-      // 2. Create a staff assignment for the specific employee row that was dropped onto
       await fetch(`/api/jobs/${jobId}/staff-assignments`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          staffAssignments: [
-            {
-              employeeId,
-              startTime: startDateTime.toISOString(),
-              endTime: endDateTime.toISOString(),
-              notes: "",
-            },
-          ],
+          staffAssignments: result.employeeIds.map((employeeId) => ({
+            employeeId,
+            startTime: startDateTime.toISOString(),
+            endTime: endDateTime.toISOString(),
+            notes: "",
+          })),
           sendNotifications: false,
           sendClientNotification: false,
           addOnly: true,
@@ -1835,18 +2073,21 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
       queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      setPendingDrop(null);
     } catch {
       toast({
         title: "Scheduling Failed",
         description: "Could not schedule the job. Please try again.",
         variant: "destructive",
       });
+    } finally {
+      setIsConfirmingDrop(false);
     }
   };
 
   const handleCreateJob = () => {
     setJobToEdit(null);
-    setInitialJobData(null);
+    setInitialJobData({ status: "work_order" });
     setGlobalJobCardMode("create");
     setShowGlobalJobCard(true);
   };
@@ -1856,8 +2097,22 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     setInitialJobData({ status: "lead" });
     setGlobalJobCardMode("create");
     setShowGlobalJobCard(true);
-    // After the card opens, switch the filter to Lead so new lead is visible
     setJobFilter("lead");
+  };
+
+  const handleCreateQuote = () => {
+    setJobToEdit(null);
+    setInitialJobData({ status: "quote" });
+    setGlobalJobCardMode("create");
+    setShowGlobalJobCard(true);
+    setJobFilter("quote");
+  };
+
+  const handleCreateInvoice = () => {
+    setJobToEdit(null);
+    setInitialJobData({ status: "invoiced" });
+    setGlobalJobCardMode("create");
+    setShowGlobalJobCard(true);
   };
 
   const saveSchedule = () => {
@@ -2034,6 +2289,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const scheduledJobs = todaysJobs.filter(
       (job) => job.status === "scheduled",
     ).length;
+    const unconfirmedCount = countUnconfirmed(todaysJobs);
 
     return (
       <Card data-testid="dispatch-summary-card">
@@ -2137,17 +2393,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return (
       <div className="flex flex-col flex-1 min-h-0 p-4">
         <Card className="flex-1">
-          <CardHeader>
-            <CardTitle>Loading Dispatch Board...</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="animate-pulse space-y-3">
-                <div className="h-4 bg-muted rounded w-3/4"></div>
-                <div className="h-4 bg-muted rounded w-1/2"></div>
-                <div className="h-4 bg-muted rounded w-5/6"></div>
-                <div className="h-4 bg-muted rounded w-2/3"></div>
-              </div>
+          <CardContent className="pt-6">
+            <div className="animate-pulse space-y-3">
+              <div className="h-4 bg-muted rounded w-3/4"></div>
+              <div className="h-4 bg-muted rounded w-1/2"></div>
+              <div className="h-4 bg-muted rounded w-5/6"></div>
+              <div className="h-4 bg-muted rounded w-2/3"></div>
             </div>
           </CardContent>
         </Card>
@@ -2173,6 +2424,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     );
   }
 
+  const todaysJobs = getTodaysJobs();
+  const unconfirmedCount = countUnconfirmed(todaysJobs);
+
   return (
     <>
       <div className="flex flex-col flex-1 min-h-0">
@@ -2184,7 +2438,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
             {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
             <ResizablePanel
-              defaultSize={showGlobalJobCard ? 50 : 100}
+              ref={leftDispatchPanelRef}
+              defaultSize={100}
               minSize={30}
             >
               <ResizablePanelGroup
@@ -2216,6 +2471,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         selectedDate={selectedDate}
                         onDateChange={setSelectedDate}
                         onJobDrop={handleCalendarJobDrop}
+                        draggingJob={draggingJob}
                       />
                     </Card>
                   </div>
@@ -2237,76 +2493,30 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       style={{ pointerEvents: "auto" }}
                     >
                       <CardHeader className="flex-shrink-0 border-b pb-3">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="min-w-0">
-                            <CardTitle className="text-base">
-                              {filterMeta[jobFilter]?.title ?? "Active Jobs"}
-                            </CardTitle>
-                            <div className="text-xs text-muted-foreground mt-0.5">
-                              {filterMeta[jobFilter]?.subtitle ??
-                                "All upcoming jobs"}
-                            </div>
-                          </div>
-                          <div className="flex gap-1 flex-shrink-0">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="default"
-                                  size="sm"
-                                  data-testid="create-job-button"
-                                  className="h-7"
-                                >
-                                  <Plus className="h-4 w-4 mr-1" />
-                                  New
-                                  <ChevronDown className="h-3 w-3 ml-1" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleCreateJob}>
-                                  <Plus className="h-4 w-4 mr-2" />
-                                  New Job
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleCreateLead}>
-                                  <UserPlus className="h-4 w-4 mr-2" />
-                                  New Lead
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setShowCreateFromMessageDialog(true)
-                              }
-                              data-testid="paste-message-button"
-                              className="h-7"
-                            >
-                              <MessageSquare className="h-4 w-4 mr-1" />
-                              Paste
-                            </Button>
-                          </div>
-                        </div>
-
-                        {/* Status Filter Tabs - Desktop */}
-                        <div className="flex gap-1 mt-2">
-                          {STATUS_TAB_FILTERS.map((tab) => (
-                            <button
-                              key={tab.value}
-                              onClick={() =>
-                                setJobFilter(
-                                  jobFilter === tab.value ? "all" : tab.value,
-                                )
-                              }
-                              className={`flex-1 text-xs py-1 px-1 rounded-md font-medium transition-colors ${
-                                jobFilter === tab.value
-                                  ? "bg-primary text-primary-foreground"
-                                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-                              }`}
-                              data-testid={`desktop-filter-tab-${tab.value}`}
-                            >
-                              {tab.label}
-                            </button>
-                          ))}
+                        <div className="flex items-center justify-between gap-2">
+                          <CardTitle className="text-base">
+                            {filterMeta[jobFilter]?.title ?? "Active Jobs"}
+                          </CardTitle>
+                          {(jobFilter === "scheduled" ||
+                            jobFilter === "work_order" ||
+                            jobFilter === "all") &&
+                            unconfirmedCount > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => setOnlyUnconfirmed(!onlyUnconfirmed)}
+                                aria-pressed={onlyUnconfirmed}
+                                title={onlyUnconfirmed ? "Clear filter" : "Show only jobs awaiting confirmation"}
+                                data-testid="badge-unconfirmed-count"
+                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
+                                  onlyUnconfirmed
+                                    ? "border-amber-500 bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                    : "border-dashed border-amber-400 text-amber-700 hover:bg-amber-50"
+                                }`}
+                              >
+                                <span>{unconfirmedCount} awaiting confirmation</span>
+                                {onlyUnconfirmed && <X className="h-3 w-3" />}
+                              </button>
+                            )}
                         </div>
 
                         {/* Search Input - Desktop */}
@@ -2322,6 +2532,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 setDeepSearchResults([]);
                               }
                             }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && searchQuery.trim()) {
+                                performDeepSearch(searchQuery);
+                              }
+                            }}
                             className="pl-8 pr-8 h-8 text-sm"
                             data-testid="desktop-job-search-input"
                           />
@@ -2329,7 +2544,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             <Button
                               size="sm"
                               variant="ghost"
-                              className="absolute right-0.5 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                              className="absolute right-4 top-[60%] transform -translate-y-1/2 h-6 w-6 p-0"
                               onClick={() => {
                                 setIsDeepSearchActive(false);
                                 setDeepSearchResults([]);
@@ -2375,8 +2590,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             const customerName =
                               job.customerName || "Unknown Customer";
                             const total = calculateJobTotal(job);
-                            const suburb =
-                              job.address?.split(",")[0]?.trim() || "";
+                            const fullAddress = job.address?.trim() || "";
 
                             // Get status badge styling - same as mobile
                             const getDesktopStatusBadge = () => {
@@ -2391,15 +2605,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 case "quote":
                                   return {
                                     label: "Quote",
-                                    bg: "bg-blue-100",
-                                    text: "text-blue-700",
+                                    bg: "bg-orange-100",
+                                    text: "text-orange-700",
                                     icon: "≡",
                                   };
                                 case "work_order":
                                   return {
                                     label: "Work Order",
-                                    bg: "bg-orange-100",
-                                    text: "text-orange-700",
+                                    bg: "bg-blue-100",
+                                    text: "text-blue-700",
                                     icon: "≡",
                                   };
                                 case "scheduled":
@@ -2440,15 +2654,39 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                               <div
                                 key={job.id}
                                 className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                                style={(() => {
+                                  const firstId = job.assignedTeam?.[0];
+                                  const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
+                                  return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
+                                })()}
                                 draggable
                                 onDragStart={(e) => {
                                   e.dataTransfer.setData("jobId", job.id);
                                   e.dataTransfer.effectAllowed = "move";
+                                  // Compact custom drag ghost so the cursor isn't dragging the whole job card around.
+                                  const ghost = document.createElement("div");
+                                  ghost.style.cssText =
+                                    "position:absolute;top:-1000px;left:-1000px;padding:4px 10px;background:#1d4ed8;color:white;border-radius:6px;font-size:12px;font-weight:600;white-space:nowrap;box-shadow:0 4px 12px rgba(0,0,0,0.2);pointer-events:none;";
+                                  const label = job.jobNumber
+                                    ? `#${job.jobNumber} ${job.customerName ?? ""}`
+                                    : job.customerName ?? "Job";
+                                  ghost.textContent = label.trim();
+                                  document.body.appendChild(ghost);
+                                  e.dataTransfer.setDragImage(ghost, 12, 12);
+                                  setTimeout(() => {
+                                    if (ghost.parentNode) ghost.parentNode.removeChild(ghost);
+                                  }, 0);
+                                  setDraggingJob({
+                                    id: job.id,
+                                    durationHours: job.estimatedDuration || 2,
+                                    customerName: job.customerName ?? "",
+                                  });
                                   // Prevent click from firing after drag
                                   e.currentTarget.dataset.dragging = "true";
                                 }}
                                 onDragEnd={(e) => {
                                   delete e.currentTarget.dataset.dragging;
+                                  setDraggingJob(null);
                                 }}
                                 onClick={(e) => {
                                   // Don't open job card if user just dragged
@@ -2504,11 +2742,11 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     </div>
 
                                     {/* Row 2: Location + Status Badge */}
-                                    <div className="flex items-center justify-between gap-2 mb-1">
-                                      <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
-                                        <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                                        <span className="truncate">
-                                          {suburb || "No location"}
+                                    <div className="flex items-start justify-between gap-2 mb-1">
+                                      <div className="flex items-start gap-1.5 text-sm text-gray-500 min-w-0">
+                                        <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0 mt-0.5" />
+                                        <span className="whitespace-normal break-words min-w-0">
+                                          {fullAddress || "No location"}
                                         </span>
                                       </div>
                                       <div className="flex items-center gap-1 flex-shrink-0">
@@ -2537,13 +2775,26 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       </div>
                                     )}
 
-                                    {/* Row 2c: Customer confirmed badge */}
-                                    {job.customerConfirmed && (
-                                      <div className="mb-1">
-                                        <Badge className="bg-green-100 text-green-700 border-0 text-xs">
-                                          <Check className="h-3 w-3 mr-1" />
-                                          Confirmed
-                                        </Badge>
+                                    {/* Row 2c: Customer confirmed / replied badge */}
+                                    {(job.customerConfirmed || job.customerReplyReceivedAt) && (
+                                      <div className="mb-1 flex items-center gap-1 flex-wrap">
+                                        {job.customerConfirmed ? (
+                                          <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+                                            <Check className="h-3 w-3 mr-1" />
+                                            Confirmed
+                                          </Badge>
+                                        ) : (
+                                          <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                            <MessageSquare className="h-3 w-3 mr-1" />
+                                            Customer replied
+                                          </Badge>
+                                        )}
+                                        {job.confirmationReplySentAt && (
+                                          <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                                            <Reply className="h-3 w-3 mr-1" />
+                                            Reply sent
+                                          </Badge>
+                                        )}
                                       </div>
                                     )}
 
@@ -2573,97 +2824,35 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                         </Badge>
                                       </div>
                                     )}
-                                    {job.description && (
-                                      <p className="text-sm text-gray-500 line-clamp-1 mb-2">
-                                        {job.description}
-                                      </p>
+                                    {/* Description — always reserved so every card keeps the same height
+                                        regardless of whether a description is set. Clamps to 3 lines max. */}
+                                    <p className="text-sm text-gray-500 line-clamp-3 mb-2 min-h-[3.75rem]">
+                                      {job.description || ''}
+                                    </p>
+
+                                    {/* Crew colour indicators */}
+                                    {job.assignedTeam && job.assignedTeam.length > 0 && (
+                                      <div className="flex items-center gap-1 mt-1">
+                                        {job.assignedTeam.slice(0, 5).map((empId: string) => {
+                                          const emp = employeeMap.get(empId);
+                                          const pal = crewPaletteMap.get(empId);
+                                          if (!pal) return null;
+                                          const label = emp ? `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() : empId;
+                                          return (
+                                            <div
+                                              key={empId}
+                                              title={label}
+                                              className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 ring-2 ring-white"
+                                              style={{ backgroundColor: pal.dot }}
+                                            >
+                                              {emp ? crewInitials(emp.firstName, emp.lastName) : '?'}
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
                                     )}
                                   </div>
 
-                                  {/* Action Icons */}
-                                  <div className="flex-shrink-0 ml-2 flex flex-col gap-1">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-10 w-10 rounded-lg border border-gray-200 hover:bg-gray-100"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleEditJob(job);
-                                      }}
-                                    >
-                                      <MessageSquare className="h-5 w-5 text-blue-500" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title={
-                                        job.inQueue
-                                          ? "Remove from Queue"
-                                          : "Add to Queue"
-                                      }
-                                      className={`h-10 w-10 rounded-lg border hover:bg-gray-100 ${job.inQueue ? "border-amber-300 bg-amber-50" : "border-gray-200"}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (job.inQueue) {
-                                          queueJobMutation.mutate({
-                                            id: job.id,
-                                            inQueue: false,
-                                            queueReason: null,
-                                          });
-                                        } else {
-                                          setQueueTargetJob(job);
-                                          setQueueReasonInput("");
-                                          setShowQueueDialog(true);
-                                        }
-                                      }}
-                                    >
-                                      <Inbox
-                                        className={`h-4 w-4 ${job.inQueue ? "text-amber-600" : "text-gray-400"}`}
-                                      />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title={
-                                        job.customerConfirmed
-                                          ? "Mark as Unconfirmed"
-                                          : "Mark as Confirmed"
-                                      }
-                                      className={`h-10 w-10 rounded-lg border hover:bg-gray-100 ${job.customerConfirmed ? "border-green-300 bg-green-50" : "border-gray-200"}`}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        confirmJobMutation.mutate({
-                                          id: job.id,
-                                          customerConfirmed:
-                                            !job.customerConfirmed,
-                                        });
-                                      }}
-                                    >
-                                      <Check
-                                        className={`h-4 w-4 ${job.customerConfirmed ? "text-green-600" : "text-gray-400"}`}
-                                      />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      title="Archive job (remove from board)"
-                                      className="h-10 w-10 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-300"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        if (
-                                          window.confirm(
-                                            "Archive this job? It will be removed from the board and staff schedule.",
-                                          )
-                                        ) {
-                                          archiveJobQuickMutation.mutate(
-                                            job.id,
-                                          );
-                                        }
-                                      }}
-                                    >
-                                      <X className="h-4 w-4 text-gray-400 hover:text-red-500" />
-                                    </Button>
-                                  </div>
                                 </div>
                               </div>
                             );
@@ -2732,10 +2921,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             mode={globalJobCardMode}
                             jobId={jobToEdit?.jobId || jobToEdit?.id}
                             initialData={initialJobData}
+                            initialSidebarTab={initialSidebarTab}
                             onClose={() => {
                               setShowGlobalJobCard(false);
                               setJobToEdit(null);
                               setInitialJobData(null);
+                              setInitialSidebarTab(undefined);
                             }}
                             renderInline={true}
                           />
@@ -2750,150 +2941,119 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
 
         {/* Mobile Layout: ServiceM8-style job cards */}
-        <div className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50">
-          {/* Header with Create Buttons */}
-          <div className="bg-gradient-to-r from-blue-500 to-blue-600 px-4 py-3 flex items-center justify-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateLead}
-              data-testid="create-lead-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              New Lead
-            </Button>
-            <span className="text-white/60">·</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateJob}
-              data-testid="create-quote-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              Quote
-            </Button>
-            <span className="text-white/60">·</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleCreateJob}
-              data-testid="create-job-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              Job
-            </Button>
-            <span className="text-white/60">·</span>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCreateFromMessageDialog(true)}
-              data-testid="paste-message-button-mobile"
-              className="text-white hover:bg-white/20 text-sm font-medium"
-            >
-              <MessageSquare className="h-4 w-4 mr-1" />
-              Paste
-            </Button>
-          </div>
-
-          {/* Search Bar */}
-          <div className="px-4 py-3 bg-white border-b">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <Input
-                  placeholder="Search..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    if (!e.target.value.trim()) {
-                      setIsDeepSearchActive(false);
-                      setDeepSearchResults([]);
-                    }
-                  }}
-                  className="pl-10 pr-10 h-11 text-base bg-gray-50 border-gray-200 rounded-xl"
-                  data-testid="mobile-job-search-input"
-                />
-                {searchQuery && !isDeepSearchActive && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                    onClick={() => setSearchQuery("")}
-                    data-testid="btn-clear-search-mobile"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+        <div
+          className="lg:hidden flex flex-col flex-1 min-h-0 overflow-hidden bg-gray-50"
+          onTouchStart={handleSwipeTouchStart}
+          onTouchEnd={handleSwipeTouchEnd}
+        >
+          {/* Search strip — pinned below main header */}
+          <div className="flex-shrink-0 z-50">
+          {showMobileSearch && (
+          <div className="bg-background border-b px-3 py-1 flex flex-col gap-1">
+              <div className="flex flex-col gap-1 pb-1">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                    <Input
+                      autoFocus
+                      placeholder="Search jobs..."
+                      value={searchQuery}
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        if (isDeepSearchActive) {
+                          setIsDeepSearchActive(false);
+                          setDeepSearchResults([]);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && searchQuery.trim()) {
+                          performDeepSearch(searchQuery);
+                        }
+                      }}
+                      className="pl-9 pr-9 h-9 text-sm rounded-xl"
+                      data-testid="mobile-job-search-input"
+                    />
+                    {searchQuery && (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="absolute right-4 top-[60%] -translate-y-1/2 h-7 w-7"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setIsDeepSearchActive(false);
+                          setDeepSearchResults([]);
+                        }}
+                        data-testid="btn-clear-search-mobile"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                  {searchQuery.trim() && !isDeepSearchActive && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 h-9 px-3"
+                      onClick={() => performDeepSearch(searchQuery)}
+                      disabled={isDeepSearchLoading}
+                      data-testid="btn-deep-search-mobile"
+                    >
+                      {isDeepSearchLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Search className="h-3.5 w-3.5 mr-1" />
+                          Deep
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
                 {isDeepSearchActive && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0 text-blue-600"
-                    onClick={() => {
-                      setIsDeepSearchActive(false);
-                      setDeepSearchResults([]);
-                      setSearchQuery("");
-                    }}
-                    data-testid="btn-clear-deep-search-mobile"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    <SearchX className="h-3 w-3" />
+                    {deepSearchResults.length} results found
+                  </div>
                 )}
               </div>
-              {/* Deep Search Button - Mobile */}
-              {searchQuery.trim() && !isDeepSearchActive && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="h-11 px-3 shrink-0"
-                  onClick={() => performDeepSearch(searchQuery)}
-                  disabled={isDeepSearchLoading}
-                  data-testid="btn-deep-search-mobile"
+          </div>
+          )}
+          {(jobFilter === "scheduled" ||
+            jobFilter === "work_order" ||
+            jobFilter === "all") &&
+            unconfirmedCount > 0 && (
+              <div className="bg-background border-b px-3 py-2">
+                <button
+                  type="button"
+                  onClick={() => setOnlyUnconfirmed(!onlyUnconfirmed)}
+                  aria-pressed={onlyUnconfirmed}
+                  data-testid="badge-unconfirmed-count-mobile"
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    onlyUnconfirmed
+                      ? "border-amber-500 bg-amber-100 text-amber-800"
+                      : "border-dashed border-amber-400 bg-amber-50 text-amber-700"
+                  }`}
                 >
-                  {isDeepSearchLoading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <>
-                      <Search className="h-4 w-4 mr-1" />
-                      Deep
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-            {/* Deep Search Status - Mobile */}
-            {isDeepSearchActive && (
-              <div className="flex items-center gap-1 text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded mt-2">
-                <SearchX className="h-3 w-3" />
-                {deepSearchResults.length} results found
+                  <span>{unconfirmedCount} awaiting confirmation</span>
+                  {onlyUnconfirmed && <X className="h-3.5 w-3.5" />}
+                </button>
               </div>
             )}
-          </div>
+          </div>{/* end header group */}
 
-          {/* Status Filter Tabs - Mobile */}
-          <div className="px-4 py-2 bg-white border-b flex gap-1.5">
-            {STATUS_TAB_FILTERS.map((tab) => (
-              <button
-                key={tab.value}
-                onClick={() =>
-                  setJobFilter(jobFilter === tab.value ? "all" : tab.value)
-                }
-                className={`flex-1 text-xs py-1.5 px-1 rounded-md font-medium transition-colors ${
-                  jobFilter === tab.value
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground"
-                }`}
-                data-testid={`mobile-filter-tab-${tab.value}`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Jobs List - ServiceM8 Style */}
-          <div className="flex-1 overflow-y-auto">
-            <div className="divide-y divide-gray-100">
+          {/* Jobs List - scrollable area with pull-to-refresh */}
+          <div className="flex-1 min-h-0">
+          <PullToRefresh
+            onRefresh={async () => {
+              await Promise.all([
+                queryClient.invalidateQueries({ queryKey: ["/api/jobs"] }),
+                queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] }),
+                queryClient.invalidateQueries({ queryKey: ["/api/customers"] }),
+                queryClient.invalidateQueries({ queryKey: ["/api/employees/active"] }),
+              ]);
+            }}
+          >
+          <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
                 const total = calculateJobTotal(job);
@@ -2912,15 +3072,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     case "quote":
                       return {
                         label: "Quote",
-                        bg: "bg-blue-100",
-                        text: "text-blue-700",
+                        bg: "bg-orange-100",
+                        text: "text-orange-700",
                         icon: "≡",
                       };
                     case "work_order":
                       return {
                         label: "Work Order",
-                        bg: "bg-orange-100",
-                        text: "text-orange-700",
+                        bg: "bg-blue-100",
+                        text: "text-blue-700",
                         icon: "≡",
                       };
                     case "scheduled":
@@ -2999,11 +3159,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 return (
                   <div
                     key={job.id}
-                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors"
+                    className="bg-white hover:bg-gray-50 cursor-pointer transition-colors w-full overflow-hidden"
+                    style={(() => {
+                      const firstId = job.assignedTeam?.[0];
+                      const pal = firstId ? crewPaletteMap.get(firstId) : undefined;
+                      return pal ? { borderLeft: `3px solid ${pal.dot}` } : {};
+                    })()}
                     onClick={() => handleEditJob(job)}
                     data-testid={`job-card-${job.id}`}
                   >
-                    <div className="flex items-start gap-3 p-4">
+                    <div className="flex items-start gap-3 p-4 min-w-0 overflow-hidden">
                       {/* Customer Avatar - Large Circle */}
                       <div className="relative flex-shrink-0">
                         <CustomerAvatar
@@ -3040,195 +3205,98 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
                         {/* Row 2: Location + Service Type with Icon + Status Badge */}
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <div className="flex items-center gap-1.5 text-sm text-gray-500 min-w-0">
+                          <div className="flex items-center gap-1.5 text-sm min-w-0">
                             <MapPin className="h-3.5 w-3.5 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">
-                              {suburb || "No location"}
+                            <span className="font-semibold text-gray-800 line-clamp-1">
+                              {job.address || "No location"}
                             </span>
                             {job.serviceType && (
                               <>
-                                <span className="text-gray-300">|</span>
+                                <span className="text-gray-300 flex-shrink-0">|</span>
                                 {getServiceTypeIcon()}
-                                <span className="truncate">
+                                <span className="truncate text-gray-500">
                                   {job.serviceType}
                                 </span>
                               </>
                             )}
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
-                            {job.inQueue && (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
-                                {job.queueReason || "Queued"}
-                              </Badge>
-                            )}
                             {job.customerConfirmed && (
                               <Badge className="bg-green-100 text-green-700 border-0 text-xs">
                                 <Check className="h-3 w-3 mr-1" />
                                 Confirmed
                               </Badge>
                             )}
-                            {job.etaNotificationRequested && (
+                            {!job.customerConfirmed && job.customerReplyReceivedAt && (
                               <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
-                                <Bell className="h-3 w-3 mr-1" />
-                                Notify ETA
+                                <MessageSquare className="h-3 w-3 mr-1" />
+                                Customer replied
                               </Badge>
                             )}
-                            <Badge
-                              className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}
-                            >
-                              {statusBadge.dot && (
-                                <span
-                                  className="w-2 h-2 rounded-full mr-1.5"
-                                  style={{ backgroundColor: "currentColor" }}
-                                />
-                              )}
-                              {statusBadge.icon && (
-                                <span className="mr-1">{statusBadge.icon}</span>
-                              )}
-                              {statusBadge.label}
+                            {job.confirmationReplySentAt && (
+                              <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                                <Reply className="h-3 w-3 mr-1" />
+                                Reply sent
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Queue reason row — own line so it never blocks the address */}
+                        {job.inQueue && job.queueReason && (
+                          <div className="mb-1.5">
+                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              {job.queueReason}
                             </Badge>
                           </div>
-                        </div>
-
-                        {/* Row 3: Description snippet */}
-                        {job.description && (
-                          <p className="text-sm text-gray-500 line-clamp-1 mb-2">
-                            {job.description}
-                          </p>
                         )}
 
-                        {/* Row 4: Action indicators + Call/Message buttons */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            {job.priority === "urgent" && (
-                              <Badge className="bg-orange-500 text-white text-xs border-0">
-                                <Zap className="h-3 w-3 mr-1" />
-                                Urgent
-                              </Badge>
-                            )}
-                            {job.scheduledEndDate ? (
-                              <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
-                                {format(new Date(job.startTime), "MMM d")} –{" "}
-                                {format(
-                                  new Date(job.scheduledEndDate),
-                                  "MMM d",
-                                )}
-                              </Badge>
-                            ) : job.startTime ? (
-                              <span className="flex items-center gap-1 text-xs text-gray-500">
-                                <Calendar className="h-3 w-3" />
-                                {format(new Date(job.startTime), "MMM d")}
-                              </span>
-                            ) : null}
-                          </div>
+                        {/* Row 3: Description snippet — always 1 line for consistent card height */}
+                        <p className="text-sm text-gray-500 line-clamp-1 mb-2 min-h-5">
+                          {job.description || ""}
+                        </p>
 
-                          {/* Call & Message & Queue Buttons */}
-                          <div className="flex items-center gap-2">
-                            {hasPhone && (
-                              <Button
-                                size="icon"
-                                variant="default"
-                                className="bg-green-500 rounded-lg"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  window.location.href = `tel:${job.jobContactPhone || job.jobContactMobile || job.customerPhone || job.phone}`;
-                                }}
-                                data-testid={`call-button-${job.id}`}
-                              >
-                                <Phone className="h-4 w-4" />
-                              </Button>
-                            )}
-                            <Button
-                              size="icon"
-                              variant="default"
-                              className="bg-blue-500 rounded-lg"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (hasPhone) {
-                                  window.location.href = `sms:${job.customerPhone || job.phone}`;
-                                }
-                              }}
-                              data-testid={`message-button-${job.id}`}
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              title={
-                                job.inQueue
-                                  ? "Remove from Queue"
-                                  : "Add to Queue"
-                              }
-                              className={
-                                job.inQueue
-                                  ? "border-amber-300 bg-amber-50 rounded-lg"
-                                  : "rounded-lg"
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (job.inQueue) {
-                                  queueJobMutation.mutate({
-                                    id: job.id,
-                                    inQueue: false,
-                                    queueReason: null,
-                                  });
-                                } else {
-                                  setQueueTargetJob(job);
-                                  setQueueReasonInput("");
-                                  setShowQueueDialog(true);
-                                }
-                              }}
-                            >
-                              <Inbox
-                                className={`h-4 w-4 ${job.inQueue ? "text-amber-600" : "text-gray-500"}`}
-                              />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              title={
-                                job.customerConfirmed
-                                  ? "Mark as Unconfirmed"
-                                  : "Mark as Confirmed"
-                              }
-                              className={
-                                job.customerConfirmed
-                                  ? "border-green-300 bg-green-50 rounded-lg"
-                                  : "rounded-lg"
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                confirmJobMutation.mutate({
-                                  id: job.id,
-                                  customerConfirmed: !job.customerConfirmed,
-                                });
-                              }}
-                            >
-                              <Check
-                                className={`h-4 w-4 ${job.customerConfirmed ? "text-green-600" : "text-gray-500"}`}
-                              />
-                            </Button>
-                            <Button
-                              size="icon"
-                              variant="outline"
-                              title="Archive job (remove from board)"
-                              className="rounded-lg hover:border-red-300 hover:bg-red-50"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (
-                                  window.confirm(
-                                    "Archive this job? It will be removed from the board and staff schedule.",
-                                  )
-                                ) {
-                                  archiveJobQuickMutation.mutate(job.id);
-                                }
-                              }}
-                            >
-                              <X className="h-4 w-4 text-gray-500" />
-                            </Button>
-                          </div>
+                        {/* Row 4: Action indicators */}
+                        <div className="flex items-center gap-2">
+                          {job.priority === "urgent" && (
+                            <Badge className="bg-orange-500 text-white text-xs border-0">
+                              <Zap className="h-3 w-3 mr-1" />
+                              Urgent
+                            </Badge>
+                          )}
+                          {job.scheduledEndDate ? (
+                            <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
+                              {format(new Date(job.startTime), "MMM d")} –{" "}
+                              {format(new Date(job.scheduledEndDate), "MMM d")}
+                            </Badge>
+                          ) : job.startTime ? (
+                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(job.startTime), "MMM d")}
+                            </span>
+                          ) : null}
                         </div>
+
+                        {/* Crew colour indicators */}
+                        {job.assignedTeam && job.assignedTeam.length > 0 && (
+                          <div className="flex items-center gap-1 mt-1.5">
+                            {job.assignedTeam.slice(0, 5).map((empId: string) => {
+                              const emp = employeeMap.get(empId);
+                              const pal = crewPaletteMap.get(empId);
+                              if (!pal) return null;
+                              return (
+                                <div
+                                  key={empId}
+                                  title={emp ? `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim() : empId}
+                                  className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold shrink-0 ring-2 ring-white"
+                                  style={{ backgroundColor: pal.dot }}
+                                >
+                                  {emp ? crewInitials(emp.firstName, emp.lastName) : '?'}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3250,6 +3318,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                 </div>
               )}
             </div>
+          </PullToRefresh>
           </div>
         </div>
       </div>
@@ -3263,10 +3332,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               mode={globalJobCardMode}
               jobId={jobToEdit?.jobId || jobToEdit?.id}
               initialData={initialJobData}
+              initialSidebarTab={initialSidebarTab}
               onClose={() => {
                 setShowGlobalJobCard(false);
                 setJobToEdit(null);
                 setInitialJobData(null);
+                setInitialSidebarTab(undefined);
               }}
             />
           </JobCardErrorBoundary>
@@ -3421,6 +3492,24 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {pendingDrop && (
+        <QuickAssignDialog
+          open
+          jobLabel={pendingDrop.jobLabel}
+          customerName={pendingDrop.customerName}
+          address={pendingDrop.address}
+          droppedHour={pendingDrop.hour}
+          droppedEmployeeId={pendingDrop.employeeId}
+          employees={employees}
+          defaultDurationHours={pendingDrop.defaultDurationHours}
+          isSubmitting={isConfirmingDrop}
+          onCancel={() => {
+            if (!isConfirmingDrop) setPendingDrop(null);
+          }}
+          onConfirm={confirmPendingDrop}
+        />
+      )}
     </>
   );
 }

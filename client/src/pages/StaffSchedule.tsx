@@ -1,446 +1,771 @@
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { formatInTimeZone, toZonedTime } from 'date-fns-tz';
-
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, X, MapPin, ChevronRight as ChevronRightSmall } from 'lucide-react';
-import { useState, useMemo } from 'react';
-import type { Job, Employee, Customer } from '@shared/schema';
-import { GlobalJobCard } from '@/components/GlobalJobCard';
-import { queryClient, apiRequest } from '@/lib/queryClient';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { addDays, format, isToday } from 'date-fns';
+import { ChevronLeft, ChevronRight, MapPin, AlignJustify, Check, Reply, MessageSquare } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import type { Job as BaseJob, Employee } from '@shared/schema';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { apiRequest } from '@/lib/queryClient';
 import { useToast } from '@/hooks/use-toast';
+
+type Job = BaseJob & {
+  confirmationReplySentAt?: string | Date | null;
+  customerReplyReceivedAt?: string | Date | null;
+};
+import { GlobalJobCard } from '@/components/GlobalJobCard';
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const NZ_TZ = 'Pacific/Auckland';
+const TIMELINE_START_H = 6;   // 6 AM
+const TIMELINE_END_H   = 19;  // 7 PM
+const TIMELINE_HOURS   = TIMELINE_END_H - TIMELINE_START_H;
+const STAFF_COL_W      = 148; // px — fixed left column width
+const MIN_HOUR_COL_W   = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
+
+const HOUR_LABELS = Array.from({ length: TIMELINE_HOURS + 1 }, (_, i) => {
+  const h = TIMELINE_START_H + i;
+  if (h === 12) return '12 PM';
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
+});
+
+// Staff accent colours (assigned by index)
+const STAFF_PALETTE = [
+  { dot: '#3b82f6', row: '#eff6ff', avatar: '#1e40af' }, // blue
+  { dot: '#10b981', row: '#f0fdf4', avatar: '#065f46' }, // emerald
+  { dot: '#f97316', row: '#fff7ed', avatar: '#9a3412' }, // orange
+  { dot: '#a855f7', row: '#faf5ff', avatar: '#6b21a8' }, // purple
+  { dot: '#ec4899', row: '#fdf2f8', avatar: '#9d174d' }, // pink
+  { dot: '#eab308', row: '#fefce8', avatar: '#713f12' }, // yellow
+  { dot: '#14b8a6', row: '#f0fdfa', avatar: '#134e4a' }, // teal
+  { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
+];
+
+// 12 visually distinct colours — each job on the day gets its own, consistent across all crew rows
+const JOB_IDENTITY_PALETTE = [
+  { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' }, // blue
+  { bg: '#d1fae5', border: '#059669', text: '#064e3b' }, // emerald
+  { bg: '#ffedd5', border: '#ea580c', text: '#7c2d12' }, // orange
+  { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // purple
+  { bg: '#fce7f3', border: '#db2777', text: '#831843' }, // pink
+  { bg: '#fef9c3', border: '#ca8a04', text: '#713f12' }, // amber
+  { bg: '#ccfbf1', border: '#0d9488', text: '#134e4a' }, // teal
+  { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d' }, // red
+  { bg: '#e0e7ff', border: '#4f46e5', text: '#312e81' }, // indigo
+  { bg: '#dcfce7', border: '#16a34a', text: '#14532d' }, // green
+  { bg: '#fef3c7', border: '#d97706', text: '#78350f' }, // yellow
+  { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' }, // violet
+];
+
+// Status dot colours used in the legend only
+const STATUS_LEGEND: Array<{ label: string; color: string }> = [
+  { label: 'Lead',        color: '#ca8a04' },
+  { label: 'Quoted',      color: '#ea580c' },
+  { label: 'Scheduled',   color: '#2563eb' },
+  { label: 'In Progress', color: '#059669' },
+  { label: 'Completed',   color: '#6b7280' },
+  { label: 'Invoiced',    color: '#7c3aed' },
+  { label: 'Paid',        color: '#16a34a' },
+];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function timeStrToMinutes(t: string): number {
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+function minutesToPercent(minutes: number): number {
+  const start = TIMELINE_START_H * 60;
+  const total = TIMELINE_HOURS * 60;
+  return Math.max(0, Math.min(100, (minutes - start) / total * 100));
+}
+
+
+function initials(name: string) {
+  return name.split(' ').map(p => p[0]).join('').toUpperCase().slice(0, 2);
+}
+
+function nzDateStr(date: Date) {
+  return formatInTimeZone(date, NZ_TZ, 'yyyy-MM-dd');
+}
+
+// Assigns overlapping items in a single row to vertical lanes so they don't cover each other.
+// Returns a map of item.id → { lane, totalLanes }.
+function assignLanes(items: { id: string; startMins: number; endMins: number }[]): Map<string, { lane: number; totalLanes: number }> {
+  const sorted = [...items].sort((a, b) => a.startMins - b.startMins);
+  const laneEnd: number[] = []; // end-time (mins) of the last item placed in each lane
+  const laneOf = new Map<string, number>();
+
+  for (const item of sorted) {
+    let placed = -1;
+    for (let l = 0; l < laneEnd.length; l++) {
+      if (laneEnd[l] <= item.startMins) { placed = l; laneEnd[l] = item.endMins; break; }
+    }
+    if (placed === -1) { placed = laneEnd.length; laneEnd.push(item.endMins); }
+    laneOf.set(item.id, placed);
+  }
+
+  const total = laneEnd.length || 1;
+  const result = new Map<string, { lane: number; totalLanes: number }>();
+  for (const [id, lane] of laneOf) result.set(id, { lane, totalLanes: total });
+  return result;
+}
+
+// Returns CSS top/height strings that divide the row equally between lanes.
+function laneStyle(lane: number, totalLanes: number) {
+  const pct = 100 / totalLanes;
+  return { top: `calc(${lane * pct}% + 3px)`, height: `calc(${pct}% - 6px)` };
+}
+
+// Minimum on-screen block size, in minutes. Matches CalendarGrid's GANTT_MIN_DURATION_MINS.
+const MIN_BLOCK_MINS = 60;
+
+// Compute effective NZ-minutes for a slot. Mirrors CalendarGrid's effectiveGanttMins:
+// prefer the job's scheduled string times; fall back to the assignment's UTC timestamps;
+// finally default to 8 AM–4 PM.
+function effectiveMins(
+  job: Job,
+  assignment: { startTime: string | Date; endTime: string | Date } | null,
+): { startMins: number; endMins: number } {
+  if (job.scheduledStartTime) {
+    const startMins = timeStrToMinutes(job.scheduledStartTime);
+    const rawEnd = job.scheduledEndTime ? timeStrToMinutes(job.scheduledEndTime) : startMins + MIN_BLOCK_MINS;
+    return { startMins, endMins: Math.max(rawEnd, startMins + MIN_BLOCK_MINS) };
+  }
+  if (assignment) {
+    const startNZ = toZonedTime(new Date(assignment.startTime), NZ_TZ);
+    const endNZ   = toZonedTime(new Date(assignment.endTime),   NZ_TZ);
+    const startMins = startNZ.getHours() * 60 + startNZ.getMinutes();
+    const rawEnd    = endNZ.getHours()   * 60 + endNZ.getMinutes();
+    return { startMins, endMins: Math.max(rawEnd, startMins + MIN_BLOCK_MINS) };
+  }
+  return { startMins: 8 * 60, endMins: 16 * 60 };
+}
+
+function formatTimeFromMins(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12  = h % 12 || 12;
+  return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function StaffSchedule() {
   const [selectedDate, setSelectedDate] = useState<Date>(() => {
-    const now = new Date();
-    const nzNow = toZonedTime(now, 'Pacific/Auckland');
-    nzNow.setHours(0, 0, 0, 0);
-    return nzNow;
+    const now = toZonedTime(new Date(), NZ_TZ);
+    now.setHours(0, 0, 0, 0);
+    return now;
   });
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [showJobCard, setShowJobCard] = useState(false);
-  const { toast } = useToast();
+  const [rowHeight, setRowHeight] = useState(72);
 
-  const { data: jobsData } = useQuery<{ success: boolean; data: Job[] }>({
-    queryKey: ['/api/jobs?limit=10000'],
-    refetchInterval: 5000,
+  // Current-time line position (refreshed every minute)
+  const [nowPercent, setNowPercent] = useState<number | null>(null);
+  useEffect(() => {
+    const calc = () => {
+      const now = toZonedTime(new Date(), NZ_TZ);
+      const mins = now.getHours() * 60 + now.getMinutes();
+      setNowPercent(minutesToPercent(mins));
+    };
+    calc();
+    const id = setInterval(calc, 60_000);
+    return () => clearInterval(id);
+  }, []);
+
+  const dateStr = nzDateStr(selectedDate);
+  const isTodaySelected = isToday(selectedDate);
+
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const setDayRoleMutation = useMutation({
+    mutationFn: async (vars: { employeeId: string; date: string; dayRole: 'A' | 'B' | null }) => {
+      const res = await apiRequest('PUT', '/api/staff-assignments/day-role', vars);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
+      queryClient.invalidateQueries({
+        predicate: (q) => Array.isArray(q.queryKey)
+          && q.queryKey[0] === '/api/jobs'
+          && q.queryKey[2] === 'staff-assignments',
+      });
+    },
+    onError: (e: Error) => toast({ title: 'Failed to set role', description: e.message, variant: 'destructive' }),
   });
 
+  // ── Queries ──
+  // Use a date-scoped endpoint so we fetch only the few jobs for this day, not all 3500+
+  const { data: jobsData, isLoading: jobsLoading } = useQuery<{ success: boolean; data: Job[] }>({
+    queryKey: ['/api/jobs/for-date', dateStr],
+    queryFn: () => fetch(`/api/jobs/for-date?date=${dateStr}`).then(r => r.json()),
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
   const { data: employeesData } = useQuery<{ success: boolean; data: Employee[] }>({
     queryKey: ['/api/employees'],
   });
-
-  const { data: customersData } = useQuery<{ success: boolean; data: Customer[] }>({
+  const { data: assignmentsData } = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ['/api/staff-assignments'],
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+  const { data: customersData } = useQuery<{ success: boolean; data: any[] }>({
     queryKey: ['/api/customers'],
   });
-
-  const { data: staffAssignmentsData } = useQuery<{ success: boolean; data: any[] }>({
-    queryKey: ['/api/staff-assignments'],
-    refetchInterval: 5000,
+  const { data: businessSettingsData } = useQuery<{
+    success: boolean;
+    data: { dailyRevenueTarget?: string | number | null };
+  }>({
+    queryKey: ['/api/business-settings'],
   });
 
-  const jobs = jobsData?.data || [];
-  const employees = employeesData?.data || [];
-  const customers = customersData?.data || [];
-  const staffAssignments = staffAssignmentsData?.data || [];
+  // dayJobs comes directly from the date-scoped API — no client-side filtering needed
+  const dayJobs        = jobsData?.data ?? [];
+  const allEmployees   = employeesData?.data ?? [];
+  const allAssignments = assignmentsData?.data ?? [];
+  const allCustomers   = customersData?.data ?? [];
+
+  // Daily revenue tracker — computed client-side from dayJobs, mirroring the
+  // dispatch board's CalendarGrid logic so the two views always agree.
+  const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
+  const revenueInfo = useMemo(() => {
+    const revenueJobs = dayJobs.filter(j => j.status !== 'completed' && j.status !== 'unsuccessful');
+    const scheduledRevenue = revenueJobs.reduce((sum, j) => {
+      const sub = parseFloat(j.subtotal || '0');
+      if (sub > 0) return sum + sub;
+      const incGst = parseFloat(j.totalIncludingGst || '0');
+      if (incGst > 0) return sum + incGst / 1.15;
+      const total = parseFloat(j.totalAmount || '0');
+      if (total > 0) return sum + total / 1.15;
+      return sum;
+    }, 0);
+    return {
+      scheduledRevenue,
+      dailyTarget: DAILY_TARGET,
+      percentComplete: DAILY_TARGET > 0 ? Math.round((scheduledRevenue / DAILY_TARGET) * 100) : 0,
+      jobCount: revenueJobs.length,
+      belowTarget: scheduledRevenue < DAILY_TARGET,
+    };
+  }, [dayJobs, DAILY_TARGET]);
 
   const customerMap = useMemo(() => {
-    const map = new Map<string, string>();
-    customers.forEach(customer => {
-      map.set(customer.id, customer.name);
-    });
-    return map;
-  }, [customers]);
+    const m = new Map<string, string>();
+    allCustomers.forEach((c: any) => m.set(c.id, c.name));
+    return m;
+  }, [allCustomers]);
 
-  const getCustomerName = (job: Job) => {
-    if (job.customerId) {
-      return customerMap.get(job.customerId) || 'Unknown Customer';
-    }
-    return 'No Customer';
-  };
-
-  // Number of calendar days a job spans (minimum 1) — used to split revenue per day
-  const jobDayCount = (job: any): number => {
-    if (!job.scheduledDate || !job.scheduledEndDate) return 1;
-    const startNZ = formatInTimeZone(new Date(job.scheduledDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-    const endNZ = formatInTimeZone(new Date(job.scheduledEndDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-    if (endNZ <= startNZ) return 1;
-    const startMs = new Date(startNZ + 'T12:00:00Z').getTime();
-    const endMs = new Date(endNZ + 'T12:00:00Z').getTime();
-    return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
-  };
-
-  // Revenue attributed to one day of the job (exc-GST, split evenly across all scheduled days)
-  const calculateJobTotal = (job: any): number => {
-    let raw = 0;
-    if (job.subtotal && Number(job.subtotal) > 0) raw = Number(job.subtotal);
-    else if (job.totalAmount && Number(job.totalAmount) > 0) raw = Number(job.totalAmount);
-    else if (job.totalIncludingGst && Number(job.totalIncludingGst) > 0) raw = Number(job.totalIncludingGst) / 1.15;
-    else {
-      const lineItems = job.lineItems;
-      if (lineItems && Array.isArray(lineItems)) {
-        raw = lineItems.reduce((sum: number, item: any) => {
-          return sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
-        }, 0);
-      }
-    }
-    return raw / jobDayCount(job);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-NZ', {
-      style: 'currency',
-      currency: 'NZD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  // Active crew (non-admin) sorted by first name
+  const crewMembers = useMemo(() =>
+    allEmployees
+      .filter(e => e.isActive && e.role !== 'admin')
+      .sort((a, b) => `${a.firstName}`.localeCompare(`${b.firstName}`)),
+    [allEmployees]
+  );
 
   const jobMap = useMemo(() => {
-    const map = new Map<string, Job>();
-    jobs.forEach(job => {
-      map.set(job.id, job);
+    const m = new Map<string, Job>();
+    dayJobs.forEach(j => m.set(j.id, j));
+    return m;
+  }, [dayJobs]);
+
+  // Assign each job a unique identity colour (stable by job order in the day)
+  const jobColorMap = useMemo(() => {
+    const m = new Map<string, typeof JOB_IDENTITY_PALETTE[0]>();
+    dayJobs.forEach((job, idx) => {
+      m.set(job.id, JOB_IDENTITY_PALETTE[idx % JOB_IDENTITY_PALETTE.length]);
     });
+    return m;
+  }, [dayJobs]);
+
+  // Slots = one renderable block each, keyed by assignment id (or a fallback key for
+  // job.assignedTeam entries that have no assignment record).
+  // This mirrors CalendarGrid: we render one block per assignment record so multiple
+  // short assignments on the same day don't collapse into a single job-level block.
+  const slotsByEmployee = useMemo(() => {
+    const map = new Map<string, { id: string; job: Job; assignment: any | null; startMins: number; endMins: number }[]>();
+
+    // 1. Assignment records that fall on the selected NZ date
+    allAssignments.forEach((a: any) => {
+      const job = jobMap.get(a.jobId);
+      if (!job) return;
+      const aDate = formatInTimeZone(new Date(a.startTime), NZ_TZ, 'yyyy-MM-dd');
+      if (aDate !== dateStr) return;
+      const { startMins, endMins } = effectiveMins(job, a);
+      const list = map.get(a.employeeId) ?? [];
+      list.push({ id: a.id, job, assignment: a, startMins, endMins });
+      map.set(a.employeeId, list);
+    });
+
+    // 2. Fallback for job.assignedTeam[] entries that have no assignment record today
+    dayJobs.forEach(job => {
+      (job.assignedTeam ?? []).forEach((empId: string) => {
+        const list = map.get(empId) ?? [];
+        if (list.some(s => s.job.id === job.id)) return;
+        const { startMins, endMins } = effectiveMins(job, null);
+        list.push({ id: `team::${empId}::${job.id}`, job, assignment: null, startMins, endMins });
+        map.set(empId, list);
+      });
+    });
+
     return map;
-  }, [jobs]);
+  }, [allAssignments, jobMap, dayJobs, dateStr]);
 
-  const getEmployeeJobs = (employeeId: string) => {
-    const selectedDateNZ = formatInTimeZone(selectedDate, 'Pacific/Auckland', 'yyyy-MM-dd');
-    const allEmployeeAssignments = staffAssignments.filter((a: any) => a.employeeId === employeeId);
+  // Jobs that don't appear on any crew row — surface them in an "Unassigned" swim lane
+  // so the user can still see (and open) them from the roster.
+  const unassignedSlots = useMemo(() => {
+    const assignedJobIds = new Set<string>();
+    slotsByEmployee.forEach(list => list.forEach(s => assignedJobIds.add(s.job.id)));
+    return dayJobs
+      .filter(j => !assignedJobIds.has(j.id))
+      .map(job => {
+        const { startMins, endMins } = effectiveMins(job, null);
+        return { id: job.id, job, assignment: null as any, startMins, endMins };
+      });
+  }, [dayJobs, slotsByEmployee]);
 
-    const directMatches = allEmployeeAssignments.filter((assignment: any) => {
-      const startTimeStr = assignment.startTime;
-      if (!startTimeStr) return false;
-      const assignmentDateNZ = formatInTimeZone(new Date(startTimeStr), 'Pacific/Auckland', 'yyyy-MM-dd');
-      return assignmentDateNZ === selectedDateNZ;
+  // Summary stats
+  const totalAssigned = useMemo(() => {
+    let count = 0;
+    crewMembers.forEach(e => { count += (slotsByEmployee.get(e.id) ?? []).length; });
+    return count;
+  }, [crewMembers, slotsByEmployee]);
+
+  const navigate = (delta: number) => {
+    setSelectedDate(d => {
+      const next = addDays(d, delta);
+      return next;
     });
-
-    const includedJobIds = new Set(directMatches.map((a: any) => a.jobId));
-    const fallbackMatches: any[] = [];
-    const employeeJobIds = new Set(allEmployeeAssignments.map((a: any) => a.jobId));
-
-    for (const jobId of employeeJobIds) {
-      if (includedJobIds.has(jobId)) continue;
-      const job = jobMap.get(jobId as string);
-      if (!job?.scheduledDate || !(job as any).scheduledEndDate) continue;
-
-      const jobStartNZ = formatInTimeZone(new Date((job as any).scheduledDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-      const jobEndNZ = formatInTimeZone(new Date((job as any).scheduledEndDate), 'Pacific/Auckland', 'yyyy-MM-dd');
-
-      if (selectedDateNZ >= jobStartNZ && selectedDateNZ <= jobEndNZ) {
-        const templateAssignment = allEmployeeAssignments.find((a: any) => a.jobId === jobId);
-        if (templateAssignment) {
-          fallbackMatches.push(templateAssignment);
-          includedJobIds.add(jobId as string);
-        }
-      }
-    }
-
-    const matchedAssignments = [...directMatches, ...fallbackMatches];
-
-    return matchedAssignments
-      .map((assignment: any) => {
-        const job = jobMap.get(assignment.jobId);
-        if (!job) return null;
-        // Hide archived or unsuccessful jobs from the schedule
-        if (job.status === 'archived' || job.status === 'unsuccessful') return null;
-        return { ...job, _assignmentStartTime: assignment.startTime };
-      })
-      .filter((job): job is Job & { _assignmentStartTime: string } => job !== null)
-      .sort((a, b) => new Date(a._assignmentStartTime).getTime() - new Date(b._assignmentStartTime).getTime());
   };
 
-  const formatTime12Hour = (time24?: string) => {
-    if (!time24) return 'All day';
-    const [hours, minutes] = time24.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  };
-
-  const staffAccentColors = [
-    'bg-blue',
-    'bg-green',
-    'bg-purple',
-    'bg-orange',
-    'bg-pink',
-    'bg-teal',
-    'bg-yellow',
-    'bg-destructive',
-    'bg-primary',
-    'bg-blue',
-    'bg-green',
-    'bg-purple',
-    'bg-orange',
-    'bg-pink',
-    'bg-teal',
-    'bg-yellow',
-  ];
-
-  const filteredEmployees = useMemo(() => {
-    return employees.filter(employee => {
-      const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
-      const isAdmin = fullName.includes('admin');
-      const isActive = employee.isActive !== false;
-      return !isAdmin && isActive;
-    });
-  }, [employees]);
-
-  const getStaffAccentColor = (employeeId: string) => {
-    const index = filteredEmployees.findIndex(emp => emp.id === employeeId);
-    return staffAccentColors[index % staffAccentColors.length];
-  };
-
-  const handleJobClick = (job: Job) => {
+  const openJob = (job: Job) => {
     setSelectedJob(job);
     setShowJobCard(true);
   };
 
-  const removeAssignmentMutation = useMutation({
-    mutationFn: async ({ jobId, employeeId }: { jobId: string; employeeId: string }) => {
-      const assignments = staffAssignments.filter(
-        a => a.jobId === jobId && a.employeeId === employeeId
-      );
-      for (const assignment of assignments) {
-        await apiRequest('DELETE', `/api/staff-assignments/${assignment.id}`);
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/staff-assignments'] });
-      queryClient.invalidateQueries({ queryKey: ['/api/jobs'] });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to remove job from schedule",
-        variant: "destructive"
-      });
-    }
-  });
-
-  const handleRemoveJob = (e: React.MouseEvent, job: Job & { _assignmentStartTime?: string }, employeeId: string) => {
-    e.stopPropagation();
-    if (confirm('Remove this job from the schedule?')) {
-      removeAssignmentMutation.mutate({ jobId: job.id, employeeId });
-    }
-  };
-
-  const previousDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() - 1);
-    setSelectedDate(newDate);
-  };
-
-  const nextDay = () => {
-    const newDate = new Date(selectedDate);
-    newDate.setDate(newDate.getDate() + 1);
-    setSelectedDate(newDate);
-  };
-
-  const allEmployeeJobData = useMemo(() => {
-    return filteredEmployees.map(employee => {
-      const employeeJobs = getEmployeeJobs(employee.id);
-      const totalBooked = employeeJobs.reduce((sum, job) => sum + calculateJobTotal(job), 0);
-      return { employee, jobs: employeeJobs, totalBooked };
-    });
-  }, [filteredEmployees, staffAssignments, jobs, selectedDate, jobMap, customerMap]);
-
-  const uniqueJobIds = new Set<string>();
-  const uniqueJobTotals = new Map<string, number>();
-  allEmployeeJobData.forEach(({ jobs: empJobs }) => {
-    empJobs.forEach(job => {
-      if (!uniqueJobIds.has(job.id)) {
-        uniqueJobIds.add(job.id);
-        uniqueJobTotals.set(job.id, calculateJobTotal(job));
-      }
-    });
-  });
-  const totalJobs = uniqueJobIds.size;
-  const totalRevenue = Array.from(uniqueJobTotals.values()).reduce((sum, v) => sum + v, 0);
-
+  // ── Render ──
   return (
-    <div className="h-full flex flex-col p-3 md:p-4 overflow-auto">
-      {/* Date Heading + Nav inline */}
-      <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-        <h2 className="text-lg md:text-xl font-bold" data-testid="text-current-date">
-          {formatInTimeZone(selectedDate, 'Pacific/Auckland', 'EEEE, MMMM d, yyyy')}
-        </h2>
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={previousDay}
-            data-testid="button-prev-day"
-            className="gap-1"
+    <div className="flex flex-col h-full bg-white overflow-hidden">
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 shrink-0">
+        <div>
+          <h1 className="text-base font-semibold text-gray-900">Live Roster</h1>
+          <p className="text-xs text-gray-500">
+            {format(selectedDate, 'EEEE d MMMM yyyy')}
+            {' · '}
+            {crewMembers.length} crew
+            {' · '}
+            {totalAssigned} jobs
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          {/* Row height slider */}
+          <div className="flex items-center gap-1.5">
+            <AlignJustify className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <input
+              type="range"
+              min={44}
+              max={160}
+              step={4}
+              value={rowHeight}
+              onChange={e => setRowHeight(Number(e.target.value))}
+              className="w-20 accent-orange-500 cursor-pointer"
+              title={`Row height: ${rowHeight}px`}
+            />
+          </div>
+          <div className="w-px h-5 bg-gray-200" />
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
           >
-            <ChevronLeft className="h-3.5 w-3.5" />
-            Previous
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            data-testid="button-jobs-view"
-            className="gap-1"
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
+              const now = toZonedTime(new Date(), NZ_TZ);
+              now.setHours(0, 0, 0, 0);
+              setSelectedDate(now);
+            }}
+            className={`px-3 py-1 text-xs font-medium rounded-md border transition-colors ${
+              isTodaySelected
+                ? 'bg-orange-500 text-white border-orange-500'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
           >
-            <CalendarIcon className="h-3.5 w-3.5" />
-            Jobs
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setSelectedDate(new Date())}
-            data-testid="button-today"
-            className="gap-1"
-          >
-            <CalendarIcon className="h-3.5 w-3.5" />
             Today
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={nextDay}
-            data-testid="button-next-day"
-            className="gap-1"
+          </button>
+          <button
+            onClick={() => navigate(1)}
+            className="p-1.5 rounded-md hover:bg-gray-100 text-gray-500 transition-colors"
           >
-            Next
-            <ChevronRight className="h-3.5 w-3.5" />
-          </Button>
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      {/* Summary Stats Bar */}
-      <div className="flex items-center gap-3 mb-3 flex-wrap">
-        <span className="text-xs font-semibold text-muted-foreground">
-          JOBS <span className="text-foreground">{totalJobs}</span>
+      {/* ── Revenue target tracker ── */}
+      <div className="flex items-center gap-3 px-4 py-2 border-b border-gray-100 bg-gray-50 shrink-0 flex-wrap gap-y-1">
+        <span className="text-xs text-gray-500 whitespace-nowrap">
+          {format(selectedDate, 'd MMM')} revenue:
         </span>
-        <span className="text-xs font-semibold text-muted-foreground">
-          REVENUE <span className="text-foreground">{formatCurrency(totalRevenue)}</span>
+        <span
+          className={`text-sm font-semibold px-2 py-0.5 rounded border whitespace-nowrap ${
+            revenueInfo.belowTarget
+              ? 'bg-amber-50 text-amber-700 border-amber-200'
+              : 'bg-green-50 text-green-700 border-green-200'
+          }`}
+        >
+          ${revenueInfo.scheduledRevenue.toLocaleString('en-NZ', { maximumFractionDigits: 0 })}
         </span>
+        <span className="text-xs text-gray-400 whitespace-nowrap">
+          {revenueInfo.jobCount} job{revenueInfo.jobCount !== 1 ? 's' : ''} · target ${revenueInfo.dailyTarget.toLocaleString('en-NZ', { maximumFractionDigits: 0 })} exc. GST
+        </span>
+        <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden min-w-[60px]">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              revenueInfo.belowTarget ? 'bg-amber-400' : 'bg-green-500'
+            }`}
+            style={{ width: `${Math.min(100, revenueInfo.percentComplete)}%` }}
+          />
+        </div>
+        {!revenueInfo.belowTarget && (
+          <span className="text-xs font-medium text-green-700 whitespace-nowrap">Target hit!</span>
+        )}
+        {revenueInfo.belowTarget && revenueInfo.scheduledRevenue > 0 && (
+          <span className="text-xs text-gray-400 whitespace-nowrap">
+            ${(revenueInfo.dailyTarget - revenueInfo.scheduledRevenue).toLocaleString('en-NZ', { maximumFractionDigits: 0 })} to go
+          </span>
+        )}
       </div>
 
-      {/* Staff Schedule List */}
-      <div className="space-y-2">
-        {allEmployeeJobData.map(({ employee, jobs: employeeJobs, totalBooked }) => {
-          const accentColor = getStaffAccentColor(employee.id);
+      {/* ── Timeline grid ── */}
+      <div className="flex-1 overflow-auto">
+        <div style={{ minWidth: STAFF_COL_W + HOUR_LABELS.length * MIN_HOUR_COL_W }}>
 
-          return (
+          {/* Hour header */}
+          <div className="flex sticky top-0 z-20 bg-white border-b border-gray-200">
+            {/* Staff column header */}
             <div
-              key={employee.id}
-              data-testid={`staff-card-${employee.id}`}
-              className="bg-card border rounded-md overflow-visible"
+              className="shrink-0 border-r border-gray-200 flex items-center px-3 py-2 sticky left-0 z-30 bg-white"
+              style={{ width: STAFF_COL_W }}
             >
-              {/* Staff Header */}
-              <div className="flex items-center gap-2 px-3 py-2">
-                <Avatar className={`h-8 w-8 flex-shrink-0 ${accentColor}`}>
-                  <AvatarFallback className="text-xs font-semibold text-primary-foreground">
-                    {employee.firstName[0]}{employee.lastName[0]}
-                  </AvatarFallback>
-                </Avatar>
+              <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Crew</span>
+            </div>
 
-                <div className="flex-1 min-w-0">
-                  <span className="font-bold text-sm leading-tight">
-                    {employee.firstName} {employee.lastName}
-                  </span>
-                  <span className="text-xs text-muted-foreground ml-2">
-                    {employeeJobs.length} {employeeJobs.length === 1 ? 'Job' : 'Jobs'}
-                    {totalBooked > 0 && ` · ${formatCurrency(totalBooked)} booked`}
-                  </span>
+            {/* Hour labels */}
+            <div className="flex-1 relative flex">
+              {HOUR_LABELS.map((label, i) => (
+                <div
+                  key={label}
+                  className="flex-1 text-center py-2 border-r border-gray-100 last:border-r-0"
+                >
+                  <span className="text-[10px] font-medium text-gray-400">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Unassigned swim lane — jobs scheduled for this day but not yet assigned to a crew member */}
+          {unassignedSlots.length > 0 && (() => {
+            const lanes = assignLanes(unassignedSlots);
+            return (
+              <div
+                className="flex border-b-2 border-amber-200 bg-amber-50/40"
+                style={{ minHeight: rowHeight }}
+              >
+                <div
+                  className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2 sticky left-0 z-10 bg-amber-50"
+                  style={{ width: STAFF_COL_W }}
+                >
+                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 bg-amber-500">
+                    ?
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-900 truncate leading-tight">Unassigned</p>
+                    <p className="text-[10px] text-amber-700 leading-tight">
+                      {unassignedSlots.length} job{unassignedSlots.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex-1 relative">
+                  <div className="absolute inset-0 flex pointer-events-none">
+                    {HOUR_LABELS.map((_, i) => (
+                      <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
+                    ))}
+                  </div>
+
+                  {isTodaySelected && nowPercent !== null && (
+                    <div
+                      className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
+                      style={{ left: `${nowPercent}%` }}
+                    />
+                  )}
+
+                  {unassignedSlots.map(slot => {
+                    const { job, startMins, endMins } = slot;
+                    const left  = minutesToPercent(startMins);
+                    const width = Math.max(2, minutesToPercent(endMins) - left);
+                    const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
+                    const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
+                    const label = custName || job.title || `#${job.jobNumber}`;
+                    const timeLabel = `${formatTimeFromMins(startMins)}–${formatTimeFromMins(endMins)}`;
+                    const { lane, totalLanes } = lanes.get(slot.id) ?? { lane: 0, totalLanes: 1 };
+                    const ls = laneStyle(lane, totalLanes);
+
+                    return (
+                      <button
+                        key={slot.id}
+                        onClick={() => openJob(job)}
+                        title={`${label} — ${timeLabel} (unassigned)`}
+                        className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                        style={{
+                          left: `${left}%`,
+                          width: `${width}%`,
+                          top: ls.top,
+                          height: ls.height,
+                          backgroundColor: colors.bg,
+                          borderLeft: `3px solid ${colors.border}`,
+                          borderStyle: 'dashed',
+                          borderTopWidth: 1,
+                          borderRightWidth: 1,
+                          borderBottomWidth: 1,
+                          borderTopColor: colors.border,
+                          borderRightColor: colors.border,
+                          borderBottomColor: colors.border,
+                          minWidth: 32,
+                        }}
+                      >
+                        <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
+                          <div className="flex items-start gap-1">
+                            <span
+                              className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words"
+                              style={{ color: colors.text }}
+                            >
+                              {label}
+                            </span>
+                            {job.customerConfirmed && (
+                              <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                            )}
+                            {!job.customerConfirmed && job.customerReplyReceivedAt && (
+                              <MessageSquare className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={2.5} style={{ color: colors.border }} />
+                            )}
+                            {job.confirmationReplySentAt && (
+                              <Reply className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                            )}
+                          </div>
+                          {width > 8 && (
+                            <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
+                              {timeLabel}
+                            </span>
+                          )}
+                          {job.address && (
+                            <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: colors.text, opacity: 0.7 }}>
+                              <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
+                              <span className="min-w-0">{job.address}</span>
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            );
+          })()}
 
-              {/* Job Cards Grid */}
-              <div className="px-3 pb-2">
-                {employeeJobs.length === 0 ? (
+          {/* Staff rows */}
+          {crewMembers.length === 0 ? (
+            <div className="flex items-center justify-center py-16 text-gray-400 text-sm">
+              No active crew members found.
+            </div>
+          ) : (
+            crewMembers.map((emp, empIdx) => {
+              const palette   = STAFF_PALETTE[empIdx % STAFF_PALETTE.length];
+              const empSlots  = slotsByEmployee.get(emp.id) ?? [];
+              const lanes     = assignLanes(empSlots);
+              const empName   = `${emp.firstName ?? ''} ${emp.lastName ?? ''}`.trim();
+              const empInit   = initials(empName || 'U');
+
+              return (
+                <div
+                  key={emp.id}
+                  className="flex border-b border-gray-100 last:border-b-0"
+                  style={{ minHeight: rowHeight }}
+                >
+                  {/* Staff name cell */}
                   <div
-                    className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground"
-                    data-testid={`no-jobs-${employee.id}`}
+                    className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2 sticky left-0 z-10"
+                    style={{ width: STAFF_COL_W, backgroundColor: palette.row }}
                   >
-                    <CalendarIcon className="h-3.5 w-3.5 opacity-50" />
-                    <span>No jobs scheduled</span>
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                      style={{ backgroundColor: palette.dot }}
+                    >
+                      {empInit}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
+                      <p className="text-[10px] text-gray-400 leading-tight">
+                        {empSlots.length} job{empSlots.length !== 1 ? 's' : ''}
+                      </p>
+                      {empSlots.length > 0 && (
+                        <ToggleGroup
+                          type="single"
+                          size="sm"
+                          value={(empSlots.find(s => s.assignment?.dayRole)?.assignment?.dayRole as 'A' | 'B' | undefined) ?? ''}
+                          onValueChange={(v) => setDayRoleMutation.mutate({
+                            employeeId: emp.id,
+                            date: dateStr,
+                            dayRole: v === 'A' || v === 'B' ? v : null,
+                          })}
+                          className="mt-1 justify-start"
+                          aria-label="Day role"
+                        >
+                          <ToggleGroupItem value="A" className="h-5 px-1.5 text-[10px]">A</ToggleGroupItem>
+                          <ToggleGroupItem value="B" className="h-5 px-1.5 text-[10px]">B</ToggleGroupItem>
+                        </ToggleGroup>
+                      )}
+                    </div>
                   </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {employeeJobs.map(job => {
-                      const jobTotal = calculateJobTotal(job);
-                      const timeDisplay = job._assignmentStartTime
-                        ? formatInTimeZone(new Date(job._assignmentStartTime), 'Pacific/Auckland', 'h:mm a')
-                        : (job.scheduledStartTime ? formatTime12Hour(job.scheduledStartTime) : '');
+
+                  {/* Timeline cell */}
+                  <div className="flex-1 relative" style={{ backgroundColor: palette.row + '55' }}>
+                    {/* Hour grid lines */}
+                    <div className="absolute inset-0 flex pointer-events-none">
+                      {HOUR_LABELS.map((_, i) => (
+                        <div
+                          key={i}
+                          className="flex-1 border-r border-gray-100 last:border-r-0 h-full"
+                        />
+                      ))}
+                    </div>
+
+                    {/* Current time line */}
+                    {isTodaySelected && nowPercent !== null && (
+                      <div
+                        className="absolute top-0 bottom-0 w-px bg-red-400 z-10 pointer-events-none"
+                        style={{ left: `${nowPercent}%` }}
+                      />
+                    )}
+
+                    {/* Job blocks */}
+                    {empSlots.map(slot => {
+                      const { job, startMins, endMins } = slot;
+                      const left  = minutesToPercent(startMins);
+                      const width = Math.max(2, minutesToPercent(endMins) - left);
+                      const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
+                      const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
+                      const label = custName || job.title || `#${job.jobNumber}`;
+                      const timeLabel = `${formatTimeFromMins(startMins)}–${formatTimeFromMins(endMins)}`;
+                      const { lane, totalLanes } = lanes.get(slot.id) ?? { lane: 0, totalLanes: 1 };
+                      const ls = laneStyle(lane, totalLanes);
 
                       return (
-                        <div
-                          key={job.id}
-                          className="group relative rounded-md bg-green/8 dark:bg-green/10 border border-green/20 dark:border-green/15 px-3 py-2 cursor-pointer hover-elevate"
-                          onClick={() => handleJobClick(job)}
-                          data-testid={`job-item-${job.id}`}
+                        <button
+                          key={slot.id}
+                          onClick={() => openJob(job)}
+                          title={`${label} — ${timeLabel}`}
+                          className="absolute rounded text-left overflow-hidden hover:brightness-95 transition-all hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-orange-400"
+                          style={{
+                            left: `${left}%`,
+                            width: `${width}%`,
+                            top: ls.top,
+                            height: ls.height,
+                            backgroundColor: colors.bg,
+                            borderLeft: `3px solid ${colors.border}`,
+                            minWidth: 32,
+                          }}
                         >
-                          {/* Remove button — top right, hidden until hover */}
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="absolute top-1 right-1 invisible group-hover:visible md:invisible md:group-hover:visible text-muted-foreground flex-shrink-0"
-                            onClick={(e) => handleRemoveJob(e, job, employee.id)}
-                            disabled={removeAssignmentMutation.isPending}
-                            data-testid={`button-remove-job-${job.id}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
-
-                          {/* Time + Customer + Price row */}
-                          <div className="flex items-center justify-between gap-1.5 mb-0.5">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <div className="h-2 w-2 rounded-full bg-green flex-shrink-0" />
-                              <span className="text-sm font-bold text-green tabular-nums">
-                                {timeDisplay}
+                          <div className="px-1.5 py-0.5 h-full flex flex-col justify-start overflow-hidden">
+                            <div className="flex items-start gap-1">
+                              <span
+                                className="text-[10px] font-semibold leading-tight flex-1 min-w-0 whitespace-normal break-words"
+                                style={{ color: colors.text }}
+                              >
+                                {label}
                               </span>
-                              <span className="font-bold text-sm truncate">
-                                {getCustomerName(job)}
-                              </span>
+                              {job.customerConfirmed && (
+                                <Check className="h-4 w-4 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                              )}
+                              {job.confirmationReplySentAt && (
+                                <Reply className="h-3.5 w-3.5 shrink-0 mt-0.5" strokeWidth={3} style={{ color: colors.border }} />
+                              )}
                             </div>
-                            {jobTotal > 0 && (
-                              <span className="text-xs font-bold whitespace-nowrap flex-shrink-0">
-                                {formatCurrency(jobTotal)} <span className="font-normal text-muted-foreground">ex</span>
+                            {width > 8 && (
+                              <span className="text-[9px] leading-tight block truncate" style={{ color: colors.border }}>
+                                {timeLabel}
                               </span>
                             )}
-                          </div>
-
-                          {/* Description */}
-                          {job.description && (
-                            <div className="text-xs text-muted-foreground line-clamp-2 mb-0.5 pl-[14px]">
-                              {job.description}
-                            </div>
-                          )}
-
-                          {/* Address row */}
-                          <div className="flex items-center justify-between gap-1.5">
                             {job.address && (
-                              <div className="flex items-center gap-1 text-sm min-w-0">
-                                <MapPin className="h-3.5 w-3.5 flex-shrink-0 text-blue" />
-                                <span className="truncate font-medium">{job.address}</span>
-                              </div>
+                              <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: colors.text, opacity: 0.7 }}>
+                                <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
+                                <span className="min-w-0">{job.address}</span>
+                              </span>
                             )}
-                            <ChevronRightSmall className="h-3.5 w-3.5 text-muted-foreground/50 flex-shrink-0 ml-auto" />
                           </div>
-                        </div>
+                        </button>
                       );
                     })}
+
+                    {empSlots.length === 0 && (
+                      <div className="absolute inset-0 flex items-center px-3">
+                        <span className="text-[10px] text-gray-300 italic">No jobs</span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            </div>
-          );
-        })}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
-      {/* Job Details Modal */}
-      {selectedJob && showJobCard && (
+      {/* ── Legend: job identity colours (top row) + status reference (bottom row) ── */}
+      <div className="shrink-0 border-t border-gray-100 px-4 py-2 bg-white space-y-1.5">
+        {/* Per-job colour swatches */}
+        {dayJobs.length > 0 && (
+          <div className="flex items-center gap-3 overflow-x-auto">
+            <span className="text-[10px] text-gray-400 shrink-0">Jobs:</span>
+            {dayJobs.map(job => {
+              const colors = jobColorMap.get(job.id) ?? JOB_IDENTITY_PALETTE[0];
+              const custName = job.customerId ? (customerMap.get(job.customerId) ?? '') : '';
+              const label = custName || job.title || `#${job.jobNumber}`;
+              return (
+                <div key={job.id} className="flex items-center gap-1 shrink-0">
+                  <div
+                    className="w-2.5 h-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: colors.border }}
+                  />
+                  <span className="text-[10px] text-gray-600 truncate max-w-[80px]">{label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* Status reference */}
+        <div className="flex items-center gap-3 overflow-x-auto">
+          <span className="text-[10px] text-gray-400 shrink-0">Status:</span>
+          {STATUS_LEGEND.map(s => (
+            <div key={s.label} className="flex items-center gap-1 shrink-0">
+              <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
+              <span className="text-[10px] text-gray-500">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Job card modal ── */}
+      {showJobCard && selectedJob && (
         <GlobalJobCard
+          job={selectedJob}
           isOpen={showJobCard}
+          onClose={() => { setShowJobCard(false); setSelectedJob(null); }}
           mode="edit"
-          jobId={selectedJob.id}
-          onClose={() => {
-            setShowJobCard(false);
-            setSelectedJob(null);
-          }}
         />
       )}
     </div>

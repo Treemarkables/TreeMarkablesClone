@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
-import logoUrl from "@assets/treemarkables_logo_transparent_smooth_1760076555496.png";
 
 interface QuoteViewerProps {}
 
@@ -15,6 +14,13 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
+
+  // Fetch default quote template so the logo reflects whatever was uploaded
+  // in Settings → Company (single source of truth across all surfaces).
+  const { data: templateResponse } = useQuery({
+    queryKey: ["/api/templates/default/quote"],
+  });
+  const logoUrl = (templateResponse as { data?: { logoUrl?: string } } | undefined)?.data?.logoUrl || "/treemarkables-logo.png";
 
   const handleBackClick = () => {
     // Check if there's a page to go back to in the history

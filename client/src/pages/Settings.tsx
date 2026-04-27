@@ -8,12 +8,12 @@ import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { 
-  Settings2, 
-  Users, 
-  Bell, 
-  Shield, 
-  Package, 
+import {
+  Settings2,
+  Users,
+  Bell,
+  Shield,
+  Package,
   FolderOpen,
   Building2,
   ListChecks,
@@ -23,8 +23,17 @@ import {
   Mail,
   MessageSquare,
   ClipboardCheck,
+  GraduationCap,
   AlertTriangle,
-  ShieldCheck
+  ShieldCheck,
+  Wrench,
+  LayoutTemplate,
+  Clock,
+  Plug,
+  Banknote,
+  PhoneOff,
+  Receipt,
+  FileStack
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -128,6 +137,14 @@ const settingsOptions = [
     path: "/settings/vehicle-inspections"
   },
   {
+    id: "equipment-inductions",
+    title: "Equipment Inductions",
+    description: "Induction checklists for each piece of equipment",
+    icon: GraduationCap,
+    color: "bg-teal-100 text-teal-600",
+    path: "/settings/equipment-inductions"
+  },
+  {
     id: "jha-templates",
     title: "JHA Templates",
     description: "Create and manage hazard templates and control measures for safety assessments",
@@ -142,6 +159,78 @@ const settingsOptions = [
     icon: ShieldCheck,
     color: "bg-emerald-100 text-emerald-600",
     path: "/settings/jha-risk-controls"
+  },
+  {
+    id: "equipment-register",
+    title: "Equipment Register",
+    description: "Assign licence requirements to equipment for AI Smart Dispatch",
+    icon: Wrench,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/equipment-register"
+  },
+  {
+    id: "invoice-builder",
+    title: "Invoice Builder",
+    description: "Drag-and-drop visual invoice layout builder",
+    icon: LayoutTemplate,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/invoice-builder"
+  },
+  {
+    id: "proposal-builder",
+    title: "Proposal Builder",
+    description: "Drag-and-drop visual proposal layout builder",
+    icon: LayoutTemplate,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/proposal-builder"
+  },
+  {
+    id: "time-tracking",
+    title: "Time Tracking",
+    description: "Track hours, timesheets and crew time on jobs",
+    icon: Clock,
+    color: "bg-sky-100 text-sky-600",
+    path: "/time-tracking"
+  },
+  {
+    id: "integrations",
+    title: "Integrations",
+    description: "Connect Xero, Google and other third-party services",
+    icon: Plug,
+    color: "bg-lime-100 text-lime-600",
+    path: "/integrations"
+  },
+  {
+    id: "xero-reconciliation",
+    title: "Xero Reconciliation",
+    description: "Match invoices and payments with your Xero account",
+    icon: Banknote,
+    color: "bg-emerald-100 text-emerald-600",
+    path: "/reconciliation"
+  },
+  {
+    id: "unlinked-calls",
+    title: "Unlinked Calls",
+    description: "Review inbound calls not yet attached to a job or customer",
+    icon: PhoneOff,
+    color: "bg-rose-100 text-rose-600",
+    path: "/unlinked-calls"
+  },
+  {
+    id: "invoices",
+    title: "Invoices",
+    description: "View and manage all customer invoices",
+    icon: Receipt,
+    color: "bg-amber-100 text-amber-600",
+    path: "/invoices"
+  },
+  {
+    id: "templates",
+    title: "Templates",
+    description: "Manage document, quote and proposal templates",
+    icon: FileStack,
+    color: "bg-fuchsia-100 text-fuchsia-600",
+    path: "/templates"
   }
 ];
 

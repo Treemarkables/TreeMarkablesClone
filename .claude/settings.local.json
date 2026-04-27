@@ -5,7 +5,32 @@
       "Bash(node -e ':*)",
       "Bash(ls *.env)",
       "Bash(ls .env*)",
-      "Bash(ls /home/runner/workspace/server/db*)"
+      "Bash(ls /home/runner/workspace/server/db*)",
+      "Bash(python3:*)",
+      "Bash(ls *)",
+      "Bash(git stash *)",
+      "Bash(curl *)",
+      "Bash(npm run *)",
+      "Bash(npx drizzle-kit *)",
+      "Bash(node *)",
+      "WebSearch",
+      "WebFetch(domain:dev.loom.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "WebFetch(domain:registry.npmjs.org)",
+      "Bash(npm install *)",
+      "Bash(awk -F: '$2>1890 && $2<1960')",
+      "Bash(awk -F: '$2>3380 && $2<3420')",
+      "Bash(pkill -f \"drizzle-kit push\")",
+      "Bash(git -C /home/runner/workspace log --all --oneline -20 -- shared/schema.ts server/routes.ts client/src/components/GlobalJobCard.tsx)",
+      "Bash(git show *)",
+      "Bash(grep *)",
+      "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Profit_and_Loss_\\(6\\)_1776905495826.pdf\")",
+      "Bash(pdfinfo \"attached_assets/Treemarkables_Limited_-_Account_Transactions_1776905495813.pdf\")",
+      "Bash(git log *)",
+      "Read(//home/runner/.claude/projects/**)",
+      "Read(//home/runner/.claude/**)",
+      "Bash(gh auth *)",
+      "Bash(pkill:*)"
     ]
   }
 }

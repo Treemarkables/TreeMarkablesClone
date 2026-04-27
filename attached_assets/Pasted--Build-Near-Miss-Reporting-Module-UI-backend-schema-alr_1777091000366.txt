@@ -1,0 +1,138 @@
+ # Build: Near Miss Reporting Module — UI + backend (schema already done)                                                                       
+                                                                                                                                                 
+  ## Current state                                                                                                                               
+  - Schema for 4 new tables already exists in `shared/schema.ts` near the bottom of the file: `nearMissReports`, `nearMissAttachments`,          
+  `nearMissWitnesses`, `nearMissActions`. Zod insert/update schemas and TypeScript types are already exported. DO NOT modify or re-add any of    
+  this.                                             
+  - The tables have already been pushed to the database via `npm run db:push`. DO NOT push again.                                                
+  - Read `CLAUDE.md` and `replit.md` before touching anything.                                                                                   
+                                                                                                                                                 
+  ## Hard rules (from CLAUDE.md)                                                                                                                 
+  - DO NOT run `npm install`, `npm run db:push`, or any migration command.                                                                       
+  - DO NOT modify `.replit`, `package.json`, `vite.config.ts`, `server/vite.ts`, `drizzle.config.ts`, `launcher.mjs`, or                         
+  `.claude/settings.local.json`.                                                                                                                 
+  - All API routes go in `server/routes.ts` (22,000+ lines) — make surgical edits, do not rewrite.                                               
+  - Routing: Wouter, not React Router. Auth via `useAuth` from `client/src/contexts/AuthContext.tsx`.                                            
+  - Currency NZD only. Timezone Pacific/Auckland via `shared/dateUtils.ts`. Store as UTC.                                                        
+  - No `as any` casts. No success toasts (only `variant: "destructive"` for errors). No emoji in UI. No manual `hover:bg-*`/`active:bg-*`        
+  classes.                                                                                                                                       
+  - Never pass `temperature` to GPT calls (GPT-5+ doesn't accept it).                                                                            
+  - Customer-facing URLs hardcode to `https://app.treemarkables.co.nz`.                                                                          
+                                                                                                                                                 
+  ## Task 1 — Backend routes in `server/routes.ts`                                                                                               
+  Add CRUD endpoints. Mirror the patterns of existing route blocks (e.g. the `/api/vehicle-inspections` routes around line 21691 are a good      
+  template).                                                                                                                                     
+                                                         
+  Endpoints needed:                                                                                                                              
+  - `GET    /api/near-miss-reports` — list with filters (status, severity, category, dateFrom/dateTo, reporterUserId)
+  - `GET    /api/near-miss-reports/:id` — full report including attachments, witnesses, actions                                                  
+  - `POST   /api/near-miss-reports` — create draft. Server generates `reportNumber` as `NM-YYYY-####` (sequential within year)                   
+  - `PUT    /api/near-miss-reports/:id` — update (any field except reportNumber)                                                                 
+  - `POST   /api/near-miss-reports/:id/submit` — sets status=submitted, submittedAt=now, effectivenessReviewDate=now+30d                         
+  - `DELETE /api/near-miss-reports/:id` — drafts only, blocked once submitted                                                                    
+  - `POST   /api/near-miss-reports/:id/attachments` — multipart upload, stores file in `/uploads/near-miss/{report_id}/`. Use whatever upload    
+  pattern already exists (search `server/routes.ts` for existing upload endpoints — likely under `/api/jobs/.../photos` or similar)              
+  - `DELETE /api/near-miss-attachments/:id`                                                                                                      
+  - `POST   /api/near-miss-reports/:id/witnesses` — create witness record                                                                        
+  - `POST   /api/near-miss-witnesses/:id/sign` — accepts signatureSvg, witnessComment, lat, lng, device. Server computes SHA-256 of report       
+  content and stores in reportHashAtSigning.                                                                                                     
+  - `POST   /api/near-miss-witnesses/:id/decline` — sets status=declined                                                                         
+  - `POST   /api/near-miss-reports/:id/actions` — create corrective action                                                                       
+  - `PUT    /api/near-miss-actions/:id` — update (status, completedAt, etc)                                                                      
+  - `DELETE /api/near-miss-actions/:id`                                                                                                          
+                                                                                                                                                 
+  Use `AuthenticatedRoute`-equivalent middleware on the server side (whatever pattern existing routes use — staff/crew need access, not just     
+  admin).                                                
+                                                                                                                                                 
+  ## Task 2 — Sidebar entries under existing JHA dropdown                                                                                        
+  File: `client/src/components/AppSidebar.tsx`. The JHA Collapsible already exists around line 222 with sub-items "Assessment"
+  (`/jha-assessment`) and "History" (`/jha-history`). DO NOT rebuild it.                                                                         
+                                                         
+  Add two more `SidebarMenuSubItem` entries inside its existing `SidebarMenuSub`:                                                                
+  - "Near Miss Report" → `/near-miss-report`             
+  - "Incident Report History" → `/incident-report-history`                                                                                       
+                                                                                                                                                 
+  Update the `jhaActive` line at the top of `SidebarNavContent` to also include these two paths.                                                 
+                                                                                                                                                 
+  ## Task 3 — Add routes in `client/src/App.tsx`                                                                                                 
+  Add two routes using `AuthenticatedRoute` (not `ProtectedRoute` — staff need access):
+  - `/near-miss-report` → `NearMissReport` page                                                                                                  
+  - `/incident-report-history` → `IncidentReportHistory` page                                                                                    
+                                                                                                                                                 
+  ## Task 4 — Build `client/src/pages/NearMissReport.tsx` (3-step capture flow, mobile-first)                                                    
+                                                         
+  ### Step 1 — Capture                                                                                                                           
+  - Header: "Report near miss" + "CONFIDENTIAL" badge    
+  - Quick row: Take photo (camera input), Voice note (browser-native `SpeechRecognition` API for live dictation; transcribed text auto-fills the 
+  description textarea below)                                                                                                                    
+  - Severity selector: 4 buttons — Low (green), Medium (blue), High (amber), Critical (red)                                                      
+  - Category dropdown (values from schema enum)                                                                                                  
+  - Description textarea                                 
+  - Auto-filled read-only block: location (geolocation API), job number (if launched from a job), reporter name (from `useAuth`), timestamp      
+  - Continue button → Step 2                                                                                                                     
+                                                                                                                                                 
+  ### Step 2 — Causes & Action                                                                                                                   
+  - Equipment involved — multi-select chips (chainsaw, bucket truck, chipper, stump grinder, mini loader, rigging, ropes, MEWP, vehicles)        
+  - Contributing factors — multi-select chips (communication, fatigue, weather, planning, training, equipment, other)                            
+  - People involved — searchable user picker (fetch from `/api/users` or equivalent existing endpoint) + free-text for non-staff                 
+  - Immediate action taken — textarea                                                                                                            
+  - Proposed control — textarea                                                                                                                  
+  - Corrective actions — repeatable block: title, controlType select, assignee picker, due date                                                  
+  - Toggle: "Share at next toolbox talk" (default ON, sets `toolboxTalkFlag`)                                                                    
+  - Continue button → Step 3                                                                                                                     
+                                                                                                                                                 
+  ### Step 3 — Witness sign-off                                                                                                                  
+  - Three-state radio:                                   
+    1. Witnessed & signing now                                                                                                                   
+    2. Witness named, sign later                         
+    3. No witness / sole worker (flags for supervisor review)                                                                                    
+  - If state 1 or 2: witness picker (user search + free-text fallback) + comment textarea                                                        
+  - If state 1: signature panel                                                                                                                  
+    - Read-only summary card (severity badge, category, location, description excerpt)                                                           
+    - Declaration checkbox: "I confirm I witnessed this incident and the account above is accurate to the best of my knowledge."                 
+    - Signature canvas — copy the canvas pattern from `client/src/pages/VehicleInspection.tsx:303-362` (mouse + touch, exports SVG path data NOT 
+  base64). DO NOT add `react-signature-canvas` as a dependency.                                                                                  
+    - Locked metadata block: timestamp, GPS lat/lng, device user-agent                                                                           
+    - Submit button → POSTs to `/api/near-miss-reports/:id/submit` then `/api/near-miss-witnesses/:id/sign`                                      
+  - If state 2 or 3: Submit button → POSTs `/submit` only                                                                                        
+                                                                                                                                                 
+  ## Task 5 — Build `client/src/pages/IncidentReportHistory.tsx`                                                                                 
+  - Top stats strip: total this month, open actions, overdue actions, by-severity count breakdown                                                
+  - Search input (full-text on description + proposedControl, send as `?q=` param)                                                               
+  - List table: report number, date (NZ-formatted via `shared/dateUtils.ts`), reporter, category, severity badge, status, witness status icon    
+  - Click row → opens detail dialog/page with all attachments inline (photos as `<img>`, voice notes as `<audio>`), witness signatures rendered  
+  as inline SVG, action progress                                                                                                                 
+  - "Export PDF" button per report — see Task 6                                                                                                  
+                                                                                                                                                 
+  ## Task 6 — Auto-behaviors                                                                                                                     
+  - Server-side: when a report is submitted, set `effectivenessReviewDate = submittedAt + 30 days`. Add a daily scheduled task (find existing    
+  cron pattern in `server/routes.ts` — search for "cron" or "setInterval") that flags overdue reviews to the reporter's inbox.                   
+  - Witness state 2 (named but not signed): create a notification record for the witness's user inbox using whatever notifications system already
+   exists. Search `server/routes.ts` for existing notification endpoints.                                                                        
+  - Toolbox talk: if `toolboxTalkFlag = true`, add to next Monday's toolbox agenda. If no toolbox feature exists yet, just store the flag — it'll
+   be picked up by future work.                                                                                                                  
+  - Status auto-transitions: draft → submitted (on submit endpoint) → in_review (when supervisor opens detail view) → actioned (when all actions 
+  status=complete) → closed (when effectivenessReviewComplete=true).                                                                            
+                                                                                                                                                 
+  ## Task 7 — PDF export                                 
+  - Check whether `pdfkit` or any PDF library is already in `package.json` BEFORE assuming. If not, ASK before adding a dependency — never `npm  
+  install`.                                                                                                                                    
+  - Endpoint: `GET /api/near-miss-reports/:id/pdf`                                                                                               
+  - Embed signature SVG natively (not as raster) for crisp scaling
+  - Include: report number, date/time, reporter, location, severity, category, description, immediate action, proposed control, corrective       
+  actions table, witness signature SVG with signed-at metadata                                                                                   
+                                                                                                                                                 
+  ## Brand                                                                                                                                       
+  - Primary action buttons: bg `#39FF14`, text `#000`                                                                                            
+  - Severity colors: low=green, medium=blue, high=amber, critical=red
+  - Match existing typography/spacing from pages like `client/src/pages/DailyBriefing.tsx` and `client/src/pages/VehicleInspection.tsx`          
+                                                                                                                                                 
+  ## Build order — STOP between each task                                                                                                        
+  Do them in order 1 → 2 → 3 → 4 → 5 → 6 → 7. After each task: stop, summarise what you changed, and wait for the user to confirm before starting
+   the next. If anything is unclear or requires a dependency install or DB change, STOP and ask.                                                 
+                                                                                                                                                 
+  ---                                                    
+  What's already done that the Replit Agent should not redo:                                                                                     
+  - shared/schema.ts — 4 tables, Zod schemas, TS types (lines ~3664–3786)                                                                        
+  - DB push completed by you in terminal                                 
+                                                                            

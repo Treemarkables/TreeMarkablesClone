@@ -127,13 +127,55 @@ export default function JHATemplates() {
     },
   });
 
+  // The controls list query key embeds the hazard id as a URL query string
+  // ("/api/jha/control-measures?hazardTemplateId=..."), which makes a plain
+  // invalidateQueries({ queryKey: ["/api/jha/control-measures"] }) miss.
+  // Also refresh /api/jha/hazard-templates because that endpoint returns
+  // each template's controls nested inline — the JHA form reads from it.
+  const refreshControlCaches = () => {
+    queryClient.invalidateQueries({
+      predicate: (q) => {
+        const key = q.queryKey[0];
+        return (
+          typeof key === "string" &&
+          (key.startsWith("/api/jha/control-measures") ||
+            key === "/api/jha/hazard-templates")
+        );
+      },
+      refetchType: "active",
+    });
+  };
+
+  // Directly patch the cached list for the currently-selected hazard so the
+  // new control appears immediately, without waiting for the refetch.
+  const patchControlsCache = (
+    hazardId: string,
+    updater: (list: JhaControlMeasureTemplate[]) => JhaControlMeasureTemplate[],
+  ) => {
+    const key = [`/api/jha/control-measures?hazardTemplateId=${hazardId}`];
+    queryClient.setQueryData<
+      { success: boolean; data: JhaControlMeasureTemplate[] } | undefined
+    >(key, (prev) => {
+      if (!prev?.data) return prev;
+      return { ...prev, data: updater(prev.data) };
+    });
+  };
+
   const createControlMutation = useMutation({
-    mutationFn: (data: typeof controlForm & { hazardTemplateId: string }) =>
-      apiRequest("POST", "/api/jha/control-measures", data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jha/control-measures"],
-      });
+    mutationFn: async (
+      data: typeof controlForm & { hazardTemplateId: string },
+    ) => {
+      const res = await apiRequest("POST", "/api/jha/control-measures", data);
+      const json: { success: boolean; data: JhaControlMeasureTemplate } =
+        await res.json();
+      return json.data;
+    },
+    onSuccess: (newControl, variables) => {
+      patchControlsCache(variables.hazardTemplateId, (list) => [
+        ...list,
+        newControl,
+      ]);
+      refreshControlCaches();
       setShowControlDialog(false);
       setControlForm({ description: "", hierarchyLevel: 3, riskReduction: 1 });
     },
@@ -146,17 +188,29 @@ export default function JHATemplates() {
   });
 
   const updateControlMutation = useMutation({
-    mutationFn: ({
+    mutationFn: async ({
       id,
       data,
     }: {
       id: string;
       data: Partial<typeof controlForm>;
-    }) => apiRequest("PATCH", `/api/jha/control-measures/${id}`, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jha/control-measures"],
-      });
+    }) => {
+      const res = await apiRequest(
+        "PATCH",
+        `/api/jha/control-measures/${id}`,
+        data,
+      );
+      const json: { success: boolean; data: JhaControlMeasureTemplate } =
+        await res.json();
+      return json.data;
+    },
+    onSuccess: (updated) => {
+      if (selectedHazard) {
+        patchControlsCache(selectedHazard.id, (list) =>
+          list.map((c) => (c.id === updated.id ? updated : c)),
+        );
+      }
+      refreshControlCaches();
       setShowControlDialog(false);
       setSelectedControl(null);
     },
@@ -171,10 +225,13 @@ export default function JHATemplates() {
   const deleteControlMutation = useMutation({
     mutationFn: (id: string) =>
       apiRequest("DELETE", `/api/jha/control-measures/${id}`, {}),
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jha/control-measures"],
-      });
+    onSuccess: (_res, deletedId) => {
+      if (selectedHazard) {
+        patchControlsCache(selectedHazard.id, (list) =>
+          list.filter((c) => c.id !== deletedId),
+        );
+      }
+      refreshControlCaches();
     },
     onError: () => {
       toast({

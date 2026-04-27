@@ -346,7 +346,7 @@ export function ProposalGeneration({
         </DialogTrigger>
       )}
 
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Generate Professional Proposal</DialogTitle>
         </DialogHeader>

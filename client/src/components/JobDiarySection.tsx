@@ -72,7 +72,80 @@ import {
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
+import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
+
+// ── Email-thread helpers ────────────────────────────────────────────────────
+// The diary stores sent and received emails as independent entries with no
+// parent/child link in the database. These helpers let the renderer infer the
+// direction of each email and stitch replies underneath their preceding sent
+// email so the UI can show one consolidated thread card per conversation.
+
+type EmailDirection = "sent" | "received" | "unknown";
+
+function getEmailDirection(entry: { title: string; content: string }): EmailDirection {
+  const titleLower = (entry.title || "").toLowerCase();
+  const contentLower = (entry.content || "").toLowerCase();
+  if (
+    titleLower.includes("sent") ||
+    contentLower.includes("email sent to") ||
+    contentLower.includes("sms sent to")
+  ) {
+    return "sent";
+  }
+  if (titleLower.includes("reply") || titleLower.includes("from")) {
+    return "received";
+  }
+  return "unknown";
+}
+
+function getEmailAddress(entry: { metadata?: any }): string | null {
+  const m = entry.metadata || {};
+  return m.emailAddress || m.recipient || m.fromEmail || null;
+}
+
+function cleanEmailMessage(
+  entry: { title: string; content: string },
+  direction: EmailDirection,
+): { text: string; recipient: string } {
+  let messageText = entry.content || "";
+  let recipientInfo = "";
+
+  if (direction === "sent" && messageText.includes("Message:")) {
+    const beforeMessage = messageText.split("Message:")[0];
+    if (beforeMessage.includes("Email sent to")) {
+      recipientInfo = beforeMessage.split("Email sent to")[1].trim();
+    } else if (beforeMessage.includes("SMS sent to")) {
+      recipientInfo = beforeMessage.split("SMS sent to")[1].trim();
+    }
+    messageText = messageText.split("Message:")[1].trim();
+    messageText = messageText
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<p>/gi, "")
+      .replace(/<[^>]+>/g, "")
+      .trim();
+  } else if (direction === "received" && messageText.includes(":\n\n")) {
+    messageText = messageText.split(":\n\n")[1].trim();
+  }
+
+  if (direction === "received") {
+    messageText = messageText
+      .replace(/\r\n/g, "\n")
+      .replace(/\r/g, "\n")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<p>/gi, "")
+      .replace(/<[^>]+>/g, "");
+    const fromIndex = messageText.search(/\n+From:\s*.+?[@<]/i);
+    if (fromIndex !== -1) messageText = messageText.substring(0, fromIndex);
+    const sentIndex = messageText.search(/\n+Sent:\s*.+?\d{4}/i);
+    if (sentIndex !== -1) messageText = messageText.substring(0, sentIndex);
+    messageText = messageText.trim();
+  }
+
+  return { text: messageText, recipient: recipientInfo };
+}
 
 // Component to display email activity (opens/clicks)
 function EmailActivity({ messageId }: { messageId: string }) {
@@ -152,6 +225,262 @@ function EmailActivity({ messageId }: { messageId: string }) {
   );
 }
 
+// Hoisted confirmation-reply card shown at the top of the diary whenever a
+// job has customerConfirmed=true and no 'confirmation-reply-sent' diary entry
+// exists yet. Three actions: Send now (one-click), Edit first (opens the
+// composer pre-filled), Dismiss (session-only hide).
+function JobConfirmationReplyCard({
+  jobId,
+  customerEmail,
+  isSending,
+  onSendNow,
+  onEditFirst,
+  onDismiss,
+}: {
+  jobId: string;
+  customerEmail: string;
+  isSending: boolean;
+  onSendNow: (draft: { subject: string; body: string }) => void;
+  onEditFirst: (draft: { subject: string; body: string }) => void;
+  onDismiss: () => void;
+}) {
+  const { data, isLoading, error, refetch, isFetching } = useQuery<{
+    subject: string;
+    body: string;
+  }>({
+    queryKey: ["confirmation-reply-draft", "job", jobId],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/jobs/${jobId}/draft-confirmation-reply`,
+      );
+      const json = await res.json();
+      if (!json?.success || !json?.data?.body) {
+        throw new Error(json?.message || "Failed to draft reply");
+      }
+      return json.data;
+    },
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+
+  return (
+    <div
+      className="mx-2 mb-2 mt-1 rounded-lg border border-green-200 dark:border-green-800 bg-green-50/60 dark:bg-green-950/30 p-3"
+      data-testid="card-confirmation-reply"
+    >
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-1.5">
+          <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+          <span className="text-xs font-semibold text-green-800 dark:text-green-200">
+            Customer confirmed — send acknowledgement?
+          </span>
+        </div>
+        {data && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+            disabled={isFetching || isSending}
+            onClick={() => refetch()}
+            data-testid="button-regen-confirmation-reply"
+          >
+            <RefreshCw
+              className={`w-3 h-3 ${isFetching ? "animate-spin" : ""}`}
+            />
+          </Button>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="text-xs text-muted-foreground flex items-center gap-1">
+          <Clock className="w-3 h-3 animate-spin" /> Drafting a reply…
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-xs text-red-600 dark:text-red-400">
+            Couldn't draft a reply.
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2"
+            onClick={() => refetch()}
+            data-testid="button-retry-confirmation-reply"
+          >
+            Retry
+          </Button>
+        </div>
+      ) : data ? (
+        <>
+          <p
+            className="text-xs leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 border-l-2 border-green-300 dark:border-green-700 pl-2 mb-2"
+            style={{ wordBreak: "break-word" }}
+          >
+            {data.body}
+          </p>
+          <div className="flex items-center justify-end gap-1 flex-wrap">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-[11px] px-2 text-gray-600 dark:text-gray-400"
+              disabled={isSending}
+              onClick={onDismiss}
+              data-testid="button-dismiss-confirmation-reply"
+            >
+              Dismiss
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-[11px] px-2"
+              disabled={isSending || !data}
+              onClick={() => onEditFirst(data)}
+              data-testid="button-edit-first-confirmation-reply"
+            >
+              <Edit className="w-3 h-3 mr-1" /> Edit first
+            </Button>
+            <Button
+              size="sm"
+              variant="default"
+              className="h-7 text-[11px] px-2"
+              disabled={isSending || !data || !customerEmail}
+              onClick={() => onSendNow(data)}
+              data-testid="button-send-now-confirmation-reply"
+            >
+              <Send className="w-3 h-3 mr-1" />
+              {isSending ? "Sending…" : "Send now"}
+            </Button>
+          </div>
+          {!customerEmail && (
+            <p className="text-[10px] text-muted-foreground mt-1.5">
+              No email address on file for this customer.
+            </p>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// Inline AI-drafted reply shown beneath a customer-confirmation diary entry.
+// Fetches a short acknowledgement from the server, then hands it to the
+// enclosing composer via onEditAndSend — the user tweaks and sends it.
+function ConfirmationReplyDraft({
+  entry,
+  jobId,
+  onEditAndSend,
+  onDismiss,
+  isDismissing,
+}: {
+  entry: DiaryEntry;
+  jobId: string;
+  onEditAndSend: (
+    draft: { subject: string; body: string },
+    entryId: string,
+  ) => void;
+  onDismiss: (entryId: string) => void;
+  isDismissing: boolean;
+}) {
+  const { data, isLoading, error, refetch, isFetching } = useQuery<{
+    subject: string;
+    body: string;
+  }>({
+    queryKey: ["confirmation-reply-draft", entry.id],
+    queryFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/jobs/${jobId}/draft-confirmation-reply`,
+      );
+      const json = await res.json();
+      if (!json?.success || !json?.data?.body) {
+        throw new Error(json?.message || "Failed to draft reply");
+      }
+      return json.data;
+    },
+    staleTime: 60 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+
+  return (
+    <div className="border-t border-purple-200 dark:border-purple-800 px-3 py-2 bg-white/60 dark:bg-black/20">
+      <div className="flex items-center justify-between gap-2 mb-1.5">
+        <div className="flex items-center gap-1">
+          <Reply className="w-3 h-3 text-purple-600 dark:text-purple-400" />
+          <span className="text-[10px] font-medium text-purple-600 dark:text-purple-400">
+            Suggested reply
+          </span>
+        </div>
+        {data && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-5 px-1 text-[10px] text-muted-foreground hover:text-foreground"
+            disabled={isFetching}
+            onClick={() => refetch()}
+            data-testid={`button-regen-reply-${entry.id}`}
+          >
+            <RefreshCw
+              className={`w-2.5 h-2.5 ${isFetching ? "animate-spin" : ""}`}
+            />
+          </Button>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+          <Clock className="w-3 h-3 animate-spin" /> Drafting a reply…
+        </div>
+      ) : error ? (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-red-600 dark:text-red-400">
+            Couldn't draft a reply.
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 text-[10px] px-2"
+            onClick={() => refetch()}
+            data-testid={`button-retry-reply-${entry.id}`}
+          >
+            Retry
+          </Button>
+        </div>
+      ) : data ? (
+        <>
+          <p
+            className="text-xs leading-relaxed whitespace-pre-wrap text-gray-700 dark:text-gray-300 border-l-2 border-purple-300 dark:border-purple-700 pl-2"
+            style={{ wordBreak: "break-word" }}
+          >
+            {data.body}
+          </p>
+          <div className="flex gap-1 mt-2 justify-end">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 text-[10px] px-2 text-gray-600 dark:text-gray-400"
+              disabled={isDismissing}
+              onClick={() => onDismiss(entry.id)}
+              data-testid={`button-dismiss-reply-${entry.id}`}
+            >
+              Dismiss
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px] px-2"
+              onClick={() => onEditAndSend(data, entry.id)}
+              data-testid={`button-edit-send-reply-${entry.id}`}
+            >
+              <Edit className="w-3 h-3 mr-0.5" /> Edit &amp; send
+            </Button>
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
 // ServiceM8 API response types (matches server/services/servicem8-api.ts)
 interface ServiceM8DiaryEntry {
   id: string;
@@ -174,6 +503,7 @@ interface DiaryEntry {
   author: string;
   timestamp: string;
   photoUrl?: string;
+  tags?: string[];
   metadata?: {
     phoneNumber?: string;
     emailAddress?: string;
@@ -181,6 +511,10 @@ interface DiaryEntry {
     eventType?: string;
     status?: string;
     viewedDate?: string;
+    replyAcknowledged?: boolean;
+    recipient?: string;
+    sendgridMessageId?: string;
+    [key: string]: any;
   };
 }
 
@@ -241,9 +575,20 @@ export function JobDiarySection({
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(
     null,
   );
+  const [diaryTab, setDiaryTab] = useState<"timeline" | "photos">("timeline");
   const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
+  // Pre-filled body when opening the email composer from an AI-drafted
+  // confirmation reply. Separate from replySubject so we can pre-populate
+  // the message field without clobbering the subject-only reply flow.
+  const [replyBody, setReplyBody] = useState<string>("");
+  // When the user opens the composer from a confirmation entry's suggested
+  // reply, we track the entry id so we can mark it as acknowledged after
+  // the email is sent.
+  const [confirmationReplyEntryId, setConfirmationReplyEntryId] = useState<
+    string | null
+  >(null);
 
   // Calendar booking state
   const [calendarBookingOpen, setCalendarBookingOpen] = useState(false);
@@ -259,6 +604,40 @@ export function JobDiarySection({
   const [selectedEmailTemplate, setSelectedEmailTemplate] =
     useState<string>("none");
   const [selectedSmsTemplate, setSelectedSmsTemplate] = useState<string>("");
+
+  // Welcome video prompt — surfaces when a NEW customer replies affirmatively
+  // to a quote-scheduling email and we have a "Welcome video" template ready
+  // to fire. Auto-opens once per session per job; the dismiss/sent state is
+  // tracked server-side via diary entries so it doesn't re-prompt on reload.
+  const [welcomeModalOpen, setWelcomeModalOpen] = useState(false);
+  const [welcomeAutoOpened, setWelcomeAutoOpened] = useState(false);
+  const { data: welcomeStatus } = useQuery<{
+    success?: boolean;
+    shouldPrompt?: boolean;
+    customerName?: string;
+    templateAvailable?: boolean;
+  }>({
+    queryKey: ["/api/jobs", jobId, "welcome-prompt-status"],
+    queryFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/welcome-prompt-status`);
+      if (!res.ok) throw new Error("Failed to load welcome prompt status");
+      return res.json();
+    },
+    enabled: !!jobId,
+    staleTime: 30_000,
+  });
+  useEffect(() => {
+    if (welcomeStatus?.shouldPrompt && !welcomeAutoOpened) {
+      setWelcomeModalOpen(true);
+      setWelcomeAutoOpened(true);
+    }
+  }, [welcomeStatus?.shouldPrompt, welcomeAutoOpened]);
+
+  // Hoisted confirmation-reply card: session-only dismiss. The persistent
+  // hide state comes from a 'confirmation-reply-sent' diary entry — dismissing
+  // deliberately does not persist, so a mis-click is recoverable by reload.
+  const [confirmationCardDismissed, setConfirmationCardDismissed] =
+    useState(false);
 
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -291,16 +670,37 @@ export function JobDiarySection({
     return "08:00";
   };
 
+  // Format a Date as YYYY-MM-DD using local (browser) time, not UTC.
+  // toISOString() always returns UTC — in NZ (UTC+12/+13) this gives yesterday's date.
+  const localDateStr = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
   const extractDateFromText = (text: string): string | null => {
     const lower = text.toLowerCase();
     const today = new Date();
     if (lower.includes("tomorrow")) {
       const d = new Date(today);
       d.setDate(d.getDate() + 1);
-      return d.toISOString().split("T")[0];
+      return localDateStr(d);
     }
     if (lower.includes("today")) {
-      return today.toISOString().split("T")[0];
+      return localDateStr(today);
+    }
+    // Day-name matching — find the next occurrence of the named day from today
+    const dayNames = ["sunday","monday","tuesday","wednesday","thursday","friday","saturday"];
+    for (let i = 0; i < dayNames.length; i++) {
+      if (lower.includes(dayNames[i])) {
+        const todayDow = today.getDay(); // 0=Sun … 6=Sat
+        let daysAhead = i - todayDow;
+        if (daysAhead <= 0) daysAhead += 7; // always go forward
+        const d = new Date(today);
+        d.setDate(d.getDate() + daysAhead);
+        return localDateStr(d);
+      }
     }
     const dateMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
     if (dateMatch) {
@@ -340,12 +740,22 @@ export function JobDiarySection({
           : `Re: ${replySubject}`;
         emailForm.setValue("subject", subject);
       }
+      if (replyBody) {
+        emailForm.setValue("message", replyBody);
+      }
     } else if (activeComposer === "email" && !replyToEmail) {
       // Reset to default customer email when not replying
       emailForm.setValue("to", customerEmail || "");
       emailForm.setValue("subject", "");
     }
-  }, [activeComposer, replyToEmail, replySubject, emailForm, customerEmail]);
+  }, [
+    activeComposer,
+    replyToEmail,
+    replySubject,
+    replyBody,
+    emailForm,
+    customerEmail,
+  ]);
 
   useEffect(() => {
     if (activeComposer === "sms" && replyToPhone) {
@@ -362,6 +772,8 @@ export function JobDiarySection({
       setReplyToEmail("");
       setReplyToPhone("");
       setReplySubject("");
+      setReplyBody("");
+      setConfirmationReplyEntryId(null);
       setSelectedEmailTemplate("");
       setSelectedSmsTemplate("");
     }
@@ -403,6 +815,16 @@ export function JobDiarySection({
     select: (response: any) => response.data || response,
   });
 
+  // Fetch customer record so the Book button always has the customer's name,
+  // even when jobContactFirstName/jobContactLastName are empty (e.g. lead-status jobs
+  // created by selecting an existing customer rather than entering new contact details).
+  const effectiveCustomerId = customerId || jobData?.customerId;
+  const { data: customerRecord } = useQuery({
+    queryKey: ["/api/customers", effectiveCustomerId],
+    enabled: !!effectiveCustomerId,
+    select: (response: any) => response.data || response,
+  });
+
   // Fetch email templates
   const { data: emailTemplates = [] } = useQuery({
     queryKey: ["/api/email-templates"],
@@ -417,7 +839,7 @@ export function JobDiarySection({
 
   // Variable replacement function
   const replaceTemplateVariables = (template: string) => {
-    const customerName = jobData?.customerName || "";
+    const customerName = customerRecord?.name || "";
     const address = jobData?.jobAddress || jobData?.address || "";
     const phone = jobData?.customerPhone || customerPhone || "";
     const email = jobData?.customerEmail || customerEmail || "";
@@ -608,6 +1030,7 @@ export function JobDiarySection({
             author: entry.authorName || entry.author_name || "System",
             timestamp: entry.createdAt || entry.created_at,
             photoUrl: photoUrl,
+            tags: entry.tags || undefined,
             metadata: {
               ...entry.metadata, // Preserve existing metadata (email, phone, etc.)
               eventType: entryType,
@@ -775,8 +1198,28 @@ export function JobDiarySection({
         });
       }
 
+      // Deduplicate: if two entries share the same messageId (e.g. a Gmail reply captured
+      // twice due to a polling race), keep only the first occurrence seen.
+      const seenMessageIds = new Set<string>();
+      const seenDbIds = new Set<string | number>();
+      const uniqueEntries = entries.filter(entry => {
+        // Dedup by DB id (catches any entry duplicated at source-merge level)
+        if (entry.id !== undefined && entry.id !== null) {
+          const idKey = String(entry.id);
+          if (seenDbIds.has(idKey)) return false;
+          seenDbIds.add(idKey);
+        }
+        // Dedup by email messageId in metadata (catches same email inserted twice in DB)
+        const msgId = entry.metadata?.messageId;
+        if (msgId) {
+          if (seenMessageIds.has(msgId)) return false;
+          seenMessageIds.add(msgId);
+        }
+        return true;
+      });
+
       // Sort by timestamp (newest first) — NaN-safe so invalid timestamps go to bottom
-      return entries.sort((a, b) => {
+      return uniqueEntries.sort((a, b) => {
         const ta = new Date(a.timestamp).getTime();
         const tb = new Date(b.timestamp).getTime();
         if (isNaN(tb) && isNaN(ta)) return 0;
@@ -798,17 +1241,77 @@ export function JobDiarySection({
     return photos;
   }, [diaryEntries]);
 
-  // Group consecutive photo entries for compact display
+  // Photo entries with metadata, used by the Photos tab grid so each tile
+  // can show its timestamp and author and link back to the right gallery
+  // index on click.
+  const photoEntries = React.useMemo<
+    Array<{ url: string; timestamp: string; author: string; id: string }>
+  >(() => {
+    return diaryEntries
+      .filter((entry: DiaryEntry) => !!entry.photoUrl)
+      .map((entry: DiaryEntry) => ({
+        url: entry.photoUrl as string,
+        timestamp: entry.timestamp,
+        author: entry.author,
+        id: entry.id,
+      }));
+  }, [diaryEntries]);
+
+  // Group consecutive photo entries for compact display, and stitch
+  // sent emails together with the replies they received into a single
+  // email_thread group.
   interface GroupedEntry {
-    type: "single" | "photo_group";
+    type: "single" | "photo_group" | "email_thread";
     entries: DiaryEntry[];
     timestamp: string;
     author: string;
+    parent?: DiaryEntry;
+    replies?: DiaryEntry[];
   }
 
   const groupedEntries = React.useMemo(() => {
     const groups: GroupedEntry[] = [];
     let currentPhotoGroup: DiaryEntry[] = [];
+    // Pending received emails awaiting a parent sent email. Walk is
+    // newest-first, so when we encounter a sent email we look back through
+    // pendingReplies for any received emails (which are newer in time) to
+    // associate as its replies.
+    let pendingReplies: DiaryEntry[] = [];
+
+    const flushPhotoGroup = () => {
+      if (currentPhotoGroup.length > 0) {
+        groups.push({
+          type: "photo_group",
+          entries: [...currentPhotoGroup],
+          timestamp: currentPhotoGroup[0].timestamp,
+          author: currentPhotoGroup[0].author,
+        });
+        currentPhotoGroup = [];
+      }
+    };
+
+    const pushEmailThread = (parent: DiaryEntry | null, replies: DiaryEntry[]) => {
+      const sortedReplies = [...replies].sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+      });
+      const all = parent ? [parent, ...sortedReplies] : sortedReplies;
+      // Thread sits in the timeline at its most recent activity, so a
+      // freshly-arrived reply pulls the whole conversation to the top.
+      const latest = all.reduce((acc, e) => {
+        const t = new Date(e.timestamp).getTime();
+        return isNaN(t) ? acc : Math.max(acc, t);
+      }, 0);
+      groups.push({
+        type: "email_thread",
+        entries: all,
+        timestamp: latest > 0 ? new Date(latest).toISOString() : (parent?.timestamp ?? sortedReplies[0]?.timestamp ?? ""),
+        author: parent?.author ?? sortedReplies[0]?.author ?? "",
+        parent: parent ?? undefined,
+        replies: sortedReplies,
+      });
+    };
 
     diaryEntries.forEach((entry, index) => {
       const isPhotoEntry =
@@ -834,47 +1337,73 @@ export function JobDiarySection({
             5 * 60 * 1000;
 
         if (!nextIsPhoto || !withinTimeWindow) {
-          // End of photo group
-          if (currentPhotoGroup.length > 0) {
-            groups.push({
-              type: "photo_group",
-              entries: [...currentPhotoGroup],
-              timestamp: currentPhotoGroup[0].timestamp,
-              author: currentPhotoGroup[0].author,
-            });
-            currentPhotoGroup = [];
-          }
+          flushPhotoGroup();
         }
-      } else {
-        // Flush any pending photo group
-        if (currentPhotoGroup.length > 0) {
-          groups.push({
-            type: "photo_group",
-            entries: [...currentPhotoGroup],
-            timestamp: currentPhotoGroup[0].timestamp,
-            author: currentPhotoGroup[0].author,
-          });
-          currentPhotoGroup = [];
-        }
-        // Add single entry
-        groups.push({
-          type: "single",
-          entries: [entry],
-          timestamp: entry.timestamp,
-          author: entry.author,
-        });
+        return;
       }
+
+      // Email threading — only applies to type === 'email'. SMS keeps the
+      // existing per-entry rendering.
+      if (entry.type === "email") {
+        flushPhotoGroup();
+        const direction = getEmailDirection(entry);
+        if (direction === "received") {
+          pendingReplies.push(entry);
+        } else {
+          // Treat 'sent' and 'unknown' as parent-style emails. Any pending
+          // replies whose address matches become this email's replies.
+          const parentAddr = getEmailAddress(entry);
+          let matched: DiaryEntry[] = [];
+          let leftover: DiaryEntry[] = [];
+          for (const r of pendingReplies) {
+            const rAddr = getEmailAddress(r);
+            // Pair on matching address; if either side has no address, fall
+            // back to assuming the reply belongs to the most recent parent.
+            if (!parentAddr || !rAddr || rAddr === parentAddr) {
+              matched.push(r);
+            } else {
+              leftover.push(r);
+            }
+          }
+          pendingReplies = leftover;
+          pushEmailThread(entry, matched);
+        }
+        return;
+      }
+
+      // Non-email, non-photo entry: flush photo group, keep pendingReplies
+      // (they may still be matched to an even older sent email further down
+      // in the timeline). Standalone single entry.
+      flushPhotoGroup();
+      groups.push({
+        type: "single",
+        entries: [entry],
+        timestamp: entry.timestamp,
+        author: entry.author,
+      });
     });
 
     // Flush any remaining photo group
-    if (currentPhotoGroup.length > 0) {
-      groups.push({
-        type: "photo_group",
-        entries: [...currentPhotoGroup],
-        timestamp: currentPhotoGroup[0].timestamp,
-        author: currentPhotoGroup[0].author,
-      });
+    flushPhotoGroup();
+
+    // Orphan replies (received emails with no preceding sent email in this
+    // job) — render each as its own thread group with no parent.
+    for (const r of pendingReplies) {
+      pushEmailThread(null, [r]);
     }
+    pendingReplies = [];
+
+    // Re-sort all groups by their effective timestamp so threads with a fresh
+    // reply float to the top of the diary instead of staying anchored at the
+    // original sent email's date.
+    groups.sort((a, b) => {
+      const ta = new Date(a.timestamp).getTime();
+      const tb = new Date(b.timestamp).getTime();
+      if (isNaN(tb) && isNaN(ta)) return 0;
+      if (isNaN(tb)) return 1;
+      if (isNaN(ta)) return -1;
+      return tb - ta;
+    });
 
     return groups;
   }, [diaryEntries]);
@@ -942,20 +1471,26 @@ export function JobDiarySection({
       (entry.title + " " + entry.content).match(/INV-\d{4}-\d{2}-\d{6}/i) ||
       (entry.title + " " + entry.content).match(/INV-[\d-]+/i);
 
-    // Also check metadata for invoice info
+    // Also check plain "Invoice NNNN created" pattern and metadata
+    const plainInvoiceCreatedMatch = (entry.title + " " + entry.content).match(/invoice\s+(\d+)\s+created/i);
+
     if (
+      entry.metadata?.invoiceId ||
+      entry.metadata?.action === "invoice_created" ||
       entry.metadata?.documentType === "invoice" ||
       invoiceMatch ||
+      plainInvoiceCreatedMatch ||
       content.includes("invoice sent") ||
       content.includes("invoice created")
     ) {
-      // If we found an invoice number in content, use it; otherwise check metadata; otherwise use a placeholder
       const invoiceNumber = invoiceMatch
         ? invoiceMatch[0]
-        : entry.metadata?.invoiceNumber ||
-          entry.metadata?.documentNumber ||
-          "latest";
-      return { type: "invoice", number: invoiceNumber };
+        : plainInvoiceCreatedMatch
+          ? plainInvoiceCreatedMatch[1]
+          : entry.metadata?.invoiceNumber ||
+            entry.metadata?.documentNumber ||
+            "latest";
+      return { type: "invoice", number: invoiceNumber, invoiceId: entry.metadata?.invoiceId };
     }
 
     // Check for proposal
@@ -1022,24 +1557,90 @@ export function JobDiarySection({
     },
   });
 
+  // Mark a customer-confirmation diary entry as having been acknowledged so
+  // the AI-drafted reply section hides from it. Existing metadata is merged
+  // client-side because the server's update replaces the jsonb column wholesale.
+  const acknowledgeConfirmationReplyMutation = useMutation({
+    mutationFn: async ({
+      entryId,
+      existingMetadata,
+    }: {
+      entryId: string;
+      existingMetadata: DiaryEntry["metadata"];
+    }) => {
+      const mergedMetadata = {
+        ...(existingMetadata || {}),
+        replyAcknowledged: true,
+      };
+      // eventType is a client-only synthetic field — don't persist it back.
+      delete (mergedMetadata as any).eventType;
+      return apiRequest("PUT", `/api/diary/${entryId}`, {
+        metadata: mergedMetadata,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description:
+          error?.message || "Couldn't dismiss the suggested reply.",
+        variant: "destructive",
+      });
+    },
+  });
+
   const sendEmailMutation = useMutation({
     mutationFn: async (data: EmailFormData) => {
-      // This would integrate with your existing email service
       return apiRequest("POST", "/api/communications/email", {
         jobId,
         customerId,
         to: data.to,
         subject: data.subject,
         message: data.message,
+        ...(confirmationReplyEntryId && {
+          tags: ["confirmation-reply-sent"],
+        }),
       });
     },
-    onSuccess: () => {
+    onSuccess: (_res, _variables) => {
+      // If this send originated from a customer-confirmation suggested reply,
+      // mark that entry as acknowledged so the draft section hides. The
+      // server-created diary entry (tagged 'confirmation-reply-sent') is
+      // what hides the hoisted confirmation-reply card on next render.
+      if (confirmationReplyEntryId) {
+        // Only call per-entry acknowledge for real diary entries — the
+        // hoisted card uses a sentinel id that doesn't exist on the server.
+        if (confirmationReplyEntryId !== "__hoisted-card__") {
+          const entry = diaryEntries?.find(
+            (e: DiaryEntry) => e.id === confirmationReplyEntryId,
+          );
+          acknowledgeConfirmationReplyMutation.mutate({
+            entryId: confirmationReplyEntryId,
+            existingMetadata: entry?.metadata,
+          });
+        }
+        setConfirmationReplyEntryId(null);
+      }
       emailForm.reset();
       setActiveComposer(null);
       queryClient.invalidateQueries({
         queryKey: ["/api/jobs", jobId, "diary-timeline"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      // Calendars use full-URL query keys (e.g. "/api/jobs?limit=...",
+      // "/api/jobs/for-date") that don't match the prefix above. Catch them all
+      // so the new "Reply sent" indicator shows up without waiting for the 30s
+      // refetch.
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && k.startsWith("/api/jobs");
+        },
+      });
     },
     onError: (error: any) => {
       toast({
@@ -1049,6 +1650,76 @@ export function JobDiarySection({
       });
     },
   });
+
+  // One-click: send the exact draft the user is looking at via the existing
+  // communications endpoint, and log a 'confirmation-reply-sent' diary entry
+  // so the hoisted card hides itself on next render. The draft must be
+  // passed in — never regenerate here, otherwise GPT non-determinism makes
+  // the sent message diverge from what the card displayed.
+  const sendConfirmationReplyNow = useMutation({
+    mutationFn: async (draft: { subject: string; body: string }) => {
+      const subject = draft?.subject?.trim();
+      const body = draft?.body?.trim();
+      if (!subject || !body) {
+        throw new Error("Couldn't send reply — draft is empty");
+      }
+      const to =
+        customerEmail ||
+        jobData?.customerEmail ||
+        customerRecord?.email ||
+        "";
+      if (!to) {
+        throw new Error("No customer email on file");
+      }
+      await apiRequest("POST", "/api/communications/email", {
+        jobId,
+        customerId,
+        to,
+        subject,
+        message: body,
+        tags: ["confirmation-reply-sent"],
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({
+        predicate: (q) => {
+          const k = q.queryKey?.[0];
+          return typeof k === "string" && k.startsWith("/api/jobs");
+        },
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Couldn't send confirmation reply",
+        description: err?.message || "Please try Edit first instead.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handlers for the inline AI-drafted confirmation reply section.
+  const handleEditAndSendConfirmationReply = (
+    draft: { subject: string; body: string },
+    entryId: string,
+  ) => {
+    setConfirmationReplyEntryId(entryId);
+    setReplyToEmail(customerEmail || "");
+    setReplySubject(draft.subject);
+    setReplyBody(draft.body);
+    setActiveComposer("email");
+  };
+
+  const handleDismissConfirmationReply = (entryId: string) => {
+    const entry = diaryEntries?.find((e: DiaryEntry) => e.id === entryId);
+    acknowledgeConfirmationReplyMutation.mutate({
+      entryId,
+      existingMetadata: entry?.metadata,
+    });
+  };
 
   const updateNoteMutation = useMutation({
     mutationFn: async ({
@@ -1295,9 +1966,141 @@ export function JobDiarySection({
               <Plus className="w-6 h-6" />
             </Button>
           </div>
+
+          {/* Diary view tabs — Timeline shows the chronological feed; Photos
+              gives crew quick access to every uploaded image at a glance. */}
+          <div className="mt-2 flex items-center gap-1 border-b border-gray-200 dark:border-gray-700 -mx-2 px-2">
+            <button
+              type="button"
+              onClick={() => setDiaryTab("timeline")}
+              data-testid="tab-diary-timeline"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                diaryTab === "timeline"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Timeline
+            </button>
+            <button
+              type="button"
+              onClick={() => setDiaryTab("photos")}
+              data-testid="tab-diary-photos"
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 transition-colors ${
+                diaryTab === "photos"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+              }`}
+            >
+              <Camera className="w-3.5 h-3.5" />
+              Photos
+              {photoEntries.length > 0 && (
+                <span
+                  className={`inline-flex items-center justify-center min-w-[1.25rem] h-4 px-1 rounded-full text-[10px] ${
+                    diaryTab === "photos"
+                      ? "bg-primary/15 text-primary"
+                      : "bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300"
+                  }`}
+                >
+                  {photoEntries.length}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
+        {/* Confirmation-reply card: hoisted above the timeline so it shows
+            for every confirmed job (including manual ticks), not just
+            auto-detected email/SMS confirmations. Hides once a
+            'confirmation-reply-sent' diary entry exists. */}
+        {jobData?.customerConfirmed &&
+          !confirmationCardDismissed &&
+          !diaryEntries.some((e: DiaryEntry) =>
+            e.tags?.includes("confirmation-reply-sent"),
+          ) && (
+            <JobConfirmationReplyCard
+              jobId={jobId}
+              customerEmail={
+                customerEmail || jobData?.customerEmail || customerRecord?.email || ""
+              }
+              isSending={sendConfirmationReplyNow.isPending}
+              onSendNow={(draft) => sendConfirmationReplyNow.mutate(draft)}
+              onEditFirst={(draft) => {
+                setReplyToEmail(
+                  customerEmail ||
+                    jobData?.customerEmail ||
+                    customerRecord?.email ||
+                    "",
+                );
+                setReplySubject(draft.subject);
+                setReplyBody(draft.body);
+                // Sentinel marker so sendEmailMutation.onSuccess also writes
+                // a 'confirmation-reply-sent' entry for the Edit-first path.
+                setConfirmationReplyEntryId("__hoisted-card__");
+                setActiveComposer("email");
+              }}
+              onDismiss={() => setConfirmationCardDismissed(true)}
+            />
+          )}
+
+        {/* Photos tab: grid of every uploaded photo on this job, click any
+            tile to open the existing fullscreen viewer (with swipe navigation). */}
+        {diaryTab === "photos" && (
+          <ScrollArea className="flex-1">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-4">
+                <div className="text-xs text-muted-foreground">Loading...</div>
+              </div>
+            ) : photoEntries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Camera className="w-10 h-10 text-gray-300 dark:text-gray-600 mb-2" />
+                <div className="text-sm text-muted-foreground">
+                  No photos uploaded yet
+                </div>
+                <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  Photos added to the diary will appear here.
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2 p-2 pr-4">
+                {photoEntries.map((photo, idx) => {
+                  const galleryIdx = allPhotos.indexOf(photo.url);
+                  return (
+                    <button
+                      key={photo.id ?? `${photo.url}-${idx}`}
+                      type="button"
+                      onClick={() =>
+                        setViewingPhotoIndex(galleryIdx >= 0 ? galleryIdx : 0)
+                      }
+                      className="group relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover-elevate active-elevate-2"
+                      data-testid={`photo-tile-${photo.id ?? idx}`}
+                    >
+                      <img
+                        src={photo.url}
+                        alt={`Diary photo ${idx + 1}`}
+                        loading="lazy"
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="text-[10px] text-white whitespace-nowrap truncate">
+                          {formatInTimeZone(
+                            new Date(photo.timestamp),
+                            "Pacific/Auckland",
+                            "MMM d, h:mm a",
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </ScrollArea>
+        )}
+
         {/* Timeline */}
+        {diaryTab === "timeline" && (
         <ScrollArea className="flex-1">
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -1312,6 +2115,255 @@ export function JobDiarySection({
           ) : (
             <div className="space-y-3 p-2 pr-4">
               {groupedEntries.map((group, groupIndex) => {
+                // Email thread rendering — one consolidated card containing the
+                // parent (sent) email plus all received replies stacked below.
+                if (group.type === "email_thread") {
+                  const parent = group.parent;
+                  const replies = group.replies ?? [];
+
+                  const openCalendarBookingFromEntry = (entry: DiaryEntry) => {
+                    const content = entry.content || "";
+                    const custName =
+                      jobData?.jobContactFirstName &&
+                      jobData?.jobContactLastName
+                        ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
+                        : jobData?.jobContactFirstName ||
+                          customerRecord?.name ||
+                          "Customer";
+                    const extractedTime = extractTimeFromText(content);
+                    const extractedDate = extractDateFromText(content);
+                    const fallbackDate = new Date();
+                    fallbackDate.setDate(fallbackDate.getDate() + 1);
+                    const dateStr =
+                      extractedDate || localDateStr(fallbackDate);
+
+                    setCalendarBookingEntry(entry);
+                    setCalendarBookingTitle(custName);
+                    setCalendarBookingDate(dateStr);
+                    setCalendarBookingTime(extractedTime);
+                    setCalendarBookingDuration("30");
+                    setCalendarBookingOpen(true);
+                  };
+
+                  const startReplyFromEntry = (entry: DiaryEntry) => {
+                    const replyEmail =
+                      entry.metadata?.emailAddress ||
+                      entry.metadata?.recipient ||
+                      entry.metadata?.fromEmail ||
+                      "";
+                    const originalSubject = (
+                      entry.content ||
+                      entry.title
+                        .replace("Email from ", "")
+                        .replace("Email sent: ", "")
+                    )
+                      .replace(/[\r\n]+/g, " ")
+                      .substring(0, 100);
+                    setReplyToEmail(replyEmail);
+                    setReplySubject(originalSubject);
+                    setActiveComposer("email");
+                  };
+
+                  const parentDirection = parent
+                    ? getEmailDirection(parent)
+                    : "unknown";
+                  const parentMsg = parent
+                    ? cleanEmailMessage(parent, parentDirection)
+                    : { text: "", recipient: "" };
+                  const parentRecipient =
+                    parentMsg.recipient ||
+                    parent?.metadata?.emailAddress ||
+                    parent?.metadata?.recipient ||
+                    "";
+
+                  return (
+                    <div
+                      key={`email-thread-${groupIndex}`}
+                      className="group"
+                      data-testid="diary-email-thread"
+                    >
+                      <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                        {parent && (
+                          <>
+                            {/* Parent email header */}
+                            <div className="flex items-start justify-between gap-2 px-3 py-2">
+                              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                <MdEmail className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+                                <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                                  Email
+                                </span>
+                                {parentRecipient && (
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                    to {parentRecipient}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
+                                  {formatInTimeZone(
+                                    new Date(parent.timestamp),
+                                    "Pacific/Auckland",
+                                    "h:mm a dd/MM/yy",
+                                  )}
+                                </span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (confirm("Delete this email?")) {
+                                      deleteEntryMutation.mutate(parent.id);
+                                    }
+                                  }}
+                                  data-testid={`button-delete-email-thread-${parent.id}`}
+                                >
+                                  <Trash2 className="w-2.5 h-2.5" />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {/* Parent body */}
+                            <div className="px-3 pb-3">
+                              <p
+                                className="text-xs leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200"
+                                style={{ wordBreak: "break-word" }}
+                              >
+                                {parentMsg.text}
+                              </p>
+                            </div>
+
+                            {/* Tracking + Book row */}
+                            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-gray-100 dark:border-gray-800">
+                              {parentDirection === "sent" ? (
+                                parent.metadata?.sendgridMessageId ? (
+                                  <EmailActivity
+                                    messageId={parent.metadata.sendgridMessageId}
+                                  />
+                                ) : (
+                                  <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                    <CheckCircle className="h-2.5 w-2.5" />
+                                    <span>Sent</span>
+                                  </div>
+                                )
+                              ) : (
+                                <div />
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openCalendarBookingFromEntry(parent);
+                                }}
+                                data-testid={`button-calendar-book-email-thread-${parent.id}`}
+                              >
+                                <CalendarPlus className="w-3 h-3 mr-0.5" />
+                                Book
+                              </Button>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Replies — indented under a purple thread bar */}
+                        {replies.length > 0 && (
+                          <div
+                            className={`${parent ? "border-t border-gray-100 dark:border-gray-800" : ""} px-3 py-3 space-y-3`}
+                          >
+                            {replies.map((reply) => {
+                              const replyMsg = cleanEmailMessage(reply, "received");
+                              const senderName =
+                                reply.author && reply.author !== "System"
+                                  ? reply.author
+                                  : reply.metadata?.emailAddress ||
+                                    "customer";
+                              return (
+                                <div
+                                  key={reply.id}
+                                  className="border-l-2 border-purple-400 dark:border-purple-500 pl-3 ml-1"
+                                  data-testid={`email-thread-reply-${reply.id}`}
+                                >
+                                  <div className="flex items-start justify-between gap-2 mb-1.5">
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                      <Reply className="w-3 h-3 text-purple-600 dark:text-purple-400 flex-shrink-0" />
+                                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
+                                        Reply received
+                                      </span>
+                                      <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                        from {senderName}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
+                                        {formatInTimeZone(
+                                          new Date(reply.timestamp),
+                                          "Pacific/Auckland",
+                                          "h:mm a dd/MM/yy",
+                                        )}
+                                      </span>
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (confirm("Delete this reply?")) {
+                                            deleteEntryMutation.mutate(reply.id);
+                                          }
+                                        }}
+                                        data-testid={`button-delete-reply-${reply.id}`}
+                                      >
+                                        <Trash2 className="w-2.5 h-2.5" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="rounded-md bg-purple-50 dark:bg-purple-900/30 px-3 py-2">
+                                    <p
+                                      className="text-xs leading-relaxed whitespace-pre-wrap break-words text-purple-900 dark:text-purple-100"
+                                      style={{ wordBreak: "break-word" }}
+                                    >
+                                      {replyMsg.text}
+                                    </p>
+                                  </div>
+                                  <div className="mt-1.5 flex items-center justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        startReplyFromEntry(reply);
+                                      }}
+                                      data-testid={`button-reply-${reply.id}`}
+                                    >
+                                      <Reply className="w-3 h-3 mr-0.5" />
+                                      Reply
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openCalendarBookingFromEntry(reply);
+                                      }}
+                                      data-testid={`button-calendar-book-${reply.id}`}
+                                    >
+                                      <CalendarPlus className="w-3 h-3 mr-0.5" />
+                                      Book
+                                    </Button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                }
+
                 // Photo group rendering
                 if (group.type === "photo_group") {
                   const photos = group.entries.filter((e) => e.photoUrl);
@@ -1369,7 +2421,7 @@ export function JobDiarySection({
                         </div>
                         {/* Photo Grid */}
                         <div
-                          className={`p-2 grid gap-1.5 ${
+                          className={`p-2 grid gap-1.5 max-w-[50%] ${
                             photos.length === 1
                               ? "grid-cols-1"
                               : photos.length === 2
@@ -1384,7 +2436,7 @@ export function JobDiarySection({
                               key={photo.id}
                               className={`relative rounded-lg overflow-hidden cursor-pointer hover-elevate ${
                                 photos.length === 1
-                                  ? "aspect-video"
+                                  ? ""
                                   : photos.length === 3 && photoIndex === 0
                                     ? "row-span-2 aspect-square"
                                     : "aspect-square"
@@ -1399,7 +2451,11 @@ export function JobDiarySection({
                               <img
                                 src={photo.photoUrl}
                                 alt="Job photo"
-                                className="w-full h-full object-cover"
+                                className={
+                                  photos.length === 1
+                                    ? "w-full h-auto max-h-48 object-contain"
+                                    : "w-full h-full object-cover"
+                                }
                                 onError={(e) =>
                                   (e.currentTarget.style.display = "none")
                                 }
@@ -1589,13 +2645,16 @@ export function JobDiarySection({
                           </div>
                         </div>
                         {/* Content */}
-                        <div className="px-3 py-2 min-w-0 overflow-hidden">
+                        <div
+                          className={`px-3 py-2 min-w-0 overflow-hidden ${isClickable ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                          onClick={isClickable ? handleEntryClick : undefined}
+                        >
                           <p
                             className={`text-xs leading-relaxed whitespace-pre-wrap break-words w-full ${
                               isSent
                                 ? "text-gray-700 dark:text-gray-300"
                                 : "text-purple-900 dark:text-purple-100"
-                            }`}
+                            } ${isClickable ? "underline underline-offset-2 decoration-dashed" : ""}`}
                             style={{ wordBreak: "break-word" }}
                           >
                             {messageText}
@@ -1610,12 +2669,17 @@ export function JobDiarySection({
                           }`}
                         >
                           {/* Email tracking for sent emails */}
-                          {isSent &&
-                          entry.type === "email" &&
-                          entry.metadata?.sendgridMessageId ? (
-                            <EmailActivity
-                              messageId={entry.metadata.sendgridMessageId}
-                            />
+                          {isSent && entry.type === "email" ? (
+                            entry.metadata?.sendgridMessageId ? (
+                              <EmailActivity
+                                messageId={entry.metadata.sendgridMessageId}
+                              />
+                            ) : (
+                              <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                                <CheckCircle className="h-2.5 w-2.5" />
+                                <span>Sent</span>
+                              </div>
+                            )
                           ) : (
                             <div />
                           )}
@@ -1671,7 +2735,7 @@ export function JobDiarySection({
                                     jobData?.jobContactLastName
                                       ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                                       : jobData?.jobContactFirstName ||
-                                        jobData?.customerName ||
+                                        customerRecord?.name ||
                                         "Customer";
                                   const extractedTime =
                                     extractTimeFromText(content);
@@ -1683,7 +2747,7 @@ export function JobDiarySection({
                                   );
                                   const dateStr =
                                     extractedDate ||
-                                    fallbackDate.toISOString().split("T")[0];
+                                    localDateStr(fallbackDate);
 
                                   setCalendarBookingEntry(entry);
                                   setCalendarBookingTitle(custName);
@@ -1733,7 +2797,7 @@ export function JobDiarySection({
                                         jobData?.jobContactLastName
                                           ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                                           : jobData?.jobContactFirstName ||
-                                            jobData?.customerName ||
+                                            customerRecord?.name ||
                                             "Customer";
                                       const extractedTime =
                                         extractTimeFromText(content);
@@ -1745,9 +2809,7 @@ export function JobDiarySection({
                                       );
                                       const dateStr =
                                         extractedDate ||
-                                        fallbackDate
-                                          .toISOString()
-                                          .split("T")[0];
+                                        localDateStr(fallbackDate);
 
                                       setCalendarBookingEntry(entry);
                                       setCalendarBookingTitle(custName);
@@ -2022,7 +3084,7 @@ export function JobDiarySection({
                                 <img
                                   src={entry.photoUrl}
                                   alt="Job photo"
-                                  className="w-24 h-24 object-cover rounded-lg cursor-pointer hover-elevate"
+                                  className="max-w-full h-auto max-h-64 rounded-lg cursor-pointer hover-elevate object-contain"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     const photoIndex = allPhotos.indexOf(
@@ -2284,6 +3346,7 @@ export function JobDiarySection({
             </div>
           )}
         </ScrollArea>
+        )}
 
         {/* Quick Actions */}
         <div className="flex-shrink-0 p-2 border-t bg-gray-50 dark:bg-gray-900">
@@ -2497,7 +3560,7 @@ export function JobDiarySection({
             <DialogHeader>
               <DialogTitle>Send Email</DialogTitle>
               <DialogDescription>
-                Send an email to {jobData?.customerName || "the customer"}
+                Send an email to {customerRecord?.name || "the customer"}
               </DialogDescription>
             </DialogHeader>
             <Form {...emailForm}>
@@ -2837,7 +3900,7 @@ export function JobDiarySection({
                       jobData?.jobContactLastName
                         ? `${jobData.jobContactFirstName} ${jobData.jobContactLastName}`
                         : jobData?.jobContactFirstName ||
-                          jobData?.customerName ||
+                          customerRecord?.name ||
                           "Customer";
                     const jobAddress =
                       jobData?.jobAddress || jobData?.address || "";
@@ -2890,6 +3953,14 @@ export function JobDiarySection({
             </div>
           </DialogContent>
         </Dialog>
+        {welcomeStatus?.customerName && (
+          <WelcomeVideoModal
+            open={welcomeModalOpen}
+            onOpenChange={setWelcomeModalOpen}
+            jobId={jobId}
+            customerName={welcomeStatus.customerName}
+          />
+        )}
       </div>
     </PullToRefresh>
   );

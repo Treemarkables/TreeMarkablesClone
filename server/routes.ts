@@ -1,9 +1,12 @@
 import type { Express, Request, Response } from "express";
 import express from "express";
+import { Webhook as SvixWebhook } from 'svix';
+import { addClient, removeClient, broadcast } from "./sseManager";
 import { createServer, type Server } from "http";
 import { fileURLToPath } from 'url';
-import { randomUUID, randomBytes } from 'crypto';
+import { randomUUID, randomBytes, createHash } from 'crypto';
 import { z } from "zod";
+import { fromZonedTime } from 'date-fns-tz';
 
 // Extend Express Session to include employeeId
 declare module 'express-session' {
@@ -15,8 +18,8 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql } from "drizzle-orm";
-import { invoices, customers, jobs } from "@shared/schema";
+import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
+import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
@@ -35,7 +38,8 @@ import {
   insertConversationSchema, updateConversationSchema,
   insertConversationMessageSchema, updateConversationMessageSchema,
   insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
-  insertInvoiceSchema, insertServiceRequestSchema, insertCustomerAuthSchema,
+  insertInvoiceSchema, insertInvoiceSectionSchema, updateInvoiceSectionSchema,
+  insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
   safetyIncidentInsertSchema, type InsertSafetyIncident,
   riskAssessmentInsertSchema, type InsertRiskAssessment,
@@ -94,6 +98,20 @@ import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
 
+// Image upload configuration for logos (memory storage, images only)
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+  fileFilter: (_req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml', 'image/gif'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed (PNG, JPG, WebP, SVG)'));
+    }
+  }
+});
+
 // Configure multer for file uploads
 // CSV file upload configuration
 const csvUpload = multer({ 
@@ -124,6 +142,23 @@ const imageUpload = multer({
   }
 });
 
+// Near miss attachment upload — disk storage so files survive server restarts
+const nearMissUpload = multer({
+  storage: multer.diskStorage({
+    destination: (req, _file, cb) => {
+      const reportId = (req.params as Record<string, string>).id || 'unknown';
+      const dir = path.join('uploads', 'near-miss', reportId);
+      fs.mkdirSync(dir, { recursive: true });
+      cb(null, dir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname);
+      cb(null, `${randomUUID()}${ext}`);
+    },
+  }),
+  limits: { fileSize: 50 * 1024 * 1024 },
+});
+
 /**
  * Serialize job timestamp fields to ISO UTC strings with 'Z' suffix
  * This ensures JavaScript Date parsing treats them as UTC, not local time
@@ -140,7 +175,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'completedDate', 'createdAt', 'updatedAt', 'startTime', 'endTime'];
+  const timestampFields = ['scheduledDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
@@ -171,6 +206,100 @@ function serializeJobTimestamps(job: any): any {
   }
   
   return serialized;
+}
+
+// Core merge: reassign every FK that points at duplicateIds to primaryId,
+// fill any blank fields on the primary from the duplicates, recompute
+// totalJobs/lifetimeValue, then delete the duplicate rows. Used by both
+// the single-group admin endpoint and the bulk dedupe-by-name job.
+async function mergeCustomerRecords(primaryId: string, duplicateIds: string[]) {
+  if (duplicateIds.length === 0) return await storage.getCustomer(primaryId);
+  if (duplicateIds.includes(primaryId)) {
+    throw new Error('primaryId cannot also appear in duplicateIds');
+  }
+  const allIds = [primaryId, ...duplicateIds];
+  const found = await db.select({ id: schema.customers.id }).from(schema.customers)
+    .where(inArray(schema.customers.id, allIds));
+  if (found.length !== allIds.length) {
+    throw new Error('One or more customer IDs not found');
+  }
+
+  const duplicates = await db.select().from(schema.customers)
+    .where(inArray(schema.customers.id, duplicateIds));
+  const primary = await storage.getCustomer(primaryId);
+  if (!primary) throw new Error('Primary customer not found');
+
+  const tables: { table: any; col: any }[] = [
+    { table: schema.communicationPreferences, col: schema.communicationPreferences.customerId },
+    { table: schema.leads,                    col: schema.leads.customerId },
+    { table: schema.calls,                    col: schema.calls.customerId },
+    { table: schema.quotes,                   col: schema.quotes.customerId },
+    { table: schema.jobs,                     col: schema.jobs.customerId },
+    { table: schema.proposals,                col: schema.proposals.customerId },
+    { table: schema.photos,                   col: schema.photos.customerId },
+    { table: schema.activities,               col: schema.activities.customerId },
+    { table: schema.reviews,                  col: schema.reviews.customerId },
+    { table: schema.conversations,            col: schema.conversations.customerId },
+    { table: schema.invoices,                 col: schema.invoices.customerId },
+    { table: schema.serviceRequests,          col: schema.serviceRequests.customerId },
+    { table: schema.customerAuth,             col: schema.customerAuth.customerId },
+    { table: schema.generatedDocuments,       col: schema.generatedDocuments.customerId },
+    { table: schema.reviewRequests,           col: schema.reviewRequests.customerId },
+    { table: schema.reviewSubmissions,        col: schema.reviewSubmissions.customerId },
+    { table: schema.pendingOutboundMessages,  col: schema.pendingOutboundMessages.customerId },
+    { table: schema.communications,           col: schema.communications.customerId },
+    { table: schema.callRecords,              col: schema.callRecords.customerId },
+  ];
+
+  for (const dupId of duplicateIds) {
+    for (const { table, col } of tables) {
+      await db.update(table).set({ customerId: primaryId } as any).where(eq(col, dupId));
+    }
+  }
+
+  const fillableFields: (keyof typeof primary)[] = [
+    'email', 'phone', 'mobile', 'address', 'city', 'region', 'notes',
+    'source', 'importSource', 'externalId', 'servicem8Uuid',
+  ];
+  const patch: Record<string, any> = {};
+  for (const field of fillableFields) {
+    if (!primary[field]) {
+      for (const dup of duplicates) {
+        if (dup[field]) {
+          patch[field] = dup[field];
+          break;
+        }
+      }
+    }
+  }
+  const consolidatedJobs = await db.select({ totalAmount: schema.jobs.totalAmount })
+    .from(schema.jobs)
+    .where(eq(schema.jobs.customerId, primaryId));
+  patch.totalJobs = consolidatedJobs.length;
+  patch.lifetimeValue = consolidatedJobs
+    .reduce((sum, j) => sum + parseFloat((j.totalAmount as string) || '0'), 0)
+    .toFixed(2);
+
+  await storage.updateCustomer(primaryId, patch);
+  await db.delete(schema.customers).where(inArray(schema.customers.id, duplicateIds));
+
+  return await storage.getCustomer(primaryId);
+}
+
+// Returns the subset of incoming customer fields that would fill empty slots
+// on the existing record. Non-destructive: never overwrites an existing
+// non-empty value with a different one.
+function mergeEmptyCustomerFields(existing: any, incoming: any): Record<string, any> {
+  const mergeable = ['email', 'phone', 'mobile', 'address', 'city', 'region', 'notes', 'source'] as const;
+  const updates: Record<string, any> = {};
+  for (const key of mergeable) {
+    const next = incoming?.[key];
+    const current = existing?.[key];
+    if (next && typeof next === 'string' && next.trim() && !(current && String(current).trim())) {
+      updates[key] = next;
+    }
+  }
+  return updates;
 }
 
 // Safe audio file extensions and MIME types for call recordings
@@ -246,6 +375,34 @@ if (!fs.existsSync(photosDir)) {
 const recordingsDir = path.join(__dirname, '..', 'uploads', 'recordings');
 if (!fs.existsSync(recordingsDir)) {
   fs.mkdirSync(recordingsDir, { recursive: true });
+}
+
+// ── Company logo helpers ──────────────────────────────────────────────────
+// Single source of truth: the default proposal template's logoUrl. Settings → Company
+// keeps all three default templates (quote/proposal/invoice) in sync on upload, so any
+// of them would do — proposal is the canonical read.
+const FALLBACK_LOGO_PATH = '/treemarkables-logo.png';
+
+async function getCompanyLogoUrl(): Promise<string> {
+  try {
+    const tpl = await storage.getDefaultDocumentTemplate('proposal');
+    return tpl?.logoUrl || FALLBACK_LOGO_PATH;
+  } catch {
+    return FALLBACK_LOGO_PATH;
+  }
+}
+
+function resolveLogoFsPath(logoUrl: string): string {
+  // URLs look like "/logos/logo-123.png" or "/treemarkables-logo.png" — both served from /client/public.
+  const relative = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+  return path.join(__dirname, '..', 'client', 'public', relative);
+}
+
+async function getCompanyLogoFilePath(): Promise<string> {
+  const url = await getCompanyLogoUrl();
+  const resolved = resolveLogoFsPath(url);
+  if (fs.existsSync(resolved)) return resolved;
+  return path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
 }
 
 // Initialize OpenAI client for call transcription
@@ -569,6 +726,278 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 }
 
 // ---------------------------------------------------------------------------
+// Shared proposal/quote PDF generation helper — used by the GET /pdf route
+// and the send-quote-email handler. When proposal.templateUsed === 'quote',
+// the rendered document uses "QUOTE" header and email-reply acceptance copy.
+// ---------------------------------------------------------------------------
+async function generateProposalPDFBuffer(
+  proposalId: string
+): Promise<{ buffer: Buffer; proposalNumber: string; isQuote: boolean }> {
+  const proposal = await storage.getProposal(proposalId);
+  if (!proposal) throw new Error('Proposal not found');
+
+  const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : undefined;
+
+  const sections = await storage.getProposalSectionsByProposal(proposalId);
+  const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+
+  // Featured (curated) reviews to render under the totals block. Same filter as
+  // GET /api/reviews/featured so the builder preview and the PDF show the same
+  // pool. Flattened to individual photo URLs; limit to 6 to keep the PDF compact.
+  const allReviews = await storage.getAllReviews().catch(() => [] as any[]);
+  const featuredPhotos: string[] = (allReviews || [])
+    .filter((r: any) => r?.isPublic && Array.isArray(r.photoUrls) && r.photoUrls.length > 0)
+    .sort((a: any, b: any) => {
+      const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      return bd - ad;
+    })
+    .flatMap((r: any) => r.photoUrls as string[])
+    .slice(0, 6);
+
+  const sectionLineItems = new Map<string, any[]>();
+  for (const item of lineItems) {
+    if (item.sectionId) {
+      if (!sectionLineItems.has(item.sectionId)) {
+        sectionLineItems.set(item.sectionId, []);
+      }
+      sectionLineItems.get(item.sectionId)!.push(item);
+    }
+  }
+
+  let subtotal = 0;
+  for (const item of lineItems) {
+    if (item.selected !== false) {
+      subtotal += parseFloat(item.totalPrice || '0');
+    }
+  }
+  const gst = subtotal * 0.15;
+  const total = subtotal + gst;
+
+  const customerName = customer?.name || 'Valued Customer';
+  const proposalNumber = proposal.proposalNumber || 'N/A';
+  const isQuote = proposal.templateUsed === 'quote';
+  const docTitle = isQuote ? 'QUOTE' : 'PROPOSAL';
+
+  console.log(`📄 Generating ${docTitle.toLowerCase()} PDF for ${proposalId} (${sections.length} sections, ${lineItems.length} line items)`);
+
+  const PDFDoc = (await import('pdfkit')).default;
+  const buffer = await new Promise<Buffer>((resolve, reject) => {
+    const doc = new PDFDoc({ size: 'A4', margin: 50 });
+    const chunks: Buffer[] = [];
+    doc.on('data', (c: Buffer) => chunks.push(Buffer.from(c)));
+    doc.on('end', () => resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+
+    const fmtCurrency = (n: number) =>
+      new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(n);
+    const fmtDate = (d: any) =>
+      d ? new Date(d).toLocaleDateString('en-NZ', { day: '2-digit', month: 'long', year: 'numeric' }) : '';
+    const pageW = doc.page.width - 100;
+
+    // Header bar
+    doc.rect(0, 0, doc.page.width, 90).fill('#f97316');
+    try { doc.image('client/public/treemarkables-logo.png', 50, 15, { height: 55 }); } catch { /* no logo */ }
+    doc.fillColor('#ffffff').fontSize(18).font('Helvetica-Bold')
+      .text(docTitle, doc.page.width - 200, 20, { width: 150, align: 'right' });
+    doc.fontSize(10).font('Helvetica')
+      .text(`#${proposalNumber}`, doc.page.width - 200, 43, { width: 150, align: 'right' });
+    const validUntil = (proposal as any).expiryDate || (proposal as any).expiresAt;
+    if (validUntil) {
+      doc.fontSize(8).text(`Valid until: ${fmtDate(validUntil)}`, doc.page.width - 200, 58, { width: 150, align: 'right' });
+    }
+
+    // Customer block
+    doc.fillColor('#111827').fontSize(12).font('Helvetica-Bold').text('Prepared for:', 50, 110);
+    doc.fontSize(14).text(customerName, 50, 128);
+    if (customer?.address) doc.fontSize(10).font('Helvetica').fillColor('#6b7280').text(customer.address, 50, 147);
+
+    // Description (introduction for newer records, description for legacy)
+    const intro = (proposal as any).introduction || (proposal as any).description;
+    if (intro) {
+      doc.moveDown(3).fillColor('#374151').fontSize(10).font('Helvetica')
+        .text(intro, { width: pageW });
+    }
+
+    const sepY = Math.max(doc.y + 12, 200);
+    doc.moveTo(50, sepY).lineTo(50 + pageW, sepY).lineWidth(1).strokeColor('#e5e7eb').stroke();
+    doc.y = sepY + 10;
+
+    // Line items per section
+    for (const section of sections) {
+      const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+      if (items.length === 0) continue;
+
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text(section.title, { width: pageW });
+      doc.moveDown(0.3);
+
+      const col = { desc: 50, qty: 360, unit: 405, price: 450, total: 495 };
+      doc.fontSize(8).font('Helvetica-Bold').fillColor('#6b7280');
+      doc.text('Description', col.desc, doc.y, { width: 300 });
+      doc.text('Qty', col.qty, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+      doc.text('Unit', col.unit, doc.y - doc.currentLineHeight(), { width: 40, align: 'right' });
+      doc.text('Total', col.total, doc.y - doc.currentLineHeight(), { width: 50, align: 'right' });
+      doc.moveDown(0.3);
+      doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#d1d5db').stroke();
+      doc.moveDown(0.3);
+
+      for (const item of items) {
+        const itemTotal = parseFloat(item.totalPrice || '0');
+        const rowY = doc.y;
+        doc.fontSize(9).font('Helvetica').fillColor('#111827')
+          .text(item.description || '', col.desc, rowY, { width: 300 });
+        const rowH = doc.y - rowY;
+        doc.text(`${item.quantity || 1}`, col.qty, rowY, { width: 40, align: 'right' });
+        doc.text(item.unit || '', col.unit, rowY, { width: 40, align: 'right' });
+        doc.text(fmtCurrency(itemTotal), col.total, rowY, { width: 50, align: 'right' });
+        doc.y = rowY + Math.max(rowH, 14) + 2;
+      }
+
+      doc.moveDown(0.5);
+    }
+
+    // Totals block
+    doc.moveDown(0.5);
+    doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.moveDown(0.5);
+
+    const tX = 370;
+    const vW = 50 + pageW - tX;
+    doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+      .text('Subtotal (excl. GST)', tX, doc.y, { width: vW - 70, align: 'left' });
+    doc.fillColor('#111827').text(fmtCurrency(subtotal), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    doc.moveDown(0.4);
+    doc.fillColor('#6b7280').text('GST (15%)', tX, doc.y, { width: vW - 70 });
+    doc.fillColor('#111827').text(fmtCurrency(gst), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+    doc.moveDown(0.4);
+    doc.moveTo(tX, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.moveDown(0.3);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#111827')
+      .text('Total (inc. GST)', tX, doc.y, { width: vW - 70 });
+    doc.fillColor('#f97316').text(fmtCurrency(total), tX + vW - 70, doc.y - doc.currentLineHeight(), { width: 70, align: 'right' });
+
+    // Reviews block — curated review screenshots under the total. Each uploaded
+    // image gets its own row, centred at a readable size. Skipped entirely when
+    // there are no photos so the layout has no empty header.
+    if (featuredPhotos.length > 0) {
+      doc.moveDown(1.5);
+      doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+      doc.moveDown(0.8);
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151')
+        .text('What our customers say', 50, doc.y, { width: pageW, align: 'center' });
+      doc.moveDown(0.6);
+
+      const maxW = Math.min(360, pageW);
+      const maxH = 180;
+      for (const url of featuredPhotos) {
+        const rel = url.startsWith('/') ? url.slice(1) : url;
+        const fsPath = path.join(__dirname, '..', 'client', 'public', rel);
+        try {
+          if (fs.existsSync(fsPath)) {
+            const startX = 50 + (pageW - maxW) / 2;
+            doc.image(fsPath, startX, doc.y, { fit: [maxW, maxH], align: 'center' });
+            doc.y += maxH + 12;
+          }
+        } catch { /* skip bad image */ }
+      }
+    }
+
+    // Acceptance section
+    doc.moveDown(1.5);
+    doc.moveTo(50, doc.y).lineTo(50 + pageW, doc.y).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.moveDown(0.8);
+    doc.fontSize(11).font('Helvetica-Bold').fillColor('#374151').text('Acceptance', { width: pageW });
+    doc.moveDown(0.4);
+    if (isQuote) {
+      doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+        .text('To accept this quote, simply reply to our email — tap the "Accept Quote" button and press send. No signature required.', { width: pageW });
+    } else {
+      doc.fontSize(9).font('Helvetica').fillColor('#6b7280')
+        .text('By signing below, you agree to the scope of works and pricing outlined in this proposal.', { width: pageW });
+      doc.moveDown(1.2);
+
+      const sigY = doc.y;
+      doc.moveTo(50, sigY + 20).lineTo(280, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+      doc.moveTo(320, sigY + 20).lineTo(550, sigY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+      doc.fontSize(8).fillColor('#9ca3af')
+        .text('Customer Signature', 50, sigY + 24, { width: 230 })
+        .text('Date', 320, sigY + 24, { width: 230 });
+
+      doc.moveDown(2.5);
+      const nameY = doc.y;
+      doc.moveTo(50, nameY + 20).lineTo(280, nameY + 20).lineWidth(0.5).strokeColor('#374151').stroke();
+      doc.fontSize(8).fillColor('#9ca3af').text('Print Name', 50, nameY + 24, { width: 230 });
+    }
+
+    if (proposal.status === 'accepted') {
+      doc.moveDown(1);
+      doc.rect(50, doc.y, pageW, 28).fill('#dcfce7');
+      doc.fontSize(10).font('Helvetica-Bold').fillColor('#15803d')
+        .text(`This ${isQuote ? 'quote' : 'proposal'} has been accepted`, 50, doc.y - 20, { width: pageW, align: 'center' });
+      doc.moveDown(0.5);
+    }
+
+    const footerY = doc.page.height - 70;
+    doc.moveTo(50, footerY).lineTo(50 + pageW, footerY).lineWidth(0.5).strokeColor('#e5e7eb').stroke();
+    doc.fontSize(8).font('Helvetica').fillColor('#9ca3af')
+      .text('Treemarkables LTD — Qualified Arborists', 50, footerY + 8, { width: pageW, align: 'center' });
+    doc.text('info@treemarkables.co.nz | 027 216 6882', 50, footerY + 20, { width: pageW, align: 'center' });
+
+    doc.end();
+  });
+
+  return { buffer, proposalNumber, isQuote };
+}
+
+// ---------------------------------------------------------------------------
+// Legacy HTML summary of a proposal (used by Smart Attachments / ?format=html).
+// Kept separate from the PDF renderer so it can be emitted without spinning up
+// PDFKit.
+// ---------------------------------------------------------------------------
+async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
+  const proposal = await storage.getProposal(proposalId);
+  if (!proposal) throw new Error('Proposal not found');
+  const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+  const sections = await storage.getProposalSectionsByProposal(proposalId);
+  const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+
+  const sectionLineItems = new Map<string, any[]>();
+  for (const item of lineItems) {
+    if (item.sectionId) {
+      if (!sectionLineItems.has(item.sectionId)) sectionLineItems.set(item.sectionId, []);
+      sectionLineItems.get(item.sectionId)!.push(item);
+    }
+  }
+  let subtotal = 0;
+  for (const item of lineItems) {
+    if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
+  }
+  const gst = subtotal * 0.15;
+  const total = subtotal + gst;
+  const isQuote = proposal.templateUsed === 'quote';
+  const docLabel = isQuote ? 'Quote' : 'Proposal';
+  const customerName = customer?.name || 'Valued Customer';
+  const proposalNumber = proposal.proposalNumber || 'N/A';
+
+  let htmlItems = '';
+  for (const section of sections) {
+    const items = (sectionLineItems.get(section.id) || []).filter((i: any) => i.selected !== false);
+    if (items.length === 0) continue;
+    htmlItems += `<h3 style="color:#374151;margin:12px 0 6px">${section.title}</h3>`;
+    htmlItems += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+    items.forEach((item: any) => {
+      const p = parseFloat(item.totalPrice || '0');
+      htmlItems += `<tr><td style="padding:4px 8px">${item.description}</td><td style="padding:4px 8px;text-align:right">$${p.toFixed(2)}</td></tr>`;
+    });
+    htmlItems += '</table>';
+  }
+  const gstFmt = `$${gst.toFixed(2)}`;
+  const totalFmt = `$${total.toFixed(2)}`;
+  const subtotalFmt = `$${subtotal.toFixed(2)}`;
+  return `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${docLabel} ${proposalNumber}</title></head><body style="font-family:Arial,sans-serif;padding:24px;max-width:700px"><h1 style="color:#f97316">Treemarkables ${docLabel}</h1><p><strong>${docLabel} #:</strong> ${proposalNumber}</p><p><strong>Customer:</strong> ${customerName}</p><hr>${htmlItems}<hr><table style="width:100%;font-size:13px"><tr><td>Subtotal (excl. GST)</td><td style="text-align:right">${subtotalFmt}</td></tr><tr><td>GST (15%)</td><td style="text-align:right">${gstFmt}</td></tr><tr><td><strong>Total (inc. GST)</strong></td><td style="text-align:right"><strong>${totalFmt}</strong></td></tr></table><hr><p style="color:#6b7280;font-size:12px">Treemarkables LTD | info@treemarkables.co.nz | 027 216 6882</p></body></html>`;
+}
+
+// ---------------------------------------------------------------------------
 // Shared PDF generation helper — used by both the email route and the
 // standalone /api/invoices/:id/pdf download endpoint.
 // Accepts either a DB invoice record (.items) or frontend invoice data
@@ -577,9 +1006,15 @@ async function requireApiKey(req: Request, res: Response, next: express.NextFunc
 async function generateInvoicePDFBuffer(
   invoiceData: any,
   job?: any,
-  customer?: any
+  customer?: any,
+  template?: any
 ): Promise<Buffer> {
   const PDFDocument = (await import('pdfkit')).default;
+  // Import shared rendering contract (resolves camelCase DB fields + defaults)
+  const { resolveCompanyInfo, resolveBlockConfig } = await import('../shared/documentBlockDefaults');
+  // Resolve the default company logo filesystem path up-front (inside the Promise
+  // executor we can't await) so the PDF header renders without extra async calls.
+  const defaultLogoPath = await getCompanyLogoFilePath();
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -599,136 +1034,327 @@ async function generateInvoicePDFBuffer(
     const formatCurrency = (num: number) =>
       new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(num);
 
-    // Logo
-    try {
-      doc.image('client/public/treemarkables-logo.png', 40, 40, { width: 120 });
-    } catch {
-      // logo optional — continue without it
-    }
+    // Resolve company info via shared contract (camelCase field names, consistent defaults)
+    const co = resolveCompanyInfo(template);
 
-    // Invoice header
-    const billingName = job?.billingNameOverride || customer?.name || 'Customer';
-    doc.fontSize(12).font('Helvetica-Bold').text(
-      `Invoice #${invoiceData.invoiceNumber}`, 350, 45, { align: 'right', width: 205 }
-    );
-    doc.fontSize(9).font('Helvetica').text(
-      `${billingName} - ${formatDate(invoiceData.issueDate) || formatDate(new Date())}`,
-      350, doc.y, { align: 'right', width: 205 }
-    );
-
-    doc.moveTo(40, 85).lineTo(555, 85).lineWidth(2).stroke();
-
-    // Bill To
-    doc.y = 100;
-    doc.fontSize(9).font('Helvetica-Bold').text('Bill To', 40, doc.y);
-    doc.moveDown(0.3);
-    doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
-    if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
-      doc.moveDown(0.2);
-      doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
-      doc.fillColor('#000000');
-    }
-    doc.moveDown(0.2);
-    if (invoiceData.address || job?.address) {
-      doc.fontSize(8).font('Helvetica').fillColor('#666666')
-        .text(invoiceData.address || job?.address || '', 40, doc.y);
-      doc.moveDown(0.2);
-    }
-    if (customer?.email) {
-      doc.fontSize(8).fillColor('#666666').text(customer.email, 40, doc.y);
-      doc.moveDown(0.2);
-    }
-    doc.fillColor('#000000');
-    doc.moveDown(0.5);
-
-    // Description
-    doc.fontSize(9).font('Helvetica-Bold').text('Description', 40, doc.y);
-    doc.moveDown(0.3);
+    // Resolve block config via shared contract (reads template.blockConfig in camelCase)
+    const blockConfig = resolveBlockConfig(template);
 
     // Support both DB (.items) and frontend (.lineItems) field names
     const lineItems: any[] = invoiceData.items || invoiceData.lineItems || [];
     const hasLineItems = lineItems.length > 0;
 
-    if (job?.description) {
-      doc.fontSize(8).font('Helvetica').fillColor('#333333')
-        .text(job.description, 40, doc.y, { width: 515 });
-      doc.fillColor('#000000');
-      doc.moveDown(0.3);
-    }
-
-    if (invoiceData.notes) {
-      doc.fontSize(8).font('Helvetica').fillColor('#333333')
-        .text(invoiceData.notes, 40, doc.y, { width: 515 });
-      doc.fillColor('#000000');
-      doc.moveDown(0.3);
-    }
-
+    // Pre-calculate totals
     let subtotal = 0;
     if (hasLineItems) {
       lineItems.forEach((item: any) => {
         const raw = item.total ?? item.amount ?? 0;
-        const total = typeof raw === 'string' ? parseFloat(raw) : raw;
-        subtotal += total;
-        doc.fontSize(8).font('Helvetica').fillColor('#000000')
-          .text(item.description || '', 40, doc.y, { width: 515 });
-        doc.moveDown(0.2);
+        subtotal += typeof raw === 'string' ? parseFloat(raw) : raw;
       });
     } else {
       const raw = invoiceData.amount ?? 0;
       subtotal = typeof raw === 'string' ? parseFloat(raw) : raw;
     }
-
-    doc.moveDown(0.5);
-
-    // Totals
     const gstAmount = subtotal * 0.15;
     const totalAmount = subtotal + gstAmount;
 
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-    doc.moveDown(0.5);
+    const billingName = job?.billingNameOverride || customer?.name || 'Customer';
+    const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
+    const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
-    const totalsX = 380;
-    const valuesX = 470;
+    const defaultOrder = ['header', 'companyInfo', 'invoiceMeta', 'billTo', 'jobDescription', 'lineItems', 'totals', 'payment', 'footer'];
+    type BlockEntry = { type: string; cfg: Record<string, unknown> };
+    const renderBlocks: BlockEntry[] = blockConfig.length > 0
+      ? blockConfig.filter(b => b.visible).map(b => ({ type: b.type, cfg: b.config || {} }))
+      : defaultOrder.map(type => ({ type, cfg: {} }));
 
-    doc.fontSize(8).font('Helvetica').fillColor('#666666');
-    doc.text('Subtotal (excl GST):', totalsX, doc.y, { width: 135, align: 'left' });
-    doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-    doc.moveDown(0.3);
+    for (const { type: sectionType, cfg } of renderBlocks) {
+      switch (sectionType) {
+        case 'header': {
+          const hdrColor = (cfg.headerColor as string) || '#ffffff';
+          const logoAlign = (cfg.logoAlignment as string) || 'left';
+          const showCoName = cfg.showCompanyName !== false;
+          if (hdrColor !== '#ffffff') {
+            doc.rect(40, 30, 515, 60).fill(hdrColor).fillColor('#000000');
+          }
+          let logoX = 40;
+          if (logoAlign === 'center') logoX = 297 - 60;
+          else if (logoAlign === 'right') logoX = 435;
+          let logoFilePath = co.logoUrl
+            ? resolveLogoFsPath(co.logoUrl)
+            : defaultLogoPath;
+          // If the template's logoUrl points at a missing file (e.g. an old upload that
+          // was never migrated), fall back to the default logo so the header still renders.
+          if (!fs.existsSync(logoFilePath)) logoFilePath = defaultLogoPath;
+          try {
+            doc.image(logoFilePath, logoX, 35, { width: 120, height: 50, fit: [120, 50] });
+          } catch { /* logo optional */ }
+          if (showCoName) {
+            doc.fontSize(9).font('Helvetica').fillColor('#374151')
+              .text(co.name, 40, 42, { align: 'right', width: 515 });
+          }
+          doc.fontSize(12).font('Helvetica-Bold').fillColor('#000000')
+            .text(`Invoice #${invoiceData.invoiceNumber}`, 350, showCoName ? 54 : 45, { align: 'right', width: 205 });
+          doc.fontSize(9).font('Helvetica').fillColor('#374151')
+            .text(`${billingName} – ${issueDate}`, 350, doc.y, { align: 'right', width: 205 });
+          doc.fillColor('#000000').moveTo(40, 90).lineTo(555, 90).lineWidth(1).stroke();
+          doc.y = 100;
+          break;
+        }
+        case 'companyInfo': {
+          const parts: string[] = [];
+          if (cfg.showName !== false) parts.push(co.name);
+          if (cfg.showAddress !== false) parts.push(co.address);
+          if (cfg.showPhone !== false) parts.push(`Ph: ${co.phone}`);
+          if (cfg.showEmail !== false) parts.push(co.email);
+          if (cfg.showGST) parts.push(`GST: ${co.gstNumber}`);
+          if (parts.length > 0) {
+            doc.fontSize(8).font('Helvetica').fillColor('#333333')
+              .text(parts.join('  |  '), 40, doc.y, { width: 515 });
+            doc.fillColor('#000000').moveDown(0.5);
+          }
+          break;
+        }
+        case 'invoiceMeta': {
 
-    doc.fillColor('#666666');
-    doc.text('GST (15%):', totalsX, doc.y, { width: 135, align: 'left' });
-    doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-    doc.moveDown(0.5);
+          const showInvNum = cfg.showInvoiceNumber !== false;
+          const showIssue = cfg.showIssueDate !== false;
+          const showDue = cfg.showDueDate !== false && dueDate;
+          const labelInv = (cfg.labelInvoice as string) || 'Invoice #';
+          const labelIssue = (cfg.labelIssueDate as string) || 'Issue Date';
+          const labelDue = (cfg.labelDueDate as string) || 'Due Date';
+          const totalsX = 380;
+          if (showInvNum) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .text(`${labelInv}: ${invoiceData.invoiceNumber}`, 40, doc.y);
+          }
+          if (showIssue) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .moveDown(0.2).text(`${labelIssue}: ${issueDate}`, 40, doc.y);
+          }
+          if (showDue) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .moveDown(0.2).text(`${labelDue}: ${dueDate}`, 40, doc.y);
+          }
+          doc.fillColor('#000000').moveDown(0.5);
+          break;
+        }
+        case 'billTo': {
 
-    doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
-    doc.text('Total Amount:', totalsX, doc.y, { width: 135, align: 'left' });
-    doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
-    doc.moveDown(1);
+          const label = (cfg.label as string) || 'Bill To';
+          doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(label, 40, doc.y);
+          doc.moveDown(0.3);
+          doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
+          if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
+            doc.moveDown(0.2);
+            doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
+            doc.fillColor('#000000');
+          }
+          doc.moveDown(0.2);
+          if (cfg.showAddress !== false && (invoiceData.address || job?.address)) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666')
+              .text(invoiceData.address || job?.address || '', 40, doc.y);
+            doc.moveDown(0.2);
+          }
+          if (cfg.showEmail !== false && customer?.email) {
+            doc.fontSize(8).fillColor('#666666').text(customer.email, 40, doc.y);
+            doc.moveDown(0.2);
+          }
+          doc.fillColor('#000000').moveDown(0.5);
+          break;
+        }
+        case 'jobDescription': {
 
-    // Payment box
-    const boxY = doc.y;
-    doc.rect(40, boxY, 515, 60).fillAndStroke('#F3F4F6', '#E5E7EB');
-    doc.fillColor('#000000');
-    doc.fontSize(9).font('Helvetica-Bold').text('Payment Information', 50, boxY + 10);
-    doc.fontSize(8).font('Helvetica');
-    doc.fillColor('#4B5563').text('Bank: ANZ', 50, boxY + 25);
-    doc.text('Account Number: 06 0637 0768850 00', 50, boxY + 37);
-    doc.text('Account Name: Treemarkables LTD', 50, boxY + 49);
-    doc.fillColor('#000000');
-    doc.y = boxY + 70;
-    doc.moveDown(0.5);
+          const description = job?.description || invoiceData.notes;
+          if (description) {
+            const label = (cfg.label as string) || 'Description';
+            doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(label, 40, doc.y);
+            doc.moveDown(0.3);
+            doc.fontSize(8).font('Helvetica').fillColor('#333333')
+              .text(description, 40, doc.y, { width: 515 });
+            doc.fillColor('#000000').moveDown(0.5);
+          }
+          break;
+        }
+        case 'lineItems': {
+          if (hasLineItems) {
+            const headerLabel = (cfg.labelDescription as string) || 'Services & Pricing';
+            const showQty = cfg.showQty !== false;
+            const showRate = cfg.showRate === true;
+            const labelQty = (cfg.labelQty as string) || 'Qty';
+            const labelRate = (cfg.labelRate as string) || 'Rate';
+            const labelAmount = (cfg.labelAmount as string) || 'Price';
+            const descColPct = typeof cfg.descColPct === 'number' ? cfg.descColPct : 60;
+            const tableW = 515;
+            const descW = Math.round(tableW * descColPct / 100);
+            const qtyW = showQty ? 40 : 0;
+            const rateW = showRate ? 60 : 0;
+            const amtW = tableW - descW - qtyW - rateW;
+            doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(headerLabel, 40, doc.y);
+            doc.moveDown(0.3);
+            doc.fontSize(7).font('Helvetica-Bold').fillColor('#666666');
+            const startX = 40;
+            doc.text((cfg.labelDescription as string) || 'Description', startX, doc.y, { width: descW });
+            if (showQty) {
+              doc.text(labelQty, startX + descW, doc.y - doc.currentLineHeight(), { width: qtyW, align: 'center' });
+            }
+            if (showRate) {
+              doc.text(labelRate, startX + descW + qtyW, doc.y - doc.currentLineHeight(), { width: rateW, align: 'right' });
+            }
+            doc.text(labelAmount, startX + descW + qtyW + rateW, doc.y - doc.currentLineHeight(), { align: 'right', width: amtW });
+            doc.moveDown(0.3);
+            doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.3).stroke('#cccccc');
+            doc.moveDown(0.2);
+            lineItems.forEach((item: any) => {
+              const raw = item.total ?? item.amount ?? 0;
+              const itemTotal = typeof raw === 'string' ? parseFloat(raw) : raw;
+              const qty = item.quantity || 1;
+              const rate = item.unitPrice || item.rate || 0;
+              const rowY = doc.y;
+              doc.fontSize(8).font('Helvetica').fillColor('#000000')
+                .text(item.description || '', startX, rowY, { width: descW });
+              if (showQty) {
+                doc.text(String(qty), startX + descW, rowY, { width: qtyW, align: 'center' });
+              }
+              if (showRate) {
+                doc.text(formatCurrency(rate), startX + descW + qtyW, rowY, { width: rateW, align: 'right' });
+              }
+              doc.text(formatCurrency(itemTotal), startX + descW + qtyW + rateW, rowY, { align: 'right', width: amtW });
+              doc.moveDown(0.2);
+            });
+            doc.moveDown(0.3);
+          }
+          break;
+        }
+        case 'totals': {
 
-    // Footer
-    doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
-    doc.moveDown(0.3);
-    doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
-      .text(
-        'Treemarkables LTD | 213 Stanley Road, Gisborne | Phone: 027 216 6882 | Email: quotes@treemarkables.nz',
-        40, doc.y, { align: 'center', width: 515 }
-      );
+          const showSubtotal = cfg.showSubtotal !== false;
+          const showGST = cfg.showGST !== false;
+          const labelSubtotal = (cfg.labelSubtotal as string) || 'Subtotal (excl GST)';
+          const labelGST = (cfg.labelGST as string) || 'GST (15%)';
+          const labelTotal = (cfg.labelTotal as string) || 'Total Amount';
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+          doc.moveDown(0.5);
+          const totalsX = 380;
+          const valuesX = 470;
+          if (showSubtotal) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666');
+            doc.text(`${labelSubtotal}:`, totalsX, doc.y, { width: 135, align: 'left' });
+            doc.fillColor('#000000').text(formatCurrency(subtotal), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            doc.moveDown(0.3);
+          }
+          if (showGST) {
+            doc.fontSize(8).font('Helvetica').fillColor('#666666');
+            doc.text(`${labelGST}:`, totalsX, doc.y, { width: 135, align: 'left' });
+            doc.fillColor('#000000').text(formatCurrency(gstAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+            doc.moveDown(0.5);
+          }
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#000000');
+          doc.text(`${labelTotal}:`, totalsX, doc.y, { width: 135, align: 'left' });
+          doc.text(formatCurrency(totalAmount), valuesX, doc.y - doc.currentLineHeight(), { align: 'right', width: 85 });
+          doc.moveDown(1);
+          break;
+        }
+        case 'payment': {
+
+          const label = (cfg.label as string) || 'Payment Information';
+          const showDueDateP = cfg.showDueDate !== false;
+          const showBank = cfg.showBank !== false;
+          const showAccNum = cfg.showAccountNumber !== false;
+          const showAccName = cfg.showAccountName !== false;
+          const showTerms = cfg.showTerms === true;
+          const payLines: string[] = [];
+          if (showDueDateP && dueDate) payLines.push(`Due Date: ${dueDate}`);
+          if (showBank) payLines.push('Bank: ANZ');
+          if (showAccNum) payLines.push('Account Number: 06 0637 0768850 00');
+          if (showAccName) payLines.push(`Account Name: ${co.name}`);
+          if (showTerms && co.paymentTerms) payLines.push(`Terms: ${co.paymentTerms}`);
+          const boxH = Math.max(60, 20 + payLines.length * 14);
+          const boxY = doc.y;
+          doc.rect(40, boxY, 515, boxH).fillAndStroke('#F3F4F6', '#E5E7EB');
+          doc.fillColor('#000000');
+          doc.fontSize(9).font('Helvetica-Bold').text(label, 50, boxY + 10);
+          doc.fontSize(8).font('Helvetica');
+          payLines.forEach((line, i) => {
+            doc.fillColor('#4B5563').text(line, 50, boxY + 25 + i * 14);
+          });
+          doc.fillColor('#000000');
+          doc.y = boxY + boxH + 5;
+          doc.moveDown(0.5);
+          break;
+        }
+        case 'divider': {
+
+          const color = (cfg.color as string) || '#e5e7eb';
+          const thickness = typeof cfg.thickness === 'number' ? cfg.thickness : 0.5;
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(thickness).stroke(color);
+          doc.moveDown(0.5);
+          break;
+        }
+        case 'customText': {
+
+          const text = (cfg.text as string) || '';
+          if (text) {
+            const fontSize = cfg.fontSize === 'base' ? 10 : cfg.fontSize === 'sm' ? 8 : 7;
+            const align = (cfg.align as 'left' | 'center' | 'right') || 'left';
+            doc.fontSize(fontSize).font('Helvetica').fillColor('#374151')
+              .text(text, 40, doc.y, { width: 515, align });
+            doc.fillColor('#000000').moveDown(0.5);
+          }
+          break;
+        }
+        case 'footer': {
+
+          const parts: string[] = [];
+          if (cfg.showCompanyName !== false) parts.push(co.name);
+          if (cfg.showAddress !== false) parts.push(co.address.replace(/\n/g, ', '));
+          if (cfg.showPhone !== false) parts.push(`Phone: ${co.phone}`);
+          if (cfg.showEmail !== false) parts.push(`Email: ${co.email}`);
+          doc.moveTo(40, doc.y).lineTo(555, doc.y).lineWidth(0.5).stroke();
+          doc.moveDown(0.3);
+          if (parts.length > 0) {
+            doc.fontSize(8).font('Helvetica').fillColor('#6B7280')
+              .text(parts.join(' | '), 40, doc.y, { align: 'center', width: 515 });
+          }
+          if (cfg.showGST) {
+            doc.moveDown(0.2).text(`GST Number: ${co.gstNumber}`, 40, doc.y, { align: 'center', width: 515 });
+          }
+          if (cfg.showPaymentTerms && co.paymentTerms) {
+            doc.moveDown(0.2).text(co.paymentTerms, 40, doc.y, { align: 'center', width: 515 });
+          }
+          break;
+        }
+        default:
+          break;
+      }
+    }
 
     doc.end();
   });
+}
+
+/**
+ * Returns true if the given email address is hosted on a Microsoft consumer
+ * mail platform (Hotmail, Outlook.com, Live, MSN).
+ *
+ * Microsoft's spam/content filters silently strip PDF attachments from emails
+ * that carry many CID-embedded images alongside a PDF. Gmail and other providers
+ * are significantly more lenient. For Microsoft recipients we skip the photo
+ * CID embeddings so the email size stays well under 1 MB and the PDF lands
+ * safely in the inbox.
+ */
+function isMicrosoftEmailDomain(email: string): boolean {
+  const domain = (email.split('@')[1] ?? '').toLowerCase();
+  const knownDomains = new Set([
+    'hotmail.com', 'hotmail.co.nz', 'hotmail.co.uk', 'hotmail.fr',
+    'hotmail.de', 'hotmail.es', 'hotmail.com.au',
+    'outlook.com', 'outlook.co.nz', 'outlook.com.au',
+    'live.com', 'live.co.nz', 'live.com.au', 'live.co.uk',
+    'msn.com',
+  ]);
+  return knownDomains.has(domain)
+    || domain.endsWith('.outlook.com')
+    || domain.endsWith('.hotmail.com');
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -750,6 +1376,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       invoiceDataType: typeof req.body?.invoiceData
     });
   });
+
+  // Dev-only bypass login for automated testing
+  if (process.env.NODE_ENV === 'development') {
+    app.post('/api/auth/dev-test-login', async (req: Request, res: Response) => {
+      const employee = await storage.getEmployee('admin-test-001');
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Test user not found' });
+      }
+      (req.session as any).userId = employee.id;
+      (req.session as any).userRole = employee.role;
+      req.session.save(() => {
+        res.json({ success: true, data: { id: employee.id, role: employee.role } });
+      });
+    });
+  }
   
   // ========================================
   // XERO INTEGRATION ROUTES
@@ -840,30 +1481,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Create server-side session
-      req.session.employeeId = employee.id;
-
-      // Explicitly save the session before responding
-      req.session.save((err) => {
-        if (err) {
-          console.error('Session save error:', err);
+      // Regenerate session ID on login so any stale cookie in the browser
+      // is always replaced by a fresh Set-Cookie. Also defends against
+      // session fixation.
+      req.session.regenerate((regenErr) => {
+        if (regenErr) {
+          console.error('Session regenerate error:', regenErr);
           return res.status(500).json({
             success: false,
             message: 'Failed to create session'
           });
         }
 
-        res.json({
-          success: true,
-          data: {
-            id: employee.id,
-            firstName: employee.firstName,
-            lastName: employee.lastName,
-            email: employee.email,
-            role: employee.role,
-            phone: employee.phone,
-            status: employee.status
+        req.session.employeeId = employee.id;
+
+        req.session.save((err) => {
+          if (err) {
+            console.error('Session save error:', err);
+            return res.status(500).json({
+              success: false,
+              message: 'Failed to create session'
+            });
           }
+
+          res.json({
+            success: true,
+            data: {
+              id: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              email: employee.email,
+              role: employee.role,
+              phone: employee.phone,
+              status: employee.status
+            }
+          });
         });
       });
     } catch (error) {
@@ -935,16 +1587,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       console.log('[LOGOUT] Session destroyed successfully for employee:', employeeId);
       
-      // Clear the session cookie with all possible options to ensure deletion
-      res.clearCookie('connect.sid', {
+      // Clear the session cookie — attributes must match exactly how the
+      // cookie was set in server/index.ts, otherwise the browser ignores the
+      // clear and the stale SID lingers into the next login.
+      const isDevelopment = process.env.NODE_ENV === 'development';
+      res.clearCookie('treemarkables.sid', {
         path: '/',
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax'
+        secure: true,
+        sameSite: 'none',
+        domain: isDevelopment ? undefined : '.treemarkables.co.nz',
       });
-      
-      // Also try clearing without options (for compatibility)
-      res.clearCookie('connect.sid');
       
       res.json({
         success: true,
@@ -952,6 +1605,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     });
   });
+
+  // ── Server-Sent Events ────────────────────────────────────────────────────
+  // Clients connect here and receive real-time invalidation signals.
+  app.get('/api/sse', (req: Request, res: Response) => {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+    // Keep-alive ping every 25 seconds to prevent proxy timeouts
+    const ping = setInterval(() => {
+      try { res.write(': ping\n\n'); } catch { clearInterval(ping); }
+    }, 25000);
+    addClient(res);
+    req.on('close', () => {
+      clearInterval(ping);
+      removeClient(res);
+    });
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   // SEO routes - serve sitemap.xml and robots.txt
   app.get('/sitemap.xml', (req: Request, res: Response) => {
@@ -973,6 +1646,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         success: false, 
         message: 'Error serving sitemap' 
       });
+    }
+  });
+
+  // Public route: SaaS subscriber onboarding guide (no auth required)
+  app.get('/onboarding-guide', (req: Request, res: Response) => {
+    try {
+      const pdfPath = path.join(process.cwd(), 'public', 'saas-onboarding-guide.pdf');
+      const htmlPath = path.join(process.cwd(), 'public', 'saas-onboarding-guide.html');
+
+      if (fs.existsSync(pdfPath)) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename="Treemarkables-SaaS-Onboarding-Guide.pdf"');
+        res.sendFile(pdfPath);
+      } else if (fs.existsSync(htmlPath)) {
+        res.setHeader('Content-Type', 'text/html');
+        res.sendFile(htmlPath);
+      } else {
+        res.status(404).json({ success: false, message: 'Onboarding guide not found' });
+      }
+    } catch (error) {
+      console.error('Error serving onboarding guide:', error);
+      res.status(500).json({ success: false, message: 'Error serving onboarding guide' });
     }
   });
 
@@ -1175,10 +1870,43 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
 
     } catch (error) {
       console.error('Google Calendar status check error:', error);
-      return res.json({ 
+      return res.json({
         connected: false,
         message: 'Error checking Google Calendar status'
       });
+    }
+  });
+
+  // List events from the operator's primary Google Calendar.
+  // Used by the CalendarAvailabilityModal inside email/SMS composers so the
+  // user can eyeball their own schedule while drafting a message to a customer.
+  app.get('/api/google-calendar/events', async (req: Request, res: Response) => {
+    const start = typeof req.query.start === 'string' ? req.query.start : '';
+    const end = typeof req.query.end === 'string' ? req.query.end : '';
+    const startDate = start ? new Date(start) : null;
+    const endDate = end ? new Date(end) : null;
+
+    if (!startDate || !endDate || Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'start and end must be ISO timestamps' });
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'end must be after start' });
+    }
+    const MAX_RANGE_MS = 31 * 24 * 60 * 60 * 1000;
+    if (endDate.getTime() - startDate.getTime() > MAX_RANGE_MS) {
+      return res.status(400).json({ success: false, error: 'invalid_range', message: 'range must be 31 days or less' });
+    }
+
+    try {
+      const events = await googleCalendarService.listEvents(startDate.toISOString(), endDate.toISOString());
+      return res.json({ success: true, data: events });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.toLowerCase().includes('not connected')) {
+        return res.status(200).json({ success: false, error: 'not_connected' });
+      }
+      console.error('Google Calendar events fetch error:', error);
+      return res.status(502).json({ success: false, error: 'upstream', message });
     }
   });
 
@@ -1532,9 +2260,10 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       const userAgent = req.get('User-Agent') || 'unknown';
 
-      // CAPTCHA validation (always required now)
-      const requireCaptcha = process.env.REQUIRE_CAPTCHA !== '0';
-      
+      // CAPTCHA validation — opt-in. Set REQUIRE_CAPTCHA=1 to enable once
+      // the frontend reCAPTCHA integration is wired up. Default is off.
+      const requireCaptcha = process.env.REQUIRE_CAPTCHA === '1';
+
       if (requireCaptcha) {
         if (!captchaToken) {
           return res.status(400).json({ 
@@ -1564,8 +2293,6 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         }
         
         console.log('CAPTCHA verification successful for contact form submission');
-      } else {
-        console.log('CAPTCHA bypassed - manually disabled via REQUIRE_CAPTCHA=0');
       }
 
       // Email validation
@@ -1589,34 +2316,67 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         userAgent
       };
 
-      // Create conversation from contact form directly (bypass legacy lead saving)
+      // Auto-create a job/lead directly from the contact form. The customer
+      // explicitly asked for a quote, so we skip the manual "convert conversation
+      // to lead" step and notify the operator about the new lead immediately.
+      const trimmedName = name.trim();
+      const lowerEmail = email.trim().toLowerCase();
+      const cleanPhone = (phone || '').trim().replace(/-/g, '').replace(/\s/g, '');
+      const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
+
+      // Step 1: find or create the customer up front so the conversation, job,
+      // and notification can all be linked to the same record.
+      let customer: any = undefined;
       try {
-        // Check for existing open conversation from this contact
-        let conversation = await notificationHelper.findExistingOpenConversation(email.trim().toLowerCase());
+        if (cleanPhone) {
+          customer = await storage.findCustomerByPhone(cleanPhone);
+        }
+        if (!customer) {
+          customer = await storage.createCustomer({
+            name: trimmedName || 'Unknown',
+            email: lowerEmail,
+            phone: cleanPhone,
+            address: '',
+            contactPreference: 'email' as const,
+            notes: '',
+          });
+        }
+        if (isMobileNumber && cleanPhone && customer?.id) {
+          try {
+            await storage.updateCustomer(customer.id, { mobile: cleanPhone });
+          } catch {
+            // non-critical
+          }
+        }
+      } catch (customerErr) {
+        console.error('Error finding/creating customer for contact form:', customerErr);
+      }
+
+      try {
+        // Step 2: find an existing open conversation or create a new one,
+        // attached to the customer record above.
+        let conversation = await notificationHelper.findExistingOpenConversation(lowerEmail);
         let isNewConversation = !conversation;
 
         if (!conversation) {
-          // Create conversation title from message (first 100 chars) or use default
-          const conversationTitle = message.trim().length > 0 
+          const conversationTitle = message.trim().length > 0
             ? message.trim().substring(0, 100) + (message.length > 100 ? '...' : '')
-            : `New inquiry from ${name}`;
+            : `New inquiry from ${trimmedName}`;
 
           conversation = await storage.createConversation({
+            customerId: customer?.id,
             title: conversationTitle,
             status: 'open',
             priority: 'medium',
             source: 'web_form',
             tags: ['contact-form', 'website']
           });
-
-          // Create notification bell entry for new conversation only
-          await notificationHelper.createConversationNotification(conversation);
           console.log(`✅ Created new conversation for contact form submission: ${conversation.id}`);
         } else {
           console.log(`✅ Found existing open conversation for ${email}, adding message to: ${conversation.id}`);
         }
 
-        // Create initial message in the conversation with contact details
+        // Step 3: append the inbound message to the conversation thread.
         const fullMessage = `Contact Form Submission\n\nName: ${name}\nEmail: ${email}\nPhone: ${phone || 'Not provided'}\nHow they heard about us: ${hearAbout || 'Not specified'}\n\nMessage:\n${message.trim()}`;
 
         await storage.createConversationMessage({
@@ -1624,10 +2384,90 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           type: 'message',
           content: fullMessage,
           direction: 'inbound',
-          fromName: name.trim(),
-          fromContact: email.trim().toLowerCase(),
+          fromName: trimmedName,
+          fromContact: lowerEmail,
           platform: 'web_form'
         });
+
+        // Step 4: auto-create a job with 'new' status (mirrors the manual
+        // "Create Job as Lead" path in Inbox). If the customer already has a
+        // 'new'-status job, reuse it instead of creating a duplicate — repeat
+        // form submissions should refresh the existing lead, not pile up.
+        let createdJob: any = undefined;
+        let reusedExistingJob = false;
+        if (customer?.id) {
+          try {
+            const existingJobs = await storage.getJobsByCustomer(customer.id);
+            const existingNewJob = existingJobs.find(j => j.status === 'new');
+            if (existingNewJob) {
+              createdJob = existingNewJob;
+              reusedExistingJob = true;
+              console.log(`✅ Reusing existing new-status job #${existingNewJob.jobNumber} (${existingNewJob.id}) for customer ${customer.id} — repeat contact form submission`);
+            } else {
+              const jobNumber = await storage.getNextJobNumber();
+              createdJob = await storage.createJob({
+                customerId: customer.id,
+                jobNumber,
+                title: `Lead from ${trimmedName || 'website'}`,
+                description: message.trim(),
+                address: 'Address not specified',
+                status: 'new',
+                priority: 'medium' as const,
+                leadSource: 'website' as const,
+                totalAmount: '0.00',
+                metricsEligible: true,
+                metricsStartDate: new Date(),
+                jobContactPhone: isMobileNumber ? '' : cleanPhone,
+                jobContactMobile: isMobileNumber ? cleanPhone : '',
+              });
+              console.log(`✅ Auto-created job #${jobNumber} (${createdJob.id}) from contact form for customer ${customer.id}`);
+
+              if (isNewConversation) {
+                try {
+                  await storage.updateConversation(conversation.id, {
+                    status: 'converted',
+                    conversionDate: new Date(),
+                  });
+                } catch {
+                  // non-critical
+                }
+              }
+            }
+          } catch (autoJobErr) {
+            console.error('Error auto-creating job lead from contact form:', autoJobErr);
+          }
+        }
+
+        // Step 5: notify operators. Brand new lead → new-lead notification
+        // (deep-links to the job's diary). Repeat submission on an existing
+        // open lead → follow-up notification so it reads as "they pinged us
+        // again" rather than a duplicate lead. Fallbacks cover the rare case
+        // where job creation failed entirely.
+        if (createdJob && customer?.id && !reusedExistingJob) {
+          await notificationHelper.createNewLeadNotification({
+            jobId: createdJob.id,
+            jobNumber: createdJob.jobNumber,
+            customerId: customer.id,
+            customerName: trimmedName || 'Website visitor',
+            customerEmail: lowerEmail,
+            customerPhone: cleanPhone,
+            sourceLabel: 'website',
+            messagePreview: message.trim(),
+            conversationId: conversation.id,
+          });
+        } else if (createdJob && customer?.id && reusedExistingJob) {
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
+            message.trim()
+          );
+        } else if (isNewConversation) {
+          await notificationHelper.createConversationNotification(conversation);
+        } else {
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'web_form', customerName: trimmedName },
+            message.trim()
+          );
+        }
 
       } catch (error) {
         console.error('Error creating conversation from contact form:', error);
@@ -1705,7 +2545,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   // POST /api/leads - Create a job lead (converts conversation to job with 'lead' status)
   app.post('/api/leads', async (req: Request, res: Response) => {
     try {
-      const { name, email, phone, address, notes, status } = req.body;
+      const { name, email, phone, address, serviceRequested, notes, status, conversationId } = req.body;
       
       // First, create or find the customer
       let customer;
@@ -1744,7 +2584,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         customerId: customer.id,
         jobNumber: jobNumber,
         title: `Lead from ${name || 'conversation'}`,
-        description: notes || '',
+        description: serviceRequested || notes || '',
         address: address || 'Address not specified',
         status: status || 'lead',
         priority: 'medium' as const,
@@ -1757,6 +2597,18 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       };
       
       const job = await storage.createJob(jobData);
+
+      // Mark the source conversation as converted if one was provided
+      if (conversationId) {
+        try {
+          await storage.updateConversation(conversationId, {
+            status: 'converted',
+            conversionDate: new Date(),
+          });
+        } catch (e) {
+          // Non-critical — continue even if the conversation update fails
+        }
+      }
       
       res.json({ 
         success: true, 
@@ -1798,6 +2650,7 @@ Extract the following information:
   • "For access contact" table field (may be a tenant, not the requester — prefer the sender's name)
   • "From" line or opening greeting
   • Property managers often sign off with their name, company, and number at the end
+  • Fallback: if no explicit name is found anywhere, derive one from the email address local part (the bit before @): split on dots, underscores, hyphens or digits, drop digits, and Title Case the words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith". Skip this fallback for generic local parts like "info", "admin", "contact", "hello", "sales", "office", "enquiries", "noreply".
 - phone: The REQUESTER's phone number (from signature block or "contact" field). Format NZ numbers as 02X XXX XXXX.
 - email: The REQUESTER's email address (from signature block or From/Reply-To)
 - address: The SERVICE ADDRESS (the property where tree work is needed). Look for:
@@ -1879,7 +2732,7 @@ Use empty string if a field cannot be determined.`
 
 Extract the following information:
 1. Phone number - Look at the TOP of the screen where the contact info is shown (usually shows the phone number like "+64 21 231 8338")
-2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings
+2. Customer name - Look for names in the messages, especially after "Thank you," or in greetings. If no explicit name is given anywhere, try to derive one from the email address local part (the bit before @): split it on dots, underscores, hyphens or digits, drop digits, and Title Case the remaining words. e.g. "debmasters18@gmail.com" → "Deb Masters", "john.smith@…" → "John Smith", "jane_doe2@…" → "Jane Doe". Only do this fallback when no real name is found, and never invent a name from a generic local part like "info", "admin", "contact", "hello", "sales", "office", "enquiries".
 3. Email address - Look for any email addresses mentioned anywhere in the messages (e.g. someone@example.com, someone@gmail.com)
 4. Address - Look for street addresses, often marked with a 📍 pin emoji or containing road/street names
 5. Job description - Any details about tree work, removal, pruning, stump grinding, etc.
@@ -1999,14 +2852,31 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       const validation = insertCustomerSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid customer data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
       }
 
+      // Dedupe by name: callers of this endpoint (Opportunities quote flow,
+      // ConversationDetail job flow) treat it as find-or-create. Honour that
+      // contract so resubmitting a lead for an existing client doesn't create
+      // a duplicate customer row.
+      const existing = validation.data.name
+        ? await storage.findCustomerByName(validation.data.name)
+        : undefined;
+      if (existing) {
+        const merged = mergeEmptyCustomerFields(existing, validation.data);
+        const customer = Object.keys(merged).length > 0
+          ? await storage.updateCustomer(existing.id, merged)
+          : existing;
+        broadcast(['/api/customers']);
+        return res.json({ success: true, data: customer, reused: true });
+      }
+
       const customer = await storage.createCustomer(validation.data);
+      broadcast(['/api/customers']);
       res.json({ success: true, data: customer });
     } catch (error) {
       console.error('Error creating customer:', error);
@@ -2040,7 +2910,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   app.get('/api/customers/historical', async (req: Request, res: Response) => {
     try {
       const allCustomers = await storage.getAllCustomers();
-      const historicalCustomers = allCustomers.filter(customer => !customer.isActive);
+      const historicalCustomers = allCustomers.filter(customer => customer.isActive === false);
       
       res.json({
         success: true,
@@ -2078,14 +2948,37 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       const updates = insertCustomerSchema.partial().safeParse(body);
       if (!updates.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid update data',
-          errors: updates.error.errors 
+          errors: updates.error.errors
         });
       }
 
+      // SAFEGUARD: Don't let an empty string silently wipe a non-empty contact field.
+      // Pair with the job PATCH/PUT guards — see job 3935 / John Braybrook incident
+      // where a job-card save blanked email/phone on both the job and the customer.
+      // Clients that actually want to clear a field must opt in via _clearFields.
+      const existingCustomer = await storage.getCustomer(req.params.id);
+      if (existingCustomer) {
+        const preserveFields = ['email', 'phone', 'mobile', 'address', 'name'] as const;
+        const explicitClears: string[] = req.body._clearFields || [];
+        for (const field of preserveFields) {
+          const next = (updates.data as any)[field];
+          const current = (existingCustomer as any)[field];
+          const isEmpty = next === '' || next === null || next === undefined;
+          const hasCurrent = current !== null && current !== undefined && current !== '';
+          if (isEmpty && hasCurrent && !explicitClears.includes(field)) {
+            (updates.data as any)[field] = current;
+          }
+        }
+        for (const field of explicitClears) {
+          (updates.data as any)[field] = null;
+        }
+      }
+
       const customer = await storage.updateCustomer(req.params.id, updates.data);
+      broadcast(['/api/customers']);
       res.json({ success: true, data: customer });
     } catch (error) {
       console.error('Error updating customer:', error);
@@ -2103,6 +2996,136 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error deleting customer:', error);
       res.status(500).json({ success: false, message: 'Error deleting customer' });
+    }
+  });
+
+  // Merge duplicate customers into one primary record
+  app.post('/api/customers/merge', requireAdmin, async (req: Request, res: Response) => {
+    const { primaryId, duplicateIds } = req.body;
+
+    if (!primaryId || !Array.isArray(duplicateIds) || duplicateIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'primaryId and duplicateIds[] are required' });
+    }
+    if (duplicateIds.includes(primaryId)) {
+      return res.status(400).json({ success: false, message: 'primaryId cannot also appear in duplicateIds' });
+    }
+
+    try {
+      const updatedPrimary = await mergeCustomerRecords(primaryId, duplicateIds);
+      console.log(`✅ Merged customers [${duplicateIds.join(', ')}] into ${primaryId}`);
+      res.json({ success: true, data: updatedPrimary });
+    } catch (error: any) {
+      console.error('Error merging customers:', error);
+      const msg = String(error?.message || '');
+      if (msg.includes('not found')) {
+        return res.status(404).json({ success: false, message: msg });
+      }
+      if (msg.includes('primaryId cannot')) {
+        return res.status(400).json({ success: false, message: msg });
+      }
+      res.status(500).json({ success: false, message: 'Failed to merge customers' });
+    }
+  });
+
+  // Bulk dedupe: find every customer group with a matching normalized name
+  // (trim + lowercase + collapse whitespace) and merge each group into a
+  // single primary. Defaults to dry-run; pass ?apply=true to actually merge.
+  app.post('/api/customers/dedupe-by-name', requireAdmin, async (req: Request, res: Response) => {
+    const apply = req.query.apply === 'true' || req.body?.apply === true;
+    try {
+      const allCustomers = await db.select().from(schema.customers);
+      const jobCounts = await db.select({
+        customerId: schema.jobs.customerId,
+        n: sql<number>`count(*)::int`,
+      }).from(schema.jobs).groupBy(schema.jobs.customerId);
+      const jobCountMap = new Map<string, number>();
+      for (const row of jobCounts) {
+        if (row.customerId) jobCountMap.set(row.customerId as string, Number(row.n));
+      }
+
+      const normalize = (name: string | null | undefined) =>
+        (name ?? '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+      const groups = new Map<string, typeof allCustomers>();
+      for (const c of allCustomers) {
+        const key = normalize(c.name);
+        if (!key) continue;
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(c);
+      }
+
+      const nonEmpty = (c: any) =>
+        ['email', 'phone', 'mobile', 'address', 'city', 'region', 'notes', 'externalId', 'servicem8Uuid']
+          .reduce((n, k) => n + (c[k] ? 1 : 0), 0);
+
+      const pickPrimary = (members: typeof allCustomers) =>
+        [...members].sort((a, b) => {
+          const ja = jobCountMap.get(a.id) || 0;
+          const jb = jobCountMap.get(b.id) || 0;
+          if (jb !== ja) return jb - ja;
+          const ta = a.createdAt ? new Date(a.createdAt).getTime() : Number.POSITIVE_INFINITY;
+          const tb = b.createdAt ? new Date(b.createdAt).getTime() : Number.POSITIVE_INFINITY;
+          if (ta !== tb) return ta - tb;
+          return nonEmpty(b) - nonEmpty(a);
+        })[0];
+
+      const plan = Array.from(groups.entries())
+        .filter(([, members]) => members.length > 1)
+        .map(([key, members]) => {
+          const primary = pickPrimary(members);
+          return {
+            normalizedName: key,
+            primaryId: primary.id,
+            primaryName: primary.name,
+            primaryJobCount: jobCountMap.get(primary.id) || 0,
+            duplicateIds: members.filter(m => m.id !== primary.id).map(m => m.id),
+            duplicateCount: members.length - 1,
+            members: members.map(m => ({
+              id: m.id,
+              name: m.name,
+              createdAt: m.createdAt,
+              jobCount: jobCountMap.get(m.id) || 0,
+              email: m.email,
+              phone: m.phone,
+              isPrimary: m.id === primary.id,
+            })),
+          };
+        })
+        .sort((a, b) => b.duplicateCount - a.duplicateCount);
+
+      if (!apply) {
+        return res.json({
+          success: true,
+          apply: false,
+          groupCount: plan.length,
+          totalDuplicatesToRemove: plan.reduce((n, g) => n + g.duplicateCount, 0),
+          groups: plan,
+        });
+      }
+
+      const results: Array<{ normalizedName: string; primaryId: string; merged: number; success: boolean; error?: string }> = [];
+      for (const g of plan) {
+        try {
+          await mergeCustomerRecords(g.primaryId, g.duplicateIds);
+          results.push({ normalizedName: g.normalizedName, primaryId: g.primaryId, merged: g.duplicateIds.length, success: true });
+        } catch (err: any) {
+          console.error(`Failed to merge group "${g.normalizedName}":`, err);
+          results.push({ normalizedName: g.normalizedName, primaryId: g.primaryId, merged: 0, success: false, error: String(err?.message || err) });
+        }
+      }
+      const mergedCount = results.reduce((n, r) => n + (r.merged || 0), 0);
+      broadcast(['/api/customers']);
+      console.log(`✅ Bulk dedupe complete: ${mergedCount} duplicate customers merged across ${results.filter(r => r.success).length} groups`);
+      return res.json({
+        success: true,
+        apply: true,
+        groupsProcessed: results.length,
+        duplicatesRemoved: mergedCount,
+        results,
+      });
+    } catch (error) {
+      console.error('Error in dedupe-by-name:', error);
+      res.status(500).json({ success: false, message: 'Failed to run dedupe' });
     }
   });
 
@@ -2422,6 +3445,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const lead = await storage.createPipelineLead(validation.data);
+      broadcast(['/api/pipeline-leads']);
       res.json({ success: true, data: lead });
     } catch (error) {
       console.error('Error creating pipeline lead:', error);
@@ -2472,6 +3496,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const lead = await storage.updatePipelineLead(req.params.id, updates.data);
+      broadcast(['/api/pipeline-leads']);
       res.json({ success: true, data: lead });
     } catch (error) {
       console.error('Error updating pipeline lead:', error);
@@ -2908,6 +3933,32 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (processedBody.completedDate && typeof processedBody.completedDate === 'string') {
         processedBody.completedDate = new Date(processedBody.completedDate);
       }
+
+      // Source-level dedupe: if the caller identifies a lead or conversation
+      // that already has an active (non-terminal) job, return that job
+      // instead of inserting a second row. Prevents the "click Create Quote
+      // twice, end up with two jobs" class of bug. Customer alone is NOT a
+      // dedupe key — customers can legitimately have multiple jobs.
+      const TERMINAL_STATUSES = ['completed', 'unsuccessful', 'cancelled', 'archived'];
+      if (processedBody.leadId) {
+        const [existingByLead] = await db.select().from(schema.jobs)
+          .where(sql`${schema.jobs.leadId} = ${processedBody.leadId} AND ${schema.jobs.status} NOT IN (${sql.join(TERMINAL_STATUSES.map(s => sql`${s}`), sql`, `)})`)
+          .limit(1);
+        if (existingByLead) {
+          console.log(`♻️ Reused existing active job ${existingByLead.id} (${existingByLead.jobNumber}) for leadId ${processedBody.leadId}`);
+          return res.json({ success: true, data: serializeJobTimestamps(existingByLead), reused: true });
+        }
+      }
+      if (processedBody.conversationId) {
+        const conv = await storage.getConversation(processedBody.conversationId).catch(() => null);
+        if (conv && (conv as any).convertedToJobId) {
+          const existingJob = await storage.getJob((conv as any).convertedToJobId).catch(() => null);
+          if (existingJob) {
+            console.log(`♻️ Reused existing job ${existingJob.id} (${existingJob.jobNumber}) for already-converted conversation ${processedBody.conversationId}`);
+            return res.json({ success: true, data: serializeJobTimestamps(existingJob), reused: true });
+          }
+        }
+      }
       
       // Convert empty strings to null for numeric fields (database expects numeric, not empty string)
       const numericFields = ['estimatedManHours', 'totalAmount', 'costOfGoods', 'laborCosts', 'materialsCosts', 
@@ -2925,17 +3976,30 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           // Use mobile as phone if phone is empty (mobile is more common for SMS leads)
           const customerPhone = processedBody.newCustomerPhone?.trim() || processedBody.newCustomerMobile?.trim() || undefined;
           const customerMobile = processedBody.newCustomerMobile?.trim() || undefined;
-          
-          const newCustomer = await storage.createCustomer({
+          const customerPayload = {
             name: processedBody.newCustomerName.trim(),
             email: processedBody.newCustomerEmail?.trim() || undefined,
             phone: customerPhone,
             mobile: customerMobile,
             address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
-          });
-          
+          };
+
+          // Reuse an existing customer with the same name (case/whitespace
+          // insensitive) instead of creating a duplicate row.
+          const existing = await storage.findCustomerByName(customerPayload.name);
+          let newCustomer;
+          if (existing) {
+            const updates = mergeEmptyCustomerFields(existing, customerPayload);
+            newCustomer = Object.keys(updates).length > 0
+              ? await storage.updateCustomer(existing.id, updates)
+              : existing;
+            console.log(`♻️ Reused existing customer ${newCustomer.id} (${newCustomer.name}) for job`);
+          } else {
+            newCustomer = await storage.createCustomer(customerPayload);
+            console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job`);
+          }
+
           processedBody.customerId = newCustomer.id;
-          console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job`);
           
           // Auto-populate job contact fields from new customer if not already set
           if (!processedBody.jobContactFirstName) {
@@ -3013,11 +4077,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const validation = insertJobSchema.safeParse(processedBody);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid job data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
+      }
+
+      // Defensive: re-add tenant contact fields after Zod's .strip() in case the
+      // server process was started before these columns were added to the schema.
+      const TENANT_CONTACT_FIELDS_CREATE = [
+        'tenantContactFirstName', 'tenantContactLastName', 'tenantContactEmail',
+        'tenantContactPhone', 'tenantContactMobile',
+      ] as const;
+      for (const field of TENANT_CONTACT_FIELDS_CREATE) {
+        if (field in processedBody) {
+          (validation.data as any)[field] = processedBody[field];
+        }
       }
 
       // Check for duplicate jobs - two layers of protection
@@ -3184,6 +4260,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         // Don't fail job creation if promo image fails
       }
 
+      broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error creating job:', error);
@@ -3474,6 +4551,154 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Fast date-scoped endpoint for Staff Schedule — returns only jobs for a given NZ calendar date
+  app.get('/api/jobs/for-date', async (req: Request, res: Response) => {
+    try {
+      const { date } = req.query; // expects YYYY-MM-DD in NZ time
+      if (!date || typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, message: 'date param required (YYYY-MM-DD)' });
+      }
+      // scheduled_date is `timestamp without time zone` storing UTC values, so we must first
+      // mark it AT TIME ZONE 'UTC' (to get a timestamptz) and THEN convert to NZ local. Doing
+      // a single AT TIME ZONE 'Pacific/Auckland' would (incorrectly) interpret the naive value
+      // as NZ local — shifting every job by 12h and hiding them from the calendar.
+      const result = await db.execute(
+        sql`SELECT jobs.*, (
+              SELECT MAX(created_at)
+              FROM job_diary_entries
+              WHERE job_id = jobs.id
+                AND tags @> ARRAY['confirmation-reply-sent']::text[]
+            ) AS confirmation_reply_sent_at, (
+              SELECT MAX(created_at)
+              FROM job_diary_entries
+              WHERE job_id = jobs.id
+                AND tags @> ARRAY['customer-reply']::text[]
+            ) AS customer_reply_received_at
+            FROM jobs
+            WHERE scheduled_date IS NOT NULL
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') = ${date}::date
+              AND status NOT IN ('archived', 'unsuccessful')
+            ORDER BY scheduled_date ASC`
+      );
+      const jobs = (result.rows as any[]).map((row: any) => {
+        // Convert snake_case DB columns back to camelCase schema shape
+        const job: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          const camel = k.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+          job[camel] = v;
+        }
+        return serializeJobTimestamps(job);
+      });
+      res.json({ success: true, data: jobs });
+    } catch (error) {
+      console.error('Error fetching jobs for date:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs for date' });
+    }
+  });
+
+  // Returns scheduled jobs whose NZ-local scheduled_date falls within [start, end).
+  // Used by CalendarAvailabilityModal so the week-view calendar shows real jobs,
+  // not only Google Calendar events.
+  app.get('/api/jobs/in-range', async (req: Request, res: Response) => {
+    try {
+      const { start, end } = req.query;
+      if (!start || typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+          !end   || typeof end   !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return res.status(400).json({ success: false, message: 'start and end params required (YYYY-MM-DD, NZ local)' });
+      }
+      // Same timezone handling as /api/jobs/for-date — see comment there.
+      const result = await db.execute(
+        sql`SELECT * FROM jobs
+            WHERE scheduled_date IS NOT NULL
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${start}::date
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <  ${end}::date
+              AND status NOT IN ('archived', 'unsuccessful')
+            ORDER BY scheduled_date ASC`
+      );
+      const jobs = (result.rows as any[]).map((row: any) => {
+        const job: any = {};
+        for (const [k, v] of Object.entries(row)) {
+          const camel = k.replace(/_([a-z])/g, (_: string, c: string) => c.toUpperCase());
+          job[camel] = v;
+        }
+        return serializeJobTimestamps(job);
+      });
+      res.json({ success: true, data: jobs });
+    } catch (error) {
+      console.error('Error fetching jobs in range:', error);
+      res.status(500).json({ success: false, message: 'Error fetching jobs in range' });
+    }
+  });
+
+  // Per-employee staff assignments within an NZ-local date range, enriched with job info.
+  // Backs the staff-filtered CalendarAvailabilityModal so blocks render 1:1 with real assignments.
+  app.get('/api/employees/:employeeId/assignments-in-range', async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const { start, end } = req.query;
+      if (!employeeId) {
+        return res.status(400).json({ success: false, message: 'employeeId required' });
+      }
+      if (!start || typeof start !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(start) ||
+          !end   || typeof end   !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(end)) {
+        return res.status(400).json({ success: false, message: 'start and end params required (YYYY-MM-DD, NZ local)' });
+      }
+
+      // Convert NZ-local day boundaries to UTC so we can filter the (UTC-stored) start_time column.
+      const startUtc = fromZonedTime(`${start}T00:00:00`, 'Pacific/Auckland');
+      const endUtc = fromZonedTime(`${end}T00:00:00`, 'Pacific/Auckland');
+
+      const rawAssignments = await db
+        .select()
+        .from(schema.jobStaffAssignments)
+        .where(
+          and(
+            eq(schema.jobStaffAssignments.employeeId, employeeId),
+            ne(schema.jobStaffAssignments.status, 'cancelled'),
+            gte(schema.jobStaffAssignments.startTime, startUtc),
+            lt(schema.jobStaffAssignments.startTime, endUtc),
+          ),
+        );
+
+      // Batch-fetch job info for the returned assignments so we can show titles/addresses.
+      const jobIds = [...new Set(rawAssignments.map((a) => a.jobId))];
+      const jobRows = jobIds.length
+        ? await db.select().from(jobs).where(inArray(jobs.id, jobIds))
+        : [];
+      const jobMap = new Map(jobRows.map((j) => [j.id, j]));
+
+      const assignments = rawAssignments
+        .map((a) => {
+          const job = jobMap.get(a.jobId);
+          if (!job) return null;
+          if (job.status === 'archived' || job.status === 'unsuccessful') return null;
+          return {
+            id: a.id,
+            jobId: a.jobId,
+            jobNumber: job.jobNumber,
+            jobTitle: job.title,
+            jobAddress: job.address,
+            jobStatus: job.status,
+            status: a.status,
+            startTime: (a.startTime instanceof Date ? a.startTime : new Date(a.startTime)).toISOString(),
+            endTime: (a.endTime instanceof Date ? a.endTime : new Date(a.endTime)).toISOString(),
+          };
+        })
+        .filter((a): a is NonNullable<typeof a> => a !== null)
+        .sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+      console.log(
+        `📅 assignments-in-range: employee=${employeeId} window=${start}..${end} ` +
+          `rawRows=${rawAssignments.length} returned=${assignments.length}`,
+      );
+
+      res.json({ success: true, data: assignments });
+    } catch (error) {
+      console.error('Error fetching employee assignments in range:', error);
+      res.status(500).json({ success: false, message: 'Error fetching employee assignments in range' });
+    }
+  });
+
   // Search jobs endpoint - searches across all jobs (not limited to paginated results)
   app.get('/api/jobs/search', async (req: Request, res: Response) => {
     try {
@@ -3623,8 +4848,26 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
   app.put('/api/jobs/:id', async (req: Request, res: Response) => {
     try {
+      // Diagnostic: surface tenant-contact payloads so we can confirm auto-save
+      // reaches the server with the right keys.
+      const tenantKeys = [
+        'tenantContactFirstName', 'tenantContactLastName',
+        'tenantContactEmail', 'tenantContactPhone', 'tenantContactMobile',
+      ];
+      const tenantPayload: Record<string, any> = {};
+      for (const k of tenantKeys) if (k in req.body) tenantPayload[k] = req.body[k];
+      if (Object.keys(tenantPayload).length > 0) {
+        console.log(`🏠 PUT /api/jobs/${req.params.id} tenant fields in body:`, tenantPayload);
+      }
+      // Optimistic-concurrency baseline from the client (ISO string). Pulled out
+      // here so it doesn't flow into validation.data or storage.updateJob.
+      const expectedUpdatedAt: string | null = typeof req.body.expectedUpdatedAt === 'string'
+        ? req.body.expectedUpdatedAt
+        : null;
+
       // Preprocess date fields - convert strings to Date objects
       const processedBody = { ...req.body };
+      delete processedBody.expectedUpdatedAt;
       if (processedBody.scheduledDate && typeof processedBody.scheduledDate === 'string') {
         processedBody.scheduledDate = new Date(processedBody.scheduledDate);
       }
@@ -3643,16 +4886,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // If the request sends an empty/null value but the DB has a real value, strip it from the
       // update so the database value is naturally preserved by the partial update pattern.
       // RC7 FIX: Extended to phone/mobile fields (previously only email was guarded here).
+      // RC8 FIX: Extended to description/internalNotes for cross-device sync safety.
+      // Rationale: if a user deliberately clears description, auto-save (PATCH) fires first
+      // and sets DB to "". By the time the full PUT fires, stripping an empty description is
+      // safe — if it was intentionally cleared, the PATCH already wrote "" to DB. If the form
+      // had stale empty data from an old cache, stripping prevents overwriting content saved on
+      // another device.
       const contactFieldsToProtect = [
         'jobContactEmail', 'billingContactEmail',
         'jobContactMobile', 'jobContactPhone',
         'billingContactMobile', 'billingContactPhone',
+        'description', 'internalNotes',
       ];
       for (const contactField of contactFieldsToProtect) {
         const rawVal = req.body[contactField];
         const isEmpty = rawVal === '' || rawVal === null || rawVal === undefined;
         if (isEmpty && contactField in req.body) {
-          console.log(`🔒 RC6/RC7: Stripping empty "${contactField}" from PUT body to preserve DB value`);
+          console.log(`🔒 RC6/RC7/RC8: Stripping empty "${contactField}" from PUT body to preserve DB value`);
           delete processedBody[contactField];
         }
       }
@@ -3677,15 +4927,28 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (processedBody.isNewCustomer && processedBody.newCustomerName) {
         console.log('🔥 Creating new customer:', processedBody.newCustomerName);
         try {
-          const newCustomer = await storage.createCustomer({
+          const customerPayload = {
             name: processedBody.newCustomerName.trim(),
             email: processedBody.newCustomerEmail?.trim() || undefined,
             phone: processedBody.newCustomerPhone?.trim() || undefined,
             address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
-          });
-          
+          };
+
+          // Reuse an existing customer with the same name instead of duplicating.
+          const existing = await storage.findCustomerByName(customerPayload.name);
+          let newCustomer;
+          if (existing) {
+            const updates = mergeEmptyCustomerFields(existing, customerPayload);
+            newCustomer = Object.keys(updates).length > 0
+              ? await storage.updateCustomer(existing.id, updates)
+              : existing;
+            console.log(`♻️ Reused existing customer ${newCustomer.id} (${newCustomer.name}) for job update`);
+          } else {
+            newCustomer = await storage.createCustomer(customerPayload);
+            console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
+          }
+
           processedBody.customerId = newCustomer.id;
-          console.log(`✅ Created new customer ${newCustomer.id} (${newCustomer.name}) for job update`);
           
           // Auto-populate job contact fields from new customer if not already set
           if (!processedBody.jobContactFirstName) {
@@ -3738,17 +5001,53 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid job data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
+      }
+
+      // Defensive: Zod's default .strip() drops unknown keys, which silently erases
+      // newly-added schema columns if the server process was started before the
+      // schema edit and hasn't been restarted. Re-add the tenant contact fields
+      // from the raw body so adding tenant details doesn't require a rebuild.
+      const TENANT_CONTACT_FIELDS = [
+        'tenantContactFirstName', 'tenantContactLastName', 'tenantContactEmail',
+        'tenantContactPhone', 'tenantContactMobile',
+      ] as const;
+      for (const field of TENANT_CONTACT_FIELDS) {
+        if (field in processedBody) {
+          (validation.data as any)[field] = processedBody[field];
+        }
+      }
+      // Diagnostic: log what's about to flow into storage.updateJob for tenant keys.
+      if (Object.keys(tenantPayload).length > 0) {
+        const afterValidation: Record<string, any> = {};
+        for (const k of tenantKeys) if (k in (validation.data as any)) afterValidation[k] = (validation.data as any)[k];
+        console.log(`🏠 PUT /api/jobs/${req.params.id} tenant fields after validation:`, afterValidation);
       }
 
       // Get the old job for status comparison
       const oldJob = await storage.getJob(req.params.id);
       const oldStatus = oldJob?.status || '';
-      
+
+      // Optimistic concurrency: reject writes whose baseline is older than the
+      // current row. Callers that don't send expectedUpdatedAt (mobile, Xero
+      // webhook, internal scripts) skip the check for backward compatibility.
+      if (expectedUpdatedAt && oldJob?.updatedAt) {
+        const clientBaseline = new Date(expectedUpdatedAt);
+        if (!Number.isNaN(clientBaseline.getTime()) && oldJob.updatedAt > clientBaseline) {
+          return res.status(409).json({
+            success: false,
+            code: 'STALE_WRITE',
+            message: 'This job was updated on another device since you loaded it.',
+            currentUpdatedAt: oldJob.updatedAt,
+            currentJob: oldJob,
+          });
+        }
+      }
+
       // SAFEGUARD: Prevent accidental overwrites of critical fields with empty values
       // Defense-in-depth: even if the client sends a field, never replace a non-empty DB value
       // with an empty/null value unless the client explicitly requests clearing via _clearFields
@@ -3759,7 +5058,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           'jobContactPhone', 'jobContactMobile', 'billingNameOverride',
           'billingAddress', 'billingContactPhone', 'billingContactMobile',
           'billingContactEmail', 'invoiceDescription', 'totalAmount', 'paidAmount',
-          'title', 'priority', 'estimatedManHours', 'scheduledDate'
+          'title', 'priority', 'estimatedManHours', 'scheduledDate',
+          'equipment'
         ];
         const fieldsInRequest = Object.keys(req.body);
         const explicitClears: string[] = req.body._clearFields || [];
@@ -3774,10 +5074,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           if (isEmpty && oldHasValue && !explicitClears.includes(field)) {
             console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (would be overwritten with empty)`);
             (validation.data as any)[field] = oldVal;
-          } else if (!wasExplicitlySent && isEmpty && oldHasValue) {
+          } else if (!wasExplicitlySent && isEmpty && oldHasValue && !explicitClears.includes(field)) {
             console.log(`🔒 Preserving field "${field}" = "${String(oldVal).substring(0, 50)}" (not in request body)`);
             (validation.data as any)[field] = oldVal;
           }
+        }
+        // Force-null any fields in _clearFields — Zod may have stripped null→undefined,
+        // which causes Drizzle to skip the field entirely in the UPDATE statement.
+        for (const field of explicitClears) {
+          (validation.data as any)[field] = null;
         }
       }
 
@@ -3901,21 +5206,35 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         const subtotal = updateData.lineItems.reduce((sum: number, item: any) => {
           return sum + (parseFloat(item.total) || 0);
         }, 0);
-        
+
         const taxRate = parseFloat(updateData.taxRate || oldJob?.taxRate || '15');
         const gstAmount = subtotal * (taxRate / 100);
         const totalAmount = subtotal + gstAmount;
-        
+
         updateData.subtotal = subtotal.toFixed(2);
         updateData.gstAmount = gstAmount.toFixed(2);
         updateData.totalAmount = totalAmount.toFixed(2);
-        
+
         console.log('💰 Recalculated job totals:', {
           subtotal: updateData.subtotal,
           taxRate,
           gstAmount: updateData.gstAmount,
           totalAmount: updateData.totalAmount
         });
+      }
+
+      // Stamp customerConfirmedAt + method when the confirmation flag transitions.
+      // Only fires on actual state change so re-saving the form doesn't refresh the timestamp.
+      if ('customerConfirmed' in updateData) {
+        const was = !!oldJob?.customerConfirmed;
+        const now = !!updateData.customerConfirmed;
+        if (now && !was) {
+          (updateData as any).customerConfirmedAt = new Date();
+          (updateData as any).customerConfirmationMethod = 'manual';
+        } else if (!now && was) {
+          (updateData as any).customerConfirmedAt = null;
+          (updateData as any).customerConfirmationMethod = null;
+        }
       }
 
       const job = await storage.updateJob(req.params.id, updateData);
@@ -4112,8 +5431,47 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
 
+      // Defensive: re-add tenant contact fields after Zod's .strip() in case the
+      // server process was started before these columns were added to the schema.
+      const TENANT_CONTACT_FIELDS_PATCH = [
+        'tenantContactFirstName', 'tenantContactLastName', 'tenantContactEmail',
+        'tenantContactPhone', 'tenantContactMobile',
+      ] as const;
+      for (const field of TENANT_CONTACT_FIELDS_PATCH) {
+        if (field in processedBody) {
+          (validation.data as any)[field] = processedBody[field];
+        }
+      }
+
       // Get old job for description comparison
       const oldJob = await storage.getJob(req.params.id);
+
+      // SAFEGUARD: Prevent accidental overwrites of critical fields with empty values.
+      // Mirrors the guard on PUT /api/jobs/:id — without it a PATCH that submits
+      // empty contact fields silently wipes them (see job 3935 / John Braybrook).
+      if (oldJob) {
+        const preserveFields: (keyof typeof oldJob)[] = [
+          'address', 'leadSource', 'notes', 'description', 'customerId',
+          'jobContactFirstName', 'jobContactLastName', 'jobContactEmail',
+          'jobContactPhone', 'jobContactMobile', 'billingNameOverride',
+          'billingAddress', 'billingContactPhone', 'billingContactMobile',
+          'billingContactEmail', 'invoiceDescription', 'totalAmount', 'paidAmount',
+          'title', 'priority', 'estimatedManHours', 'scheduledDate'
+        ];
+        const explicitClears: string[] = req.body._clearFields || [];
+        for (const field of preserveFields) {
+          const updateVal = (validation.data as any)[field];
+          const oldVal = oldJob[field];
+          const isEmpty = updateVal === '' || updateVal === null || updateVal === undefined;
+          const oldHasValue = oldVal !== null && oldVal !== undefined && oldVal !== '';
+          if (isEmpty && oldHasValue && !explicitClears.includes(field)) {
+            (validation.data as any)[field] = oldVal;
+          }
+        }
+        for (const field of explicitClears) {
+          (validation.data as any)[field] = null;
+        }
+      }
 
       // Convert empty string customerId to null in validated data
       const updateData = { ...validation.data };
@@ -4126,6 +5484,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         if (!updateData.completedDate) {
           updateData.completedDate = new Date();
           console.log(`✅ Auto-setting completedDate for job ${req.params.id} (PATCH status → completed)`);
+        }
+      }
+
+      // Stamp customerConfirmedAt + method when the confirmation flag transitions.
+      if ('customerConfirmed' in updateData) {
+        const was = !!oldJob?.customerConfirmed;
+        const now = !!updateData.customerConfirmed;
+        if (now && !was) {
+          (updateData as any).customerConfirmedAt = new Date();
+          (updateData as any).customerConfirmationMethod = 'manual';
+        } else if (!now && was) {
+          (updateData as any).customerConfirmedAt = null;
+          (updateData as any).customerConfirmationMethod = null;
         }
       }
 
@@ -4203,6 +5574,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       }
 
+      broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
     } catch (error) {
       console.error('Error patching job:', error);
@@ -4370,6 +5742,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.error('Error creating diary notification:', error);
       }
       
+      broadcast(['/api/jobs/' + jobId + '/diary', '/api/jobs']);
       res.json({ success: true, data: entry });
     } catch (error) {
       console.error('Error creating job diary entry:', error);
@@ -4778,6 +6151,84 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Draft a short acknowledgement email in reply to a customer's booking confirmation.
+  // Returns { subject, body } — does not send.
+  app.post('/api/jobs/:id/draft-confirmation-reply', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+      if (!job.customerConfirmed) {
+        return res.status(400).json({ success: false, message: 'Job is not marked as customer-confirmed' });
+      }
+
+      const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+
+      const greetingName =
+        (job as any).jobContactFirstName ||
+        (customer?.name ? customer.name.split(' ')[0] : '') ||
+        'there';
+
+      const scheduledDateStr = job.scheduledDate
+        ? formatNZTime(job.scheduledDate as any, 'full')
+        : 'the scheduled date';
+
+      const jobDescription =
+        (job as any).description ||
+        (job as any).invoiceDescription ||
+        (job as any).title ||
+        '';
+
+      const subject = `Re: Booking J-${job.jobNumber}`;
+
+      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. The customer has just confirmed a scheduled booking. Draft an extremely brief acknowledgement — essentially one short casual line.
+
+Strict rules:
+- Plain text only. No HTML, no markdown, no emoji.
+- Exactly ONE short acknowledgement line between the greeting and sign-off. No second sentence. No extra detail.
+- That one line must be a casual Kiwi acknowledgement in the same family as "Awesome, see you then." — pick one of: "Awesome, see you then.", "Sweet, see you then.", "Perfect, see you then.", "Beauty, see you then.", "Cheers, see you then." Do not deviate from this pattern and do not invent longer variations.
+- NEVER mention the scheduled date, job number, address, job description, or any logistics. The customer already has those.
+- NO "thanks for confirming", "looking forward to it", "our team will", or any added context — just the short acknowledgement.
+- Do NOT include a subject line, greeting label, signature block, phone number, or contact details.
+- Start with "Hi {firstName}," on its own line.
+- End with "Kind regards," on its own line followed by "Jules" on the next line.
+
+Your entire output must look exactly like this shape — four lines, no more:
+Hi Trev,
+Awesome, see you then.
+Kind regards,
+Jules`;
+
+      const userPrompt = `Customer first name: ${greetingName}
+Scheduled date (NZ time): ${scheduledDateStr}
+Job number: J-${job.jobNumber}
+Job description: ${jobDescription || '(not provided)'}
+Confirmation method: ${job.customerConfirmationMethod || 'manual'}
+
+Draft the reply now.`;
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const body = (aiResponse.choices[0].message.content || '').trim();
+      if (!body) {
+        return res.status(502).json({ success: false, message: 'AI returned an empty draft' });
+      }
+
+      return res.json({ success: true, data: { subject, body } });
+    } catch (error) {
+      console.error('Error drafting confirmation reply:', error);
+      return res.status(500).json({ success: false, message: 'Failed to draft reply' });
+    }
+  });
+
   // Validate if gross margin calculation is complete
   app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
     try {
@@ -5019,20 +6470,75 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         totalAmount: amount.toString() // Sync invoice amount to job for revenue tracking
       });
 
+      // Compute exc-GST and inc-GST totals per line item so the diary entry
+      // can show both, clearly labelled. Without this, the diary dumped the
+      // raw `amount` sum (whose GST basis depends on each item's
+      // priceIncludesTax flag) while the job-card header always shows
+      // exc-GST — producing confusing "$9,145 vs $7,952" discrepancies.
+      type DiaryLineItem = {
+        total?: number | string;
+        amount?: number | string;
+        quantity?: number | string;
+        unitPrice?: number | string;
+        rate?: number | string;
+        priceIncludesTax?: boolean;
+      };
+      const taxRate = parseFloat(job.taxRate ?? '15') / 100 || 0.15;
+      let exGstTotal = 0;
+      let incGstTotal = 0;
+      const sourceItems: DiaryLineItem[] =
+        (customData.lineItems && customData.lineItems.length > 0)
+          ? (customData.lineItems as DiaryLineItem[])
+          : ((job.lineItems as DiaryLineItem[] | null) ?? []);
+      if (sourceItems.length > 0) {
+        for (const item of sourceItems) {
+          const rawTotal = item.total ?? item.amount;
+          const qty = Number(item.quantity) || 0;
+          const unit = Number(item.unitPrice ?? item.rate) || 0;
+          const raw = rawTotal ?? qty * unit;
+          const v = typeof raw === 'string' ? parseFloat(raw) : Number(raw) || 0;
+          if (item.priceIncludesTax) {
+            incGstTotal += v;
+            exGstTotal += v / (1 + taxRate);
+          } else {
+            exGstTotal += v;
+            incGstTotal += v * (1 + taxRate);
+          }
+        }
+      } else {
+        // No line items — fall back to job.totalAmount with the job's tax mode.
+        if (job.taxMode === 'tax_inclusive') {
+          incGstTotal = amount;
+          exGstTotal = amount / (1 + taxRate);
+        } else {
+          exGstTotal = amount;
+          incGstTotal = amount * (1 + taxRate);
+        }
+      }
+      if (invoiceType === 'partial' && customData.percentage) {
+        const pct = parseFloat(customData.percentage) / 100;
+        exGstTotal *= pct;
+        incGstTotal *= pct;
+      }
+      const partialSuffix = invoiceType === 'partial' ? ' (partial)' : '';
+      const diaryText = `Invoice ${invoiceNumber} created for $${exGstTotal.toFixed(2)} + GST — $${incGstTotal.toFixed(2)} total${partialSuffix}`;
+
       // Create diary entry for invoice creation with invoice-specific metadata
       try {
         const diaryEntry = await storage.createJobDiaryEntry({
           jobId: id,
           entryType: 'email', // Use 'email' type so it can display with invoice icon
           title: 'Invoice Created',
-          description: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`, // Database requires description field
-          content: `Invoice ${invoiceNumber} created for $${amount.toFixed(2)}${invoiceType === 'partial' ? ' (partial)' : ''}`,
+          description: diaryText, // Database requires description field
+          content: diaryText,
           authorName: req.user?.name || 'System',
           authorRole: req.user?.role || 'system',
           metadata: {
             invoiceId: invoice.id,
             invoiceNumber: invoiceNumber,
             amount: amount.toString(),
+            amountExGst: exGstTotal.toFixed(2),
+            amountIncGst: incGstTotal.toFixed(2),
             action: 'invoice_created',
             documentType: 'invoice', // Mark this as an invoice document
             documentNumber: invoiceNumber
@@ -5198,11 +6704,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
-      // Get base URL for customer-facing links
-      // Derive from the incoming request so it always matches the actual deployed domain
-      const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol;
-      const host = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string) || 'app.treemarkables.co.nz';
-      const baseUrl = `${protocol}://${host}`;
+      // Always use the production domain for customer-facing links
+      // to prevent dev/preview URLs from leaking into customer emails/SMS
+      const baseUrl = `https://app.treemarkables.co.nz`;
       
       // Prepare email content
       const customerName = customer?.name || 'Valued Customer';
@@ -5334,17 +6838,199 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Send quote email — PDF attachment only, no public web viewer link.
+  // Accept is via mailto reply to the job-specific inbox (handled in /api/webhooks/email).
+  app.post('/api/proposals/:proposalId/send-quote-email', async (req: Request, res: Response) => {
+    try {
+      const { proposalId } = req.params;
+      const { to, subject, message, cc } = req.body;
+
+      if (!to || !subject) {
+        return res.status(400).json({
+          success: false,
+          message: 'Recipient email and subject are required'
+        });
+      }
+
+      const proposal = await storage.getProposal(proposalId);
+      if (!proposal) {
+        return res.status(404).json({ success: false, message: 'Quote not found' });
+      }
+
+      const job = proposal.jobId ? await storage.getJob(proposal.jobId) : null;
+      const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+
+      // Mark this record as a quote on first send (templateUsed drives PDF + acceptance behaviour).
+      if (proposal.templateUsed !== 'quote') {
+        await storage.updateProposal(proposalId, { templateUsed: 'quote' });
+      }
+
+      // Promote draft number Q-DRAFT-* → Q-* so the customer-facing number is stable.
+      let quoteNumber = proposal.proposalNumber || 'N/A';
+      if (quoteNumber.startsWith('Q-DRAFT-')) {
+        quoteNumber = quoteNumber.replace('Q-DRAFT-', 'Q-');
+        await storage.updateProposal(proposalId, { proposalNumber: quoteNumber });
+      } else if (quoteNumber.startsWith('DRAFT-')) {
+        quoteNumber = quoteNumber.replace('DRAFT-', 'Q-');
+        await storage.updateProposal(proposalId, { proposalNumber: quoteNumber });
+      }
+
+      // Recompute totals from the live line items for the email body.
+      const lineItems = await storage.getProposalLineItemsByProposal(proposalId);
+      let subtotal = 0;
+      for (const item of lineItems) {
+        if (item.selected !== false) subtotal += parseFloat(item.totalPrice || '0');
+      }
+      const gst = subtotal * 0.15;
+      const total = subtotal + gst;
+
+      // Generate PDF buffer for the attachment.
+      const { buffer: pdfBuffer } = await generateProposalPDFBuffer(proposalId);
+      const pdfBase64 = pdfBuffer.toString('base64');
+
+      // Build the mailto "Accept Quote" button. Reply lands in the job-specific
+      // inbox (Cloudflare → Gmail IMAP) where the webhook parser detects the
+      // "ACCEPT QUOTE" subject and marks the quote accepted.
+      const jobReplyAddress = job?.jobNumber
+        ? `job-${job.jobNumber}@jobs.treemarkables.co.nz`
+        : 'info@treemarkables.co.nz';
+      const mailtoSubject = encodeURIComponent(`ACCEPT QUOTE ${quoteNumber}`);
+      const mailtoBody = encodeURIComponent(
+        `Hi Treemarkables,\n\nI accept quote ${quoteNumber}. Please proceed.\n\nRegards,`
+      );
+      const acceptMailto = `mailto:${jobReplyAddress}?subject=${mailtoSubject}&body=${mailtoBody}`;
+
+      const customerName = customer?.name || 'Valued Customer';
+      const bodyLead = message && message.trim().length > 0
+        ? message
+        : `Thank you for your enquiry. Please find your quote attached as a PDF.`;
+
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 640px;">
+          <p>Dear ${customerName},</p>
+          <p>${bodyLead}</p>
+          <p><strong>Quote:</strong> ${quoteNumber}<br>
+          <strong>Total (inc. GST):</strong> $${total.toFixed(2)} NZD</p>
+          <p>The quote is attached to this email as a PDF. To accept, tap the button below and press send in your email app — no signature required.</p>
+          <p style="margin: 24px 0;">
+            <a href="${acceptMailto}"
+               style="background: #f97316; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
+              Accept Quote
+            </a>
+          </p>
+          <p style="color: #6b7280; font-size: 12px;">If the button doesn't work in your email app, simply reply to this email with the words "I accept quote ${quoteNumber}".</p>
+          <p>Regards,<br>Treemarkables</p>
+        </div>
+      `;
+
+      const textContent = [
+        `Quote ${quoteNumber} for ${customerName}.`,
+        `Total (inc. GST): $${total.toFixed(2)} NZD.`,
+        `${bodyLead}`,
+        `The quote is attached as a PDF.`,
+        `To accept, reply to this email with: I accept quote ${quoteNumber}`,
+      ].join('\n\n');
+
+      const emailResult = await emailService.sendEmail({
+        to,
+        cc,
+        subject,
+        html: htmlContent,
+        text: textContent,
+        jobNumber: job?.jobNumber,
+        attachments: [
+          {
+            filename: `Quote-${quoteNumber}.pdf`,
+            content: pdfBase64,
+            type: 'application/pdf',
+          },
+        ],
+      });
+
+      if (!emailResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: emailResult.error || 'Failed to send quote email',
+        });
+      }
+
+      // Update proposal to sent status.
+      await storage.updateProposal(proposalId, {
+        status: 'sent',
+        sentDate: new Date(),
+        deliveryMethod: 'email',
+      });
+
+      // Diary entry + job activity (mirrors proposal email flow, minus the viewer link).
+      if (proposal.jobId) {
+        try {
+          await storage.createJobDiaryEntry({
+            jobId: proposal.jobId,
+            entryType: 'email',
+            title: `Quote ${quoteNumber} emailed`,
+            description: `Quote ${quoteNumber} sent to ${to} (total $${total.toFixed(2)} NZD)`,
+            content: `Quote ${quoteNumber} sent to ${to}`,
+            authorName: (req as any).user?.name || 'System',
+            authorRole: (req as any).user?.role || 'system',
+            metadata: {
+              proposalId,
+              quoteNumber,
+              recipient: to,
+              cc: cc || null,
+              total: total.toFixed(2),
+              documentType: 'quote',
+              documentNumber: quoteNumber,
+              sendgridMessageId: emailResult.messageId,
+            },
+          });
+
+          const jobForUpdate = await storage.getJob(proposal.jobId);
+          const updateData: any = {
+            lastActivityAt: new Date(),
+            quotePresentedDate: new Date(),
+          };
+          if (jobForUpdate && jobForUpdate.status === 'lead') {
+            updateData.status = 'quote';
+          }
+          await storage.updateJob(proposal.jobId, updateData);
+        } catch (diaryError) {
+          console.error('Error creating diary entry for quote email:', diaryError);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Quote email sent successfully',
+        data: {
+          proposalId,
+          quoteNumber,
+          recipient: to,
+          sentAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('Error sending quote email:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Error sending quote email',
+      });
+    }
+  });
+
   // Send invoice email
   app.post('/api/emails/send', async (req: Request, res: Response) => {
     try {
       const { to, cc, subject, body, attachments, selectedPhotos = [], jobId, customerId, invoiceId, quoteId, invoiceData } = req.body;
       
-      // DEBUG: Log received photo selection data
       console.log('📧 Email send request received:');
       console.log('   - To:', to);
       console.log('   - Subject:', subject);
+      console.log('   - JobId:', jobId);
+      console.log('   - CustomerId:', customerId);
+      console.log('   - InvoiceId:', invoiceId);
+      console.log('   - InvoiceData id:', invoiceData?.id, 'number:', invoiceData?.invoiceNumber);
       console.log('   - Selected photos count:', selectedPhotos?.length || 0);
-      console.log('   - Selected photos URLs:', JSON.stringify(selectedPhotos));
+      console.log('   - Client attachments:', JSON.stringify((attachments || []).map((a: any) => ({type: a.type, id: a.id}))));
       
       // DEFENSIVE FIX: Validate invoiceData is a proper object with required properties
       // The frontend may sometimes serialize it incorrectly as a boolean
@@ -5363,11 +7049,15 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       
       // Validate required fields
       if (!to || !subject || !body) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Missing required email fields: to, subject, body' 
+        return res.status(400).json({
+          success: false,
+          message: 'Missing required email fields: to, subject, body'
         });
       }
+
+      // Microsoft-hosted addresses silently strip PDFs when inline CID images are present.
+      // We skip both the photo and logo CID attachments for these recipients so the PDF lands.
+      const recipientIsMicrosoft = typeof to === 'string' && isMicrosoftEmailDomain(to);
 
       // Get related data for email context
       let job, customer, invoice, quote;
@@ -5440,6 +7130,11 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
       } else if (effectiveInvoiceId) {
         invoice = await storage.getInvoice(effectiveInvoiceId);
+        if (invoice) {
+          console.log(`📄 Fetched invoice from DB: #${invoice.invoiceNumber} (${invoice.id}), items: ${(invoice.items || []).length}`);
+        } else {
+          console.warn(`⚠️ Invoice not found in DB for effectiveInvoiceId: ${effectiveInvoiceId}`);
+        }
       }
       
       if (quoteId) {
@@ -5510,15 +7205,27 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           </tr>
         `;
         
-        // Logo will be embedded as inline attachment (CID) for better email client compatibility
-        const logoUrl = 'cid:treemarkables-logo';
-        
+        // Logo is embedded as inline attachment (CID). Microsoft recipients still get the
+        // real logo — the PDF-stripping mitigation is the download-link banner below, so
+        // replacing the logo with text is no longer required.
+        const logoBlockHtml = `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
+
+        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF attachment
+        // is stripped by their spam filters regardless of inline-image presence. We replace the
+        // attachment with a prominent download button that fetches the PDF from the public endpoint.
+        const pdfDownloadBanner = (recipientIsMicrosoft && invoiceDetails?.id)
+          ? `<div style="margin: 0 0 30px 0; padding: 18px 20px; background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; text-align: center;">
+               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">Your invoice PDF is ready to download</div>
+               <a href="https://app.treemarkables.co.nz/api/invoices/${invoiceDetails.id}/pdf" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">Download Invoice PDF</a>
+             </div>`
+          : '';
+
         invoiceHtml = `
         <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
           <!-- Header with Logo and Company Info -->
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #000;">
             <div>
-              <img src="${logoUrl}" alt="Treemarkables" style="height: 70px; width: auto;" />
+              ${logoBlockHtml}
             </div>
             <div style="text-align: right; font-size: 13px;">
               <div style="font-weight: bold; margin-bottom: 8px;">Treemarkables LTD</div>
@@ -5529,6 +7236,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
               <div>Email: info@treemarkables.nz</div>
             </div>
           </div>
+
+          ${pdfDownloadBanner}
 
           <!-- Invoice Type and Details -->
           <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
@@ -5665,12 +7374,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Process attachments (logo + photos + invoice PDF)
       const emailAttachments = [];
       
-      // Generate and attach invoice PDF using the shared helper
-      if (invoice || validatedInvoiceData) {
+      // Generate and attach invoice PDF using the shared helper.
+      // Microsoft recipients: skip the attachment entirely — Microsoft's filters strip PDFs from
+      // this sender's reputation profile even when no inline CIDs are present. The HTML body below
+      // injects a "Download Invoice (PDF)" button pointing at the public PDF endpoint instead.
+      if ((invoice || validatedInvoiceData) && !recipientIsMicrosoft) {
         try {
           const invoiceForPdf = invoice || validatedInvoiceData;
           console.log(`📄 Generating invoice PDF for email (invoice #${invoiceForPdf.invoiceNumber}, lineItems: ${(invoiceForPdf.items || invoiceForPdf.lineItems || []).length})`);
-          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer);
+          // Fetch invoice template for block-config-aware PDF rendering
+          const invoiceTemplateRows = await db.select().from(documentTemplates)
+            .where(eq(documentTemplates.type, 'invoice')).limit(1);
+          const invoiceTemplate = invoiceTemplateRows[0] || null;
+          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate);
           emailAttachments.push({
             content: pdfBuffer.toString('base64'),
             filename: `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`,
@@ -5681,20 +7397,30 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         } catch (pdfError) {
           console.error('Error generating invoice PDF for email:', pdfError);
         }
+      } else if ((invoice || validatedInvoiceData) && recipientIsMicrosoft) {
+        const invNum = (invoice || validatedInvoiceData)?.invoiceNumber;
+        console.log(`📄 Skipped PDF attachment for Microsoft-hosted recipient ${to} (Invoice #${invNum}) — delivering via download link`);
       }
 
       
-      // Add logo as inline attachment for emails with invoices
+      // Add logo as inline CID attachment for emails with invoices. Attached for all
+      // recipients (incl. Microsoft) — the PDF-stripping workaround is the download-link
+      // banner, so the inline logo no longer needs to be suppressed for deliverability.
       if (validatedInvoiceData || invoiceId || invoice) {
         try {
-          const logoPath = path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
+          const logoPath = await getCompanyLogoFilePath();
           if (fs.existsSync(logoPath)) {
             const logoContent = fs.readFileSync(logoPath);
             const logoBase64 = logoContent.toString('base64');
+            const ext = path.extname(logoPath).toLowerCase();
+            const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+              : ext === '.webp' ? 'image/webp'
+              : ext === '.svg' ? 'image/svg+xml'
+              : 'image/png';
             emailAttachments.push({
               content: logoBase64,
-              filename: 'treemarkables-logo.png',
-              type: 'image/png',
+              filename: `company-logo${ext || '.png'}`,
+              type: mime,
               disposition: 'inline',
               content_id: 'treemarkables-logo'
             });
@@ -5707,64 +7433,99 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // Embed photos as true inline CID attachments — no external URL dependency.
       // Photos are fetched from object storage server-side and embedded directly in the
       // email body, so they display in every email client regardless of auth or server state.
+      //
+      // EXCEPTION — Microsoft-hosted addresses (Hotmail / Outlook.com / Live / MSN):
+      // Microsoft's spam filters silently strip PDF attachments from emails that contain
+      // many CID-embedded images. To ensure the PDF lands in the inbox, we skip the photo
+      // CID loop for these recipients and show a text link to the invoice page instead.
+      // Gmail and all other providers are unaffected.
       let photoGalleryHtml = '';
       let embeddedPhotoCount = 0;
 
       if (selectedPhotos && selectedPhotos.length > 0) {
-        const photoStorage = new PhotoStorageService();
-        const photoHtmlParts: string[] = [];
+        if (recipientIsMicrosoft) {
+          // Skip CID embedding for Microsoft recipients so the PDF is not stripped.
+          // Build a text-only section that tells the customer how to view the photos.
+          const photoCount = selectedPhotos.filter((p: string) => p.startsWith('/objects/photos/')).length;
+          const invoiceViewId = invoice?.id || invoiceId || (validatedInvoiceData as any)?.id;
+          const protocol = req.protocol;
+          const host = req.get('host') || 'treemarkables.co.nz';
+          const invoiceViewUrl = invoiceViewId
+            ? `${protocol}://${host}/invoice/${invoiceViewId}`
+            : `${protocol}://${host}`;
 
-        console.log(`📸 Embedding ${selectedPhotos.length} photo(s) as inline CID attachments...`);
+          if (photoCount > 0) {
+            photoGalleryHtml = `
+              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
+                          border-radius: 8px; font-family: Arial, sans-serif;">
+                <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">
+                  Job Photos (${photoCount})
+                </p>
+                <p style="margin: 0; color: #555; font-size: 13px;">
+                  ${photoCount} photo${photoCount !== 1 ? 's' : ''} ${photoCount !== 1 ? 'were' : 'was'} taken at this job.
+                  <a href="${invoiceViewUrl}" style="color: #f97316; font-weight: 600;">View your invoice online</a>
+                  to see the photos.
+                </p>
+              </div>
+            `;
+          }
+          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — PDF deliverability mode`);
+        } else {
+          const photoStorage = new PhotoStorageService();
+          const photoHtmlParts: string[] = [];
 
-        for (let i = 0; i < selectedPhotos.length; i++) {
-          const photoUrl = selectedPhotos[i];
-          if (!photoUrl.startsWith('/objects/photos/')) continue;
+          console.log(`📸 Embedding ${selectedPhotos.length} photo(s) as inline CID attachments...`);
 
-          const fileName = path.basename(photoUrl);
-          const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
-          const thumbPath = `/objects/photos/${thumbFileName}`;
-          const cid = `job-photo-${i}`;
+          for (let i = 0; i < selectedPhotos.length; i++) {
+            const photoUrl = selectedPhotos[i];
+            if (!photoUrl.startsWith('/objects/photos/')) continue;
 
-          // Try thumbnail first (small, fast); fall back to original if thumbnail missing
-          let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
-          if (!photoData) {
-            photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+            const fileName = path.basename(photoUrl);
+            const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
+            const thumbPath = `/objects/photos/${thumbFileName}`;
+            const cid = `job-photo-${i}`;
+
+            // Try thumbnail first (small, fast); fall back to original if thumbnail missing
+            let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
+            if (!photoData) {
+              photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+            }
+
+            if (photoData && photoData.buffer) {
+              // Attach as inline CID image — email client renders it directly in the body
+              emailAttachments.push({
+                content: photoData.buffer.toString('base64'),
+                filename: thumbFileName,
+                type: photoData.contentType || 'image/jpeg',
+                content_id: cid
+              });
+              photoHtmlParts.push(`
+                <div style="display: inline-block; margin: 5px; vertical-align: top;">
+                  <img src="cid:${cid}" alt="Job Photo ${i + 1}"
+                    style="max-width: 200px; max-height: 200px; border-radius: 8px;
+                           border: 1px solid #ddd; display: block;" />
+                </div>
+              `);
+              embeddedPhotoCount++;
+              console.log(`📷 Photo ${i + 1} embedded as CID "${cid}" (${Math.round(photoData.buffer.length / 1024)}KB, ${photoData.contentType})`);
+            } else {
+              console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
+            }
           }
 
-          if (photoData && photoData.buffer) {
-            // Attach as inline CID image — email client renders it directly in the body
-            emailAttachments.push({
-              content: photoData.buffer.toString('base64'),
-              filename: thumbFileName,
-              type: photoData.contentType || 'image/jpeg',
-              content_id: cid
-            });
-            photoHtmlParts.push(`
-              <div style="display: inline-block; margin: 5px; vertical-align: top;">
-                <img src="cid:${cid}" alt="Job Photo ${i + 1}"
-                  style="max-width: 200px; max-height: 200px; border-radius: 8px;
-                         border: 1px solid #ddd; display: block;" />
+          if (photoHtmlParts.length > 0) {
+            photoGalleryHtml = `
+              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
+                          border-radius: 8px; font-family: Arial, sans-serif;">
+                <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">
+                  Photos (${embeddedPhotoCount}):
+                </p>
+                <div>
+                  ${photoHtmlParts.join('')}
+                </div>
               </div>
-            `);
-            embeddedPhotoCount++;
-            console.log(`📷 Photo ${i + 1} embedded as CID "${cid}" (${Math.round(photoData.buffer.length / 1024)}KB, ${photoData.contentType})`);
-          } else {
-            console.warn(`⚠️ Could not fetch photo buffer for ${photoUrl} — skipping`);
+            `;
           }
-        }
-
-        if (photoHtmlParts.length > 0) {
-          photoGalleryHtml = `
-            <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
-                        border-radius: 8px; font-family: Arial, sans-serif;">
-              <p style="margin: 0 0 10px 0; font-weight: bold; color: #333;">
-                Photos (${embeddedPhotoCount}):
-              </p>
-              <div>
-                ${photoHtmlParts.join('')}
-              </div>
-            </div>
-          `;
         }
       }
       
@@ -5773,6 +7534,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         emailHtml = emailHtml + photoGalleryHtml;
       }
       
+      // Log final attachment summary before sending
+      console.log(`📧 Preparing to send email with ${emailAttachments.length} server-side attachment(s):`, 
+        emailAttachments.map(a => ({ filename: (a as any).filename, type: (a as any).type, contentKB: Math.round(((a as any).content?.length || 0) / 1024 * 0.75) })));
+
       // Send email using the emailService
       // Pass jobNumber so Cloudflare Email Routing forwards replies to job-specific address
       const emailResult = await emailService.sendEmail({
@@ -6094,6 +7859,92 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           // Update job's lastActivityAt to trigger activity indicator and sorting
           await storage.updateJob(recentJob.id, { lastActivityAt: new Date() });
           console.log(`✅ SMS logged to job #${recentJob.jobNumber} diary`);
+
+          // Push notification to admins about SMS reply
+          try {
+            await notificationHelper.notifyCustomerSmsReply(
+              customer.name,
+              Body,
+              recentJob.jobNumber?.toString()
+            );
+          } catch (pushErr) {
+            console.error('Error sending SMS reply push notification:', pushErr);
+          }
+
+          // Detect reschedule intent → alert dispatcher to re-propose a time slot
+          const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
+          const isReschedule = rescheduleKeywords.test(Body);
+          if (isReschedule) {
+            await storage.createNotification({
+              title: `Reschedule requested — Job #${recentJob.jobNumber}`,
+              message: `Customer ${customer.name} may be requesting a new time slot for Job #${recentJob.jobNumber} via SMS. Consider re-proposing via AI Smart Dispatch.`,
+              type: 'reschedule_request',
+              priority: 'high',
+              isRead: false,
+              actionUrl: '/ai-scheduler',
+              jobId: recentJob.id,
+            }).catch(() => { /* non-critical */ });
+          }
+
+          // Detect confirmation intent. Only auto-flip customerConfirmed when we have
+          // reasonable proof we actually asked: a pending_outbound_messages row was
+          // created for this job within the last 14 days. Otherwise raise a notification
+          // for manual review.
+          const confirmKeywords = /\b(yes|yep|yeah|yup|confirm(ed|ing)?|all good|sounds good|that works|works for me|sg|ok(ay)?|thanks(\s|!|$)|thank you|perfect|great|cheers|sweet|awesome)\b/i;
+          const isConfirmation = !isReschedule && confirmKeywords.test(Body);
+          if (
+            isConfirmation &&
+            (recentJob.status === 'scheduled' || recentJob.status === 'work_order') &&
+            !recentJob.customerConfirmed
+          ) {
+            try {
+              const fourteenDaysAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
+              const allPending = await storage.getPendingOutboundMessages();
+              const hasRecentOutbound = allPending.some(
+                (m) =>
+                  m.jobId === recentJob.id &&
+                  m.createdAt &&
+                  new Date(m.createdAt).getTime() >= fourteenDaysAgo,
+              );
+              if (hasRecentOutbound) {
+                await storage.updateJob(recentJob.id, {
+                  customerConfirmed: true,
+                  customerConfirmedAt: new Date(),
+                  customerConfirmationMethod: 'sms',
+                } as any);
+                await storage.createJobDiaryEntry({
+                  jobId: recentJob.id,
+                  entryType: 'milestone',
+                  title: 'Customer confirmed scheduled date',
+                  description: `Customer ${customer.name} confirmed the scheduled date/time via SMS reply: "${Body}"`,
+                  authorName: customer.name,
+                  authorRole: 'customer',
+                  tags: ['customer-confirmation', 'sms'],
+                  metadata: { source: 'sms', from: From },
+                });
+                await storage.createNotification({
+                  title: `Customer confirmed Job #${recentJob.jobNumber}`,
+                  message: `${customer.name} confirmed the scheduled date for Job #${recentJob.jobNumber} via SMS.`,
+                  type: 'customer_confirmation',
+                  priority: 'medium',
+                  isRead: false,
+                  jobId: recentJob.id,
+                }).catch(() => { /* non-critical */ });
+                console.log(`✅ Auto-confirmed Job #${recentJob.jobNumber} from SMS reply`);
+              } else {
+                await storage.createNotification({
+                  title: `Possible confirmation — Job #${recentJob.jobNumber}`,
+                  message: `${customer.name} replied with confirmation-style wording but no recent booking request was on file. Review and tick manually if appropriate.`,
+                  type: 'customer_confirmation_review',
+                  priority: 'low',
+                  isRead: false,
+                  jobId: recentJob.id,
+                }).catch(() => { /* non-critical */ });
+              }
+            } catch (confirmErr) {
+              console.error('Error processing SMS confirmation:', confirmErr);
+            }
+          }
         } else {
           console.log(`⚠️ No jobs found for customer ${customer.name}`);
         }
@@ -6102,6 +7953,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       
       // Respond to Twilio with TwiML (required)
+      broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
       res.type('text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
       
@@ -6113,10 +7965,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   });
 
   // ----------------------------------------
-  // TWILIO LIVE CALL RECORDING — OPTION 2
-  // Caller rings owner's real number → carrier forwards here →
-  // Twilio dials HERO_PHONE_NUMBER while recording → on no-answer, takes voicemail.
-  // Configure in Twilio console: "A CALL COMES IN" → Webhook → this URL.
+  // TWILIO LIVE CALL RECORDING
+  // Caller rings owner's personal mobile → carrier unconditionally forwards here →
+  // Twilio dials OWNER_PHONE_NUMBER while recording → on no-answer, takes voicemail.
+  // Configure in Twilio console: "A CALL COMES IN" → Webhook → /api/webhooks/twilio-answer
   // ----------------------------------------
 
   // Serve recordings from persistent Object Storage
@@ -6162,16 +8014,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         });
       }
       const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       const { AccessToken } = twilio.jwt;
       const { VoiceGrant } = AccessToken;
-      const voiceGrant = new VoiceGrant({ incomingAllow: true });
+      const voiceGrant = new VoiceGrant({
+        incomingAllow: true,
+        ...(twimlAppSid ? { outgoingApplicationSid: twimlAppSid } : {}),
+      });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
         ttl: 3600,
       });
       accessToken.addGrant(voiceGrant);
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity}`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity });
+      if (!twimlAppSid) {
+        console.warn('⚠️  TWILIO_TWIML_APP_SID not set — outgoing calls from the iOS app will not work. Create a TwiML App in the Twilio Console and set this secret.');
+      }
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (outgoing: ${twimlAppSid ? 'enabled' : 'disabled'})`);
+      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, outgoingEnabled: !!twimlAppSid });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
@@ -6188,13 +8047,13 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       return res.status(403).send('Forbidden');
     }
 
-    const ownerPhone = process.env.HERO_PHONE_NUMBER;
+    const ownerPhone = process.env.OWNER_PHONE_NUMBER || process.env.HERO_PHONE_NUMBER;
     const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
     const hasClient = !!(process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET);
 
     // Must have at least one destination — Client app OR phone number
     if (!hasClient && !ownerPhone) {
-      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or HERO_PHONE_NUMBER)');
+      console.error('❌ No call destination configured (set TWILIO_API_KEY+TWILIO_API_SECRET or OWNER_PHONE_NUMBER)');
       res.type('text/xml');
       return res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -7136,11 +8995,19 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const customer = customerData[0] || null;
       const job = jobData[0] || null;
       
+      // Fetch invoice template for block-config-aware PDF rendering
+      const invoiceTemplateRows2 = await db.select().from(documentTemplates)
+        .where(eq(documentTemplates.type, 'invoice')).limit(1);
+      const invoiceTemplate2 = invoiceTemplateRows2[0] || null;
+      
       // Generate PDF using the shared helper (same code as email attachment)
-      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer);
+      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
+      // Inline so the PDF renders in-browser when customers click the email link
+      // (Microsoft PDF-stripping workaround). `attachment` left the tab blank on
+      // desktop and failed silently in mobile email in-app browsers.
+      res.setHeader('Content-Disposition', `inline; filename="Invoice-${invoice.invoiceNumber}.pdf"`);
       res.send(pdfBuffer);
       
     } catch (error) {
@@ -7234,6 +9101,231 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   });
 
   // ========================================
+  // INVOICE SECTION MANAGEMENT (mirrors proposal sections)
+  // ========================================
+
+  app.get('/api/invoices/:invoiceId/sections', async (req: Request, res: Response) => {
+    try {
+      const sections = await storage.getInvoiceSectionsByInvoice(req.params.invoiceId);
+      const sectionsWithPhotos = sections.map(section => ({
+        ...section,
+        description: section.content || '',
+        photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => ({
+          id: `photo-${Date.now()}-${Math.random()}`,
+          url,
+          filename: url.split('/').pop() || 'photo',
+          type: 'before' as const,
+          category: 'documentation' as const,
+          capturedAt: new Date().toISOString(),
+        }))
+      }));
+      res.json({ success: true, data: sectionsWithPhotos, count: sectionsWithPhotos.length });
+    } catch (error) {
+      console.error('Error fetching invoice sections:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoice sections' });
+    }
+  });
+
+  app.post('/api/invoices/:invoiceId/sections', async (req: Request, res: Response) => {
+    try {
+      const sectionData = { ...req.body, invoiceId: req.params.invoiceId };
+      const validatedData = insertInvoiceSectionSchema.parse(sectionData);
+      const section = await storage.createInvoiceSection(validatedData);
+      res.status(201).json({ success: true, data: section, message: 'Invoice section created' });
+    } catch (error: any) {
+      console.error('Error creating invoice section:', error);
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ success: false, message: 'Invalid section data', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: 'Error creating invoice section' });
+    }
+  });
+
+  app.put('/api/invoices/sections/:id', async (req: Request, res: Response) => {
+    try {
+      const validatedData = updateInvoiceSectionSchema.parse(req.body);
+      const section = await storage.updateInvoiceSection(req.params.id, validatedData);
+      res.json({ success: true, data: section, message: 'Invoice section updated' });
+    } catch (error: any) {
+      console.error('Error updating invoice section:', error);
+      if (error.message === 'Invoice section not found') {
+        return res.status(404).json({ success: false, message: 'Invoice section not found' });
+      }
+      if (error.name === 'ZodError') {
+        return res.status(400).json({ success: false, message: 'Invalid section data', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: 'Error updating invoice section' });
+    }
+  });
+
+  app.delete('/api/invoices/sections/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteInvoiceSection(req.params.id);
+      res.json({ success: true, message: 'Invoice section deleted' });
+    } catch (error) {
+      console.error('Error deleting invoice section:', error);
+      res.status(500).json({ success: false, message: 'Error deleting invoice section' });
+    }
+  });
+
+  app.put('/api/invoices/:invoiceId/sections/reorder', async (req: Request, res: Response) => {
+    try {
+      const { sectionIds } = req.body;
+      if (!Array.isArray(sectionIds)) {
+        return res.status(400).json({ success: false, message: 'sectionIds must be an array' });
+      }
+      const sections = await storage.reorderInvoiceSections(req.params.invoiceId, sectionIds);
+      res.json({ success: true, data: sections, message: 'Invoice sections reordered' });
+    } catch (error) {
+      console.error('Error reordering invoice sections:', error);
+      res.status(500).json({ success: false, message: 'Error reordering invoice sections' });
+    }
+  });
+
+  // Public invoice endpoint (no auth) — used by customer-facing /invoice/:id/view page
+  app.get('/api/invoices/:id/public', async (req: Request, res: Response) => {
+    try {
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const [customer, job, sections] = await Promise.all([
+        invoice.customerId ? storage.getCustomer(invoice.customerId) : Promise.resolve(null),
+        invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
+        storage.getInvoiceSectionsByInvoice(invoice.id),
+      ]);
+
+      res.json({
+        success: true,
+        data: {
+          ...invoice,
+          customer: customer || null,
+          job: job || null,
+          sections: sections.map(s => ({
+            ...s,
+            images: Array.isArray(s.images) ? s.images : [],
+          })),
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching public invoice:', error);
+      res.status(500).json({ success: false, message: 'Error fetching invoice' });
+    }
+  });
+
+  // Send invoice email — mirrors /api/proposals/:proposalId/send-email
+  app.post('/api/invoices/:invoiceId/send-email', async (req: Request, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { to, subject, message, cc } = req.body;
+
+      if (!to || !subject) {
+        return res.status(400).json({ success: false, message: 'Recipient email and subject are required' });
+      }
+
+      const invoice = await storage.getInvoice(invoiceId);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+
+      const [customer, job] = await Promise.all([
+        invoice.customerId ? storage.getCustomer(invoice.customerId) : Promise.resolve(null),
+        invoice.jobId ? storage.getJob(invoice.jobId) : Promise.resolve(null),
+      ]);
+
+      const baseUrl = `https://app.treemarkables.co.nz`;
+      const customerName = customer?.name || 'Valued Customer';
+      const invoiceViewUrl = `${baseUrl}/invoice/${invoiceId}/view`;
+
+      // Calculate total from line items table or fall back to invoice.amount
+      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoiceId));
+      let subtotal = 0;
+      for (const li of dbLineItems) {
+        subtotal += parseFloat(li.totalPrice || '0');
+      }
+      if (subtotal === 0) {
+        subtotal = parseFloat((invoice as any).amount || '0');
+      }
+      const gst = subtotal * 0.15;
+      const total = subtotal + gst;
+
+      const htmlContent = `
+        <div style="font-family: Arial, sans-serif; padding: 20px;">
+          <p>Dear ${customerName},</p>
+
+          <p>${message || `Please find your invoice attached. Payment can be made via bank transfer.`}</p>
+
+          <p><strong>Total due: $${total.toFixed(2)}</strong></p>
+
+          <p>View your invoice online here: <a href="${invoiceViewUrl}">${invoiceViewUrl}</a></p>
+
+          <p>Regards,<br>
+          Treemarkables</p>
+        </div>
+      `;
+
+      const emailResult = await emailService.sendEmail({
+        to,
+        cc,
+        subject,
+        html: htmlContent,
+        text: `Invoice ${invoice.invoiceNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD.`,
+        jobNumber: job?.jobNumber,
+      });
+
+      if (!emailResult.success) {
+        return res.status(500).json({ success: false, message: 'Failed to send invoice email' });
+      }
+
+      console.log(`📧 Invoice ${invoice.invoiceNumber} email sent to ${to}${emailResult.messageId ? ` (Message ID: ${emailResult.messageId})` : ''}`);
+
+      // Mark invoice as sent
+      await storage.updateInvoice(invoiceId, {
+        status: 'sent',
+        sentDate: new Date(),
+      } as any);
+
+      // Diary entry
+      if (invoice.jobId) {
+        try {
+          await storage.createJobDiaryEntry({
+            jobId: invoice.jobId,
+            entryType: 'email',
+            title: `Invoice Sent: ${invoice.invoiceNumber}`,
+            description: `Invoice "${invoice.jobTitle || invoice.invoiceNumber}" sent to ${to}${cc ? ` (CC: ${cc})` : ''}\n\nTotal: $${total.toFixed(2)} NZD incl. GST`,
+            authorName: 'System',
+            metadata: {
+              invoiceId,
+              invoiceNumber: invoice.invoiceNumber,
+              recipient: to,
+              cc: cc || null,
+              total: total.toFixed(2),
+              sendgridMessageId: emailResult.messageId,
+            },
+          });
+        } catch (diaryError) {
+          console.error('Error creating diary entry for invoice email:', diaryError);
+        }
+      }
+
+      res.json({
+        success: true,
+        message: 'Invoice email sent successfully',
+        data: {
+          invoiceId,
+          invoiceNumber: invoice.invoiceNumber,
+          recipient: to,
+          sentAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('Error sending invoice email:', error);
+      res.status(500).json({ success: false, message: 'Error sending invoice email' });
+    }
+  });
+
+  // ========================================
   // STAFF TIME TRACKING API ROUTES
   // ========================================
 
@@ -7286,6 +9378,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       for (const entry of entries) {
         const hours = typeof entry.hours === 'string' ? parseFloat(entry.hours) : entry.hours;
         const rate = typeof entry.rate === 'string' ? parseFloat(entry.rate) : entry.rate;
+        const costRate = typeof entry.costRate === 'string' ? parseFloat(entry.costRate) : (entry.costRate ?? null);
         const employeeId = entry.employeeId || entry.staffId; // Support both field names
 
         if (isNaN(hours) || hours <= 0) continue;
@@ -7294,6 +9387,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           employeeId: employeeId,
           hours: hours,
           rate: rate || 0,
+          costRate: costRate !== null && !isNaN(costRate) ? costRate : undefined,
           date: entry.date || entry.entryDate || new Date().toISOString().split('T')[0]
         });
 
@@ -7327,9 +9421,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         await storage.updateJobExpenses(jobId, { additionalCosts: additionalCosts });
       }
 
-      // Calculate and update labor costs
+      // Calculate and update labor costs using cost rate (not charge-out rate)
       const staffEntries = await storage.getJobStaffTimeEntries(jobId);
-      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalLaborCost = await staffEntries.reduce(async (accPromise, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
 
       // Recalculate gross margin
@@ -7375,10 +9477,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Save back to job
       await storage.updateJobStaffTime(jobId, updatedEntries);
       
-      // Recalculate labor costs
-      const totalLaborCost = updatedEntries.reduce((sum: number, e: any) => sum + (e.hours * e.rate), 0);
+      // Recalculate labor costs using cost rate (not charge-out rate)
+      const totalLaborCost = await updatedEntries.reduce(async (accPromise: Promise<number>, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       await storage.updateJobExpenses(jobId, { actualLaborCosts: totalLaborCost });
-      
+
       res.json({ success: true, message: 'Time entry deleted', remainingCount: updatedEntries.length });
     } catch (error) {
       console.error('Error deleting time entry:', error);
@@ -7451,9 +9561,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       // Automatically update job labor costs from staff time totals
       const staffEntries = await storage.getJobStaffTimeEntries(id);
-      const totalLaborCost = staffEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalLaborCost = await (staffEntries as any[]).reduce(async (accPromise, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       const totalHours = staffEntries.reduce((sum, e) => sum + e.hours, 0);
-      
+
       // Update job with computed labor costs
       await storage.updateJobExpenses(id, { actualLaborCosts: totalLaborCost });
       
@@ -7507,7 +9625,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const updatedJob = await storage.updateJobStaffTime(id, validatedEntries);
       
       // Automatically update job labor costs from staff time totals
-      const totalLaborCost = validatedEntries.reduce((sum, e) => sum + (e.hours * e.rate), 0);
+      const totalLaborCost = await (validatedEntries as any[]).reduce(async (accPromise, e: any) => {
+        const acc = await accPromise;
+        let costRate = e.costRate;
+        if (costRate === undefined || costRate === null) {
+          const employee = e.employeeId ? await storage.getEmployee(e.employeeId) : null;
+          costRate = employee?.hourlyRate ? parseFloat(String(employee.hourlyRate)) : 0;
+        }
+        return acc + (e.hours * (costRate || 0));
+      }, Promise.resolve(0));
       const totalHours = validatedEntries.reduce((sum, e) => sum + e.hours, 0);
       
       // Get employee names and create diary entry for time tracking update
@@ -7681,14 +9807,33 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // REVIEW MANAGEMENT API ROUTES
   // ========================================
 
+  // Convert ISO date strings in the request body into Date objects so the
+  // Drizzle-zod insert schema (which expects z.date()) accepts JSON payloads
+  // from the admin UI. Safe to call on unknown shapes — only the two known
+  // date columns are touched.
+  const coerceReviewDates = (body: any) => {
+    if (!body || typeof body !== 'object') return body;
+    const out = { ...body };
+    for (const key of ['reviewDate', 'responseDate'] as const) {
+      const v = out[key];
+      if (typeof v === 'string' && v.trim().length > 0) {
+        const d = new Date(v);
+        if (!isNaN(d.getTime())) out[key] = d;
+      } else if (v === '' || v === null) {
+        out[key] = null;
+      }
+    }
+    return out;
+  };
+
   app.post('/api/reviews', async (req: Request, res: Response) => {
     try {
-      const validation = insertReviewSchema.safeParse(req.body);
+      const validation = insertReviewSchema.safeParse(coerceReviewDates(req.body));
       if (!validation.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid review data',
-          errors: validation.error.errors 
+          errors: validation.error.errors
         });
       }
 
@@ -7718,14 +9863,40 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Featured (curated) reviews for the proposal/quote builder widget and PDF.
+  // Filters to public reviews that have at least one uploaded photo; sorts
+  // newest first; limit defaults to 10 so the carousel has enough slides.
+  app.get('/api/reviews/featured', async (req: Request, res: Response) => {
+    try {
+      const limit = Math.max(1, Math.min(20, parseInt(String(req.query.limit || '10'), 10) || 10));
+      const all = await storage.getAllReviews();
+      const featured = (all || [])
+        .filter((r: any) => r?.isPublic && Array.isArray(r.photoUrls) && r.photoUrls.length > 0)
+        .sort((a: any, b: any) => {
+          const bd = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          const ad = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          return bd - ad;
+        })
+        .slice(0, limit)
+        .map((r: any) => ({
+          id: r.id,
+          photoUrls: Array.isArray(r.photoUrls) ? r.photoUrls : [],
+        }));
+      res.json({ success: true, data: featured });
+    } catch (error) {
+      console.error('Error fetching featured reviews:', error);
+      res.status(500).json({ success: false, message: 'Error fetching featured reviews' });
+    }
+  });
+
   app.put('/api/reviews/:id', async (req: Request, res: Response) => {
     try {
-      const updates = insertReviewSchema.partial().safeParse(req.body);
+      const updates = insertReviewSchema.partial().safeParse(coerceReviewDates(req.body));
       if (!updates.success) {
-        return res.status(400).json({ 
-          success: false, 
+        return res.status(400).json({
+          success: false,
           message: 'Invalid update data',
-          errors: updates.error.errors 
+          errors: updates.error.errors
         });
       }
 
@@ -7736,6 +9907,55 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       res.status(500).json({ success: false, message: 'Error updating review' });
     }
   });
+
+  app.delete('/api/reviews/:id', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteReview(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      res.status(500).json({ success: false, message: 'Error deleting review' });
+    }
+  });
+
+  // Upload one or more photos to attach to a curated review. Reuses the logo
+  // upload's validation (5MB cap, image mimetypes only) but accepts up to 10
+  // files per call so the admin can drop a whole screenshot set at once.
+  app.post(
+    '/api/reviews/upload-photos',
+    logoUpload.array('photos', 10),
+    async (req: Request, res: Response) => {
+      try {
+        const files = (req.files as Express.Multer.File[] | undefined) || [];
+        if (files.length === 0) {
+          return res.status(400).json({ success: false, message: 'No files uploaded' });
+        }
+        const destDir = path.join(__dirname, '..', 'client', 'public', 'reviews');
+        fs.mkdirSync(destDir, { recursive: true });
+
+        const extFor = (mime: string) =>
+          mime === 'image/png' ? '.png'
+          : mime === 'image/jpeg' ? '.jpg'
+          : mime === 'image/webp' ? '.webp'
+          : mime === 'image/gif' ? '.gif'
+          : mime === 'image/svg+xml' ? '.svg'
+          : '.png';
+
+        const urls: string[] = [];
+        for (let i = 0; i < files.length; i++) {
+          const f = files[i];
+          const filename = `review-${Date.now()}-${i}${extFor(f.mimetype)}`;
+          fs.writeFileSync(path.join(destDir, filename), f.buffer);
+          urls.push(`/reviews/${filename}`);
+        }
+
+        res.json({ success: true, urls });
+      } catch (error) {
+        console.error('Error uploading review photos:', error);
+        res.status(500).json({ success: false, message: 'Error uploading photos' });
+      }
+    },
+  );
 
   // ========================================
   // CAMPAIGN MANAGEMENT API ROUTES
@@ -8142,11 +10362,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         }
       }
       
-      // Get completed jobs with invoices in the date range
-      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
-      const allInvoices = await storage.getAllInvoices();
-      const allCustomers = await storage.getAllCustomers();
-      const allProposals = await storage.getAllProposals();
+      // Get completed jobs with invoices in the date range.
+      // Fetch in parallel — these four queries are independent, and running them
+      // sequentially was the dominant cost of the drilldown.
+      const [{ jobs: allJobs }, allInvoices, allCustomers, allProposals] = await Promise.all([
+        storage.getAllJobs({ limit: 999999 }),
+        storage.getAllInvoices(),
+        storage.getAllCustomers(),
+        storage.getAllProposals(),
+      ]);
       
       // Create customer map
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
@@ -8156,10 +10380,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // the Revenue card calculates its total via getDashboardStats/getRevenueStats.
       const jobInvoiceMap = new Map<string, number>();
       const jobInvoiceDateMap = new Map<string, string>(); // jobId -> latest invoice issue date
+      // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
+      // (NZ 15%), so divide to strip the tax. This keeps the drilldown rows and
+      // total in sync with the Revenue card (getDashboardStats / getRevenueStats).
       for (const invoice of allInvoices) {
         if (invoice.status !== 'cancelled' && invoice.jobId) {
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0');
+          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
           if (invoice.issueDate) {
             const dateStr = invoice.issueDate.toString();
@@ -8328,13 +10555,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
 
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
 
-      // Build a map of jobId -> { sentDate, value } from sent proposals
+      // Build a map of jobId -> { sentDate, value } from sent proposals.
+      // proposal.totalAmount is inc-GST; internal metrics show ex-GST per business rule,
+      // so strip the NZ 15% GST before storing.
       const sentProposalsByJobId = new Map<string, { sentDate: Date; value: number }>();
       for (const p of allProposals) {
         if (p.jobId && (p.status === 'sent' || p.status === 'accepted' || p.status === 'viewed' || p.sentDate)) {
           const sentDate = p.sentDate ? new Date(p.sentDate) : null;
           if (sentDate) {
-            const value = parseFloat((p.totalAmount || '0').toString());
+            const value = parseFloat((p.totalAmount || '0').toString()) / 1.15;
             const existing = sentProposalsByJobId.get(p.jobId);
             if (!existing || sentDate < existing.sentDate) {
               sentProposalsByJobId.set(p.jobId, { sentDate, value });
@@ -9024,7 +11253,18 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  // Delete notification
+  // Delete ALL notifications
+  app.delete('/api/notifications', async (req: Request, res: Response) => {
+    try {
+      const userId = req.query.userId as string | undefined;
+      await storage.deleteAllNotifications(userId);
+      res.json({ success: true, message: 'All notifications deleted' });
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+      res.status(500).json({ success: false, message: 'Error deleting notifications' });
+    }
+  });
+
   app.delete('/api/notifications/:id', async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -9333,6 +11573,16 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     res.set('X-Frame-Options', 'DENY');
     next();
   }, express.static(path.join(__dirname, '..', 'uploads', 'photos')));
+
+  // Serve uploaded company logos. Mirrors the photos mount so files written by
+  // POST /api/templates/upload-logo (to uploads/logos/) are reachable at
+  // /logos/<filename> in both dev and production.
+  app.use('/logos', (req, res, next) => {
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'DENY');
+    next();
+  }, express.static(path.join(__dirname, '..', 'uploads', 'logos')));
 
   // Legacy API route compatibility
   app.use('/api/photos', (req, res, next) => {
@@ -10330,15 +12580,32 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         }
       }
 
+      // Inherit dayRole: if this employee already has any assignment that NZ-day,
+      // the new row inherits their existing 'A' / 'B'. Cached per (employeeId, NZ date).
+      const dayRoleCache = new Map<string, string | null>();
+      const lookupDayRole = async (employeeId: string, day: Date): Promise<string | null> => {
+        const dayNZ = format(toZonedTime(day, 'Pacific/Auckland'), 'yyyy-MM-dd');
+        const cacheKey = `${employeeId}|${dayNZ}`;
+        if (dayRoleCache.has(cacheKey)) return dayRoleCache.get(cacheKey) ?? null;
+        const dayStartUTC = fromZonedTime(`${dayNZ}T00:00:00`, 'Pacific/Auckland');
+        const dayEndUTC = fromZonedTime(`${dayNZ}T23:59:59.999`, 'Pacific/Auckland');
+        const sameDay = await storage.getJobStaffAssignmentsByEmployee(employeeId, dayStartUTC, dayEndUTC);
+        const inherited = sameDay.find(s => s.dayRole)?.dayRole ?? null;
+        dayRoleCache.set(cacheKey, inherited);
+        return inherited;
+      };
+
       // Create all per-day assignments
       const created = [];
       for (const assignment of allAssignmentsToCreate) {
+        const inheritedDayRole = await lookupDayRole(assignment.employeeId, assignment.startTime);
         const newAssignment = await storage.createJobStaffAssignment({
           jobId,
           employeeId: assignment.employeeId,
           startTime: assignment.startTime,
           endTime: assignment.endTime,
           role: assignment.role,
+          dayRole: inheritedDayRole,
           notes: assignment.notes
         });
         created.push(newAssignment);
@@ -10568,6 +12835,36 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Set the day-level Role A / Role B for one crew member on one NZ date.
+  // Mirrored across every assignment row for that (employeeId, NZ-date) so per-job
+  // reads pick it up with no joins. Setting null clears the role for the day.
+  // Must be registered BEFORE /api/staff-assignments/:id so Express doesn't match :id="day-role".
+  app.put('/api/staff-assignments/day-role', async (req: Request, res: Response) => {
+    try {
+      const { employeeId, date, dayRole } = req.body as { employeeId?: string; date?: string; dayRole?: 'A' | 'B' | null };
+      if (!employeeId || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, message: 'employeeId and date (YYYY-MM-DD) required' });
+      }
+      if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B') {
+        return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', or null" });
+      }
+      const startUtc = fromZonedTime(`${date}T00:00:00`, 'Pacific/Auckland');
+      const endUtc = fromZonedTime(`${date}T23:59:59.999`, 'Pacific/Auckland');
+      const updated = await db.update(schema.jobStaffAssignments)
+        .set({ dayRole, updatedAt: new Date() })
+        .where(and(
+          eq(schema.jobStaffAssignments.employeeId, employeeId),
+          gte(schema.jobStaffAssignments.startTime, startUtc),
+          lte(schema.jobStaffAssignments.startTime, endUtc),
+        ))
+        .returning();
+      res.json({ success: true, data: { updatedCount: updated.length } });
+    } catch (error) {
+      console.error('Error setting day role:', error);
+      res.status(500).json({ success: false, message: 'Error setting day role' });
+    }
+  });
+
   // Update a staff assignment (reschedule drag-and-drop)
   app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
@@ -10586,6 +12883,32 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Toggle Role A / Role B completion for a job. Truth = presence of *CompletedAt timestamp.
+  // Dedicated route so we skip the full insertJobSchema parse + side-effects on PATCH /api/jobs/:id.
+  app.patch('/api/jobs/:jobId/role-completion', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { role, completed, completedBy } = req.body as { role?: 'A' | 'B'; completed?: boolean; completedBy?: string | null };
+      if (role !== 'A' && role !== 'B') {
+        return res.status(400).json({ success: false, message: "role must be 'A' or 'B'" });
+      }
+      if (typeof completed !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'completed must be a boolean' });
+      }
+      const ts = completed ? new Date() : null;
+      const by = completed ? (completedBy ?? null) : null;
+      const updates = role === 'A'
+        ? { roleACompletedAt: ts, roleACompletedBy: by }
+        : { roleBCompletedAt: ts, roleBCompletedBy: by };
+      const updated = await storage.updateJob(jobId, updates as Parameters<typeof storage.updateJob>[1]);
+      if (!updated) return res.status(404).json({ success: false, message: 'Job not found' });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating role completion:', error);
+      res.status(500).json({ success: false, message: 'Error updating role completion' });
+    }
+  });
+
   // Delete a staff assignment
   app.delete('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
@@ -10600,6 +12923,51 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         success: false,
         message: 'Error deleting staff assignment'
       });
+    }
+  });
+
+  // Bulk delete all staff assignments for a job (used by Unschedule)
+  app.delete('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteJobStaffAssignmentsByJob(req.params.jobId);
+      res.json({ success: true, message: 'All staff assignments removed' });
+    } catch (error) {
+      console.error('Error bulk-deleting staff assignments:', error);
+      res.status(500).json({ success: false, message: 'Error removing staff assignments' });
+    }
+  });
+
+  // Bulk delete all schedule events for a job (used by Unschedule)
+  app.delete('/api/jobs/:jobId/schedule-events', async (req: Request, res: Response) => {
+    try {
+      await storage.deleteScheduleEventsByJob(req.params.jobId);
+      res.json({ success: true, message: 'All schedule events removed' });
+    } catch (error) {
+      console.error('Error bulk-deleting schedule events:', error);
+      res.status(500).json({ success: false, message: 'Error removing schedule events' });
+    }
+  });
+
+  // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity
+  app.post('/api/jobs/:jobId/unschedule', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      await storage.deleteJobStaffAssignmentsByJob(jobId);
+      await storage.deleteScheduleEventsByJob(jobId);
+      const job = await storage.updateJob(jobId, {
+        scheduledDate: null,
+        scheduledEndDate: null,
+        scheduledStartTime: null,
+        scheduledEndTime: null,
+        assignedTo: [],
+        assignedTeam: [],
+        status: 'work_order',
+      } as any);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+      res.json({ success: true, data: job });
+    } catch (error) {
+      console.error('Error unscheduling job:', error);
+      res.status(500).json({ success: false, message: 'Error unscheduling job' });
     }
   });
 
@@ -11188,6 +13556,48 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Upload logo for templates — saves the file and propagates the new URL to all three
+  // default templates (quote, proposal, invoice) so Settings → Company is the single
+  // source of truth for the company logo.
+  app.post('/api/templates/upload-logo', logoUpload.single('logo'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No file uploaded' });
+      }
+      const ext = req.file.mimetype === 'image/png' ? '.png'
+        : req.file.mimetype === 'image/jpeg' ? '.jpg'
+        : req.file.mimetype === 'image/webp' ? '.webp'
+        : req.file.mimetype === 'image/svg+xml' ? '.svg'
+        : '.png';
+      const filename = `logo-${Date.now()}${ext}`;
+      // Write to the persistent uploads/ dir (mirrors the photos pattern). The
+      // previous path pointed at client/public/logos/ which is Vite's source
+      // static dir — fine in dev where Vite middleware serves from it, but in
+      // production Express serves from dist/public/, so writes after build
+      // were unreachable and the new logo never rendered.
+      const dest = path.join(__dirname, '..', 'uploads', 'logos', filename);
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, req.file.buffer);
+      const url = `/logos/${filename}`;
+
+      const defaults = await Promise.all([
+        storage.getDefaultDocumentTemplate('quote'),
+        storage.getDefaultDocumentTemplate('proposal'),
+        storage.getDefaultDocumentTemplate('invoice'),
+      ]);
+      await Promise.all(
+        defaults
+          .filter((t): t is NonNullable<typeof t> => !!t)
+          .map(t => storage.updateDocumentTemplate(t.id, { logoUrl: url })),
+      );
+
+      res.json({ success: true, url });
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      res.status(500).json({ success: false, message: 'Error uploading logo' });
+    }
+  });
+
   // Get default template for type
   app.get('/api/templates/default/:type', async (req: Request, res: Response) => {
     try {
@@ -11616,6 +14026,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       if (typeof rawBody.defaultGrossMarginPct === 'number') {
         rawBody.defaultGrossMarginPct = String(rawBody.defaultGrossMarginPct);
       }
+      if (typeof rawBody.dailyRevenueTarget === 'number') {
+        rawBody.dailyRevenueTarget = String(rawBody.dailyRevenueTarget);
+      }
 
       const validationResult = updateBusinessSettingsSchema.safeParse(rawBody);
       if (!validationResult.success) {
@@ -11989,7 +14402,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Send email from diary  
   app.post('/api/communications/email', async (req: Request, res: Response) => {
     try {
-      const { to, subject, message, jobId, customerId } = req.body;
+      const { to, subject, message, jobId, customerId, tags } = req.body;
       
       if (!to || !subject || !message) {
         return res.status(400).json({ 
@@ -12059,12 +14472,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           jobId,
           entryType: 'email',
           title: `Email: ${subject}`,
-          description: `Email sent to ${to}: ${message}`,
+          description: `Email sent to ${to}\n\nMessage:\n${message}`,
           authorName: 'System',
+          tags: Array.isArray(tags) ? tags : undefined,
           metadata: {
             sendgridMessageId: emailResult.messageId,
             isReviewRequest,
-            reviewRequestId
+            reviewRequestId,
+            to,
+            subject,
           }
         });
         
@@ -12152,6 +14568,38 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Resend email events webhook - receives open/click/bounce events
   app.post('/api/webhooks/resend-events', async (req: Request, res: Response) => {
     try {
+      // ── Svix signature verification ──────────────────────────────────────
+      // Resend signs webhook payloads with Svix. Verify before processing so
+      // forged requests from third parties are rejected.
+      const webhookSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
+      if (webhookSecret) {
+        const svixId        = req.headers['svix-id'] as string;
+        const svixTimestamp = req.headers['svix-timestamp'] as string;
+        const svixSignature = req.headers['svix-signature'] as string;
+
+        if (!svixId || !svixTimestamp || !svixSignature) {
+          console.warn('📬 Resend events webhook: missing Svix headers — rejecting request');
+          return res.status(401).json({ error: 'Missing webhook signature headers' });
+        }
+
+        try {
+          const wh = new SvixWebhook(webhookSecret);
+          const rawBody = (req as any).rawBody as Buffer | undefined;
+          const payloadStr = rawBody ? rawBody.toString('utf-8') : JSON.stringify(req.body);
+          wh.verify(payloadStr, {
+            'svix-id':        svixId,
+            'svix-timestamp': svixTimestamp,
+            'svix-signature': svixSignature,
+          });
+        } catch (verifyErr) {
+          console.warn('📬 Resend events webhook: invalid Svix signature — rejecting request');
+          return res.status(401).json({ error: 'Invalid webhook signature' });
+        }
+      } else {
+        console.warn('⚠️ RESEND_EVENTS_WEBHOOK_SECRET not set — Resend event webhooks are unverified. Set this secret from your Resend dashboard → Webhooks → Signing Secret.');
+      }
+      // ─────────────────────────────────────────────────────────────────────
+
       const event = req.body;
       console.log('📬 Resend event webhook received:', event.type);
       
@@ -12185,6 +14633,84 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
       
       console.log(`📬 Stored ${event.type} event for message ${messageId}`);
+
+      // ── Bounce & complaint alerts ─────────────────────────────────────────
+      if (event.type === 'email.bounced' || event.type === 'email.complained') {
+        const isBounce = event.type === 'email.bounced';
+        const recipientEmail: string = (Array.isArray(data?.to) ? data.to[0] : data?.to) ?? '';
+        const subject: string = data?.subject ?? '';
+        const bounceMsg: string = data?.bounce?.message ?? '';
+
+        // Try to extract a job/invoice number from the subject line
+        // Matches: "Invoice #3888", "Job #3888", "Quote #42", "#3888"
+        const jobNumMatch = subject.match(/#(\d{3,})/);
+        const jobNumber = jobNumMatch ? jobNumMatch[1] : null;
+
+        // Try to look up the job by extracted number
+        let matchedJob: schema.Job | undefined;
+        if (jobNumber) {
+          matchedJob = await storage.getJobByJobNumber(jobNumber) ?? undefined;
+        }
+
+        // If no job found via subject, try finding via customer email
+        if (!matchedJob && recipientEmail) {
+          const matchedCustomer = await db.select().from(customers)
+            .where(eq(customers.email, recipientEmail))
+            .limit(1)
+            .then(rows => rows[0]);
+          if (matchedCustomer) {
+            const customerJobs = await storage.getCustomerJobs(matchedCustomer.id);
+            // Pick the most recent active or open job
+            matchedJob = customerJobs
+              .filter(j => j.status !== 'completed' && j.status !== 'cancelled')
+              .sort((a, b) => (b.jobNumber ?? 0) - (a.jobNumber ?? 0))[0];
+          }
+        }
+
+        const jobLabel = matchedJob?.jobNumber ? `Job #${matchedJob.jobNumber}` : (jobNumber ? `Job #${jobNumber}` : 'an email');
+        const subjectSnippet = subject ? ` (subject: "${subject}")` : '';
+        const bounceDetail = bounceMsg ? ` — ${bounceMsg}` : '';
+
+        const notifTitle = isBounce
+          ? `Email bounced — ${jobLabel}`
+          : `Spam complaint — ${jobLabel}`;
+        const notifMessage = isBounce
+          ? `Email to ${recipientEmail} for ${jobLabel} was not delivered${bounceDetail}. Check the address and resend.${subjectSnippet}`
+          : `${recipientEmail} marked your email as spam for ${jobLabel}. Consider using a different address.${subjectSnippet}`;
+
+        const actionUrl = matchedJob ? `/jobs/${matchedJob.id}` : '/invoices';
+
+        await storage.createNotification({
+          title: notifTitle,
+          message: notifMessage,
+          type: isBounce ? 'email_bounce' : 'email_complaint',
+          priority: 'high',
+          isRead: false,
+          actionUrl,
+          jobId: matchedJob?.id,
+        });
+
+        // Also write a job diary entry so the bounce is visible in context
+        if (matchedJob) {
+          await storage.createJobDiaryEntry({
+            jobId: matchedJob.id,
+            entryType: 'note',
+            title: isBounce ? `Email bounced: ${subject || recipientEmail}` : `Spam complaint: ${subject || recipientEmail}`,
+            description: isBounce
+              ? `Email to ${recipientEmail} bounced and was not delivered.${bounceDetail ? '\n' + bounceDetail : ''}\n\nThe email address may be incorrect, deactivated, or the domain may not exist. Please verify and resend.`
+              : `${recipientEmail} reported your email as spam. You may need to use an alternative contact method.`,
+            authorName: 'System',
+            authorRole: 'system',
+            tags: ['email', isBounce ? 'bounce' : 'spam-complaint'],
+            isPrivate: false,
+            metadata: { recipientEmail, subject, resendMessageId: messageId },
+          }).catch(() => { /* non-critical */ });
+        }
+
+        console.log(`🚨 ${isBounce ? 'Bounce' : 'Complaint'} alert created for ${recipientEmail} (${jobLabel})`);
+        broadcast(['/api/notifications/summary']);
+      }
+      // ─────────────────────────────────────────────────────────────────────
       
       return res.status(200).json({ received: true });
     } catch (error) {
@@ -12289,7 +14815,15 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Update conversation
   app.patch('/api/conversations/:id', async (req: Request, res: Response) => {
     try {
-      const updates = updateConversationSchema.safeParse(req.body);
+      // Preprocess date fields - convert ISO strings to Date objects
+      const processedBody = { ...req.body };
+      if (processedBody.conversionDate && typeof processedBody.conversionDate === 'string') {
+        processedBody.conversionDate = new Date(processedBody.conversionDate);
+      }
+      if (processedBody.lastMessageAt && typeof processedBody.lastMessageAt === 'string') {
+        processedBody.lastMessageAt = new Date(processedBody.lastMessageAt);
+      }
+      const updates = updateConversationSchema.safeParse(processedBody);
       if (!updates.success) {
         return res.status(400).json({ 
           success: false, 
@@ -13444,13 +15978,36 @@ Transcription: ${transcriptText}`;
         
         try {
           const notificationHelper = await import('./services/notificationHelper.js');
-          await notificationHelper.createNotification({
-            type: 'email_reply',
-            title: `Email reply on Job #${job.jobNumber}`,
-            message: `${actualFromName || actualFromEmail} replied to Job #${job.jobNumber}`,
-            jobId: job.id,
-            metadata: { emailAddress: actualFromEmail || actualFrom }
-          });
+          // De-dup against gmailReplyService (which polls the inbox) so the same email
+          // doesn't produce two bell entries. Matches the 24h/per-job guard there.
+          const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+          const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+          const alreadyNotified = recentNotifs.some(
+            (n) => n.type === 'email_reply' && n.jobId === job.id,
+          );
+          if (!alreadyNotified) {
+            await notificationHelper.createNotification({
+              type: 'email_reply',
+              title: `Email reply on Job #${job.jobNumber}`,
+              message: `${actualFromName || actualFromEmail} replied to Job #${job.jobNumber}`,
+              jobId: job.id,
+              metadata: { emailAddress: actualFromEmail || actualFrom }
+            });
+          } else {
+            console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (UUID path)`);
+          }
+          // Detect reschedule intent → alert dispatcher to re-propose a time slot
+          const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
+          if (rescheduleKeywords.test(cleanedBody)) {
+            await notificationHelper.createNotification({
+              type: 'reschedule_request',
+              title: `Reschedule requested — Job #${job.jobNumber}`,
+              message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+              jobId: job.id,
+              metadata: { emailAddress: actualFromEmail || actualFrom, trigger: 'email_reply' },
+              actionUrl: '/ai-scheduler',
+            });
+          }
         } catch (notifError) {
           console.error('Failed to create email reply notification:', notifError);
         }
@@ -13488,28 +16045,52 @@ Transcription: ${transcriptText}`;
           try {
             const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
-            
-            const notificationData = {
-              title: 'Customer Email Reply',
-              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
-              type: 'email_reply',
-              priority: 'high' as const,
-              isRead: false,
-              actionUrl: `/dispatch?job=${job.id}&tab=diary`,
-              entityType: 'job',
-              entityId: job.id,
-              relatedEntityType: 'job',
-              relatedEntityId: job.id,
-              jobId: job.id,
-              metadata: { 
-                preview: previewText,
-                senderEmail: actualFromEmail || actualFrom,
-                senderName: actualFromName
-              }
-            };
-            
-            await storage.createNotification(notificationData);
-            console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+
+            // De-dup against gmailReplyService: same 24h/per-job guard used there.
+            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+            const alreadyNotified = recentNotifs.some(
+              (n) => n.type === 'email_reply' && n.jobId === job.id,
+            );
+
+            if (!alreadyNotified) {
+              const notificationData = {
+                title: 'Customer Email Reply',
+                message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
+                type: 'email_reply',
+                priority: 'high' as const,
+                isRead: false,
+                actionUrl: `/dispatch?job=${job.id}&tab=diary`,
+                entityType: 'job',
+                entityId: job.id,
+                relatedEntityType: 'job',
+                relatedEntityId: job.id,
+                jobId: job.id,
+                metadata: {
+                  preview: previewText,
+                  senderEmail: actualFromEmail || actualFrom,
+                  senderName: actualFromName
+                }
+              };
+
+              await storage.createNotification(notificationData);
+              console.log(`🔔 Notification created for email reply on job ${job.jobNumber}`);
+            } else {
+              console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (job-number path)`);
+            }
+            // Detect reschedule intent → alert dispatcher to re-propose a time slot
+            const rescheduleKeywords = /can.?t make|not available|doesn.?t suit|time doesn.?t|different time|reschedule|can we change|change the time|won.?t work|another time|change appointment/i;
+            if (rescheduleKeywords.test(cleanedBody)) {
+              await storage.createNotification({
+                title: `Reschedule requested — Job #${job.jobNumber}`,
+                message: `Customer may be requesting a new time slot for Job #${job.jobNumber}. Consider re-proposing via AI Smart Dispatch.`,
+                type: 'reschedule_request',
+                priority: 'high',
+                isRead: false,
+                actionUrl: '/ai-scheduler',
+                jobId: job.id,
+              });
+            }
           } catch (notifError) {
             console.error('Error creating email reply notification:', notifError);
             // Don't fail the request if notification creation fails
@@ -13550,28 +16131,39 @@ Transcription: ${transcriptText}`;
           try {
             const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
             const previewText = cleanedBody.substring(0, 100) + (cleanedBody.length > 100 ? '...' : '');
-            
-            const notificationData = {
-              title: 'Customer Email Reply',
-              message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
-              type: 'email_reply',
-              priority: 'high' as const,
-              isRead: false,
-              actionUrl: `/dispatch?job=${job.id}&tab=diary`,
-              entityType: 'job',
-              entityId: job.id,
-              relatedEntityType: 'job',
-              relatedEntityId: job.id,
-              jobId: job.id,
-              metadata: { 
-                preview: previewText,
-                senderEmail: actualFromEmail || actualFrom,
-                senderName: actualFromName
-              }
-            };
-            
-            await storage.createNotification(notificationData);
-            console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (via quote)`);
+
+            // De-dup against gmailReplyService: same 24h/per-job guard used there.
+            const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const recentNotifs = await storage.getNotificationsCreatedSince(since24h);
+            const alreadyNotified = recentNotifs.some(
+              (n) => n.type === 'email_reply' && n.jobId === job.id,
+            );
+
+            if (!alreadyNotified) {
+              const notificationData = {
+                title: 'Customer Email Reply',
+                message: `${actualFromName || actualFromEmail} replied to Job ${job.jobNumber}${customer ? ` (${customer.name})` : ''}`,
+                type: 'email_reply',
+                priority: 'high' as const,
+                isRead: false,
+                actionUrl: `/dispatch?job=${job.id}&tab=diary`,
+                entityType: 'job',
+                entityId: job.id,
+                relatedEntityType: 'job',
+                relatedEntityId: job.id,
+                jobId: job.id,
+                metadata: {
+                  preview: previewText,
+                  senderEmail: actualFromEmail || actualFrom,
+                  senderName: actualFromName
+                }
+              };
+
+              await storage.createNotification(notificationData);
+              console.log(`🔔 Notification created for email reply on job ${job.jobNumber} (via quote)`);
+            } else {
+              console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber} (quote-number path)`);
+            }
           } catch (notifError) {
             console.error('Error creating email reply notification:', notifError);
             // Don't fail the request if notification creation fails
@@ -13579,6 +16171,124 @@ Transcription: ${transcriptText}`;
         }
       }
       
+      // Quote acceptance via email reply — triggered by the "Accept Quote"
+      // mailto button. Subject is "ACCEPT QUOTE Q-XXX"; body fallback is
+      // "I accept quote Q-XXX". Only runs when a job was matched above.
+      const acceptQuoteMatch =
+        actualSubject?.match(/ACCEPT\s+QUOTE\s+(Q-[A-Za-z0-9-]+)/i) ||
+        cleanedBody?.match(/\bI?\s*accept\s+quote\s+(Q-[A-Za-z0-9-]+)/i);
+      if (acceptQuoteMatch && jobFound) {
+        const acceptedNumber = acceptQuoteMatch[1];
+        try {
+          let targetJob: any = jobFromUuid;
+          if (!targetJob && jobNumberMatch) {
+            targetJob = await storage.getJobByJobNumber(jobNumberMatch[1]);
+          }
+          if (!targetJob && quoteNumberMatch) {
+            const jobs = await storage.getAllJobs({ quoteNumber: quoteNumberMatch[1] });
+            if (jobs && jobs.length > 0) targetJob = jobs[0];
+          }
+
+          if (targetJob) {
+            const proposals = await storage.getProposalsByJob(targetJob.id);
+            const quoteProposal = proposals.find(
+              (p) => p.proposalNumber === acceptedNumber && p.templateUsed === 'quote',
+            );
+            if (quoteProposal && quoteProposal.status !== 'accepted') {
+              await storage.updateProposal(quoteProposal.id, {
+                status: 'accepted',
+                responseDate: new Date(),
+              });
+              await storage.createJobDiaryEntry({
+                jobId: targetJob.id,
+                entryType: 'email',
+                title: `Quote ${acceptedNumber} accepted`,
+                description: `Customer accepted quote ${acceptedNumber} via email reply.`,
+                content: `Quote ${acceptedNumber} accepted`,
+                authorName: actualFromName || actualFromEmail,
+                authorRole: 'customer',
+                metadata: {
+                  proposalId: quoteProposal.id,
+                  quoteNumber: acceptedNumber,
+                  documentType: 'quote',
+                  action: 'quote_accepted',
+                },
+              });
+              try {
+                const notificationHelper = await import('./services/notificationHelper.js');
+                await notificationHelper.createNotification({
+                  type: 'quote_accepted',
+                  title: `Quote ${acceptedNumber} accepted`,
+                  message: `${actualFromName || actualFromEmail} accepted quote ${acceptedNumber} for Job #${targetJob.jobNumber}`,
+                  jobId: targetJob.id,
+                  priority: 'high',
+                  actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
+                  metadata: { proposalId: quoteProposal.id, quoteNumber: acceptedNumber },
+                });
+              } catch (notifErr) {
+                console.error('Failed to create quote_accepted notification:', notifErr);
+              }
+              console.log(`✅ Marked quote ${acceptedNumber} as accepted for job ${targetJob.jobNumber}`);
+            }
+          }
+        } catch (acceptErr) {
+          console.error('Failed to process quote acceptance:', acceptErr);
+        }
+      }
+
+      // Booking-date confirmation via email reply — mirrors the quote-accept parser.
+      // The outbound "Proposed Booking" email instructs the customer to reply with
+      // "I confirm booking J-<jobNumber>" (or set the subject to "CONFIRM BOOKING J-...").
+      const confirmBookingMatch =
+        actualSubject?.match(/CONFIRM\s+BOOKING\s+J-(\d+)/i) ||
+        cleanedBody?.match(/\bI?\s*confirm\s+booking\s+J-(\d+)/i);
+      if (confirmBookingMatch && jobFound) {
+        const confirmedJobNumber = confirmBookingMatch[1];
+        try {
+          let targetJob: any = jobFromUuid;
+          if (!targetJob || String(targetJob.jobNumber) !== String(confirmedJobNumber)) {
+            targetJob = await storage.getJobByJobNumber(confirmedJobNumber);
+          }
+          if (targetJob && !targetJob.customerConfirmed &&
+              (targetJob.status === 'scheduled' || targetJob.status === 'work_order')) {
+            await storage.updateJob(targetJob.id, {
+              customerConfirmed: true,
+              customerConfirmedAt: new Date(),
+              customerConfirmationMethod: 'email',
+            } as any);
+            await storage.createJobDiaryEntry({
+              jobId: targetJob.id,
+              entryType: 'email',
+              title: `Customer confirmed scheduled date`,
+              description: `Customer confirmed the scheduled date for Job #${targetJob.jobNumber} via email reply.`,
+              content: `Confirmation received from ${actualFromName || actualFromEmail}`,
+              authorName: actualFromName || actualFromEmail,
+              authorRole: 'customer',
+              tags: ['customer-confirmation', 'email'],
+              metadata: {
+                source: 'email',
+                jobNumber: confirmedJobNumber,
+                action: 'booking_confirmed',
+              },
+            });
+            await storage.createNotification({
+              type: 'customer_confirmation',
+              title: `Customer confirmed Job #${targetJob.jobNumber}`,
+              message: `${actualFromName || actualFromEmail} confirmed the scheduled date for Job #${targetJob.jobNumber}.`,
+              jobId: targetJob.id,
+              priority: 'medium',
+              isRead: false,
+              actionUrl: `/dispatch?job=${targetJob.id}&tab=diary`,
+            }).catch((notifErr) => {
+              console.error('Failed to create customer_confirmation notification:', notifErr);
+            });
+            console.log(`✅ Auto-confirmed Job #${targetJob.jobNumber} from email reply`);
+          }
+        } catch (confirmErr) {
+          console.error('Failed to process email booking confirmation:', confirmErr);
+        }
+      }
+
       // If no job found, create/update conversation (original behavior)
       if (!jobFound) {
         console.log(`💬 No job reference found - checking for existing conversation`);
@@ -13602,6 +16312,10 @@ Transcription: ${transcriptText}`;
           console.log(`✅ Created new conversation for email from ${actualFromEmail}: ${conversation.id}`);
         } else {
           console.log(`✅ Found existing open conversation for ${actualFromEmail}, adding message to: ${conversation.id}`);
+          await notificationHelper.notifyConversationReply(
+            { id: conversation.id, title: conversation.title, source: 'email', customerName: actualFromName || actualFromEmail },
+            cleanedBody
+          );
         }
         
         // Create message in conversation
@@ -13823,6 +16537,10 @@ Transcription: ${transcriptText}`;
                   conversation.title = senderName;
                 }
                 console.log(`✅ Found existing open conversation for Facebook user ${senderId}, adding message to: ${conversation.id}`);
+                await notificationHelper.notifyConversationReply(
+                  { id: conversation.id, title: conversation.title, source: 'social', customerName: senderName },
+                  messageData.text
+                );
               } else {
                 // Create new conversation if none exists for this sender
                 conversation = await storage.createConversation({
@@ -13857,18 +16575,7 @@ Transcription: ${transcriptText}`;
                 unreadCount: (conversation.unreadCount || 0) + 1
               } as any);
               
-              // Create notification for new Facebook message
-              const notificationData = {
-                title: isNewConversation ? 'New Facebook Conversation' : 'New Facebook Message',
-                message: `${senderName}: ${messageData.text.substring(0, 100)}${messageData.text.length > 100 ? '...' : ''}`,
-                type: 'message_received' as const,
-                priority: 'medium' as const,
-                isRead: false,
-                actionUrl: `/conversation/${conversation.id}`,
-                metadata: { conversationId: conversation.id, entityType: 'conversation' }
-              };
-              await storage.createNotification(notificationData);
-              console.log(`🔔 Notification created for Facebook message in conversation ${conversation.id}`);
+              console.log(`🔔 Notification handled for Facebook message in conversation ${conversation.id}`);
             }
           }
         }
@@ -15578,12 +18285,15 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             customerName = customer?.name || undefined;
           }
           
+          // proposal.totalAmount is inc-GST; strip GST so the internal metrics drilldown
+          // reconciles with the ex-GST revenue tiles on the Business Metrics page.
+          const amountExGst = (parseFloat(proposal.totalAmount?.toString() || '0') / 1.15).toFixed(2);
           return {
             id: proposal.id,
             jobId: proposal.jobId,
             jobNumber,
             customerName,
-            amount: proposal.totalAmount,
+            amount: amountExGst,
             sentDate: proposal.sentDate,
             acceptedDate: proposal.acceptedAt,
             title
@@ -15648,10 +18358,25 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           const sections = sectionsByProposalId.get(proposal.id) || [];
           const lineItems = lineItemsByProposalId.get(proposal.id) || [];
 
-          // Attach line items to their sections and map content to description
+          // Attach line items to their sections, map content → description, and images → photos
           const sectionsWithLineItems = sections.map(section => ({
             ...section,
-            description: section.content || '', // Map content to description for client compatibility
+            description: section.content || '',
+            photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => {
+              const filename = url.split('/').pop() || 'photo';
+              const thumbnailUrl = url.includes('/objects/photos/')
+                ? url.replace(/\/([^/]+)\.(jpg|jpeg|png|webp)$/i, '/thumb_$1.webp')
+                : url;
+              return {
+                id: `photo-${filename}`,
+                url,
+                thumbnailUrl,
+                filename,
+                type: 'before' as const,
+                category: 'documentation' as const,
+                capturedAt: new Date().toISOString(),
+              };
+            }),
             lineItems: lineItems.filter(item => item.sectionId === section.id)
           }));
 
@@ -15720,7 +18445,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const sectionsWithPhotosAndLineItems = sections.map(section => ({
         ...section,
         description: section.content, // Map content to description for frontend
-        photos: (section.images || []).map((url: string) => {
+        photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => {
           // Generate thumbnail URL: /objects/photos/filename.jpg → /objects/photos/thumb_filename.webp
           const filename = url.split('/').pop() || 'photo';
           const thumbnailUrl = url.includes('/objects/photos/') 
@@ -15757,7 +18482,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       res.json({
         success: true,
         data: {
-          proposal: { ...proposal, sections: sectionsWithPhotosAndLineItems },
+          proposal: {
+            ...proposal,
+            blockConfig: (proposal as any).blockConfig ?? schema.DEFAULT_PROPOSAL_BLOCKS,
+            sections: sectionsWithPhotosAndLineItems,
+          },
           customer,
           job,
           template: finalTemplate
@@ -15783,41 +18512,144 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         });
       }
       
-      // Get proposal sections
-      const sections = await storage.getProposalSectionsByProposal(proposal.id);
-      
-      // Get all line items for this proposal
-      const allLineItems = await storage.getProposalLineItemsByProposal(proposal.id);
+      // Get proposal sections and all line items in parallel
+      const [sections, allLineItems] = await Promise.all([
+        storage.getProposalSectionsByProposal(proposal.id),
+        storage.getProposalLineItemsByProposal(proposal.id),
+      ]);
       
       // Fetch choices for each line item
       const lineItemsWithChoices = await Promise.all(
         allLineItems.map(async (item) => {
           const choices = await storage.getProposalLineItemChoicesByLineItem(item.id);
-          return {
-            ...item,
-            choices: choices || []
-          };
+          return { ...item, choices: choices || [] };
         })
       );
-      
-      // Map images → photos, content → description, and attach line items with choices to each section
-      const sectionsWithPhotosAndLineItems = sections.map(section => ({
-        ...section,
-        description: section.content || '', // Map content to description for client compatibility
-        photos: (section.images || []).map((url: string) => ({
+
+      const mapPhotos = (images: string[] | unknown) =>
+        (Array.isArray(images) ? images : []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,
           filename: url.split('/').pop() || 'photo',
           type: 'before' as const,
           category: 'documentation' as const,
           capturedAt: new Date().toISOString(),
-        })),
-        lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id)
-      }));
+        }));
+
+      // Helper: map raw job lineItems JSONB entries to the shape ProposalTemplate expects
+      const mapJobItems = (rawItems: any[]): any[] =>
+        rawItems.map((item: any, i: number) => {
+          const qty = parseFloat(String(item.quantity ?? 1)) || 1;
+          const rawTotal = parseFloat(String(item.totalPrice ?? item.total ?? item.price ?? 0)) || 0;
+          const rawUnit = parseFloat(String(item.unitPrice ?? item.price ?? 0));
+          const unitPrice = rawUnit || (rawTotal > 0 ? rawTotal / qty : 0);
+          const totalPrice = rawTotal || (qty * unitPrice);
+          return {
+            id: item.id || `synth-item-${i}`,
+            description: item.description || item.name || '',
+            quantity: qty,
+            unitPrice,
+            totalPrice,
+            unit: item.unit || 'each',
+            category: item.category || item.itemCode || '',
+            isOptional: item.isOptional || false,
+            selected: true,
+            pricingType: item.pricingType || 'normal',
+            choices: item.choices || [],
+            priceIncludesTax: item.priceIncludesTax || false,
+            fixedPrice: item.fixedPrice ? parseFloat(String(item.fixedPrice)) : undefined,
+            sortOrder: i,
+          };
+        });
+
+      let sectionsWithPhotosAndLineItems: any[];
+
+      if (allLineItems.length === 0 && proposal.jobId) {
+        // No proposal_line_items saved yet — fall back to the job's lineItems JSONB
+        const job = await storage.getJob(proposal.jobId);
+        const rawJobItems: any[] = Array.isArray((job as any)?.lineItems) ? (job as any).lineItems : [];
+        const mappedJobItems = mapJobItems(rawJobItems);
+
+        if (sections.length === 0) {
+          // No builder sections at all — synthesise everything from the job
+          const builtSections: any[] = [];
+          const desc = (job as any)?.description || '';
+          builtSections.push({
+            id: 'synth-desc',
+            title: (job as any)?.serviceType || 'Job Description',
+            description: desc,
+            photos: [],
+            lineItems: [],
+            sortOrder: 0,
+            sectionType: 'fixed',
+          });
+          if (mappedJobItems.length > 0) {
+            builtSections.push({
+              id: 'synth-items',
+              title: 'Line Items',
+              description: '',
+              photos: [],
+              lineItems: mappedJobItems,
+              sortOrder: 1,
+              sectionType: 'fixed',
+            });
+          }
+          sectionsWithPhotosAndLineItems = builtSections;
+        } else {
+          // Sections exist but have no line items — inject job items into the first
+          // section whose title / type looks like a "line items" section.
+          let injected = false;
+          sectionsWithPhotosAndLineItems = sections.map((section, idx) => {
+            const normType = ((section as any).sectionType || '').toLowerCase();
+            const normTitle = (section.title || '').toLowerCase();
+            const isLineItemsSection =
+              normType === 'lineitems' || normType === 'pricing' ||
+              normTitle.includes('line item') || normTitle === 'items' ||
+              normTitle === 'pricing' || normTitle === 'services' || normTitle === 'quote';
+
+            if (!injected && isLineItemsSection && mappedJobItems.length > 0) {
+              injected = true;
+              return {
+                ...section,
+                description: section.content || '',
+                photos: mapPhotos((section.images || []) as string[]),
+                lineItems: mappedJobItems,
+                sectionType: 'fixed',
+              };
+            }
+            return {
+              ...section,
+              description: section.content || '',
+              photos: mapPhotos((section.images || []) as string[]),
+              lineItems: [],
+              sectionType: normType === 'custom' ? 'fixed' : (normType || 'fixed'),
+            };
+          });
+
+          // Only synthesise a section if the proposal has no sections at all for line items
+          // (don't append one if the user intentionally removed the line-items block)
+        }
+      } else {
+        // Normal path: builder-saved sections with their own line items
+        sectionsWithPhotosAndLineItems = sections.map(section => {
+          const normType = ((section as any).sectionType || '').toLowerCase();
+          return {
+            ...section,
+            description: section.content || '',
+            photos: mapPhotos((section.images || []) as string[]),
+            lineItems: lineItemsWithChoices.filter(item => item.sectionId === section.id),
+            sectionType: normType === 'custom' ? 'fixed' : (normType || 'fixed'),
+          };
+        });
+      }
       
       res.json({
         success: true,
-        data: { ...proposal, sections: sectionsWithPhotosAndLineItems }
+        data: {
+          ...proposal,
+          blockConfig: (proposal as any).blockConfig ?? schema.DEFAULT_PROPOSAL_BLOCKS,
+          sections: sectionsWithPhotosAndLineItems,
+        },
       });
     } catch (error) {
       console.error('Error fetching proposal:', error);
@@ -15866,7 +18698,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // Create section
           const createdSection = await storage.createProposalSection({
             proposalId: proposal.id,
-            sectionType: 'custom',
+            sectionType: section.sectionType || 'fixed',
             title: section.title || 'Untitled Section',
             content: section.description || '',
             images: section.photos?.map((p: any) => p.url) || [],
@@ -15921,35 +18753,52 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // Note: Diary entries are only created when proposal is SENT (via email/SMS)
       // not when it's saved/created as a draft to prevent duplicate entries
       
-      // Sync job subtotal and totalAmount from proposal
-      if (proposal.jobId) {
-        try {
-          let syncAmount = parseFloat(req.body.subtotal || '0') || 0;
-          // If no subtotal in body, calculate from line items
-          if (syncAmount === 0 && req.body.sections && Array.isArray(req.body.sections)) {
-            for (const section of req.body.sections) {
-              if (section.lineItems && Array.isArray(section.lineItems)) {
-                for (const item of section.lineItems) {
-                  if (item.selected !== false) {
-                    syncAmount += parseFloat(item.totalPrice || '0') || 0;
-                  }
-                }
-              }
-            }
+      // Recompute subtotal server-side from actual stored line items (authoritative)
+      // This prevents frontend calculation bugs from corrupting the stored value
+      try {
+        const storedItems = await storage.getProposalLineItemsByProposal(proposal.id);
+        const storedSections = await storage.getProposalSectionsByProposal(proposal.id);
+        // Build set of optional section IDs — items in these sections are excluded from the total
+        const optionalSectionIds = new Set(
+          storedSections
+            .filter(s => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map(s => s.id)
+        );
+        const taxRate = parseFloat(req.body.taxRate || '15') / 100;
+        const discountAmt = parseFloat(req.body.discountAmount || '0') || 0;
+        const discountType = req.body.discountType || 'fixed';
+        let recomputedSubtotal = 0;
+        for (const item of storedItems) {
+          const inOptionalSection = optionalSectionIds.has(item.sectionId || '');
+          if (item.selected !== false && !item.isOptional && !inOptionalSection) {
+            const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
+            recomputedSubtotal += item.priceIncludesTax ? price / (1 + taxRate) : price;
           }
-          if (syncAmount > 0) {
-            const gst = syncAmount * 0.15;
-            await storage.updateJob(proposal.jobId, { 
-              subtotal: syncAmount.toString(),
-              totalAmount: syncAmount.toString(),
-              gstAmount: gst.toFixed(2),
-              totalIncludingGst: (syncAmount + gst).toFixed(2)
-            });
-            console.log('✅ Synced job prices from proposal:', { subtotal: syncAmount, gst: gst.toFixed(2), total: (syncAmount + gst).toFixed(2) });
-          }
-        } catch (error) {
-          console.error('❌ Error syncing job prices:', error);
         }
+        const discountValue = discountType === 'percentage'
+          ? (recomputedSubtotal * discountAmt) / 100
+          : discountAmt;
+        const subtotalAfterDiscount = Math.max(0, recomputedSubtotal - discountValue);
+        const recomputedGst = subtotalAfterDiscount * taxRate;
+        const recomputedTotal = subtotalAfterDiscount + recomputedGst;
+        // Update proposal with correct values
+        await storage.updateProposal(proposal.id, {
+          subtotal: parseFloat(recomputedSubtotal.toFixed(2)),
+          gstAmount: parseFloat(recomputedGst.toFixed(2)),
+          totalAmount: parseFloat(recomputedTotal.toFixed(2)),
+        });
+        // Sync correct values to job
+        if (proposal.jobId && recomputedSubtotal > 0) {
+          await storage.updateJob(proposal.jobId, {
+            subtotal: recomputedSubtotal.toFixed(2),
+            totalAmount: recomputedSubtotal.toFixed(2),
+            gstAmount: recomputedGst.toFixed(2),
+            totalIncludingGst: recomputedTotal.toFixed(2)
+          });
+          console.log('✅ Synced job prices from recomputed line items (CREATE):', { subtotal: recomputedSubtotal.toFixed(2), gst: recomputedGst.toFixed(2), total: recomputedTotal.toFixed(2) });
+        }
+      } catch (error) {
+        console.error('❌ Error recomputing/syncing job prices (CREATE):', error);
       }
       
       res.status(201).json({
@@ -16020,7 +18869,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           // Create section
           const createdSection = await storage.createProposalSection({
             proposalId: proposal.id,
-            sectionType: 'custom',
+            sectionType: section.sectionType || 'fixed',
             title: section.title || 'Untitled Section',
             content: section.description || '',
             images: section.photos?.map((p: any) => p.url) || [],
@@ -16084,34 +18933,51 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         console.log('⚠️ PUT proposal - no sections in request body');
       }
       
-      // Sync job prices from proposal subtotal
-      if (proposal.jobId) {
-        try {
-          let syncAmount = parseFloat(req.body.subtotal || '0') || 0;
-          if (syncAmount === 0 && req.body.sections && Array.isArray(req.body.sections)) {
-            for (const section of req.body.sections) {
-              if (section.lineItems && Array.isArray(section.lineItems)) {
-                for (const item of section.lineItems) {
-                  if (item.selected !== false) {
-                    syncAmount += parseFloat(item.totalPrice || '0') || 0;
-                  }
-                }
-              }
-            }
+      // Recompute subtotal server-side from actual stored line items (authoritative)
+      // This prevents frontend calculation bugs from corrupting the stored value
+      try {
+        const storedItemsPut = await storage.getProposalLineItemsByProposal(proposal.id);
+        const storedSectionsPut = await storage.getProposalSectionsByProposal(proposal.id);
+        const optionalSectionIdsPut = new Set(
+          storedSectionsPut
+            .filter(s => s.sectionType === 'optional' || s.sectionType === 'multipleChoice')
+            .map(s => s.id)
+        );
+        const taxRatePut = parseFloat(req.body.taxRate || '15') / 100;
+        const discountAmtPut = parseFloat(req.body.discountAmount || '0') || 0;
+        const discountTypePut = req.body.discountType || 'fixed';
+        let recomputedSubtotalPut = 0;
+        for (const item of storedItemsPut) {
+          const inOptionalSectionPut = optionalSectionIdsPut.has(item.sectionId || '');
+          if (item.selected !== false && !item.isOptional && !inOptionalSectionPut) {
+            const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
+            recomputedSubtotalPut += item.priceIncludesTax ? price / (1 + taxRatePut) : price;
           }
-          if (syncAmount > 0) {
-            const gst = syncAmount * 0.15;
-            await storage.updateJob(proposal.jobId, { 
-              subtotal: syncAmount.toString(),
-              totalAmount: syncAmount.toString(),
-              gstAmount: gst.toFixed(2),
-              totalIncludingGst: (syncAmount + gst).toFixed(2)
-            });
-            console.log('✅ Synced job prices from proposal:', { subtotal: syncAmount, gst: gst.toFixed(2), total: (syncAmount + gst).toFixed(2) });
-          }
-        } catch (error) {
-          console.error('❌ Error syncing job prices:', error);
         }
+        const discountValuePut = discountTypePut === 'percentage'
+          ? (recomputedSubtotalPut * discountAmtPut) / 100
+          : discountAmtPut;
+        const subtotalAfterDiscountPut = Math.max(0, recomputedSubtotalPut - discountValuePut);
+        const recomputedGstPut = subtotalAfterDiscountPut * taxRatePut;
+        const recomputedTotalPut = subtotalAfterDiscountPut + recomputedGstPut;
+        // Update proposal with correct values
+        await storage.updateProposal(proposal.id, {
+          subtotal: parseFloat(recomputedSubtotalPut.toFixed(2)),
+          gstAmount: parseFloat(recomputedGstPut.toFixed(2)),
+          totalAmount: parseFloat(recomputedTotalPut.toFixed(2)),
+        });
+        // Sync correct values to job
+        if (proposal.jobId && recomputedSubtotalPut > 0) {
+          await storage.updateJob(proposal.jobId, {
+            subtotal: recomputedSubtotalPut.toFixed(2),
+            totalAmount: recomputedSubtotalPut.toFixed(2),
+            gstAmount: recomputedGstPut.toFixed(2),
+            totalIncludingGst: recomputedTotalPut.toFixed(2)
+          });
+          console.log('✅ Synced job prices from recomputed line items (PUT):', { subtotal: recomputedSubtotalPut.toFixed(2), gst: recomputedGstPut.toFixed(2), total: recomputedTotalPut.toFixed(2) });
+        }
+      } catch (error) {
+        console.error('❌ Error recomputing/syncing job prices (PUT):', error);
       }
       
       res.json({
@@ -16232,8 +19098,35 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
       // If customer selected different choices, update the proposal sections
       let updatedSections = proposal.sections;
-      let updatedTotalAmount = proposal.totalAmount;
-      let updatedSubtotal = proposal.subtotal;
+      let updatedTotalAmount: number = parseFloat(proposal.totalAmount?.toString() || '0');
+      let updatedSubtotal: number = parseFloat(proposal.subtotal?.toString() || '0');
+
+      // When no choices are made, recompute from actual DB line items (more reliable than cached proposal.subtotal)
+      if (!selectedChoices || Object.keys(selectedChoices).length === 0) {
+        try {
+          const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
+          const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
+          const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
+          const acceptDiscountType = proposal.discountType || 'fixed';
+          let computedSubtotal = 0;
+          for (const item of acceptLineItems) {
+            if (item.selected !== false) {
+              const price = parseFloat(item.totalPrice?.toString() || '0') || 0;
+              computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
+            }
+          }
+          const acceptDiscountValue = acceptDiscountType === 'percentage'
+            ? (computedSubtotal * acceptDiscountAmt) / 100
+            : acceptDiscountAmt;
+          const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
+          const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
+          updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
+          updatedTotalAmount = Math.round((acceptSubtotalAfterDiscount + acceptGst) * 100) / 100;
+          console.log(`💰 Accept: recomputed from line items: subtotal=${updatedSubtotal}, total=${updatedTotalAmount}`);
+        } catch (err) {
+          console.error('⚠️ Accept: failed to recompute from line items, using cached values:', err);
+        }
+      }
       
       if (selectedChoices && Object.keys(selectedChoices).length > 0 && Array.isArray(proposal.sections)) {
         console.log('🎯 Applying customer-selected choices to proposal...');
@@ -16390,6 +19283,39 @@ Keep the tone professional but conversational. Use NZD for currency.`;
 
       await storage.createNotification(notificationData);
 
+      // Create a pending holding message draft for the owner to approve
+      const firstName = customer?.name?.split(' ')[0] || 'there';
+      const phone = customer?.mobile || customer?.phone;
+      const email = customer?.email;
+      const channel = phone ? 'sms' : (email ? 'email' : 'sms');
+      const holdingMsg = `Hey ${firstName}, thanks for accepting our proposal. We'll be in touch within 24 hours to get your job scheduled.`;
+
+      const pendingMsg = await storage.createPendingOutboundMessage({
+        jobId: job.id,
+        customerId: proposal.customerId || undefined,
+        proposalId: id,
+        proposalNumber: proposal.proposalNumber,
+        recipientName: customer?.name || undefined,
+        recipientPhone: phone || undefined,
+        recipientEmail: email || undefined,
+        message: holdingMsg,
+        channel,
+        status: 'pending',
+      });
+
+      // Notify owner that the holding message needs approval
+      await storage.createNotification({
+        title: 'Holding message awaiting approval',
+        message: `A holding message to ${customer?.name || 'the customer'} is ready to send — tap to review and approve.`,
+        type: 'holding_message_pending',
+        priority: 'high',
+        isRead: false,
+        jobId: job.id,
+        customerId: proposal.customerId || undefined,
+        actionUrl: '/communications?tab=pending',
+        metadata: { pendingMessageId: pendingMsg.id }
+      });
+
       // Create diary entry for the job to record the acceptance
       if (job?.id) {
         await storage.createJobDiaryEntry({
@@ -16439,7 +19365,126 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Get proposal as HTML (for Smart Attachments)
+  // ==========================================
+  // PENDING OUTBOUND MESSAGES
+  // ==========================================
+
+  // List pending outbound messages
+  app.get('/api/pending-messages', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const status = req.query.status as string | undefined;
+      const messages = await storage.getPendingOutboundMessages(status);
+      res.json({ success: true, data: messages });
+    } catch (error) {
+      console.error('Error fetching pending messages:', error);
+      res.status(500).json({ success: false, message: 'Error fetching pending messages' });
+    }
+  });
+
+  // Update (edit) a pending message
+  app.patch('/api/pending-messages/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getPendingOutboundMessage(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Message not found' });
+      if (existing.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending messages can be edited' });
+      const { message } = req.body;
+      if (!message || !message.trim()) {
+        return res.status(400).json({ success: false, message: 'Message cannot be blank' });
+      }
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, { message: message.trim() });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating pending message:', error);
+      res.status(500).json({ success: false, message: 'Error updating pending message' });
+    }
+  });
+
+  // Approve and send a pending message
+  app.post('/api/pending-messages/:id/approve', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const msg = await storage.getPendingOutboundMessage(req.params.id);
+      if (!msg) return res.status(404).json({ success: false, message: 'Message not found' });
+      if (msg.status !== 'pending') return res.status(400).json({ success: false, message: 'Message is not pending' });
+
+      // Send via SMS or email
+      let sent = false;
+      if (msg.channel === 'sms' && msg.recipientPhone) {
+        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+        sent = true;
+      } else if (msg.channel === 'email' && msg.recipientEmail) {
+        await emailService.sendEmail({
+          to: msg.recipientEmail,
+          subject: 'Update from Treemarkables',
+          html: `<p>${msg.message.replace(/\n/g, '<br>')}</p>`,
+          text: msg.message,
+        });
+        sent = true;
+      } else if (msg.recipientPhone) {
+        // Fallback to SMS if phone available
+        await smsService.sendSMS({ to: msg.recipientPhone, message: msg.message });
+        sent = true;
+      }
+
+      // Only mark as sent and log if a transport actually succeeded
+      if (!sent) {
+        return res.status(422).json({
+          success: false,
+          message: 'No deliverable channel: message has no phone number or email address. Please edit the message details and try again.',
+        });
+      }
+
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, {
+        status: 'sent',
+        sentAt: new Date(),
+      });
+
+      // Log to job diary
+      if (msg.jobId) {
+        await storage.createJobDiaryEntry({
+          jobId: msg.jobId,
+          entryType: msg.channel === 'email' ? 'email' : 'sms',
+          title: 'Holding message sent to customer',
+          content: msg.message,
+          metadata: {
+            channel: msg.channel,
+            recipientName: msg.recipientName,
+            eventType: 'holding_message_sent',
+          },
+        });
+      }
+
+      res.json({ success: true, data: updated, sent });
+    } catch (error) {
+      console.error('Error approving pending message:', error);
+      res.status(500).json({ success: false, message: 'Error approving pending message' });
+    }
+  });
+
+  // Reject (dismiss) a pending message
+  app.post('/api/pending-messages/:id/reject', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getPendingOutboundMessage(req.params.id);
+      if (!existing) return res.status(404).json({ success: false, message: 'Message not found' });
+      if (existing.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending messages can be dismissed' });
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, { status: 'rejected' });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error rejecting pending message:', error);
+      res.status(500).json({ success: false, message: 'Error rejecting pending message' });
+    }
+  });
+
+  // GET /api/proposals/:id/pdf
+  // Returns a proposal/quote document. Known consumers (all audited 2026-04-11):
+  //   1. ProposalViewer — Download PDF button (frontend blob download)
+  //   2. ProposalBuilder — onDownload in preview dialog (frontend blob download)
+  //   3. EmailComposerModal — Smart Attachments URL (stored in attachments array
+  //      and sent as email attachment via Resend — PDF is the correct format here)
+  //   4. send-quote-email handler — attaches the generated buffer to outgoing emails.
+  // When proposal.templateUsed === 'quote', the header renders as "QUOTE" (not
+  // "PROPOSAL") and the acceptance copy points to an email-reply flow.
+  // Default: application/pdf (binary, PDFKit-generated, branded layout)
+  // Legacy HTML: append ?format=html to receive a plain HTML summary instead.
   app.get('/api/proposals/:id/pdf', async (req: Request, res: Response) => {
     try {
       const proposal = await storage.getProposal(req.params.id);
@@ -16450,235 +19495,23 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         });
       }
 
-      // Get customer details
-      let customer;
-      if (proposal.customerId) {
-        customer = await storage.getCustomer(proposal.customerId);
+      // Legacy HTML format (used by Smart Attachments feature) — unchanged output.
+      if (req.query.format === 'html') {
+        const html = await renderProposalHTMLSummary(req.params.id);
+        res.setHeader('Content-Type', 'text/html');
+        return res.send(html);
       }
 
-      // Get proposal sections and line items
-      const sections = await storage.getProposalSectionsByProposal(req.params.id);
-      const lineItems = await storage.getProposalLineItemsByProposal(req.params.id);
-      
-      console.log(`📄 Generating proposal HTML for ${req.params.id}`);
-      console.log(`📋 Found ${sections.length} sections`);
-      console.log(`📝 Found ${lineItems.length} line items`);
-      
-      // Group line items by section
-      const sectionLineItems = new Map<string, any[]>();
-      for (const item of lineItems) {
-        if (item.sectionId) {
-          if (!sectionLineItems.has(item.sectionId)) {
-            sectionLineItems.set(item.sectionId, []);
-          }
-          sectionLineItems.get(item.sectionId)!.push(item);
-        }
-      }
-
-      // Calculate totals
-      let subtotal = 0;
-      for (const item of lineItems) {
-        if (item.selected) {
-          subtotal += parseFloat(item.totalPrice || '0');
-        }
-      }
-      const gst = subtotal * 0.15;
-      const total = subtotal + gst;
-
-      const customerName = customer?.name || 'Valued Customer';
-      const proposalNumber = proposal.proposalNumber || 'N/A';
-
-      // Build line items HTML
-      let lineItemsHtml = '';
-      if (sections.length > 0 && sectionLineItems.size > 0) {
-        for (const section of sections) {
-          const items = sectionLineItems.get(section.id) || [];
-          if (items.length > 0) {
-            lineItemsHtml += `<div style="margin-bottom: 20px;">`;
-            lineItemsHtml += `<h3 style="color: #374151; margin: 0 0 10px 0;">${section.title}</h3>`;
-            lineItemsHtml += '<table style="width: 100%; border-collapse: collapse; margin-bottom: 15px;">';
-            lineItemsHtml += `
-              <thead>
-                <tr style="background: #f9fafb;">
-                  <th style="padding: 8px; text-align: left; border-bottom: 2px solid #e5e7eb;">Service</th>
-                  <th style="padding: 8px; text-align: center; border-bottom: 2px solid #e5e7eb;">Qty</th>
-                  <th style="padding: 8px; text-align: right; border-bottom: 2px solid #e5e7eb;">Price</th>
-                </tr>
-              </thead>
-              <tbody>
-            `;
-            
-            for (const item of items) {
-              if (item.selected) {
-                const itemPrice = parseFloat(item.totalPrice || '0');
-                lineItemsHtml += `
-                  <tr>
-                    <td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${item.description}</td>
-                    <td style="padding: 8px; text-align: center; border-bottom: 1px solid #f3f4f6;">${item.quantity} ${item.unit}</td>
-                    <td style="padding: 8px; text-align: right; border-bottom: 1px solid #f3f4f6;">$${itemPrice.toFixed(2)}</td>
-                  </tr>
-                `;
-              }
-            }
-            lineItemsHtml += '</tbody></table></div>';
-          }
-        }
-      }
-
-      const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Proposal ${proposalNumber}</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 800px;
-      margin: 0 auto;
-      padding: 20px;
-      background: #f9fafb;
-    }
-    .header {
-      background: linear-gradient(135deg, #f59e0b 0%, #f97316 50%, #6366f1 100%);
-      color: white;
-      padding: 30px;
-      border-radius: 8px 8px 0 0;
-      margin-bottom: 0;
-    }
-    .header h1 {
-      margin: 0 0 5px 0;
-      font-size: 32px;
-    }
-    .header p {
-      margin: 0;
-      opacity: 0.9;
-    }
-    .proposal-info {
-      background: white;
-      padding: 20px 30px;
-      border-left: 4px solid #f59e0b;
-      margin-bottom: 20px;
-    }
-    .proposal-number {
-      background: white;
-      padding: 10px 15px;
-      border-radius: 6px;
-      display: inline-block;
-      font-size: 14px;
-      font-weight: bold;
-      color: #374151;
-      margin-top: 10px;
-    }
-    .proposal-number span {
-      color: #f59e0b;
-    }
-    .content {
-      background: white;
-      padding: 30px;
-      border-radius: 0 0 8px 8px;
-    }
-    .section-title {
-      color: #374151;
-      font-size: 24px;
-      margin: 0 0 15px 0;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #e5e7eb;
-    }
-    .customer-name {
-      font-size: 20px;
-      color: #1f2937;
-      margin-bottom: 20px;
-    }
-    .totals-table {
-      width: 100%;
-      margin-top: 30px;
-      border-top: 2px solid #e5e7eb;
-      padding-top: 15px;
-    }
-    .totals-table tr td:first-child {
-      text-align: right;
-      padding: 8px;
-      color: #6b7280;
-    }
-    .totals-table tr td:last-child {
-      text-align: right;
-      padding: 8px;
-      font-weight: bold;
-      width: 150px;
-    }
-    .total-row {
-      border-top: 2px solid #374151;
-      font-size: 18px;
-    }
-    .total-row td {
-      padding-top: 15px !important;
-      color: #374151 !important;
-    }
-    .total-amount {
-      color: #f59e0b !important;
-      font-size: 20px !important;
-    }
-    .footer {
-      text-align: center;
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #e5e7eb;
-      color: #6b7280;
-      font-size: 14px;
-    }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>Treemarkables</h1>
-    <p>Professional Tree Services</p>
-    <p>📞 +64 6 867 1234</p>
-    <p>📍 Gisborne, New Zealand</p>
-    <div class="proposal-number">
-      PROPOSAL Number: <span>${proposalNumber}</span><br>
-      Date: <span>${new Date().toLocaleDateString('en-NZ', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
-    </div>
-  </div>
-
-  <div class="content">
-    <h2 class="section-title">Proposal For</h2>
-    <div class="customer-name">${customerName}</div>
-
-    ${lineItemsHtml}
-
-    <table class="totals-table">
-      <tr>
-        <td>Subtotal (excl GST):</td>
-        <td>$${subtotal.toFixed(2)}</td>
-      </tr>
-      <tr>
-        <td>GST (15%):</td>
-        <td>$${gst.toFixed(2)}</td>
-      </tr>
-      <tr class="total-row">
-        <td>Total (inc GST):</td>
-        <td class="total-amount">$${total.toFixed(2)}</td>
-      </tr>
-    </table>
-
-    <div class="footer">
-      <p>Treemarkables LTD - Qualified Arborists</p>
-      <p>Email: info@treemarkables.co.nz | Phone: 0272166882</p>
-    </div>
-  </div>
-</body>
-</html>
-      `;
-
-      res.setHeader('Content-Type', 'text/html');
-      res.send(htmlContent);
+      const { buffer, proposalNumber, isQuote } = await generateProposalPDFBuffer(req.params.id);
+      const docLabel = isQuote ? 'Quote' : 'Proposal';
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${docLabel}-${proposalNumber}.pdf"`);
+      res.send(buffer);
     } catch (error) {
-      console.error('Error generating proposal HTML:', error);
+      console.error('Error generating proposal PDF:', error);
       res.status(500).json({
         success: false,
-        message: 'Error generating proposal'
+        message: 'Error generating proposal PDF'
       });
     }
   });
@@ -16692,7 +19525,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const sectionsWithPhotos = sections.map(section => ({
         ...section,
         description: section.content || '', // Map content to description for client compatibility
-        photos: (section.images || []).map((url: string) => ({
+        photos: (Array.isArray(section.images) ? section.images : []).map((url: string) => ({
           id: `photo-${Date.now()}-${Math.random()}`,
           url,
           filename: url.split('/').pop() || 'photo',
@@ -19397,17 +22230,272 @@ Transcription: ${transcriptText}`;
         .set({ signature })
         .returning({ id: schema.vehicleInspections.id });
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         updatedCount: result.length,
         message: `Successfully applied signature to ${result.length} inspections`
       });
     } catch (error) {
       console.error('Error applying signature:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Failed to apply signature' 
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to apply signature'
       });
+    }
+  });
+
+  // ========================================
+  // EQUIPMENT INDUCTION SYSTEM
+  // ========================================
+
+  app.get("/api/induction-templates", async (req, res) => {
+    try {
+      const templates = await storage.getAllInductionTemplates();
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction templates' });
+    }
+  });
+
+  app.get("/api/induction-templates/by-type/:equipmentType", async (req, res) => {
+    try {
+      const templates = await storage.getInductionTemplatesByType(req.params.equipmentType);
+      res.json({ success: true, data: templates });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch templates by type' });
+    }
+  });
+
+  app.get("/api/induction-templates/:id", async (req, res) => {
+    try {
+      const template = await storage.getInductionTemplate(req.params.id);
+      if (!template) {
+        return res.status(404).json({ success: false, message: 'Induction template not found' });
+      }
+      res.json({ success: true, data: template });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction template' });
+    }
+  });
+
+  app.post("/api/induction-templates", async (req, res) => {
+    try {
+      const validatedData = schema.insertInductionTemplateSchema.parse(req.body);
+      const template = await storage.createInductionTemplate(validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create induction template' });
+    }
+  });
+
+  app.patch("/api/induction-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Induction template not found' });
+      }
+      const validatedData = schema.updateInductionTemplateSchema.parse(req.body);
+      const template = await storage.updateInductionTemplate(req.params.id, validatedData);
+      res.json({ success: true, data: template });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update induction template' });
+    }
+  });
+
+  app.delete("/api/induction-templates/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionTemplate(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Induction template not found' });
+      }
+      await storage.deleteInductionTemplate(req.params.id);
+      res.json({ success: true, message: 'Induction template deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete induction template' });
+    }
+  });
+
+  app.get("/api/induction-templates/:templateId/items", async (req, res) => {
+    try {
+      const items = await storage.getInductionChecklistItemsByTemplate(req.params.templateId);
+      res.json({ success: true, data: items });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction checklist items' });
+    }
+  });
+
+  app.post("/api/induction-templates/:templateId/items", async (req, res) => {
+    try {
+      const validatedData = schema.insertInductionChecklistItemSchema.parse({ ...req.body, templateId: req.params.templateId });
+      const item = await storage.createInductionChecklistItem(validatedData);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create checklist item' });
+    }
+  });
+
+  app.patch("/api/induction-checklist-items/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionChecklistItem(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Checklist item not found' });
+      }
+      const validatedData = schema.updateInductionChecklistItemSchema.parse(req.body);
+      const item = await storage.updateInductionChecklistItem(req.params.id, validatedData);
+      res.json({ success: true, data: item });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update checklist item' });
+    }
+  });
+
+  app.delete("/api/induction-checklist-items/:id", async (req, res) => {
+    try {
+      const existing = await storage.getInductionChecklistItem(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Checklist item not found' });
+      }
+      await storage.deleteInductionChecklistItem(req.params.id);
+      res.json({ success: true, message: 'Checklist item deleted' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete checklist item' });
+    }
+  });
+
+  app.post("/api/induction-templates/:templateId/reorder", async (req, res) => {
+    try {
+      const { itemIds } = req.body;
+      await storage.reorderInductionChecklistItems(req.params.templateId, itemIds);
+      res.json({ success: true, message: 'Items reordered' });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to reorder items' });
+    }
+  });
+
+  app.get("/api/equipment-inductions", async (req, res) => {
+    try {
+      const filters: any = {};
+      if (req.query.employeeId) filters.employeeId = req.query.employeeId as string;
+      if (req.query.equipmentType) filters.equipmentType = req.query.equipmentType as string;
+      const inductions = await storage.getAllEquipmentInductions(filters);
+      res.json({ success: true, data: inductions });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch inductions' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/employee/:employeeId/status", async (req, res) => {
+    try {
+      const status = await storage.getInductionStatusForEmployee(req.params.employeeId);
+      res.json({ success: true, data: status });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction status' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/employee/:employeeId", async (req, res) => {
+    try {
+      const inductions = await storage.getEquipmentInductionsByEmployee(req.params.employeeId);
+      res.json({ success: true, data: inductions });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch employee inductions' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/:id", async (req, res) => {
+    try {
+      const induction = await storage.getEquipmentInduction(req.params.id);
+      if (!induction) {
+        return res.status(404).json({ success: false, message: 'Induction not found' });
+      }
+      res.json({ success: true, data: induction });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch induction' });
+    }
+  });
+
+  app.post("/api/equipment-inductions", async (req, res) => {
+    try {
+      const validatedData = schema.insertEquipmentInductionSchema.parse(req.body);
+      const induction = await storage.createEquipmentInduction({
+        ...validatedData,
+        completedAt: new Date(),
+      } as any);
+      res.json({ success: true, data: induction });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create induction' });
+    }
+  });
+
+  app.patch("/api/equipment-inductions/:id", async (req, res) => {
+    try {
+      const existing = await storage.getEquipmentInduction(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Induction not found' });
+      }
+      const validatedData = schema.updateEquipmentInductionSchema.parse(req.body);
+      const induction = await storage.updateEquipmentInduction(req.params.id, validatedData);
+      res.json({ success: true, data: induction });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update induction' });
+    }
+  });
+
+  app.get("/api/equipment-inductions/:inductionId/responses", async (req, res) => {
+    try {
+      const responses = await storage.getInductionResponses(req.params.inductionId);
+      res.json({ success: true, data: responses });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch responses' });
+    }
+  });
+
+  app.post("/api/equipment-inductions/:inductionId/responses", async (req, res) => {
+    try {
+      const validatedData = schema.insertInductionResponseSchema.parse({ ...req.body, inductionId: req.params.inductionId });
+      const response = await storage.createInductionResponse(validatedData);
+      res.json({ success: true, data: response });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create response' });
+    }
+  });
+
+  // Synchronous photo upload for induction step photos -> object storage
+  app.post('/api/induction-photos', imageUpload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No photo file provided' });
+      }
+      const photoStorage = new PhotoStorageService();
+      const { url, thumbnailUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      res.json({ success: true, data: { url, thumbnailUrl } });
+    } catch (error) {
+      console.error('Error uploading induction photo:', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error uploading photo' });
     }
   });
 
@@ -19871,8 +22959,14 @@ Transcription: ${transcriptText}`;
 
       res.json({ success: true, data: updatedAssessment });
     } catch (error) {
+      console.error('JHA Assessment update error:', error);
       if (error instanceof z.ZodError) {
-        return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+        console.error('JHA Zod validation details:', JSON.stringify(error.errors, null, 2));
+        return res.status(400).json({
+          success: false,
+          message: `Validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')}`,
+          errors: error.errors,
+        });
       }
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update assessment' });
     }
@@ -19888,6 +22982,96 @@ Transcription: ${transcriptText}`;
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete assessment' });
+    }
+  });
+
+  // Append a single signature to an existing JHA without re-validating or
+  // rewriting the rest of the assessment. Used when a worker joins a job after
+  // the JHA has already been completed and signed by others.
+  app.post("/api/jha/assessments/:id/signatures", async (req, res) => {
+    try {
+      const existing = await storage.getJhaAssessment(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Assessment not found' });
+      }
+
+      const signaturePayload = z.object({
+        signatureDataUrl: z.string().min(1, 'signatureDataUrl is required'),
+        workerName: z.string().optional(),
+      }).parse(req.body);
+
+      await storage.createJhaSignature({
+        assessmentId: req.params.id,
+        workerName: signaturePayload.workerName?.trim() || 'Worker',
+        workerId: null,
+        signatureDataUrl: signaturePayload.signatureDataUrl,
+        signedAt: new Date(),
+      });
+
+      await storage.updateJhaAssessment(req.params.id, {});
+
+      const updated = await storage.getJhaAssessment(req.params.id, true, true);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('JHA append signature error:', error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({
+          success: false,
+          message: `Validation error: ${error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')}`,
+          errors: error.errors,
+        });
+      }
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to add signature' });
+    }
+  });
+
+  // JHA Photo upload (no assessment ID — for pending photos before assessment is created)
+  app.post("/api/jha/photos/upload", imageUpload.single("photo"), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No photo file provided" });
+      }
+      const photoStorage = new PhotoStorageService();
+      const { url: photoUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      return res.json({ success: true, photoUrl });
+    } catch (error) {
+      console.error("Error uploading JHA photo:", error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to upload photo",
+      });
+    }
+  });
+
+  // JHA Photo upload for an existing assessment
+  app.post("/api/jha/assessments/:assessmentId/photos", imageUpload.single("photo"), async (req: Request, res: Response) => {
+    try {
+      const existing = await storage.getJhaAssessment(req.params.assessmentId);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: "Assessment not found" });
+      }
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: "No photo file provided" });
+      }
+      const photoStorage = new PhotoStorageService();
+      const { url: photoUrl } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname,
+        req.file.mimetype,
+      );
+      const updatedPhotos = [...(existing.photos ?? []), photoUrl];
+      await storage.updateJhaAssessment(req.params.assessmentId, { photos: updatedPhotos });
+      return res.json({ success: true, photoUrl });
+    } catch (error) {
+      console.error("Error uploading JHA assessment photo:", error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : "Failed to upload photo",
+      });
     }
   });
 
@@ -20342,6 +23526,57 @@ Transcription: ${transcriptText}`;
     }
   });
 
+  // Native iOS FCM token registration (bypasses session auth using webhook secret)
+  // Called directly by Swift code in the Capacitor app
+  app.post("/api/notifications/register-native-fcm-token", async (req, res) => {
+    try {
+      const webhookSecret = req.headers['x-webhook-secret'];
+      const expectedSecret = process.env.HERO_WEBHOOK_SECRET;
+      if (!expectedSecret || webhookSecret !== expectedSecret) {
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
+      }
+
+      const { token, employeeId, deviceInfo } = req.body;
+      if (!token || !employeeId) {
+        return res.status(400).json({ success: false, message: 'token and employeeId are required' });
+      }
+
+      // Verify employee exists
+      const employee = await storage.getEmployee(employeeId);
+      if (!employee) {
+        return res.status(404).json({ success: false, message: 'Employee not found' });
+      }
+
+      // Check if token already exists
+      const existingToken = await storage.getFcmTokenByToken(token);
+      if (existingToken) {
+        await storage.markFcmTokenAsUsed(token);
+        console.log(`✅ Native FCM token already registered for employee ${employeeId}`);
+        return res.json({ success: true, message: 'Token already registered' });
+      }
+
+      // Create new token
+      await storage.createFcmToken({
+        employeeId,
+        token,
+        deviceInfo: deviceInfo || 'iOS Native',
+        isActive: true
+      });
+
+      // Create default notification preferences if they don't exist
+      const existingPrefs = await storage.getNotificationPreferences(employeeId);
+      if (!existingPrefs) {
+        await storage.createNotificationPreferences({ employeeId });
+      }
+
+      console.log(`✅ Native FCM token registered for employee ${employeeId} (${employee.name})`);
+      res.json({ success: true, message: 'Native token registered successfully' });
+    } catch (error) {
+      console.error('Error registering native FCM token:', error);
+      res.status(500).json({ success: false, message: 'Failed to register token' });
+    }
+  });
+
   // Get notification preferences
   app.get("/api/notifications/preferences", async (req, res) => {
     try {
@@ -20387,7 +23622,14 @@ Transcription: ${transcriptText}`;
   // Test notification endpoint (for debugging)
   app.post("/api/notifications/test", async (req, res) => {
     try {
-      const employeeId = req.session.employeeId;
+      const { adminSecret, targetEmployeeId } = req.body;
+      let employeeId = req.session.employeeId;
+
+      // Allow server-side admin trigger with webhook secret
+      if (!employeeId && adminSecret && adminSecret === process.env.HERO_WEBHOOK_SECRET) {
+        employeeId = targetEmployeeId;
+      }
+
       if (!employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
@@ -21074,6 +24316,1117 @@ If you cannot find a value, use null. Do not guess.`
       return res.status(500).json({ success: false, message: 'Failed to clear history' });
     }
   });
+
+  // ========================================
+  // AI SMART DISPATCH SCHEDULING
+  // ========================================
+
+  // GET /api/scheduling/revenue/:date — daily revenue summary for dispatch board
+  app.get('/api/scheduling/revenue/:date', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { date } = req.params;
+      // Use NZ (Pacific/Auckland) timezone boundaries so morning NZ jobs aren't missed
+      const NZ_TZ = 'Pacific/Auckland';
+      const dayStart = fromZonedTime(`${date}T00:00:00`, NZ_TZ);
+      const dayEnd = fromZonedTime(`${date}T23:59:59.999`, NZ_TZ);
+
+      const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
+      const settings = await storage.getBusinessSettings();
+      const dailyTarget = Number(settings.dailyRevenueTarget) || 3500;
+
+      const dayJobs = allJobs.filter(j => {
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        return d >= dayStart && d <= dayEnd && j.status !== 'completed' && j.status !== 'unsuccessful';
+      });
+
+      const scheduledRevenue = dayJobs.reduce((sum, j) => {
+        if (j.subtotal && Number(j.subtotal) > 0) return sum + Number(j.subtotal);
+        if (j.totalAmount && Number(j.totalAmount) > 0) return sum + Number(j.totalAmount);
+        return sum;
+      }, 0);
+
+      return res.json({
+        success: true,
+        data: {
+          date,
+          scheduledRevenue,
+          dailyTarget,
+          percentComplete: dailyTarget > 0 ? Math.round((scheduledRevenue / dailyTarget) * 100) : 0,
+          jobCount: dayJobs.length,
+          belowTarget: scheduledRevenue < dailyTarget,
+        },
+      });
+    } catch (error) {
+      console.error('[AI Dispatch] Revenue summary error:', error);
+      return res.status(500).json({ success: false, message: 'Error fetching revenue summary' });
+    }
+  });
+
+  // POST /api/scheduling/propose — AI scheduling engine
+  app.post('/api/scheduling/propose', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { targetDate, revenueTarget: overrideTarget } = req.body;
+      if (!targetDate) return res.status(400).json({ success: false, message: 'targetDate is required' });
+
+      const settings = await storage.getBusinessSettings();
+      const dailyTarget = overrideTarget || Number(settings.dailyRevenueTarget) || 3500;
+
+      // Fetch all the data needed for constraint checking
+      const [allEmployees, allEquipment, { jobs: allJobs }] = await Promise.all([
+        storage.getAllEmployees(),
+        storage.getAllEquipment(),
+        storage.getAllJobs({ limit: 999999 }),
+      ]);
+
+      // Get unscheduled work orders only (status === 'work_order')
+      // Already-scheduled jobs are excluded to avoid double-booking or re-confirming them.
+      const unscheduledJobs = allJobs.filter(j => j.status === 'work_order');
+
+      const activeStaff = allEmployees.filter(e => e.isActive && e.status === 'active');
+      const availableEquipment = allEquipment.filter(e => e.isActive && e.status === 'available');
+
+      // Build equipment licenceRequired map
+      const equipLicenceMap: Record<string, string | null> = {};
+      for (const eq of allEquipment) {
+        equipLicenceMap[eq.id] = eq.licenceRequired || null;
+        equipLicenceMap[eq.name] = eq.licenceRequired || null;
+      }
+
+      // Build staff licences map
+      const staffLicenceMap: Record<string, string[]> = {};
+      for (const emp of allEmployees) {
+        staffLicenceMap[emp.id] = [
+          ...(emp.licences || []),
+          ...(emp.certifications || []),
+        ];
+      }
+
+      // Build proposals using OpenAI GPT
+      const jobSummaries = unscheduledJobs.slice(0, 30).map(j => ({
+        id: j.id,
+        jobNumber: j.jobNumber,
+        title: j.title || 'Tree service',
+        address: j.address,
+        status: j.status,
+        revenue: Number(j.subtotal || j.totalAmount || 0),
+        estimatedDuration: j.estimatedDuration || 4,
+        equipment: j.equipment || [],
+      }));
+
+      const staffSummaries = activeStaff.map(e => ({
+        id: e.id,
+        name: `${e.firstName} ${e.lastName}`,
+        position: e.position,
+        licences: staffLicenceMap[e.id] || [],
+      }));
+
+      const equipSummaries = availableEquipment.map(e => ({
+        id: e.id,
+        name: e.name,
+        type: e.type,
+        licenceRequired: e.licenceRequired || null,
+      }));
+
+      const systemPrompt = `You are an expert tree service business scheduling assistant. Your job is to propose MULTIPLE RANKED schedule alternatives for the day, each prioritising a different optimisation goal:
+
+Alternative 1 (rank 1): "Maximum Revenue" — pick the combination of jobs that maximises total revenue, even if it means a heavier workload.
+Alternative 2 (rank 2): "Balanced Crew" — distribute work evenly across crew, favouring jobs matched well to available staff licences.
+Alternative 3 (rank 3): "Quick Wins" — prioritise shorter jobs that can definitely be completed in the day, minimising risk.
+
+Rules for ALL alternatives:
+- Assign crew based on their licences/tickets matching equipment requirements
+- No double-booking of staff or equipment across jobs in the same alternative
+- Assign realistic start and end times starting from 07:00
+- Check equipment licence requirements — at least one crew member must hold the required licence
+- Flag any conflicts clearly
+
+Return a valid JSON object only (no markdown) with this EXACT structure:
+{
+  "alternatives": [
+    {
+      "rank": 1,
+      "label": "Maximum Revenue",
+      "summaryNote": "Brief explanation",
+      "totalRevenue": number,
+      "meetsTarget": boolean,
+      "conflicts": ["Any overall conflicts"],
+      "proposedJobs": [
+        {
+          "jobId": "string",
+          "jobNumber": "string",
+          "title": "string",
+          "address": "string",
+          "revenue": number,
+          "estimatedDuration": number,
+          "proposedStartTime": "08:00",
+          "proposedEndTime": "12:00",
+          "assignedStaffIds": ["staffId1"],
+          "assignedStaffNames": ["Name 1"],
+          "equipmentNeeded": ["equipment name"],
+          "licenceMatches": [{"equipment": "EWP", "licence": "EWP Ticket", "heldBy": "Staff Name"}],
+          "conflicts": []
+        }
+      ]
+    }
+  ],
+  "revenueTarget": number
+}`;
+
+      // Find any already-scheduled jobs for this date so GPT knows who's busy
+      const proposeDayStart = new Date(targetDate + 'T00:00:00.000Z');
+      const proposeDayEnd = new Date(targetDate + 'T23:59:59.999Z');
+      const alreadyScheduledToday = allJobs.filter(j => {
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        return d >= proposeDayStart && d <= proposeDayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+      }).map(j => ({
+        jobNumber: j.jobNumber,
+        title: j.title || 'existing job',
+        assignedTeam: j.assignedTeam || [],
+        equipmentIds: j.equipment || [],
+        startTime: j.scheduledStartTime || '08:00',
+        endTime: j.scheduledEndTime || '17:00',
+      }));
+
+      const userPrompt = `Target date: ${targetDate}
+Daily revenue target: $${dailyTarget} NZD
+
+Already scheduled jobs for this date (staff AND equipment NOT available during these slots):
+${alreadyScheduledToday.length > 0 ? JSON.stringify(alreadyScheduledToday, null, 2) : 'None'}
+
+Available unscheduled work orders (${jobSummaries.length} jobs):
+${JSON.stringify(jobSummaries, null, 2)}
+
+Available staff (${staffSummaries.length} people):
+${JSON.stringify(staffSummaries, null, 2)}
+
+Available equipment (${equipSummaries.length} items):
+${JSON.stringify(equipSummaries, null, 2)}
+
+Equipment→Licence requirements:
+${JSON.stringify(Object.fromEntries(availableEquipment.filter(e => e.licenceRequired).map(e => [e.name, e.licenceRequired])), null, 2)}
+
+Generate 3 ranked schedule alternatives as specified. Each alternative must have different job selections or different crew assignments. Respect existing bookings — do not assign staff already scheduled. For each alternative, verify licence requirements and flag any conflicts.`;
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-4o',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        response_format: { type: 'json_object' },
+      });
+
+      const proposalText = aiResponse.choices[0].message.content || '{}';
+      let rawProposal: { alternatives?: Array<{ rank: number; label: string; summaryNote: string; totalRevenue: number; meetsTarget: boolean; conflicts: string[]; proposedJobs: unknown[] }>; revenueTarget?: number; proposedJobs?: unknown[] };
+      try {
+        rawProposal = JSON.parse(proposalText);
+      } catch {
+        rawProposal = {};
+      }
+
+      // Normalise: support both legacy single-proposal and new ranked-alternatives format
+      const alternatives = rawProposal.alternatives && rawProposal.alternatives.length > 0
+        ? rawProposal.alternatives
+        : rawProposal.proposedJobs
+          ? [{ rank: 1, label: 'Proposed Schedule', summaryNote: '', totalRevenue: 0, meetsTarget: false, conflicts: [], proposedJobs: rawProposal.proposedJobs }]
+          : [];
+
+      // Notify that schedule alternatives are ready for review
+      if (alternatives.length > 0) {
+        await storage.createNotification({
+          title: `AI Dispatch: ${alternatives.length} schedule alternatives ready`,
+          message: `${alternatives.length} ranked schedule proposals generated for ${targetDate}. Review and confirm your preferred option.`,
+          type: 'schedule_proposal_ready',
+          priority: 'medium',
+          isRead: false,
+          actionUrl: '/ai-scheduler',
+        }).catch(() => { /* non-critical */ });
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          alternatives,
+          revenueTarget: dailyTarget,
+          targetDate,
+          generatedAt: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('[AI Dispatch] Propose error:', error);
+      return res.status(500).json({ success: false, message: 'Error generating schedule proposal' });
+    }
+  });
+
+  // POST /api/scheduling/confirm — confirm a proposed schedule with server-side constraint re-check
+  app.post('/api/scheduling/confirm', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const { targetDate, proposedJobs } = req.body;
+      if (!targetDate || !Array.isArray(proposedJobs)) {
+        return res.status(400).json({ success: false, message: 'targetDate and proposedJobs are required' });
+      }
+
+      // === SERVER-SIDE CONSTRAINT VALIDATION ===
+      const [allEmployeesForValidation, allEquipmentForValidation] = await Promise.all([
+        storage.getAllEmployees(),
+        storage.getAllEquipment(),
+      ]);
+
+      const employeeMap: Record<string, typeof allEmployeesForValidation[0]> = {};
+      for (const emp of allEmployeesForValidation) employeeMap[emp.id] = emp;
+
+      const equipmentMap: Record<string, typeof allEquipmentForValidation[0]> = {};
+      for (const eq of allEquipmentForValidation) {
+        equipmentMap[eq.id] = eq;
+        equipmentMap[eq.name] = eq;
+      }
+
+      const validationErrors: string[] = [];
+
+      // Track staff and equipment time slots for double-booking detection
+      const staffTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
+      const equipmentTimeSlots: Record<string, Array<{ start: string; end: string; jobTitle: string }>> = {};
+
+      // Collect resolved equipment IDs per proposed job (for persisting to jobs.equipment on confirm)
+      const resolvedEquipmentByJob: Record<string, string[]> = {};
+
+      const timeToMinutes = (t: string) => {
+        const [h, m] = t.split(':').map(Number);
+        return h * 60 + (m || 0);
+      };
+
+      // Pre-populate time slots with already-scheduled jobs for the target date
+      // This prevents confirming proposals that conflict with existing bookings
+      const proposedJobIds = new Set(proposedJobs.map((pj: { jobId?: string }) => pj.jobId));
+      const allJobsForDate = await storage.getAllJobs({ limit: 999999 });
+      const dayStart = new Date(targetDate + 'T00:00:00.000Z');
+      const dayEnd = new Date(targetDate + 'T23:59:59.999Z');
+      const existingDayJobs = allJobsForDate.filter(j => {
+        if (proposedJobIds.has(j.id)) return false; // Skip jobs in this proposal
+        if (!j.scheduledDate) return false;
+        const d = new Date(j.scheduledDate);
+        return d >= dayStart && d <= dayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+      });
+      for (const ej of existingDayJobs) {
+        const existStart = ej.scheduledStartTime || '08:00';
+        const existEnd = ej.scheduledEndTime || '17:00';
+        const ejLabel = `existing Job #${ej.jobNumber}`;
+        // Pre-populate staff time slots from existing scheduled jobs
+        const existingTeam = ej.assignedTeam;
+        if (Array.isArray(existingTeam)) {
+          for (const sid of existingTeam) {
+            if (typeof sid !== 'string') continue;
+            if (!staffTimeSlots[sid]) staffTimeSlots[sid] = [];
+            staffTimeSlots[sid].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
+          }
+        }
+        // Pre-populate equipment time slots from existing scheduled jobs (uses jobs.equipment field)
+        const existingEquipment = ej.equipment;
+        if (Array.isArray(existingEquipment)) {
+          for (const eqId of existingEquipment) {
+            if (typeof eqId !== 'string') continue;
+            if (!equipmentTimeSlots[eqId]) equipmentTimeSlots[eqId] = [];
+            equipmentTimeSlots[eqId].push({ start: existStart, end: existEnd, jobTitle: ejLabel });
+          }
+        }
+      }
+
+      for (const pj of proposedJobs) {
+        if (!pj.jobId) continue;
+
+        const assignedStaffIds: string[] = pj.assignedStaffIds || [];
+        const equipmentNeeded: string[] = pj.equipmentNeeded || [];
+        const startTime: string = pj.proposedStartTime || '08:00';
+        const endTime: string = pj.proposedEndTime || '17:00';
+        const jobLabel = pj.title || pj.jobId;
+
+        // 1. Validate that assigned staff members exist and are active
+        for (const staffId of assignedStaffIds) {
+          const emp = employeeMap[staffId];
+          if (!emp) {
+            validationErrors.push(`Job "${jobLabel}": Staff ID ${staffId} not found`);
+            continue;
+          }
+          if (!emp.isActive) {
+            validationErrors.push(`Job "${jobLabel}": Staff member ${emp.firstName} ${emp.lastName} is not active`);
+          }
+
+          // 2. Check for time-slot double-booking
+          if (!staffTimeSlots[staffId]) staffTimeSlots[staffId] = [];
+          const startMins = timeToMinutes(startTime);
+          const endMins = timeToMinutes(endTime);
+          for (const slot of staffTimeSlots[staffId]) {
+            const existingStart = timeToMinutes(slot.start);
+            const existingEnd = timeToMinutes(slot.end);
+            if (startMins < existingEnd && endMins > existingStart) {
+              validationErrors.push(
+                `Double-booking: ${emp.firstName} ${emp.lastName} is assigned to both "${jobLabel}" (${startTime}–${endTime}) and "${slot.jobTitle}" (${slot.start}–${slot.end})`
+              );
+            }
+          }
+          staffTimeSlots[staffId].push({ start: startTime, end: endTime, jobTitle: jobLabel });
+        }
+
+        // 3. Validate licence requirements for equipment
+        const staffLicences = new Set<string>();
+        for (const staffId of assignedStaffIds) {
+          const emp = employeeMap[staffId];
+          if (!emp) continue;
+          for (const lic of (emp.licences || [])) staffLicences.add(lic.toLowerCase());
+          for (const cert of (emp.certifications || [])) staffLicences.add(cert.toLowerCase());
+        }
+
+        if (!resolvedEquipmentByJob[pj.jobId]) resolvedEquipmentByJob[pj.jobId] = [];
+
+        for (const equipName of equipmentNeeded) {
+          const eq = equipmentMap[equipName];
+          if (!eq) continue;
+
+          // Collect resolved equipment ID for job persistence
+          if (eq.id && !resolvedEquipmentByJob[pj.jobId].includes(eq.id)) {
+            resolvedEquipmentByJob[pj.jobId].push(eq.id);
+          }
+
+          // 4. Check equipment is active/available
+          if (!eq.isActive) {
+            validationErrors.push(`Job "${jobLabel}": Equipment "${equipName}" is not active`);
+          }
+          if (eq.status && eq.status !== 'available' && eq.status !== 'in_use') {
+            validationErrors.push(`Job "${jobLabel}": Equipment "${equipName}" has status "${eq.status}" and may not be available`);
+          }
+
+          // 5. Check equipment double-booking (time overlap across jobs)
+          const equipKey = eq.id || equipName;
+          if (!equipmentTimeSlots[equipKey]) equipmentTimeSlots[equipKey] = [];
+          const startMins = timeToMinutes(startTime);
+          const endMins = timeToMinutes(endTime);
+          for (const slot of equipmentTimeSlots[equipKey]) {
+            const existingStart = timeToMinutes(slot.start);
+            const existingEnd = timeToMinutes(slot.end);
+            if (startMins < existingEnd && endMins > existingStart) {
+              validationErrors.push(
+                `Equipment double-booking: "${equipName}" is assigned to both "${jobLabel}" (${startTime}–${endTime}) and "${slot.jobTitle}" (${slot.start}–${slot.end})`
+              );
+            }
+          }
+          equipmentTimeSlots[equipKey].push({ start: startTime, end: endTime, jobTitle: jobLabel });
+
+          // 6. Validate licence requirements for equipment
+          const required = eq.licenceRequired;
+          // Sentinel values that mean "no licence required"
+          const NO_LICENCE_SENTINELS = new Set(['none', 'none required', 'n/a', 'na', 'not required', 'no requirement', 'any', '']);
+          if (required && !NO_LICENCE_SENTINELS.has(required.trim().toLowerCase())) {
+            const requiredLower = required.trim().toLowerCase();
+            const hasLicence = Array.from(staffLicences).some(l =>
+              l.includes(requiredLower) || requiredLower.includes(l)
+            );
+            if (!hasLicence) {
+              validationErrors.push(
+                `Job "${jobLabel}": Equipment "${equipName}" requires "${required}" but no assigned crew member holds this licence`
+              );
+            }
+          }
+        }
+      }
+
+      // If hard validation errors exist, block confirmation
+      if (validationErrors.length > 0) {
+        return res.status(422).json({
+          success: false,
+          message: 'Schedule validation failed — constraint violations detected',
+          validationErrors,
+        });
+      }
+      // === END VALIDATION ===
+
+      const updatedJobs = [];
+      const draftMessages = [];
+
+      for (const pj of proposedJobs) {
+        if (!pj.jobId) continue;
+        const job = await storage.getJob(pj.jobId);
+        if (!job) continue;
+
+        // Set the scheduled date — store as date-only (no time component) matching the job form pattern.
+        // Actual start/end wall-clock times are kept in scheduledStartTime/scheduledEndTime strings.
+        const scheduledDate = new Date(targetDate);
+        const equipsForJob = resolvedEquipmentByJob[pj.jobId] || [];
+        const updated = await storage.updateJob(pj.jobId, {
+          scheduledDate,
+          scheduledStartTime: pj.proposedStartTime || '08:00',
+          scheduledEndTime: pj.proposedEndTime || '17:00',
+          assignedTeam: pj.assignedStaffIds || [],
+          status: 'scheduled',
+          ...(equipsForJob.length > 0 ? { equipment: equipsForJob } : {}),
+        });
+        updatedJobs.push(updated);
+
+        // Create a pending customer notification draft
+        const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+        if (customer) {
+          const nzDate = new Date(targetDate).toLocaleDateString('en-NZ', {
+            weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Pacific/Auckland',
+          });
+          const nzTime = pj.proposedStartTime || '8:00';
+          const serviceType = job.serviceType || 'tree service';
+          const address = job.address ? ` at ${job.address}` : '';
+
+          const hasPhone = !!(customer.phone || customer.mobile);
+          const channel: 'sms' | 'email' = hasPhone ? 'sms' : 'email';
+          const interpolate = (tmpl: string) => tmpl
+            .replace(/\{\{customerName\}\}/gi, customer.name)
+            .replace(/\{\{serviceType\}\}/gi, serviceType)
+            .replace(/\{\{jobTitle\}\}/gi, job.title || serviceType)
+            .replace(/\{\{address\}\}/gi, job.address || '')
+            .replace(/\{\{date\}\}/gi, nzDate)
+            .replace(/\{\{time\}\}/gi, nzTime)
+            .replace(/\{\{jobNumber\}\}/gi, job.jobNumber?.toString() || '');
+
+          const fallbackMessage = `Hi ${customer.name}, just confirming your ${serviceType} job${address} is scheduled for ${nzDate} starting around ${nzTime}. If this time doesn't suit, please reply and we'll find an alternative. Thanks, Treemarkables.`;
+
+          // Try to find a template from the template library (channel-aware)
+          let message: string = fallbackMessage;
+          try {
+            if (channel === 'sms') {
+              const allSmsTemplates = await storage.getAllSmsTemplates();
+              const t = allSmsTemplates.find(t => t.isActive && t.category === 'confirmation' && t.isDefault)
+                || allSmsTemplates.find(t => t.isActive && t.category === 'confirmation');
+              if (t) message = interpolate(t.message);
+            } else {
+              const allEmailTemplates = await storage.getAllEmailTemplates();
+              const t = allEmailTemplates.find(t => t.isActive && t.category === 'confirmation' && t.isDefault)
+                || allEmailTemplates.find(t => t.isActive && t.category === 'confirmation');
+              if (t) message = interpolate(t.textContent || t.htmlContent.replace(/<[^>]*>/g, ' ').trim());
+            }
+          } catch {
+            // Keep fallback message
+          }
+
+          const draft = await storage.createPendingOutboundMessage({
+            jobId: job.id,
+            customerId: customer.id,
+            recipientName: customer.name,
+            recipientPhone: customer.phone || customer.mobile || undefined,
+            recipientEmail: job.jobContactEmail || customer.email || undefined,
+            message,
+            channel,
+            status: 'pending',
+            proposalNumber: job.jobNumber,
+          });
+          draftMessages.push(draft);
+        }
+
+        // Log to job diary
+        const crewNames = (pj.assignedStaffNames || []).join(', ') || 'unassigned';
+        const diaryContent = `Job scheduled for ${targetDate} at ${pj.proposedStartTime || '08:00'} via AI Smart Dispatch. Crew: ${crewNames}`;
+        await storage.createJobDiaryEntry({
+          jobId: pj.jobId,
+          entryType: 'note',
+          title: 'AI Smart Dispatch scheduled',
+          description: diaryContent,
+          content: diaryContent,
+          authorName: 'AI Smart Dispatch',
+          authorRole: 'manager',
+          metadata: { source: 'ai_dispatch', targetDate, assignedStaff: pj.assignedStaffIds },
+        });
+      }
+
+      // Create notification for pending messages
+      if (draftMessages.length > 0) {
+        await storage.createNotification({
+          title: `${draftMessages.length} customer confirmation${draftMessages.length > 1 ? 's' : ''} ready to send`,
+          message: `AI Dispatch created ${draftMessages.length} draft confirmation message${draftMessages.length > 1 ? 's' : ''} for your approval`,
+          type: 'holding_message_pending',
+          priority: 'medium',
+          isRead: false,
+          actionUrl: '/communications?tab=pending',
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: { updatedJobs: updatedJobs.length, draftMessages: draftMessages.length },
+      });
+    } catch (error) {
+      console.error('[AI Dispatch] Confirm error:', error);
+      return res.status(500).json({ success: false, message: 'Error confirming schedule' });
+    }
+  });
+
+  // ── Near Miss Reports ─────────────────────────────────────────────────────
+
+  // Helper: generate NM-YYYY-#### report numbers (sequential within year)
+  async function generateNearMissReportNumber(): Promise<string> {
+    const year = new Date().getFullYear();
+    const prefix = `NM-${year}-`;
+    const rows = await db
+      .select({ rn: schema.nearMissReports.reportNumber })
+      .from(schema.nearMissReports)
+      .where(sql`report_number LIKE ${prefix + '%'}`)
+      .orderBy(desc(schema.nearMissReports.reportNumber));
+    let seq = 1;
+    if (rows.length > 0) {
+      const parts = rows[0].rn.split('-');
+      const lastSeq = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(lastSeq)) seq = lastSeq + 1;
+    }
+    return `${prefix}${String(seq).padStart(4, '0')}`;
+  }
+
+  // Drizzle-zod's auto-generated schema requires Date objects for timestamp
+  // columns, but JSON serialisation always produces ISO strings. Coerce.
+  const nearMissReportInsert = schema.insertNearMissReportSchema.extend({
+    incidentDatetime: z.coerce.date(),
+    submittedAt: z.coerce.date().nullable().optional(),
+    effectivenessReviewDate: z.coerce.date().nullable().optional(),
+    reporterSignedAt: z.coerce.date().nullable().optional(),
+  });
+  const nearMissReportUpdate = nearMissReportInsert.partial();
+
+  // GET /api/near-miss-reports
+  app.get('/api/near-miss-reports', async (req: Request, res: Response) => {
+    try {
+      const { status, severity, category, dateFrom, dateTo, reporterUserId } = req.query;
+      const conditions = [];
+      if (status) conditions.push(eq(schema.nearMissReports.status, status as string));
+      if (severity) conditions.push(eq(schema.nearMissReports.potentialSeverity, severity as string));
+      if (category) conditions.push(eq(schema.nearMissReports.category, category as string));
+      if (reporterUserId) conditions.push(eq(schema.nearMissReports.reporterUserId, reporterUserId as string));
+      if (dateFrom) conditions.push(gte(schema.nearMissReports.incidentDatetime, new Date(dateFrom as string)));
+      if (dateTo) conditions.push(lt(schema.nearMissReports.incidentDatetime, new Date(dateTo as string)));
+      const reports = await db
+        .select()
+        .from(schema.nearMissReports)
+        .where(conditions.length > 0 ? and(...conditions) : undefined)
+        .orderBy(desc(schema.nearMissReports.createdAt));
+      res.json({ success: true, data: reports });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch near miss reports' });
+    }
+  });
+
+  // GET /api/near-miss-reports/:id
+  app.get('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const [attachments, witnesses, actions] = await Promise.all([
+        db.select().from(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.reportId, req.params.id)),
+        db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.reportId, req.params.id)),
+        db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.reportId, req.params.id)).orderBy(schema.nearMissActions.createdAt),
+      ]);
+      // Auto-transition to in_review when supervisor opens
+      if (report.status === 'submitted' && req.session.employeeId) {
+        const [reporter] = await db.select({ id: schema.employees.id }).from(schema.employees).where(eq(schema.employees.id, report.reporterUserId));
+        if (!reporter || reporter.id !== req.session.employeeId) {
+          await db.update(schema.nearMissReports).set({ status: 'in_review', updatedAt: new Date() }).where(eq(schema.nearMissReports.id, req.params.id));
+          report.status = 'in_review';
+        }
+      }
+      res.json({ success: true, data: { ...report, attachments, witnesses, actions } });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to fetch report' });
+    }
+  });
+
+  // POST /api/near-miss-reports
+  app.post('/api/near-miss-reports', async (req: Request, res: Response) => {
+    try {
+      const reportNumber = await generateNearMissReportNumber();
+      const parsed = nearMissReportInsert.parse(req.body);
+      const [report] = await db.insert(schema.nearMissReports).values({ ...parsed, reportNumber }).returning();
+      res.json({ success: true, data: report });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create report' });
+    }
+  });
+
+  // PUT /api/near-miss-reports/:id
+  app.put('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+      const { reportNumber: _rn, ...updatePayload } = req.body;
+      const parsed = nearMissReportUpdate.parse({ ...updatePayload, updatedAt: new Date() });
+      const [updated] = await db.update(schema.nearMissReports).set(parsed).where(eq(schema.nearMissReports.id, req.params.id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update report' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/submit
+  app.post('/api/near-miss-reports/:id/submit', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (existing.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft reports can be submitted' });
+      const now = new Date();
+      const effectivenessReviewDate = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const [updated] = await db
+        .update(schema.nearMissReports)
+        .set({ status: 'submitted', submittedAt: now, effectivenessReviewDate, updatedAt: now })
+        .where(eq(schema.nearMissReports.id, req.params.id))
+        .returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to submit report' });
+    }
+  });
+
+  // DELETE /api/near-miss-reports/:id
+  app.delete('/api/near-miss-reports/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (existing.status !== 'draft') return res.status(400).json({ success: false, message: 'Only draft reports can be deleted' });
+      await db.delete(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete report' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/attachments
+  app.post('/api/near-miss-reports/:id/attachments', nearMissUpload.single('file'), async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+      const type = req.file.mimetype.startsWith('audio') ? 'voice_note' : 'photo';
+      const filePath = req.file.path.replace(/\\/g, '/');
+      const [attachment] = await db.insert(schema.nearMissAttachments).values({
+        reportId: req.params.id,
+        type,
+        filePath,
+        uploadedBy: req.session.employeeId || null,
+      }).returning();
+      res.json({ success: true, data: attachment });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to upload attachment' });
+    }
+  });
+
+  // DELETE /api/near-miss-attachments/:id
+  app.delete('/api/near-miss-attachments/:id', async (req: Request, res: Response) => {
+    try {
+      const [attachment] = await db.select().from(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.id, req.params.id));
+      if (!attachment) return res.status(404).json({ success: false, message: 'Attachment not found' });
+      try { fs.unlinkSync(attachment.filePath); } catch { /* file may already be gone */ }
+      await db.delete(schema.nearMissAttachments).where(eq(schema.nearMissAttachments.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete attachment' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/witnesses
+  app.post('/api/near-miss-reports/:id/witnesses', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const parsed = schema.insertNearMissWitnessSchema.parse({ ...req.body, reportId: req.params.id });
+      const [witness] = await db.insert(schema.nearMissWitnesses).values(parsed).returning();
+      // State 2: named but signing later — notify the witness via inbox
+      if (witness.witnessUserId && witness.status === 'pending') {
+        await storage.createNotification({
+          userId: witness.witnessUserId,
+          title: 'Near Miss Witness Sign-Off Required',
+          message: `You have been named as a witness on near miss report ${report.reportNumber}. Please review and sign off.`,
+          type: 'near_miss_witness',
+          priority: 'high',
+          isRead: false,
+          metadata: { reportId: report.id, witnessId: witness.id, reportNumber: report.reportNumber },
+        });
+      }
+      res.json({ success: true, data: witness });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create witness record' });
+    }
+  });
+
+  // POST /api/near-miss-witnesses/:id/sign
+  app.post('/api/near-miss-witnesses/:id/sign', async (req: Request, res: Response) => {
+    try {
+      const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
+      if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, witness.reportId));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const { signatureSvg, witnessComment, lat, lng, device } = req.body;
+      if (!signatureSvg) return res.status(400).json({ success: false, message: 'signatureSvg is required' });
+      // SHA-256 of core report content at time of signing — tamper-evident record
+      const reportContent = JSON.stringify({
+        reportNumber: report.reportNumber,
+        description: report.description,
+        category: report.category,
+        potentialSeverity: report.potentialSeverity,
+        incidentDatetime: report.incidentDatetime,
+        immediateActionTaken: report.immediateActionTaken,
+        proposedControl: report.proposedControl,
+      });
+      const reportHashAtSigning = createHash('sha256').update(reportContent).digest('hex');
+      const [updated] = await db
+        .update(schema.nearMissWitnesses)
+        .set({
+          status: 'signed',
+          signatureSvg,
+          witnessComment: witnessComment || null,
+          signedAt: new Date(),
+          signedLat: lat != null ? String(lat) : null,
+          signedLng: lng != null ? String(lng) : null,
+          signedDevice: device || (req.headers['user-agent'] ?? null),
+          reportHashAtSigning,
+        })
+        .where(eq(schema.nearMissWitnesses.id, req.params.id))
+        .returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to record witness signature' });
+    }
+  });
+
+  // POST /api/near-miss-witnesses/:id/decline
+  app.post('/api/near-miss-witnesses/:id/decline', async (req: Request, res: Response) => {
+    try {
+      const [witness] = await db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.id, req.params.id));
+      if (!witness) return res.status(404).json({ success: false, message: 'Witness record not found' });
+      const [updated] = await db.update(schema.nearMissWitnesses).set({ status: 'declined' }).where(eq(schema.nearMissWitnesses.id, req.params.id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to decline witness' });
+    }
+  });
+
+  // POST /api/near-miss-reports/:id/actions
+  app.post('/api/near-miss-reports/:id/actions', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const parsed = schema.insertNearMissActionSchema.parse({ ...req.body, reportId: req.params.id });
+      const [action] = await db.insert(schema.nearMissActions).values(parsed).returning();
+      res.json({ success: true, data: action });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to create action' });
+    }
+  });
+
+  // PUT /api/near-miss-actions/:id
+  app.put('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
+      const parsed = schema.updateNearMissActionSchema.parse({ ...req.body, updatedAt: new Date() });
+      const [updated] = await db.update(schema.nearMissActions).set(parsed).where(eq(schema.nearMissActions.id, req.params.id)).returning();
+      // Auto-transition report to 'actioned' when every action is complete
+      const allActions = await db.select({ status: schema.nearMissActions.status }).from(schema.nearMissActions).where(eq(schema.nearMissActions.reportId, existing.reportId));
+      const resolvedStatus = req.body.status ?? existing.status;
+      const allComplete = allActions.every(a => a.status === 'complete' || (a === allActions.find(x => x === a) && resolvedStatus === 'complete'));
+      if (allComplete && allActions.length > 0) {
+        const [parentReport] = await db.select({ status: schema.nearMissReports.status }).from(schema.nearMissReports).where(eq(schema.nearMissReports.id, existing.reportId));
+        if (parentReport && (parentReport.status === 'submitted' || parentReport.status === 'in_review')) {
+          await db.update(schema.nearMissReports).set({ status: 'actioned', updatedAt: new Date() }).where(eq(schema.nearMissReports.id, existing.reportId));
+        }
+      }
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to update action' });
+    }
+  });
+
+  // DELETE /api/near-miss-actions/:id
+  app.delete('/api/near-miss-actions/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Action not found' });
+      await db.delete(schema.nearMissActions).where(eq(schema.nearMissActions.id, req.params.id));
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to delete action' });
+    }
+  });
+
+  // GET /api/near-miss-reports/:id/pdf
+  app.get('/api/near-miss-reports/:id/pdf', async (req: Request, res: Response) => {
+    try {
+      const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
+      if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
+      const [witnesses, actions] = await Promise.all([
+        db.select().from(schema.nearMissWitnesses).where(eq(schema.nearMissWitnesses.reportId, req.params.id)),
+        db.select().from(schema.nearMissActions).where(eq(schema.nearMissActions.reportId, req.params.id)),
+      ]);
+      let reporterName = report.reporterUserId;
+      try {
+        const [emp] = await db.select({ firstName: schema.employees.firstName, lastName: schema.employees.lastName }).from(schema.employees).where(eq(schema.employees.id, report.reporterUserId));
+        if (emp) reporterName = `${emp.firstName} ${emp.lastName}`.trim();
+      } catch { /* fallback to userId */ }
+
+      const doc = new PDFDocument({ margin: 50, size: 'A4' });
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="near-miss-${report.reportNumber}.pdf"`);
+      doc.pipe(res);
+
+      const severityColour: Record<string, string> = { low: '#22c55e', medium: '#3b82f6', high: '#f59e0b', critical: '#ef4444' };
+      const sevCol = severityColour[report.potentialSeverity] ?? '#6b7280';
+
+      doc.fontSize(18).fillColor('#111').text('Near Miss Report', { align: 'center' });
+      doc.fontSize(10).fillColor('#888').text('CONFIDENTIAL', { align: 'center' });
+      doc.moveDown(0.3);
+      doc.fontSize(14).fillColor('#111').text(report.reportNumber, { align: 'center' });
+      doc.moveDown(1);
+
+      doc.fontSize(10).fillColor('#111');
+      doc.text(`Date/Time: ${formatNZTime(report.incidentDatetime, 'full')}`);
+      doc.text(`Reporter: ${reporterName}`);
+      doc.text(`Location: ${report.locationAddress || (report.locationLat && report.locationLng ? `${report.locationLat}, ${report.locationLng}` : 'Not recorded')}`);
+      doc.text(`Category: ${report.category.replace(/_/g, ' ')}`);
+      doc.fillColor(sevCol).text(`Severity: ${report.potentialSeverity.toUpperCase()}`).fillColor('#111');
+      doc.text(`Status: ${report.status}`);
+      doc.moveDown(0.75);
+
+      doc.fontSize(11).text('Description', { underline: true });
+      doc.fontSize(10).text(report.description || '—');
+      doc.moveDown(0.75);
+
+      if (report.immediateActionTaken) {
+        doc.fontSize(11).text('Immediate Action Taken', { underline: true });
+        doc.fontSize(10).text(report.immediateActionTaken);
+        doc.moveDown(0.75);
+      }
+      if (report.proposedControl) {
+        doc.fontSize(11).text('Proposed Control', { underline: true });
+        doc.fontSize(10).text(report.proposedControl);
+        doc.moveDown(0.75);
+      }
+      if (actions.length > 0) {
+        doc.fontSize(11).text('Corrective Actions', { underline: true });
+        actions.forEach((a, i) => {
+          const done = a.completedAt ? ` (completed ${formatNZTime(a.completedAt, 'date')})` : '';
+          doc.fontSize(10).text(`${i + 1}. ${a.title} — ${a.status}${done}`);
+        });
+        doc.moveDown(0.75);
+      }
+      witnesses.forEach((w, i) => {
+        if (w.status !== 'signed') return;
+        doc.fontSize(11).text(`Witness ${i + 1}: ${w.witnessName || 'Staff member'}`, { underline: true });
+        doc.fontSize(9).fillColor('#555');
+        doc.text(`Signed: ${w.signedAt ? formatNZTime(w.signedAt, 'full') : '—'}`);
+        if (w.signedDevice) doc.text(`Device: ${w.signedDevice}`);
+        if (w.reportHashAtSigning) doc.text(`Report hash at signing: ${w.reportHashAtSigning}`);
+        if (w.witnessComment) doc.text(`Comment: ${w.witnessComment}`);
+        doc.fillColor('#111').moveDown(0.5);
+        if (w.signatureSvg) doc.fontSize(8).fillColor('#888').text('[Electronic signature on file]').fillColor('#111');
+        doc.moveDown(0.5);
+      });
+
+      doc.end();
+    } catch (error) {
+      console.error('[Near Miss PDF]', error);
+      res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to generate PDF' });
+    }
+  });
+
+  // Daily: flag overdue effectiveness reviews to the reporter's inbox
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const overdue = await db
+        .select()
+        .from(schema.nearMissReports)
+        .where(and(
+          eq(schema.nearMissReports.effectivenessReviewComplete, false),
+          lt(schema.nearMissReports.effectivenessReviewDate, now),
+          ne(schema.nearMissReports.status, 'closed'),
+        ));
+      for (const report of overdue) {
+        try {
+          await storage.createNotification({
+            userId: report.reporterUserId,
+            title: 'Near Miss Review Overdue',
+            message: `Effectiveness review for ${report.reportNumber} is overdue. Please complete it.`,
+            type: 'near_miss_review_overdue',
+            priority: 'high',
+            isRead: false,
+            metadata: { reportId: report.id, reportNumber: report.reportNumber },
+          });
+        } catch { /* individual notification failures must not stop the loop */ }
+      }
+    } catch { /* suppress cron errors to avoid crashing server */ }
+  }, 24 * 60 * 60 * 1000);
+
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Resend events webhook configuration reminder ─────────────────────────
+  // Log the webhook URL and configuration status at startup so it's easy to
+  // find in the server console when setting up the Resend dashboard.
+  const resendEventsSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
+  const deployedBase = process.env.REPLIT_DEPLOYMENT_ID
+    ? `https://${process.env.REPL_SLUG}.replit.app`
+    : '(your deployed URL)';
+  console.log('');
+  console.log('━━━ Resend Email Events Webhook ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log(`  Endpoint : ${deployedBase}/api/webhooks/resend-events`);
+  console.log(`  Secret   : ${resendEventsSecret ? '✅ RESEND_EVENTS_WEBHOOK_SECRET is set' : '⚠️  RESEND_EVENTS_WEBHOOK_SECRET not set — webhooks unverified'}`);
+  console.log('  To configure: resend.com → Webhooks → Add endpoint → paste URL above');
+  console.log('                then copy the Signing Secret into RESEND_EVENTS_WEBHOOK_SECRET');
+  console.log('  Also needed : resend.com → Domains → your domain → Enable open tracking');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('');
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ── Welcome video prompt ─────────────────────────────────────────────────
+  // Detects when a new-customer job has an affirmative reply in the diary,
+  // surfaces a modal in the diary view, and fires the existing "Welcome
+  // video" email template on confirm. State (sent/skipped) is tracked via
+  // diary entries so we don't re-prompt across reloads or sessions.
+  const AFFIRMATIVE_REGEX =
+    /\b(yes|yep|yeah|sure|please|confirm(?:ed)?)\b|sounds good|let'?s do it|let'?s go|book it in|booked in/i;
+
+  app.get('/api/jobs/:id/welcome-prompt-status', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      const job = await storage.getJob(jobId);
+      if (!job || !job.customerId) {
+        return res.json({ success: true, shouldPrompt: false });
+      }
+
+      const customer = await storage.getCustomer(job.customerId);
+      if (!customer || !customer.email) {
+        return res.json({ success: true, shouldPrompt: false, customerName: customer?.name });
+      }
+
+      // Only prompt while the job is still a fresh lead. Once a quote has
+      // been sent the job moves to 'quote' (and beyond), at which point the
+      // welcome-video acknowledgement is no longer relevant — the quote is
+      // the next customer touchpoint, not a welcome email.
+      const isLeadStatus = job.status === 'lead' || job.status === 'new';
+
+      // New customer = this is the customer's only job
+      const customerJobs = await storage.getJobsByCustomer(job.customerId);
+      const isNew = customerJobs.length === 1;
+
+      // Welcome video template lookup (case-insensitive name match)
+      const templates = await storage.getAllEmailTemplates();
+      const tpl = templates.find((t: any) =>
+        (t.name || '').toLowerCase() === 'welcome video' && t.isActive !== false,
+      );
+      const templateAvailable = !!tpl;
+
+      // Diary scan: prior sent/skipped + latest customer-authored email reply
+      const diary = await storage.getJobDiaryEntriesByJob(jobId);
+      const alreadyHandled = diary.some((e: any) =>
+        typeof e.title === 'string' &&
+        (e.title.startsWith('Welcome video sent') ||
+          e.title.startsWith('Welcome video skipped')),
+      );
+      const customerEmails = diary.filter((e: any) =>
+        e.entryType === 'email' && e.authorRole === 'customer',
+      );
+      const latest = customerEmails.sort((a: any, b: any) => {
+        const ta = new Date(a.createdAt).getTime();
+        const tb = new Date(b.createdAt).getTime();
+        return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
+      })[0];
+      const haystack = latest
+        ? `${latest.title || ''} ${latest.description || ''} ${latest.content || ''}`
+        : '';
+      const replyHasAffirmative = !!latest && AFFIRMATIVE_REGEX.test(haystack);
+
+      const shouldPrompt =
+        isLeadStatus && isNew && !alreadyHandled && templateAvailable && replyHasAffirmative;
+
+      res.json({
+        success: true,
+        shouldPrompt,
+        customerName: customer.name,
+        templateAvailable,
+      });
+    } catch (e: any) {
+      console.error('welcome-prompt-status error', e);
+      res.json({ success: false, shouldPrompt: false });
+    }
+  });
+
+  app.post('/api/jobs/:id/send-welcome-video', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      const job = await storage.getJob(jobId);
+      if (!job || !job.customerId) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const customer = await storage.getCustomer(job.customerId);
+      if (!customer || !customer.email) {
+        return res.status(400).json({ success: false, message: 'Customer email is missing' });
+      }
+
+      const templates = await storage.getAllEmailTemplates();
+      const tpl = templates.find((t: any) =>
+        (t.name || '').toLowerCase() === 'welcome video' && t.isActive !== false,
+      );
+      if (!tpl) {
+        return res.status(404).json({ success: false, message: 'Welcome video template not configured' });
+      }
+
+      // Render: substitute {customerName} per the template's single-brace syntax
+      const customerName = customer.name || 'there';
+      const subject = (tpl.subject || 'Welcome video').replace(/\{customerName\}/g, customerName);
+      const rawBody = (tpl.htmlContent || '').replace(/\{customerName\}/g, customerName);
+      // Convert newlines to <br> for HTML rendering — template stores plain text
+      const htmlBody = rawBody.replace(/\n/g, '<br>');
+
+      const result = await emailService.sendEmail({
+        to: customer.email,
+        subject,
+        html: htmlBody,
+        text: rawBody,
+        jobNumber: job.jobNumber,
+      });
+
+      if (!result.success) {
+        return res.status(500).json({ success: false, message: 'Email send failed' });
+      }
+
+      await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'email',
+        title: 'Welcome video sent',
+        description: `Welcome video email sent to ${customer.email}`,
+        authorName: 'System',
+        authorRole: 'system',
+      } as any);
+
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('send-welcome-video error', e);
+      res.status(500).json({ success: false, message: e.message || 'Send failed' });
+    }
+  });
+
+  app.post('/api/jobs/:id/dismiss-welcome-prompt', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'note',
+        title: 'Welcome video skipped',
+        description: 'User chose not to send the welcome video for this job',
+        authorName: 'System',
+        authorRole: 'system',
+      } as any);
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error('dismiss-welcome-prompt error', e);
+      res.status(500).json({ success: false, message: e.message || 'Dismiss failed' });
+    }
+  });
+  // ─────────────────────────────────────────────────────────────────────────
 
   const httpServer = createServer(app);
 

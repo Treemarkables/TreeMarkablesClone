@@ -1,8 +1,7 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import ReCAPTCHA from "react-google-recaptcha";
 import { type LeadSource } from "@shared/schema";
 
 // Declare gtag for TypeScript
@@ -30,9 +29,7 @@ export default function ContactSection() {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [leadSource, setLeadSource] = useState<LeadSource | null>(null);
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
   const { toast } = useToast();
 
   // Capture lead source data on component mount
@@ -147,10 +144,6 @@ export default function ContactSection() {
     return null;
   };
 
-  const handleCaptchaChange = (token: string | null) => {
-    setCaptchaToken(token);
-  };
-
   const handleQuoteRequest = async (e?: React.MouseEvent) => {
     e?.preventDefault();
 
@@ -164,8 +157,6 @@ export default function ContactSection() {
       });
       return;
     }
-
-    // CAPTCHA disabled - form can be submitted without verification
 
     setIsSubmitting(true);
 
@@ -181,7 +172,6 @@ export default function ContactSection() {
           phone: formData.phone.trim(),
           hearAbout: formData.hearAbout,
           message: formData.message.trim(),
-          captchaToken: captchaToken,
           leadSource: leadSource,
         }),
       });
@@ -229,7 +219,7 @@ export default function ContactSection() {
         // Show success state
         setIsSubmitted(true);
 
-        // Reset form and CAPTCHA
+        // Reset form
         setFormData({
           name: "",
           email: "",
@@ -237,8 +227,6 @@ export default function ContactSection() {
           hearAbout: "",
           message: "",
         });
-        setCaptchaToken(null);
-        recaptchaRef.current?.reset();
 
         // Hide success message after 10 seconds
         setTimeout(() => {
@@ -402,16 +390,6 @@ export default function ContactSection() {
                       Thank you! We'll respond within 24 hours with your
                       personalized quote.
                     </div>
-                  </div>
-                )}
-
-                {/* CAPTCHA disabled for now */}
-                {!isSubmitted && (
-                  <div
-                    className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm text-center"
-                    data-testid="captcha-disabled"
-                  >
-                    ✅ Contact form ready - submit your quote request
                   </div>
                 )}
 

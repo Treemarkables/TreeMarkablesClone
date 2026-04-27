@@ -51,9 +51,11 @@ import {
   Settings,
   ChevronLeft,
   Lock,
+  GraduationCap,
 } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
+import StaffInductionsDialog from "@/components/StaffInductionsDialog";
 
 // Staff role options
 const STAFF_ROLES = [
@@ -93,6 +95,19 @@ const COMMON_CERTIFICATIONS = [
   "Commercial Driver License",
 ];
 
+const NZ_LICENCES = [
+  "EWP Ticket (Elevated Work Platform)",
+  "Class 2 Heavy Motor Vehicle Licence",
+  "Class 4 Heavy Motor Vehicle Licence",
+  "Class 5 Heavy Motor Vehicle Licence",
+  "Chainsaw Unit Standard (US6377)",
+  "Competent Person Certificate (Arboriculture)",
+  "NZQA Level 4 Arboriculture",
+  "Crane Licence (Dogman / Rigger)",
+  "Forklift Licence",
+  "First Aid Certificate",
+];
+
 const COMMON_SKILLS = [
   "Tree Climbing",
   "Chainsaw Operation",
@@ -120,11 +135,14 @@ const staffFormSchema = z.object({
     .default("beginner"),
   hourlyRate: z.string().optional(),
   chargeOutRate: z.string().optional(),
+  costLineItemNumber: z.string().optional(),
+  chargeOutLineItemNumber: z.string().optional(),
   emergencyContact: z.string().optional(),
   emergencyContactPhone: z.string().optional(),
   notes: z.string().optional(),
   hireDate: z.string().optional(),
   certifications: z.array(z.string()).default([]),
+  licences: z.array(z.string()).default([]),
   skills: z.array(z.string()).default([]),
 });
 
@@ -142,7 +160,10 @@ interface StaffMember {
   skillLevel: "beginner" | "intermediate" | "advanced" | "expert";
   hourlyRate?: string;
   chargeOutRate?: string;
+  costLineItemNumber?: string;
+  chargeOutLineItemNumber?: string;
   certifications: string[];
+  licences: string[];
   skills: string[];
   emergencyContact?: string;
   emergencyContactPhone?: string;
@@ -164,6 +185,14 @@ function StaffFormDialog({
   onClose: () => void;
   onSubmit: (data: StaffFormData) => void;
 }) {
+  const { data: materialsData } = useQuery({
+    queryKey: ["/api/materials-services"],
+    enabled: isOpen,
+  });
+  const labourItems = ((materialsData as any)?.data || []).filter(
+    (item: any) => item.category === "Labour"
+  );
+
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffFormSchema),
     defaultValues: {
@@ -177,12 +206,15 @@ function StaffFormDialog({
       skillLevel: "beginner",
       hourlyRate: "",
       chargeOutRate: "",
+      costLineItemNumber: "",
+      chargeOutLineItemNumber: "",
       emergencyContact: "",
       emergencyContactPhone: "",
       notes: "",
       hireDate: "",
       certifications: [],
       skills: [],
+      licences: [],
     },
   });
 
@@ -201,11 +233,14 @@ function StaffFormDialog({
           skillLevel: staff.skillLevel,
           hourlyRate: staff.hourlyRate || "",
           chargeOutRate: staff.chargeOutRate || "",
+          costLineItemNumber: (staff as any).costLineItemNumber || "",
+          chargeOutLineItemNumber: (staff as any).chargeOutLineItemNumber || "",
           emergencyContact: staff.emergencyContact || "",
           emergencyContactPhone: staff.emergencyContactPhone || "",
           notes: staff.notes || "",
           hireDate: staff.hireDate || "",
           certifications: staff.certifications || [],
+          licences: staff.licences || [],
           skills: staff.skills || [],
         });
       } else {
@@ -220,11 +255,14 @@ function StaffFormDialog({
           skillLevel: "beginner",
           hourlyRate: "",
           chargeOutRate: "",
+          costLineItemNumber: "",
+          chargeOutLineItemNumber: "",
           emergencyContact: "",
           emergencyContactPhone: "",
           notes: "",
           hireDate: "",
           certifications: [],
+          licences: [],
           skills: [],
         });
       }
@@ -249,6 +287,18 @@ function StaffFormDialog({
       "certifications",
       current.filter((c) => c !== cert),
     );
+  };
+
+  const addLicence = (lic: string) => {
+    const current = form.getValues("licences");
+    if (!current.includes(lic)) {
+      form.setValue("licences", [...current, lic]);
+    }
+  };
+
+  const removeLicence = (lic: string) => {
+    const current = form.getValues("licences");
+    form.setValue("licences", current.filter((l) => l !== lic));
   };
 
   const addSkill = (skill: string) => {
@@ -518,6 +568,60 @@ function StaffFormDialog({
               />
             </div>
 
+            {/* Line Item Assignments */}
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="costLineItemNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Cost Line Item</FormLabel>
+                    <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-cost-line-item">
+                          <SelectValue placeholder="Select cost item..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {labourItems.map((item: any) => (
+                          <SelectItem key={item.itemNumber} value={item.itemNumber}>
+                            {item.itemNumber} — {item.name} (${parseFloat(item.price).toFixed(2)}/hr)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="chargeOutLineItemNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Charge-out Line Item</FormLabel>
+                    <Select onValueChange={(v) => field.onChange(v === "__none__" ? "" : v)} value={field.value || "__none__"}>
+                      <FormControl>
+                        <SelectTrigger data-testid="select-charge-out-line-item">
+                          <SelectValue placeholder="Select charge-out item..." />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        <SelectItem value="__none__">None</SelectItem>
+                        {labourItems.map((item: any) => (
+                          <SelectItem key={item.itemNumber} value={item.itemNumber}>
+                            {item.itemNumber} — {item.name} (${parseFloat(item.price).toFixed(2)}/hr)
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
             {/* Emergency Contact */}
             <div className="grid grid-cols-2 gap-4">
               <FormField
@@ -574,6 +678,37 @@ function StaffFormDialog({
                   ).map((cert) => (
                     <SelectItem key={cert} value={cert}>
                       {cert}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Licences & Tickets */}
+            <div className="space-y-2">
+              <FormLabel>Licences &amp; Tickets</FormLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {(form.watch("licences") ?? []).map((lic) => (
+                  <Badge
+                    key={lic}
+                    className="cursor-pointer bg-amber-100 text-amber-800 border border-amber-300 hover:bg-destructive hover:text-destructive-foreground"
+                    onClick={() => removeLicence(lic)}
+                    data-testid={`badge-licence-${lic.replace(/\s+/g, "-").toLowerCase()}`}
+                  >
+                    {lic} ×
+                  </Badge>
+                ))}
+              </div>
+              <Select onValueChange={addLicence}>
+                <SelectTrigger data-testid="select-licences">
+                  <SelectValue placeholder="Add licence or ticket..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {NZ_LICENCES.filter(
+                    (lic) => !(form.watch("licences") ?? []).includes(lic),
+                  ).map((lic) => (
+                    <SelectItem key={lic} value={lic}>
+                      {lic}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -780,12 +915,14 @@ function StaffCard({
   onEdit,
   onDelete,
   onSetPassword,
+  onInductions,
   isAdmin,
 }: {
   staff: StaffMember;
   onEdit: (staff: StaffMember) => void;
   onDelete: (staff: StaffMember) => void;
   onSetPassword: (staff: StaffMember) => void;
+  onInductions: (staff: StaffMember) => void;
   isAdmin: boolean;
 }) {
   const roleConfig = STAFF_ROLES.find((r) => r.value === staff.role);
@@ -828,6 +965,15 @@ function StaffCard({
             </Badge>
 
             <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onInductions(staff)}
+                data-testid={`button-inductions-${staff.id}`}
+                title="Inductions"
+              >
+                <GraduationCap className="w-4 h-4" />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -941,6 +1087,7 @@ export default function StaffManagement() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [passwordStaff, setPasswordStaff] = useState<StaffMember | null>(null);
+  const [inductionsStaff, setInductionsStaff] = useState<StaffMember | null>(null);
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -1279,6 +1426,7 @@ export default function StaffManagement() {
                 onEdit={setEditingStaff}
                 onDelete={handleDeleteStaff}
                 onSetPassword={setPasswordStaff}
+                onInductions={setInductionsStaff}
                 isAdmin={isAdmin}
               />
             ))}
@@ -1333,6 +1481,13 @@ export default function StaffManagement() {
         isOpen={!!passwordStaff}
         onClose={() => setPasswordStaff(null)}
         onSubmit={handleSetPassword}
+      />
+
+      {/* Inductions Dialog */}
+      <StaffInductionsDialog
+        staff={inductionsStaff}
+        open={!!inductionsStaff}
+        onClose={() => setInductionsStaff(null)}
       />
     </div>
   );

@@ -33,6 +33,8 @@ import {
   Package,
   User,
   Calendar,
+  Camera,
+  Image as ImageIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -40,7 +42,7 @@ import { InvoiceTemplate } from "@/components/InvoiceTemplate";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { DocumentTemplate, Customer, Job } from "@shared/schema";
+import type { DocumentTemplate, Customer, Job, InvoiceSectionConfig } from "@shared/schema";
 
 interface InvoiceBuilderProps {
   isOpen: boolean;
@@ -77,6 +79,16 @@ interface CreatedInvoice {
   address: string;
 }
 
+interface InvoiceSectionDraft {
+  id?: string;
+  title: string;
+  content: string;
+  images: string[];
+  sortOrder: number;
+  sectionType: string;
+  isVisible: boolean;
+}
+
 export function InvoiceBuilder({
   isOpen,
   onClose,
@@ -109,6 +121,18 @@ export function InvoiceBuilder({
   const [editableNotes, setEditableNotes] = useState("");
   const [customDueDate, setCustomDueDate] = useState<string>("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
+  const [sections, setSections] = useState<InvoiceSectionDraft[]>([]);
+  const [deletedSectionIds, setDeletedSectionIds] = useState<string[]>([]);
+  const [photoUploadingIdx, setPhotoUploadingIdx] = useState<number | null>(null);
+
+  // Fetch the customer fresh so invoiceCcEmail is always up-to-date,
+  // even if the parent component cached stale customer data before the record was edited.
+  const { data: freshCustomerData } = useQuery({
+    queryKey: ["/api/customers", customer.id],
+    enabled: !!customer.id,
+    select: (response: any) => response.data || response,
+  });
+  const effectiveCustomer = (freshCustomerData as Customer | undefined) || customer;
 
   // Fetch proposals for this job
   const { data: proposalsResponse, isLoading: loadingProposals } = useQuery({
@@ -171,6 +195,8 @@ export function InvoiceBuilder({
       setInitializedJobId(null);
       setExistingInvoiceId(null);
       setCreatedInvoice(null);
+      setSections([]);
+      setDeletedSectionIds([]);
     }
   }, [isOpen]);
 
@@ -249,26 +275,45 @@ export function InvoiceBuilder({
       // Populate notes and description from existing invoice (always set, even if empty)
       // description is the primary field; fall back to notes for older invoices that stored description there
       setEditableNotes(existingInvoice.notes ?? "");
-      setEditableDescription(
-        existingInvoice.description ?? existingInvoice.notes ?? "",
-      );
+      // If the saved invoice description is empty (either the user created
+      // the invoice before adding a job description, or the initial copy at
+      // create time was from an empty job), fall back to the current job
+      // description. A non-empty saved value still wins — we don't stomp on
+      // edits that were made directly inside the invoice.
+      const savedInvoiceDesc =
+        existingInvoice.description ?? existingInvoice.notes ?? "";
+      setEditableDescription(savedInvoiceDesc || job.description || "");
     } else {
       console.log("⚠️ No existing invoices found for this job");
     }
 
-    // Set address, contact name, and email - use billing address if available
+    // Set address, contact name, and email
+    // Billing overrides set on the job's Billing tab take priority over raw customer/contact fields
     setEditableAddress(
       job.billingAddress || job.address || customer.address || "",
     );
-    // Build contact name from job contact or existing invoice
-    const contactName =
+    // Build contact name: prefer billing name override, then existing invoice name, then job contact name
+    const jobContactName =
       job.jobContactFirstName && job.jobContactLastName
         ? `${job.jobContactFirstName} ${job.jobContactLastName}`
         : job.jobContactFirstName || job.jobContactLastName || "";
     const existingInvoiceContactName =
       existingInvoices.length > 0 ? existingInvoices[0]?.contactName : null;
-    setEditableContactName(existingInvoiceContactName || contactName);
-    setEditableEmail(customer.email || "");
+    setEditableContactName(
+      job.billingNameOverride ||
+      existingInvoiceContactName ||
+      jobContactName ||
+      customer.name ||
+      "",
+    );
+    // Email: prefer billing contact email override, then existing invoice email, then job contact email, then customer email
+    setEditableEmail(
+      job.billingContactEmail ||
+      (existingInvoices.length > 0 ? existingInvoices[0]?.email : null) ||
+      (job as any).jobContactEmail ||
+      customer.email ||
+      "",
+    );
 
     // Initialise the due date: prefer existing invoice's due date, else default from settings
     const existingDue = existingInvoices.length > 0 ? existingInvoices[0]?.dueDate : null;
@@ -362,10 +407,36 @@ export function InvoiceBuilder({
       ];
     }
 
-    // Only set line items if no existing invoice (existing invoice line items were set earlier)
+    // If proposal/quote items are available, always prefer them over the existing invoice's items.
+    // This ensures the invoice is pre-filled with the accepted/sent quote without requiring
+    // the user to manually click "Import from Quote/Proposal".
+    const hasProposalOrQuoteItems = extractedItems.length > 0 &&
+      !(extractedItems.length === 1 &&
+        extractedItems[0].description === (job.description || "Tree service") &&
+        !proposal && !quote);
+
+    const existingItemsLookLikeProposalItems =
+      existingInvoices.length > 0 &&
+      existingInvoices[0].items &&
+      Array.isArray(existingInvoices[0].items) &&
+      existingInvoices[0].items.length > 0 &&
+      (proposal?.sections?.some((s: any) =>
+        s.lineItems?.some((li: any) =>
+          existingInvoices[0].items.some((ei: any) => ei.description === li.description)
+        )
+      ) || quote?.lineItems?.some((li: any) =>
+        existingInvoices[0].items.some((ei: any) => ei.description === li.description)
+      ));
+
     if (existingInvoices.length === 0) {
+      // New invoice — always set line items from proposal/quote/fallback
+      setLineItems(extractedItems);
+    } else if (hasProposalOrQuoteItems && !existingItemsLookLikeProposalItems) {
+      // Existing invoice but its items weren't sourced from the current proposal/quote —
+      // auto-import so the user doesn't have to click the button manually.
       setLineItems(extractedItems);
     }
+    // else: existing invoice already has proposal-sourced items, keep them as-is.
 
     // Set description from proposal/quote (only if no existing invoice)
     if (!existingInvoices.length) {
@@ -462,8 +533,11 @@ export function InvoiceBuilder({
 
   // Remove line item
   const removeLineItem = (id: string) => {
-    if (lineItems.length > 1) {
-      setLineItems(lineItems.filter((item) => item.id !== id));
+    const remaining = lineItems.filter((item) => item.id !== id);
+    if (remaining.length === 0) {
+      setLineItems([{ id: Math.random().toString(), description: "", quantity: 1, unitPrice: 0, total: 0, category: "other" }]);
+    } else {
+      setLineItems(remaining);
     }
   };
 
@@ -549,6 +623,22 @@ export function InvoiceBuilder({
       });
     }
 
+    // If still no items, fall back to job's own line items (set via the Quote tab)
+    if (extractedItems.length === 0 && job.lineItems && Array.isArray(job.lineItems) && job.lineItems.length > 0) {
+      console.log("🔍 Import Debug - Falling back to job.lineItems:", job.lineItems);
+      extractedItems = (job.lineItems as any[]).map((item: any) => ({
+        id: item.id || Math.random().toString(),
+        description: item.description || "",
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || item.rate || 0,
+        total: item.total || item.amount || (item.quantity * (item.unitPrice || item.rate || 0)) || 0,
+        category: item.category,
+        serviceId: item.serviceId,
+        materialId: item.materialId,
+        unitCost: item.unitCost,
+      }));
+    }
+
     console.log("🔍 Import Debug - Extracted Items:", extractedItems);
 
     if (extractedItems.length > 0) {
@@ -595,23 +685,12 @@ export function InvoiceBuilder({
       return null;
     }
 
-    if (
-      lineItems.length === 0 ||
-      lineItems.every((item) => !item.description.trim())
-    ) {
-      isCreatingRef.current = false;
-      toast({
-        title: "Line Items Required",
-        description: "Please add at least one line item with a description.",
-        variant: "destructive",
-      });
-      return null;
-    }
+    const filledLineItems = lineItems.filter((item) => item.description.trim());
 
     setIsCreating(true);
 
     try {
-      const formattedLineItems = lineItems.map((item) => ({
+      const formattedLineItems = filledLineItems.map((item) => ({
         description: item.description,
         quantity: item.quantity,
         rate: item.unitPrice,
@@ -719,17 +798,7 @@ export function InvoiceBuilder({
       return null;
     }
 
-    if (
-      lineItems.length === 0 ||
-      lineItems.every((item) => !item.description.trim())
-    ) {
-      toast({
-        title: "Line Items Required",
-        description: "Please add at least one line item with a description.",
-        variant: "destructive",
-      });
-      return null;
-    }
+    const filledItems = lineItems.filter((item) => item.description.trim());
 
     setIsCreating(true);
 
@@ -737,7 +806,7 @@ export function InvoiceBuilder({
       console.log("🔄 Updating invoice:", existingInvoiceId);
 
       // Format line items for database (using rate/amount instead of unitPrice/total)
-      const formattedLineItems = lineItems.map((item) => ({
+      const formattedLineItems = filledItems.map((item) => ({
         description: item.description,
         quantity: item.quantity.toString(),
         rate: item.unitPrice,
@@ -745,7 +814,7 @@ export function InvoiceBuilder({
       }));
 
       // Calculate new amount from line items
-      const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
+      const subtotal = filledItems.reduce((sum, item) => sum + item.total, 0);
 
       const updateData = {
         address: editableAddress,
@@ -768,6 +837,11 @@ export function InvoiceBuilder({
 
       if (response.success) {
         console.log("✅ Invoice updated successfully");
+
+        // Update createdInvoice state with the fresh data from server
+        if (response.data) {
+          setCreatedInvoice(response.data);
+        }
 
         // Invalidate queries to refresh data
         queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
@@ -798,6 +872,185 @@ export function InvoiceBuilder({
     }
   };
 
+  // Load sections when an existing invoice is loaded
+  useEffect(() => {
+    if (!existingInvoiceId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/invoices/${existingInvoiceId}/sections`, {
+          credentials: "include",
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        const loaded: InvoiceSectionDraft[] = (data.data || []).map((s: any) => ({
+          id: s.id,
+          title: s.title || "",
+          content: s.content || s.description || "",
+          images: Array.isArray(s.images) ? s.images : [],
+          sortOrder: s.sortOrder ?? 0,
+          sectionType: s.sectionType || "custom",
+          isVisible: s.isVisible !== false,
+        }));
+        setSections(loaded);
+        setDeletedSectionIds([]);
+      } catch (err) {
+        console.error("Failed to load invoice sections:", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [existingInvoiceId]);
+
+  // Section management
+  const handleAddSection = () => {
+    setSections((prev) => [
+      ...prev,
+      {
+        title: `Section ${prev.length + 1}`,
+        content: "",
+        images: [],
+        sortOrder: prev.length,
+        sectionType: "custom",
+        isVisible: true,
+      },
+    ]);
+  };
+
+  const handleRemoveSection = (idx: number) => {
+    setSections((prev) => {
+      const removed = prev[idx];
+      if (removed?.id) {
+        setDeletedSectionIds((d) => [...d, removed.id!]);
+      }
+      return prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, sortOrder: i }));
+    });
+  };
+
+  const handleUpdateSection = (
+    idx: number,
+    patch: Partial<InvoiceSectionDraft>,
+  ) => {
+    setSections((prev) =>
+      prev.map((s, i) => (i === idx ? { ...s, ...patch } : s)),
+    );
+  };
+
+  const handleSectionPhotoUpload = async (
+    idx: number,
+    files: FileList | null,
+  ) => {
+    if (!files || files.length === 0) return;
+    if (!job?.id) {
+      toast({
+        title: "Job required",
+        description: "Photos can only be attached to invoices linked to a job.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPhotoUploadingIdx(idx);
+    try {
+      const { compressImages } = await import("@/lib/imageCompression");
+      const compressedFiles = await compressImages(files, {
+        maxWidth: 1920,
+        maxHeight: 1920,
+        quality: 0.8,
+      });
+      const formData = new FormData();
+      for (let i = 0; i < compressedFiles.length; i++) {
+        formData.append("photos", compressedFiles[i]);
+      }
+      formData.append("type", "before");
+      formData.append("category", "documentation");
+
+      const response = await fetch(`/api/jobs/${job.id}/photos/batch`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Upload failed");
+      const data = await response.json();
+      const urls: string[] = Array.isArray(data.photos) ? data.photos : [];
+      setSections((prev) =>
+        prev.map((s, i) =>
+          i === idx ? { ...s, images: [...s.images, ...urls] } : s,
+        ),
+      );
+    } catch (err) {
+      console.error("Photo upload error:", err);
+      toast({
+        title: "Photo upload failed",
+        description: "Could not upload photos. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPhotoUploadingIdx(null);
+    }
+  };
+
+  const handleRemoveSectionPhoto = (idx: number, url: string) => {
+    setSections((prev) =>
+      prev.map((s, i) =>
+        i === idx ? { ...s, images: s.images.filter((u) => u !== url) } : s,
+      ),
+    );
+  };
+
+  // Persist sections after the invoice is saved/created
+  const persistSections = async (invoiceId: string) => {
+    try {
+      // Delete removed sections
+      await Promise.all(
+        deletedSectionIds.map((id) =>
+          fetch(`/api/invoices/sections/${id}`, {
+            method: "DELETE",
+            credentials: "include",
+          }),
+        ),
+      );
+
+      // Upsert each section
+      for (let i = 0; i < sections.length; i++) {
+        const s = sections[i];
+        const payload = {
+          sectionType: s.sectionType || "custom",
+          title: s.title || `Section ${i + 1}`,
+          content: s.content || "",
+          images: s.images,
+          sortOrder: i,
+          isVisible: s.isVisible,
+        };
+        if (s.id) {
+          await fetch(`/api/invoices/sections/${s.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          });
+        } else {
+          await fetch(`/api/invoices/${invoiceId}/sections`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify(payload),
+          });
+        }
+      }
+      setDeletedSectionIds([]);
+    } catch (err) {
+      console.error("Failed to persist invoice sections:", err);
+      toast({
+        title: "Section save failed",
+        description:
+          "The invoice saved, but one or more sections didn't persist.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // Save invoice only
   const handleSaveInvoice = async (e?: React.MouseEvent) => {
     console.log("🎯 SAVE INVOICE CLICKED");
@@ -820,6 +1073,7 @@ export function InvoiceBuilder({
       );
       const updated = await updateInvoice();
       if (updated) {
+        await persistSections(existingInvoiceId);
         handleClose();
       }
       return;
@@ -828,6 +1082,8 @@ export function InvoiceBuilder({
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
+      const newId = invoice.id || invoice.invoiceId;
+      if (newId) await persistSections(newId);
       handleClose();
     }
   };
@@ -852,6 +1108,7 @@ export function InvoiceBuilder({
       console.log("📝 Existing invoice detected, updating before sending");
       const updated = await updateInvoice();
       if (updated) {
+        await persistSections(existingInvoiceId);
         console.log("📧 Invoice updated successfully, opening email composer");
         setShowEmailComposer(true);
       } else {
@@ -863,6 +1120,8 @@ export function InvoiceBuilder({
     // Otherwise create new invoice
     const invoice = await createInvoice();
     if (invoice) {
+      const newId = invoice.id || invoice.invoiceId;
+      if (newId) await persistSections(newId);
       console.log("📧 Invoice created successfully, opening email composer");
       setShowEmailComposer(true);
     } else {
@@ -954,8 +1213,11 @@ export function InvoiceBuilder({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={handleClose}>
-        <DialogContent className="max-w-full sm:max-w-6xl max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6">
+      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
+        <DialogContent
+          className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
+          onEscapeKeyDown={(e) => e.stopPropagation()}
+        >
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1061,31 +1323,37 @@ export function InvoiceBuilder({
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <User className="h-4 w-4 text-blue-600" />
-                    Contact Name (optional)
+                    Billing Name
                   </Label>
                   <Input
                     value={editableContactName}
                     onChange={(e) => setEditableContactName(e.target.value)}
-                    placeholder="e.g., Sam Frasier"
+                    placeholder="e.g., Gisborne District Council"
                     className="bg-white"
                     data-testid="input-invoice-contact-name"
                   />
+                  <p className="text-xs text-gray-500">
+                    Pre-filled from the Billing Name Override on the Billing tab. Edit here for this invoice only.
+                  </p>
                 </div>
 
                 {/* Email */}
                 <div className="space-y-2">
                   <Label className="flex items-center gap-2 text-sm font-medium">
                     <Mail className="h-4 w-4 text-blue-600" />
-                    Customer Email
+                    Billing Email
                   </Label>
                   <Input
                     type="email"
                     value={editableEmail}
                     onChange={(e) => setEditableEmail(e.target.value)}
-                    placeholder="Enter customer email"
+                    placeholder="Enter billing email address"
                     className="bg-white"
                     data-testid="input-invoice-email"
                   />
+                  <p className="text-xs text-gray-500">
+                    Pre-filled from the Billing Email override on the Billing tab. Edit here for this invoice only.
+                  </p>
                 </div>
 
                 {/* Due Date */}
@@ -1486,6 +1754,143 @@ export function InvoiceBuilder({
                 </div>
               </div>
 
+              {/* Sections (photos + narrative) — shown on the customer-facing invoice page */}
+              <div className="border-t pt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4 text-blue-600" />
+                      Sections & Photos
+                    </h3>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Optional. Each section appears on the customer-facing invoice link.
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddSection}
+                    data-testid="button-add-invoice-section"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Section
+                  </Button>
+                </div>
+
+                {sections.length === 0 && (
+                  <div className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">
+                    No sections yet. Add one to attach photos or notes that the
+                    customer will see on the invoice link.
+                  </div>
+                )}
+
+                {sections.map((section, idx) => (
+                  <div
+                    key={section.id ?? `new-${idx}`}
+                    className="border rounded-lg p-3 space-y-3 bg-gray-50"
+                    data-testid={`invoice-section-${idx}`}
+                  >
+                    <div className="flex items-start gap-2">
+                      <Input
+                        value={section.title}
+                        onChange={(e) =>
+                          handleUpdateSection(idx, { title: e.target.value })
+                        }
+                        placeholder="Section title"
+                        className="bg-white"
+                        data-testid={`input-section-title-${idx}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleRemoveSection(idx)}
+                        className="text-red-600 hover:text-red-700 flex-shrink-0"
+                        data-testid={`button-remove-section-${idx}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <Textarea
+                      value={section.content}
+                      onChange={(e) =>
+                        handleUpdateSection(idx, { content: e.target.value })
+                      }
+                      placeholder="Optional description shown above the photos"
+                      className="bg-white min-h-[60px]"
+                      data-testid={`textarea-section-content-${idx}`}
+                    />
+
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <Label className="text-sm font-medium">Photos</Label>
+                        <input
+                          type="file"
+                          multiple
+                          accept="image/*"
+                          capture="environment"
+                          onChange={(e) =>
+                            handleSectionPhotoUpload(idx, e.target.files)
+                          }
+                          className="hidden"
+                          id={`invoice-photo-upload-${idx}`}
+                        />
+                        <label htmlFor={`invoice-photo-upload-${idx}`}>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            disabled={photoUploadingIdx === idx}
+                            asChild
+                            data-testid={`button-upload-section-photo-${idx}`}
+                          >
+                            <span>
+                              <Camera className="h-4 w-4 mr-2" />
+                              {photoUploadingIdx === idx
+                                ? "Uploading..."
+                                : "Add Photos"}
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
+
+                      {section.images.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">
+                          No photos yet.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {section.images.map((url) => (
+                            <div
+                              key={url}
+                              className="relative group rounded-md overflow-hidden border bg-white aspect-square"
+                            >
+                              <img
+                                src={url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRemoveSectionPhoto(idx, url)
+                                }
+                                className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                data-testid={`button-remove-section-photo-${idx}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               {/* Action Buttons */}
               <div className="flex flex-col sm:flex-row gap-3 justify-between">
                 {/* Delete button - only show when editing existing invoice */}
@@ -1621,7 +2026,7 @@ export function InvoiceBuilder({
               {/* Preview Section */}
               <div className="border-t pt-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Preview</h3>
-                <div className="border rounded-lg p-0 sm:p-4 bg-white overflow-hidden">
+                <div className="border rounded-lg p-0 sm:p-4 bg-white">
                   <InvoiceTemplate
                     invoice={{
                       id: job.id,
@@ -1653,6 +2058,7 @@ export function InvoiceBuilder({
                     template={invoiceTemplate}
                     lineItems={lineItems}
                     description={editableDescription}
+                    sectionConfig={Array.isArray(invoiceTemplate.sectionConfig) ? invoiceTemplate.sectionConfig as InvoiceSectionConfig[] : undefined}
                   />
                 </div>
               </div>
@@ -1670,10 +2076,11 @@ export function InvoiceBuilder({
             handleClose();
           }}
           job={job}
-          customer={customer}
+          customer={effectiveCustomer}
           customEmail={editableEmail}
           invoiceData={createdInvoice}
           templateType="invoice"
+          defaultCc={effectiveCustomer?.invoiceCcEmail || undefined}
         />
       )}
 
