@@ -85,8 +85,8 @@ export default function WelcomeVideoModal({
     })();
   };
 
-  // Triggered for X-button, Escape, and outside-click — treat them as a Skip
-  // so the prompt doesn't reappear on remount.
+  // X-button, Escape, and outside-click are treated as a Skip so the prompt
+  // doesn't reappear on remount.
   const handleOpenChange = (next: boolean) => {
     if (!next && open) {
       dismiss();

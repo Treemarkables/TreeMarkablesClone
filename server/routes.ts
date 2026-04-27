@@ -25510,12 +25510,12 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   // ─────────────────────────────────────────────────────────────────────────
 
   // ── Welcome video prompt ─────────────────────────────────────────────────
-  // Detects when a new-customer job has an affirmative reply in the diary,
-  // surfaces a modal in the diary view, and fires the existing "Welcome
-  // video" email template on confirm. State (sent/skipped) is tracked via
-  // diary entries so we don't re-prompt across reloads or sessions.
-  const AFFIRMATIVE_REGEX =
-    /\b(yes|yep|yeah|sure|please|confirm(?:ed)?)\b|sounds good|let'?s do it|let'?s go|book it in|booked in/i;
+  // Fires the welcome-video pop-up at the very start of customer
+  // communication: when a new-customer lead has had a site visit booked
+  // (scheduledDate set on the job) and no proposal has been drafted yet.
+  // Once a proposal exists we're past the "welcome" moment, so we suppress.
+  // State (sent/skipped) is tracked via diary entries so we don't re-prompt
+  // across reloads or sessions.
 
   app.get('/api/jobs/:id/welcome-prompt-status', async (req: Request, res: Response) => {
     try {
@@ -25536,9 +25536,19 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       // the next customer touchpoint, not a welcome email.
       const isLeadStatus = job.status === 'lead' || job.status === 'new';
 
+      // Site visit booked = a date is on the job. This is the "start of
+      // communication" trigger the user wants — no booking, no prompt.
+      const siteVisitBooked = !!job.scheduledDate;
+
       // New customer = this is the customer's only job
       const customerJobs = await storage.getJobsByCustomer(job.customerId);
       const isNew = customerJobs.length === 1;
+
+      // Past-stage guard: once a proposal exists for this job we've already
+      // moved past the welcome moment — suppress the prompt regardless of
+      // job.status (proposals can be drafted while the job is still 'lead').
+      const proposalsForJob = await storage.getProposalsByJob(jobId);
+      const hasProposal = proposalsForJob.length > 0;
 
       // Welcome video template lookup (case-insensitive name match)
       const templates = await storage.getAllEmailTemplates();
@@ -25547,28 +25557,21 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       );
       const templateAvailable = !!tpl;
 
-      // Diary scan: prior sent/skipped + latest customer-authored email reply
+      // Diary scan: prior sent/skipped
       const diary = await storage.getJobDiaryEntriesByJob(jobId);
       const alreadyHandled = diary.some((e: any) =>
         typeof e.title === 'string' &&
         (e.title.startsWith('Welcome video sent') ||
           e.title.startsWith('Welcome video skipped')),
       );
-      const customerEmails = diary.filter((e: any) =>
-        e.entryType === 'email' && e.authorRole === 'customer',
-      );
-      const latest = customerEmails.sort((a: any, b: any) => {
-        const ta = new Date(a.createdAt).getTime();
-        const tb = new Date(b.createdAt).getTime();
-        return (isNaN(tb) ? 0 : tb) - (isNaN(ta) ? 0 : ta);
-      })[0];
-      const haystack = latest
-        ? `${latest.title || ''} ${latest.description || ''} ${latest.content || ''}`
-        : '';
-      const replyHasAffirmative = !!latest && AFFIRMATIVE_REGEX.test(haystack);
 
       const shouldPrompt =
-        isLeadStatus && isNew && !alreadyHandled && templateAvailable && replyHasAffirmative;
+        isLeadStatus &&
+        siteVisitBooked &&
+        isNew &&
+        !hasProposal &&
+        !alreadyHandled &&
+        templateAvailable;
 
       res.json({
         success: true,
