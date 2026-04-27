@@ -4933,6 +4933,57 @@ The Treemarkables Team`;
             <ListChecks className="w-3.5 h-3.5" />
             Checklist
           </button>
+          {/* Mobile-only Diary tab. On sm+ the diary lives in its own right-hand
+              panel beside the sidebar tabs, so this button is hidden there. */}
+          <button
+            className={`flex-1 md:hidden p-3 min-h-[44px] text-xs font-medium border-r ${
+              currentStatus === "completed"
+                ? "border-green-200"
+                : currentStatus === "work_order"
+                  ? "border-blue-200"
+                  : currentStatus === "scheduled"
+                    ? "border-purple-200"
+                    : currentStatus === "quote"
+                      ? "border-orange-200"
+                      : currentStatus === "lead"
+                        ? "border-yellow-200"
+                        : currentStatus === "unsuccessful"
+                          ? "border-red-200"
+                          : "border-gray-200"
+            } ${
+              sidebarTab === "diary"
+                ? currentStatus === "completed"
+                  ? "bg-green-500 text-white"
+                  : currentStatus === "work_order"
+                    ? "bg-blue-500 text-white"
+                    : currentStatus === "scheduled"
+                      ? "bg-purple-500 text-white"
+                      : currentStatus === "quote"
+                        ? "bg-orange-500 text-white"
+                        : currentStatus === "lead"
+                          ? "bg-yellow-500 text-white"
+                          : currentStatus === "unsuccessful"
+                            ? "bg-red-500 text-white"
+                            : "bg-gray-500 text-white"
+                : currentStatus === "completed"
+                  ? "text-green-700 hover:bg-green-200"
+                  : currentStatus === "work_order"
+                    ? "text-blue-700 hover:bg-blue-200"
+                    : currentStatus === "scheduled"
+                      ? "text-purple-700 hover:bg-purple-200"
+                      : currentStatus === "quote"
+                        ? "text-orange-700 hover:bg-orange-200"
+                        : currentStatus === "lead"
+                          ? "text-yellow-700 hover:bg-yellow-200"
+                          : currentStatus === "unsuccessful"
+                            ? "text-red-700 hover:bg-red-200"
+                            : "text-gray-700 hover:bg-gray-200"
+            }`}
+            onClick={() => setSidebarTab("diary")}
+            data-testid="sidebar-diary"
+          >
+            Diary
+          </button>
         </div>
 
         {/* Main Content Area */}
@@ -9306,6 +9357,37 @@ The Treemarkables Team`;
                         </div>
                       )}
                     </>
+                  )}
+
+                  {/* Mobile-only diary view. Mirrors the desktop side-panel
+                      below, but rendered in the main content area when the
+                      mobile Diary tab is active. */}
+                  {sidebarTab === "diary" && (
+                    <div className="md:hidden -m-3 sm:-m-4">
+                      {editingJob ? (
+                        <JobDiarySection
+                          jobId={editingJob.id}
+                          onQuoteClick={() => setIsQuoteModalOpen(true)}
+                          onInvoiceClick={() => setIsInvoiceModalOpen(true)}
+                          onProposalClick={(proposalNumber) => {
+                            const proposals = jobProposalResponse?.data || [];
+                            const proposal = proposals.find(
+                              (p: any) => p.proposalNumber === proposalNumber,
+                            );
+                            setEditingProposalId(proposal?.id);
+                            setIsProposalBuilderOpen(true);
+                          }}
+                        />
+                      ) : (
+                        <div className="p-4">
+                          <div className="text-center py-8 text-gray-500">
+                            <p className="text-sm">
+                              Save the job to start a diary
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   )}
                   </div>
                 </div>
