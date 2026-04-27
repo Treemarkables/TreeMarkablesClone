@@ -409,6 +409,11 @@ export const jobs = pgTable("jobs", {
   // Global Job Card Fields
   checklist: jsonb("checklist").$type<ChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "text": "Task description", "completed": false}]
   equipmentChecklist: jsonb("equipment_checklist").$type<EquipmentChecklistItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "uuid", "equipment": "Chainsaw", "checked": false, "checkedAt": "timestamp", "checkedBy": "name"}]
+  // Per-job role completion. Truth = presence of *CompletedAt timestamps. *CompletedBy is the employee id (nullable).
+  roleACompletedAt: timestamp("role_a_completed_at"),
+  roleACompletedBy: varchar("role_a_completed_by"),
+  roleBCompletedAt: timestamp("role_b_completed_at"),
+  roleBCompletedBy: varchar("role_b_completed_by"),
   notes: text("notes"), // Job notes and comments
   internalNotes: text("internal_notes"), // Staff-only internal notes — never shown to customers
   lineItems: jsonb("line_items").$type<ServiceM8LineItem[]>().notNull().default(sql`'[]'::jsonb`), // [{"id": "string", "description": "string", "quantity": number, "unitPrice": number, "total": number, "unitCost": number, "totalCost": number, "costExGst": number, "markup": number, "priceExGst": number, "totalExGst": number, "taxRate": number, "itemCode": string}]
@@ -1386,6 +1391,7 @@ export const jobStaffAssignments = pgTable("job_staff_assignments", {
   
   // Assignment details
   role: text("role"), // lead, operator, ground_crew, driver
+  dayRole: text("day_role"), // 'A' | 'B' | null — set once per (employeeId, NZ-date), propagated to every assignment row that day
   status: text("status").notNull().default("assigned"), // assigned, confirmed, in_progress, completed, cancelled
   notificationSent: boolean("notification_sent").notNull().default(false),
   notificationSentAt: timestamp("notification_sent_at"),
@@ -1404,9 +1410,11 @@ export const insertJobStaffAssignmentSchema = createInsertSchema(jobStaffAssignm
   createdAt: true,
   updatedAt: true,
 });
+export const updateJobStaffAssignmentSchema = insertJobStaffAssignmentSchema.partial();
 
 export type JobStaffAssignment = typeof jobStaffAssignments.$inferSelect;
 export type InsertJobStaffAssignment = z.infer<typeof insertJobStaffAssignmentSchema>;
+export type UpdateJobStaffAssignment = z.infer<typeof updateJobStaffAssignmentSchema>;
 
 // Job Template Schema  
 export const jobTemplates = pgTable("job_templates", {

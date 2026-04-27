@@ -102,6 +102,7 @@ import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobChecklistPanel } from "./JobChecklistPanel";
+import { JobRoleCompletionCard } from "./JobRoleCompletionCard";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -9192,7 +9193,10 @@ The Treemarkables Team`;
                   {sidebarTab === "checklist" && (
                     <>
                       {editingJob ? (
-                        <JobChecklistPanel jobId={editingJob.id} />
+                        <>
+                          <JobRoleCompletionCard jobId={editingJob.id} />
+                          <JobChecklistPanel jobId={editingJob.id} />
+                        </>
                       ) : (
                         <div className="p-4">
                           <div className="text-center py-8 text-gray-500">

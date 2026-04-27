@@ -18,7 +18,7 @@ import { storage } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, sql, inArray, and, gte, lt, ne } from "drizzle-orm";
+import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
 import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
@@ -12581,15 +12581,32 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         }
       }
 
+      // Inherit dayRole: if this employee already has any assignment that NZ-day,
+      // the new row inherits their existing 'A' / 'B'. Cached per (employeeId, NZ date).
+      const dayRoleCache = new Map<string, string | null>();
+      const lookupDayRole = async (employeeId: string, day: Date): Promise<string | null> => {
+        const dayNZ = format(toZonedTime(day, 'Pacific/Auckland'), 'yyyy-MM-dd');
+        const cacheKey = `${employeeId}|${dayNZ}`;
+        if (dayRoleCache.has(cacheKey)) return dayRoleCache.get(cacheKey) ?? null;
+        const dayStartUTC = fromZonedTime(`${dayNZ}T00:00:00`, 'Pacific/Auckland');
+        const dayEndUTC = fromZonedTime(`${dayNZ}T23:59:59.999`, 'Pacific/Auckland');
+        const sameDay = await storage.getJobStaffAssignmentsByEmployee(employeeId, dayStartUTC, dayEndUTC);
+        const inherited = sameDay.find(s => s.dayRole)?.dayRole ?? null;
+        dayRoleCache.set(cacheKey, inherited);
+        return inherited;
+      };
+
       // Create all per-day assignments
       const created = [];
       for (const assignment of allAssignmentsToCreate) {
+        const inheritedDayRole = await lookupDayRole(assignment.employeeId, assignment.startTime);
         const newAssignment = await storage.createJobStaffAssignment({
           jobId,
           employeeId: assignment.employeeId,
           startTime: assignment.startTime,
           endTime: assignment.endTime,
           role: assignment.role,
+          dayRole: inheritedDayRole,
           notes: assignment.notes
         });
         created.push(newAssignment);
@@ -12819,6 +12836,36 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
+  // Set the day-level Role A / Role B for one crew member on one NZ date.
+  // Mirrored across every assignment row for that (employeeId, NZ-date) so per-job
+  // reads pick it up with no joins. Setting null clears the role for the day.
+  // Must be registered BEFORE /api/staff-assignments/:id so Express doesn't match :id="day-role".
+  app.put('/api/staff-assignments/day-role', async (req: Request, res: Response) => {
+    try {
+      const { employeeId, date, dayRole } = req.body as { employeeId?: string; date?: string; dayRole?: 'A' | 'B' | null };
+      if (!employeeId || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ success: false, message: 'employeeId and date (YYYY-MM-DD) required' });
+      }
+      if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B') {
+        return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', or null" });
+      }
+      const startUtc = fromZonedTime(`${date}T00:00:00`, 'Pacific/Auckland');
+      const endUtc = fromZonedTime(`${date}T23:59:59.999`, 'Pacific/Auckland');
+      const updated = await db.update(schema.jobStaffAssignments)
+        .set({ dayRole, updatedAt: new Date() })
+        .where(and(
+          eq(schema.jobStaffAssignments.employeeId, employeeId),
+          gte(schema.jobStaffAssignments.startTime, startUtc),
+          lte(schema.jobStaffAssignments.startTime, endUtc),
+        ))
+        .returning();
+      res.json({ success: true, data: { updatedCount: updated.length } });
+    } catch (error) {
+      console.error('Error setting day role:', error);
+      res.status(500).json({ success: false, message: 'Error setting day role' });
+    }
+  });
+
   // Update a staff assignment (reschedule drag-and-drop)
   app.put('/api/staff-assignments/:id', async (req: Request, res: Response) => {
     try {
@@ -12834,6 +12881,32 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     } catch (error) {
       console.error('Error updating staff assignment:', error);
       res.status(500).json({ success: false, message: 'Error updating staff assignment' });
+    }
+  });
+
+  // Toggle Role A / Role B completion for a job. Truth = presence of *CompletedAt timestamp.
+  // Dedicated route so we skip the full insertJobSchema parse + side-effects on PATCH /api/jobs/:id.
+  app.patch('/api/jobs/:jobId/role-completion', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const { role, completed, completedBy } = req.body as { role?: 'A' | 'B'; completed?: boolean; completedBy?: string | null };
+      if (role !== 'A' && role !== 'B') {
+        return res.status(400).json({ success: false, message: "role must be 'A' or 'B'" });
+      }
+      if (typeof completed !== 'boolean') {
+        return res.status(400).json({ success: false, message: 'completed must be a boolean' });
+      }
+      const ts = completed ? new Date() : null;
+      const by = completed ? (completedBy ?? null) : null;
+      const updates = role === 'A'
+        ? { roleACompletedAt: ts, roleACompletedBy: by }
+        : { roleBCompletedAt: ts, roleBCompletedBy: by };
+      const updated = await storage.updateJob(jobId, updates as Parameters<typeof storage.updateJob>[1]);
+      if (!updated) return res.status(404).json({ success: false, message: 'Job not found' });
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating role completion:', error);
+      res.status(500).json({ success: false, message: 'Error updating role completion' });
     }
   });
 
@@ -25229,6 +25302,12 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         return res.json({ success: true, shouldPrompt: false, customerName: customer?.name });
       }
 
+      // Only prompt while the job is still a fresh lead. Once a quote has
+      // been sent the job moves to 'quote' (and beyond), at which point the
+      // welcome-video acknowledgement is no longer relevant — the quote is
+      // the next customer touchpoint, not a welcome email.
+      const isLeadStatus = job.status === 'lead' || job.status === 'new';
+
       // New customer = this is the customer's only job
       const customerJobs = await storage.getJobsByCustomer(job.customerId);
       const isNew = customerJobs.length === 1;
@@ -25261,7 +25340,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const replyHasAffirmative = !!latest && AFFIRMATIVE_REGEX.test(haystack);
 
       const shouldPrompt =
-        isNew && !alreadyHandled && templateAvailable && replyHasAffirmative;
+        isLeadStatus && isNew && !alreadyHandled && templateAvailable && replyHasAffirmative;
 
       res.json({
         success: true,

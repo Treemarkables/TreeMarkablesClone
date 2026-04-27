@@ -28,13 +28,23 @@ export default function WelcomeVideoModal({
   const queryClient = useQueryClient();
   const [busy, setBusy] = useState(false);
 
+  const statusKey = ["/api/jobs", jobId, "welcome-prompt-status"];
+
   const invalidateRelated = () =>
     Promise.all([
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "diary"] }),
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jobs", jobId, "welcome-prompt-status"],
-      }),
+      queryClient.invalidateQueries({ queryKey: statusKey }),
     ]);
+
+  // Optimistically mark the prompt dismissed in the cache so any re-render
+  // (or remount of the parent) sees shouldPrompt=false immediately, instead
+  // of waiting on the dismiss POST + refetch round-trip.
+  const markDismissedInCache = () => {
+    queryClient.setQueryData<any>(statusKey, (old) => ({
+      ...(old || { success: true }),
+      shouldPrompt: false,
+    }));
+  };
 
   const handleSend = async () => {
     setBusy(true);
@@ -46,8 +56,9 @@ export default function WelcomeVideoModal({
       if (!res.ok || !data.success) {
         throw new Error(data.message || "Failed to send welcome video");
       }
-      await invalidateRelated();
+      markDismissedInCache();
       onOpenChange(false);
+      await invalidateRelated();
     } catch (e: any) {
       toast({
         variant: "destructive",
@@ -59,21 +70,33 @@ export default function WelcomeVideoModal({
     }
   };
 
-  const handleSkip = async () => {
-    setBusy(true);
-    try {
-      await fetch(`/api/jobs/${jobId}/dismiss-welcome-prompt`, {
-        method: "POST",
-      });
+  const dismiss = () => {
+    markDismissedInCache();
+    onOpenChange(false);
+    void (async () => {
+      try {
+        await fetch(`/api/jobs/${jobId}/dismiss-welcome-prompt`, {
+          method: "POST",
+        });
+      } catch {
+        // non-critical: cache already reflects dismissal
+      }
       await invalidateRelated();
-    } finally {
-      setBusy(false);
-      onOpenChange(false);
+    })();
+  };
+
+  // Triggered for X-button, Escape, and outside-click — treat them as a Skip
+  // so the prompt doesn't reappear on remount.
+  const handleOpenChange = (next: boolean) => {
+    if (!next && open) {
+      dismiss();
+      return;
     }
+    onOpenChange(next);
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-md" data-testid="modal-welcome-video">
         <DialogHeader>
           <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-2">
@@ -88,7 +111,7 @@ export default function WelcomeVideoModal({
         <div className="flex justify-end gap-2 mt-4">
           <Button
             variant="outline"
-            onClick={handleSkip}
+            onClick={dismiss}
             disabled={busy}
             data-testid="button-skip-welcome-video"
           >

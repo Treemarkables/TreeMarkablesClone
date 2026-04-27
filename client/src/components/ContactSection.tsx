@@ -165,7 +165,16 @@ export default function ContactSection() {
       return;
     }
 
-    // CAPTCHA disabled - form can be submitted without verification
+    // CAPTCHA required for spam protection
+    if (!captchaToken) {
+      toast({
+        title: "CAPTCHA Required",
+        description:
+          "Please complete the CAPTCHA verification to prevent spam.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setIsSubmitting(true);
 
@@ -405,13 +414,25 @@ export default function ContactSection() {
                   </div>
                 )}
 
-                {/* CAPTCHA disabled for now */}
+                {/* reCAPTCHA */}
                 {!isSubmitted && (
-                  <div
-                    className="p-3 bg-green-50 border border-green-200 rounded-md text-green-800 text-sm text-center"
-                    data-testid="captcha-disabled"
-                  >
-                    ✅ Contact form ready - submit your quote request
+                  <div className="flex justify-center">
+                    {import.meta.env.VITE_RECAPTCHA_SITE_KEY ? (
+                      <ReCAPTCHA
+                        ref={recaptchaRef}
+                        sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
+                        onChange={handleCaptchaChange}
+                        onExpired={() => setCaptchaToken(null)}
+                        data-testid="recaptcha-widget"
+                      />
+                    ) : (
+                      <div
+                        className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800"
+                        data-testid="captcha-error"
+                      >
+                        CAPTCHA configuration missing. Please check environment variables.
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -419,7 +440,7 @@ export default function ContactSection() {
                   size="lg"
                   className="w-full"
                   onClick={handleQuoteRequest}
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !captchaToken}
                   data-testid="button-submit-quote"
                 >
                   {isSubmitting ? "Sending..." : "Get Free Quote"}
