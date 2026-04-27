@@ -2325,11 +2325,16 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       const isMobileNumber = /^(\+?64)?0?2[0-9]/.test(cleanPhone);
 
       // Step 1: find or create the customer up front so the conversation, job,
-      // and notification can all be linked to the same record.
+      // and notification can all be linked to the same record. Try phone first
+      // (indexed), then fall back to email so an existing client emailing in
+      // (or with a slightly different phone) doesn't get a duplicate record.
       let customer: any = undefined;
       try {
         if (cleanPhone) {
           customer = await storage.findCustomerByPhone(cleanPhone);
+        }
+        if (!customer && lowerEmail) {
+          customer = await storage.findCustomerByEmail(lowerEmail);
         }
         if (!customer) {
           customer = await storage.createCustomer({
@@ -2389,20 +2394,20 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
           platform: 'web_form'
         });
 
-        // Step 4: auto-create a job with 'new' status (mirrors the manual
-        // "Create Job as Lead" path in Inbox). If the customer already has a
-        // 'new'-status job, reuse it instead of creating a duplicate — repeat
+        // Step 4: auto-create a job with 'lead' status (the canonical first
+        // state in the jobs.status enum). If the customer already has an open
+        // lead-status job, reuse it instead of creating a duplicate — repeat
         // form submissions should refresh the existing lead, not pile up.
         let createdJob: any = undefined;
         let reusedExistingJob = false;
         if (customer?.id) {
           try {
             const existingJobs = await storage.getJobsByCustomer(customer.id);
-            const existingNewJob = existingJobs.find(j => j.status === 'new');
-            if (existingNewJob) {
-              createdJob = existingNewJob;
+            const existingLeadJob = existingJobs.find(j => j.status === 'lead');
+            if (existingLeadJob) {
+              createdJob = existingLeadJob;
               reusedExistingJob = true;
-              console.log(`✅ Reusing existing new-status job #${existingNewJob.jobNumber} (${existingNewJob.id}) for customer ${customer.id} — repeat contact form submission`);
+              console.log(`✅ Reusing existing lead-status job #${existingLeadJob.jobNumber} (${existingLeadJob.id}) for customer ${customer.id} — repeat contact form submission`);
             } else {
               const jobNumber = await storage.getNextJobNumber();
               createdJob = await storage.createJob({
@@ -2411,7 +2416,7 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
                 title: `Lead from ${trimmedName || 'website'}`,
                 description: message.trim(),
                 address: 'Address not specified',
-                status: 'new',
+                status: 'lead',
                 priority: 'medium' as const,
                 leadSource: 'website' as const,
                 totalAmount: '0.00',
@@ -2547,12 +2552,17 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
     try {
       const { name, email, phone, address, serviceRequested, notes, status, conversationId } = req.body;
       
-      // First, create or find the customer
+      // First, create or find the customer. Try phone (indexed) first, then
+      // fall back to email so existing clients aren't duplicated when their
+      // phone is missing or has changed.
       let customer;
       if (phone) {
         customer = await storage.findCustomerByPhone(phone);
       }
-      
+      if (!customer && email) {
+        customer = await storage.findCustomerByEmail(email);
+      }
+
       if (!customer) {
         const customerData = {
           name: name || 'Unknown',
@@ -5383,6 +5393,57 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error updating job:', error);
       res.status(500).json({ success: false, message: 'Error updating job' });
+    }
+  });
+
+  // Link a lead-status job to an existing customer. If the job currently
+  // points at a different customer (the auto-created stub from the inquiry),
+  // merge that stub into the target customer so we don't leave orphan
+  // duplicate records. mergeCustomerRecords re-points every FK (jobs,
+  // conversations, etc.) and deletes the stub atomically.
+  app.post('/api/jobs/:id/link-to-customer', async (req: Request, res: Response) => {
+    try {
+      const jobId = req.params.id;
+      const { customerId: targetCustomerId } = req.body || {};
+      if (!targetCustomerId || typeof targetCustomerId !== 'string') {
+        return res.status(400).json({ success: false, message: 'customerId is required' });
+      }
+
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const target = await storage.getCustomer(targetCustomerId);
+      if (!target) {
+        return res.status(404).json({ success: false, message: 'Target customer not found' });
+      }
+
+      const currentCustomerId = job.customerId;
+
+      if (currentCustomerId === targetCustomerId) {
+        return res.json({ success: true, data: job, merged: false });
+      }
+
+      if (!currentCustomerId) {
+        const updated = await storage.updateJob(jobId, { customerId: targetCustomerId });
+        return res.json({ success: true, data: updated, merged: false });
+      }
+
+      // Merge the stub customer into the target. This re-points the job's
+      // customerId (along with the conversation, leads, etc.) to target and
+      // deletes the stub row.
+      await mergeCustomerRecords(targetCustomerId, [currentCustomerId]);
+      const updatedJob = await storage.getJob(jobId);
+      console.log(`✅ Linked job #${job.jobNumber} to existing customer ${targetCustomerId} (merged stub ${currentCustomerId})`);
+      res.json({ success: true, data: updatedJob, merged: true });
+    } catch (error: any) {
+      console.error('Error linking job to existing customer:', error);
+      const msg = String(error?.message || '');
+      if (msg.includes('not found')) {
+        return res.status(404).json({ success: false, message: msg });
+      }
+      res.status(500).json({ success: false, message: 'Failed to link job to customer' });
     }
   });
 

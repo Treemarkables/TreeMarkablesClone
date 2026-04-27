@@ -97,6 +97,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
   findCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  findCustomerByEmail(email: string): Promise<Customer | undefined>;
   findCustomerByName(name: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
   deleteCustomer(id: string): Promise<boolean>;
@@ -1080,6 +1081,19 @@ class DatabaseStorage implements IStorage {
       .select()
       .from(schema.customers)
       .where(eq(schema.customers.normalizedPhone, normalizedInput))
+      .limit(1);
+
+    return customer || undefined;
+  }
+
+  async findCustomerByEmail(email: string): Promise<Customer | undefined> {
+    const normalized = (email ?? '').trim().toLowerCase();
+    if (!normalized) return undefined;
+
+    const [customer] = await db
+      .select()
+      .from(schema.customers)
+      .where(sql`LOWER(${schema.customers.email}) = ${normalized}`)
       .limit(1);
 
     return customer || undefined;

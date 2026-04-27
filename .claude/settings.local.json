@@ -30,7 +30,9 @@
       "Read(//home/runner/.claude/projects/**)",
       "Read(//home/runner/.claude/**)",
       "Bash(gh auth *)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(git -C /home/runner/workspace log --oneline)",
+      "Bash(git *)"
     ]
   }
 }

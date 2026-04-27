@@ -331,6 +331,12 @@ export function GlobalJobCard({
   const [isEditingCustomerName, setIsEditingCustomerName] = useState(false);
   const [editingNameValue, setEditingNameValue] = useState("");
   const [isSavingCustomerName, setIsSavingCustomerName] = useState(false);
+  // Link-to-existing-client flow on lead-status jobs
+  const [linkClientDialogOpen, setLinkClientDialogOpen] = useState(false);
+  const [linkClientSearchValue, setLinkClientSearchValue] = useState("");
+  const [linkClientResults, setLinkClientResults] = useState<Customer[]>([]);
+  const [linkClientSearching, setLinkClientSearching] = useState(false);
+  const [pendingLinkClient, setPendingLinkClient] = useState<Customer | null>(null);
 
   const { toast: _originalToast } = useToast();
   const toast = () => {}; // Disabled - user preference: no toast notifications
@@ -2197,6 +2203,71 @@ export function GlobalJobCard({
       setIsAutoSaving(false);
     }
   };
+
+  // Link-to-existing-client: debounced search against /api/customers
+  useEffect(() => {
+    if (!linkClientDialogOpen) return;
+    const q = linkClientSearchValue.trim();
+    if (q.length < 2) {
+      setLinkClientResults([]);
+      return;
+    }
+    setLinkClientSearching(true);
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `/api/customers?search=${encodeURIComponent(q)}`,
+          { credentials: "include" },
+        );
+        const json = await res.json().catch(() => ({ data: [] }));
+        const list: Customer[] = Array.isArray(json?.data) ? json.data : [];
+        // Don't suggest the customer the job is already linked to
+        setLinkClientResults(
+          editingJob?.customerId
+            ? list.filter((c) => c.id !== editingJob.customerId)
+            : list,
+        );
+      } catch (err) {
+        console.error("Link-to-existing-client search failed:", err);
+        setLinkClientResults([]);
+      } finally {
+        setLinkClientSearching(false);
+      }
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [linkClientSearchValue, linkClientDialogOpen, editingJob?.customerId]);
+
+  // Link-to-existing-client: POST to merge stub customer into the chosen one
+  const linkToExistingClientMutation = useMutation({
+    mutationFn: async (customerId: string) => {
+      if (!editingJob?.id) throw new Error("Job not loaded");
+      const res = await apiRequest(
+        "POST",
+        `/api/jobs/${editingJob.id}/link-to-customer`,
+        { customerId },
+      );
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      if (editingJob?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id] });
+      }
+      setPendingLinkClient(null);
+      setLinkClientDialogOpen(false);
+      setLinkClientSearchValue("");
+      setLinkClientResults([]);
+    },
+    onError: (err) => {
+      console.error("Failed to link job to existing customer:", err);
+      toast({
+        title: "Could not link to existing client",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
 
   // Job create/update mutations
   const createJobMutation = useMutation({
@@ -7701,6 +7772,33 @@ The Treemarkables Team`;
                           </div>
                         </div>
 
+                        {/* Link-to-existing-client banner — only for lead-status jobs.
+                            Lets the operator fold the auto-created customer record
+                            into the matching existing client when an inbound inquiry
+                            comes from someone we already know about. */}
+                        {mode === "edit" &&
+                          watchedStatus === "lead" && (
+                            <div className="border border-amber-200 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 rounded-md px-3 py-2 mb-3 flex items-center justify-between gap-3">
+                              <p className="text-xs text-amber-800 dark:text-amber-300 leading-snug">
+                                Is this an existing client? Linking merges the auto-created customer record into the existing one.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-shrink-0 h-7 text-xs"
+                                onClick={() => {
+                                  setLinkClientSearchValue("");
+                                  setLinkClientResults([]);
+                                  setLinkClientDialogOpen(true);
+                                }}
+                                data-testid="button-link-existing-client"
+                              >
+                                Link to existing client
+                              </Button>
+                            </div>
+                          )}
+
                         {/* Contacts — two tabs: Job Contact (primary, used by automations)
                             and Tenant Details (opt-in, for tenanted properties). */}
                         <div>
@@ -10801,6 +10899,131 @@ The Treemarkables Team`;
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Link-to-existing-client picker — search and pick an existing customer
+          to merge the auto-created stub into. Shown only on lead-status jobs. */}
+      <Dialog
+        open={linkClientDialogOpen}
+        onOpenChange={(open) => {
+          setLinkClientDialogOpen(open);
+          if (!open) {
+            setLinkClientSearchValue("");
+            setLinkClientResults([]);
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Link to existing client</DialogTitle>
+            <DialogDescription>
+              Search by name, email or phone. Selecting a client will merge this
+              lead's auto-created customer record into the existing one.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              autoFocus
+              placeholder="Search clients..."
+              value={linkClientSearchValue}
+              onChange={(e) => setLinkClientSearchValue(e.target.value)}
+              data-testid="input-link-client-search"
+            />
+            <div className="max-h-72 overflow-y-auto border border-border rounded-md">
+              {linkClientSearchValue.trim().length < 2 ? (
+                <p className="text-xs text-muted-foreground p-3">
+                  Type at least 2 characters to search.
+                </p>
+              ) : linkClientSearching ? (
+                <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Searching...
+                </div>
+              ) : linkClientResults.length === 0 ? (
+                <p className="text-xs text-muted-foreground p-3">
+                  No matching clients.
+                </p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {linkClientResults.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => setPendingLinkClient(c)}
+                        className="w-full text-left p-3 hover-elevate"
+                        data-testid={`link-client-result-${c.id}`}
+                      >
+                        <p className="text-sm font-medium">{c.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {[c.email, c.phone || c.mobile]
+                            .filter(Boolean)
+                            .join(" · ") || "No contact details"}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirmation: merge the stub customer into the chosen existing client. */}
+      <AlertDialog
+        open={!!pendingLinkClient}
+        onOpenChange={(open) => {
+          if (!open) setPendingLinkClient(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Link to {pendingLinkClient?.name}?</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm">
+                <p>
+                  This job will be re-pointed to{" "}
+                  <span className="font-medium">{pendingLinkClient?.name}</span>
+                  {pendingLinkClient?.email
+                    ? ` (${pendingLinkClient.email})`
+                    : ""}
+                  .
+                </p>
+                <p>
+                  The auto-created customer record from this inquiry will be
+                  merged into the existing client and removed. Any conversation
+                  attached to this lead will move with it.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              disabled={linkToExistingClientMutation.isPending}
+              data-testid="link-client-cancel"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (pendingLinkClient) {
+                  linkToExistingClientMutation.mutate(pendingLinkClient.id);
+                }
+              }}
+              disabled={linkToExistingClientMutation.isPending}
+              data-testid="link-client-confirm"
+            >
+              {linkToExistingClientMutation.isPending ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                  Linking...
+                </>
+              ) : (
+                "Link client"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Call Contact Picker — pick between Job Contact and Tenant */}
       <AlertDialog open={callPickerOpen} onOpenChange={setCallPickerOpen}>
