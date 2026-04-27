@@ -2260,9 +2260,10 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       const clientIp = req.ip || req.connection.remoteAddress || 'unknown';
       const userAgent = req.get('User-Agent') || 'unknown';
 
-      // CAPTCHA validation (always required now)
-      const requireCaptcha = process.env.REQUIRE_CAPTCHA !== '0';
-      
+      // CAPTCHA validation — opt-in. Set REQUIRE_CAPTCHA=1 to enable once
+      // the frontend reCAPTCHA integration is wired up. Default is off.
+      const requireCaptcha = process.env.REQUIRE_CAPTCHA === '1';
+
       if (requireCaptcha) {
         if (!captchaToken) {
           return res.status(400).json({ 
@@ -2292,8 +2293,6 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         }
         
         console.log('CAPTCHA verification successful for contact form submission');
-      } else {
-        console.log('CAPTCHA bypassed - manually disabled via REQUIRE_CAPTCHA=0');
       }
 
       // Email validation

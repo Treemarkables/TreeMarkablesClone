@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { Leaf, ShieldCheck, X } from "lucide-react";
-import ReCAPTCHA from "react-google-recaptcha";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -49,8 +48,6 @@ export default function InquiryForm({
   const [message, setMessage] = useState("");
   const [hearAbout, setHearAbout] = useState("");
   const [submitted, setSubmitted] = useState(false);
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -60,7 +57,6 @@ export default function InquiryForm({
         phone: phone.trim(),
         hearAbout,
         message: message.trim(),
-        captchaToken,
       });
       return response.json();
     },
@@ -77,8 +73,6 @@ export default function InquiryForm({
       setPhone("");
       setMessage("");
       setHearAbout("");
-      setCaptchaToken(null);
-      recaptchaRef.current?.reset();
       setSubmitted(true);
       onSuccess?.();
     },
@@ -111,15 +105,6 @@ export default function InquiryForm({
       toast({
         title: "Check the form",
         description: error,
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!captchaToken) {
-      toast({
-        title: "CAPTCHA Required",
-        description:
-          "Please complete the CAPTCHA verification to prevent spam.",
         variant: "destructive",
       });
       return;
@@ -292,25 +277,6 @@ export default function InquiryForm({
         </div>
       </div>
 
-      <div className="flex justify-center mt-6">
-        {import.meta.env.VITE_RECAPTCHA_SITE_KEY ? (
-          <ReCAPTCHA
-            ref={recaptchaRef}
-            sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-            onChange={(token) => setCaptchaToken(token)}
-            onExpired={() => setCaptchaToken(null)}
-            data-testid="recaptcha-widget"
-          />
-        ) : (
-          <div
-            className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm"
-            data-testid="captcha-error"
-          >
-            CAPTCHA configuration missing. Please check environment variables.
-          </div>
-        )}
-      </div>
-
       <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
         <Button
           type="button"
@@ -324,7 +290,7 @@ export default function InquiryForm({
         </Button>
         <Button
           type="submit"
-          disabled={mutation.isPending || !captchaToken}
+          disabled={mutation.isPending}
           className="bg-[#1f7a1f] hover:bg-[#196619] text-white min-w-[140px]"
           data-testid="button-inquiry-submit"
         >
