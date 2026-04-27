@@ -32,8 +32,6 @@ export function BeforeAfterCaptureModal({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
   const generateMutation = useMutation({
     mutationFn: async () => {
       if (!photo1 || !photo2) {
@@ -179,7 +177,6 @@ export function BeforeAfterCaptureModal({
               id={inputId}
               type="file"
               accept="image/*"
-              {...(isMobile ? { capture: "environment" as const } : {})}
               onChange={handleFileSelect(slot)}
               className="sr-only"
               data-testid={`input-${slot}`}
@@ -189,9 +186,7 @@ export function BeforeAfterCaptureModal({
               className="w-full h-40 flex flex-col gap-2 items-center justify-center border-2 border-dashed border-input rounded-md hover:bg-accent hover:text-accent-foreground transition-colors cursor-pointer"
             >
               <Camera className="w-7 h-7" />
-              <span className="text-xs font-medium">
-                {isMobile ? "Take or choose" : "Choose photo"}
-              </span>
+              <span className="text-xs font-medium">Choose photo</span>
             </label>
           </>
         )}
