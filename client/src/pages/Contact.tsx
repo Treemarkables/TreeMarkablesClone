@@ -1,8 +1,6 @@
-import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import ReCAPTCHA from "react-google-recaptcha";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -96,8 +94,6 @@ const urgencyLabels: Record<string, string> = {
 
 export default function Contact() {
   const { toast } = useToast();
-  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
-  const recaptchaRef = useRef<ReCAPTCHA>(null);
 
   const form = useForm<ContactFormData>({
     resolver: zodResolver(contactFormSchema),
@@ -112,10 +108,7 @@ export default function Contact() {
 
   const contactMutation = useMutation({
     mutationFn: async (data: ContactFormData) => {
-      const response = await apiRequest("POST", "/api/contact", {
-        ...data,
-        captchaToken,
-      });
+      const response = await apiRequest("POST", "/api/contact", data);
       return await response.json();
     },
     onSuccess: (response) => {
@@ -126,8 +119,6 @@ export default function Contact() {
         });
       }
       form.reset();
-      setCaptchaToken(null);
-      recaptchaRef.current?.reset();
     },
     onError: (error: Error) => {
       toast({
@@ -141,15 +132,6 @@ export default function Contact() {
   });
 
   const onSubmit = (data: ContactFormData) => {
-    if (!captchaToken) {
-      toast({
-        title: "CAPTCHA Required",
-        description:
-          "Please complete the CAPTCHA verification to prevent spam.",
-        variant: "destructive",
-      });
-      return;
-    }
     contactMutation.mutate(data);
   };
 
@@ -506,26 +488,6 @@ export default function Contact() {
                           )}
                         />
 
-                        {/* reCAPTCHA */}
-                        <div className="flex justify-center pt-4">
-                          {import.meta.env.VITE_RECAPTCHA_SITE_KEY ? (
-                            <ReCAPTCHA
-                              ref={recaptchaRef}
-                              sitekey={import.meta.env.VITE_RECAPTCHA_SITE_KEY}
-                              onChange={(token) => setCaptchaToken(token)}
-                              onExpired={() => setCaptchaToken(null)}
-                              data-testid="recaptcha-widget"
-                            />
-                          ) : (
-                            <div
-                              className="p-4 bg-red-50 border border-red-200 rounded-md text-red-800 text-sm"
-                              data-testid="captcha-error"
-                            >
-                              CAPTCHA configuration missing. Please check environment variables.
-                            </div>
-                          )}
-                        </div>
-
                         {/* Submit Button */}
                         <div className="flex items-center justify-between pt-4">
                           <p className="text-sm text-muted-foreground">
@@ -534,9 +496,7 @@ export default function Contact() {
                           <Button
                             type="submit"
                             size="lg"
-                            disabled={
-                              contactMutation.isPending || !captchaToken
-                            }
+                            disabled={contactMutation.isPending}
                             data-testid="button-submit"
                             className="min-w-[140px]"
                           >
