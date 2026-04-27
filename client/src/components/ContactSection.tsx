@@ -131,14 +131,16 @@ export default function ContactSection() {
     if (!formData.email.trim()) {
       return "Please enter your email address";
     }
-    if (!formData.message.trim()) {
-      return "Please enter a message";
-    }
-
     // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
       return "Please enter a valid email address";
+    }
+    if (!formData.hearAbout) {
+      return "Please tell us how you heard about us";
+    }
+    if (!formData.message.trim()) {
+      return "Please enter a message";
     }
 
     return null;
@@ -335,7 +337,7 @@ export default function ContactSection() {
                     htmlFor="hearAbout"
                     className="block text-sm font-medium text-foreground mb-2"
                   >
-                    How did you hear about us?
+                    How did you hear about us? *
                   </label>
                   <select
                     id="hearAbout"
@@ -344,6 +346,7 @@ export default function ContactSection() {
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-input bg-background text-foreground rounded-md focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
                     data-testid="select-hear-about"
+                    required
                   >
                     <option value="">Please select...</option>
                     <option value="Google">Google</option>

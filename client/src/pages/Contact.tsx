@@ -43,8 +43,11 @@ declare global {
 const contactFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(255, "Name is too long"),
   email: z.string().email("Please enter a valid email address").max(255),
-  phone: z.string().min(1, "Phone number is required").max(50),
-  address: z.string().max(500, "Address is too long").optional(),
+  phone: z.string().max(50).optional(),
+  address: z
+    .string()
+    .min(1, "Service address is required")
+    .max(500, "Address is too long"),
   serviceType: z.enum(
     [
       "tree_removal",
@@ -58,10 +61,12 @@ const contactFormSchema = z.object({
       required_error: "Please select a service type",
     },
   ),
-  propertyType: z.enum(["residential", "commercial", "council"]).optional(),
-  urgency: z
-    .enum(["immediate", "within_week", "within_month", "planning"])
-    .optional(),
+  propertyType: z.enum(["residential", "commercial", "council"], {
+    required_error: "Please select a property type",
+  }),
+  urgency: z.enum(["immediate", "within_week", "within_month", "planning"], {
+    required_error: "Please select an urgency",
+  }),
   message: z
     .string()
     .min(1, "Message is required")
@@ -339,7 +344,7 @@ export default function Contact() {
                             name="phone"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Phone *</FormLabel>
+                                <FormLabel>Phone</FormLabel>
                                 <FormControl>
                                   <Input
                                     type="tel"
@@ -360,7 +365,7 @@ export default function Contact() {
                           name="address"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Service Address</FormLabel>
+                              <FormLabel>Service Address *</FormLabel>
                               <FormControl>
                                 <Input
                                   placeholder="123 Main Street, Gisborne"
@@ -411,7 +416,7 @@ export default function Contact() {
                             name="propertyType"
                             render={({ field }) => (
                               <FormItem>
-                                <FormLabel>Property Type</FormLabel>
+                                <FormLabel>Property Type *</FormLabel>
                                 <Select
                                   onValueChange={field.onChange}
                                   defaultValue={field.value}
@@ -443,7 +448,7 @@ export default function Contact() {
                           name="urgency"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Urgency</FormLabel>
+                              <FormLabel>Urgency *</FormLabel>
                               <Select
                                 onValueChange={field.onChange}
                                 defaultValue={field.value}

@@ -89,12 +89,12 @@ export default function InquiryForm({
 
   const validate = (): string | null => {
     if (!firstName.trim()) return "Please enter your first name";
-    if (!lastName.trim()) return "Please enter your last name";
     if (!email.trim()) return "Please enter your email address";
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email.trim()))
       return "Please enter a valid email address";
     if (!message.trim()) return "Please tell us about the job";
+    if (!hearAbout) return "Please tell us how you heard about us";
     return null;
   };
 
@@ -170,7 +170,7 @@ export default function InquiryForm({
               htmlFor="firstName"
               className="block text-sm font-medium text-foreground mb-1.5"
             >
-              First name
+              First name *
             </label>
             <Input
               id="firstName"
@@ -194,7 +194,6 @@ export default function InquiryForm({
               onChange={(e) => setLastName(e.target.value)}
               placeholder=""
               data-testid="input-last-name"
-              required
             />
           </div>
         </div>
@@ -204,7 +203,7 @@ export default function InquiryForm({
             htmlFor="inquiryEmail"
             className="block text-sm font-medium text-foreground mb-1.5"
           >
-            Email
+            Email *
           </label>
           <Input
             id="inquiryEmail"
@@ -239,7 +238,7 @@ export default function InquiryForm({
             htmlFor="inquiryMessage"
             className="block text-sm font-medium text-foreground mb-1.5"
           >
-            Message
+            Message *
           </label>
           <Textarea
             id="inquiryMessage"
@@ -257,7 +256,7 @@ export default function InquiryForm({
             htmlFor="hearAbout"
             className="block text-sm font-medium text-foreground mb-1.5"
           >
-            How did you find us?
+            How did you find us? *
           </label>
           <Select value={hearAbout} onValueChange={setHearAbout}>
             <SelectTrigger
