@@ -27,6 +27,90 @@ export const objectStorageClient = new Storage({
   projectId: "",
 });
 
+export type PhotoLabel = "BEFORE" | "AFTER";
+
+async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
+  const meta = await sharp(buffer).metadata();
+  const w = meta.width ?? 1200;
+  const fontSize = Math.max(48, Math.round(w / 18));
+  const padX = Math.round(fontSize * 0.6);
+  const padY = Math.round(fontSize * 0.3);
+  const boxW = Math.round(label.length * fontSize * 0.62 + padX * 2);
+  const boxH = Math.round(fontSize + padY * 2);
+  const offset = Math.round(fontSize * 0.6);
+  const svg = `<svg width="${boxW}" height="${boxH}" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" width="${boxW}" height="${boxH}" rx="${Math.round(boxH / 2)}" fill="rgba(0,0,0,0.65)"/>
+    <text x="${padX}" y="${Math.round(fontSize + padY * 0.7)}" font-family="Inter, Arial, sans-serif"
+          font-size="${fontSize}" font-weight="700" fill="white" letter-spacing="2">${label}</text>
+  </svg>`;
+  return sharp(buffer)
+    .composite([{ input: Buffer.from(svg), top: offset, left: offset }])
+    .jpeg({ quality: 88 })
+    .toBuffer();
+}
+
+// Stitch two images into one side-by-side JPEG with BEFORE/AFTER labels burned in.
+// HEIC/HEIF inputs are converted to JPEG first. Each side is resized to a common
+// height (the smaller of the two) and a thin divider sits between them.
+export async function composeBeforeAfter(
+  beforeInput: { buffer: Buffer; mimeType: string; filename: string },
+  afterInput: { buffer: Buffer; mimeType: string; filename: string },
+): Promise<Buffer> {
+  const toJpegBuffer = async (input: { buffer: Buffer; mimeType: string; filename: string }) => {
+    const ext = input.filename.split(".").pop()?.toLowerCase() || "";
+    const isHeic =
+      ext === "heic" ||
+      ext === "heif" ||
+      input.mimeType === "image/heic" ||
+      input.mimeType === "image/heif";
+    if (!isHeic) return input.buffer;
+    const jpeg = await heicConvert({ buffer: input.buffer, format: "JPEG", quality: 0.85 });
+    return Buffer.from(jpeg);
+  };
+
+  const [beforeJpeg, afterJpeg] = await Promise.all([toJpegBuffer(beforeInput), toJpegBuffer(afterInput)]);
+  const [beforeLabelled, afterLabelled] = await Promise.all([
+    burnLabel(beforeJpeg, "BEFORE"),
+    burnLabel(afterJpeg, "AFTER"),
+  ]);
+
+  const [beforeMeta, afterMeta] = await Promise.all([
+    sharp(beforeLabelled).metadata(),
+    sharp(afterLabelled).metadata(),
+  ]);
+
+  // Force a true 50/50 split: each half gets identical dimensions and the source
+  // is cover-fit (centre-cropped) into that box. Picking the smaller width and
+  // height across the two avoids upscaling either photo.
+  const halfWidth = Math.min(beforeMeta.width ?? 1080, afterMeta.width ?? 1080);
+  const targetHeight = Math.min(beforeMeta.height ?? 1080, afterMeta.height ?? 1080);
+  const [leftBuf, rightBuf] = await Promise.all([
+    sharp(beforeLabelled)
+      .resize({ width: halfWidth, height: targetHeight, fit: "cover", position: "centre" })
+      .toBuffer(),
+    sharp(afterLabelled)
+      .resize({ width: halfWidth, height: targetHeight, fit: "cover", position: "centre" })
+      .toBuffer(),
+  ]);
+  const dividerW = Math.max(2, Math.round(targetHeight / 360));
+  const totalW = halfWidth * 2 + dividerW;
+
+  return sharp({
+    create: {
+      width: totalW,
+      height: targetHeight,
+      channels: 3,
+      background: { r: 0, g: 0, b: 0 },
+    },
+  })
+    .composite([
+      { input: leftBuf, left: 0, top: 0 },
+      { input: rightBuf, left: halfWidth + dividerW, top: 0 },
+    ])
+    .jpeg({ quality: 88 })
+    .toBuffer();
+}
+
 export class PhotoStorageService {
   private getPrivateObjectDir(): string {
     const dir = process.env.PRIVATE_OBJECT_DIR || "";
@@ -51,13 +135,13 @@ export class PhotoStorageService {
     return { bucketName, objectName };
   }
 
-  async uploadPhoto(fileBuffer: Buffer, originalFilename: string, mimeType: string): Promise<{ url: string; thumbnailUrl: string }> {
+  async uploadPhoto(fileBuffer: Buffer, originalFilename: string, mimeType: string, opts?: { label?: PhotoLabel }): Promise<{ url: string; thumbnailUrl: string }> {
     const privateDir = this.getPrivateObjectDir();
     const timestamp = Date.now();
     let extension = originalFilename.split('.').pop()?.toLowerCase() || 'jpg';
     let processedBuffer = fileBuffer;
     let finalMimeType = mimeType;
-    
+
     // Convert HEIC/HEIF to JPEG during upload for universal compatibility
     if (extension === 'heic' || extension === 'heif' || mimeType === 'image/heic' || mimeType === 'image/heif') {
       console.log(`🔄 Converting HEIC to JPEG during upload: ${originalFilename}`);
@@ -67,7 +151,7 @@ export class PhotoStorageService {
           format: 'JPEG',
           quality: 0.8
         });
-        
+
         processedBuffer = Buffer.from(jpegBuffer);
         extension = 'jpg';
         finalMimeType = 'image/jpeg';
@@ -77,7 +161,20 @@ export class PhotoStorageService {
         // Keep original if conversion fails
       }
     }
-    
+
+    // Burn Before/After label after HEIC conversion so it lands in both the saved
+    // original and the thumbnail (which is generated from processedBuffer below).
+    if (opts?.label) {
+      try {
+        processedBuffer = await burnLabel(processedBuffer, opts.label);
+        extension = 'jpg';
+        finalMimeType = 'image/jpeg';
+        console.log(`🏷️  Burned ${opts.label} label onto ${originalFilename}`);
+      } catch (labelError) {
+        console.error(`❌ Label burn failed for ${originalFilename}, uploading without label:`, labelError);
+      }
+    }
+
     const uniqueFilename = `${timestamp}_${randomUUID()}.${extension}`;
     const bucket = objectStorageClient.bucket(this.parseObjectPath(privateDir).bucketName);
 

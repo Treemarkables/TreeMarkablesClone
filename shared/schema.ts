@@ -3922,5 +3922,30 @@ export type NearMissAction = typeof nearMissActions.$inferSelect;
 export type InsertNearMissAction = z.infer<typeof insertNearMissActionSchema>;
 export type UpdateNearMissAction = z.infer<typeof updateNearMissActionSchema>;
 
+// ==========================================
+// JOB COMPLETION CHECKLIST (manual ticks)
+// ==========================================
+// One row per (jobId, itemId) when an operator marks the item complete.
+// Absence of a row means "not done". Toggling off deletes the row.
+export const jobChecklistCompletions = pgTable("job_checklist_completions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  itemId: text("item_id").notNull(),
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  completedByEmployeeId: varchar("completed_by_employee_id").references(() => employees.id),
+  completedByName: text("completed_by_name"),
+}, (table) => ({
+  jobItemUnique: unique("job_checklist_completions_job_item_unique").on(table.jobId, table.itemId),
+  jobIdx: index("job_checklist_completions_job_idx").on(table.jobId),
+}));
+
+export const insertJobChecklistCompletionSchema = createInsertSchema(jobChecklistCompletions).omit({
+  id: true,
+  completedAt: true,
+});
+
+export type JobChecklistCompletion = typeof jobChecklistCompletions.$inferSelect;
+export type InsertJobChecklistCompletion = z.infer<typeof insertJobChecklistCompletionSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

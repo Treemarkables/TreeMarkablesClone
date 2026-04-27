@@ -959,6 +959,11 @@ export interface IStorage {
   getNotificationPreferences(employeeId: string): Promise<schema.NotificationPreferences | undefined>;
   updateNotificationPreferences(employeeId: string, updates: Partial<schema.InsertNotificationPreferences>): Promise<schema.NotificationPreferences>;
 
+  // Job completion checklist (manual ticks)
+  getJobChecklistCompletions(jobId: string): Promise<schema.JobChecklistCompletion[]>;
+  setJobChecklistItem(jobId: string, itemId: string, employeeId: string | null, employeeName: string | null): Promise<schema.JobChecklistCompletion>;
+  clearJobChecklistItem(jobId: string, itemId: string): Promise<void>;
+
   // Call Records
   createCallRecord(record: schema.InsertCallRecord): Promise<schema.CallRecord>;
   getCallRecord(id: string): Promise<schema.CallRecord | null>;
@@ -6652,6 +6657,51 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.notificationPreferences.employeeId, employeeId))
       .returning();
     return result;
+  }
+
+  // ========================================
+  // JOB COMPLETION CHECKLIST (manual ticks)
+  // ========================================
+
+  async getJobChecklistCompletions(jobId: string): Promise<schema.JobChecklistCompletion[]> {
+    return await db.select()
+      .from(schema.jobChecklistCompletions)
+      .where(eq(schema.jobChecklistCompletions.jobId, jobId));
+  }
+
+  async setJobChecklistItem(
+    jobId: string,
+    itemId: string,
+    employeeId: string | null,
+    employeeName: string | null,
+  ): Promise<schema.JobChecklistCompletion> {
+    const [result] = await db.insert(schema.jobChecklistCompletions)
+      .values({
+        jobId,
+        itemId,
+        completedByEmployeeId: employeeId,
+        completedByName: employeeName,
+      })
+      .onConflictDoUpdate({
+        target: [schema.jobChecklistCompletions.jobId, schema.jobChecklistCompletions.itemId],
+        set: {
+          completedAt: new Date(),
+          completedByEmployeeId: employeeId,
+          completedByName: employeeName,
+        },
+      })
+      .returning();
+    return result;
+  }
+
+  async clearJobChecklistItem(jobId: string, itemId: string): Promise<void> {
+    await db.delete(schema.jobChecklistCompletions)
+      .where(
+        and(
+          eq(schema.jobChecklistCompletions.jobId, jobId),
+          eq(schema.jobChecklistCompletions.itemId, itemId),
+        ),
+      );
   }
 
   // ========================================

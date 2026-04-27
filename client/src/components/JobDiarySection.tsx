@@ -69,10 +69,12 @@ import {
   MousePointerClick,
   Reply,
   CalendarPlus,
+  Images,
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import WelcomeVideoModal from "@/components/WelcomeVideoModal";
+import { BeforeAfterCaptureModal } from "@/components/BeforeAfterCaptureModal";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
 // ── Email-thread helpers ────────────────────────────────────────────────────
@@ -570,6 +572,7 @@ export function JobDiarySection({
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     null,
   );
+  const [isBeforeAfterModalOpen, setIsBeforeAfterModalOpen] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>("");
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(
@@ -3385,8 +3388,26 @@ export function JobDiarySection({
               <Phone className="w-3 h-3 mr-1" />
               Call
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => setIsBeforeAfterModalOpen(true)}
+              data-testid="button-before-after"
+              className="h-7 text-xs flex-1 min-w-[100px] whitespace-nowrap"
+            >
+              <Images className="w-3 h-3 mr-1" />
+              Before/After
+            </Button>
           </div>
         </div>
+
+        <BeforeAfterCaptureModal
+          isOpen={isBeforeAfterModalOpen}
+          onClose={() => setIsBeforeAfterModalOpen(false)}
+          jobId={jobId}
+        />
+
 
         {/* Composer Dialogs */}
         <Dialog

@@ -93,7 +93,7 @@ import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
 import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
-import { PhotoStorageService, objectStorageClient } from "./photoStorage";
+import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
@@ -5910,6 +5910,50 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // ----- Job completion checklist (manual ticks) -----
+
+  app.get('/api/jobs/:jobId/checklist', async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      if (jobId.startsWith('temp-')) {
+        res.json({ success: true, data: [] });
+        return;
+      }
+      const completions = await storage.getJobChecklistCompletions(jobId);
+      res.json({ success: true, data: completions });
+    } catch (error) {
+      console.error('Error fetching job checklist:', error);
+      res.status(500).json({ success: false, message: 'Error fetching checklist' });
+    }
+  });
+
+  app.post('/api/jobs/:jobId/checklist/:itemId', async (req: Request, res: Response) => {
+    try {
+      const { jobId, itemId } = req.params;
+      const { completed } = req.body ?? {};
+      const employeeId = req.session.employeeId;
+      if (!employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      if (jobId.startsWith('temp-')) {
+        return res.status(400).json({ success: false, message: 'Save the job before ticking checklist items' });
+      }
+      if (completed === false) {
+        await storage.clearJobChecklistItem(jobId, itemId);
+        return res.json({ success: true, data: null });
+      }
+      const employee = await storage.getEmployee(employeeId);
+      const employeeName = employee
+        ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
+        : null;
+      const result = await storage.setJobChecklistItem(jobId, itemId, employeeId, employeeName);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error toggling job checklist item:', error);
+      res.status(500).json({ success: false, message: 'Error updating checklist' });
+    }
+  });
+
   // Get single diary entry
   app.get('/api/diary/:id', async (req: Request, res: Response) => {
     try {
@@ -6063,6 +6107,130 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       });
     }
   });
+
+  // Upload a Before/After photo pair: AI decides which is which, labels are burned
+  // into the saved files, one diary entry is created with both photos in order.
+  app.post(
+    '/api/jobs/:jobId/diary/before-after',
+    imageUpload.fields([{ name: 'photo1', maxCount: 1 }, { name: 'photo2', maxCount: 1 }]),
+    async (req: Request, res: Response) => {
+      try {
+        const { jobId } = req.params;
+        const files = req.files as { photo1?: Express.Multer.File[]; photo2?: Express.Multer.File[] } | undefined;
+        const photo1 = files?.photo1?.[0];
+        const photo2 = files?.photo2?.[0];
+
+        if (!photo1 || !photo2) {
+          return res.status(400).json({ success: false, message: 'Both photo1 and photo2 are required' });
+        }
+
+        // Ask GPT-5 vision which photo is "before" and which is "after".
+        let beforeIndex = 0;
+        let afterIndex = 1;
+        try {
+          // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
+          const visionResponse = await openai.chat.completions.create({
+            model: 'gpt-5',
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: `These two photos show a tree-care job in New Zealand. One is the "before" (work not yet done — tree present, overgrown, hazardous, debris on site) and one is the "after" (work completed — tree trimmed/removed, site cleared).
+
+Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image index (0 = first image, 1 = second image). The two values must be different.`,
+                  },
+                  { type: 'image_url', image_url: { url: `data:${photo1.mimetype};base64,${photo1.buffer.toString('base64')}` } },
+                  { type: 'image_url', image_url: { url: `data:${photo2.mimetype};base64,${photo2.buffer.toString('base64')}` } },
+                ],
+              },
+            ],
+            response_format: { type: 'json_object' },
+            max_completion_tokens: 200,
+          });
+
+          const raw = visionResponse.choices[0]?.message?.content || '{}';
+          const parsed = JSON.parse(raw);
+          if (
+            (parsed.before === 0 || parsed.before === 1) &&
+            (parsed.after === 0 || parsed.after === 1) &&
+            parsed.before !== parsed.after
+          ) {
+            beforeIndex = parsed.before;
+            afterIndex = parsed.after;
+            console.log(`🤖 Vision decided: photo${beforeIndex + 1}=before, photo${afterIndex + 1}=after`);
+          } else {
+            console.warn('🤖 Vision returned unexpected JSON, using upload order as fallback:', raw);
+          }
+        } catch (visionError) {
+          console.error('🤖 Vision call failed, using upload order as fallback:', visionError);
+        }
+
+        const photos = [photo1, photo2];
+        const beforeFile = photos[beforeIndex];
+        const afterFile = photos[afterIndex];
+
+        // Stitch BEFORE + AFTER into a single labelled side-by-side JPEG so the
+        // diary shows one tile, one image to share, instead of two separate cards.
+        const compositeBuffer = await composeBeforeAfter(
+          { buffer: beforeFile.buffer, mimeType: beforeFile.mimetype, filename: beforeFile.originalname },
+          { buffer: afterFile.buffer, mimeType: afterFile.mimetype, filename: afterFile.originalname },
+        );
+
+        const photoStorage = new PhotoStorageService();
+        const compositeUpload = await photoStorage.uploadPhoto(
+          compositeBuffer,
+          'before-after.jpg',
+          'image/jpeg',
+        );
+
+        const beforeAfterPairId = randomUUID();
+        const authorName = (req.body?.authorName as string) || 'User';
+
+        const diaryEntry = await storage.createJobDiaryEntry({
+          jobId,
+          entryType: 'photo',
+          title: 'Before / After',
+          description: 'AI-labelled before/after composite',
+          authorName,
+          photoUrl: compositeUpload.url,
+          photos: [compositeUpload.url],
+          tags: ['before-after-pair', `pair:${beforeAfterPairId}`, 'composite'],
+          isPrivate: false,
+        });
+
+        const now = new Date();
+        try {
+          await db.insert(schema.photos).values({
+            jobId,
+            jobDiaryEntryId: diaryEntry.id,
+            url: compositeUpload.url,
+            thumbnailUrl: compositeUpload.thumbnailUrl,
+            filename: compositeUpload.url.split('/').pop() || 'before-after.jpg',
+            originalName: 'before-after.jpg',
+            mimeType: 'image/jpeg',
+            fileSize: compositeBuffer.length,
+            type: 'before-after',
+            capturedAt: now,
+            capturedBy: authorName,
+            beforeAfterPairId,
+            sequenceOrder: 0,
+          });
+        } catch (photoRowError) {
+          console.error('⚠️ Failed to insert photos table row for before/after composite:', photoRowError);
+        }
+
+        res.json({ success: true, data: { entry: diaryEntry } });
+      } catch (error) {
+        console.error('Error creating before/after diary entry:', error);
+        res.status(500).json({
+          success: false,
+          message: error instanceof Error ? error.message : 'Error creating before/after diary entry',
+        });
+      }
+    },
+  );
 
   // Serve photos from object storage
   app.get('/objects/photos/:filename', async (req: Request, res: Response) => {

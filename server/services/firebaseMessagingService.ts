@@ -7,7 +7,8 @@ class FirebaseMessagingService {
   private init(): boolean {
     if (this.initialized) return true;
 
-    const serviceAccountStr = process.env.FIREBASE_SERVICE_ACCOUNT;
+    const serviceAccountStr =
+      process.env.FIREBASE_SERVICE_ACCOUNT || process.env.Fire_Service_Account;
     if (!serviceAccountStr) {
       console.warn('⚠️  Firebase service account not configured - push notifications disabled');
       return false;
