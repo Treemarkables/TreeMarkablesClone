@@ -5928,6 +5928,19 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Item IDs are split across the two day-roles (Kaiwhangai = A, Kaitirotiro = B)
+  // and matched by the panel client-side. Whitelisted here so stale clients can't
+  // write retired item IDs (e.g. 'time-tracking', 'review') into the table.
+  const ALLOWED_CHECKLIST_ITEM_IDS = new Set([
+    'risk-assessment',
+    'content-creation',
+    'alert-customer-late',
+    'signs-out',
+    'pre-start',
+    'time-tracking',
+    'review-request',
+  ]);
+
   app.post('/api/jobs/:jobId/checklist/:itemId', async (req: Request, res: Response) => {
     try {
       const { jobId, itemId } = req.params;
@@ -5938,6 +5951,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
       if (jobId.startsWith('temp-')) {
         return res.status(400).json({ success: false, message: 'Save the job before ticking checklist items' });
+      }
+      if (!ALLOWED_CHECKLIST_ITEM_IDS.has(itemId)) {
+        return res.status(400).json({ success: false, message: `Unknown checklist item: ${itemId}` });
       }
       if (completed === false) {
         await storage.clearJobChecklistItem(jobId, itemId);
@@ -13072,12 +13088,12 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Must be registered BEFORE /api/staff-assignments/:id so Express doesn't match :id="day-role".
   app.put('/api/staff-assignments/day-role', async (req: Request, res: Response) => {
     try {
-      const { employeeId, date, dayRole } = req.body as { employeeId?: string; date?: string; dayRole?: 'A' | 'B' | null };
+      const { employeeId, date, dayRole } = req.body as { employeeId?: string; date?: string; dayRole?: 'A' | 'B' | 'C' | null };
       if (!employeeId || !date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         return res.status(400).json({ success: false, message: 'employeeId and date (YYYY-MM-DD) required' });
       }
-      if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B') {
-        return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', or null" });
+      if (dayRole !== null && dayRole !== 'A' && dayRole !== 'B' && dayRole !== 'C') {
+        return res.status(400).json({ success: false, message: "dayRole must be 'A', 'B', 'C', or null" });
       }
       const startUtc = fromZonedTime(`${date}T00:00:00`, 'Pacific/Auckland');
       const endUtc = fromZonedTime(`${date}T23:59:59.999`, 'Pacific/Auckland');
@@ -13111,32 +13127,6 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     } catch (error) {
       console.error('Error updating staff assignment:', error);
       res.status(500).json({ success: false, message: 'Error updating staff assignment' });
-    }
-  });
-
-  // Toggle Role A / Role B completion for a job. Truth = presence of *CompletedAt timestamp.
-  // Dedicated route so we skip the full insertJobSchema parse + side-effects on PATCH /api/jobs/:id.
-  app.patch('/api/jobs/:jobId/role-completion', async (req: Request, res: Response) => {
-    try {
-      const { jobId } = req.params;
-      const { role, completed, completedBy } = req.body as { role?: 'A' | 'B'; completed?: boolean; completedBy?: string | null };
-      if (role !== 'A' && role !== 'B') {
-        return res.status(400).json({ success: false, message: "role must be 'A' or 'B'" });
-      }
-      if (typeof completed !== 'boolean') {
-        return res.status(400).json({ success: false, message: 'completed must be a boolean' });
-      }
-      const ts = completed ? new Date() : null;
-      const by = completed ? (completedBy ?? null) : null;
-      const updates = role === 'A'
-        ? { roleACompletedAt: ts, roleACompletedBy: by }
-        : { roleBCompletedAt: ts, roleBCompletedBy: by };
-      const updated = await storage.updateJob(jobId, updates as Parameters<typeof storage.updateJob>[1]);
-      if (!updated) return res.status(404).json({ success: false, message: 'Job not found' });
-      res.json({ success: true, data: updated });
-    } catch (error) {
-      console.error('Error updating role completion:', error);
-      res.status(500).json({ success: false, message: 'Error updating role completion' });
     }
   });
 

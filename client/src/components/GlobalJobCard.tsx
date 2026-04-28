@@ -102,7 +102,6 @@ import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobChecklistPanel } from "./JobChecklistPanel";
-import { JobRoleCompletionCard } from "./JobRoleCompletionCard";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -9376,7 +9375,6 @@ The Treemarkables Team`;
                     <>
                       {editingJob ? (
                         <>
-                          <JobRoleCompletionCard jobId={editingJob.id} />
                           <JobChecklistPanel jobId={editingJob.id} />
                         </>
                       ) : (
