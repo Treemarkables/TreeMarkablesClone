@@ -359,11 +359,11 @@ export const quotes = pgTable("quotes", {
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
-  // NOTE: a `customer_contact_id` column linking a job to a saved contact under
-  // the customer (see customerContacts table) is intentionally NOT declared
-  // here yet. It will be added in a follow-up after `npm run db:push` has
-  // applied the customerContacts table to the live DB. Until then, the job
-  // card's saved-contact picker fills jobContact* fields directly.
+  // Optional pointer to a saved contact under the customer (see customerContacts).
+  // When set, the job's jobContact* fields default from this contact but remain
+  // independently editable so historical jobs aren't rewritten if the contact
+  // record is later updated.
+  customerContactId: varchar("customer_contact_id").references(() => customerContacts.id, { onDelete: "set null" }),
   quoteId: varchar("quote_id").references(() => quotes.id),
   jobNumber: text("job_number").notNull().unique(),
   title: text("title"),

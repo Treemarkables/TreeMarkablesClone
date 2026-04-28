@@ -220,6 +220,9 @@ const globalJobCardSchema = insertJobSchema
     newCustomerCity: z.string().optional(),
     newCustomerRegion: z.string().optional(),
 
+    // Saved contact under the customer (multi-contact orgs like councils)
+    customerContactId: z.string().optional().nullable(),
+
     // Contact information
     jobContactFirstName: z.string().optional(),
     jobContactLastName: z.string().optional(),
@@ -1403,9 +1406,6 @@ export function GlobalJobCard({
   const customerContacts: any[] = customerContactsQuery.data?.data || [];
 
   const [showAddContactDialog, setShowAddContactDialog] = useState(false);
-  // Local-only — picker selection isn't persisted to the job row yet (waiting
-  // on a `customer_contact_id` column to be added via db:push).
-  const [pickedContactId, setPickedContactId] = useState<string>("");
   const [contactDraft, setContactDraft] = useState({
     firstName: "",
     lastName: "",
@@ -1429,7 +1429,8 @@ export function GlobalJobCard({
           queryKey: ["/api/customers", selectedCustomer?.id, "contacts"],
         });
         const c = response.data;
-        setPickedContactId(c.id);
+        // Auto-pick the freshly-created contact and fill the job-contact fields
+        form.setValue("customerContactId", c.id, { shouldDirty: true });
         if (c.firstName) form.setValue("jobContactFirstName", c.firstName, { shouldDirty: true });
         if (c.lastName) form.setValue("jobContactLastName", c.lastName, { shouldDirty: true });
         if (c.email) form.setValue("jobContactEmail", c.email, { shouldDirty: true });
@@ -1444,7 +1445,7 @@ export function GlobalJobCard({
   const handleSelectSavedContact = (contactId: string) => {
     const c = customerContacts.find((x) => x.id === contactId);
     if (!c) return;
-    setPickedContactId(c.id);
+    form.setValue("customerContactId", c.id, { shouldDirty: true });
     form.setValue("jobContactFirstName", c.firstName || "", { shouldDirty: true });
     form.setValue("jobContactLastName", c.lastName || "", { shouldDirty: true });
     form.setValue("jobContactEmail", c.email || "", { shouldDirty: true });
@@ -7995,7 +7996,7 @@ The Treemarkables Team`;
                               </div>
                               {customerContacts.length > 0 ? (
                                 <Select
-                                  value={pickedContactId}
+                                  value={form.watch("customerContactId") || ""}
                                   onValueChange={handleSelectSavedContact}
                                 >
                                   <SelectTrigger className="h-8 text-xs bg-white" data-testid="select-customer-contact">
