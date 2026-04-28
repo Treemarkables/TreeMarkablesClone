@@ -2244,6 +2244,15 @@ export function JobDiarySection({
                     parent?.metadata?.recipient ||
                     "";
 
+                  // All entries in chronological order so the thread reads
+                  // top-to-bottom like a chat. Each row is direction-aware
+                  // (incoming = purple, outgoing = blue) so it's obvious who
+                  // wrote what without scanning the labels.
+                  const threadEntries = parent ? [parent, ...replies] : replies;
+                  const counterpartyAddr =
+                    threadEntries
+                      .map((e) => getEmailAddress(e))
+                      .find((a): a is string => !!a) || "";
                   return (
                     <div
                       key={`email-thread-${groupIndex}`}
@@ -2251,149 +2260,109 @@ export function JobDiarySection({
                       data-testid="diary-email-thread"
                     >
                       <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-                        {parent && (
-                          <>
-                            {/* Parent email header */}
-                            <div className="flex items-start justify-between gap-2 px-3 py-2">
-                              <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                <MdEmail className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
-                                <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                                  Email
-                                </span>
-                                {parentRecipient && (
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                    to {parentRecipient}
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
-                                  {formatInTimeZone(
-                                    new Date(parent.timestamp),
-                                    "Pacific/Auckland",
-                                    "h:mm a dd/MM/yy",
-                                  )}
-                                </span>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (confirm("Delete this email?")) {
-                                      deleteEntryMutation.mutate(parent.id);
-                                    }
-                                  }}
-                                  data-testid={`button-delete-email-thread-${parent.id}`}
-                                >
-                                  <Trash2 className="w-2.5 h-2.5" />
-                                </Button>
-                              </div>
-                            </div>
+                        {/* Thread header */}
+                        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                            <MdEmail className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                              Email thread
+                            </span>
+                            {counterpartyAddr && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                with {counterpartyAddr}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            {threadEntries.length}{" "}
+                            {threadEntries.length === 1 ? "message" : "messages"}
+                          </span>
+                        </div>
 
-                            {/* Parent body */}
-                            <div className="px-3 pb-3">
-                              <p
-                                className="text-xs leading-relaxed whitespace-pre-wrap break-words text-gray-800 dark:text-gray-200"
-                                style={{ wordBreak: "break-word" }}
+                        {/* Chronological message list */}
+                        <div className="px-3 py-3 space-y-3">
+                          {threadEntries.map((msg) => {
+                            const direction = getEmailDirection(msg);
+                            const cleaned = cleanEmailMessage(msg, direction);
+                            const isOutgoing = direction === "sent";
+                            const senderLabel = isOutgoing
+                              ? `to ${cleaned.recipient || msg.metadata?.emailAddress || msg.metadata?.recipient || counterpartyAddr || "customer"}`
+                              : `from ${
+                                  msg.author && msg.author !== "System"
+                                    ? msg.author
+                                    : msg.metadata?.fromEmail ||
+                                      msg.metadata?.emailAddress ||
+                                      counterpartyAddr ||
+                                      "customer"
+                                }`;
+                            const accent = isOutgoing
+                              ? "border-blue-400 dark:border-blue-500"
+                              : "border-purple-400 dark:border-purple-500";
+                            const bubbleBg = isOutgoing
+                              ? "bg-blue-50 dark:bg-blue-900/30"
+                              : "bg-purple-50 dark:bg-purple-900/30";
+                            const bubbleText = isOutgoing
+                              ? "text-blue-900 dark:text-blue-100"
+                              : "text-purple-900 dark:text-purple-100";
+                            const labelText = isOutgoing
+                              ? "text-blue-700 dark:text-blue-300"
+                              : "text-purple-700 dark:text-purple-300";
+                            const iconColor = isOutgoing
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-purple-600 dark:text-purple-400";
+                            return (
+                              <div
+                                key={msg.id}
+                                className={`border-l-2 pl-3 ml-1 ${accent}`}
+                                data-testid={`email-thread-msg-${msg.id}`}
                               >
-                                {parentMsg.text}
-                              </p>
-                            </div>
-
-                            {/* Tracking + Book row */}
-                            <div className="flex items-center justify-between gap-2 px-3 py-1.5 border-t border-gray-100 dark:border-gray-800">
-                              {parentDirection === "sent" ? (
-                                parent.metadata?.sendgridMessageId ? (
-                                  <EmailActivity
-                                    messageId={parent.metadata.sendgridMessageId}
-                                  />
-                                ) : (
-                                  <div className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                                    <CheckCircle className="h-2.5 w-2.5" />
-                                    <span>Sent</span>
+                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                    {isOutgoing ? (
+                                      <Send className={`w-3 h-3 flex-shrink-0 ${iconColor}`} />
+                                    ) : (
+                                      <Reply className={`w-3 h-3 flex-shrink-0 ${iconColor}`} />
+                                    )}
+                                    <span className={`text-xs font-medium ${labelText}`}>
+                                      {isOutgoing ? "You sent" : "Reply received"}
+                                    </span>
+                                    <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                      {senderLabel}
+                                    </span>
                                   </div>
-                                )
-                              ) : (
-                                <div />
-                              )}
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openCalendarBookingFromEntry(parent);
-                                }}
-                                data-testid={`button-calendar-book-email-thread-${parent.id}`}
-                              >
-                                <CalendarPlus className="w-3 h-3 mr-0.5" />
-                                Book
-                              </Button>
-                            </div>
-                          </>
-                        )}
-
-                        {/* Replies — indented under a purple thread bar */}
-                        {replies.length > 0 && (
-                          <div
-                            className={`${parent ? "border-t border-gray-100 dark:border-gray-800" : ""} px-3 py-3 space-y-3`}
-                          >
-                            {replies.map((reply) => {
-                              const replyMsg = cleanEmailMessage(reply, "received");
-                              const senderName =
-                                reply.author && reply.author !== "System"
-                                  ? reply.author
-                                  : reply.metadata?.emailAddress ||
-                                    "customer";
-                              return (
-                                <div
-                                  key={reply.id}
-                                  className="border-l-2 border-purple-400 dark:border-purple-500 pl-3 ml-1"
-                                  data-testid={`email-thread-reply-${reply.id}`}
-                                >
-                                  <div className="flex items-start justify-between gap-2 mb-1.5">
-                                    <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
-                                      <Reply className="w-3 h-3 text-purple-600 dark:text-purple-400 flex-shrink-0" />
-                                      <span className="text-xs font-medium text-purple-700 dark:text-purple-300">
-                                        Reply received
-                                      </span>
-                                      <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
-                                        from {senderName}
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center gap-1 flex-shrink-0">
-                                      <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
-                                        {formatInTimeZone(
-                                          new Date(reply.timestamp),
-                                          "Pacific/Auckland",
-                                          "h:mm a dd/MM/yy",
-                                        )}
-                                      </span>
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          if (confirm("Delete this reply?")) {
-                                            deleteEntryMutation.mutate(reply.id);
-                                          }
-                                        }}
-                                        data-testid={`button-delete-reply-${reply.id}`}
-                                      >
-                                        <Trash2 className="w-2.5 h-2.5" />
-                                      </Button>
-                                    </div>
-                                  </div>
-                                  <div className="rounded-md bg-purple-50 dark:bg-purple-900/30 px-3 py-2">
-                                    <p
-                                      className="text-xs leading-relaxed whitespace-pre-wrap break-words text-purple-900 dark:text-purple-100"
-                                      style={{ wordBreak: "break-word" }}
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
+                                      {formatInTimeZone(
+                                        new Date(msg.timestamp),
+                                        "Pacific/Auckland",
+                                        "h:mm a dd/MM/yy",
+                                      )}
+                                    </span>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Delete this email?")) {
+                                          deleteEntryMutation.mutate(msg.id);
+                                        }
+                                      }}
+                                      data-testid={`button-delete-thread-msg-${msg.id}`}
                                     >
-                                      {replyMsg.text}
-                                    </p>
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                    </Button>
                                   </div>
+                                </div>
+                                <div className={`rounded-md px-3 py-2 ${bubbleBg}`}>
+                                  <p
+                                    className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${bubbleText}`}
+                                    style={{ wordBreak: "break-word" }}
+                                  >
+                                    {cleaned.text}
+                                  </p>
+                                </div>
+                                {!isOutgoing && (
                                   <div className="mt-1.5 flex items-center justify-end gap-1">
                                     <Button
                                       size="sm"
@@ -2401,12 +2370,11 @@ export function JobDiarySection({
                                       className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        startReplyFromEntry(reply);
+                                        startReplyFromEntry(msg);
                                       }}
-                                      data-testid={`button-reply-${reply.id}`}
+                                      data-testid={`button-reply-${msg.id}`}
                                     >
-                                      <Reply className="w-3 h-3 mr-0.5" />
-                                      Reply
+                                      <Reply className="w-3 h-3 mr-0.5" /> Reply
                                     </Button>
                                     <Button
                                       size="sm"
@@ -2414,19 +2382,25 @@ export function JobDiarySection({
                                       className="h-6 text-[10px] px-2 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-800"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        openCalendarBookingFromEntry(reply);
+                                        openCalendarBookingFromEntry(msg);
                                       }}
-                                      data-testid={`button-calendar-book-${reply.id}`}
+                                      data-testid={`button-calendar-book-${msg.id}`}
                                     >
-                                      <CalendarPlus className="w-3 h-3 mr-0.5" />
-                                      Book
+                                      <CalendarPlus className="w-3 h-3 mr-0.5" /> Book
                                     </Button>
                                   </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                                )}
+                                {isOutgoing && msg.metadata?.sendgridMessageId && (
+                                  <div className="mt-1.5 flex items-center justify-end">
+                                    <EmailActivity
+                                      messageId={msg.metadata.sendgridMessageId}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </div>
                   );

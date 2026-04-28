@@ -439,26 +439,16 @@ export function InvoiceBuilder({
       }));
     }
 
-    // Final fallback to job total
-    if (extractedItems.length === 0) {
-      extractedItems = [
-        {
-          id: Math.random().toString(),
-          description: job.description || "Tree service",
-          quantity: 1,
-          unitPrice: parseFloat(job.totalAmount || "0"),
-          total: parseFloat(job.totalAmount || "0"),
-        },
-      ];
-    }
+    // No final fallback — if there's no proposal, quote, or job line items,
+    // start with an empty line-items list so the user picks what goes on the
+    // invoice. We used to pre-fill a single line "<job description> · $total"
+    // but that forced people to delete it on every fresh invoice and was
+    // bleeding job descriptions into invoices unintentionally.
 
-    // If proposal/quote items are available, always prefer them over the existing invoice's items.
-    // This ensures the invoice is pre-filled with the accepted/sent quote without requiring
-    // the user to manually click "Import from Quote/Proposal".
-    const hasProposalOrQuoteItems = extractedItems.length > 0 &&
-      !(extractedItems.length === 1 &&
-        extractedItems[0].description === (job.description || "Tree service") &&
-        !proposal && !quote);
+    // If proposal/quote items are available, prefer them over the existing
+    // invoice's items so the invoice is pre-filled with the accepted/sent
+    // quote without requiring the user to click "Import from Quote/Proposal".
+    const hasProposalOrQuoteItems = extractedItems.length > 0;
 
     const existingItemsLookLikeProposalItems =
       existingInvoices.length > 0 &&

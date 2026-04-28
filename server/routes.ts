@@ -13703,7 +13703,10 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
 
       if (eventId) {
-        // If jobId provided, add a diary entry about the booking
+        // If jobId provided, add a diary entry about the booking AND advance
+        // the job's status if booking implies a transition. Without this, a
+        // lead with a confirmed quote-visit appointment stayed as 'lead' even
+        // though the next step (the on-site quote) was locked in.
         if (jobId) {
           try {
             await storage.createJobDiaryEntry({
@@ -13716,6 +13719,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             });
           } catch (diaryError) {
             console.error('Error creating diary entry for calendar booking:', diaryError);
+          }
+
+          try {
+            const job = await storage.getJob(jobId);
+            const nextStatus = statusAfterBooking(job?.status);
+            if (job && nextStatus && nextStatus !== job.status) {
+              await storage.updateJob(jobId, { status: nextStatus });
+              console.log(`📊 Quick-book advanced job ${job.jobNumber} status: ${job.status} → ${nextStatus}`);
+            }
+          } catch (statusError) {
+            console.error('Error advancing job status after quick-book:', statusError);
           }
         }
 
@@ -17057,11 +17071,23 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Facebook Messenger webhook - Receives incoming messages
+  // Facebook Messenger webhook - Receives incoming messages.
+  // GUARDED OFF: inbound Messenger DMs were filling the conversations
+  // inbox with spam, so the handler now acks Facebook (so they don't
+  // retry-bombard the endpoint) and stops before any conversation /
+  // notification is created. Re-enable by setting
+  // FACEBOOK_INBOUND_ENABLED=1 in the environment. The GET verify route
+  // above is left intact so Facebook keeps the page subscription healthy
+  // (still needed for Reviews fetching and outbound posting).
   app.post('/api/webhooks/messenger', async (req: Request, res: Response) => {
+    if (process.env.FACEBOOK_INBOUND_ENABLED !== '1') {
+      console.log('💬 Facebook Messenger inbound disabled — acked and skipped');
+      res.sendStatus(200);
+      return;
+    }
     try {
       const { entry } = req.body;
-      
+
       if (!entry || !Array.isArray(entry)) {
         res.sendStatus(200);
         return;

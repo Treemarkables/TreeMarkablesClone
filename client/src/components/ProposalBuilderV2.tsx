@@ -1915,30 +1915,7 @@ export function ProposalBuilderV2({
         <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 w-full">
           {/* ── Toolbar ── */}
           <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
-            {previewMode ? (
-              /* Preview mode toolbar */
-              <>
-                <button
-                  type="button"
-                  onClick={() => setPreviewMode(false)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" /> Back to Edit
-                </button>
-                <span className="text-sm font-medium text-gray-500">Customer Preview</span>
-                <button
-                  type="button"
-                  onClick={handleClose}
-                  aria-label="Close proposal"
-                  title="Close"
-                  className="flex items-center justify-center h-9 w-9 rounded-md text-white bg-red-500 shadow-sm hover:bg-red-600 transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </>
-            ) : (
-              /* Edit mode toolbar */
-              <>
+            <>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -1963,24 +1940,9 @@ export function ProposalBuilderV2({
               >
                 <MessageSquare className="w-4 h-4" /> SMS
               </button>
-              {draftId && (
-                <button
-                  type="button"
-                  onClick={async () => {
-                    // Save for persistence, but always use the client-side blocks for display
-                    // (server round-trip can return stale/empty data due to sectionId timing)
-                    try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* save errors don't block preview */ }
-                    setPreviewServerData(null); // Always use blocks.map() fallback
-                    setPreviewSelectedChoices({});
-                    setPreviewSelectedOptional({});
-                    setPreviewMode(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 transition-colors"
-                  title="Preview customer view"
-                >
-                  <Eye className="w-4 h-4" /> Preview
-                </button>
-              )}
+              {/* Preview button removed — the customer view now lives inline
+                  below the editor (scroll down to see it), matching the
+                  invoice modal's live-preview pattern. */}
             </div>
             <div className="flex items-center gap-2">
               {autoSaveStatus === "saving" && (
@@ -2049,8 +2011,7 @@ export function ProposalBuilderV2({
                 <X className="w-5 h-5" />
               </button>
             </div>
-              </>
-            )}
+            </>
           </div>
 
           {/* ── VIP Banner ── */}
@@ -2076,67 +2037,7 @@ export function ProposalBuilderV2({
             </div>
           )}
 
-          {/* ── Preview Mode ── */}
-          {previewMode && template && (
-            <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
-              <ProposalTemplate
-                template={template as DocumentTemplate}
-                proposal={({
-                  id: draftId || "",
-                  customerId: (customer as { id?: string } | null)?.id || customerId || "",
-                  jobId: (job as { id?: string } | null)?.id || jobId || null,
-                  title: proposalTitle,
-                  subtotal: subtotalAfterDiscount.toString(),
-                  gstAmount: gst.toString(),
-                  totalAmount: grandTotal.toString(),
-                  taxRate: taxRate.toString(),
-                  discountAmount: discountAmount.toString(),
-                  discountType,
-                  validUntil: validUntil || null,
-                  expiryDate: validUntil || null,
-                  status: "draft",
-                  deliveryMethod: "email",
-                  createdBy: "system",
-                  proposalNumber: draftId ? draftId.slice(-6).toUpperCase() : "",
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  sentAt: null,
-                  viewedAt: null,
-                  acceptedAt: null,
-                  declinedAt: null,
-                  acceptedByName: null,
-                  acceptedBySignature: null,
-                  notes: null,
-                  internalNotes: null,
-                  presentationMethod: null,
-                }) as Proposal}
-                customer={customer as Customer | undefined}
-                job={job}
-                sections={previewServerData?.sections ?? blocks.map((b) => ({
-                  id: b.id,
-                  title: b.title,
-                  description: b.description,
-                  photos: b.photos,
-                  lineItems: b.lineItems,
-                  sortOrder: b.sortOrder,
-                  sectionType: b.sectionType ?? "fixed",
-                }))}
-                showActions={false}
-                allowChoiceSelection={true}
-                selectedChoices={previewSelectedChoices}
-                onChoiceSelect={(lineItemId, choiceId) =>
-                  setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
-                }
-                selectedOptionalItems={previewSelectedOptional}
-                onOptionalToggle={(lineItemId, selected) =>
-                  setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
-                }
-              />
-            </div>
-          )}
-
-          {/* ── Document Canvas ── */}
-          {!previewMode && (
+          {/* ── Document Canvas (editor + inline customer preview) ── */}
           <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
@@ -2340,8 +2241,72 @@ export function ProposalBuilderV2({
                 <p>Professional tree services you can trust.</p>
               </div>
             </div>
+
+            {/* ── Inline Customer Preview (scroll-down) ── */}
+            {template && (
+              <div className="max-w-4xl mx-auto mt-6">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <h3 className="text-sm font-semibold text-gray-700">Customer preview</h3>
+                  <span className="text-[10px] text-gray-500">how the customer will see this proposal</span>
+                </div>
+                <div className="border rounded-lg bg-white overflow-hidden">
+                  <ProposalTemplate
+                    template={template as DocumentTemplate}
+                    proposal={({
+                      id: draftId || "",
+                      customerId: (customer as { id?: string } | null)?.id || customerId || "",
+                      jobId: (job as { id?: string } | null)?.id || jobId || null,
+                      title: proposalTitle,
+                      subtotal: subtotalAfterDiscount.toString(),
+                      gstAmount: gst.toString(),
+                      totalAmount: grandTotal.toString(),
+                      taxRate: taxRate.toString(),
+                      discountAmount: discountAmount.toString(),
+                      discountType,
+                      validUntil: validUntil || null,
+                      expiryDate: validUntil || null,
+                      status: "draft",
+                      deliveryMethod: "email",
+                      createdBy: "system",
+                      proposalNumber: draftId ? draftId.slice(-6).toUpperCase() : "",
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                      sentAt: null,
+                      viewedAt: null,
+                      acceptedAt: null,
+                      declinedAt: null,
+                      acceptedByName: null,
+                      acceptedBySignature: null,
+                      notes: null,
+                      internalNotes: null,
+                      presentationMethod: null,
+                    }) as Proposal}
+                    customer={customer as Customer | undefined}
+                    job={job}
+                    sections={blocks.map((b) => ({
+                      id: b.id,
+                      title: b.title,
+                      description: b.description,
+                      photos: b.photos,
+                      lineItems: b.lineItems,
+                      sortOrder: b.sortOrder,
+                      sectionType: b.sectionType ?? "fixed",
+                    }))}
+                    showActions={false}
+                    allowChoiceSelection={true}
+                    selectedChoices={previewSelectedChoices}
+                    onChoiceSelect={(lineItemId, choiceId) =>
+                      setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
+                    }
+                    selectedOptionalItems={previewSelectedOptional}
+                    onOptionalToggle={(lineItemId, selected) =>
+                      setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
+                    }
+                  />
+                </div>
+              </div>
+            )}
           </div>
-          )}
         </DialogContent>
       </Dialog>
 
