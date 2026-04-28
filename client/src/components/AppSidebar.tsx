@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   Calendar,
+  CheckSquare,
   BarChart3,
   Users,
   Settings,
@@ -131,6 +132,18 @@ function SidebarNavContent({
                       <Calendar className="h-4 w-4" />
                     </span>
                     <span>Dispatch Board</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Tasks — internal Kanban (gear, admin, follow-ups) */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/tasks"}>
+                  <Link href="/tasks" onClick={handleLinkClick} data-testid="link-tasks">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black text-[#39FF14]">
+                      <CheckSquare className="h-4 w-4" />
+                    </span>
+                    <span>Tasks</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>

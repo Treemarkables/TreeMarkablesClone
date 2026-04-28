@@ -106,6 +106,41 @@ function getEmailAddress(entry: { metadata?: any }): string | null {
   return m.emailAddress || m.recipient || m.fromEmail || null;
 }
 
+// True when there's a later outbound entry of the same kind (email/sms) to
+// the same counterparty as `target`. Used to suppress the AI suggested-reply
+// card once we've already replied — without this, the suggestion sits on the
+// inbound message forever even though the conversation has moved on.
+function hasOutboundReplyAfter(
+  entries: Array<{
+    id: string;
+    type?: string;
+    timestamp: string;
+    title?: string;
+    content?: string;
+    metadata?: any;
+  }>,
+  target: { id: string; type?: string; timestamp: string; metadata?: any },
+): boolean {
+  const targetTime = new Date(target.timestamp).getTime();
+  if (!Number.isFinite(targetTime)) return false;
+  const targetAddr = getEmailAddress(target);
+  const targetType = target.type;
+  for (const e of entries) {
+    if (e.id === target.id) continue;
+    if (targetType && e.type && e.type !== targetType) continue;
+    const t = new Date(e.timestamp).getTime();
+    if (!Number.isFinite(t) || t <= targetTime) continue;
+    const dir = getEmailDirection({
+      title: e.title || "",
+      content: e.content || "",
+    });
+    if (dir !== "sent") continue;
+    const addr = getEmailAddress(e);
+    if (!targetAddr || !addr || addr === targetAddr) return true;
+  }
+  return false;
+}
+
 function cleanEmailMessage(
   entry: { title: string; content: string },
   direction: EmailDirection,
@@ -640,10 +675,30 @@ export function JobDiarySection({
   }, [welcomeStatus?.shouldPrompt, welcomeAutoOpened]);
 
   // Hoisted confirmation-reply card: session-only dismiss. The persistent
-  // hide state comes from a 'confirmation-reply-sent' diary entry — dismissing
-  // deliberately does not persist, so a mis-click is recoverable by reload.
-  const [confirmationCardDismissed, setConfirmationCardDismissed] =
-    useState(false);
+  // Dismissal is now persisted per-job in localStorage. The earlier "session
+  // only" behaviour meant the same suggestion popped back every time the job
+  // card was re-opened — a single Dismiss should kill it for that job.
+  const confirmationCardDismissedKey = `diary-confirmation-card-dismissed:${jobId}`;
+  const [confirmationCardDismissed, setConfirmationCardDismissedRaw] =
+    useState<boolean>(() => {
+      try {
+        return localStorage.getItem(confirmationCardDismissedKey) === "1";
+      } catch {
+        return false;
+      }
+    });
+  const setConfirmationCardDismissed = useCallback(
+    (next: boolean) => {
+      setConfirmationCardDismissedRaw(next);
+      try {
+        if (next) localStorage.setItem(confirmationCardDismissedKey, "1");
+        else localStorage.removeItem(confirmationCardDismissedKey);
+      } catch {
+        /* localStorage may be unavailable (private mode); state-only is fine */
+      }
+    },
+    [confirmationCardDismissedKey],
+  );
 
   // Touch swipe state for photo gallery
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -1278,11 +1333,16 @@ export function JobDiarySection({
   const groupedEntries = React.useMemo(() => {
     const groups: GroupedEntry[] = [];
     let currentPhotoGroup: DiaryEntry[] = [];
-    // Pending received emails awaiting a parent sent email. Walk is
-    // newest-first, so when we encounter a sent email we look back through
-    // pendingReplies for any received emails (which are newer in time) to
-    // associate as its replies.
-    let pendingReplies: DiaryEntry[] = [];
+    // Email threading: group every email entry by counterparty address into
+    // a single thread for this job. Earlier this only paired received emails
+    // with a *preceding* sent email — which broke when the customer started
+    // the conversation (their inbound email + our reply rendered as two
+    // separate cards). Address-keyed grouping handles both directions.
+    const emailThreadByAddr = new Map<string, GroupedEntry>();
+    // Stable address key: an empty/missing address shouldn't collide entries
+    // from unrelated correspondents into one thread, so each missing-address
+    // entry gets its own bucket.
+    let missingAddrCounter = 0;
 
     const flushPhotoGroup = () => {
       if (currentPhotoGroup.length > 0) {
@@ -1294,29 +1354,6 @@ export function JobDiarySection({
         });
         currentPhotoGroup = [];
       }
-    };
-
-    const pushEmailThread = (parent: DiaryEntry | null, replies: DiaryEntry[]) => {
-      const sortedReplies = [...replies].sort((a, b) => {
-        const ta = new Date(a.timestamp).getTime();
-        const tb = new Date(b.timestamp).getTime();
-        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
-      });
-      const all = parent ? [parent, ...sortedReplies] : sortedReplies;
-      // Thread sits in the timeline at its most recent activity, so a
-      // freshly-arrived reply pulls the whole conversation to the top.
-      const latest = all.reduce((acc, e) => {
-        const t = new Date(e.timestamp).getTime();
-        return isNaN(t) ? acc : Math.max(acc, t);
-      }, 0);
-      groups.push({
-        type: "email_thread",
-        entries: all,
-        timestamp: latest > 0 ? new Date(latest).toISOString() : (parent?.timestamp ?? sortedReplies[0]?.timestamp ?? ""),
-        author: parent?.author ?? sortedReplies[0]?.author ?? "",
-        parent: parent ?? undefined,
-        replies: sortedReplies,
-      });
     };
 
     diaryEntries.forEach((entry, index) => {
@@ -1348,31 +1385,29 @@ export function JobDiarySection({
         return;
       }
 
-      // Email threading — only applies to type === 'email'. SMS keeps the
-      // existing per-entry rendering.
+      // Email threading — group every email by counterparty address, regardless
+      // of direction. SMS keeps the existing per-entry rendering.
       if (entry.type === "email") {
         flushPhotoGroup();
-        const direction = getEmailDirection(entry);
-        if (direction === "received") {
-          pendingReplies.push(entry);
+        const addr = getEmailAddress(entry);
+        const key = addr || `__missing_${missingAddrCounter++}__`;
+        const existing = emailThreadByAddr.get(key);
+        if (existing) {
+          existing.entries.push(entry);
         } else {
-          // Treat 'sent' and 'unknown' as parent-style emails. Any pending
-          // replies whose address matches become this email's replies.
-          const parentAddr = getEmailAddress(entry);
-          let matched: DiaryEntry[] = [];
-          let leftover: DiaryEntry[] = [];
-          for (const r of pendingReplies) {
-            const rAddr = getEmailAddress(r);
-            // Pair on matching address; if either side has no address, fall
-            // back to assuming the reply belongs to the most recent parent.
-            if (!parentAddr || !rAddr || rAddr === parentAddr) {
-              matched.push(r);
-            } else {
-              leftover.push(r);
-            }
-          }
-          pendingReplies = leftover;
-          pushEmailThread(entry, matched);
+          // Reserve a thread group slot in `groups`. We finalise its parent /
+          // replies / timestamp / author after the walk so we can sort by
+          // chronological order without re-traversing.
+          const newGroup: GroupedEntry = {
+            type: "email_thread",
+            entries: [entry],
+            timestamp: entry.timestamp,
+            author: entry.author,
+            parent: undefined,
+            replies: [],
+          };
+          emailThreadByAddr.set(key, newGroup);
+          groups.push(newGroup);
         }
         return;
       }
@@ -1392,12 +1427,27 @@ export function JobDiarySection({
     // Flush any remaining photo group
     flushPhotoGroup();
 
-    // Orphan replies (received emails with no preceding sent email in this
-    // job) — render each as its own thread group with no parent.
-    for (const r of pendingReplies) {
-      pushEmailThread(null, [r]);
+    // Finalise each email thread now that we've collected every entry for it.
+    // Sort entries chronologically (oldest first) so the thread reads top-to-
+    // bottom in conversation order. Parent = oldest entry; replies = the rest.
+    // Group timestamp uses latest activity so a fresh reply pulls the whole
+    // thread to the top of the diary in the sort below.
+    for (const group of emailThreadByAddr.values()) {
+      group.entries.sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+      });
+      const [parent, ...rest] = group.entries;
+      group.parent = parent;
+      group.replies = rest;
+      group.author = parent?.author ?? group.author;
+      const latest = group.entries.reduce((acc, e) => {
+        const t = new Date(e.timestamp).getTime();
+        return isNaN(t) ? acc : Math.max(acc, t);
+      }, 0);
+      if (latest > 0) group.timestamp = new Date(latest).toISOString();
     }
-    pendingReplies = [];
 
     // Re-sort all groups by their effective timestamp so threads with a fresh
     // reply float to the top of the diary instead of staying anchored at the
@@ -2846,7 +2896,10 @@ export function JobDiarySection({
                           </div>
                         </div>
                       </div>
-                      {isReceived && (
+                      {isReceived &&
+                        !(entry.metadata as { replyAcknowledged?: boolean } | undefined)
+                          ?.replyAcknowledged &&
+                        !hasOutboundReplyAfter(diaryEntries, entry) && (
                         <SuggestedReplyDraft
                           entry={entry}
                           jobId={jobId}
