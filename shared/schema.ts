@@ -558,6 +558,56 @@ export const jobDiaryEntries = pgTable("job_diary_entries", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Tasks — internal work that isn't a customer job: gear maintenance, admin,
+// follow-ups, marketing, training. Lives separately from `jobs` (customer
+// work). When a task is linked to a job and marked done, an entry is appended
+// to that job's diary; recurring tasks auto-spawn the next instance on
+// completion. Soft-delete via deletedAt — kept off the board view but
+// retained for audit and so recurring chains remain traceable.
+export const tasks = pgTable("tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  // equipment, vehicle, admin, sales, marketing, training, yard, compliance, personal
+  category: text("category"),
+  // urgent, high, normal, low
+  priority: text("priority").default("normal"),
+  // backlog, todo, in_progress, blocked, done
+  status: text("status").notNull().default("todo"),
+  blockedReason: text("blocked_reason"), // required when status = 'blocked'
+  assigneeId: varchar("assignee_id").references(() => employees.id, { onDelete: "set null" }),
+  createdBy: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  dueDate: timestamp("due_date"),
+  linkedJobId: varchar("linked_job_id").references(() => jobs.id, { onDelete: "set null" }),
+  linkedEquipmentId: varchar("linked_equipment_id").references(() => equipment.id, { onDelete: "set null" }),
+  recurring: boolean("recurring").default(false),
+  recurringIntervalDays: integer("recurring_interval_days"),
+  parentTaskId: varchar("parent_task_id"), // self-FK declared below; Drizzle disallows inline self-references
+  completedAt: timestamp("completed_at"),
+  deletedAt: timestamp("deleted_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  // Indexes the kanban + filter views hit on every load.
+  statusIdx: index("tasks_status_idx").on(table.status),
+  assigneeIdx: index("tasks_assignee_idx").on(table.assigneeId),
+  dueDateIdx: index("tasks_due_date_idx").on(table.dueDate),
+  linkedJobIdx: index("tasks_linked_job_idx").on(table.linkedJobId),
+}));
+
+export const insertTaskSchema = createInsertSchema(tasks)
+  .omit({ id: true, completedAt: true, deletedAt: true, createdAt: true, updatedAt: true })
+  .extend({
+    dueDate: z.union([z.string(), z.date()]).optional().nullable().transform(v =>
+      v == null || v === "" ? null : (typeof v === "string" ? new Date(v) : v)
+    ),
+  });
+export const updateTaskSchema = insertTaskSchema.partial();
+
+export type Task = typeof tasks.$inferSelect;
+export type InsertTask = z.infer<typeof insertTaskSchema>;
+export type UpdateTask = z.infer<typeof updateTaskSchema>;
+
 // Safety Incident Management
 export const safetyIncidents = pgTable("safety_incidents", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

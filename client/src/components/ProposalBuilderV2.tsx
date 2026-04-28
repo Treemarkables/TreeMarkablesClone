@@ -1929,9 +1929,11 @@ export function ProposalBuilderV2({
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  aria-label="Close proposal"
+                  title="Close"
+                  className="flex items-center justify-center h-9 w-9 rounded-md text-white bg-red-500 shadow-sm hover:bg-red-600 transition-colors"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </>
             ) : (
@@ -1942,9 +1944,10 @@ export function ProposalBuilderV2({
                 type="button"
                 onClick={handleClose}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
+                aria-label="Back to job card"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span className="hidden sm:inline">Back</span>
+                <span>Back</span>
               </button>
               <button
                 type="button"
@@ -2039,9 +2042,11 @@ export function ProposalBuilderV2({
               <button
                 type="button"
                 onClick={handleClose}
-                className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                aria-label="Close proposal"
+                title="Close"
+                className="flex items-center justify-center h-9 w-9 rounded-md text-white bg-red-500 shadow-sm hover:bg-red-600 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-5 h-5" />
               </button>
             </div>
               </>
