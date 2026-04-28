@@ -66,18 +66,7 @@ import {
   BookOpen,
   ListOrdered,
 } from "lucide-react";
-import {
-  MdEmail,
-  MdSms,
-  MdPhone,
-  MdCalendarToday,
-  MdDescription,
-  MdSend,
-  MdAttachMoney,
-  MdAccessTime,
-  MdCameraAlt,
-  MdMoreHoriz,
-} from "react-icons/md";
+import { MdEmail, MdSend } from "react-icons/md";
 import {
   CameraIcon,
   SMSIcon,
@@ -4644,7 +4633,7 @@ The Treemarkables Team`;
               onClick={handleEmailClick}
               data-testid="button-email"
             >
-              <MdEmail className="w-full h-auto max-w-[40px] max-h-[40px] text-blue-500" />
+              <EmailIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">Email</span>
             </Button>
             <Button
@@ -4654,7 +4643,7 @@ The Treemarkables Team`;
               onClick={() => setIsSMSComposerOpen(true)}
               data-testid="button-sms"
             >
-              <MdSms className="w-full h-auto max-w-[40px] max-h-[40px] text-blue-500" />
+              <SMSIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">SMS</span>
             </Button>
             <Button
@@ -4664,7 +4653,7 @@ The Treemarkables Team`;
               onClick={handleCallClick}
               data-testid="button-call"
             >
-              <MdPhone className="w-full h-auto max-w-[40px] max-h-[40px] text-green-500" />
+              <CallIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">Call</span>
             </Button>
             <Button
@@ -4674,7 +4663,7 @@ The Treemarkables Team`;
               onClick={handleScheduleClick}
               data-testid="button-schedule"
             >
-              <MdCalendarToday className="w-full h-auto max-w-[40px] max-h-[40px] text-red-500" />
+              <ScheduleIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">
                 Schedule
               </span>
@@ -4686,7 +4675,7 @@ The Treemarkables Team`;
               onClick={handleQueueClick}
               data-testid="button-queue"
             >
-              <MdDescription className="w-full h-auto max-w-[40px] max-h-[40px] text-blue-600" />
+              <QueueJobIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">Queue</span>
             </Button>
             <DropdownMenu>
@@ -4767,7 +4756,7 @@ The Treemarkables Team`;
               onClick={() => setIsProfitTrackerOpen(true)}
               data-testid="button-profit"
             >
-              <MdAttachMoney className="w-full h-auto max-w-[40px] max-h-[40px] text-teal-500" />
+              <ProfitTrackerIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">Profit</span>
             </Button>
             <Button
@@ -4777,7 +4766,7 @@ The Treemarkables Team`;
               onClick={() => setIsTimeTrackingOpen(true)}
               data-testid="button-time"
             >
-              <MdAccessTime className="w-full h-auto max-w-[40px] max-h-[40px] text-purple-500" />
+              <TimeTrackingIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">Time</span>
             </Button>
             <Button
@@ -4787,7 +4776,7 @@ The Treemarkables Team`;
               onClick={() => setIsPhotoCaptureOpen(true)}
               data-testid="button-camera"
             >
-              <MdCameraAlt className="w-full h-auto max-w-[40px] max-h-[40px] text-pink-500" />
+              <CameraIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
               <span className="text-[10px] mt-1 whitespace-nowrap">Camera</span>
             </Button>
             <DropdownMenu>
@@ -4798,7 +4787,7 @@ The Treemarkables Team`;
                   className="h-auto py-1 flex-1 hover-elevate active-elevate-2 flex-col [&_svg]:!w-full [&_svg]:!h-auto"
                   data-testid="button-more"
                 >
-                  <MdMoreHoriz className="w-full h-auto max-w-[40px] max-h-[40px] text-green-600" />
+                  <MoreDotsIcon className="w-full h-auto max-w-[40px] max-h-[40px]" />
                   <span className="text-[10px] mt-1 whitespace-nowrap">
                     More
                   </span>

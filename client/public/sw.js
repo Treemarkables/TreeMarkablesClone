@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v13-ios-push';
-const STATIC_CACHE = 'treemarkables-static-v13-ios-push';
-const API_CACHE = 'treemarkables-api-v13-ios-push';
+const CACHE_NAME = 'treemarkables-v14-ios-icons';
+const STATIC_CACHE = 'treemarkables-static-v14-ios-icons';
+const API_CACHE = 'treemarkables-api-v14-ios-icons';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -31,7 +31,7 @@ self.addEventListener('activate', function(event) {
       console.log('[SW v13] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v13-ios-push')) {
+          if (!cacheName.includes('v14-ios-icons')) {
             console.log('[SW v13] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }

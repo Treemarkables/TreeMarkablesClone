@@ -876,6 +876,13 @@ export function JobDiarySection({
     select: (response: any) => response.data || response,
   });
 
+  // Suppress AI suggested-reply drafts on jobs that are done — no point
+  // drafting a follow-up to a customer when the job is closed out.
+  const isJobClosed =
+    jobData?.status === "completed" ||
+    jobData?.status === "archived" ||
+    jobData?.status === "unsuccessful";
+
   // Fetch customer record so the Book button always has the customer's name,
   // even when jobContactFirstName/jobContactLastName are empty (e.g. lead-status jobs
   // created by selecting an existing customer rather than entering new contact details).
@@ -2397,6 +2404,26 @@ export function JobDiarySection({
                                     />
                                   </div>
                                 )}
+                                {!isOutgoing &&
+                                  !isJobClosed &&
+                                  !(
+                                    msg.metadata as
+                                      | { replyAcknowledged?: boolean }
+                                      | undefined
+                                  )?.replyAcknowledged &&
+                                  !hasOutboundReplyAfter(diaryEntries, msg) && (
+                                    <div className="mt-2 rounded-md border border-purple-200 dark:border-purple-800 overflow-hidden">
+                                      <SuggestedReplyDraft
+                                        entry={msg}
+                                        jobId={jobId}
+                                        onEditAndSend={handleEditAndSendConfirmationReply}
+                                        onDismiss={handleDismissConfirmationReply}
+                                        isDismissing={
+                                          acknowledgeConfirmationReplyMutation.isPending
+                                        }
+                                      />
+                                    </div>
+                                  )}
                               </div>
                             );
                           })}
@@ -2871,6 +2898,7 @@ export function JobDiarySection({
                         </div>
                       </div>
                       {isReceived &&
+                        !isJobClosed &&
                         !(entry.metadata as { replyAcknowledged?: boolean } | undefined)
                           ?.replyAcknowledged &&
                         !hasOutboundReplyAfter(diaryEntries, entry) && (
