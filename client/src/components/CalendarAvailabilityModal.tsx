@@ -91,6 +91,12 @@ interface Props {
    * staff-scoped view. Only meaningful when employeeId matches the current user.
    */
   includeGoogleCalendar?: boolean;
+  /**
+   * When true, render ONLY Google Calendar events — no staff job assignments and
+   * no company-wide jobs. Used by the "view my Google Calendar" shortcut so the
+   * operator can eyeball their personal calendar in isolation when scheduling.
+   */
+  googleOnly?: boolean;
 }
 
 function minsToPercent(mins: number): number {
@@ -179,6 +185,7 @@ export function CalendarAvailabilityModal({
   employeeId,
   employeeName,
   includeGoogleCalendar = false,
+  googleOnly = false,
 }: Props) {
   // Monday-anchored NZ week
   const [weekStart, setWeekStart] = useState<Date>(() => {
@@ -208,7 +215,8 @@ export function CalendarAvailabilityModal({
   // assignments). Google Calendar is only shown when the caller explicitly opts in —
   // e.g. the employee being viewed is the logged-in user themself.
   const isEmployeeScoped = !!employeeId;
-  const showGoogleCalendar = isEmployeeScoped ? includeGoogleCalendar : true;
+  // googleOnly forces both: include Google Calendar AND suppress all job-source feeds.
+  const showGoogleCalendar = googleOnly ? true : (isEmployeeScoped ? includeGoogleCalendar : true);
 
   const googleQuery = useQuery<GoogleEventsResponse>({
     queryKey: ['/api/google-calendar/events', startIso, endIso],
@@ -226,7 +234,7 @@ export function CalendarAvailabilityModal({
       const res = await fetch(`/api/jobs/in-range?start=${startDateNZ}&end=${endDateNZ}`);
       return res.json();
     },
-    enabled: isOpen && !isEmployeeScoped,
+    enabled: isOpen && !isEmployeeScoped && !googleOnly,
     staleTime: 60 * 1000,
   });
 
@@ -238,7 +246,7 @@ export function CalendarAvailabilityModal({
       );
       return res.json();
     },
-    enabled: isOpen && isEmployeeScoped,
+    enabled: isOpen && isEmployeeScoped && !googleOnly,
     staleTime: 60 * 1000,
   });
 
@@ -251,6 +259,9 @@ export function CalendarAvailabilityModal({
       : [];
 
   const blocks = useMemo<CalendarBlock[]>(() => {
+    if (googleOnly) {
+      return googleEvents.map(googleEventToBlock);
+    }
     if (isEmployeeScoped) {
       const assignmentBlocks = employeeAssignments.map((a): CalendarBlock => {
         const label = a.jobNumber ? `#${a.jobNumber}` : 'Job';
@@ -270,7 +281,7 @@ export function CalendarAvailabilityModal({
     const jobBlocks = jobs.map(jobToBlock).filter((b): b is CalendarBlock => b !== null);
     const googleBlocks = googleEvents.map(googleEventToBlock);
     return [...jobBlocks, ...googleBlocks];
-  }, [isEmployeeScoped, showGoogleCalendar, employeeAssignments, jobs, googleEvents]);
+  }, [googleOnly, isEmployeeScoped, showGoogleCalendar, employeeAssignments, jobs, googleEvents]);
 
   // Group blocks by NZ date
   const blocksByDate = useMemo(() => {
@@ -371,7 +382,9 @@ export function CalendarAvailabilityModal({
         <DialogHeader className="px-4 py-3 border-b flex-row items-center justify-between space-y-0">
           <DialogTitle className="text-base font-semibold flex items-center gap-2">
             <CalendarIcon className="h-4 w-4" />
-            {employeeName ? `${employeeName}'s availability` : 'Your availability'} — {weekLabel}
+            {googleOnly
+              ? `Google Calendar — ${weekLabel}`
+              : `${employeeName ? `${employeeName}'s availability` : 'Your availability'} — ${weekLabel}`}
           </DialogTitle>
           <div className="flex items-center gap-1.5">
             <Button variant="ghost" size="icon" onClick={goPrev} aria-label="Previous week" data-testid="btn-availability-prev">

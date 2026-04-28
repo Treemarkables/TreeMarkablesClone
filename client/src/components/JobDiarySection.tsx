@@ -365,10 +365,12 @@ function JobConfirmationReplyCard({
   );
 }
 
-// Inline AI-drafted reply shown beneath a customer-confirmation diary entry.
-// Fetches a short acknowledgement from the server, then hands it to the
-// enclosing composer via onEditAndSend — the user tweaks and sends it.
-function ConfirmationReplyDraft({
+// Inline AI-drafted reply shown beneath an inbound customer SMS/email diary
+// entry. Fetches a context-aware suggestion from the server (using the
+// customer's actual message + the most recent thing we sent them), then
+// hands it to the enclosing composer via onEditAndSend — the user tweaks and
+// sends it.
+function SuggestedReplyDraft({
   entry,
   jobId,
   onEditAndSend,
@@ -388,11 +390,12 @@ function ConfirmationReplyDraft({
     subject: string;
     body: string;
   }>({
-    queryKey: ["confirmation-reply-draft", entry.id],
+    queryKey: ["suggested-reply-draft", entry.id],
     queryFn: async () => {
       const res = await apiRequest(
         "POST",
-        `/api/jobs/${jobId}/draft-confirmation-reply`,
+        `/api/jobs/${jobId}/draft-reply-to-entry`,
+        { entryId: entry.id },
       );
       const json = await res.json();
       if (!json?.success || !json?.data?.body) {
@@ -2831,6 +2834,17 @@ export function JobDiarySection({
                           </div>
                         </div>
                       </div>
+                      {isReceived && (
+                        <SuggestedReplyDraft
+                          entry={entry}
+                          jobId={jobId}
+                          onEditAndSend={handleEditAndSendConfirmationReply}
+                          onDismiss={handleDismissConfirmationReply}
+                          isDismissing={
+                            acknowledgeConfirmationReplyMutation.isPending
+                          }
+                        />
+                      )}
                     </div>
                   );
                 }

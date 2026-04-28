@@ -563,11 +563,13 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     return m;
   }, [employees]);
 
-  // Map employeeId → palette colour (sorted crew, same order as StaffSchedule)
+  // Map employeeId → palette colour (sorted crew, same order as StaffSchedule).
+  // Don't filter on role — owner-operators carry the 'admin' role but also need
+  // a palette colour because they work jobs.
   const crewPaletteMap = useMemo(() => {
     const m = new Map<string, { dot: string }>();
     const crew = employees
-      .filter(e => e.isActive && e.role !== 'admin')
+      .filter(e => e.isActive)
       .sort((a, b) => (a.firstName ?? '').localeCompare(b.firstName ?? ''));
     crew.forEach((e, i) => m.set(e.id, STAFF_PALETTE[i % STAFF_PALETTE.length]));
     return m;

@@ -6563,6 +6563,105 @@ Draft the reply now.`;
     }
   });
 
+  // Draft a contextual AI reply to a specific inbound diary entry (customer
+  // SMS/email reply on a job). Unlike /draft-confirmation-reply, this works
+  // for any job status and uses the customer's actual message as context, so
+  // the suggestion is responsive to what the customer said rather than a
+  // generic "see you then" acknowledgement.
+  app.post('/api/jobs/:id/draft-reply-to-entry', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { entryId } = req.body || {};
+
+      if (!entryId || typeof entryId !== 'string') {
+        return res.status(400).json({ success: false, message: 'entryId is required' });
+      }
+
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const entry = await storage.getJobDiaryEntry(entryId);
+      if (!entry || entry.jobId !== id) {
+        return res.status(404).json({ success: false, message: 'Diary entry not found for this job' });
+      }
+
+      const customer = job.customerId ? await storage.getCustomer(job.customerId) : null;
+      const greetingName =
+        (job as any).jobContactFirstName ||
+        (customer?.name ? customer.name.split(' ')[0] : '') ||
+        'there';
+
+      // Gather the most recent prior outbound message (what we asked them) so the
+      // AI can respond in context — this is what we sent that they're now replying to.
+      const allEntries = await storage.getJobDiaryEntriesByJob(id);
+      const entryTimestamp = entry.createdAt ? new Date(entry.createdAt as any).getTime() : Date.now();
+      const priorOutbound = allEntries
+        .filter((e: any) => {
+          const t = e.createdAt ? new Date(e.createdAt).getTime() : 0;
+          if (t >= entryTimestamp) return false;
+          const isComm = e.entryType === 'email' || e.entryType === 'sms' || e.entryType === 'communication';
+          if (!isComm) return false;
+          const role = (e.authorRole || '').toLowerCase();
+          if (role === 'customer') return false; // skip prior inbound
+          const title = (e.title || '').toLowerCase();
+          return title.includes('sent') || title.includes('to ');
+        })
+        .sort((a: any, b: any) => new Date(b.createdAt as any).getTime() - new Date(a.createdAt as any).getTime())[0];
+
+      const channel = entry.entryType === 'sms' ? 'sms' : 'email';
+      const customerMessage = (entry.description || (entry as any).content || '').toString().slice(0, 1500);
+      const ourLastMessage = (priorOutbound?.description || (priorOutbound as any)?.content || '').toString().slice(0, 1500);
+      const jobDescription = (job as any).description || (job as any).title || '';
+      const scheduledDateStr = job.scheduledDate ? formatNZTime(job.scheduledDate as any, 'full') : '';
+
+      const subject = `Re: ${entry.metadata?.subject || `Job J-${job.jobNumber}`}`;
+
+      const systemPrompt = `You are Jules, the owner of Treemarkables, a New Zealand arborist business. A customer has just replied to a message you sent. Draft a short, natural reply that responds to what they actually said.
+
+Strict rules:
+- Plain text only. No HTML, no markdown, no emoji.
+- Keep it brief — 1 to 3 short sentences in the body, casual Kiwi tone.
+- Read the customer's reply and respond to it directly. If they confirmed a date, acknowledge it and say you'll see them then. If they suggested a different date or time, propose the next step. If they asked a question, answer it briefly.
+- Do not invent commitments, prices, or details that weren't in the prior conversation.
+- Start with "Hi {firstName}," on its own line.
+- End with "Kind regards," on its own line followed by "Jules" on the next line.
+- ${channel === 'sms' ? 'This will be sent as an SMS — keep it tight, no formal sign-off needed; you can drop the sign-off and just end naturally.' : 'This will be sent as an email — include the greeting and sign-off as specified.'}`;
+
+      const userPrompt = `Customer first name: ${greetingName}
+Channel: ${channel}
+Job description: ${jobDescription || '(not provided)'}
+${scheduledDateStr ? `Scheduled date (NZ time): ${scheduledDateStr}` : ''}
+
+Most recent message we sent them${ourLastMessage ? ':' : ' (not found in diary)'}
+${ourLastMessage || ''}
+
+Their reply (this is what to respond to):
+${customerMessage}
+
+Draft the reply now.`;
+
+      const aiResponse = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+      });
+
+      const body = (aiResponse.choices[0].message.content || '').trim();
+      if (!body) {
+        return res.status(502).json({ success: false, message: 'AI returned an empty draft' });
+      }
+
+      return res.json({ success: true, data: { subject, body } });
+    } catch (error) {
+      console.error('Error drafting reply to diary entry:', error);
+      return res.status(500).json({ success: false, message: 'Failed to draft reply' });
+    }
+  });
+
   // Validate if gross margin calculation is complete
   app.get('/api/jobs/:id/gross-margin/validate', async (req: Request, res: Response) => {
     try {
@@ -13129,25 +13228,22 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         // Don't fail the request if diary entry creation fails
       }
 
-      // Sync to Google Calendar ONLY if the current user is scheduling themselves
+      // Sync every scheduled job to Google Calendar — the connected calendar is
+      // the operator's company-wide schedule, not a per-staff personal calendar,
+      // so it should reflect every booking regardless of who's assigned. The
+      // earlier "self-only" gate hid most of the schedule from Google Calendar
+      // because the operator usually books crew members rather than themself.
       try {
-        const currentUserId = req.session.employeeId;
-        const isSchedulingSelf = currentUserId && employeeIds.includes(currentUserId);
-        
-        if (isSchedulingSelf) {
-          const calendarJob = { ...job } as any;
-          if (job.customerId) {
-            const customer = await storage.getCustomer(job.customerId);
-            if (customer) {
-              calendarJob.customerName = customer.name;
-            }
+        const calendarJob = { ...job } as any;
+        if (job.customerId) {
+          const customer = await storage.getCustomer(job.customerId);
+          if (customer) {
+            calendarJob.customerName = customer.name;
           }
-          const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
-          if (googleEventId) {
-            console.log(`✅ Job synced to Google Calendar (user scheduling themselves): ${googleEventId}`);
-          }
-        } else {
-          console.log(`ℹ️  Skipping Google Calendar sync (user not scheduling themselves)`);
+        }
+        const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
+        if (googleEventId) {
+          console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
         }
       } catch (calendarError) {
         console.error('❌ Error syncing to Google Calendar:', calendarError);

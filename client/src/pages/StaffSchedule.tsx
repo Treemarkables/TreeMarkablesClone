@@ -239,10 +239,13 @@ export default function StaffSchedule() {
     return m;
   }, [allCustomers]);
 
-  // Active crew (non-admin) sorted by first name
+  // Active crew sorted by first name. Don't filter on role — owner-operators
+  // (e.g. Jullian) carry the 'admin' role for app permissions but also work in
+  // the field as foremen and need to appear here. isActive already strips the
+  // test/inactive admin accounts.
   const crewMembers = useMemo(() =>
     allEmployees
-      .filter(e => e.isActive && e.role !== 'admin')
+      .filter(e => e.isActive)
       .sort((a, b) => `${a.firstName}`.localeCompare(`${b.firstName}`)),
     [allEmployees]
   );

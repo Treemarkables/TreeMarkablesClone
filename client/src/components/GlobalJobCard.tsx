@@ -677,6 +677,10 @@ export function GlobalJobCard({
   const [staffAvailabilityFor, setStaffAvailabilityFor] = useState<
     { id: string; name: string } | null
   >(null);
+  // Separate state for the operator's own Google-Calendar-only view, opened from
+  // a second icon next to their staff row. Kept distinct from staffAvailabilityFor
+  // so the two modals don't fight over the same "isOpen" flag.
+  const [myGoogleCalendarOpen, setMyGoogleCalendarOpen] = useState(false);
 
   // Time tracking modal state
   const [isTimeTrackingOpen, setIsTimeTrackingOpen] = useState(false);
@@ -5360,7 +5364,7 @@ The Treemarkables Team`;
                                         <CommandEmpty>
                                           No customers found
                                         </CommandEmpty>
-                                        <CommandGroup heading="Switch Customer">
+                                        <CommandGroup heading="Link to existing customer">
                                           {customers
                                             .filter((customer) =>
                                               customer.name
@@ -10386,9 +10390,25 @@ The Treemarkables Team`;
                 </div>
               )}
             <div>
-              <label className="text-sm font-medium">
-                Assign Staff Members
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">
+                  Assign Staff Members
+                </label>
+                {/* Operator's Google Calendar shortcut. Lives beside the label
+                    instead of on a per-staff row so it's always visible and
+                    not coupled to who happens to be logged in. */}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7"
+                  onClick={() => setMyGoogleCalendarOpen(true)}
+                  data-testid="btn-my-google-calendar"
+                  title="Check my Google Calendar"
+                >
+                  <Calendar className="h-4 w-4 text-green-600" />
+                </Button>
+              </div>
               <div className="mt-2 space-y-2 border rounded-md p-3 max-h-60 overflow-y-auto">
                 {employees.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
@@ -10618,6 +10638,25 @@ The Treemarkables Team`;
         includeGoogleCalendar={
           !!staffAvailabilityFor && !!currentUser && staffAvailabilityFor.id === currentUser.id
         }
+        onSlotPick={(slotStart) => {
+          const dateStr = formatInTimeZone(slotStart, "Pacific/Auckland", "yyyy-MM-dd");
+          const timeStr = formatInTimeZone(slotStart, "Pacific/Auckland", "HH:mm");
+          setSchedulingData((prev) => ({
+            ...prev,
+            date: dateStr,
+            startTime: timeStr,
+            endDate: prev.endDate && prev.endDate < dateStr ? "" : prev.endDate,
+          }));
+        }}
+      />
+
+      {/* Operator's own Google Calendar — opened from the green calendar icon
+          next to the logged-in user's staff row. Renders Google events only,
+          no staff jobs and no company-wide jobs feed. */}
+      <CalendarAvailabilityModal
+        isOpen={myGoogleCalendarOpen}
+        onClose={() => setMyGoogleCalendarOpen(false)}
+        googleOnly
         onSlotPick={(slotStart) => {
           const dateStr = formatInTimeZone(slotStart, "Pacific/Auckland", "yyyy-MM-dd");
           const timeStr = formatInTimeZone(slotStart, "Pacific/Auckland", "HH:mm");
