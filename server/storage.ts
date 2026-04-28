@@ -2898,6 +2898,16 @@ class DatabaseStorage implements IStorage {
     // invoices sent this week — regardless of when the job was originally scheduled.
     const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 });
     const allInvoices = await this.getAllInvoices();
+    // Load employees so staff-time-entry COST aggregation can use the canonical
+    // employee cost rate (employees.hourlyRate) rather than whatever number was
+    // typed into entry.rate at creation — those can be charge-out rates that
+    // would inflate the cost side of margin and depress profit unrealistically.
+    const allEmployees = await this.getAllEmployees().catch(() => [] as any[]);
+    const employeeRateById = new Map<string, number>();
+    for (const e of allEmployees as any[]) {
+      const r = parseFloat((e.hourlyRate ?? '0').toString());
+      if (!isNaN(r)) employeeRateById.set(e.id, r);
+    }
 
     // Step 1: select invoices that fall in the requested date window.
     const activeInvoices = allInvoices.filter(inv => {
@@ -2961,11 +2971,16 @@ class DatabaseStorage implements IStorage {
       const materialsCost = parseFloat(job.materialsCosts?.toString() || '0');
       const otherCost = parseFloat(job.otherCosts?.toString() || '0');
       
-      // Include staff time entry costs (hours * rate for each entry)
+      // Include staff time entry costs. Use the employee's canonical cost
+      // rate (employees.hourlyRate). entry.rate is only a last-resort fallback
+      // because the user-entered rate on a time entry is sometimes a
+      // charge-out figure rather than a true cost — we don't want that to
+      // inflate the cost side of the margin calculation.
       const staffTimeEntries = (job.staffTimeEntries as any[]) || [];
       const staffTimeCost = staffTimeEntries.reduce((sum: number, entry: any) => {
         const hours = Number(entry.hours) || 0;
-        const rate = Number(entry.rate) || 0;
+        const empRate = entry.employeeId ? employeeRateById.get(entry.employeeId) : undefined;
+        const rate = Number(entry.costRate) || empRate || Number(entry.rate) || 0;
         return sum + (hours * rate);
       }, 0);
       

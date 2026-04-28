@@ -135,10 +135,22 @@ export function GrossMarginCalculator({
 
   const hasStaffTimeEntries = (staffTimeData as any)?.data?.length > 0;
   const staffTimeEntries = (staffTimeData as any)?.data || [];
+  // Labour cost = employees' cost rate (employees.hourlyRate) × hours, NOT
+  // entry.rate. The `rate` saved on each entry can be a charge-out rate that
+  // the user typed in (or auto-filled from a stale source) and would otherwise
+  // inflate the cost. Cost-side aggregates always use the canonical employee
+  // cost rate so profit reflects what the staff actually cost the business.
+  // Fallback order: explicit entry.costRate (if a future code path stores one)
+  // → live employees.hourlyRate → entry.rate as last resort.
   const staffTimeLaborCost = staffTimeEntries.reduce(
     (sum: number, entry: any) => {
       const hours = Number(entry.hours) || 0;
-      const costRate = Number(entry.costRate ?? entry.rate) || 0;
+      const employee = employees.find((e: any) => e.id === entry.employeeId);
+      const costRate =
+        Number(entry.costRate) ||
+        Number(employee?.hourlyRate) ||
+        Number(entry.rate) ||
+        0;
       return sum + hours * costRate;
     },
     0,

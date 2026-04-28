@@ -85,8 +85,21 @@ export function StaffTimeTracker({ jobId, compact = false, onLaborCostChange }: 
     }
   }, [staffTimeData]);
 
-  // Calculate total labor cost and notify parent
-  const totalLaborCost = staffEntries.reduce((sum, entry) => sum + (Number(entry.hours) * Number(entry.rate)), 0);
+  // Total LABOUR COST (what staff cost the business) uses each employee's
+  // current cost rate (employees.hourlyRate). entry.rate is treated as a
+  // last-resort fallback only, because users sometimes type a charge-out
+  // figure into the rate field — using that for cost would inflate profit
+  // calculations. (See also GrossMarginCalculator.staffTimeLaborCost.)
+  const totalLaborCost = staffEntries.reduce((sum, entry) => {
+    const hours = Number(entry.hours) || 0;
+    const employee = employees.find((e: any) => e.id === entry.employeeId);
+    const costRate =
+      Number((entry as any).costRate) ||
+      Number(employee?.hourlyRate) ||
+      Number(entry.rate) ||
+      0;
+    return sum + hours * costRate;
+  }, 0);
   const totalHours = staffEntries.reduce((sum, entry) => sum + Number(entry.hours), 0);
   
   useEffect(() => {
