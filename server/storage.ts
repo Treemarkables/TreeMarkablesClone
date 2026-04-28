@@ -1852,8 +1852,27 @@ class DatabaseStorage implements IStorage {
     }));
     
     const total = Number(totalResult[0]?.count) || 0;
-    
+
     return { jobs, total };
+  }
+
+  /**
+   * Fast path for analytics/reporting that only need raw job rows. Skips the
+   * customer LEFT JOIN and the two correlated diary-entry subqueries that
+   * `getAllJobs` does — those make a full-table scan ~10× slower at 3k+ jobs
+   * and 4k+ diary rows. Optional createdAt date range filters at the SQL
+   * level so the analytics methods don't pull rows they're going to throw
+   * away in JS anyway.
+   */
+  async getJobsForAnalytics(options?: { fromDate?: Date; toDate?: Date }): Promise<Job[]> {
+    const conditions: any[] = [];
+    if (options?.fromDate) conditions.push(gte(schema.jobs.createdAt, options.fromDate));
+    if (options?.toDate) conditions.push(lte(schema.jobs.createdAt, options.toDate));
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const q = whereClause
+      ? db.select().from(schema.jobs).where(whereClause).orderBy(desc(schema.jobs.createdAt))
+      : db.select().from(schema.jobs).orderBy(desc(schema.jobs.createdAt));
+    return await q;
   }
 
   async searchJobs(query: string, options?: { limit?: number; offset?: number; excludeArchived?: boolean }): Promise<{ jobs: any[]; total: number }> {
@@ -2705,7 +2724,11 @@ class DatabaseStorage implements IStorage {
   async getPriceRulesByService(serviceName: string): Promise<PriceRule[]> { return []; }
 
   async getDashboardStats(fromDate?: Date, toDate?: Date): Promise<any> {
-    const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 }); // Get all jobs for accurate stats
+    // Use the slim analytics fetch — this method aggregates over jobs but
+    // doesn't need customer name/phone or diary-reply timestamps. Pass the
+    // date range so SQL filters at the DB level instead of pulling 3k+ jobs
+    // and discarding most in JS.
+    const allJobs = await this.getJobsForAnalytics({ fromDate, toDate });
     const allCustomers = await this.getAllCustomers();
     const allLeads = await this.getLeads();
     const allQuotes = await this.getAllQuotes();
@@ -2896,7 +2919,10 @@ class DatabaseStorage implements IStorage {
     // INVOICE-FIRST APPROACH: Revenue is recognised when an invoice is issued.
     // We filter by invoice issueDate so that "This Week" revenue exactly matches
     // invoices sent this week — regardless of when the job was originally scheduled.
-    const { jobs: allJobs } = await this.getAllJobs({ limit: 999999 });
+    // NOTE: jobs are fetched WITHOUT a createdAt filter because we need to look
+    // up cost data for any job that has an invoice in the window, even if the
+    // job itself was created earlier. The set is then narrowed to jobIdSet below.
+    const allJobs = await this.getJobsForAnalytics();
     const allInvoices = await this.getAllInvoices();
     // Load employees so staff-time-entry COST aggregation can use the canonical
     // employee cost rate (employees.hourlyRate) rather than whatever number was
@@ -3025,9 +3051,8 @@ class DatabaseStorage implements IStorage {
   }
 
   async getQuoteAnalytics(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all jobs to calculate acceptance based on job status
-    const jobsResult = await this.getAllJobs({ limit: 10000 });
-    const allJobs = jobsResult.jobs;
+    // Slim fetch — analytics over the jobs table only, no joins/subqueries.
+    const allJobs = await this.getJobsForAnalytics({ fromDate, toDate });
     
     // Get all proposals that have been sent (status = 'sent' or 'accepted' or 'viewed', or has sent_date)
     const proposals = await db.select().from(schema.proposals);
@@ -3120,9 +3145,9 @@ class DatabaseStorage implements IStorage {
   }
 
   async getQuoteMethodAnalytics(fromDate?: Date, toDate?: Date): Promise<any> {
-    // Get all jobs to analyze quote presentation methods
-    const jobsResult = await this.getAllJobs({ limit: 10000 });
-    const allJobs = jobsResult.jobs;
+    // Slim fetch — only the jobs table; we don't need customer joins or diary
+    // subqueries. Date filtering happens at the SQL level.
+    const allJobs = await this.getJobsForAnalytics({ fromDate, toDate });
     
     // Filter by date if provided
     let filteredJobs = allJobs.filter(j => !j.archived);
