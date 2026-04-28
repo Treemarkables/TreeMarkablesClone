@@ -2446,11 +2446,24 @@ class DatabaseStorage implements IStorage {
     }
     return updated;
   }
-  async deleteJobDiaryEntry(id: string): Promise<boolean> { 
-    const result = await db.delete(schema.jobDiaryEntries)
-      .where(eq(schema.jobDiaryEntries.id, id))
-      .returning();
-    return result.length > 0;
+  async deleteJobDiaryEntry(id: string): Promise<boolean> {
+    // photos.jobDiaryEntryId and callRecords.jobDiaryEntryId reference this row
+    // without ON DELETE CASCADE, so the parent delete fails with a FK violation
+    // whenever a child exists (e.g. before/after composites insert a photos
+    // row at upload time). Null the references first so the parent delete
+    // succeeds; both children are independent records and survive without it.
+    return await db.transaction(async (tx) => {
+      await tx.update(schema.photos)
+        .set({ jobDiaryEntryId: null })
+        .where(eq(schema.photos.jobDiaryEntryId, id));
+      await tx.update(schema.callRecords)
+        .set({ jobDiaryEntryId: null })
+        .where(eq(schema.callRecords.jobDiaryEntryId, id));
+      const result = await tx.delete(schema.jobDiaryEntries)
+        .where(eq(schema.jobDiaryEntries.id, id))
+        .returning();
+      return result.length > 0;
+    });
   }
   async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> {
     return await db.select().from(schema.jobDiaryEntries)

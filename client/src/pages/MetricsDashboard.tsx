@@ -232,6 +232,20 @@ interface DispatchAIData {
   aiInsight: string;
 }
 
+interface ChecklistUsageItem {
+  id: string;
+  label: string;
+  role: 'A' | 'B' | 'C';
+  completedCount: number;
+  percent: number;
+}
+
+interface ChecklistUsageData {
+  totalJobs: number;
+  items: ChecklistUsageItem[];
+  overall: number;
+}
+
 export default function MetricsDashboard() {
   const [kpiCollapsed, setKpiCollapsed] = useState(false);
   const [manHoursCollapsed, setManHoursCollapsed] = useState(false);
@@ -842,6 +856,24 @@ export default function MetricsDashboard() {
     retry: false,
   });
   const dispatchAI = dispatchAIResponse?.data;
+
+  // Checklist usage — % of completed jobs in the date range that had each item ticked.
+  const { data: checklistUsageResp, isLoading: checklistUsageLoading } = useQuery<{
+    success: boolean;
+    data: ChecklistUsageData;
+  }>({
+    queryKey: ["/api/checklist-usage", dateRange?.from, dateRange?.to],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (dateRange?.from) params.append("fromDate", dateRange.from);
+      if (dateRange?.to) params.append("toDate", dateRange.to);
+      const res = await fetch(`/api/checklist-usage?${params.toString()}`);
+      if (!res.ok) throw new Error("Failed to load checklist usage");
+      return res.json();
+    },
+    staleTime: 60_000,
+  });
+  const checklistUsage = checklistUsageResp?.data;
 
   // Pre-populate calculator with real analytics data when available (only once)
   useEffect(() => {
@@ -2583,6 +2615,91 @@ export default function MetricsDashboard() {
                       Set the presentation method when creating quotes to start
                       tracking conversion rates
                     </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Checklist Usage Section — how often each per-role item gets ticked on completed jobs */}
+          <div className="mt-8">
+            <Card data-testid="card-checklist-usage">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <CheckCircle className="h-5 w-5 text-green-600" />
+                  Checklist Usage
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  How often each role's checklist items get ticked on completed jobs in this date range.
+                </p>
+              </CardHeader>
+              <CardContent>
+                {checklistUsageLoading ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">Loading checklist usage…</p>
+                  </div>
+                ) : !checklistUsage || checklistUsage.totalJobs === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-muted-foreground">
+                      No completed jobs in this date range yet.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Summary row */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div className="bg-muted/30 rounded-lg p-4 border">
+                        <p className="text-xs text-muted-foreground">Completed jobs</p>
+                        <p className="text-2xl font-bold text-foreground" data-testid="checklist-usage-total-jobs">
+                          {checklistUsage.totalJobs}
+                        </p>
+                      </div>
+                      <div className="bg-muted/30 rounded-lg p-4 border">
+                        <p className="text-xs text-muted-foreground">Overall completion</p>
+                        <p className="text-2xl font-bold text-foreground" data-testid="checklist-usage-overall">
+                          {checklistUsage.overall}%
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">avg across all items</p>
+                      </div>
+                    </div>
+
+                    {/* Per-role breakdown */}
+                    {(["C", "A", "B"] as const).map((roleKey) => {
+                      const roleLabel =
+                        roleKey === "C" ? "Kaitiaki" : roleKey === "A" ? "Kaiwhangai" : "Kaitirotiro";
+                      const roleItems = checklistUsage.items.filter((i) => i.role === roleKey);
+                      if (roleItems.length === 0) return null;
+                      return (
+                        <div key={roleKey} data-testid={`checklist-usage-role-${roleKey}`}>
+                          <h4 className="text-sm font-semibold text-foreground mb-2">{roleLabel}</h4>
+                          <div className="space-y-2">
+                            {roleItems.map((item) => (
+                              <div
+                                key={item.id}
+                                className="flex items-center gap-3"
+                                data-testid={`checklist-usage-item-${item.id}`}
+                              >
+                                <div className="w-48 shrink-0 text-sm text-foreground truncate">
+                                  {item.label}
+                                </div>
+                                <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-green-500 transition-all"
+                                    style={{ width: `${item.percent}%` }}
+                                  />
+                                </div>
+                                <div className="w-24 shrink-0 text-right text-sm font-semibold text-foreground tabular-nums">
+                                  {item.percent}%
+                                </div>
+                                <div className="w-20 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                                  {item.completedCount}/{checklistUsage.totalJobs}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>

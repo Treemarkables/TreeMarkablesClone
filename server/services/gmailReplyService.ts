@@ -513,12 +513,12 @@ class GmailReplyService {
           console.error('Error creating email reply notification:', notifError);
         }
         
-        // If reply was to a job-specific email address, ONLY log to job diary, NOT conversations
-        // This prevents duplicates when emails are sent from the job card modal
-        if (email.to && email.to.match(/job-\d+@/i)) {
-          console.log(`📧 Reply was to job-specific address (${email.to}) - skipping conversations page`);
-          return true; // Successfully processed - stop here, don't add to conversations
-        }
+        // Job-matched replies live in the job diary only — never in the conversations page.
+        // The diary entry + email_reply notification above is the complete record; creating a
+        // conversation here would also fire a `new_conversation` notification that routes to
+        // /conversation/{id}, which is exactly what we don't want for job replies.
+        console.log(`📧 Reply matched to job #${job.jobNumber} - logged to diary only, skipping conversations page`);
+        return true;
       }
       
       // Create or update conversation to trigger notification bell

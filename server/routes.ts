@@ -5971,6 +5971,80 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Aggregated checklist completion rates over a date range — feeds the
+  // Checklist Usage card on the metrics dashboard.
+  // Scope: jobs with status='completed' whose completedDate falls in [fromDate, toDate].
+  // For each canonical item, percent = jobs-with-this-completion / totalCompletedJobs * 100.
+  app.get('/api/checklist-usage', async (req: Request, res: Response) => {
+    try {
+      const { fromDate, toDate } = req.query as { fromDate?: string; toDate?: string };
+
+      // Items live alongside the client whitelist — kept in sync by hand because
+      // there are only 7 of them and they rarely change.
+      const ITEM_META: Array<{ id: string; label: string; role: 'A' | 'B' | 'C' }> = [
+        { id: 'time-tracking',       label: 'Time tracking',                role: 'C' },
+        { id: 'review-request',      label: 'Request review from client',   role: 'C' },
+        { id: 'risk-assessment',     label: 'Risk assessment',              role: 'A' },
+        { id: 'content-creation',    label: 'Content creation',             role: 'A' },
+        { id: 'alert-customer-late', label: 'Alert customer if running late', role: 'B' },
+        { id: 'signs-out',           label: 'Signs out',                    role: 'B' },
+        { id: 'pre-start',           label: 'Pre-start',                    role: 'B' },
+      ];
+
+      const conditions = [eq(schema.jobs.status, 'completed')];
+      if (fromDate && typeof fromDate === 'string') {
+        const d = fromZonedTime(`${fromDate}T00:00:00`, 'Pacific/Auckland');
+        if (isNaN(d.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid fromDate format' });
+        }
+        conditions.push(gte(schema.jobs.completedDate, d));
+      }
+      if (toDate && typeof toDate === 'string') {
+        const d = fromZonedTime(`${toDate}T23:59:59.999`, 'Pacific/Auckland');
+        if (isNaN(d.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid toDate format' });
+        }
+        conditions.push(lte(schema.jobs.completedDate, d));
+      }
+
+      const completedJobs = await db
+        .select({ id: schema.jobs.id })
+        .from(schema.jobs)
+        .where(and(...conditions));
+      const totalJobs = completedJobs.length;
+
+      const emptyItems = ITEM_META.map((m) => ({ ...m, completedCount: 0, percent: 0 }));
+      if (totalJobs === 0) {
+        return res.json({ success: true, data: { totalJobs: 0, items: emptyItems, overall: 0 } });
+      }
+
+      const jobIds = completedJobs.map((j) => j.id);
+      const completions = await db
+        .select({
+          itemId: schema.jobChecklistCompletions.itemId,
+        })
+        .from(schema.jobChecklistCompletions)
+        .where(inArray(schema.jobChecklistCompletions.jobId, jobIds));
+
+      const countByItem = new Map<string, number>();
+      for (const c of completions) {
+        countByItem.set(c.itemId, (countByItem.get(c.itemId) ?? 0) + 1);
+      }
+
+      const items = ITEM_META.map((m) => {
+        const completedCount = countByItem.get(m.id) ?? 0;
+        const percent = Math.round((completedCount / totalJobs) * 100);
+        return { ...m, completedCount, percent };
+      });
+      const overall = Math.round(items.reduce((s, i) => s + i.percent, 0) / items.length);
+
+      res.json({ success: true, data: { totalJobs, items, overall } });
+    } catch (error) {
+      console.error('Error fetching checklist usage:', error);
+      res.status(500).json({ success: false, message: 'Error fetching checklist usage' });
+    }
+  });
+
   // Get single diary entry
   app.get('/api/diary/:id', async (req: Request, res: Response) => {
     try {
