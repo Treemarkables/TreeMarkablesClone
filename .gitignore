@@ -10,6 +10,8 @@ uploads
 attached_assets/*.png
 attached_assets/Screenshot*
 attached_assets/IMG_*
+attached_assets/screenshots/*
+!attached_assets/screenshots/.gitkeep
 .claude-user # Environment variables
 .env
 .env.dev

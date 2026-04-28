@@ -1,50 +1,53 @@
+import { useId } from "react";
+
 interface IconProps {
   className?: string;
 }
 
 export function CameraIcon({ className }: IconProps) {
+  const uid = useId();
   return (
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="ci-body" x1="8" y1="18" x2="56" y2="54" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-ci-body`} x1="8" y1="18" x2="56" y2="54" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#4ade80" />
           <stop offset="55%" stopColor="#16a34a" />
           <stop offset="100%" stopColor="#14532d" />
         </linearGradient>
-        <radialGradient id="ci-lens-bg" cx="45%" cy="38%" r="62%">
+        <radialGradient id={`${uid}-ci-lens-bg`} cx="45%" cy="38%" r="62%">
           <stop offset="0%" stopColor="#f0fdf4" />
           <stop offset="55%" stopColor="#bbf7d0" />
           <stop offset="100%" stopColor="#6ee7b7" />
         </radialGradient>
-        <radialGradient id="ci-pupil" cx="38%" cy="32%" r="65%">
+        <radialGradient id={`${uid}-ci-pupil`} cx="38%" cy="32%" r="65%">
           <stop offset="0%" stopColor="#1e3a5f" />
           <stop offset="70%" stopColor="#0f172a" />
           <stop offset="100%" stopColor="#020617" />
         </radialGradient>
-        <linearGradient id="ci-shine" x1="8" y1="20" x2="32" y2="34" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-ci-shine`} x1="8" y1="20" x2="32" y2="34" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.30" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
       {/* Body */}
-      <rect x="5" y="21" width="54" height="34" rx="7" fill="url(#ci-body)" />
+      <rect x="5" y="21" width="54" height="34" rx="7" fill={`url(#${uid}-ci-body)`} />
       {/* Viewfinder notch */}
       <path d="M21 21 L21 16 Q21 13 24 13 L40 13 Q43 13 43 16 L43 21 Z" fill="#15803d" />
       {/* Flash */}
       <rect x="8" y="14" width="9" height="7" rx="3.5" fill="#22c55e" />
       {/* Lens outer halo */}
-      <circle cx="32" cy="38" r="13" fill="url(#ci-lens-bg)" />
+      <circle cx="32" cy="38" r="13" fill={`url(#${uid}-ci-lens-bg)`} />
       {/* Lens chrome ring */}
       <circle cx="32" cy="38" r="10.5" fill="none" stroke="#86efac" strokeWidth="1.5" />
       {/* Lens inner ring */}
       <circle cx="32" cy="38" r="8.5" fill="#a7f3d0" />
       {/* Pupil */}
-      <circle cx="32" cy="38" r="6.5" fill="url(#ci-pupil)" />
+      <circle cx="32" cy="38" r="6.5" fill={`url(#${uid}-ci-pupil)`} />
       {/* Catchlight */}
       <circle cx="29.5" cy="35.5" r="2" fill="white" opacity="0.5" />
       <circle cx="35" cy="34.5" r="0.9" fill="white" opacity="0.3" />
       {/* Top-left shine */}
-      <rect x="5" y="21" width="54" height="14" rx="7" fill="url(#ci-shine)" />
+      <rect x="5" y="21" width="54" height="14" rx="7" fill={`url(#${uid}-ci-shine)`} />
       {/* Status dot */}
       <circle cx="52" cy="27" r="2.5" fill="#86efac" />
       <circle cx="52" cy="27" r="1.2" fill="#f0fdf4" />
@@ -53,23 +56,24 @@ export function CameraIcon({ className }: IconProps) {
 }
 
 export function SMSIcon({ className }: IconProps) {
+  const uid = useId();
   return (
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="sms-body" x1="6" y1="10" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-sms-body`} x1="6" y1="10" x2="58" y2="52" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#7dd3fc" />
           <stop offset="50%" stopColor="#38bdf8" />
           <stop offset="100%" stopColor="#0284c7" />
         </linearGradient>
-        <linearGradient id="sms-shine" x1="6" y1="10" x2="30" y2="26" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-sms-shine`} x1="6" y1="10" x2="30" y2="26" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.36" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
       {/* Bubble body */}
-      <path d="M8 12 Q8 8 12 8 L52 8 Q56 8 56 12 L56 40 Q56 44 52 44 L22 44 L12 54 L14 44 L12 44 Q8 44 8 40 Z" fill="url(#sms-body)" />
+      <path d="M8 12 Q8 8 12 8 L52 8 Q56 8 56 12 L56 40 Q56 44 52 44 L22 44 L12 54 L14 44 L12 44 Q8 44 8 40 Z" fill={`url(#${uid}-sms-body)`} />
       {/* Top shine */}
-      <path d="M8 12 Q8 8 12 8 L52 8 Q56 8 56 12 L56 22 Q30 22 8 22 Z" fill="url(#sms-shine)" />
+      <path d="M8 12 Q8 8 12 8 L52 8 Q56 8 56 12 L56 22 Q30 22 8 22 Z" fill={`url(#${uid}-sms-shine)`} />
       {/* Message dots */}
       <circle cx="22" cy="26" r="3.5" fill="white" opacity="0.95" />
       <circle cx="32" cy="26" r="3.5" fill="white" opacity="0.95" />
@@ -81,29 +85,30 @@ export function SMSIcon({ className }: IconProps) {
 }
 
 export function EmailIcon({ className }: IconProps) {
+  const uid = useId();
   return (
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="em-body" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-em-body`} x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#ffffff" />
           <stop offset="100%" stopColor="#f1f5f9" />
         </linearGradient>
-        <linearGradient id="em-flap" x1="6" y1="14" x2="58" y2="36" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-em-flap`} x1="6" y1="14" x2="58" y2="36" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#f87171" />
           <stop offset="55%" stopColor="#dc2626" />
           <stop offset="100%" stopColor="#991b1b" />
         </linearGradient>
-        <linearGradient id="em-shine" x1="6" y1="14" x2="32" y2="26" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-em-shine`} x1="6" y1="14" x2="32" y2="26" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
       {/* Envelope body — white */}
-      <rect x="6" y="14" width="52" height="38" rx="6" fill="url(#em-body)" stroke="#e2e8f0" strokeWidth="1" />
+      <rect x="6" y="14" width="52" height="38" rx="6" fill={`url(#${uid}-em-body)`} stroke="#e2e8f0" strokeWidth="1" />
       {/* Flap fold — red V */}
-      <path d="M6 14 L32 34 L58 14 Z" fill="url(#em-flap)" />
+      <path d="M6 14 L32 34 L58 14 Z" fill={`url(#${uid}-em-flap)`} />
       {/* Shine on flap */}
-      <path d="M6 14 L32 34 L58 14 Z" fill="url(#em-shine)" />
+      <path d="M6 14 L32 34 L58 14 Z" fill={`url(#${uid}-em-shine)`} />
       {/* Red ruled lines on body */}
       <line x1="16" y1="38" x2="48" y2="38" stroke="#dc2626" strokeWidth="1.2" strokeLinecap="round" opacity="0.30" />
       <line x1="16" y1="43" x2="42" y2="43" stroke="#dc2626" strokeWidth="1.2" strokeLinecap="round" opacity="0.20" />
@@ -114,25 +119,26 @@ export function EmailIcon({ className }: IconProps) {
 }
 
 export function MoreDotsIcon({ className }: IconProps) {
+  const uid = useId();
   return (
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="md-dot" cx="40%" cy="30%" r="65%">
+        <radialGradient id={`${uid}-md-dot`} cx="40%" cy="30%" r="65%">
           <stop offset="0%" stopColor="#94a3b8" />
           <stop offset="55%" stopColor="#475569" />
           <stop offset="100%" stopColor="#1e293b" />
         </radialGradient>
-        <radialGradient id="md-shine" cx="40%" cy="30%" r="55%">
+        <radialGradient id={`${uid}-md-shine`} cx="40%" cy="30%" r="55%">
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.4" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </radialGradient>
       </defs>
-      <circle cx="16" cy="32" r="7.5" fill="url(#md-dot)" />
-      <circle cx="16" cy="32" r="7.5" fill="url(#md-shine)" />
-      <circle cx="32" cy="32" r="7.5" fill="url(#md-dot)" />
-      <circle cx="32" cy="32" r="7.5" fill="url(#md-shine)" />
-      <circle cx="48" cy="32" r="7.5" fill="url(#md-dot)" />
-      <circle cx="48" cy="32" r="7.5" fill="url(#md-shine)" />
+      <circle cx="16" cy="32" r="7.5" fill={`url(#${uid}-md-dot)`} />
+      <circle cx="16" cy="32" r="7.5" fill={`url(#${uid}-md-shine)`} />
+      <circle cx="32" cy="32" r="7.5" fill={`url(#${uid}-md-dot)`} />
+      <circle cx="32" cy="32" r="7.5" fill={`url(#${uid}-md-shine)`} />
+      <circle cx="48" cy="32" r="7.5" fill={`url(#${uid}-md-dot)`} />
+      <circle cx="48" cy="32" r="7.5" fill={`url(#${uid}-md-shine)`} />
     </svg>
   );
 }
@@ -223,23 +229,24 @@ export function ScheduleIcon({ className }: IconProps) {
 }
 
 export function CallIcon({ className }: IconProps) {
+  const uid = useId();
   return (
     <svg viewBox="0 0 64 64" className={className} xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="call-bg" x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-call-bg`} x1="4" y1="4" x2="60" y2="60" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#4ade80" />
           <stop offset="55%" stopColor="#16a34a" />
           <stop offset="100%" stopColor="#14532d" />
         </linearGradient>
-        <linearGradient id="call-shine" x1="4" y1="4" x2="32" y2="28" gradientUnits="userSpaceOnUse">
+        <linearGradient id={`${uid}-call-shine`} x1="4" y1="4" x2="32" y2="28" gradientUnits="userSpaceOnUse">
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.30" />
           <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
         </linearGradient>
       </defs>
       {/* iOS-style rounded square background */}
-      <rect x="4" y="4" width="56" height="56" rx="14" fill="url(#call-bg)" />
+      <rect x="4" y="4" width="56" height="56" rx="14" fill={`url(#${uid}-call-bg)`} />
       {/* Shine overlay */}
-      <rect x="4" y="4" width="56" height="28" rx="14" fill="url(#call-shine)" />
+      <rect x="4" y="4" width="56" height="28" rx="14" fill={`url(#${uid}-call-shine)`} />
       {/* White phone handset — classic telephone receiver path */}
       <path
         d="M20 17 C18 17 16 19 16 21 L16 26 C16 27.5 17 28.5 18.5 29 C22 30 25.5 31.5 28.5 34.5 C31.5 37.5 33 41 34 44.5 C34.5 46 35.5 47 37 47 L42 47 C44 47 46 45 46 43 L46 38 C46 36.5 45 35.5 43.5 35 C41 34.5 38.5 33.5 36.5 32"

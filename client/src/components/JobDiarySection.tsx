@@ -617,7 +617,7 @@ export function JobDiarySection({
     null,
   );
   const [diaryTab, setDiaryTab] = useState<"timeline" | "photos">("timeline");
-  const quickNoteInputRef = React.useRef<HTMLInputElement>(null);
+  const quickNoteInputRef = React.useRef<HTMLTextAreaElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
   const [replyToPhone, setReplyToPhone] = useState<string>("");
   // Pre-filled body when opening the email composer from an AI-drafted
@@ -1979,32 +1979,21 @@ export function JobDiarySection({
           </div>
 
           {/* Quick Note Input */}
-          <div className="flex gap-1">
+          <div className="flex gap-1 items-start">
             <div className="flex-1 relative">
-              <MdStickyNote2 className="absolute left-2.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-yellow-400" />
-              <Input
+              <MdStickyNote2 className="absolute left-2.5 top-2.5 w-4 h-4 text-yellow-400" />
+              <Textarea
                 ref={quickNoteInputRef}
                 placeholder="Add note..."
-                className="pl-9 pr-9 h-9 text-sm"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (e.currentTarget.value.trim()) {
-                      createNoteMutation.mutate({
-                        content: e.currentTarget.value.trim(),
-                      });
-                      e.currentTarget.value = "";
-                    }
-                  }
-                }}
+                rows={1}
+                className="pl-9 pr-9 py-2 text-sm min-h-9 resize-none"
                 data-testid="input-quick-note"
               />
               <Button
                 type="button"
                 size="icon"
                 variant="ghost"
-                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-7 w-7"
+                className="absolute right-1 top-1 h-7 w-7"
               >
                 <Paperclip className="w-4 h-4" />
               </Button>
