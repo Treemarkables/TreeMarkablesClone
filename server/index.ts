@@ -371,6 +371,16 @@ function startNotificationQueueWorker() {
       const err = error as Error;
       log(`[Notification Queue] Worker error: ${err.message}`, "error");
     }
+
+    // Process customer-facing booking reminders on the same tick. Kept on
+    // the same interval so we don't add a second background loop.
+    try {
+      const { processDueReminders } = await import("./services/bookingReminderService");
+      await processDueReminders();
+    } catch (error) {
+      const err = error as Error;
+      log(`[Booking Reminders] Worker error: ${err.message}`, "error");
+    }
   }, 60000);
 
   log("🔔 Notification queue worker started (checking every 60 seconds)", "startup");

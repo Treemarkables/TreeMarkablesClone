@@ -70,6 +70,7 @@ import {
   Reply,
   CalendarPlus,
   Images,
+  Bell,
 } from "lucide-react";
 import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -1565,6 +1566,39 @@ export function JobDiarySection({
   };
 
   // Mutations
+  // Manual booking reminder — fires the configured channels (email/SMS)
+  // immediately. The diary timeline picks up an entry from the server via
+  // invalidate, so the user sees the audit trail without an extra fetch.
+  const sendBookingReminderNow = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/jobs/${jobId}/booking-reminders/send-now`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || "Failed to send reminder");
+      }
+      return data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "diary-timeline"],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: ["/api/jobs", jobId, "booking-reminders"],
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Reminder failed",
+        description: error.message || "Failed to send reminder",
+        variant: "destructive",
+      });
+    },
+  });
+
   const createNoteMutation = useMutation({
     mutationFn: async (data: NoteFormData) => {
       return apiRequest("POST", `/api/jobs/${jobId}/diary`, {
@@ -1957,6 +1991,19 @@ export function JobDiarySection({
               Job Diary
             </h3>
             <div className="flex gap-1">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => sendBookingReminderNow.mutate()}
+                disabled={sendBookingReminderNow.isPending}
+                data-testid="button-send-booking-reminder"
+                className="h-7 text-xs gap-1"
+                title="Send booking reminder to customer now"
+              >
+                <Bell className="w-3 h-3" />
+                {sendBookingReminderNow.isPending ? "Sending..." : "Send reminder"}
+              </Button>
               <Button
                 type="button"
                 size="icon"

@@ -97,6 +97,22 @@ const settingsOptions = [
     path: "/settings/notifications"
   },
   {
+    id: "quote-followup",
+    title: "Quote Follow-up Automation",
+    description: "Auto-draft follow-ups for unanswered quotes — you approve before send",
+    icon: Mail,
+    color: "bg-green-100 text-green-600",
+    path: "/settings/quote-followup"
+  },
+  {
+    id: "booking-reminders",
+    title: "Booking Reminders",
+    description: "Customer email/SMS reminders before scheduled jobs",
+    icon: Bell,
+    color: "bg-emerald-100 text-emerald-600",
+    path: "/settings/booking-reminders"
+  },
+  {
     id: "forms",
     title: "Job Templates",
     description: "Create and manage job templates and forms",

@@ -663,6 +663,7 @@ export function GlobalJobCard({
     notes: "",
     sendClientNotification: false,
     sendProposalEmail: false,
+    scheduleBookingReminders: false,
   });
   const [staffConflicts, setStaffConflicts] = useState<
     { employeeId: string; conflicts: any[] }[]
@@ -3145,6 +3146,7 @@ export function GlobalJobCard({
           notes: firstAssignment.notes || "",
           sendClientNotification: false,
           sendProposalEmail: false,
+          scheduleBookingReminders: false,
         });
       }
     } catch (error) {
@@ -3603,6 +3605,7 @@ The Treemarkables Team`;
             staffAssignments,
             sendNotifications: true,
             sendClientNotification: schedulingData.sendClientNotification,
+            scheduleBookingReminders: schedulingData.scheduleBookingReminders,
           }),
         },
       );
@@ -3808,6 +3811,7 @@ The Treemarkables Team`;
           notes: "",
           sendClientNotification: false,
           sendProposalEmail: false,
+          scheduleBookingReminders: false,
         });
         setStaffConflicts([]);
       } else {
@@ -3865,7 +3869,7 @@ The Treemarkables Team`;
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary"] });
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", editingJob.id, "diary-timeline"] });
       setIsSchedulingModalOpen(false);
-      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false, sendProposalEmail: false });
+      setSchedulingData({ date: "", endDate: "", startTime: "", duration: "", day2Duration: "", assignedTo: [], notes: "", sendClientNotification: false, sendProposalEmail: false, scheduleBookingReminders: false });
     } catch (error) {
       console.error("Error unscheduling job:", error);
       toast({ title: "Error", description: "Could not unschedule the job.", variant: "destructive" });
@@ -10765,6 +10769,42 @@ The Treemarkables Team`;
               </div>
             </div>
 
+            {/* Booking reminders toggle — opts the job into the configured
+                reminder schedule (e.g. 24h before). Cadence and channel are
+                set in Settings → Booking Reminders. */}
+            <div className="flex items-start space-x-2 p-3 bg-emerald-50 dark:bg-emerald-950 rounded-md border border-emerald-200 dark:border-emerald-800">
+              <Checkbox
+                id="schedule-booking-reminders"
+                checked={schedulingData.scheduleBookingReminders}
+                onCheckedChange={(checked) =>
+                  setSchedulingData((prev) => ({
+                    ...prev,
+                    scheduleBookingReminders: checked === true,
+                  }))
+                }
+                data-testid="checkbox-schedule-booking-reminders"
+                className="mt-0.5"
+              />
+              <div className="flex-1">
+                <label
+                  htmlFor="schedule-booking-reminders"
+                  className="text-sm font-medium leading-none cursor-pointer select-none"
+                >
+                  Schedule automatic booking reminders for this job
+                </label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Sends email/SMS reminders at the offsets configured in{" "}
+                  <Link
+                    href="/settings/booking-reminders"
+                    className="underline hover:text-foreground"
+                  >
+                    Booking Reminder Settings
+                  </Link>
+                  . Reschedules automatically if the job date changes.
+                </p>
+              </div>
+            </div>
+
             <div>
               <label className="text-sm font-medium">Notes</label>
               <Textarea
@@ -10809,6 +10849,7 @@ The Treemarkables Team`;
                     notes: "",
                     sendClientNotification: false,
                     sendProposalEmail: false,
+                    scheduleBookingReminders: false,
                   });
                 }}
                 data-testid="btn-cancel-schedule"

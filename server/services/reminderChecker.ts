@@ -1,4 +1,5 @@
 import { storage } from '../storage.js';
+import { generateQuoteFollowupDraft } from './quoteFollowupAi.js';
 
 // De-duplication helper: check if a reminder of this type for this entity was already sent in the last 24 hours
 async function wasReminderSentRecently(type: string, entityId: string, entityField: 'jobId' | 'quoteId'): Promise<boolean> {
@@ -13,15 +14,35 @@ async function wasReminderSentRecently(type: string, entityId: string, entityFie
   });
 }
 
-// Check 1: Formally sent quotes with no customer response after 3+ days
+// Pick a customer first name from the customer.name "Last, First" / "First Last" / "Business Ltd" mess.
+function firstNameFrom(customerName: string | null | undefined): string {
+  if (!customerName) return '';
+  const trimmed = customerName.trim();
+  if (!trimmed) return '';
+  if (trimmed.includes(',')) {
+    const after = trimmed.split(',')[1]?.trim();
+    if (after) return after.split(/\s+/)[0];
+  }
+  return trimmed.split(/\s+/)[0];
+}
+
+// Check 1: Formally sent quotes with no customer response after the configured threshold
 async function checkStaleQuotes(): Promise<void> {
-  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
+  const settings = await storage.getBusinessSettings();
+  const thresholdDays = (settings?.autoFollowUpDays && settings.autoFollowUpDays > 0) ? settings.autoFollowUpDays : 3;
+  const followupEnabled = !!settings?.autoQuoteFollowupEnabled;
+  const followupChannel = (settings?.quoteFollowupChannel === 'email' ? 'email' : 'sms') as 'sms' | 'email';
+  const maxAttempts = (settings?.quoteFollowupMaxAttempts && settings.quoteFollowupMaxAttempts > 0) ? settings.quoteFollowupMaxAttempts : 2;
+
+  const thresholdAgo = new Date(Date.now() - thresholdDays * 24 * 60 * 60 * 1000);
   const allQuotes = await storage.getAllQuotes();
 
   for (const quote of allQuotes) {
     if (quote.status !== 'sent' || quote.responseDate) continue;
-    if (!quote.sentDate || new Date(quote.sentDate) > threeDaysAgo) continue;
+    if (!quote.sentDate || new Date(quote.sentDate) > thresholdAgo) continue;
 
+    // 24-hour cooldown gates BOTH the notification and the AI-drafted follow-up — so we
+    // never queue more than one pending draft per quote within a 24h window.
     const alreadySent = await wasReminderSentRecently('reminder_stale_quote', quote.id, 'quoteId');
     if (alreadySent) continue;
 
@@ -29,6 +50,7 @@ async function checkStaleQuotes(): Promise<void> {
     const customerName = customer?.name || 'Customer';
     const daysSince = Math.floor((Date.now() - new Date(quote.sentDate).getTime()) / (1000 * 60 * 60 * 24));
 
+    // Internal staff notification — always runs, regardless of automation toggle.
     await storage.createNotification({
       title: 'Quote follow-up needed',
       message: `Quote #${quote.quoteNumber} sent to ${customerName} ${daysSince} day${daysSince === 1 ? '' : 's'} ago — no response yet`,
@@ -42,6 +64,65 @@ async function checkStaleQuotes(): Promise<void> {
       metadata: { quoteNumber: quote.quoteNumber, customerName, daysSince },
     });
     console.log(`[ReminderChecker] Stale quote reminder: Quote #${quote.quoteNumber} (${customerName}, ${daysSince}d)`);
+
+    // AI-drafted customer follow-up — only when the user has opted in.
+    if (!followupEnabled) continue;
+
+    const currentAttempts = quote.followUpCount || 0;
+    if (currentAttempts >= maxAttempts) {
+      console.log(`[ReminderChecker] Quote #${quote.quoteNumber} hit maxAttempts (${maxAttempts}) — skipping draft`);
+      continue;
+    }
+
+    // Resolve channel — fall back if the requested channel has no recipient on file.
+    let channel: 'sms' | 'email' = followupChannel;
+    const phone = (customer?.mobile || customer?.phone || '').trim();
+    const email = (customer?.email || '').trim();
+    if (channel === 'sms' && !phone && email) channel = 'email';
+    if (channel === 'email' && !email && phone) channel = 'sms';
+    if (channel === 'sms' && !phone) {
+      console.log(`[ReminderChecker] Quote #${quote.quoteNumber}: no phone/email on customer — cannot draft followup`);
+      continue;
+    }
+    if (channel === 'email' && !email) {
+      console.log(`[ReminderChecker] Quote #${quote.quoteNumber}: no email/phone on customer — cannot draft followup`);
+      continue;
+    }
+
+    try {
+      const { body } = await generateQuoteFollowupDraft({
+        customerFirstName: firstNameFrom(customer?.name),
+        jobDescription: null,
+        quoteNumber: quote.quoteNumber,
+        quoteAmount: (quote as any).total ?? (quote as any).amount ?? null,
+        daysSince,
+        attemptNumber: currentAttempts + 1,
+        channel,
+      });
+
+      await storage.createPendingOutboundMessage({
+        jobId: quote.jobId || undefined,
+        customerId: quote.customerId || undefined,
+        proposalId: undefined,
+        proposalNumber: quote.quoteNumber ? String(quote.quoteNumber) : undefined,
+        recipientName: customer?.name || undefined,
+        recipientPhone: channel === 'sms' ? phone : undefined,
+        recipientEmail: channel === 'email' ? email : undefined,
+        message: body,
+        channel,
+        status: 'pending',
+      });
+
+      await storage.updateQuote(quote.id, {
+        followUpCount: currentAttempts + 1,
+        lastFollowUpDate: new Date(),
+        nextFollowUpDate: new Date(Date.now() + thresholdDays * 24 * 60 * 60 * 1000),
+      } as any);
+
+      console.log(`[ReminderChecker] Queued follow-up draft for Quote #${quote.quoteNumber} (${channel}, attempt ${currentAttempts + 1}/${maxAttempts})`);
+    } catch (err) {
+      console.error(`[ReminderChecker] Failed to draft follow-up for Quote #${quote.quoteNumber}:`, err);
+    }
   }
 }
 

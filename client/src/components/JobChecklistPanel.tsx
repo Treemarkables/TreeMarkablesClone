@@ -10,6 +10,7 @@ import {
   Clock,
   Star,
   Users,
+  MessageSquare,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
@@ -58,6 +59,7 @@ const ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
     { id: "alert-customer-late", label: "Alert customer if running late", Icon: PhoneCall },
     { id: "signs-out", label: "Signs out", Icon: TriangleAlert },
     { id: "pre-start", label: "Pre-start", Icon: ClipboardCheck },
+    { id: "day-progress-update", label: "Day progress update to Jules", Icon: MessageSquare },
   ],
   C: [
     { id: "time-tracking", label: "Time tracking", Icon: Clock },

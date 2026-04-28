@@ -5328,6 +5328,24 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
+      // Re-sync booking reminders if scheduledDate changed and the job
+      // has reminders enabled. We compare timestamps (handle date|null|undefined).
+      try {
+        const oldDateMs = oldJob?.scheduledDate ? new Date(oldJob.scheduledDate as any).getTime() : null;
+        const newDateMs = job.scheduledDate ? new Date(job.scheduledDate as any).getTime() : null;
+        if (job.bookingRemindersEnabled && oldDateMs !== newDateMs) {
+          if (newDateMs) {
+            const { scheduleRemindersForJob } = await import('./services/bookingReminderService');
+            await scheduleRemindersForJob(job.id);
+          } else {
+            const { cancelPendingRemindersForJob } = await import('./services/bookingReminderService');
+            await cancelPendingRemindersForJob(job.id);
+          }
+        }
+      } catch (reminderError) {
+        console.error('❌ Error re-syncing booking reminders after job update:', reminderError);
+      }
+
       // Always sync customer info from job card to customer record
       if (job.customerId) {
         try {
@@ -5640,6 +5658,24 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const job = await storage.updateJob(req.params.id, updateData);
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Re-sync booking reminders if scheduledDate changed and the job
+      // has reminders enabled. We compare timestamps (handle date|null|undefined).
+      try {
+        const oldDateMs = oldJob?.scheduledDate ? new Date(oldJob.scheduledDate as any).getTime() : null;
+        const newDateMs = job.scheduledDate ? new Date(job.scheduledDate as any).getTime() : null;
+        if (job.bookingRemindersEnabled && oldDateMs !== newDateMs) {
+          if (newDateMs) {
+            const { scheduleRemindersForJob } = await import('./services/bookingReminderService');
+            await scheduleRemindersForJob(job.id);
+          } else {
+            const { cancelPendingRemindersForJob } = await import('./services/bookingReminderService');
+            await cancelPendingRemindersForJob(job.id);
+          }
+        }
+      } catch (reminderError) {
+        console.error('❌ Error re-syncing booking reminders after job update:', reminderError);
       }
 
       // Always sync customer info from job card to customer record
@@ -6003,18 +6039,16 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
-  // Item IDs are split across the two day-roles (Kaiwhangai = A, Kaitirotiro = B)
-  // and matched by the panel client-side. Whitelisted here so stale clients can't
-  // write retired item IDs (e.g. 'time-tracking', 'review') into the table.
-  const ALLOWED_CHECKLIST_ITEM_IDS = new Set([
-    'risk-assessment',
-    'content-creation',
-    'alert-customer-late',
-    'signs-out',
-    'pre-start',
-    'time-tracking',
-    'review-request',
-  ]);
+  // Whitelist of acceptable checklist item IDs is now driven by the
+  // role_checklist_tasks table (built-ins + user-added). Stale clients still
+  // can't write a retired item ID — anything not in the table is rejected.
+  const isAllowedChecklistItemId = async (itemId: string): Promise<boolean> => {
+    const { db } = await import('./db');
+    const { roleChecklistTasks } = await import('../shared/schema');
+    const { eq } = await import('drizzle-orm');
+    const rows = await db.select({ id: roleChecklistTasks.id }).from(roleChecklistTasks).where(eq(roleChecklistTasks.itemId, itemId)).limit(1);
+    return rows.length > 0;
+  };
 
   app.post('/api/jobs/:jobId/checklist/:itemId', async (req: Request, res: Response) => {
     try {
@@ -6027,7 +6061,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (jobId.startsWith('temp-')) {
         return res.status(400).json({ success: false, message: 'Save the job before ticking checklist items' });
       }
-      if (!ALLOWED_CHECKLIST_ITEM_IDS.has(itemId)) {
+      if (!(await isAllowedChecklistItemId(itemId))) {
         return res.status(400).json({ success: false, message: `Unknown checklist item: ${itemId}` });
       }
       if (completed === false) {
@@ -13091,7 +13125,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   // Create staff assignments for a job (with conflict checking and notifications)
   app.post('/api/jobs/:jobId/staff-assignments', async (req: Request, res: Response) => {
     try {
-      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false } = req.body;
+      const { staffAssignments, sendNotifications = true, sendClientNotification = false, addOnly = false, scheduleBookingReminders = false } = req.body;
       const jobId = req.params.jobId;
 
       if (!staffAssignments || !Array.isArray(staffAssignments) || staffAssignments.length === 0) {
@@ -13342,6 +13376,20 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         } catch (emailError) {
           console.error('❌ Error sending client notification email:', emailError);
           // Don't fail the request if email sending fails
+        }
+      }
+
+      // Schedule customer booking reminders if requested. Failure here must
+      // not fail the assignment request — reminders are an enhancement, not
+      // a hard dependency of the booking flow.
+      if (scheduleBookingReminders) {
+        try {
+          await storage.updateJob(jobId, { bookingRemindersEnabled: true });
+          const { scheduleRemindersForJob } = await import('./services/bookingReminderService');
+          const result = await scheduleRemindersForJob(jobId);
+          console.log(`📅 Booking reminders scheduled for job ${jobId}: created=${result.created}, skipped=${result.skipped}`);
+        } catch (reminderError) {
+          console.error('❌ Error scheduling booking reminders:', reminderError);
         }
       }
 
@@ -14693,6 +14741,96 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         success: false,
         message: 'Error resetting business settings'
       });
+    }
+  });
+
+  // ========================================
+  // BOOKING REMINDER ENDPOINTS
+  // Customer-facing reminders sent before a scheduled job. Backed by
+  // server/services/bookingReminderService.ts and processed by the
+  // notification queue worker tick in server/index.ts.
+  // ========================================
+
+  // List reminders for a job (used by the diary card and settings UI)
+  app.get('/api/jobs/:id/booking-reminders', async (req: Request, res: Response) => {
+    try {
+      const { getRemindersForJob } = await import('./services/bookingReminderService');
+      const reminders = await getRemindersForJob(req.params.id);
+      res.json({ success: true, data: reminders });
+    } catch (error) {
+      console.error('Error listing booking reminders:', error);
+      res.status(500).json({ success: false, message: 'Failed to list reminders' });
+    }
+  });
+
+  // Send a reminder right now (manual button in diary)
+  app.post('/api/jobs/:id/booking-reminders/send-now', async (req: Request, res: Response) => {
+    try {
+      const { channel } = req.body || {};
+      const { createAndSendManualReminder } = await import('./services/bookingReminderService');
+      const result = await createAndSendManualReminder(req.params.id, channel);
+      if (!result.ok) {
+        return res.status(400).json({ success: false, message: result.error || 'Failed to send reminder', reminderId: result.reminderId });
+      }
+      res.json({ success: true, reminderId: result.reminderId });
+    } catch (error) {
+      console.error('Error sending booking reminder now:', error);
+      res.status(500).json({ success: false, message: 'Failed to send reminder' });
+    }
+  });
+
+  // Schedule (or re-schedule) automatic reminders for a job using the
+  // configured offsets in business_settings. Also flips the per-job
+  // bookingRemindersEnabled flag on.
+  app.post('/api/jobs/:id/booking-reminders/schedule', async (req: Request, res: Response) => {
+    try {
+      const job = await storage.getJob(req.params.id);
+      if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
+      if (!job.scheduledDate) {
+        return res.status(400).json({ success: false, message: 'Job has no scheduled date' });
+      }
+
+      await storage.updateJob(req.params.id, { bookingRemindersEnabled: true });
+      const { scheduleRemindersForJob } = await import('./services/bookingReminderService');
+      const result = await scheduleRemindersForJob(req.params.id);
+
+      res.json({ success: true, ...result });
+    } catch (error) {
+      console.error('Error scheduling booking reminders:', error);
+      res.status(500).json({ success: false, message: 'Failed to schedule reminders' });
+    }
+  });
+
+  // Turn off automatic reminders for a job — cancels every pending row.
+  app.post('/api/jobs/:id/booking-reminders/cancel', async (req: Request, res: Response) => {
+    try {
+      const { cancelPendingRemindersForJob } = await import('./services/bookingReminderService');
+      const cancelled = await cancelPendingRemindersForJob(req.params.id);
+      await storage.updateJob(req.params.id, { bookingRemindersEnabled: false });
+      res.json({ success: true, cancelled });
+    } catch (error) {
+      console.error('Error cancelling booking reminders:', error);
+      res.status(500).json({ success: false, message: 'Failed to cancel reminders' });
+    }
+  });
+
+  // Cancel a single scheduled reminder by id
+  app.delete('/api/booking-reminders/:id', async (req: Request, res: Response) => {
+    try {
+      const { db } = await import('./db');
+      const schemaModule = await import('@shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const result = await db.update(schemaModule.bookingReminders)
+        .set({ status: 'cancelled', updatedAt: new Date() })
+        .where(eq(schemaModule.bookingReminders.id, req.params.id))
+        .returning();
+      if (result.length === 0) {
+        return res.status(404).json({ success: false, message: 'Reminder not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error cancelling booking reminder:', error);
+      res.status(500).json({ success: false, message: 'Failed to cancel reminder' });
     }
   });
 
@@ -24877,6 +25015,142 @@ If you cannot find a value, use null. Do not guess.`
     } catch (error) {
       console.error('Error deleting checklist template:', error);
       return res.status(500).json({ success: false, message: 'Failed to delete checklist template' });
+    }
+  });
+
+  // ─── Role Checklist Tasks ────────────────────────────────────────────────
+  // The seven built-in tasks rendered by JobChecklistPanel today, seeded on
+  // first GET so existing tenants see the same checklist as before but can now
+  // disable/edit/reorder them and add their own from Settings.
+  const BUILT_IN_ROLE_CHECKLIST_TASKS: Array<{
+    roleKey: 'A' | 'B' | 'C';
+    itemId: string;
+    label: string;
+    iconName: string;
+    sortOrder: number;
+  }> = [
+    { roleKey: 'A', itemId: 'risk-assessment',     label: 'Risk assessment',                iconName: 'Shield',         sortOrder: 0 },
+    { roleKey: 'A', itemId: 'content-creation',    label: 'Content creation',               iconName: 'Camera',         sortOrder: 1 },
+    { roleKey: 'B', itemId: 'alert-customer-late', label: 'Alert customer if running late', iconName: 'PhoneCall',      sortOrder: 0 },
+    { roleKey: 'B', itemId: 'signs-out',           label: 'Signs out',                      iconName: 'TriangleAlert',  sortOrder: 1 },
+    { roleKey: 'B', itemId: 'pre-start',           label: 'Pre-start',                      iconName: 'ClipboardCheck', sortOrder: 2 },
+    { roleKey: 'B', itemId: 'day-progress-update', label: 'Day progress update to Jules',   iconName: 'MessageSquare',  sortOrder: 3 },
+    { roleKey: 'C', itemId: 'time-tracking',       label: 'Time tracking',                  iconName: 'Clock',          sortOrder: 0 },
+    { roleKey: 'C', itemId: 'review-request',      label: 'Request review from client',     iconName: 'Star',           sortOrder: 1 },
+  ];
+
+  // Lazy seed: on first GET, if the table is empty, insert the eight built-ins.
+  // Idempotent — safe to call repeatedly. Returns the resulting row set.
+  const ensureRoleChecklistTasksSeeded = async () => {
+    const { db } = await import('./db');
+    const { roleChecklistTasks } = await import('../shared/schema');
+    const existing = await db.select().from(roleChecklistTasks).limit(1);
+    if (existing.length === 0) {
+      await db.insert(roleChecklistTasks).values(
+        BUILT_IN_ROLE_CHECKLIST_TASKS.map(t => ({ ...t, isBuiltIn: true })),
+      ).onConflictDoNothing();
+    }
+  };
+
+  // GET /api/role-checklist-tasks — returns all tasks (enabled and disabled),
+  // ordered by role then sortOrder. Frontend filters disabled out for the
+  // panel; Settings UI shows everything so users can re-enable.
+  app.get('/api/role-checklist-tasks', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { roleChecklistTasks } = await import('../shared/schema');
+      const { asc } = await import('drizzle-orm');
+      await ensureRoleChecklistTasksSeeded();
+      const items = await db.select().from(roleChecklistTasks).orderBy(asc(roleChecklistTasks.roleKey), asc(roleChecklistTasks.sortOrder), asc(roleChecklistTasks.createdAt));
+      return res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error fetching role checklist tasks:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch role checklist tasks' });
+    }
+  });
+
+  // POST /api/role-checklist-tasks — adds a user-defined custom task.
+  // Required: roleKey (A|B|C), label. Optional: iconName, sortOrder, itemId.
+  // If itemId omitted, derive a slug from the label.
+  app.post('/api/role-checklist-tasks', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { roleChecklistTasks } = await import('../shared/schema');
+      const { eq, max, and } = await import('drizzle-orm');
+      const { roleKey, label, iconName, sortOrder, itemId } = req.body ?? {};
+      if (!['A', 'B', 'C'].includes(roleKey)) {
+        return res.status(400).json({ success: false, message: 'roleKey must be A, B, or C' });
+      }
+      if (!label || typeof label !== 'string' || !label.trim()) {
+        return res.status(400).json({ success: false, message: 'label is required' });
+      }
+      // Derive a stable slug if no itemId provided. Slug must be unique table-wide.
+      const slug = (itemId && typeof itemId === 'string' && itemId.trim())
+        ? itemId.trim()
+        : `custom-${label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}-${Date.now().toString(36)}`;
+      const [maxResult] = await db
+        .select({ maxOrder: max(roleChecklistTasks.sortOrder) })
+        .from(roleChecklistTasks)
+        .where(eq(roleChecklistTasks.roleKey, roleKey));
+      const nextOrder = sortOrder ?? ((maxResult?.maxOrder ?? -1) + 1);
+      const [result] = await db.insert(roleChecklistTasks).values({
+        roleKey,
+        itemId: slug,
+        label: label.trim(),
+        iconName: typeof iconName === 'string' && iconName.trim() ? iconName.trim() : 'Check',
+        sortOrder: nextOrder,
+        isEnabled: true,
+        isBuiltIn: false,
+      }).returning();
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error creating role checklist task:', error);
+      return res.status(500).json({ success: false, message: 'Failed to create role checklist task' });
+    }
+  });
+
+  // PUT /api/role-checklist-tasks/:id — update label, icon, sortOrder, isEnabled.
+  // roleKey and itemId are immutable once set (itemId is referenced by completions).
+  app.put('/api/role-checklist-tasks/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { roleChecklistTasks } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const updates: Record<string, any> = { updatedAt: new Date() };
+      if (typeof req.body.label === 'string' && req.body.label.trim()) updates.label = req.body.label.trim();
+      if (typeof req.body.iconName === 'string' && req.body.iconName.trim()) updates.iconName = req.body.iconName.trim();
+      if (typeof req.body.sortOrder === 'number') updates.sortOrder = req.body.sortOrder;
+      if (typeof req.body.isEnabled === 'boolean') updates.isEnabled = req.body.isEnabled;
+      const [result] = await db.update(roleChecklistTasks).set(updates).where(eq(roleChecklistTasks.id, req.params.id)).returning();
+      if (!result) return res.status(404).json({ success: false, message: 'Task not found' });
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error updating role checklist task:', error);
+      return res.status(500).json({ success: false, message: 'Failed to update role checklist task' });
+    }
+  });
+
+  // DELETE /api/role-checklist-tasks/:id — only allowed for user-added tasks.
+  // Built-ins can be disabled via PUT but never deleted, so completions stay intact.
+  app.delete('/api/role-checklist-tasks/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { roleChecklistTasks } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const [task] = await db.select().from(roleChecklistTasks).where(eq(roleChecklistTasks.id, req.params.id));
+      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      if (task.isBuiltIn) {
+        return res.status(400).json({ success: false, message: 'Built-in tasks cannot be deleted — disable them instead' });
+      }
+      await db.delete(roleChecklistTasks).where(eq(roleChecklistTasks.id, req.params.id));
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting role checklist task:', error);
+      return res.status(500).json({ success: false, message: 'Failed to delete role checklist task' });
     }
   });
 

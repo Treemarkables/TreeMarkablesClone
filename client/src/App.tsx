@@ -47,6 +47,7 @@ import Developer from "@/pages/Developer";
 import Calendar from "@/pages/Calendar";
 import StaffSchedule from "@/pages/StaffSchedule";
 import SettingsPreferences from "@/pages/SettingsPreferences";
+import BookingReminderSettings from "@/pages/BookingReminderSettings";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
 import { NotificationSettings } from "@/components/NotificationSettings";
@@ -77,6 +78,7 @@ import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
 import DocumentBuilderPage from "@/pages/DocumentBuilderPage";
 import SettingsCompany from "@/pages/SettingsCompany";
+import SettingsQuoteFollowup from "@/pages/SettingsQuoteFollowup";
 import TimeTracking from "@/pages/TimeTracking";
 import FollowUpQueue from "@/pages/FollowUpQueue";
 import UnlinkedCalls from "@/pages/UnlinkedCalls";
@@ -1132,6 +1134,16 @@ function Router() {
             <NotificationSettings />
             <NotificationPreferences />
           </div>
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/quote-followup">
+        <SidebarLayout>
+          <SettingsQuoteFollowup />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/booking-reminders">
+        <SidebarLayout>
+          <BookingReminderSettings />
         </SidebarLayout>
       </Route>
       <Route path="/settings/templates">

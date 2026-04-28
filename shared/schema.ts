@@ -529,6 +529,11 @@ export const jobs = pgTable("jobs", {
   customerConfirmationMethod: text("customer_confirmation_method"), // 'manual' | 'sms' | 'email'
   etaNotificationRequested: boolean("eta_notification_requested").default(false),
 
+  // Booking reminders — per-job opt-in. When true, the booking-reminder
+  // service will create scheduled SMS/email reminders against this job's
+  // scheduledDate using the offsets from business_settings.
+  bookingRemindersEnabled: boolean("booking_reminders_enabled").default(false),
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastActivityAt: timestamp("last_activity_at"),
@@ -1109,6 +1114,9 @@ export const businessSettings = pgTable("business_settings", {
   // Business Rules & Workflow
   leadAssignmentMethod: text("lead_assignment_method").default("round_robin"), // round_robin, skill_based, manual
   autoFollowUpDays: integer("auto_follow_up_days").default(3),
+  autoQuoteFollowupEnabled: boolean("auto_quote_followup_enabled").default(false),
+  quoteFollowupChannel: text("quote_followup_channel").default("sms"), // sms, email
+  quoteFollowupMaxAttempts: integer("quote_followup_max_attempts").default(2),
   quotePricingModel: text("quote_pricing_model").default("standard"), // standard, dynamic, competitive
   quoteValidityDays: integer("quote_validity_days").default(30),
   autoQuoteApproval: boolean("auto_quote_approval").default(false),
@@ -1169,6 +1177,18 @@ export const businessSettings = pgTable("business_settings", {
   // Xero Integration
   xeroDefaultBankAccountCode: text("xero_default_bank_account_code"),
 
+  // Booking Reminders (customer-facing job reminders)
+  // Master toggle and channel apply when an operator opts a job in via the
+  // scheduling modal or the settings default. Offsets is an array of
+  // {hoursBefore:number, label?:string} entries — one row per offset is
+  // created in booking_reminders when scheduling reminders for a job.
+  bookingRemindersEnabled: boolean("booking_reminders_enabled").default(false),
+  bookingReminderChannel: text("booking_reminder_channel").default("both"), // 'email' | 'sms' | 'both'
+  bookingReminderOffsets: jsonb("booking_reminder_offsets").default(sql`'[{"hoursBefore":24,"label":"24 hours before"}]'::jsonb`),
+  bookingReminderEmailTemplateId: varchar("booking_reminder_email_template_id"),
+  bookingReminderSmsTemplateId: varchar("booking_reminder_sms_template_id"),
+  bookingReminderDefaultOn: boolean("booking_reminder_default_on").default(false), // Pre-tick the per-job toggle when scheduling
+
   // Metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1193,13 +1213,21 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   fieldPhotoQuality: z.number().int().min(1).max(100).optional(),
   sessionTimeout: z.number().int().min(30).max(1440).optional(), // 30 minutes to 24 hours
   passwordExpiration: z.number().int().min(30).max(365).optional(), // 30 days to 1 year
+  quoteFollowupMaxAttempts: z.number().int().min(1).max(5).optional(),
   // Add enum constraints for select fields
   leadAssignmentMethod: z.enum(['round_robin', 'skill_based', 'manual']).optional(),
+  quoteFollowupChannel: z.enum(['sms', 'email']).optional(),
   quotePricingModel: z.enum(['standard', 'dynamic', 'competitive']).optional(),
   backupFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
   exportFormat: z.enum(['csv', 'excel', 'json']).optional(),
   paymentProvider: z.enum(['stripe', 'paypal', 'square']).optional(),
   locationAccuracy: z.enum(['low', 'medium', 'high']).optional(),
+  bookingReminderChannel: z.enum(['email', 'sms', 'both']).optional(),
+  bookingReminderOffsets: z.array(z.object({
+    hoursBefore: z.number().int().min(1).max(720),
+    label: z.string().optional(),
+    channel: z.enum(['email', 'sms', 'both']).optional(),
+  })).optional(),
 });
 
 // Business Settings Update Schema - partial with same constraints
@@ -1340,6 +1368,57 @@ export const insertNotificationQueueSchema = createInsertSchema(notificationQueu
 
 export type NotificationQueueItem = typeof notificationQueue.$inferSelect;
 export type InsertNotificationQueueItem = z.infer<typeof insertNotificationQueueSchema>;
+
+// ========================================
+// BOOKING REMINDERS
+// ========================================
+// Customer-facing reminders sent before a scheduled job (e.g. "24 hours
+// before", "night before at 18:00"). Distinct from notification_queue,
+// which is internal/staff. Rows are created when an operator opts a job
+// into scheduled reminders or sends a manual one from the diary; the
+// booking-reminder worker tick processes any row where status='pending'
+// and scheduled_for <= now.
+export const bookingReminders = pgTable("booking_reminders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull(), // FK to jobs.id, no cascade — kept for audit if job is deleted
+  scheduledFor: timestamp("scheduled_for").notNull(), // When to send (NULL when manual=true and already sent)
+  channel: text("channel").notNull(), // 'email' | 'sms' | 'both'
+  status: text("status").notNull().default("pending"), // 'pending' | 'sent' | 'failed' | 'cancelled'
+  manual: boolean("manual").notNull().default(false), // True when triggered by the diary "Send reminder now" button
+  offsetHours: integer("offset_hours"), // The configured offset that produced this row (for audit)
+  recipientEmail: text("recipient_email"), // Snapshotted at schedule time
+  recipientPhone: text("recipient_phone"),
+  subject: text("subject"),
+  emailBody: text("email_body"),
+  smsBody: text("sms_body"),
+  sentAt: timestamp("sent_at"),
+  emailSent: boolean("email_sent").default(false),
+  smsSent: boolean("sms_sent").default(false),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  jobIdx: index("booking_reminders_job_id_idx").on(table.jobId),
+  pendingIdx: index("booking_reminders_pending_idx").on(table.status, table.scheduledFor),
+}));
+
+export const insertBookingReminderSchema = createInsertSchema(bookingReminders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  sentAt: true,
+});
+
+export type BookingReminder = typeof bookingReminders.$inferSelect;
+export type InsertBookingReminder = z.infer<typeof insertBookingReminderSchema>;
+
+// Validation for the bookingReminderOffsets JSON in business_settings
+export const bookingReminderOffsetSchema = z.object({
+  hoursBefore: z.number().int().min(1).max(24 * 30), // up to 30 days before
+  label: z.string().optional(),
+  channel: z.enum(['email', 'sms', 'both']).optional(), // Per-offset channel override
+});
+export type BookingReminderOffset = z.infer<typeof bookingReminderOffsetSchema>;
 
 // ========================================
 // SCHEDULING & TEAM MANAGEMENT SCHEMAS
@@ -3845,6 +3924,28 @@ export const checklistTemplates = pgTable("checklist_templates", {
 export const insertChecklistTemplateSchema = createInsertSchema(checklistTemplates).omit({ id: true, createdAt: true });
 export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
 export type InsertChecklistTemplate = z.infer<typeof insertChecklistTemplateSchema>;
+
+// Per-role checklist tasks rendered in the Job Card Diary's Kaitiaki / Kaiwhangai /
+// Kaitirotiro panels. Replaces the hardcoded ROLE_ITEMS constant in
+// JobChecklistPanel.tsx so subscribers can toggle, edit, reorder, or add tasks
+// from Settings. Built-in tasks (the seven seeded defaults) can be disabled but
+// not deleted; user-added ones are fully editable.
+export const roleChecklistTasks = pgTable("role_checklist_tasks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  roleKey: varchar("role_key").notNull(), // 'A' | 'B' | 'C'
+  itemId: text("item_id").notNull().unique(), // slug used by completions table
+  label: text("label").notNull(),
+  iconName: text("icon_name").notNull().default("Check"), // lucide icon name
+  sortOrder: integer("sort_order").notNull().default(0),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertRoleChecklistTaskSchema = createInsertSchema(roleChecklistTasks).omit({ id: true, createdAt: true, updatedAt: true });
+export type RoleChecklistTask = typeof roleChecklistTasks.$inferSelect;
+export type InsertRoleChecklistTask = z.infer<typeof insertRoleChecklistTaskSchema>;
 
 export const insertDailyBriefingSchema = createInsertSchema(dailyBriefings).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertDailyJobNoteSchema = createInsertSchema(dailyJobNotes).omit({ id: true, createdAt: true });
