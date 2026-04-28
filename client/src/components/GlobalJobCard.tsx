@@ -1189,6 +1189,7 @@ export function GlobalJobCard({
       setCallPickerOpen(false);
       setCancelBookingDialogOpen(false);
       setLinkClientDialogOpen(false);
+      setShowMoreActionsSheet(false);
     }
     prevJobIdRef.current = newId;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1676,6 +1677,11 @@ export function GlobalJobCard({
 
     for (const { key, getValue } of syncableTextFields) {
       if (changedFieldsRef.current.has(key)) continue; // user is editing this field locally
+      // Never overwrite a field whose dedicated popup is currently open — the user is
+      // actively editing in-place, and `changedFieldsRef` is cleared the moment auto-save
+      // succeeds, leaving a window where a stale poll response could clobber typed text.
+      if (key === 'description' && descriptionPopupOpen) continue;
+      if (key === 'internalNotes' && internalNotesPopupOpen) continue;
       const serverValue = getValue() ?? '';
       const formValue = form.getValues(key as any) ?? '';
       if (serverValue !== formValue) {

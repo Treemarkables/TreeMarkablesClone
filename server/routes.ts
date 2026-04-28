@@ -4898,11 +4898,10 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // update so the database value is naturally preserved by the partial update pattern.
       // RC7 FIX: Extended to phone/mobile fields (previously only email was guarded here).
       // RC8 FIX: Extended to description/internalNotes for cross-device sync safety.
-      // Rationale: if a user deliberately clears description, auto-save (PATCH) fires first
-      // and sets DB to "". By the time the full PUT fires, stripping an empty description is
-      // safe — if it was intentionally cleared, the PATCH already wrote "" to DB. If the form
-      // had stale empty data from an old cache, stripping prevents overwriting content saved on
-      // another device.
+      // RC9 FIX: Honour `_clearFields`. The earlier rationale assumed a separate PATCH
+      // wrote "" to the DB before this PUT — but auto-save IS this PUT, and stripping
+      // here without checking `_clearFields` made deliberate clears silently no-op.
+      const earlyClears: string[] = Array.isArray(req.body._clearFields) ? req.body._clearFields : [];
       const contactFieldsToProtect = [
         'jobContactEmail', 'billingContactEmail',
         'jobContactMobile', 'jobContactPhone',
@@ -4910,6 +4909,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         'description', 'internalNotes',
       ];
       for (const contactField of contactFieldsToProtect) {
+        if (earlyClears.includes(contactField)) continue;
         const rawVal = req.body[contactField];
         const isEmpty = rawVal === '' || rawVal === null || rawVal === undefined;
         if (isEmpty && contactField in req.body) {
@@ -18976,18 +18976,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       
       // Save proposal sections and line items if provided
       if (req.body.sections && Array.isArray(req.body.sections)) {
-        // Update job description from first section's content (or clear if no sections)
-        if (proposal.jobId) {
-          const firstSectionContent = req.body.sections.length > 0 
-            ? (req.body.sections[0].description || '') 
-            : '';
-          try {
-            await storage.updateJob(proposal.jobId, { description: firstSectionContent });
-            console.log('✅ Updated job description from proposal:', firstSectionContent ? 'with content' : 'cleared');
-          } catch (error) {
-            console.error('❌ Error updating job description:', error);
-          }
-        }
+        // NOTE: Do NOT write section[0].description back into job.description here.
+        // The proposal builder seeds section[0] from job.description ONCE on open and
+        // never refreshes it, so any in-flight edits the user makes on the job card
+        // after the builder mounts get clobbered by the stale captured value when
+        // they hit Send. Job description is the source of truth — proposal sections
+        // stay in the proposal.
 
         for (const section of req.body.sections) {
           // Create section
@@ -19145,19 +19139,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         for (const section of existingSections) {
           await storage.deleteProposalSection(section.id);
         }
-        
-        // Update job description from first section's content (or clear if no sections)
-        if (proposal.jobId) {
-          const firstSectionContent = req.body.sections.length > 0 
-            ? (req.body.sections[0].description || '') 
-            : '';
-          try {
-            await storage.updateJob(proposal.jobId, { description: firstSectionContent });
-            console.log('✅ Updated job description from proposal:', firstSectionContent ? 'with content' : 'cleared');
-          } catch (error) {
-            console.error('❌ Error updating job description:', error);
-          }
-        }
+
+        // NOTE: Do NOT write section[0].description back into job.description here —
+        // see matching comment in POST /api/proposals. Job description is the source
+        // of truth; proposal sections stay in the proposal.
 
         // Now create new sections
         for (const section of req.body.sections) {
@@ -19746,6 +19731,24 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             eventType: 'holding_message_sent',
           },
         });
+
+        // Auto-upgrade lead → quote once the customer has been sent a booking
+        // confirmation for a job that's already booked in the diary. The
+        // dispatch-board staff-assignment flow does this inline; this branch
+        // catches the AI-Smart-Dispatch draft → approve-and-send path so the
+        // job drops out of the lead list as soon as the customer is told a date.
+        try {
+          const linkedJob = await storage.getJob(msg.jobId);
+          if (linkedJob?.scheduledDate) {
+            const next = statusAfterBooking(linkedJob.status);
+            if (next) {
+              await storage.updateJob(msg.jobId, { status: next });
+              console.log(`📊 Auto-upgraded job ${linkedJob.jobNumber} status '${linkedJob.status}' → '${next}' after customer booking message`);
+            }
+          }
+        } catch (statusErr) {
+          console.error('Failed to auto-upgrade job status after pending-message approve:', statusErr);
+        }
       }
 
       res.json({ success: true, data: updated, sent });

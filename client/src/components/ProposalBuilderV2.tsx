@@ -1353,16 +1353,19 @@ export function ProposalBuilderV2({
         }));
         const sectionDesc = s.description || "";
         const inferredType = inferBlockType({ description: sectionDesc, photos, lineItems });
-        // If this is a description-type block with no saved content, fall
-        // back to the current job description so editing an existing
-        // proposal still reflects job-description updates made after the
-        // proposal was first created. A non-empty saved value still wins so
-        // direct edits inside the proposal are preserved.
+        // For a description block, prefer the live job.description over the
+        // proposal's saved section content. The saved content was originally
+        // a snapshot of job.description at creation time (auto-created from a
+        // lead, etc.), so when the user updates the job description they
+        // expect the proposal to reflect it. Fall back to the saved sectionDesc
+        // only when no live job description is available.
+        const liveJobDesc =
+          jobDescription ||
+          (job as { description?: string } | null)?.description ||
+          "";
         const effectiveDesc =
-          inferredType === "description" && !sectionDesc.trim()
-            ? (jobDescription ||
-               (job as { description?: string } | null)?.description ||
-               "")
+          inferredType === "description"
+            ? (liveJobDesc || sectionDesc)
             : sectionDesc;
         return {
           id: s.id || `block-${idx}`,
