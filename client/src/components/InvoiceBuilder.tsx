@@ -113,6 +113,11 @@ export function InvoiceBuilder({
   // Immediate lock to prevent concurrent button clicks (doesn't rely on state updates)
   const isCreatingRef = useRef(false);
 
+  // True when the most recent init had to use the cold-cache fallback (no
+  // proposals/quotes available). Used by the init effect to decide whether
+  // to re-init when proposal/quote data arrives from a slow background fetch.
+  const initialisedFromFallbackRef = useRef(false);
+
   // Editable fields
   const [editableAddress, setEditableAddress] = useState("");
   const [editableContactName, setEditableContactName] = useState("");
@@ -131,8 +136,17 @@ export function InvoiceBuilder({
     queryKey: ["/api/customers", customer.id],
     enabled: !!customer.id,
     select: (response: any) => response.data || response,
+    staleTime: 60_000,
   });
   const effectiveCustomer = (freshCustomerData as Customer | undefined) || customer;
+
+  // staleTime on all of these: GlobalJobCard pre-fetches the same query keys
+  // when the job card opens, so the data is normally already in cache by the
+  // time the user clicks Invoice. Without staleTime each open refetched and
+  // the init effect's "wait for all three" gate translated that refetch into
+  // a visible delay.
+  const PER_JOB_STALE_MS = 60_000;
+  const SETTINGS_STALE_MS = 30 * 60_000;
 
   // Fetch proposals for this job
   const { data: proposalsResponse, isLoading: loadingProposals } = useQuery({
@@ -145,6 +159,7 @@ export function InvoiceBuilder({
       return response.json();
     },
     enabled: isOpen,
+    staleTime: PER_JOB_STALE_MS,
   });
 
   // Fetch quotes for this job
@@ -156,6 +171,7 @@ export function InvoiceBuilder({
       return response.json();
     },
     enabled: isOpen,
+    staleTime: PER_JOB_STALE_MS,
   });
 
   // Fetch existing invoices for this job
@@ -167,12 +183,14 @@ export function InvoiceBuilder({
       return response.json();
     },
     enabled: isOpen && !!job.id,
+    staleTime: PER_JOB_STALE_MS,
   });
 
   // Fetch business settings for invoice payment days
   const { data: businessSettings } = useQuery({
     queryKey: ["/api/business-settings"],
     enabled: isOpen,
+    staleTime: SETTINGS_STALE_MS,
   });
   const invoicePaymentDays: number = (businessSettings as any)?.data?.invoicePaymentDays ?? 7;
 
@@ -180,6 +198,7 @@ export function InvoiceBuilder({
   const { data: materialsData } = useQuery({
     queryKey: ["/api/materials"],
     enabled: isOpen,
+    staleTime: SETTINGS_STALE_MS,
   });
   const materials = (materialsData as any)?.data || [];
 
@@ -197,19 +216,45 @@ export function InvoiceBuilder({
       setCreatedInvoice(null);
       setSections([]);
       setDeletedSectionIds([]);
+      initialisedFromFallbackRef.current = false;
     }
   }, [isOpen]);
 
-  // Initialize fields when modal opens or when job changes
+  // Initialize fields when modal opens or when job changes.
+  //
+  // No "wait for all three queries" gate here. GlobalJobCard pre-fetches
+  // proposals/quotes/invoices on the same query keys, so they're typically
+  // already in cache and `loading*` is false on first render. If the cache
+  // *is* cold (user clicks Invoice before the parent's fetches return), we
+  // initialise from `job.lineItems` (passed live from the form) and the
+  // single-line fallback, which is far better UX than an empty modal that
+  // sits for 4 seconds. When the queries do return with proposal/quote
+  // content, this effect re-runs (deps include the responses) — the
+  // `initializedJobId` guard then prevents stomping on whatever the user
+  // sees, unless we explicitly transition from "cold-cache fallback" to
+  // "real proposal/quote items" via the upgrade check below.
   useEffect(() => {
     if (!isOpen) return;
 
-    // Check if we've already initialized this specific job
-    if (initializedJobId === job.id) return;
-
-    // Only initialize if we have the data or if data loading is complete
-    const dataLoaded = !loadingProposals && !loadingQuotes && !loadingInvoices;
-    if (!dataLoaded) return;
+    // Detect a meaningful upgrade: we initialised before any proposal/quote
+    // data was available (cold cache), and now one has arrived. In that
+    // case force a re-init so the modal swaps fallback rows for the real
+    // proposal/quote rows the user expects.
+    const proposalsAvailable =
+      Array.isArray(proposalsResponse?.data) && proposalsResponse.data.length > 0;
+    const quotesAvailable =
+      Array.isArray(quotesResponse?.data) && quotesResponse.data.length > 0;
+    const initialisedFromFallback = initialisedFromFallbackRef.current;
+    if (
+      initializedJobId === job.id &&
+      initialisedFromFallback &&
+      (proposalsAvailable || quotesAvailable)
+    ) {
+      // Allow the rest of the effect to run again with the upgraded data.
+      initialisedFromFallbackRef.current = false;
+    } else if (initializedJobId === job.id) {
+      return;
+    }
 
     console.log(
       "🔄 Initializing invoice for job:",
@@ -452,7 +497,13 @@ export function InvoiceBuilder({
       setEditableNotes(job.notes || "");
     }
 
-    // Mark this job as initialized to prevent overwriting user edits
+    // Mark this job as initialized to prevent overwriting user edits.
+    // Record whether we initialised from real proposal/quote data or had to
+    // fall back to job line items / placeholder. If it was a fallback and
+    // proposal/quote data arrives later, the effect's upgrade branch above
+    // will re-run and replace the fallback rows.
+    initialisedFromFallbackRef.current =
+      !proposalsAvailable && !quotesAvailable;
     setInitializedJobId(job.id);
   }, [
     isOpen,

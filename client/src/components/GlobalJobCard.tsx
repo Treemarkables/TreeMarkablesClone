@@ -128,6 +128,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
   Sheet,
@@ -1386,6 +1387,70 @@ export function GlobalJobCard({
       ? customers.find((c) => c.id === editingJob.customerId)
       : null;
   }, [editingJob, customers]);
+
+  // Saved contacts under the selected customer org. Lets jobs at multi-contact
+  // customers (councils, agencies, property managers) reuse the same person
+  // record across jobs instead of retyping name/email/phone every time.
+  const customerContactsQuery = useQuery<{ success: boolean; data: any[] }>({
+    queryKey: ["/api/customers", selectedCustomer?.id, "contacts"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/customers/${selectedCustomer!.id}/contacts`);
+      return res.json();
+    },
+    enabled: !!selectedCustomer?.id && isOpen,
+    staleTime: 60 * 1000,
+  });
+  const customerContacts: any[] = customerContactsQuery.data?.data || [];
+
+  const [showAddContactDialog, setShowAddContactDialog] = useState(false);
+  // Local-only — picker selection isn't persisted to the job row yet (waiting
+  // on a `customer_contact_id` column to be added via db:push).
+  const [pickedContactId, setPickedContactId] = useState<string>("");
+  const [contactDraft, setContactDraft] = useState({
+    firstName: "",
+    lastName: "",
+    role: "",
+    email: "",
+    phone: "",
+    mobile: "",
+  });
+  const createContactMutation = useMutation({
+    mutationFn: async (input: typeof contactDraft) => {
+      const res = await apiRequest(
+        "POST",
+        `/api/customers/${selectedCustomer!.id}/contacts`,
+        input,
+      );
+      return res.json();
+    },
+    onSuccess: (response: any) => {
+      if (response?.success && response?.data) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/customers", selectedCustomer?.id, "contacts"],
+        });
+        const c = response.data;
+        setPickedContactId(c.id);
+        if (c.firstName) form.setValue("jobContactFirstName", c.firstName, { shouldDirty: true });
+        if (c.lastName) form.setValue("jobContactLastName", c.lastName, { shouldDirty: true });
+        if (c.email) form.setValue("jobContactEmail", c.email, { shouldDirty: true });
+        if (c.phone) form.setValue("jobContactPhone", c.phone, { shouldDirty: true });
+        if (c.mobile) form.setValue("jobContactMobile", c.mobile, { shouldDirty: true });
+        setShowAddContactDialog(false);
+        setContactDraft({ firstName: "", lastName: "", role: "", email: "", phone: "", mobile: "" });
+      }
+    },
+  });
+
+  const handleSelectSavedContact = (contactId: string) => {
+    const c = customerContacts.find((x) => x.id === contactId);
+    if (!c) return;
+    setPickedContactId(c.id);
+    form.setValue("jobContactFirstName", c.firstName || "", { shouldDirty: true });
+    form.setValue("jobContactLastName", c.lastName || "", { shouldDirty: true });
+    form.setValue("jobContactEmail", c.email || "", { shouldDirty: true });
+    form.setValue("jobContactPhone", c.phone || "", { shouldDirty: true });
+    form.setValue("jobContactMobile", c.mobile || "", { shouldDirty: true });
+  };
 
   // Reset form when switching to create mode OR populate form when editing an existing job
   useEffect(() => {
@@ -7908,6 +7973,58 @@ The Treemarkables Team`;
                               Contacts
                             </label>
                           </div>
+                          {/* Saved-contact picker — for multi-contact orgs (councils,
+                              agencies, property managers). Reuses person records
+                              across jobs so name/email/phone aren't retyped every time. */}
+                          {selectedCustomer?.id && (
+                            <div className="mb-3 rounded-md border border-blue-100 bg-blue-50/50 p-2">
+                              <div className="flex items-center justify-between gap-2 mb-1.5">
+                                <span className="text-[11px] font-medium text-blue-700">
+                                  Saved contacts under {selectedCustomer.name}
+                                </span>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-6 text-[10px] text-blue-700 hover:bg-blue-100"
+                                  onClick={() => setShowAddContactDialog(true)}
+                                  data-testid="button-add-customer-contact"
+                                >
+                                  <Plus className="w-3 h-3 mr-0.5" /> Add
+                                </Button>
+                              </div>
+                              {customerContacts.length > 0 ? (
+                                <Select
+                                  value={pickedContactId}
+                                  onValueChange={handleSelectSavedContact}
+                                >
+                                  <SelectTrigger className="h-8 text-xs bg-white" data-testid="select-customer-contact">
+                                    <SelectValue placeholder="Pick a saved contact…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {customerContacts.map((c: any) => {
+                                      const fullName = [c.firstName, c.lastName]
+                                        .filter(Boolean)
+                                        .join(" ")
+                                        .trim();
+                                      const label = [fullName || "(unnamed)", c.role]
+                                        .filter(Boolean)
+                                        .join(" — ");
+                                      return (
+                                        <SelectItem key={c.id} value={c.id}>
+                                          {label}
+                                        </SelectItem>
+                                      );
+                                    })}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <p className="text-[10px] text-blue-600/80">
+                                  No saved contacts yet — add one to reuse across jobs at this customer.
+                                </p>
+                              )}
+                            </div>
+                          )}
                           <Tabs defaultValue="job" className="w-full">
                             <TabsList className="grid w-full grid-cols-2 h-8">
                               <TabsTrigger value="job" className="text-xs" data-testid="tab-job-contact">
@@ -8126,6 +8243,91 @@ The Treemarkables Team`;
                               </div>
                             </TabsContent>
                           </Tabs>
+
+                          {/* Add Contact Dialog — saves a person under the customer
+                              org so they can be reused across future jobs. */}
+                          <Dialog
+                            open={showAddContactDialog}
+                            onOpenChange={(open) => {
+                              if (!open) {
+                                setShowAddContactDialog(false);
+                                setContactDraft({ firstName: "", lastName: "", role: "", email: "", phone: "", mobile: "" });
+                              }
+                            }}
+                          >
+                            <DialogContent className="sm:max-w-md">
+                              <DialogHeader>
+                                <DialogTitle>
+                                  Add contact to {selectedCustomer?.name || "customer"}
+                                </DialogTitle>
+                                <DialogDescription>
+                                  Save a person under this customer so you can reuse them on future jobs.
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="space-y-3 py-2">
+                                <div className="grid grid-cols-2 gap-3">
+                                  <Input
+                                    placeholder="First Name"
+                                    value={contactDraft.firstName}
+                                    onChange={(e) => setContactDraft((d) => ({ ...d, firstName: e.target.value }))}
+                                    data-testid="input-new-contact-first-name"
+                                  />
+                                  <Input
+                                    placeholder="Last Name"
+                                    value={contactDraft.lastName}
+                                    onChange={(e) => setContactDraft((d) => ({ ...d, lastName: e.target.value }))}
+                                    data-testid="input-new-contact-last-name"
+                                  />
+                                </div>
+                                <Input
+                                  placeholder="Role / Department (e.g. Roads Manager)"
+                                  value={contactDraft.role}
+                                  onChange={(e) => setContactDraft((d) => ({ ...d, role: e.target.value }))}
+                                  data-testid="input-new-contact-role"
+                                />
+                                <Input
+                                  placeholder="Email"
+                                  type="email"
+                                  value={contactDraft.email}
+                                  onChange={(e) => setContactDraft((d) => ({ ...d, email: e.target.value }))}
+                                  data-testid="input-new-contact-email"
+                                />
+                                <Input
+                                  placeholder="Mobile"
+                                  value={contactDraft.mobile}
+                                  onChange={(e) => setContactDraft((d) => ({ ...d, mobile: e.target.value }))}
+                                  data-testid="input-new-contact-mobile"
+                                />
+                                <Input
+                                  placeholder="Phone (Landline)"
+                                  value={contactDraft.phone}
+                                  onChange={(e) => setContactDraft((d) => ({ ...d, phone: e.target.value }))}
+                                  data-testid="input-new-contact-phone"
+                                />
+                              </div>
+                              <DialogFooter>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  onClick={() => setShowAddContactDialog(false)}
+                                  disabled={createContactMutation.isPending}
+                                >
+                                  Cancel
+                                </Button>
+                                <Button
+                                  type="button"
+                                  onClick={() => createContactMutation.mutate(contactDraft)}
+                                  disabled={
+                                    createContactMutation.isPending ||
+                                    !(contactDraft.firstName.trim() || contactDraft.lastName.trim() || contactDraft.email.trim() || contactDraft.mobile.trim() || contactDraft.phone.trim())
+                                  }
+                                  data-testid="button-save-customer-contact"
+                                >
+                                  {createContactMutation.isPending ? "Saving…" : "Save contact"}
+                                </Button>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
                         </div>
                       </div>
                     </div>
@@ -10163,6 +10365,21 @@ The Treemarkables Team`;
               jobContactLastName:
                 form.getValues("jobContactLastName") ??
                 editingJob.jobContactLastName,
+              // Line items are managed via useFieldArray and persist on a
+              // separate path from the auto-save debounce; the cached
+              // editingJob.lineItems can lag the form state by seconds.
+              // Prefer the form's current values so InvoiceBuilder's
+              // proposal→quote→job fallback chain pre-fills with the rows
+              // the user just entered, instead of dropping to the generic
+              // "Tree service" placeholder.
+              lineItems: (() => {
+                const formItems = form.getValues("lineItems");
+                return Array.isArray(formItems) && formItems.length > 0
+                  ? formItems
+                  : (editingJob as any).lineItems;
+              })(),
+              totalAmount:
+                form.getValues("totalAmount") ?? editingJob.totalAmount,
             }}
             customer={{
               ...selectedCustomer,

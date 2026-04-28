@@ -59,8 +59,6 @@ interface IncomingLineItemRaw {
   markupPct?: string | number;
 }
 
-const LOGO_URL = "/treemarkables-logo.webp";
-
 type BlockType = "description" | "photos" | "lineItems";
 type SectionType = "fixed" | "subtotalOnly" | "multipleChoice" | "optional";
 
@@ -1202,7 +1200,15 @@ export function ProposalBuilderV2({
 
   // ── Queries ────────────────────────────────────────────────────────────────
 
-  const { data: templateData } = useQuery({ queryKey: ["/api/templates/default/proposal"], enabled: isOpen });
+  // Long staleTime + cacheTime so the logo template doesn't refetch every open —
+  // a fresh fetch on each open is what made the static fallback logo flash before
+  // the operator's real logo arrived. Once cached, subsequent opens are instant.
+  const { data: templateData } = useQuery({
+    queryKey: ["/api/templates/default/proposal"],
+    enabled: isOpen,
+    staleTime: 30 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
   const { data: jobData } = useQuery({ queryKey: ["/api/jobs", jobId], enabled: !!jobId && isOpen });
   const { data: customerData } = useQuery({ queryKey: ["/api/customers", customerId], enabled: !!customerId && isOpen });
   const { data: diaryData } = useQuery({ queryKey: ["/api/jobs", jobId, "diary"], enabled: !!jobId && isOpen });
@@ -1819,7 +1825,10 @@ export function ProposalBuilderV2({
   const companyPhone = (template?.companyPhone as string) || "";
   const companyEmail = (template?.companyEmail as string) || "";
   const gstNumber = (template?.gstNumber as string) || "";
-  const logoUrl = (template?.logoUrl as string) || LOGO_URL;
+  // No fallback — render only the operator's real logo from the template.
+  // Showing a static placeholder created a visible "wrong logo → real logo"
+  // flicker every time the proposal opened.
+  const logoUrl = (template?.logoUrl as string | undefined) || "";
 
   // Logo sizing — stored on the proposal template, editable inline
   const [logoSize, setLogoSize] = useState<number>((template?.logoSize as number) ?? 80);
@@ -1912,7 +1921,7 @@ export function ProposalBuilderV2({
                 <button
                   type="button"
                   onClick={() => setPreviewMode(false)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" /> Back to Edit
                 </button>
@@ -1932,7 +1941,7 @@ export function ProposalBuilderV2({
               <button
                 type="button"
                 onClick={handleClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Back</span>
@@ -1940,16 +1949,16 @@ export function ProposalBuilderV2({
               <button
                 type="button"
                 onClick={() => { initEmailForm(); setShowEmailDialog(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 transition-colors"
               >
                 <Mail className="w-4 h-4" /> Email
               </button>
               <button
                 type="button"
                 onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md shadow-sm hover:bg-green-700 transition-colors"
               >
-                <MessageSquare className="w-4 h-4 text-green-600" /> SMS
+                <MessageSquare className="w-4 h-4" /> SMS
               </button>
               {draftId && (
                 <button
@@ -1963,7 +1972,7 @@ export function ProposalBuilderV2({
                     setPreviewSelectedOptional({});
                     setPreviewMode(true);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-blue-600 border border-blue-200 rounded-md hover:bg-blue-50 transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 transition-colors"
                   title="Preview customer view"
                 >
                   <Eye className="w-4 h-4" /> Preview
@@ -2136,14 +2145,23 @@ export function ProposalBuilderV2({
                     onClick={(e) => { if (!logoSelected) { e.stopPropagation(); setLogoSelected(true); } }}
                     title={logoSelected ? undefined : "Click to resize logo"}
                   >
-                    <img
-                      ref={logoImgRef}
-                      src={logoUrl}
-                      alt="Company Logo"
-                      style={{ height: Math.min(logoSize, headerHeight), maxWidth: 600, display: "block" }}
-                      className="w-auto object-contain select-none"
-                      draggable={false}
-                    />
+                    {logoUrl ? (
+                      <img
+                        ref={logoImgRef}
+                        src={logoUrl}
+                        alt="Company Logo"
+                        style={{ height: Math.min(logoSize, headerHeight), maxWidth: 600, display: "block" }}
+                        className="w-auto object-contain select-none"
+                        draggable={false}
+                      />
+                    ) : (
+                      // Reserve the same space the logo will take so the header
+                      // doesn't jump when the template finally loads.
+                      <div
+                        style={{ height: Math.min(logoSize, headerHeight), width: Math.min(logoSize, headerHeight) * 2.5 }}
+                        aria-hidden
+                      />
+                    )}
 
                     {/* Hover hint outline when not selected */}
                     {!logoSelected && (

@@ -22,7 +22,8 @@ import { eq, desc, sql, inArray, and, gte, lt, lte, ne } from "drizzle-orm";
 import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "@shared/schema";
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
-  insertCustomerSchema, insertLeadSchema, insertCallSchema, insertQuoteSchema,
+  insertCustomerSchema, insertCustomerContactSchema, updateCustomerContactSchema,
+  insertLeadSchema, insertCallSchema, insertQuoteSchema,
   insertJobSchema, insertJobDiaryEntrySchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
   insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema,
   insertNotificationSchema, updateNotificationSchema,
@@ -3007,6 +3008,65 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error deleting customer:', error);
       res.status(500).json({ success: false, message: 'Error deleting customer' });
+    }
+  });
+
+  // ========================================
+  // CUSTOMER CONTACTS — multiple people under one customer org
+  // ========================================
+
+  app.get('/api/customers/:id/contacts', async (req: Request, res: Response) => {
+    try {
+      const contacts = await storage.getCustomerContacts(req.params.id);
+      res.json({ success: true, data: contacts });
+    } catch (error) {
+      console.error('Error fetching customer contacts:', error);
+      res.status(500).json({ success: false, message: 'Error fetching contacts' });
+    }
+  });
+
+  app.post('/api/customers/:id/contacts', async (req: Request, res: Response) => {
+    try {
+      const parsed = insertCustomerContactSchema.safeParse({ ...req.body, customerId: req.params.id });
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid contact data', errors: parsed.error.errors });
+      }
+      const created = await storage.createCustomerContact(parsed.data);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating customer contact:', error);
+      res.status(500).json({ success: false, message: 'Error creating contact' });
+    }
+  });
+
+  app.patch('/api/customer-contacts/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = updateCustomerContactSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid contact data', errors: parsed.error.errors });
+      }
+      const existing = await storage.getCustomerContact(req.params.id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Contact not found' });
+      }
+      const updated = await storage.updateCustomerContact(req.params.id, parsed.data);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating customer contact:', error);
+      res.status(500).json({ success: false, message: 'Error updating contact' });
+    }
+  });
+
+  app.delete('/api/customer-contacts/:id', async (req: Request, res: Response) => {
+    try {
+      const success = await storage.deleteCustomerContact(req.params.id);
+      if (!success) {
+        return res.status(404).json({ success: false, message: 'Contact not found' });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting customer contact:', error);
+      res.status(500).json({ success: false, message: 'Error deleting contact' });
     }
   });
 

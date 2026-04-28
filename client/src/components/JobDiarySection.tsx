@@ -2013,6 +2013,18 @@ export function JobDiarySection({
                 </span>
               )}
             </button>
+            {/* Before/After capture — kept inline with the tabs because crew
+                often want to fire it right after toggling between Timeline
+                and Photos. It opens a modal rather than switching the view. */}
+            <button
+              type="button"
+              onClick={() => setIsBeforeAfterModalOpen(true)}
+              data-testid="button-before-after"
+              className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+            >
+              <Images className="w-3.5 h-3.5" />
+              Before/After
+            </button>
           </div>
         </div>
 
@@ -3365,56 +3377,8 @@ export function JobDiarySection({
         </ScrollArea>
         )}
 
-        {/* Quick Actions */}
-        <div className="flex-shrink-0 p-2 border-t bg-gray-50 dark:bg-gray-900">
-          <div className="flex gap-1 flex-wrap">
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setActiveComposer("sms")}
-              disabled={!customerPhone}
-              data-testid="button-send-sms"
-              className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap"
-            >
-              <MessageSquare className="w-3 h-3 mr-1" />
-              SMS
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setActiveComposer("email")}
-              disabled={!customerEmail}
-              data-testid="button-send-email"
-              className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap"
-            >
-              <Mail className="w-3 h-3 mr-1" />
-              Email
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              data-testid="button-call-customer"
-              className="h-7 text-xs flex-1 min-w-[80px] whitespace-nowrap"
-            >
-              <Phone className="w-3 h-3 mr-1" />
-              Call
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => setIsBeforeAfterModalOpen(true)}
-              data-testid="button-before-after"
-              className="h-7 text-xs flex-1 min-w-[100px] whitespace-nowrap"
-            >
-              <Images className="w-3 h-3 mr-1" />
-              Before/After
-            </Button>
-          </div>
-        </div>
+        {/* Quick Actions row removed — SMS, Email, Call already live up top
+            on the job card; Before/After moved into the diary tab row above. */}
 
         <BeforeAfterCaptureModal
           isOpen={isBeforeAfterModalOpen}

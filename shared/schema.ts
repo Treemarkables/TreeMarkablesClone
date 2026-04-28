@@ -221,6 +221,32 @@ export const customers = pgTable("customers", {
   normalizedPhoneIdx: index("customers_normalized_phone_idx").on(table.normalizedPhone),
 }));
 
+// Customer Contacts — multiple people under one customer organisation.
+// Used for clients like councils, real-estate agencies, and property
+// managers where different departments/people book jobs with their own
+// email/phone/role. Each job picks one contact via jobs.customerContactId,
+// which auto-populates the per-job jobContact* override fields.
+export const customerContacts = pgTable("customer_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerId: varchar("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  role: text("role"), // e.g. "Roads Manager", "Parks Coordinator", "Property Manager"
+  email: text("email"),
+  phone: text("phone"),
+  mobile: text("mobile"),
+  normalizedPhone: text("normalized_phone"), // for matching, mirrors the customers table
+  address: text("address"), // optional override; jobs default to the customer address
+  notes: text("notes"),
+  isPrimary: boolean("is_primary").default(false), // mark the default contact for this customer
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  customerIdx: index("customer_contacts_customer_id_idx").on(table.customerId),
+  normalizedPhoneIdx: index("customer_contacts_normalized_phone_idx").on(table.normalizedPhone),
+}));
+
 // Customer Communication Preferences
 export const communicationPreferences = pgTable("communication_preferences", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -333,6 +359,11 @@ export const quotes = pgTable("quotes", {
 export const jobs = pgTable("jobs", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   customerId: varchar("customer_id").references(() => customers.id),
+  // NOTE: a `customer_contact_id` column linking a job to a saved contact under
+  // the customer (see customerContacts table) is intentionally NOT declared
+  // here yet. It will be added in a follow-up after `npm run db:push` has
+  // applied the customerContacts table to the live DB. Until then, the job
+  // card's saved-contact picker fills jobContact* fields directly.
   quoteId: varchar("quote_id").references(() => quotes.id),
   jobNumber: text("job_number").notNull().unique(),
   title: text("title"),
@@ -842,6 +873,10 @@ export const updateCustomerImportBatchSchema = createInsertSchema(customerImport
 export const insertCustomerSchema = createInsertSchema(customers).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   email: z.string().optional().transform(val => val ? val.toLowerCase() : val),
 });
+export const insertCustomerContactSchema = createInsertSchema(customerContacts).omit({ id: true, normalizedPhone: true, createdAt: true, updatedAt: true }).extend({
+  email: z.string().optional().nullable().transform(val => val ? val.toLowerCase() : val),
+});
+export const updateCustomerContactSchema = insertCustomerContactSchema.partial();
 export const insertCommunicationPreferencesSchema = createInsertSchema(communicationPreferences).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLeadSchema = createInsertSchema(leads).omit({ id: true, createdAt: true, updatedAt: true }).extend({
   email: z.string().optional().transform(val => val ? val.toLowerCase() : val),
@@ -875,6 +910,9 @@ export type CustomerImportBatch = typeof customerImportBatches.$inferSelect;
 export type InsertCustomerImportBatch = z.infer<typeof insertCustomerImportBatchSchema>;
 export type UpdateCustomerImportBatch = z.infer<typeof updateCustomerImportBatchSchema>;
 export type Customer = typeof customers.$inferSelect;
+export type CustomerContact = typeof customerContacts.$inferSelect;
+export type InsertCustomerContact = z.infer<typeof insertCustomerContactSchema>;
+export type UpdateCustomerContact = z.infer<typeof updateCustomerContactSchema>;
 export type CommunicationPreferences = typeof communicationPreferences.$inferSelect;
 export type Lead = typeof leads.$inferSelect;
 export type Call = typeof calls.$inferSelect;

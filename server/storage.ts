@@ -104,7 +104,14 @@ export interface IStorage {
   getAllCustomers(): Promise<Customer[]>;
   clearAllCustomers(): Promise<number>;
   searchCustomers(query: string): Promise<Customer[]>;
-  
+
+  // Customer contacts (multi-contact under one customer org)
+  getCustomerContacts(customerId: string): Promise<schema.CustomerContact[]>;
+  getCustomerContact(id: string): Promise<schema.CustomerContact | undefined>;
+  createCustomerContact(input: schema.InsertCustomerContact): Promise<schema.CustomerContact>;
+  updateCustomerContact(id: string, updates: schema.UpdateCustomerContact): Promise<schema.CustomerContact>;
+  deleteCustomerContact(id: string): Promise<boolean>;
+
   // Complete database wipe methods
   clearAllQuotes(): Promise<number>;
   clearAllLeads(): Promise<number>;
@@ -1167,9 +1174,71 @@ class DatabaseStorage implements IStorage {
   }
 
   // ========================================
+  // CUSTOMER CONTACTS (multi-contact under one customer org)
+  // ========================================
+
+  async getCustomerContacts(customerId: string): Promise<schema.CustomerContact[]> {
+    return await db
+      .select()
+      .from(schema.customerContacts)
+      .where(eq(schema.customerContacts.customerId, customerId))
+      .orderBy(desc(schema.customerContacts.isPrimary), asc(schema.customerContacts.firstName));
+  }
+
+  async getCustomerContact(id: string): Promise<schema.CustomerContact | undefined> {
+    const [c] = await db.select().from(schema.customerContacts).where(eq(schema.customerContacts.id, id)).limit(1);
+    return c || undefined;
+  }
+
+  async createCustomerContact(input: schema.InsertCustomerContact): Promise<schema.CustomerContact> {
+    const phoneForNorm = input.mobile?.trim() || input.phone?.trim() || '';
+    const normalizedPhone = this.normalizePhone(phoneForNorm);
+    if (input.isPrimary) {
+      // Demote any existing primary so there's only one per customer
+      await db.update(schema.customerContacts)
+        .set({ isPrimary: false })
+        .where(eq(schema.customerContacts.customerId, input.customerId));
+    }
+    const [created] = await db
+      .insert(schema.customerContacts)
+      .values({ ...input, normalizedPhone })
+      .returning();
+    return created;
+  }
+
+  async updateCustomerContact(id: string, updates: schema.UpdateCustomerContact): Promise<schema.CustomerContact> {
+    const updateData: any = { ...updates, updatedAt: new Date() };
+    if ('phone' in updates || 'mobile' in updates) {
+      const existing = await this.getCustomerContact(id);
+      const newMobile = (updates as any).mobile ?? existing?.mobile ?? '';
+      const newPhone = (updates as any).phone ?? existing?.phone ?? '';
+      updateData.normalizedPhone = this.normalizePhone(newMobile || newPhone || '');
+    }
+    if (updates.isPrimary) {
+      const existing = await this.getCustomerContact(id);
+      if (existing) {
+        await db.update(schema.customerContacts)
+          .set({ isPrimary: false })
+          .where(eq(schema.customerContacts.customerId, existing.customerId));
+      }
+    }
+    const [updated] = await db
+      .update(schema.customerContacts)
+      .set(updateData)
+      .where(eq(schema.customerContacts.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteCustomerContact(id: string): Promise<boolean> {
+    const result = await db.delete(schema.customerContacts).where(eq(schema.customerContacts.id, id));
+    return (result.rowCount || 0) > 0;
+  }
+
+  // ========================================
   // CUSTOMER IMPORT BATCH MANAGEMENT
   // ========================================
-  
+
   async createCustomerImportBatch(batch: InsertCustomerImportBatch): Promise<CustomerImportBatch> {
     const [newBatch] = await db.insert(schema.customerImportBatches).values(batch).returning();
     return newBatch;
