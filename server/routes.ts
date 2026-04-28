@@ -23,6 +23,7 @@ import { invoices, invoiceLineItems, customers, jobs, documentTemplates } from "
 import { 
   leadSourceSchema, contactFormSchema, type InsertLeadSubmission, type LeadSource,
   insertCustomerSchema, insertCustomerContactSchema, updateCustomerContactSchema,
+  insertTaskSchema, updateTaskSchema,
   insertLeadSchema, insertCallSchema, insertQuoteSchema,
   insertJobSchema, insertJobDiaryEntrySchema, insertActivitySchema, insertReviewSchema, insertCampaignSchema,
   insertSocialPlanSchema, insertCompetitorSignalSchema, insertPriceRuleSchema,
@@ -12527,6 +12528,107 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
   });
 
   // ========================================
+  // ========================================
+  // TASKS — internal Kanban
+  // ========================================
+
+  app.get('/api/tasks', async (req: Request, res: Response) => {
+    try {
+      const { status, assignee_id, category, due_before, linked_job_id, overdue } = req.query;
+      const tasks = await storage.getTasks({
+        status: typeof status === 'string' ? status : undefined,
+        assigneeId: typeof assignee_id === 'string' ? assignee_id : undefined,
+        category: typeof category === 'string' ? category : undefined,
+        dueBefore: typeof due_before === 'string' ? new Date(due_before) : undefined,
+        linkedJobId: typeof linked_job_id === 'string' ? linked_job_id : undefined,
+        overdue: overdue === 'true',
+      });
+      res.json({ success: true, data: tasks });
+    } catch (error) {
+      console.error('Error fetching tasks:', error);
+      res.status(500).json({ success: false, message: 'Error fetching tasks' });
+    }
+  });
+
+  app.get('/api/tasks/board', async (req: Request, res: Response) => {
+    try {
+      const board = await storage.getTasksBoard();
+      res.json({ success: true, data: board });
+    } catch (error) {
+      console.error('Error fetching tasks board:', error);
+      res.status(500).json({ success: false, message: 'Error fetching tasks board' });
+    }
+  });
+
+  app.get('/api/tasks/:id', async (req: Request, res: Response) => {
+    try {
+      const task = await storage.getTask(req.params.id);
+      if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
+      // Hydrate the relations the side-panel needs without forcing the
+      // client to make follow-up calls.
+      const [assignee, creator, linkedJob, linkedEquipment] = await Promise.all([
+        task.assigneeId ? storage.getEmployee(task.assigneeId).catch(() => null) : null,
+        task.createdBy ? storage.getEmployee(task.createdBy).catch(() => null) : null,
+        task.linkedJobId ? storage.getJob(task.linkedJobId).catch(() => null) : null,
+        task.linkedEquipmentId ? storage.getEquipment(task.linkedEquipmentId).catch(() => null) : null,
+      ]);
+      res.json({ success: true, data: { ...task, assignee, creator, linkedJob, linkedEquipment } });
+    } catch (error) {
+      console.error('Error fetching task:', error);
+      res.status(500).json({ success: false, message: 'Error fetching task' });
+    }
+  });
+
+  app.post('/api/tasks', async (req: Request, res: Response) => {
+    try {
+      const parsed = insertTaskSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid task data', errors: parsed.error.errors });
+      }
+      // Block→reason invariant: enforce on the way in so the board flow can't
+      // sneak past it via direct API.
+      if (parsed.data.status === 'blocked' && !parsed.data.blockedReason?.trim()) {
+        return res.status(400).json({ success: false, message: 'blockedReason is required when status is blocked' });
+      }
+      const created = await storage.createTask(parsed.data);
+      res.json({ success: true, data: created });
+    } catch (error) {
+      console.error('Error creating task:', error);
+      res.status(500).json({ success: false, message: 'Error creating task' });
+    }
+  });
+
+  app.patch('/api/tasks/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = updateTaskSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid task data', errors: parsed.error.errors });
+      }
+      if (parsed.data.status === 'blocked' && !parsed.data.blockedReason?.trim()) {
+        const existing = await storage.getTask(req.params.id);
+        if (!existing?.blockedReason) {
+          return res.status(400).json({ success: false, message: 'blockedReason is required when status is blocked' });
+        }
+      }
+      const result = await storage.updateTask(req.params.id, parsed.data);
+      res.json({ success: true, data: result.task, spawned: result.spawned });
+    } catch (error) {
+      console.error('Error updating task:', error);
+      res.status(500).json({ success: false, message: 'Error updating task' });
+    }
+  });
+
+  app.delete('/api/tasks/:id', async (req: Request, res: Response) => {
+    try {
+      const ok = await storage.deleteTask(req.params.id);
+      if (!ok) return res.status(404).json({ success: false, message: 'Task not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      res.status(500).json({ success: false, message: 'Error deleting task' });
+    }
+  });
+
   // EMPLOYEE MANAGEMENT ROUTES
   // ========================================
 
