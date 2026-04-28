@@ -57,6 +57,7 @@ import {
   List,
   ListChecks,
   Pencil,
+  Link2,
   Star,
   RotateCcw,
   Crown,
@@ -5312,12 +5313,18 @@ The Treemarkables Team`;
                                   onOpenChange={setMobileNamePopoverOpen}
                                 >
                                   <PopoverTrigger asChild>
-                                    <button className="font-bold text-gray-900 text-xl text-left flex items-center gap-1 hover:text-blue-600 transition-colors">
+                                    <button
+                                      className="font-bold text-gray-900 text-xl text-left flex items-center gap-2 hover:text-blue-600 transition-colors"
+                                      data-testid="customer-name-link-trigger"
+                                      aria-label="Edit name or link to an existing customer"
+                                    >
                                       {selectedCustomerName}
                                       {selectedVipCustomer?.isVipMember && (
                                         <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />
                                       )}
-                                      <Pencil className="h-3.5 w-3.5 opacity-50" />
+                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-50 text-blue-600 flex-shrink-0">
+                                        <Link2 className="h-3.5 w-3.5" />
+                                      </span>
                                     </button>
                                   </PopoverTrigger>
                                   <PopoverContent

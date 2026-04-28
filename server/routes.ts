@@ -3995,9 +3995,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             address: processedBody.newCustomerAddress?.trim() || processedBody.address?.trim() || undefined,
           };
 
-          // Reuse an existing customer with the same name (case/whitespace
-          // insensitive) instead of creating a duplicate row.
-          const existing = await storage.findCustomerByName(customerPayload.name);
+          // Reuse an existing customer when we can. Order matters: phone is the
+          // strongest signal for SMS-screenshot leads (the message is from a
+          // real number), email second, then case/whitespace-insensitive name.
+          // This prevents a Vision-extracted "Bob Smith" from creating a
+          // duplicate when the same number already belongs to "Robert Smith".
+          let existing = customerPhone
+            ? await storage.findCustomerByPhone(customerPhone)
+            : undefined;
+          if (!existing && customerMobile && customerMobile !== customerPhone) {
+            existing = await storage.findCustomerByPhone(customerMobile);
+          }
+          if (!existing && customerPayload.email) {
+            existing = await storage.findCustomerByEmail(customerPayload.email);
+          }
+          if (!existing) {
+            existing = await storage.findCustomerByName(customerPayload.name);
+          }
           let newCustomer;
           if (existing) {
             const updates = mergeEmptyCustomerFields(existing, customerPayload);
