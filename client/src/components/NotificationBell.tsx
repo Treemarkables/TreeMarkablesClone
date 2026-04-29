@@ -499,6 +499,7 @@ export function NotificationBell() {
         "proposal_sent",
         "photo_added",
         "note_added",
+        "holding_message_pending",
       ];
       if (diaryTypes.includes(notification.type)) {
         const url = `/dispatch?job=${notification.jobId}&tab=diary`;

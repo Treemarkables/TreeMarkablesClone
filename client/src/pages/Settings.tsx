@@ -49,6 +49,14 @@ const settingsOptions = [
     path: "/settings/checklist-template"
   },
   {
+    id: "role-checklist-tasks",
+    title: "Role Checklist Tasks",
+    description: "Customise tasks for Kaitiaki, Kaiwhangai and Kaitirotiro",
+    icon: ListChecks,
+    color: "bg-green-100 text-green-600",
+    path: "/settings/role-checklist-tasks"
+  },
+  {
     id: "staff",
     title: "Staff",
     description: "Manage team members, roles and permissions",

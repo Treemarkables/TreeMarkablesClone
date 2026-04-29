@@ -696,6 +696,16 @@ export function CalendarGrid({
       ? "$0"
       : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + "k" : Math.round(amount).toLocaleString()}`;
 
+  // Job price exc. GST. Returns 0 if no price has been set yet.
+  const getJobPrice = (job: Job): number => {
+    const sub = parseFloat(job.subtotal || "0");
+    if (sub > 0) return sub;
+    const incGst = parseFloat(job.totalIncludingGst || "0");
+    if (incGst > 0) return incGst / 1.15;
+    const total = parseFloat(job.totalAmount || "0");
+    return total > 0 ? total / 1.15 : 0;
+  };
+
   // Round to the same $100 display unit that the k-formatter uses, so the badge
   // ("$3.0k") and "to go" always add up to the target on screen.
   const displayDayRevenue =
@@ -1097,6 +1107,14 @@ export function CalendarGrid({
                                 {timeLabel}
                               </span>
                             )}
+                            {(() => {
+                              const price = getJobPrice(job);
+                              return price > 0 ? (
+                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: c.border }}>
+                                  {formatNZD(price)}
+                                </span>
+                              ) : null;
+                            })()}
                             {blockW > 8 && (
                               <span className="text-[9px] leading-tight block truncate text-gray-400">
                                 drag to assign
@@ -1294,6 +1312,14 @@ export function CalendarGrid({
                                 {timeLabel}
                               </span>
                             )}
+                            {(() => {
+                              const price = getJobPrice(job);
+                              return price > 0 ? (
+                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: c.border }}>
+                                  {formatNZD(price)}
+                                </span>
+                              ) : null;
+                            })()}
                             {job.address && (
                               <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: c.text, opacity: 0.7 }}>
                                 <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
@@ -1376,8 +1402,18 @@ export function CalendarGrid({
                                 <div className="opacity-70 truncate mt-0.5">
                                   {job.address?.split(",")[0]}
                                 </div>
-                                <div className="opacity-80 mt-0.5 font-mono">
-                                  #{job.jobNumber}
+                                <div className="flex items-center justify-between gap-1 mt-0.5">
+                                  <span className="opacity-80 font-mono">
+                                    #{job.jobNumber}
+                                  </span>
+                                  {(() => {
+                                    const price = getJobPrice(job);
+                                    return price > 0 ? (
+                                      <span className="font-bold" style={{ color: c.border }}>
+                                        {formatNZD(price)}
+                                      </span>
+                                    ) : null;
+                                  })()}
                                 </div>
                               </div>
                             );

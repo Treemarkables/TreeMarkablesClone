@@ -11,14 +11,42 @@ import {
   Star,
   Users,
   MessageSquare,
+  Bell,
+  Mail,
+  MapPin,
+  Wrench,
+  TreePine,
+  AlertTriangle,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
+import type { RoleChecklistTask } from "@shared/schema";
 
 type RoleKey = "A" | "B" | "C";
 type ChecklistIcon = React.ComponentType<{ className?: string }>;
 // Kaitiaki (C) leads, so it sits first in the buttons row and as the top role section.
 const ROLE_KEYS: RoleKey[] = ["C", "A", "B"];
+
+// Icon name → lucide component. Keep in sync with RoleChecklistSettings.tsx.
+// Unknown names fall back to Check.
+const ICON_BY_NAME: Record<string, ChecklistIcon> = {
+  Check,
+  Shield,
+  Camera,
+  PhoneCall,
+  TriangleAlert,
+  ClipboardCheck,
+  Clock,
+  Star,
+  Users,
+  MessageSquare,
+  Bell,
+  Mail,
+  MapPin,
+  Wrench,
+  TreePine,
+  AlertTriangle,
+};
 
 interface ChecklistItem {
   id: string;
@@ -50,7 +78,9 @@ const ROLE_LABEL: Record<RoleKey, string> = {
   C: "Kaitiaki",
 };
 
-const ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
+// Fallback used while the API call is loading or if it fails. Mirrors the
+// seed data on the server so the panel never renders empty.
+const FALLBACK_ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
   A: [
     { id: "risk-assessment", label: "Risk assessment", Icon: Shield },
     { id: "content-creation", label: "Content creation", Icon: Camera },
@@ -67,11 +97,42 @@ const ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
   ],
 };
 
-const ALL_ITEM_IDS = ROLE_KEYS.flatMap((r) => ROLE_ITEMS[r].map((i) => i.id));
-
 export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const queryClient = useQueryClient();
   const isTempJob = jobId.startsWith("temp-");
+
+  // Tasks are now driven by the role_checklist_tasks table so users can
+  // toggle/edit/add them from Settings. While loading or on error we fall
+  // back to the static defaults so the panel never goes empty.
+  const { data: tasksResp } = useQuery<{
+    success?: boolean;
+    data?: RoleChecklistTask[];
+  }>({
+    queryKey: ["/api/role-checklist-tasks"],
+    staleTime: 60_000,
+  });
+
+  const roleItems = useMemo<Record<RoleKey, ChecklistItem[]>>(() => {
+    const tasks = tasksResp?.data;
+    if (!tasks || tasks.length === 0) return FALLBACK_ROLE_ITEMS;
+    const groups: Record<RoleKey, ChecklistItem[]> = { A: [], B: [], C: [] };
+    const enabled = tasks
+      .filter((t) => t.isEnabled && (t.roleKey === "A" || t.roleKey === "B" || t.roleKey === "C"))
+      .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+    for (const t of enabled) {
+      groups[t.roleKey as RoleKey].push({
+        id: t.itemId,
+        label: t.label,
+        Icon: ICON_BY_NAME[t.iconName] ?? Check,
+      });
+    }
+    return groups;
+  }, [tasksResp]);
+
+  const allItemIds = useMemo(
+    () => ROLE_KEYS.flatMap((r) => roleItems[r].map((i) => i.id)),
+    [roleItems],
+  );
 
   const { data: completionsResp, isLoading: completionsLoading } = useQuery<{
     success?: boolean;
@@ -163,8 +224,8 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
     },
   });
 
-  const completedCount = ALL_ITEM_IDS.filter((id) => completionByItem.has(id)).length;
-  const totalCount = ALL_ITEM_IDS.length;
+  const completedCount = allItemIds.filter((id) => completionByItem.has(id)).length;
+  const totalCount = allItemIds.length;
   const percent = totalCount === 0 ? 0 : Math.round((completedCount / totalCount) * 100);
 
   if (isTempJob) {
@@ -246,6 +307,7 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
             <RoleSection
               key={roleKey}
               roleKey={roleKey}
+              items={roleItems[roleKey]}
               staffInRole={staffByRole[roleKey]}
               completionByItem={completionByItem}
               onToggle={(itemId, completed) => toggleItem.mutate({ itemId, completed })}
@@ -303,18 +365,19 @@ function RoleAssignRow({
 
 function RoleSection({
   roleKey,
+  items,
   staffInRole,
   completionByItem,
   onToggle,
   disabled,
 }: {
   roleKey: RoleKey;
+  items: ChecklistItem[];
   staffInRole: AssignmentRow[];
   completionByItem: Map<string, ChecklistCompletion>;
   onToggle: (itemId: string, completed: boolean) => void;
   disabled: boolean;
 }) {
-  const items = ROLE_ITEMS[roleKey];
   const ownerNames = staffInRole
     .map((s) => (s.employeeName ?? "").trim())
     .filter(Boolean);

@@ -76,6 +76,7 @@ import { ProposalBuilder } from "@/components/ProposalBuilder";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 import { BeforeAfterCaptureModal } from "@/components/BeforeAfterCaptureModal";
+import { PendingMessagesCard } from "@/components/PendingMessagesCard";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
 // ── Email-thread helpers ────────────────────────────────────────────────────
@@ -2213,6 +2214,7 @@ export function JobDiarySection({
         {/* Timeline */}
         {diaryTab === "timeline" && (
         <ScrollArea className="flex-1">
+          <PendingMessagesCard jobId={jobId} />
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
               <div className="text-xs text-muted-foreground">Loading...</div>

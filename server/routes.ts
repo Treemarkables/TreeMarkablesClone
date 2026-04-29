@@ -20037,24 +20037,36 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         isRead: false,
         jobId: job.id,
         customerId: proposal.customerId || undefined,
-        actionUrl: '/communications?tab=pending',
+        // No actionUrl: the NotificationBell routes holding_message_pending
+        // notifications with a jobId to the job card's diary tab, where the
+        // pending draft is rendered for in-line approval.
         metadata: { pendingMessageId: pendingMsg.id }
       });
 
-      // Create diary entry for the job to record the acceptance
+      // Create diary entry for the job to record the acceptance. Wrapped in
+      // its own try/catch so a diary failure can't 500 the customer-facing
+      // accept response after we've already created the job + pending draft.
       if (job?.id) {
-        await storage.createJobDiaryEntry({
-          jobId: job.id,
-          entryType: 'system',
-          title: `Proposal Accepted: ${proposal.proposalNumber}`,
-          content: `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(updatedTotalAmount || 0)}. Job converted to work order.`,
-          metadata: {
-            proposalId: proposal.id,
-            proposalNumber: proposal.proposalNumber,
-            totalAmount: proposal.totalAmount,
-            eventType: 'proposal_accepted'
-          }
-        });
+        try {
+          const acceptanceContent = `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(updatedTotalAmount || 0)}. Job converted to work order.`;
+          await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'system',
+            title: `Proposal Accepted: ${proposal.proposalNumber}`,
+            description: acceptanceContent,
+            content: acceptanceContent,
+            authorName: customer?.name || 'Customer',
+            authorRole: 'customer',
+            metadata: {
+              proposalId: proposal.id,
+              proposalNumber: proposal.proposalNumber,
+              totalAmount: proposal.totalAmount,
+              eventType: 'proposal_accepted'
+            }
+          });
+        } catch (diaryErr) {
+          console.error('Failed to log proposal-accepted diary entry:', diaryErr);
+        }
       }
 
       console.log(`✅ Proposal ${proposal.proposalNumber} accepted and converted to work order ${jobNumber}`);
@@ -20098,7 +20110,9 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.get('/api/pending-messages', requireAdmin, async (req: Request, res: Response) => {
     try {
       const status = req.query.status as string | undefined;
-      const messages = await storage.getPendingOutboundMessages(status);
+      const jobId = req.query.jobId as string | undefined;
+      let messages = await storage.getPendingOutboundMessages(status);
+      if (jobId) messages = messages.filter(m => m.jobId === jobId);
       res.json({ success: true, data: messages });
     } catch (error) {
       console.error('Error fetching pending messages:', error);
@@ -20163,19 +20177,28 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         sentAt: new Date(),
       });
 
-      // Log to job diary
+      // Log to job diary. Wrapped in try/catch so a diary failure can't
+      // surface as a 500 to the UI after the SMS/email has already gone out
+      // and the message is already marked sent.
       if (msg.jobId) {
-        await storage.createJobDiaryEntry({
-          jobId: msg.jobId,
-          entryType: msg.channel === 'email' ? 'email' : 'sms',
-          title: 'Holding message sent to customer',
-          content: msg.message,
-          metadata: {
-            channel: msg.channel,
-            recipientName: msg.recipientName,
-            eventType: 'holding_message_sent',
-          },
-        });
+        try {
+          await storage.createJobDiaryEntry({
+            jobId: msg.jobId,
+            entryType: msg.channel === 'email' ? 'email' : 'sms',
+            title: 'Holding message sent to customer',
+            description: msg.message,
+            content: msg.message,
+            authorName: (req as any).user?.name || 'System',
+            authorRole: (req as any).user?.role || 'system',
+            metadata: {
+              channel: msg.channel,
+              recipientName: msg.recipientName,
+              eventType: 'holding_message_sent',
+            },
+          });
+        } catch (diaryErr) {
+          console.error('Failed to log diary entry after pending-message approve:', diaryErr);
+        }
 
         // Auto-upgrade lead → quote once the customer has been sent a booking
         // confirmation for a job that's already booked in the diary. The

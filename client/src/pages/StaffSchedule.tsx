@@ -148,6 +148,24 @@ function formatTimeFromMins(mins: number): string {
   return m ? `${h12}:${String(m).padStart(2, '0')} ${ampm}` : `${h12} ${ampm}`;
 }
 
+// Job price exc. GST. Returns 0 if no price has been set yet.
+function getJobPrice(job: Job): number {
+  const sub = parseFloat(job.subtotal || '0');
+  if (sub > 0) return sub;
+  const incGst = parseFloat(job.totalIncludingGst || '0');
+  if (incGst > 0) return incGst / 1.15;
+  const total = parseFloat(job.totalAmount || '0');
+  return total > 0 ? total / 1.15 : 0;
+}
+
+function formatNZDShort(amount: number): string {
+  if (amount === 0) return '$0';
+  if (amount >= 1000) {
+    return `$${(amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1)}k`;
+  }
+  return `$${Math.round(amount).toLocaleString()}`;
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function StaffSchedule() {
@@ -547,6 +565,14 @@ export default function StaffSchedule() {
                               {timeLabel}
                             </span>
                           )}
+                          {(() => {
+                            const price = getJobPrice(job);
+                            return price > 0 ? (
+                              <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: colors.border }}>
+                                {formatNZDShort(price)}
+                              </span>
+                            ) : null;
+                          })()}
                           {job.address && (
                             <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: colors.text, opacity: 0.7 }}>
                               <MapPin className="w-2 h-2 shrink-0 mt-0.5" />
@@ -668,6 +694,14 @@ export default function StaffSchedule() {
                                 {timeLabel}
                               </span>
                             )}
+                            {(() => {
+                              const price = getJobPrice(job);
+                              return price > 0 ? (
+                                <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: colors.border }}>
+                                  {formatNZDShort(price)}
+                                </span>
+                              ) : null;
+                            })()}
                             {job.address && (
                               <span className="text-[9px] leading-tight flex items-start gap-0.5 whitespace-normal break-words" style={{ color: colors.text, opacity: 0.7 }}>
                                 <MapPin className="w-2 h-2 shrink-0 mt-0.5" />

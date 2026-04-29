@@ -76,6 +76,7 @@ import NearMissHistory from "@/pages/NearMissHistory";
 import EquipmentRegister from "@/pages/EquipmentRegister";
 import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
+import RoleChecklistSettings from "@/pages/RoleChecklistSettings";
 import DocumentBuilderPage from "@/pages/DocumentBuilderPage";
 import SettingsCompany from "@/pages/SettingsCompany";
 import SettingsQuoteFollowup from "@/pages/SettingsQuoteFollowup";
@@ -1203,6 +1204,12 @@ function Router() {
       <Route path="/settings/checklist-template">
         <SidebarLayout>
           <ChecklistTemplatePage />
+        </SidebarLayout>
+      </Route>
+
+      <Route path="/settings/role-checklist-tasks">
+        <SidebarLayout>
+          <RoleChecklistSettings />
         </SidebarLayout>
       </Route>
 

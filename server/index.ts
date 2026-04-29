@@ -552,6 +552,60 @@ function startBackgroundWorkersAfterListen() {
         ALTER TABLE equipment ADD COLUMN IF NOT EXISTS requires_pre_start BOOLEAN NOT NULL DEFAULT false;
         ALTER TABLE customers ADD COLUMN IF NOT EXISTS invoice_cc_email TEXT;
         ALTER TABLE document_templates ADD COLUMN IF NOT EXISTS block_config JSONB;
+        ALTER TABLE jobs ADD COLUMN IF NOT EXISTS booking_reminders_enabled BOOLEAN DEFAULT false;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS auto_quote_followup_enabled BOOLEAN DEFAULT false;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS quote_followup_channel TEXT DEFAULT 'sms';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS quote_followup_max_attempts INTEGER DEFAULT 2;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminders_enabled BOOLEAN DEFAULT false;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_channel TEXT DEFAULT 'both';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_offsets JSONB DEFAULT '[{"hoursBefore":24,"label":"24 hours before"}]'::jsonb;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_email_template_id VARCHAR;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_sms_template_id VARCHAR;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_default_on BOOLEAN DEFAULT false;
+        CREATE TABLE IF NOT EXISTS booking_reminders (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          job_id VARCHAR NOT NULL,
+          scheduled_for TIMESTAMP NOT NULL,
+          channel TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          manual BOOLEAN NOT NULL DEFAULT false,
+          offset_hours INTEGER,
+          recipient_email TEXT,
+          recipient_phone TEXT,
+          subject TEXT,
+          email_body TEXT,
+          sms_body TEXT,
+          sent_at TIMESTAMP,
+          email_sent BOOLEAN DEFAULT false,
+          sms_sent BOOLEAN DEFAULT false,
+          error TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+          updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        );
+        CREATE INDEX IF NOT EXISTS booking_reminders_job_id_idx ON booking_reminders (job_id);
+        CREATE INDEX IF NOT EXISTS booking_reminders_pending_idx ON booking_reminders (status, scheduled_for);
+        CREATE TABLE IF NOT EXISTS role_checklist_tasks (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          role_key VARCHAR NOT NULL,
+          item_id TEXT NOT NULL UNIQUE,
+          label TEXT NOT NULL,
+          icon_name TEXT NOT NULL DEFAULT 'Check',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          is_enabled BOOLEAN NOT NULL DEFAULT true,
+          is_built_in BOOLEAN NOT NULL DEFAULT false,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO role_checklist_tasks (role_key, item_id, label, icon_name, sort_order, is_built_in) VALUES
+          ('A', 'risk-assessment',     'Risk assessment',                'Shield',         0, true),
+          ('A', 'content-creation',    'Content creation',               'Camera',         1, true),
+          ('B', 'alert-customer-late', 'Alert customer if running late', 'PhoneCall',      0, true),
+          ('B', 'signs-out',           'Signs out',                      'TriangleAlert',  1, true),
+          ('B', 'pre-start',           'Pre-start',                      'ClipboardCheck', 2, true),
+          ('B', 'day-progress-update', 'Day progress update to Jules',   'MessageSquare',  3, true),
+          ('C', 'time-tracking',       'Time tracking',                  'Clock',          0, true),
+          ('C', 'review-request',      'Request review from client',     'Star',           1, true)
+        ON CONFLICT (item_id) DO NOTHING;
       `);
       log("✅ Background schema migrations complete", "startup");
 
