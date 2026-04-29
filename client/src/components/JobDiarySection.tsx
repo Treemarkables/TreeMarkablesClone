@@ -108,6 +108,56 @@ function getEmailAddress(entry: { metadata?: any }): string | null {
   return m.emailAddress || m.recipient || m.fromEmail || null;
 }
 
+function normalizePhone(raw: string): string {
+  const digits = (raw || "").replace(/[^0-9]/g, "");
+  return digits.replace(/^0+/, "").slice(-9);
+}
+
+function getPhoneNumber(entry: { metadata?: any; content?: string }): string | null {
+  const m = entry.metadata || {};
+  const fromMeta = m.phoneNumber || m.recipient || m.fromPhone;
+  if (fromMeta) {
+    const norm = normalizePhone(fromMeta);
+    if (norm) return norm;
+  }
+  // Fallback: content like "from NAME (+6421...)" or "(021 555 1234)"
+  const match = (entry.content || "").match(/\(([+0-9][\d ()+\-]{6,})\)/);
+  if (match) {
+    const norm = normalizePhone(match[1]);
+    if (norm) return norm;
+  }
+  return null;
+}
+
+function cleanSmsMessage(
+  entry: { title: string; content: string },
+  direction: EmailDirection,
+): { text: string; recipient: string } {
+  let messageText = entry.content || "";
+  let recipientInfo = "";
+
+  if (direction === "sent") {
+    if (messageText.includes("Message:")) {
+      const beforeMessage = messageText.split("Message:")[0];
+      if (beforeMessage.includes("SMS sent to")) {
+        recipientInfo = beforeMessage.split("SMS sent to")[1].trim();
+      }
+      messageText = messageText.split("Message:")[1].trim();
+    }
+  } else if (direction === "received") {
+    // Common formats:
+    //   "SMS received from NAME (PHONE)\n\nMessage: TEXT"
+    //   "SMS reply from NAME (PHONE):\n\nTEXT"
+    if (messageText.includes("Message:")) {
+      messageText = messageText.split("Message:")[1].trim();
+    } else if (messageText.includes(":\n\n")) {
+      messageText = messageText.split(":\n\n")[1].trim();
+    }
+  }
+
+  return { text: messageText.trim(), recipient: recipientInfo };
+}
+
 // True when there's a later outbound entry of the same kind (email/sms) to
 // the same counterparty as `target`. Used to suppress the AI suggested-reply
 // card once we've already replied — without this, the suggestion sits on the
@@ -1331,7 +1381,7 @@ export function JobDiarySection({
   // sent emails together with the replies they received into a single
   // email_thread group.
   interface GroupedEntry {
-    type: "single" | "photo_group" | "email_thread";
+    type: "single" | "photo_group" | "email_thread" | "sms_thread";
     entries: DiaryEntry[];
     timestamp: string;
     author: string;
@@ -1348,10 +1398,12 @@ export function JobDiarySection({
     // the conversation (their inbound email + our reply rendered as two
     // separate cards). Address-keyed grouping handles both directions.
     const emailThreadByAddr = new Map<string, GroupedEntry>();
+    const smsThreadByPhone = new Map<string, GroupedEntry>();
     // Stable address key: an empty/missing address shouldn't collide entries
     // from unrelated correspondents into one thread, so each missing-address
     // entry gets its own bucket.
     let missingAddrCounter = 0;
+    let missingPhoneCounter = 0;
 
     const flushPhotoGroup = () => {
       if (currentPhotoGroup.length > 0) {
@@ -1421,6 +1473,31 @@ export function JobDiarySection({
         return;
       }
 
+      // SMS threading — group every SMS by counterparty phone number, regardless
+      // of direction, so a back-and-forth conversation reads as one thread
+      // instead of scattered single cards.
+      if (entry.type === "sms") {
+        flushPhotoGroup();
+        const phone = getPhoneNumber(entry);
+        const key = phone || `__missing_phone_${missingPhoneCounter++}__`;
+        const existing = smsThreadByPhone.get(key);
+        if (existing) {
+          existing.entries.push(entry);
+        } else {
+          const newGroup: GroupedEntry = {
+            type: "sms_thread",
+            entries: [entry],
+            timestamp: entry.timestamp,
+            author: entry.author,
+            parent: undefined,
+            replies: [],
+          };
+          smsThreadByPhone.set(key, newGroup);
+          groups.push(newGroup);
+        }
+        return;
+      }
+
       // Non-email, non-photo entry: flush photo group, keep pendingReplies
       // (they may still be matched to an even older sent email further down
       // in the timeline). Standalone single entry.
@@ -1442,6 +1519,24 @@ export function JobDiarySection({
     // Group timestamp uses latest activity so a fresh reply pulls the whole
     // thread to the top of the diary in the sort below.
     for (const group of emailThreadByAddr.values()) {
+      group.entries.sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
+      });
+      const [parent, ...rest] = group.entries;
+      group.parent = parent;
+      group.replies = rest;
+      group.author = parent?.author ?? group.author;
+      const latest = group.entries.reduce((acc, e) => {
+        const t = new Date(e.timestamp).getTime();
+        return isNaN(t) ? acc : Math.max(acc, t);
+      }, 0);
+      if (latest > 0) group.timestamp = new Date(latest).toISOString();
+    }
+
+    // Same finalisation pass for SMS threads.
+    for (const group of smsThreadByPhone.values()) {
       group.entries.sort((a, b) => {
         const ta = new Date(a.timestamp).getTime();
         const tb = new Date(b.timestamp).getTime();
@@ -2462,6 +2557,150 @@ export function JobDiarySection({
                                       />
                                     </div>
                                   )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // SMS thread rendering — one consolidated card containing every
+                // SMS to/from the same phone number, in chronological order.
+                if (group.type === "sms_thread") {
+                  const threadEntries = group.entries;
+                  const counterpartyPhone =
+                    threadEntries
+                      .map((e) => e.metadata?.phoneNumber)
+                      .find((p): p is string => !!p) || "";
+                  return (
+                    <div
+                      key={`sms-thread-${groupIndex}`}
+                      className="group"
+                      data-testid="diary-sms-thread"
+                    >
+                      <div className="rounded-xl bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+                        {/* Thread header */}
+                        <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/50">
+                          <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                            <MessageSquare className="w-3.5 h-3.5 text-gray-600 dark:text-gray-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                              SMS thread
+                            </span>
+                            {counterpartyPhone && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                with {counterpartyPhone}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                            {threadEntries.length}{" "}
+                            {threadEntries.length === 1 ? "message" : "messages"}
+                          </span>
+                        </div>
+
+                        {/* Chronological message list */}
+                        <div className="px-3 py-3 space-y-3">
+                          {threadEntries.map((msg) => {
+                            const direction = getEmailDirection(msg);
+                            const cleaned = cleanSmsMessage(msg, direction);
+                            const isOutgoing = direction === "sent";
+                            const senderLabel = isOutgoing
+                              ? `to ${cleaned.recipient || msg.metadata?.phoneNumber || counterpartyPhone || "customer"}`
+                              : `from ${
+                                  msg.author && msg.author !== "System"
+                                    ? msg.author
+                                    : msg.metadata?.phoneNumber ||
+                                      counterpartyPhone ||
+                                      "customer"
+                                }`;
+                            const accent = isOutgoing
+                              ? "border-blue-400 dark:border-blue-500"
+                              : "border-purple-400 dark:border-purple-500";
+                            const bubbleBg = isOutgoing
+                              ? "bg-blue-50 dark:bg-blue-900/30"
+                              : "bg-purple-50 dark:bg-purple-900/30";
+                            const bubbleText = isOutgoing
+                              ? "text-blue-900 dark:text-blue-100"
+                              : "text-purple-900 dark:text-purple-100";
+                            const labelText = isOutgoing
+                              ? "text-blue-700 dark:text-blue-300"
+                              : "text-purple-700 dark:text-purple-300";
+                            const iconColor = isOutgoing
+                              ? "text-blue-600 dark:text-blue-400"
+                              : "text-purple-600 dark:text-purple-400";
+                            const replyPhone =
+                              msg.metadata?.phoneNumber || counterpartyPhone || "";
+                            return (
+                              <div
+                                key={msg.id}
+                                className={`border-l-2 pl-3 ml-1 ${accent}`}
+                                data-testid={`sms-thread-msg-${msg.id}`}
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-wrap">
+                                    {isOutgoing ? (
+                                      <Send className={`w-3 h-3 flex-shrink-0 ${iconColor}`} />
+                                    ) : (
+                                      <Reply className={`w-3 h-3 flex-shrink-0 ${iconColor}`} />
+                                    )}
+                                    <span className={`text-xs font-medium ${labelText}`}>
+                                      {isOutgoing ? "You sent" : "Reply received"}
+                                    </span>
+                                    <span className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                                      {senderLabel}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    <span className="text-[10px] text-gray-500 dark:text-gray-400 whitespace-nowrap text-right">
+                                      {formatInTimeZone(
+                                        new Date(msg.timestamp),
+                                        "Pacific/Auckland",
+                                        "h:mm a dd/MM/yy",
+                                      )}
+                                    </span>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (confirm("Delete this message?")) {
+                                          deleteEntryMutation.mutate(msg.id);
+                                        }
+                                      }}
+                                      data-testid={`button-delete-sms-thread-msg-${msg.id}`}
+                                    >
+                                      <Trash2 className="w-2.5 h-2.5" />
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className={`rounded-md px-3 py-2 ${bubbleBg}`}>
+                                  <p
+                                    className={`text-xs leading-relaxed whitespace-pre-wrap break-words ${bubbleText}`}
+                                    style={{ wordBreak: "break-word" }}
+                                  >
+                                    {cleaned.text}
+                                  </p>
+                                </div>
+                                {!isOutgoing && replyPhone && (
+                                  <div className="mt-1.5 flex items-center justify-end gap-1">
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      className="h-6 text-[10px] px-2 text-purple-600 dark:text-purple-400 hover:bg-purple-100 dark:hover:bg-purple-800"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setReplyToPhone(replyPhone);
+                                        setActiveComposer("sms");
+                                      }}
+                                      data-testid={`button-reply-sms-thread-${msg.id}`}
+                                    >
+                                      <Reply className="w-3 h-3 mr-0.5" /> Reply
+                                    </Button>
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
