@@ -452,8 +452,7 @@ export default function StaffSchedule() {
           <div className="flex sticky top-0 z-20 bg-white border-b border-gray-200">
             {/* Staff column header */}
             <div
-              className="shrink-0 border-r border-gray-200 flex items-center px-3 py-2 sticky left-0 z-30 bg-white"
-              style={{ width: STAFF_COL_W }}
+              className="shrink-0 border-r border-gray-200 flex items-center px-2 md:px-3 py-2 sticky left-0 z-30 bg-white w-[72px] md:w-[148px]"
             >
               <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Crew</span>
             </div>
@@ -480,14 +479,13 @@ export default function StaffSchedule() {
                 style={{ minHeight: rowHeight }}
               >
                 <div
-                  className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2 sticky left-0 z-10 bg-amber-50"
-                  style={{ width: STAFF_COL_W }}
+                  className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-2 md:px-3 py-2 sticky left-0 z-10 bg-amber-50 w-[72px] md:w-[148px]"
                 >
-                  <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 bg-amber-500">
+                  <div className="hidden md:flex w-7 h-7 rounded-full items-center justify-center text-white text-[10px] font-bold shrink-0 bg-amber-500">
                     ?
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-amber-900 truncate leading-tight">Unassigned</p>
+                    <p className="text-[11px] md:text-xs font-semibold text-amber-900 truncate leading-tight">Unassigned</p>
                     <p className="text-[10px] text-amber-700 leading-tight">
                       {unassignedSlots.length} job{unassignedSlots.length !== 1 ? 's' : ''}
                     </p>
@@ -609,17 +607,27 @@ export default function StaffSchedule() {
                 >
                   {/* Staff name cell */}
                   <div
-                    className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3 py-2 sticky left-0 z-10"
-                    style={{ width: STAFF_COL_W, backgroundColor: palette.row }}
+                    className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-2 md:px-3 py-2 sticky left-0 z-10 w-[72px] md:w-[148px]"
+                    style={{ backgroundColor: palette.row }}
                   >
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                      className="hidden md:flex w-7 h-7 rounded-full items-center justify-center text-white text-[10px] font-bold shrink-0"
                       style={{ backgroundColor: palette.dot }}
                     >
                       {empInit}
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
+                    <div className="min-w-0 flex-1">
+                      {/* Mobile: stacked first/last name */}
+                      <p className="md:hidden text-[11px] font-semibold text-gray-800 truncate leading-tight">
+                        {emp.firstName}
+                      </p>
+                      {emp.lastName && (
+                        <p className="md:hidden text-[11px] font-semibold text-gray-800 truncate leading-tight">
+                          {emp.lastName}
+                        </p>
+                      )}
+                      {/* Desktop: full name on one line */}
+                      <p className="hidden md:block text-xs font-semibold text-gray-800 truncate leading-tight">{empName}</p>
                       <p className="text-[10px] text-gray-400 leading-tight">
                         {empSlots.length} job{empSlots.length !== 1 ? 's' : ''}
                       </p>
