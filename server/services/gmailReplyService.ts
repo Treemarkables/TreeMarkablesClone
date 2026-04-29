@@ -634,6 +634,14 @@ class GmailReplyService {
     cleaned = cleaned.replace(/--\s*\n[\s\S]*$/im, '');
     cleaned = cleaned.replace(/Sent from my.*/i, '');
 
+    // Strip everything from a closing salutation onward. Catches lines like
+    // "Kind regards", "Regards", "Cheers", "Regards, Glen Udall" etc., which
+    // are reliably followed by a name + signature block we don't want.
+    cleaned = cleaned.replace(
+      /\n+(?:kind regards|best regards|warm regards|regards|cheers mate|cheers|many thanks|thank you so much|thank you|thanks|sincerely|yours sincerely|yours faithfully|best wishes|talk soon|speak soon|best)(?:[,.!]|\s*,\s*\S[^\n]*)?\s*$[\s\S]*/im,
+      '',
+    );
+
     // Collapse multiple blank lines into one
     cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
 

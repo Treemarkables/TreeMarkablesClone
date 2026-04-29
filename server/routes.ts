@@ -16539,7 +16539,11 @@ Transcription: ${transcriptText}`;
           trimmed.match(/^p:\s*[+\d]/i) || // Phone: "p: +64..."
           trimmed.match(/^w:\s*www\./i) || // Website: "w: www..."
           trimmed.match(/^e:\s*\S+@\S+/i) || // Email: "e: email@..."
-          trimmed.match(/^a:\s*\d+/i) // Address: "a: 347..."
+          trimmed.match(/^a:\s*\d+/i) || // Address: "a: 347..."
+          // Closing salutation alone on a line (optionally followed by a name).
+          // Catches "Kind regards", "Regards", "Cheers", "Regards, Glen Udall", etc.
+          // — strips the entire signature block that customarily follows.
+          trimmed.match(/^(?:kind regards|best regards|warm regards|regards|cheers mate|cheers|many thanks|thank you so much|thank you|thanks|sincerely|yours sincerely|yours faithfully|best wishes|talk soon|speak soon|best)(?:[,.!]|\s*,\s*\S.*)?$/i)
         ) {
           break;
         }
@@ -16562,7 +16566,14 @@ Transcription: ${transcriptText}`;
         .replace(/\n\n+/g, '\n\n')
         .trim();
     }
-    
+
+    // Final safety net for HTML-only emails (text branch already breaks at
+    // signoff lines): strip everything from a closing salutation onward.
+    cleaned = cleaned.replace(
+      /\n+(?:kind regards|best regards|warm regards|regards|cheers mate|cheers|many thanks|thank you so much|thank you|thanks|sincerely|yours sincerely|yours faithfully|best wishes|talk soon|speak soon|best)(?:[,.!]|\s*,\s*\S[^\n]*)?\s*$[\s\S]*/im,
+      '',
+    ).trim();
+
     return cleaned;
   }
   
