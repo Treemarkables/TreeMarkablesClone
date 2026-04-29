@@ -20,7 +20,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Edit2, Trash2, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Plus, Edit2, Trash2, AlertTriangle } from "lucide-react";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 
@@ -275,6 +276,19 @@ export default function JHATemplates() {
 
   return (
     <div className="container mx-auto p-4 space-y-6">
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Job Hazard Analysis Templates</h1>

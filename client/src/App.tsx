@@ -87,7 +87,7 @@ import Reconciliation from "@/pages/Reconciliation";
 import ProfitabilityCalculator from "@/pages/ProfitabilityCalculator";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User } from "lucide-react";
+import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft } from "lucide-react";
 import { useJobFilter, DISPATCH_STATUS_FILTERS, useDispatchSearchOpen } from "@/lib/dispatchHeaderStore";
 import { Link, useLocation } from "wouter";
 import { useState, useEffect } from "react";
@@ -1117,7 +1117,23 @@ function Router() {
       </Route>
       <Route path="/settings/forms">
         <SidebarLayout>
-          <JobTemplateManagement />
+          <div className="flex flex-col h-full">
+            <div className="p-4 md:p-6 pb-0">
+              <Button
+                variant="ghost"
+                size="sm"
+                asChild
+                className="self-start"
+                data-testid="button-back-to-settings"
+              >
+                <Link href="/settings" className="flex items-center gap-2">
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Settings
+                </Link>
+              </Button>
+            </div>
+            <JobTemplateManagement />
+          </div>
         </SidebarLayout>
       </Route>
       <Route path="/settings/preferences">
@@ -1128,6 +1144,18 @@ function Router() {
       <Route path="/settings/notifications">
         <SidebarLayout>
           <div className="p-6 space-y-6">
+            <Button
+              variant="ghost"
+              size="sm"
+              asChild
+              className="self-start"
+              data-testid="button-back-to-settings"
+            >
+              <Link href="/settings" className="flex items-center gap-2">
+                <ArrowLeft className="w-4 h-4" />
+                Back to Settings
+              </Link>
+            </Button>
             <div>
               <h1 className="text-3xl font-bold">Notification Preferences</h1>
               <p className="text-muted-foreground mt-2">Control which events trigger notifications and how you receive them</p>

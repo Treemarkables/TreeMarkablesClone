@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import {
+  ArrowLeft,
   ClipboardCheck,
   Plus,
   Edit,
@@ -25,6 +26,7 @@ import {
   Check,
   X,
 } from "lucide-react";
+import { Link } from "wouter";
 import {
   DndContext,
   closestCenter,
@@ -358,6 +360,20 @@ export default function VehicleInspectionSettings() {
 
   return (
     <div className="flex flex-col h-full p-4 md:p-6 space-y-6">
+      {/* Back to Settings */}
+      <Button
+        variant="ghost"
+        size="sm"
+        asChild
+        className="self-start"
+        data-testid="button-back-to-settings"
+      >
+        <Link href="/settings" className="flex items-center gap-2">
+          <ArrowLeft className="w-4 h-4" />
+          Back to Settings
+        </Link>
+      </Button>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
