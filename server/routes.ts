@@ -7232,6 +7232,47 @@ Draft the reply now.`;
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
+      // Pre-send validation — block silent rendering failures from reaching the customer.
+      // Mirrors what buildProposalRenderContext (BlockRenderedProposal.tsx) reads:
+      // description = proposal.introduction OR concatenated content of any non-photos /
+      // non-line-items section. Keep this in sync if the renderer's logic changes.
+      const validationErrors: string[] = [];
+
+      if (!customer?.name?.trim()) {
+        validationErrors.push('customer name is missing');
+      }
+
+      const hasIntroduction = !!proposal.introduction && proposal.introduction.trim().length > 0;
+      const hasDescriptionSection = sections.some(s =>
+        s.sectionType !== 'photos'
+        && (!s.images || s.images.length === 0)
+        && !sectionLineItems.has(s.id)
+        && !!s.content
+        && s.content.trim().length > 0,
+      );
+      if (!hasIntroduction && !hasDescriptionSection) {
+        validationErrors.push('proposal has no description text — the customer would see an empty job description');
+      }
+
+      const selectedLineItems = lineItems.filter(li => li.selected);
+      if (selectedLineItems.length === 0) {
+        validationErrors.push('proposal has no selected line items');
+      }
+
+      if (subtotal <= 0) {
+        validationErrors.push('proposal total is $0');
+      }
+
+      if (validationErrors.length > 0) {
+        console.warn(`⚠️  Blocked send for proposal ${proposalId}: ${validationErrors.join('; ')}`);
+        return res.status(400).json({
+          success: false,
+          code: 'PROPOSAL_INCOMPLETE',
+          message: `This proposal isn't ready to send: ${validationErrors.join('; ')}.`,
+          errors: validationErrors,
+        });
+      }
+
       // Always use the production domain for customer-facing links
       // to prevent dev/preview URLs from leaking into customer emails/SMS
       const baseUrl = `https://app.treemarkables.co.nz`;
@@ -7411,6 +7452,50 @@ Draft the reply now.`;
       }
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
+
+      // Pre-send validation — block silent rendering failures from reaching the customer.
+      // Same checks as /send-email; the failure modes (missing description, no line items,
+      // $0 total) all produce broken PDFs that the customer will only flag after the fact.
+      const sectionsForValidation = await storage.getProposalSectionsByProposal(proposalId);
+      const sectionLineItemIds = new Set(
+        lineItems.filter(li => li.sectionId).map(li => li.sectionId as string),
+      );
+      const validationErrors: string[] = [];
+
+      if (!customer?.name?.trim()) {
+        validationErrors.push('customer name is missing');
+      }
+
+      const hasIntroduction = !!proposal.introduction && proposal.introduction.trim().length > 0;
+      const hasDescriptionSection = sectionsForValidation.some(s =>
+        s.sectionType !== 'photos'
+        && (!s.images || s.images.length === 0)
+        && !sectionLineItemIds.has(s.id)
+        && !!s.content
+        && s.content.trim().length > 0,
+      );
+      if (!hasIntroduction && !hasDescriptionSection) {
+        validationErrors.push('quote has no description text — the PDF would have an empty job description');
+      }
+
+      const selectedLineItems = lineItems.filter(li => li.selected !== false);
+      if (selectedLineItems.length === 0) {
+        validationErrors.push('quote has no selected line items');
+      }
+
+      if (subtotal <= 0) {
+        validationErrors.push('quote total is $0');
+      }
+
+      if (validationErrors.length > 0) {
+        console.warn(`⚠️  Blocked send for quote ${proposalId}: ${validationErrors.join('; ')}`);
+        return res.status(400).json({
+          success: false,
+          code: 'PROPOSAL_INCOMPLETE',
+          message: `This quote isn't ready to send: ${validationErrors.join('; ')}.`,
+          errors: validationErrors,
+        });
+      }
 
       // Generate PDF buffer for the attachment.
       const { buffer: pdfBuffer } = await generateProposalPDFBuffer(proposalId);
