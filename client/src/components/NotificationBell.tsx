@@ -454,8 +454,20 @@ export function NotificationBell() {
     // Close popover first to ensure clean navigation
     setIsOpen(false);
 
+    // Holding-message notifications with a jobId always belong on the job's
+    // diary tab, where the draft is rendered for in-line approval. Older
+    // rows in the DB still carry actionUrl: '/communications?tab=pending'
+    // from before the in-diary flow existed — override that here so the
+    // legacy notifications also route correctly without a backfill.
+    const overrideToJobDiary =
+      notification.type === "holding_message_pending" && !!notification.jobId;
+
     // Navigate to action URL if provided and it's an internal route
-    if (notification.actionUrl && notification.actionUrl.startsWith("/")) {
+    if (
+      !overrideToJobDiary &&
+      notification.actionUrl &&
+      notification.actionUrl.startsWith("/")
+    ) {
       console.log("🔀 Navigating via actionUrl:", notification.actionUrl);
 
       // Use setTimeout to ensure popover closes before navigation
