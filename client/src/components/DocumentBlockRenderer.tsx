@@ -75,6 +75,12 @@ export interface DocumentRenderContext {
     signedAt?: Date;
     signatureName?: string;
   };
+
+  // Customer-facing proposal pages render their own page-level "Accept
+  // proposal" button at the top of the viewport — set this to suppress the
+  // duplicate in-document acceptance block. The accepted-state stamp still
+  // renders so customers see confirmation after signing.
+  hidePageAcceptance?: boolean;
 }
 
 /** Sample context used by the document builder's WYSIWYG canvas. */
@@ -497,6 +503,9 @@ export function renderDocumentBlock(
           </div>
         );
       }
+      // Suppress the in-document acceptance block when the consuming page
+      // already renders a page-level Accept button (customer proposal viewer).
+      if (ctx.hidePageAcceptance) return null;
       // Visual placeholder — interactive accept UX is layered on by ProposalAccept in a later PR.
       return (
         <div key={block.id} className="mt-4 p-4 border border-gray-300 rounded-lg">

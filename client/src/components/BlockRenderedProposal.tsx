@@ -31,7 +31,7 @@ interface ProposalLike {
     id: string;
     sectionType?: string;
     title?: string;
-    content?: string;
+    content?: string | null;
     images?: string[] | null;
     lineItems?: Array<ProposalLineItemLike>;
   }>;
@@ -148,7 +148,27 @@ export function buildProposalRenderContext(
     customerAddress: customer?.address ?? undefined,
     customerEmail: customer?.email ?? undefined,
     jobAddress: job?.address ?? undefined,
-    description: proposal.introduction ?? undefined,
+    // Prefer the explicit introduction field, then fall back to the content
+    // of any non-line-items / non-photos section. The proposal builder lets
+    // users put the job description in a free-text section (e.g. one titled
+    // "Job Description") rather than the introduction field, and without
+    // this fallback the customer-facing render dropped that content silently.
+    description: (() => {
+      if (proposal.introduction && proposal.introduction.trim().length > 0) {
+        return proposal.introduction;
+      }
+      const fromSections = (proposal.sections ?? [])
+        .filter(s =>
+          s.sectionType !== 'photos'
+          && (!s.images || s.images.length === 0)
+          && (!s.lineItems || s.lineItems.length === 0)
+          && !!s.content
+          && s.content.trim().length > 0,
+        )
+        .map(s => s.content!.trim())
+        .join('\n\n');
+      return fromSections.length > 0 ? fromSections : undefined;
+    })(),
     lineItems: [], // legacy field — proposals use lineItemsWithChoices
     hasLineItems: false,
     subtotal,
@@ -162,6 +182,9 @@ export function buildProposalRenderContext(
       signedAt: toDate(proposal.signedDate),
       signatureName: proposal.customerSignature ?? undefined,
     },
+    // Customer-facing proposal pages render their own page-level Accept
+    // button at the top — suppress the duplicate in-document acceptance block.
+    hidePageAcceptance: true,
   };
 }
 
