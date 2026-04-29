@@ -32,17 +32,23 @@ import { useToast } from "@/hooks/use-toast";
 const NZ_TZ = "Pacific/Auckland";
 
 // ── Gantt (day-view) constants & helpers ──────────────────────────────────────
-const GANTT_START_H = 6;
-const GANTT_END_H   = 19;
-const GANTT_HOURS   = GANTT_END_H - GANTT_START_H;
-// Labels for the START of each 1-hour slot (GANTT_HOURS columns, NOT +1).
-// This keeps label positions aligned with ganttMinsToPercent which also uses GANTT_HOURS as denominator.
-// The last column's right edge implicitly marks GANTT_END_H without a label.
-const GANTT_HOUR_LABELS = Array.from({ length: GANTT_HOURS }, (_, i) => {
-  const h = GANTT_START_H + i;
-  if (h === 12) return '12 PM';
-  return h < 12 ? `${h} AM` : `${h - 12} PM`;
-});
+// Default the day-view timeline to 8 AM (most jobs start there). The component
+// expands the start backwards if the visible day actually contains a job
+// scheduled earlier — see ganttStartH inside the component.
+const DEFAULT_GANTT_START_H = 8;
+const GANTT_END_H            = 19;
+
+function buildGanttHourLabels(startH: number, endH: number): string[] {
+  // Labels for the START of each 1-hour slot ((endH - startH) columns, NOT +1).
+  // Keeps label positions aligned with the percent helper, which also uses
+  // (endH - startH) as the denominator. The last column's right edge implicitly
+  // marks endH without a label.
+  return Array.from({ length: endH - startH }, (_, i) => {
+    const h = startH + i;
+    if (h === 12) return '12 PM';
+    return h < 12 ? `${h} AM` : `${h - 12} PM`;
+  });
+}
 // Same palette used in Staff Schedule — index-stable colours per crew member
 const GANTT_STAFF_PALETTE = [
   { dot: '#3b82f6', row: '#eff6ff', avatar: '#1e40af' }, // blue
@@ -65,8 +71,10 @@ function ganttTimeToMins(t: string | undefined): number {
   const [h, m] = t.split(':').map(Number);
   return (isNaN(h) ? 8 : h) * 60 + (isNaN(m) ? 0 : m);
 }
-function ganttMinsToPercent(mins: number): number {
-  return ((mins - GANTT_START_H * 60) / (GANTT_HOURS * 60)) * 100;
+function makeGanttMinsToPercent(startH: number, endH: number) {
+  const startMin = startH * 60;
+  const totalMin = (endH - startH) * 60;
+  return (mins: number) => ((mins - startMin) / totalMin) * 100;
 }
 function ganttLaneStyle(lane: number, totalLanes: number) {
   const pct = 100 / totalLanes;
@@ -593,6 +601,48 @@ export function CalendarGrid({
     });
   }, [viewMode, currentDate, assignmentsByEmployeeDate, allJobs]);
 
+  // Dynamic day-view timeline start — default 8 AM, expand backwards (down to
+  // 0) if the visible day has any job/assignment scheduled before then. Hours
+  // before the earliest block are hidden so the grid isn't padded with empty
+  // 6/7 AM cells. Mirrors the StaffSchedule logic.
+  const ganttStartH = useMemo(() => {
+    if (viewMode !== "day") return DEFAULT_GANTT_START_H;
+    const dateKey = getNZDateString(currentDate);
+
+    const startMinsFor = (job: Job, assignment: StaffAssignment | null): number => {
+      if (job.scheduledStartTime) return ganttTimeToMins(job.scheduledStartTime);
+      if (assignment) {
+        const startNZ = toZonedTime(new Date(assignment.startTime), NZ_TZ);
+        return startNZ.getHours() * 60 + startNZ.getMinutes();
+      }
+      return 8 * 60;
+    };
+
+    let earliestMins = DEFAULT_GANTT_START_H * 60;
+    for (const [key, items] of assignmentsByEmployeeDate.entries()) {
+      if (!key.endsWith(`__${dateKey}`)) continue;
+      for (const { job, assignment } of items) {
+        const m = startMinsFor(job, assignment);
+        if (m < earliestMins) earliestMins = m;
+      }
+    }
+    for (const job of unassignedJobsForDay) {
+      const m = startMinsFor(job, null);
+      if (m < earliestMins) earliestMins = m;
+    }
+    return Math.max(0, Math.min(DEFAULT_GANTT_START_H, Math.floor(earliestMins / 60)));
+  }, [viewMode, currentDate, assignmentsByEmployeeDate, unassignedJobsForDay]);
+
+  const ganttHours = GANTT_END_H - ganttStartH;
+  const ganttHourLabels = useMemo(
+    () => buildGanttHourLabels(ganttStartH, GANTT_END_H),
+    [ganttStartH],
+  );
+  const ganttMinsToPercent = useMemo(
+    () => makeGanttMinsToPercent(ganttStartH, GANTT_END_H),
+    [ganttStartH],
+  );
+
   // ── Revenue helpers ─────────────────────────────────────────────────────────
   // Statuses that don't represent confirmed revenue (quotes/leads aren't booked work)
   const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
@@ -947,7 +997,7 @@ export function CalendarGrid({
       >
         <div
           className={`flex flex-col h-full ${viewMode !== "day" ? "min-w-max" : ""}`}
-          style={viewMode === "day" ? { minWidth: GANTT_COL_W + GANTT_HOUR_LABELS.length * GANTT_MIN_COL_W } : undefined}
+          style={viewMode === "day" ? { minWidth: GANTT_COL_W + ganttHourLabels.length * GANTT_MIN_COL_W } : undefined}
         >
           {/* Header row */}
           <div className="sticky top-0 z-10 flex bg-white border-b">
@@ -960,7 +1010,7 @@ export function CalendarGrid({
                   CREW
                 </div>
                 <div className="flex flex-1">
-                  {GANTT_HOUR_LABELS.map((label, i) => (
+                  {ganttHourLabels.map((label, i) => (
                     <div
                       key={i}
                       className="flex-1 border-r border-gray-100 last:border-r-0 text-[10px] text-gray-400 font-medium pb-1 pl-0.5 flex items-end"
@@ -1043,7 +1093,7 @@ export function CalendarGrid({
                   >
                     {/* Hour grid lines */}
                     <div className="absolute inset-0 flex pointer-events-none">
-                      {GANTT_HOUR_LABELS.map((_, i) => (
+                      {ganttHourLabels.map((_, i) => (
                         <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
                       ))}
                     </div>
@@ -1189,8 +1239,8 @@ export function CalendarGrid({
                       setDayViewDragOver(employee.id);
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                      const mins = GANTT_START_H * 60 + pct * GANTT_HOURS * 60;
-                      const hour = Math.max(GANTT_START_H, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
+                      const mins = ganttStartH * 60 + pct * ganttHours * 60;
+                      const hour = Math.max(ganttStartH, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
                       setDayViewDragHour((prev) =>
                         prev && prev.employeeId === employee.id && prev.hour === hour
                           ? prev
@@ -1209,8 +1259,8 @@ export function CalendarGrid({
                       setDayViewDragHour(null);
                       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                       const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-                      const mins = GANTT_START_H * 60 + pct * GANTT_HOURS * 60;
-                      const hour = Math.max(GANTT_START_H, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
+                      const mins = ganttStartH * 60 + pct * ganttHours * 60;
+                      const hour = Math.max(ganttStartH, Math.min(GANTT_END_H - 1, Math.floor(mins / 60)));
                       const drag = dragRef.current;
                       if (drag) {
                         dragRef.current = null;
@@ -1227,7 +1277,7 @@ export function CalendarGrid({
                   >
                     {/* Hour grid lines */}
                     <div className="absolute inset-0 flex pointer-events-none">
-                      {GANTT_HOUR_LABELS.map((_, i) => (
+                      {ganttHourLabels.map((_, i) => (
                         <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
                       ))}
                     </div>
@@ -1237,8 +1287,8 @@ export function CalendarGrid({
                       const durationHours = Math.max(0.25, draggingJob?.durationHours ?? 1);
                       const startMins = h * 60;
                       const endMins = Math.min(startMins + durationHours * 60, GANTT_END_H * 60);
-                      const leftPct = ((startMins - GANTT_START_H * 60) / (GANTT_HOURS * 60)) * 100;
-                      const widthPct = ((endMins - startMins) / (GANTT_HOURS * 60)) * 100;
+                      const leftPct = ((startMins - ganttStartH * 60) / (ganttHours * 60)) * 100;
+                      const widthPct = ((endMins - startMins) / (ganttHours * 60)) * 100;
                       const hourLabel = `${h % 12 === 0 ? 12 : h % 12}:00${h < 12 ? 'am' : 'pm'}`;
                       const previewName = draggingJob?.customerName || "";
                       return (
