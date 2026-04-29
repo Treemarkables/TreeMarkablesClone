@@ -14,17 +14,21 @@ import { GlobalJobCard } from '@/components/GlobalJobCard';
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const NZ_TZ = 'Pacific/Auckland';
-const TIMELINE_START_H = 6;   // 6 AM
-const TIMELINE_END_H   = 19;  // 7 PM
-const TIMELINE_HOURS   = TIMELINE_END_H - TIMELINE_START_H;
-const STAFF_COL_W      = 148; // px — fixed left column width
-const MIN_HOUR_COL_W   = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
+// The timeline starts at 8 AM by default — most jobs do — and only expands
+// backwards if the day actually contains a job scheduled earlier. Hours before
+// the earliest job are hidden so the grid isn't padded with dead space.
+const DEFAULT_TIMELINE_START_H = 8;
+const TIMELINE_END_H            = 19; // 7 PM
+const STAFF_COL_W               = 148; // px — fixed left column width
+const MIN_HOUR_COL_W            = 110; // px minimum per hour column — forces horizontal scroll on narrow screens
 
-const HOUR_LABELS = Array.from({ length: TIMELINE_HOURS + 1 }, (_, i) => {
-  const h = TIMELINE_START_H + i;
-  if (h === 12) return '12 PM';
-  return h < 12 ? `${h} AM` : `${h - 12} PM`;
-});
+function buildHourLabels(startH: number, endH: number): string[] {
+  return Array.from({ length: endH - startH + 1 }, (_, i) => {
+    const h = startH + i;
+    if (h === 12) return '12 PM';
+    return h < 12 ? `${h} AM` : `${h - 12} PM`;
+  });
+}
 
 // Staff accent colours (assigned by index)
 const STAFF_PALETTE = [
@@ -72,10 +76,11 @@ function timeStrToMinutes(t: string): number {
   return h * 60 + (m || 0);
 }
 
-function minutesToPercent(minutes: number): number {
-  const start = TIMELINE_START_H * 60;
-  const total = TIMELINE_HOURS * 60;
-  return Math.max(0, Math.min(100, (minutes - start) / total * 100));
+function makeMinutesToPercent(startH: number, endH: number) {
+  const start = startH * 60;
+  const total = (endH - startH) * 60;
+  return (minutes: number) =>
+    Math.max(0, Math.min(100, (minutes - start) / total * 100));
 }
 
 
@@ -178,13 +183,14 @@ export default function StaffSchedule() {
   const [showJobCard, setShowJobCard] = useState(false);
   const [rowHeight, setRowHeight] = useState(72);
 
-  // Current-time line position (refreshed every minute)
-  const [nowPercent, setNowPercent] = useState<number | null>(null);
+  // Current-time line minutes-since-midnight (refreshed every minute).
+  // Stored as raw minutes — the percent is derived later, after we know the
+  // dynamic timeline start, so the bar stays correct when the start shifts.
+  const [nowMins, setNowMins] = useState<number | null>(null);
   useEffect(() => {
     const calc = () => {
       const now = toZonedTime(new Date(), NZ_TZ);
-      const mins = now.getHours() * 60 + now.getMinutes();
-      setNowPercent(minutesToPercent(mins));
+      setNowMins(now.getHours() * 60 + now.getMinutes());
     };
     calc();
     const id = setInterval(calc, 60_000);
@@ -329,6 +335,28 @@ export default function StaffSchedule() {
       });
   }, [dayJobs, slotsByEmployee]);
 
+  // Dynamic timeline start — default 8 AM, but expand backwards if the day
+  // contains a job scheduled earlier (clamped to midnight). Hours before the
+  // earliest job are hidden so the grid isn't padded with empty 6/7 AM cells.
+  const timelineStartH = useMemo(() => {
+    let earliestMins = DEFAULT_TIMELINE_START_H * 60;
+    slotsByEmployee.forEach(list => {
+      list.forEach(s => { if (s.startMins < earliestMins) earliestMins = s.startMins; });
+    });
+    unassignedSlots.forEach(s => { if (s.startMins < earliestMins) earliestMins = s.startMins; });
+    return Math.max(0, Math.min(DEFAULT_TIMELINE_START_H, Math.floor(earliestMins / 60)));
+  }, [slotsByEmployee, unassignedSlots]);
+
+  const hourLabels = useMemo(
+    () => buildHourLabels(timelineStartH, TIMELINE_END_H),
+    [timelineStartH],
+  );
+  const minutesToPercent = useMemo(
+    () => makeMinutesToPercent(timelineStartH, TIMELINE_END_H),
+    [timelineStartH],
+  );
+  const nowPercent = nowMins != null ? minutesToPercent(nowMins) : null;
+
   // Summary stats
   const totalAssigned = useMemo(() => {
     let count = 0;
@@ -446,7 +474,7 @@ export default function StaffSchedule() {
 
       {/* ── Timeline grid ── */}
       <div className="flex-1 overflow-auto">
-        <div style={{ minWidth: STAFF_COL_W + HOUR_LABELS.length * MIN_HOUR_COL_W }}>
+        <div style={{ minWidth: STAFF_COL_W + hourLabels.length * MIN_HOUR_COL_W }}>
 
           {/* Hour header */}
           <div className="flex sticky top-0 z-20 bg-white border-b border-gray-200">
@@ -459,7 +487,7 @@ export default function StaffSchedule() {
 
             {/* Hour labels */}
             <div className="flex-1 relative flex">
-              {HOUR_LABELS.map((label, i) => (
+              {hourLabels.map((label, i) => (
                 <div
                   key={label}
                   className="flex-1 text-center py-2 border-r border-gray-100 last:border-r-0"
@@ -494,7 +522,7 @@ export default function StaffSchedule() {
 
                 <div className="flex-1 relative">
                   <div className="absolute inset-0 flex pointer-events-none">
-                    {HOUR_LABELS.map((_, i) => (
+                    {hourLabels.map((_, i) => (
                       <div key={i} className="flex-1 border-r border-gray-100 last:border-r-0 h-full" />
                     ))}
                   </div>
@@ -638,7 +666,7 @@ export default function StaffSchedule() {
                   <div className="flex-1 relative" style={{ backgroundColor: palette.row + '55' }}>
                     {/* Hour grid lines */}
                     <div className="absolute inset-0 flex pointer-events-none">
-                      {HOUR_LABELS.map((_, i) => (
+                      {hourLabels.map((_, i) => (
                         <div
                           key={i}
                           className="flex-1 border-r border-gray-100 last:border-r-0 h-full"
