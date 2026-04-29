@@ -578,25 +578,69 @@ export default function VehicleInspection() {
                           {response.responseValue === "NO" &&
                             response.requiresPhoto && (
                               <div>
-                                <Label
-                                  htmlFor={`photo-${item.id}`}
-                                  className="text-xs"
-                                >
+                                <Label className="text-xs">
                                   Photo (optional)
                                 </Label>
-                                <div className="flex gap-2">
-                                  <Input
-                                    id={`photo-${item.id}`}
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <input
+                                    id={`photo-camera-${item.id}`}
                                     type="file"
                                     accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
                                     onChange={(e) => {
                                       const file = e.target.files?.[0];
                                       if (file)
                                         handlePhotoUpload(item.id, file);
+                                      e.target.value = "";
                                     }}
-                                    className="text-base md:text-sm"
-                                    data-testid={`input-photo-${item.id}`}
+                                    data-testid={`input-photo-camera-${item.id}`}
                                   />
+                                  <input
+                                    id={`photo-library-${item.id}`}
+                                    type="file"
+                                    accept="image/*"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0];
+                                      if (file)
+                                        handlePhotoUpload(item.id, file);
+                                      e.target.value = "";
+                                    }}
+                                    data-testid={`input-photo-library-${item.id}`}
+                                  />
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      document
+                                        .getElementById(
+                                          `photo-camera-${item.id}`,
+                                        )
+                                        ?.click()
+                                    }
+                                    data-testid={`button-photo-camera-${item.id}`}
+                                  >
+                                    <Camera className="w-4 h-4 mr-2" />
+                                    Take photo
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      document
+                                        .getElementById(
+                                          `photo-library-${item.id}`,
+                                        )
+                                        ?.click()
+                                    }
+                                    data-testid={`button-photo-library-${item.id}`}
+                                  >
+                                    <Upload className="w-4 h-4 mr-2" />
+                                    Choose photo
+                                  </Button>
                                   {response.photoUrl && (
                                     <CheckCircle2 className="w-5 h-5 text-green-600" />
                                   )}
