@@ -7,13 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -418,11 +411,6 @@ export default function VehicleInspectionSettings() {
                           </Badge>
                         )}
                       </div>
-                      {template.vehicleType && (
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {template.vehicleType}
-                        </p>
-                      )}
                     </div>
                     <div className="flex gap-1">
                       <Button
@@ -580,26 +568,6 @@ export default function VehicleInspectionSettings() {
                 placeholder="e.g., Standard Vehicle Pre-Start"
                 data-testid="input-template-name"
               />
-            </div>
-            <div>
-              <Label htmlFor="vehicleType">Vehicle Type (optional)</Label>
-              <Select
-                value={editingTemplate.vehicleType || ""}
-                onValueChange={(value) =>
-                  setEditingTemplate({ ...editingTemplate, vehicleType: value })
-                }
-              >
-                <SelectTrigger data-testid="select-vehicle-type">
-                  <SelectValue placeholder="Select vehicle type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="truck">Truck</SelectItem>
-                  <SelectItem value="ute">Ute</SelectItem>
-                  <SelectItem value="trailer">Trailer</SelectItem>
-                  <SelectItem value="chipper">Chipper</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             <div>
               <Label htmlFor="description">Description (optional)</Label>

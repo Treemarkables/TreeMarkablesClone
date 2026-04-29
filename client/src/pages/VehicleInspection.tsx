@@ -82,12 +82,11 @@ export default function VehicleInspection() {
     ? (templatesData as any).data
     : [];
 
-  // Fetch default template for the selected vehicle's type (falls back to any default)
-  const selectedVehicleType = vehicles.find((v) => v.id === selectedVehicleId)?.type;
+  // Fetch the global default template (used when the vehicle doesn't have its
+  // own defaultInspectionTemplateId). Templates no longer carry a vehicleType,
+  // so there is exactly one default across the list.
   const { data: defaultTemplateData } = useQuery({
-    queryKey: selectedVehicleType
-      ? ["/api/inspection-templates/default", selectedVehicleType]
-      : ["/api/inspection-templates/default"],
+    queryKey: ["/api/inspection-templates/default"],
     enabled: !!selectedVehicleId && !selectedTemplateId,
   });
   const defaultTemplate = (defaultTemplateData as any)?.data || null;

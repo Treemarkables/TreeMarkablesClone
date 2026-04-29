@@ -4752,21 +4752,16 @@ class DatabaseStorage implements IStorage {
   }
 
   async setDefaultTemplate(id: string): Promise<InspectionTemplate> {
-    // Get the template to find its vehicle type
     const template = await this.getInspectionTemplate(id);
     if (!template) throw new Error("Template not found");
-    
-    // Unset any existing default for this vehicle type
-    if (template.vehicleType) {
-      await db.update(schema.inspectionTemplates)
-        .set({ isDefault: false })
-        .where(and(
-          eq(schema.inspectionTemplates.vehicleType, template.vehicleType),
-          eq(schema.inspectionTemplates.isDefault, true)
-        ));
-    }
-    
-    // Set this template as default
+
+    // Single global default — unset any other template currently flagged as
+    // default. (Templates used to be scoped by vehicleType, but the field has
+    // been retired so the default is one-per-list.)
+    await db.update(schema.inspectionTemplates)
+      .set({ isDefault: false })
+      .where(eq(schema.inspectionTemplates.isDefault, true));
+
     return await this.updateInspectionTemplate(id, { isDefault: true });
   }
 
