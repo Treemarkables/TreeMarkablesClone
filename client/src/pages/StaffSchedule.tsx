@@ -163,6 +163,24 @@ function getJobPrice(job: Job): number {
   return total > 0 ? total / 1.15 : 0;
 }
 
+// Number of NZ-local days a job spans (min 1). Used to split price + revenue
+// evenly across each day's block / KPI for multi-day jobs.
+function jobDayCount(job: Job): number {
+  if (!job.scheduledDate || !job.scheduledEndDate) return 1;
+  const startKey = nzDateStr(new Date(job.scheduledDate));
+  const endKey = nzDateStr(new Date(job.scheduledEndDate));
+  if (endKey <= startKey) return 1;
+  const startMs = new Date(startKey + 'T12:00:00Z').getTime();
+  const endMs = new Date(endKey + 'T12:00:00Z').getTime();
+  return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+}
+
+// Price attributed to a single day of the job (exc. GST). For single-day jobs
+// this is the full price; for multi-day jobs it's evenly split.
+function getJobPricePerDay(job: Job): number {
+  return getJobPrice(job) / jobDayCount(job);
+}
+
 function formatNZDShort(amount: number): string {
   if (amount === 0) return '$0';
   if (amount >= 1000) {
@@ -240,26 +258,10 @@ export default function StaffSchedule() {
   const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
   const revenueInfo = useMemo(() => {
     const revenueJobs = dayJobs.filter(j => j.status !== 'completed' && j.status !== 'unsuccessful');
-    const dayCount = (j: Job): number => {
-      if (!j.scheduledDate || !j.scheduledEndDate) return 1;
-      const startKey = nzDateStr(new Date(j.scheduledDate));
-      const endKey   = nzDateStr(new Date(j.scheduledEndDate));
-      if (endKey <= startKey) return 1;
-      const startMs = new Date(startKey + 'T12:00:00Z').getTime();
-      const endMs   = new Date(endKey   + 'T12:00:00Z').getTime();
-      return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
-    };
-    const scheduledRevenue = revenueJobs.reduce((sum, j) => {
-      const sub = parseFloat(j.subtotal || '0');
-      const incGst = parseFloat(j.totalIncludingGst || '0');
-      const total = parseFloat(j.totalAmount || '0');
-      const raw =
-        sub    > 0 ? sub
-      : incGst > 0 ? incGst / 1.15
-      : total  > 0 ? total  / 1.15
-      : 0;
-      return sum + raw / dayCount(j);
-    }, 0);
+    const scheduledRevenue = revenueJobs.reduce(
+      (sum, j) => sum + getJobPricePerDay(j),
+      0,
+    );
     return {
       scheduledRevenue,
       dailyTarget: DAILY_TARGET,
@@ -604,7 +606,7 @@ export default function StaffSchedule() {
                             </span>
                           )}
                           {(() => {
-                            const price = getJobPrice(job);
+                            const price = getJobPricePerDay(job);
                             return price > 0 ? (
                               <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: colors.border }}>
                                 {formatNZDShort(price)}
@@ -743,7 +745,7 @@ export default function StaffSchedule() {
                               </span>
                             )}
                             {(() => {
-                              const price = getJobPrice(job);
+                              const price = getJobPricePerDay(job);
                               return price > 0 ? (
                                 <span className="text-[10px] font-bold leading-tight block truncate" style={{ color: colors.border }}>
                                   {formatNZDShort(price)}

@@ -2384,11 +2384,13 @@ export function JobDiarySection({
                     parent?.metadata?.recipient ||
                     "";
 
-                  // All entries in chronological order so the thread reads
-                  // top-to-bottom like a chat. Each row is direction-aware
-                  // (incoming = purple, outgoing = blue) so it's obvious who
-                  // wrote what without scanning the labels.
-                  const threadEntries = parent ? [parent, ...replies] : replies;
+                  // Newest message first so the latest reply is visible without
+                  // scrolling through the whole thread. Each row is direction-
+                  // aware (incoming = purple, outgoing = blue) so it's obvious
+                  // who wrote what without scanning the labels.
+                  const threadEntries = (parent ? [parent, ...replies] : replies)
+                    .slice()
+                    .reverse();
                   const counterpartyAddr =
                     threadEntries
                       .map((e) => getEmailAddress(e))
@@ -2419,7 +2421,6 @@ export function JobDiarySection({
                           </span>
                         </div>
 
-                        {/* Chronological message list */}
                         <div className="px-3 py-3 space-y-3">
                           {threadEntries.map((msg) => {
                             const direction = getEmailDirection(msg);
@@ -2567,9 +2568,10 @@ export function JobDiarySection({
                 }
 
                 // SMS thread rendering — one consolidated card containing every
-                // SMS to/from the same phone number, in chronological order.
+                // SMS to/from the same phone number, newest first so the latest
+                // message is visible without scrolling.
                 if (group.type === "sms_thread") {
-                  const threadEntries = group.entries;
+                  const threadEntries = group.entries.slice().reverse();
                   const counterpartyPhone =
                     threadEntries
                       .map((e) => e.metadata?.phoneNumber)
@@ -2600,7 +2602,6 @@ export function JobDiarySection({
                           </span>
                         </div>
 
-                        {/* Chronological message list */}
                         <div className="px-3 py-3 space-y-3">
                           {threadEntries.map((msg) => {
                             const direction = getEmailDirection(msg);
