@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,12 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Camera, Loader2, X } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Camera, ImageIcon, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { compressImage } from "@/lib/imageCompression";
 
@@ -29,8 +34,38 @@ export function BeforeAfterCaptureModal({
   const [photo2, setPhoto2] = useState<File | null>(null);
   const [preview1, setPreview1] = useState<string | null>(null);
   const [preview2, setPreview2] = useState<string | null>(null);
+  const [showDiary, setShowDiary] = useState(false);
+  const [pickingFromDiary, setPickingFromDiary] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const { data: diaryData } = useQuery({
+    queryKey: ["/api/jobs", jobId, "diary"],
+    enabled: !!jobId && isOpen,
+  });
+  const { data: jobPhotosData } = useQuery({
+    queryKey: ["/api/jobs", jobId, "photos"],
+    enabled: !!jobId && isOpen,
+  });
+
+  const diaryPhotos: string[] = (() => {
+    const all: string[] = [];
+    const dd = diaryData as
+      | { success?: boolean; data?: Array<{ photos?: string[]; photoUrl?: string; tags?: string[] }> }
+      | undefined;
+    if (dd?.success && dd.data) {
+      dd.data.forEach((e) => {
+        // Skip composites - the existing before/after pair would just be re-paired
+        if (e.tags?.includes("composite")) return;
+        if (e.photos) all.push(...e.photos);
+        if (e.photoUrl && !e.photos?.includes(e.photoUrl)) all.push(e.photoUrl);
+      });
+    }
+    const jpd = jobPhotosData as { beforePhotos?: string[]; afterPhotos?: string[] } | null;
+    if (jpd?.beforePhotos) all.push(...jpd.beforePhotos);
+    if (jpd?.afterPhotos) all.push(...jpd.afterPhotos);
+    return Array.from(new Set(all.filter(Boolean)));
+  })();
 
   const generateMutation = useMutation({
     mutationFn: async () => {
@@ -138,11 +173,42 @@ export function BeforeAfterCaptureModal({
     }
   };
 
+  const handlePickFromDiary = async (url: string) => {
+    if (preview1 === url || preview2 === url) return;
+    setPickingFromDiary(true);
+    try {
+      const res = await fetch(url, { credentials: "include", cache: "no-store" });
+      if (!res.ok) throw new Error("Could not load photo");
+      const blob = await res.blob();
+      const filename = url.split("/").pop() || "diary-photo.jpg";
+      const file = new File([blob], filename, {
+        type: blob.type || "image/jpeg",
+      });
+      if (!photo1) {
+        setPhoto1(file);
+        setPreview1(url);
+      } else if (!photo2) {
+        setPhoto2(file);
+        setPreview2(url);
+        setShowDiary(false);
+      }
+    } catch (err) {
+      toast({
+        title: "Could not load diary photo",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setPickingFromDiary(false);
+    }
+  };
+
   const handleClose = () => {
     setPhoto1(null);
     setPhoto2(null);
     setPreview1(null);
     setPreview2(null);
+    setShowDiary(false);
     onClose();
   };
 
@@ -213,6 +279,57 @@ export function BeforeAfterCaptureModal({
             {renderSlot("photo1", preview1, "Photo 1")}
             {renderSlot("photo2", preview2, "Photo 2")}
           </div>
+
+          {diaryPhotos.length > 0 && (
+            <Popover open={showDiary} onOpenChange={setShowDiary}>
+              <PopoverTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full gap-1.5"
+                  disabled={pending || (!!photo1 && !!photo2)}
+                  data-testid="button-from-diary"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  Pick from job diary
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-3" align="center">
+                <p className="text-sm font-medium mb-2">
+                  {!photo1
+                    ? "Tap a photo to use as Photo 1"
+                    : "Tap a photo to use as Photo 2"}
+                </p>
+                <div className="grid grid-cols-3 gap-1 max-h-64 overflow-y-auto">
+                  {diaryPhotos.map((url) => {
+                    const used = preview1 === url || preview2 === url;
+                    return (
+                      <button
+                        type="button"
+                        key={url}
+                        onClick={() => handlePickFromDiary(url)}
+                        disabled={used || pickingFromDiary}
+                        className={`relative rounded overflow-hidden border-2 ${
+                          used
+                            ? "border-blue-500 opacity-50 cursor-not-allowed"
+                            : "border-transparent hover:border-blue-400"
+                        }`}
+                        style={{ paddingBottom: "100%" }}
+                        data-testid={`button-diary-photo-${url}`}
+                      >
+                        <img
+                          src={url}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+              </PopoverContent>
+            </Popover>
+          )}
 
           <div className="flex justify-end gap-2 pt-1">
             <Button

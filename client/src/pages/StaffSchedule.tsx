@@ -236,17 +236,29 @@ export default function StaffSchedule() {
 
   // Daily revenue tracker — computed client-side from dayJobs, mirroring the
   // dispatch board's CalendarGrid logic so the two views always agree.
+  // Multi-day jobs are split evenly across the NZ-local days they span.
   const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
   const revenueInfo = useMemo(() => {
     const revenueJobs = dayJobs.filter(j => j.status !== 'completed' && j.status !== 'unsuccessful');
+    const dayCount = (j: Job): number => {
+      if (!j.scheduledDate || !j.scheduledEndDate) return 1;
+      const startKey = nzDateStr(new Date(j.scheduledDate));
+      const endKey   = nzDateStr(new Date(j.scheduledEndDate));
+      if (endKey <= startKey) return 1;
+      const startMs = new Date(startKey + 'T12:00:00Z').getTime();
+      const endMs   = new Date(endKey   + 'T12:00:00Z').getTime();
+      return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
+    };
     const scheduledRevenue = revenueJobs.reduce((sum, j) => {
       const sub = parseFloat(j.subtotal || '0');
-      if (sub > 0) return sum + sub;
       const incGst = parseFloat(j.totalIncludingGst || '0');
-      if (incGst > 0) return sum + incGst / 1.15;
       const total = parseFloat(j.totalAmount || '0');
-      if (total > 0) return sum + total / 1.15;
-      return sum;
+      const raw =
+        sub    > 0 ? sub
+      : incGst > 0 ? incGst / 1.15
+      : total  > 0 ? total  / 1.15
+      : 0;
+      return sum + raw / dayCount(j);
     }, 0);
     return {
       scheduledRevenue,

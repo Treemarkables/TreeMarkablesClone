@@ -44,7 +44,6 @@ async function processSMSReplies() {
     const replies = await retrieveSMSReplies();
     
     if (!replies || replies.length === 0) {
-      console.log('📱 No new SMS replies');
       return;
     }
 

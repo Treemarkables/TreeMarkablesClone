@@ -4648,6 +4648,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       // mark it AT TIME ZONE 'UTC' (to get a timestamptz) and THEN convert to NZ local. Doing
       // a single AT TIME ZONE 'Pacific/Auckland' would (incorrectly) interpret the naive value
       // as NZ local — shifting every job by 12h and hiding them from the calendar.
+      // Multi-day jobs (scheduled_end_date set) must surface on every NZ day in their span,
+      // not just day 1 — otherwise day 2+ shows no job in the staff schedule and the revenue
+      // tracker double-counts on day 1. COALESCE handles single-day jobs where end is null.
       const result = await db.execute(
         sql`SELECT jobs.*, (
               SELECT MAX(created_at)
@@ -4662,7 +4665,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             ) AS customer_reply_received_at
             FROM jobs
             WHERE scheduled_date IS NOT NULL
-              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') = ${date}::date
+              AND DATE((scheduled_date AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') <= ${date}::date
+              AND DATE((COALESCE(scheduled_end_date, scheduled_date) AT TIME ZONE 'UTC') AT TIME ZONE 'Pacific/Auckland') >= ${date}::date
               AND status NOT IN ('archived', 'unsuccessful')
             ORDER BY scheduled_date ASC`
       );

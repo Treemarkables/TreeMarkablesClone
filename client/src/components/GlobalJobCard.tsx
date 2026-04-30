@@ -3052,14 +3052,16 @@ export function GlobalJobCard({
   };
 
   const dialPhone = (phone: string) => {
-    const url = `tel:${phone.replace(/\s/g, "")}`;
-    // '_system' routes through Capacitor's bridge on native (iOS/Android)
-    // so tel: URLs reach the system dialer instead of being swallowed by
-    // the WebView. On web it falls through to a normal navigation.
-    const opened = window.open(url, "_system");
-    if (!opened) {
-      window.location.href = url;
-    }
+    // Anchor click is the most reliable cross-platform tel: trigger:
+    // Capacitor's WebView and mobile browsers both delegate tel: anchor
+    // clicks to the OS dialer. window.open('tel:', '_system') silently
+    // fails on WKWebView without a Cordova InAppBrowser plugin.
+    const a = document.createElement("a");
+    a.href = `tel:${phone.replace(/\s/g, "")}`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleCallClick = () => {

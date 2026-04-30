@@ -182,8 +182,9 @@ export async function retrieveSMSReplies(): Promise<SMSReply[]> {
   
   let response;
   let lastError;
+  let lastStatus = 0;
   let usedEndpoint = '';
-  
+
   for (const endpoint of endpoints) {
     try {
       response = await fetch(endpoint, {
@@ -194,26 +195,28 @@ export async function retrieveSMSReplies(): Promise<SMSReply[]> {
         },
         body: JSON.stringify({}) // Empty body to get all new replies
       });
-      
+
       if (response.ok) {
         usedEndpoint = endpoint;
         break; // Success, exit loop
-      } else {
-        console.error(`📱 SMS Replies API error at ${endpoint}: ${response.status} ${response.statusText}`);
       }
+      // Per-endpoint failures are normal fallback flow — don't log here.
+      // The caller (smsReplyPoller) logs once if every endpoint fails.
+      lastStatus = response.status;
     } catch (error) {
-      console.error(`📱 SMS Replies connection error at ${endpoint}:`, error);
       lastError = error;
       // Try next endpoint
     }
   }
-  
+
   if (!response || !response.ok) {
-    throw lastError || new Error('Failed to connect to SMS Everyone Replies API');
+    throw lastError || new Error(`SMS Everyone Replies API: ${lastStatus || 'connection failed'}`);
   }
 
   const result: SMSRepliesResponse = await response.json();
-  console.log(`📱 SMS Replies API response from ${usedEndpoint}:`, JSON.stringify(result, null, 2));
-  
+  if (result.Messages && result.Messages.length > 0) {
+    console.log(`📱 SMS Replies API response from ${usedEndpoint}:`, JSON.stringify(result, null, 2));
+  }
+
   return result.Messages || [];
 }

@@ -101,6 +101,7 @@ const ADDITIONAL_VEHICLE_COST_ESTIMATE = 54000;
 export default function ProfitabilityCalculator() {
   const [billableStaff, setBillableStaff] = useState(6);
   const [salary, setSalary] = useState(67000);
+  const [ownerWage, setOwnerWage] = useState(90000);
   const [fixedCosts, setFixedCosts] = useState(234000);
   const [targetMargin, setTargetMargin] = useState(20);
   const [publicHolidays, setPublicHolidays] = useState(11);
@@ -113,7 +114,7 @@ export default function ProfitabilityCalculator() {
 
   const variablePerPerson = salary + VARIABLE_PER_PERSON_EX_SALARY;
   const totalVariable = variablePerPerson * billableStaff;
-  const totalCosts = fixedCosts + totalVariable;
+  const totalCosts = fixedCosts + totalVariable + ownerWage;
 
   const marginFrac = targetMargin / 100;
   const targetRevenue = marginFrac < 1 ? totalCosts / (1 - marginFrac) : 0;
@@ -165,6 +166,7 @@ export default function ProfitabilityCalculator() {
           <div style={{ fontSize: "0.72rem", textTransform: "uppercase", letterSpacing: "0.12em", color: "#444", marginBottom: "0.8rem" }}>Team &amp; Economics</div>
           <Slider label="Billable Staff" value={billableStaff} min={5} max={10} step={1} onChange={setBillableStaff} format={(v) => `${v} people`} />
           <Slider label="Average Salary / Person" value={salary} min={55000} max={90000} step={1000} onChange={setSalary} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
+          <Slider label="Owner's Wage (excl. staff)" value={ownerWage} min={0} max={200000} step={5000} onChange={setOwnerWage} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
           <Slider label="Fixed Base Costs" value={fixedCosts} min={150000} max={350000} step={1000} onChange={setFixedCosts} format={(v) => `$${(v / 1000).toFixed(0)}k`} />
           <Slider label="Target Profit Margin" value={targetMargin} min={0} max={40} step={1} onChange={setTargetMargin} format={(v) => `${v}%`} />
         </div>
@@ -216,7 +218,7 @@ export default function ProfitabilityCalculator() {
           <StatCard
             label="Total Costs"
             formatted={fmt(totalCosts)}
-            sub={`${fmt(fixedCosts)} fixed + ${fmt(totalVariable)} variable`}
+            sub={`${fmt(fixedCosts)} fixed + ${fmt(totalVariable)} variable + ${fmt(ownerWage)} owner`}
           />
           <StatCard
             label="Target Revenue"
@@ -255,6 +257,7 @@ export default function ProfitabilityCalculator() {
             ["Fixed base costs", fmt(fixedCosts)],
             [`Salary × ${billableStaff}`, fmt(salary * billableStaff)],
             [`Other variable × ${billableStaff}`, fmt(VARIABLE_PER_PERSON_EX_SALARY * billableStaff)],
+            ["Owner's wage", fmt(ownerWage)],
             ["Total costs", fmt(totalCosts)],
             ["Target revenue", fmt(targetRevenue)],
             ["Profit", fmt(profit)],

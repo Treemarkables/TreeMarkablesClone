@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Upload,
 } from "lucide-react";
+import { Link } from "wouter";
 import { useAuth } from "@/contexts/AuthContext";
 import type {
   SelectInspectionTemplate,
@@ -424,6 +425,17 @@ export default function VehicleInspection() {
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Don't see your vehicle?{" "}
+                <Link
+                  href="/equipment"
+                  className="text-primary underline underline-offset-2"
+                  data-testid="link-add-vehicle"
+                >
+                  Add it in Equipment
+                </Link>{" "}
+                with "Requires Pre-Start Inspection" turned on.
+              </p>
             </div>
 
             {selectedVehicleId && (
