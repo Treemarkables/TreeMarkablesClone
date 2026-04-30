@@ -1914,45 +1914,52 @@ export function ProposalBuilderV2({
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-hidden flex flex-col p-0 gap-0 w-full">
           {/* ── Toolbar ── */}
-          <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+          <div className="flex-shrink-0 flex items-center justify-between gap-2 px-2 sm:px-4 py-2 border-b bg-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
             <>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <button
                 type="button"
                 onClick={handleClose}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-gray-700 rounded-md shadow-sm hover:bg-gray-800 transition-colors"
                 aria-label="Back to job card"
+                title="Back"
               >
                 <ArrowLeft className="w-4 h-4" />
-                <span>Back</span>
+                <span className="hidden sm:inline">Back</span>
               </button>
               <button
                 type="button"
                 onClick={() => { initEmailForm(); setShowEmailDialog(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 transition-colors"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-blue-600 rounded-md shadow-sm hover:bg-blue-700 transition-colors"
+                aria-label="Email proposal"
+                title="Email"
               >
-                <Mail className="w-4 h-4" /> Email
+                <Mail className="w-4 h-4" />
+                <span className="hidden sm:inline">Email</span>
               </button>
               <button
                 type="button"
                 onClick={() => { initSmsForm(); setShowSmsDialog(true); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md shadow-sm hover:bg-green-700 transition-colors"
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-green-600 rounded-md shadow-sm hover:bg-green-700 transition-colors"
+                aria-label="SMS proposal"
+                title="SMS"
               >
-                <MessageSquare className="w-4 h-4" /> SMS
+                <MessageSquare className="w-4 h-4" />
+                <span className="hidden sm:inline">SMS</span>
               </button>
               {/* Preview button removed — the customer view now lives inline
                   below the editor (scroll down to see it), matching the
                   invoice modal's live-preview pattern. */}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
               {autoSaveStatus === "saving" && (
-                <div className="flex items-center gap-1 text-xs text-blue-500">
+                <div className="hidden sm:flex items-center gap-1 text-xs text-blue-500">
                   <div className="w-2.5 h-2.5 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
                   Saving
                 </div>
               )}
               {autoSaveStatus === "saved" && lastSavedAt && (
-                <div className="flex items-center gap-1 text-xs text-green-600">
+                <div className="hidden sm:flex items-center gap-1 text-xs text-green-600">
                   <Check className="w-3 h-3" /> Saved
                 </div>
               )}
@@ -1960,7 +1967,7 @@ export function ProposalBuilderV2({
                 <PopoverTrigger asChild>
                   <button
                     type="button"
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm text-gray-700 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors"
                   >
                     Settings <ChevronDown className="w-3.5 h-3.5" />
                   </button>

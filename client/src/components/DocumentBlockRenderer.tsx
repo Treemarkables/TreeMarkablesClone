@@ -158,25 +158,36 @@ export function renderDocumentBlock(
       const textPrimary = isLight ? '#000000' : '#ffffff';
       const textSecondary = isLight ? '#4b5563' : '#d1d5db';
       const logoAlign = cfg.logoAlignment || template.logoAlignment || 'left';
+      const logoMaxH = template.logoSize ?? 40;
       return (
-        <div key={block.id} className="mb-8 rounded-sm overflow-hidden" style={{ backgroundColor: hdrBg, height: 80 }}>
-          <div className="h-full px-4 flex items-center">
+        <div key={block.id} className="mb-8 rounded-sm overflow-hidden" style={{ backgroundColor: hdrBg, minHeight: 80 }}>
+          <div className="px-4 py-2 flex items-center min-h-20">
             {logoAlign === 'center' ? (
-              <div className="w-full flex items-center justify-center gap-3 text-center">
-                <img src={template.logoUrl || '/treemarkables-logo.webp'} alt={co.name} style={{ height: `${template.logoSize ?? 40}px` }} className="w-auto object-contain flex-shrink-0" />
-                <div>
-                  <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{ctx.invoiceNumber}</h1>
-                  {cfg.showCompanyName && <p className="text-xs mt-1" style={{ color: textSecondary }}>{co.name}</p>}
+              <div className="w-full flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center">
+                <img
+                  src={template.logoUrl || '/treemarkables-logo.webp'}
+                  alt={co.name}
+                  style={{ maxHeight: `${logoMaxH}px` }}
+                  className="w-auto max-w-full h-auto object-contain flex-shrink-0"
+                />
+                <div className="min-w-0">
+                  <h1 className="text-base font-bold break-words" style={{ color: textPrimary }}>Invoice #{ctx.invoiceNumber}</h1>
+                  {cfg.showCompanyName && <p className="text-xs mt-1 break-words" style={{ color: textSecondary }}>{co.name}</p>}
                 </div>
               </div>
             ) : (
               <div className={`w-full flex items-center justify-between gap-3 ${logoAlign === 'right' ? 'flex-row-reverse' : 'flex-row'}`}>
-                <div className="flex-shrink-0">
-                  <img src={template.logoUrl || '/treemarkables-logo.webp'} alt={co.name} style={{ height: `${template.logoSize ?? 40}px` }} className="w-auto object-contain" />
+                <div className="flex-shrink min-w-0">
+                  <img
+                    src={template.logoUrl || '/treemarkables-logo.webp'}
+                    alt={co.name}
+                    style={{ maxHeight: `${logoMaxH}px` }}
+                    className="w-auto max-w-full h-auto object-contain"
+                  />
                 </div>
-                <div className={`flex-1 ${logoAlign === 'right' ? 'text-left' : 'text-right'}`}>
-                  <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{ctx.invoiceNumber}</h1>
-                  {cfg.showCompanyName && <p className="text-xs mt-1" style={{ color: textSecondary }}>{co.name}</p>}
+                <div className={`flex-1 min-w-0 ${logoAlign === 'right' ? 'text-left' : 'text-right'}`}>
+                  <h1 className="text-base font-bold break-words" style={{ color: textPrimary, wordBreak: 'break-word' }}>Invoice #{ctx.invoiceNumber}</h1>
+                  {cfg.showCompanyName && <p className="text-xs mt-1 break-words" style={{ color: textSecondary, wordBreak: 'break-word' }}>{co.name}</p>}
                 </div>
               </div>
             )}
