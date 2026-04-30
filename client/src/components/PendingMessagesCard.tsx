@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Loader2, Pencil, Send, X } from "lucide-react";
+import { AlertCircle, Loader2, Mail, MessageSquare, Pencil, Send, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { PendingOutboundMessage } from "@shared/schema";
@@ -90,6 +90,19 @@ export function PendingMessagesCard({ jobId }: PendingMessagesCardProps) {
     },
   });
 
+  const channelMutation = useMutation({
+    mutationFn: async ({ id, channel }: { id: string; channel: "sms" | "email" }) => {
+      const res = await apiRequest("PATCH", `/api/pending-messages/${id}`, { channel });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || "Failed to switch channel");
+      return json;
+    },
+    onSuccess: () => invalidateAll(),
+    onError: (err: Error) => {
+      toast({ title: "Could not switch channel", description: err.message, variant: "destructive" });
+    },
+  });
+
   if (isLoading || pending.length === 0) return null;
 
   return (
@@ -105,9 +118,48 @@ export function PendingMessagesCard({ jobId }: PendingMessagesCardProps) {
             <span className="text-xs font-semibold text-orange-900 dark:text-orange-200">
               Draft awaiting your approval
             </span>
-            <Badge variant="secondary" className="text-[10px] capitalize">
-              {msg.channel}
-            </Badge>
+            {(() => {
+              const canSms = !!msg.recipientPhone;
+              const canEmail = !!msg.recipientEmail;
+              const switching = channelMutation.isPending;
+              if (canSms && canEmail) {
+                return (
+                  <div className="inline-flex rounded-md border border-input overflow-hidden">
+                    <button
+                      type="button"
+                      disabled={switching || msg.channel === "sms"}
+                      onClick={() => channelMutation.mutate({ id: msg.id, channel: "sms" })}
+                      className={`px-2 py-0.5 text-[10px] font-medium inline-flex items-center gap-1 ${
+                        msg.channel === "sms"
+                          ? "bg-orange-200/70 dark:bg-orange-900/40 text-orange-900 dark:text-orange-100"
+                          : "bg-background text-muted-foreground"
+                      } disabled:opacity-100`}
+                      data-testid={`pending-message-channel-sms-${msg.id}`}
+                    >
+                      <MessageSquare className="w-3 h-3" /> SMS
+                    </button>
+                    <button
+                      type="button"
+                      disabled={switching || msg.channel === "email"}
+                      onClick={() => channelMutation.mutate({ id: msg.id, channel: "email" })}
+                      className={`px-2 py-0.5 text-[10px] font-medium inline-flex items-center gap-1 border-l border-input ${
+                        msg.channel === "email"
+                          ? "bg-orange-200/70 dark:bg-orange-900/40 text-orange-900 dark:text-orange-100"
+                          : "bg-background text-muted-foreground"
+                      } disabled:opacity-100`}
+                      data-testid={`pending-message-channel-email-${msg.id}`}
+                    >
+                      <Mail className="w-3 h-3" /> Email
+                    </button>
+                  </div>
+                );
+              }
+              return (
+                <Badge variant="secondary" className="text-[10px] capitalize">
+                  {msg.channel}
+                </Badge>
+              );
+            })()}
             {msg.recipientName && (
               <span className="text-xs text-muted-foreground">to {msg.recipientName}</span>
             )}

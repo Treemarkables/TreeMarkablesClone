@@ -2217,11 +2217,14 @@ export function JobDiarySection({
           </div>
         </div>
 
-        {/* Confirmation-reply card: hoisted above the timeline so it shows
-            for every confirmed job (including manual ticks), not just
-            auto-detected email/SMS confirmations. Hides once a
+        {/* Confirmation-reply card: only shown when the confirmation came in
+            via SMS/email (i.e. there's an actual customer message to
+            acknowledge). Manual ticks have no incoming message, so prompting
+            an "acknowledgement" is misleading. Hides once a
             'confirmation-reply-sent' diary entry exists. */}
         {jobData?.customerConfirmed &&
+          (jobData?.customerConfirmationMethod === "sms" ||
+            jobData?.customerConfirmationMethod === "email") &&
           !confirmationCardDismissed &&
           !diaryEntries.some((e: DiaryEntry) =>
             e.tags?.includes("confirmation-reply-sent"),

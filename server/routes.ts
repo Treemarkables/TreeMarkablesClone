@@ -20226,11 +20226,27 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const existing = await storage.getPendingOutboundMessage(req.params.id);
       if (!existing) return res.status(404).json({ success: false, message: 'Message not found' });
       if (existing.status !== 'pending') return res.status(400).json({ success: false, message: 'Only pending messages can be edited' });
-      const { message } = req.body;
-      if (!message || !message.trim()) {
-        return res.status(400).json({ success: false, message: 'Message cannot be blank' });
+      const { message, channel } = req.body;
+      const updates: Partial<typeof existing> = {};
+      if (typeof message === 'string') {
+        if (!message.trim()) {
+          return res.status(400).json({ success: false, message: 'Message cannot be blank' });
+        }
+        updates.message = message.trim();
       }
-      const updated = await storage.updatePendingOutboundMessage(req.params.id, { message: message.trim() });
+      if (channel === 'sms' || channel === 'email') {
+        if (channel === 'sms' && !existing.recipientPhone) {
+          return res.status(400).json({ success: false, message: 'Cannot switch to SMS — no phone number on file.' });
+        }
+        if (channel === 'email' && !existing.recipientEmail) {
+          return res.status(400).json({ success: false, message: 'Cannot switch to email — no email address on file.' });
+        }
+        updates.channel = channel;
+      }
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ success: false, message: 'Nothing to update' });
+      }
+      const updated = await storage.updatePendingOutboundMessage(req.params.id, updates);
       res.json({ success: true, data: updated });
     } catch (error) {
       console.error('Error updating pending message:', error);

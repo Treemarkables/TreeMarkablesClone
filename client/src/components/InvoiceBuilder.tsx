@@ -1256,7 +1256,7 @@ export function InvoiceBuilder({
     <>
       <Dialog open={isOpen} onOpenChange={(open) => { if (!open) handleClose(); }}>
         <DialogContent
-          className="max-w-[min(calc(100vw-1rem),42rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
+          className="max-w-[min(calc(100vw-1rem),56rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden w-full p-4 sm:p-6"
           onEscapeKeyDown={(e) => e.stopPropagation()}
         >
           <DialogHeader>
@@ -1933,7 +1933,7 @@ export function InvoiceBuilder({
               </div>
 
               {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row gap-3 justify-between">
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-between">
                 {/* Delete button - only show when editing existing invoice */}
                 {existingInvoiceId && createdInvoice && (
                   <Button
@@ -1948,7 +1948,7 @@ export function InvoiceBuilder({
                   </Button>
                 )}
 
-                <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto w-full sm:w-auto">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:ml-auto w-full sm:w-auto sm:justify-end">
                   <Button
                     type="button"
                     variant="outline"
