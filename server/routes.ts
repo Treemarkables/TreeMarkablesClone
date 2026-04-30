@@ -3975,12 +3975,44 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       await storage.createNotification(notificationData);
 
+      // Create a pending holding-message draft so the suggested reply shows up
+      // on the job diary, mirroring the proposal-accept flow.
+      try {
+        const firstName = customer?.name?.split(' ')[0] || 'there';
+        const phone = customer?.mobile || customer?.phone;
+        const email = customer?.email;
+        const channel: 'sms' | 'email' = phone ? 'sms' : (email ? 'email' : 'sms');
+        const holdingMsg = `Hey ${firstName}, thanks for accepting our quote. We'll be in touch within 24 hours to get your job scheduled.`;
+        const pendingMsg = await storage.createPendingOutboundMessage({
+          jobId: job.id,
+          customerId: quote.customerId || undefined,
+          recipientName: customer?.name || undefined,
+          recipientPhone: phone || undefined,
+          recipientEmail: email || undefined,
+          message: holdingMsg,
+          channel,
+          status: 'pending',
+        });
+        await storage.createNotification({
+          title: 'Holding message awaiting approval',
+          message: `A holding message to ${customer?.name || 'the customer'} is ready to send — tap to review and approve.`,
+          type: 'holding_message_pending',
+          priority: 'high',
+          isRead: false,
+          jobId: job.id,
+          customerId: quote.customerId || undefined,
+          metadata: { pendingMessageId: pendingMsg.id },
+        });
+      } catch (holdErr) {
+        console.error('Failed to create holding-message draft after quote acceptance:', holdErr);
+      }
+
       console.log(`✅ Quote ${quote.quoteNumber} accepted and converted to work order ${jobNumber}`);
 
-      res.json({ 
-        success: true, 
-        data: { 
-          quote: updatedQuote, 
+      res.json({
+        success: true,
+        data: {
+          quote: updatedQuote,
           workOrder: job,
           message: 'Quote accepted successfully and work order created'
         }
@@ -17055,6 +17087,44 @@ Transcription: ${transcriptText}`;
                 });
               } catch (notifErr) {
                 console.error('Failed to create quote_accepted notification:', notifErr);
+              }
+
+              // Create a pending holding-message draft for the owner to approve.
+              // Mirrors the proposal-accept flow so quote acceptances also surface a
+              // suggested reply on the job diary instead of an empty diary.
+              try {
+                const customer = targetJob.customerId
+                  ? await storage.getCustomer(targetJob.customerId)
+                  : null;
+                const firstName = customer?.name?.split(' ')[0] || 'there';
+                const phone = customer?.mobile || customer?.phone;
+                const email = customer?.email;
+                const channel: 'sms' | 'email' = phone ? 'sms' : (email ? 'email' : 'sms');
+                const holdingMsg = `Hey ${firstName}, thanks for accepting our quote. We'll be in touch within 24 hours to get your job scheduled.`;
+                const pendingMsg = await storage.createPendingOutboundMessage({
+                  jobId: targetJob.id,
+                  customerId: targetJob.customerId || undefined,
+                  proposalId: quoteProposal.id,
+                  proposalNumber: quoteProposal.proposalNumber,
+                  recipientName: customer?.name || undefined,
+                  recipientPhone: phone || undefined,
+                  recipientEmail: email || undefined,
+                  message: holdingMsg,
+                  channel,
+                  status: 'pending',
+                });
+                await storage.createNotification({
+                  title: 'Holding message awaiting approval',
+                  message: `A holding message to ${customer?.name || 'the customer'} is ready to send — tap to review and approve.`,
+                  type: 'holding_message_pending',
+                  priority: 'high',
+                  isRead: false,
+                  jobId: targetJob.id,
+                  customerId: targetJob.customerId || undefined,
+                  metadata: { pendingMessageId: pendingMsg.id },
+                });
+              } catch (holdErr) {
+                console.error('Failed to create holding-message draft after quote acceptance:', holdErr);
               }
               console.log(`✅ Marked quote ${acceptedNumber} as accepted for job ${targetJob.jobNumber}`);
             }

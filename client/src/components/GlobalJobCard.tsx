@@ -3706,14 +3706,9 @@ The Treemarkables Team`;
             ? substitute(proposalTemplate.subject) ||
               `Proposed booking: ${dateDisplay} at ${timeDisplay}`
             : `Proposed booking: ${dateDisplay} at ${timeDisplay}`;
-          const baseProposalBody = proposalTemplate
+          const proposalBody = proposalTemplate
             ? substitute(proposalTemplate.htmlContent) || fallbackBody
             : fallbackBody;
-          // Appended reply instruction lets the inbound email parser
-          // (server/routes.ts, matches /I confirm booking J-\d+/) auto-flip
-          // customerConfirmed + log a diary entry.
-          const confirmInstruction = `<p style="color: #6b7280; font-size: 12px; margin-top: 16px;">To confirm this date, reply with: <strong>I confirm booking J-${editingJob.jobNumber}</strong></p>`;
-          const proposalBody = `${baseProposalBody}${confirmInstruction}`;
 
           if (!proposalEmail) {
             toast({
