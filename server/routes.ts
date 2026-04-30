@@ -4007,6 +4007,29 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         console.error('Failed to create holding-message draft after quote acceptance:', holdErr);
       }
 
+      if (job?.id) {
+        try {
+          const acceptanceContent = `${customer?.name || 'Customer'} accepted quote ${quote.quoteNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(quoteAmount)}. Job converted to work order.`;
+          await storage.createJobDiaryEntry({
+            jobId: job.id,
+            entryType: 'system',
+            title: `Quote Accepted: ${quote.quoteNumber}`,
+            description: acceptanceContent,
+            content: acceptanceContent,
+            authorName: customer?.name || 'Customer',
+            authorRole: 'customer',
+            metadata: {
+              quoteId: quote.id,
+              quoteNumber: quote.quoteNumber,
+              totalAmount: quote.amount,
+              eventType: 'quote_accepted'
+            }
+          });
+        } catch (diaryErr) {
+          console.error('Failed to log quote-accepted diary entry:', diaryErr);
+        }
+      }
+
       console.log(`✅ Quote ${quote.quoteNumber} accepted and converted to work order ${jobNumber}`);
 
       res.json({

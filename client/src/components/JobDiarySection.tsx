@@ -1389,173 +1389,18 @@ export function JobDiarySection({
     replies?: DiaryEntry[];
   }
 
+  // Flat reverse-chronological list — every entry is its own card, latest
+  // always at the top. Email/SMS thread grouping and consecutive-photo
+  // collapsing were removed because the user prefers seeing the most recent
+  // activity without scrolling through a thread.
   const groupedEntries = React.useMemo(() => {
-    const groups: GroupedEntry[] = [];
-    let currentPhotoGroup: DiaryEntry[] = [];
-    // Email threading: group every email entry by counterparty address into
-    // a single thread for this job. Earlier this only paired received emails
-    // with a *preceding* sent email — which broke when the customer started
-    // the conversation (their inbound email + our reply rendered as two
-    // separate cards). Address-keyed grouping handles both directions.
-    const emailThreadByAddr = new Map<string, GroupedEntry>();
-    const smsThreadByPhone = new Map<string, GroupedEntry>();
-    // Stable address key: an empty/missing address shouldn't collide entries
-    // from unrelated correspondents into one thread, so each missing-address
-    // entry gets its own bucket.
-    let missingAddrCounter = 0;
-    let missingPhoneCounter = 0;
+    const groups: GroupedEntry[] = diaryEntries.map((entry) => ({
+      type: "single",
+      entries: [entry],
+      timestamp: entry.timestamp,
+      author: entry.author,
+    }));
 
-    const flushPhotoGroup = () => {
-      if (currentPhotoGroup.length > 0) {
-        groups.push({
-          type: "photo_group",
-          entries: [...currentPhotoGroup],
-          timestamp: currentPhotoGroup[0].timestamp,
-          author: currentPhotoGroup[0].author,
-        });
-        currentPhotoGroup = [];
-      }
-    };
-
-    diaryEntries.forEach((entry, index) => {
-      const isPhotoEntry =
-        entry.type === "photo" ||
-        (entry.photoUrl && entry.content.toLowerCase().includes("photo"));
-
-      if (isPhotoEntry) {
-        currentPhotoGroup.push(entry);
-
-        // Check if next entry is also a photo (within 5 minutes)
-        const nextEntry = diaryEntries[index + 1];
-        const nextIsPhoto =
-          nextEntry &&
-          (nextEntry.type === "photo" ||
-            (nextEntry.photoUrl &&
-              nextEntry.content.toLowerCase().includes("photo")));
-        const withinTimeWindow =
-          nextEntry &&
-          Math.abs(
-            new Date(entry.timestamp).getTime() -
-              new Date(nextEntry.timestamp).getTime(),
-          ) <
-            5 * 60 * 1000;
-
-        if (!nextIsPhoto || !withinTimeWindow) {
-          flushPhotoGroup();
-        }
-        return;
-      }
-
-      // Email threading — group every email by counterparty address, regardless
-      // of direction. SMS keeps the existing per-entry rendering.
-      if (entry.type === "email") {
-        flushPhotoGroup();
-        const addr = getEmailAddress(entry);
-        const key = addr || `__missing_${missingAddrCounter++}__`;
-        const existing = emailThreadByAddr.get(key);
-        if (existing) {
-          existing.entries.push(entry);
-        } else {
-          // Reserve a thread group slot in `groups`. We finalise its parent /
-          // replies / timestamp / author after the walk so we can sort by
-          // chronological order without re-traversing.
-          const newGroup: GroupedEntry = {
-            type: "email_thread",
-            entries: [entry],
-            timestamp: entry.timestamp,
-            author: entry.author,
-            parent: undefined,
-            replies: [],
-          };
-          emailThreadByAddr.set(key, newGroup);
-          groups.push(newGroup);
-        }
-        return;
-      }
-
-      // SMS threading — group every SMS by counterparty phone number, regardless
-      // of direction, so a back-and-forth conversation reads as one thread
-      // instead of scattered single cards.
-      if (entry.type === "sms") {
-        flushPhotoGroup();
-        const phone = getPhoneNumber(entry);
-        const key = phone || `__missing_phone_${missingPhoneCounter++}__`;
-        const existing = smsThreadByPhone.get(key);
-        if (existing) {
-          existing.entries.push(entry);
-        } else {
-          const newGroup: GroupedEntry = {
-            type: "sms_thread",
-            entries: [entry],
-            timestamp: entry.timestamp,
-            author: entry.author,
-            parent: undefined,
-            replies: [],
-          };
-          smsThreadByPhone.set(key, newGroup);
-          groups.push(newGroup);
-        }
-        return;
-      }
-
-      // Non-email, non-photo entry: flush photo group, keep pendingReplies
-      // (they may still be matched to an even older sent email further down
-      // in the timeline). Standalone single entry.
-      flushPhotoGroup();
-      groups.push({
-        type: "single",
-        entries: [entry],
-        timestamp: entry.timestamp,
-        author: entry.author,
-      });
-    });
-
-    // Flush any remaining photo group
-    flushPhotoGroup();
-
-    // Finalise each email thread now that we've collected every entry for it.
-    // Sort entries chronologically (oldest first) so the thread reads top-to-
-    // bottom in conversation order. Parent = oldest entry; replies = the rest.
-    // Group timestamp uses latest activity so a fresh reply pulls the whole
-    // thread to the top of the diary in the sort below.
-    for (const group of emailThreadByAddr.values()) {
-      group.entries.sort((a, b) => {
-        const ta = new Date(a.timestamp).getTime();
-        const tb = new Date(b.timestamp).getTime();
-        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
-      });
-      const [parent, ...rest] = group.entries;
-      group.parent = parent;
-      group.replies = rest;
-      group.author = parent?.author ?? group.author;
-      const latest = group.entries.reduce((acc, e) => {
-        const t = new Date(e.timestamp).getTime();
-        return isNaN(t) ? acc : Math.max(acc, t);
-      }, 0);
-      if (latest > 0) group.timestamp = new Date(latest).toISOString();
-    }
-
-    // Same finalisation pass for SMS threads.
-    for (const group of smsThreadByPhone.values()) {
-      group.entries.sort((a, b) => {
-        const ta = new Date(a.timestamp).getTime();
-        const tb = new Date(b.timestamp).getTime();
-        return (isNaN(ta) ? 0 : ta) - (isNaN(tb) ? 0 : tb);
-      });
-      const [parent, ...rest] = group.entries;
-      group.parent = parent;
-      group.replies = rest;
-      group.author = parent?.author ?? group.author;
-      const latest = group.entries.reduce((acc, e) => {
-        const t = new Date(e.timestamp).getTime();
-        return isNaN(t) ? acc : Math.max(acc, t);
-      }, 0);
-      if (latest > 0) group.timestamp = new Date(latest).toISOString();
-    }
-
-    // Re-sort all groups by their effective timestamp so threads with a fresh
-    // reply float to the top of the diary instead of staying anchored at the
-    // original sent email's date.
     groups.sort((a, b) => {
       const ta = new Date(a.timestamp).getTime();
       const tb = new Date(b.timestamp).getTime();

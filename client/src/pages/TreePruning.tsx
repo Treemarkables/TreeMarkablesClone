@@ -4,71 +4,13 @@ import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
-import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
+import { Shield, Award, Clock, CheckCircle, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import InquiryForm from "@/components/InquiryForm";
+import GoogleReviewsGrid from "@/components/GoogleReviewsGrid";
 const heroImage = "/tree-pruning.jpg";
-
-interface Review {
-  id: string;
-  name: string;
-  location: string;
-  rating: number;
-  comment: string;
-  service: string;
-}
-
-const reviews: Review[] = [
-  {
-    id: "1",
-    name: "Margaret Harrison",
-    location: "Kaiti Heights, Gisborne",
-    rating: 5,
-    comment: "Treemarkables transformed our overgrown fruit trees into healthy, productive specimens. Their attention to detail and knowledge of local growing conditions is exceptional. The crew was punctual, professional, and cleaned up meticulously. Highly recommended for anyone seeking quality tree care in Gisborne.",
-    service: "Fruit Tree Pruning"
-  },
-  {
-    id: "2",
-    name: "David Chen",
-    location: "Te Hapara, Gisborne",
-    rating: 5,
-    comment: "Outstanding service from start to finish. The arborist provided detailed explanations of the pruning process and demonstrated extensive knowledge of native New Zealand species. The results exceeded our expectations, and our pohutukawa has never looked healthier.",
-    service: "Native Tree Pruning"
-  },
-  {
-    id: "3",
-    name: "Sarah Thompson",
-    location: "Wainui Beach, Gisborne",
-    rating: 5,
-    comment: "Professional, reliable, and expertly executed. Treemarkables pruned our coastal property trees with precision, considering both wind exposure and aesthetic appeal. Their understanding of Gisborne's unique climate conditions is evident in their work quality.",
-    service: "Coastal Tree Pruning"
-  },
-  {
-    id: "4",
-    name: "Robert Williams",
-    location: "Makaraka, Gisborne",
-    rating: 5,
-    comment: "Exceptional craftsmanship and attention to detail. The team demonstrated superior technical skills while maintaining the natural beauty of our mature oak trees. Their professional approach and comprehensive clean-up service sets them apart from competitors.",
-    service: "Mature Tree Pruning"
-  }
-];
-
-const StarRating = ({ rating }: { rating: number }) => {
-  return (
-    <div className="flex gap-1">
-      {[...Array(5)].map((_, i) => (
-        <Star
-          key={i}
-          className={`w-4 h-4 ${
-            i < rating ? 'fill-primary text-primary' : 'text-muted-foreground'
-          }`}
-        />
-      ))}
-    </div>
-  );
-};
 
 export default function TreePruning() {
   // Add Google tag event script for form submission tracking
@@ -430,43 +372,11 @@ export default function TreePruning() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-6">
-              Testimonials
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
-            {reviews.slice(0, 4).map((review) => (
-              <div key={review.id} className="bg-white p-6 rounded-lg shadow-sm" data-testid={`review-card-${review.id}`}>
-                <p className="text-muted-foreground mb-4 italic leading-relaxed" data-testid={`review-comment-${review.id}`}>
-                  {review.comment}
-                </p>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold text-foreground" data-testid={`review-name-${review.id}`}>
-                      {review.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground" data-testid={`review-location-${review.id}`}>
-                      {review.location}
-                    </p>
-                  </div>
-                  <StarRating rating={review.rating} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <Button size="lg" onClick={handleGetQuote}>
-              Talk to us today
-            </Button>
-          </div>
-        </div>
-      </section>
+      <GoogleReviewsGrid
+        heading="What Gisborne homeowners say"
+        ctaLabel="Talk to us today"
+        onCtaClick={handleGetQuote}
+      />
 
       {/* Service Areas Section */}
       <section className="py-8 md:py-16 bg-muted/30">

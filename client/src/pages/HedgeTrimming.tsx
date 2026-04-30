@@ -4,68 +4,19 @@ import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
-import { Shield, Award, Clock, CheckCircle, Star, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Calendar, Target, Wrench, ArrowRight, Check, Sprout } from "lucide-react";
+import { Shield, Award, Clock, CheckCircle, Scissors, TreePine, Users, MapPin, Phone, AlertTriangle, Heart, Leaf, Calendar, Target, Wrench, ArrowRight, Check, Sprout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
 import PhotoSlider from "@/components/PhotoSlider";
+import GoogleReviewsGrid from "@/components/GoogleReviewsGrid";
 import hedgeCtaImage from "@assets/generated_images/085E9CAA-804B-4CAB-9ACC-5F01FCC57C40_4_5005_c.jpeg";
 import sliderPhoto1 from "@assets/generated_images/669C2196-13EE-400F-847C-8CC0E1BCBC49_1_101_o.jpeg";
 import sliderPhoto2 from "@assets/generated_images/2766DDE9-E1CE-4202-9826-C98136F33554_1_105_c.jpeg";
 import sliderPhoto3 from "@assets/generated_images/F3D7C8A2-F7D8-4CAB-B547-224297C35A84_1_102_o.jpeg";
 const heroBackground = "/hedge-trimming-hero.jpg";
-
-const reviews = [
-  {
-    id: "1",
-    name: "Carol Anderson",
-    location: "Mangapapa, Gisborne",
-    rating: 5,
-    comment: "Fantastic hedge trimming service! Our boundary hedge was getting out of control and they shaped it perfectly. The crew was professional, efficient, and cleaned up thoroughly. Very pleased with the results.",
-    service: "Hedge Trimming"
-  },
-  {
-    id: "2",
-    name: "Brian Foster",
-    location: "Elgin, Gisborne",
-    rating: 5,
-    comment: "Professional service from start to finish. They trimmed our large privet hedge beautifully - it's never looked better. Fair pricing and excellent workmanship. Highly recommend Treemarkables.",
-    service: "Hedge Shaping"
-  },
-  {
-    id: "3",
-    name: "Susan Clarke",
-    location: "Te Hapara, Gisborne",
-    rating: 5,
-    comment: "Outstanding attention to detail. Our ornamental hedges required careful shaping and they did a perfect job. The team was courteous and left our property immaculate.",
-    service: "Ornamental Hedge Care"
-  },
-  {
-    id: "4",
-    name: "Mark Robinson",
-    location: "Kaiti Heights, Gisborne",
-    rating: 5,
-    comment: "Reliable and professional hedge maintenance service. They've been trimming our hedges regularly for over a year now. Always on time, consistent quality, and competitive pricing.",
-    service: "Regular Hedge Maintenance"
-  }
-];
-
-const StarRating = ({ rating }: { rating: number }) => {
-  return (
-    <div className="flex gap-1">
-      {[...Array(5)].map((_, i) => (
-        <Star
-          key={i}
-          className={`w-4 h-4 ${
-            i < rating ? 'fill-primary text-primary' : 'text-muted-foreground'
-          }`}
-        />
-      ))}
-    </div>
-  );
-};
 
 export default function HedgeTrimming() {
   const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
@@ -372,43 +323,11 @@ export default function HedgeTrimming() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-12 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-6">
-              Testimonials
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
-            {reviews.slice(0, 4).map((review) => (
-              <div key={review.id} className="bg-white p-6 rounded-lg shadow-sm" data-testid={`review-card-${review.id}`}>
-                <p className="text-muted-foreground mb-4 italic leading-relaxed" data-testid={`review-comment-${review.id}`}>
-                  {review.comment}
-                </p>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold text-foreground" data-testid={`review-name-${review.id}`}>
-                      {review.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground" data-testid={`review-location-${review.id}`}>
-                      {review.location}
-                    </p>
-                  </div>
-                  <StarRating rating={review.rating} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <Button size="lg" onClick={handleGetQuote}>
-              Talk to us today
-            </Button>
-          </div>
-        </div>
-      </section>
+      <GoogleReviewsGrid
+        heading="What Gisborne homeowners say"
+        ctaLabel="Talk to us today"
+        onCtaClick={handleGetQuote}
+      />
 
       <FAQSection />
 

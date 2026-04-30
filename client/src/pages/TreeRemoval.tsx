@@ -8,6 +8,7 @@ import { Shield, Award, Clock, CheckCircle, Phone, Star, ArrowRight } from "luci
 import { Button } from "@/components/ui/button";
 import InquiryForm from "@/components/InquiryForm";
 import ContactFormModal from "@/components/ContactFormModal";
+import GoogleReviewsGrid from "@/components/GoogleReviewsGrid";
 import PhotoSlider from "@/components/PhotoSlider";
 import sliderPhoto1 from "@assets/generated_images/E0AAF8BC-CFB4-4F84-ABE2-2B1493FE147D.jpeg";
 import sliderPhoto2 from "@assets/generated_images/C145D020-049C-4424-9E2F-A852B84FCA59_1_102_o.jpeg";
@@ -243,66 +244,11 @@ export default function TreeRemoval() {
         </div>
       </section>
 
-      {/* Social Proof Section */}
-      <section className="py-16 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-foreground mb-4">
-              What Gisborne Homeowners Say About Us
-            </h2>
-            <div className="flex items-center justify-center gap-2 mb-8">
-              <div className="flex">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-6 w-6 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <span className="text-xl font-bold text-foreground">4.9/5</span>
-              <span className="text-muted-foreground">(120+ Google Reviews)</span>
-            </div>
-          </div>
-          
-          <div className="grid md:grid-cols-3 gap-8 mb-12">
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex mb-3">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <p className="text-muted-foreground mb-4 italic">
-                "Excellent service! They removed a massive pine tree that was threatening our house. 
-                Professional, quick, and left no mess behind."
-              </p>
-              <p className="font-semibold text-foreground">— Sarah M., Kaiti</p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex mb-3">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <p className="text-muted-foreground mb-4 italic">
-                "Called them for an emergency after the storm. They came out the same day and 
-                handled everything perfectly. Highly recommend!"
-              </p>
-              <p className="font-semibold text-foreground">— Mike T., Elgin</p>
-            </div>
-            
-            <div className="bg-white p-6 rounded-lg shadow-sm">
-              <div className="flex mb-3">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-4 w-4 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <p className="text-muted-foreground mb-4 italic">
-                "Great team! They trimmed our pohutukawa near the power lines safely. 
-                Fair pricing and excellent cleanup."
-              </p>
-              <p className="font-semibold text-foreground">— Jenny L., Mangapapa</p>
-            </div>
-          </div>
+      <GoogleReviewsGrid heading="What Gisborne homeowners say about us" />
 
-          {/* Trust Indicators */}
+      {/* Trust Indicators */}
+      <section className="py-12 bg-muted/30">
+        <div className="max-w-6xl mx-auto px-6">
           <div className="grid md:grid-cols-3 gap-8 text-center">
             <div className="flex flex-col items-center">
               <Shield className="h-12 w-12 text-primary mb-4" />

@@ -118,8 +118,8 @@ export default function InquiryForm({
         className="bg-white rounded-2xl shadow-xl border border-border p-8 text-center"
         data-testid="inquiry-form-success"
       >
-        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#39FF14]/20">
-          <Leaf className="h-6 w-6 text-[#1f7a1f]" />
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#39FF14] border-2 border-[#32CD32]">
+          <Leaf className="h-6 w-6 text-black" />
         </div>
         <h3 className="text-xl font-semibold text-foreground mb-2">
           Inquiry sent
@@ -146,8 +146,8 @@ export default function InquiryForm({
       data-testid="inquiry-form"
     >
       <div className="flex items-center justify-center gap-2 mb-6">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#1f7a1f]">
-          <Leaf className="h-5 w-5 text-white" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#39FF14] border-2 border-[#32CD32]">
+          <Leaf className="h-5 w-5 text-black" />
         </div>
         <h3 className="text-xl font-semibold text-foreground">Want a free quote?</h3>
       </div>
@@ -290,7 +290,7 @@ export default function InquiryForm({
         <Button
           type="submit"
           disabled={mutation.isPending}
-          className="bg-[#1f7a1f] hover:bg-[#196619] text-white min-w-[140px]"
+          className="bg-[#39FF14] hover:bg-[#32CD32] text-black border-2 border-[#32CD32] hover:border-[#2EB82E] font-bold min-w-[140px] shadow-md"
           data-testid="button-inquiry-submit"
         >
           {mutation.isPending ? "Sending..." : "Send inquiry"}
@@ -299,15 +299,15 @@ export default function InquiryForm({
 
       <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 mt-6 pt-4 border-t border-border text-xs text-muted-foreground">
         <span className="flex items-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#1f7a1f]" />
+          <ShieldCheck className="h-3.5 w-3.5 text-[#32CD32]" />
           Fully insured
         </span>
         <span className="flex items-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#1f7a1f]" />
+          <ShieldCheck className="h-3.5 w-3.5 text-[#32CD32]" />
           Qualified arborists
         </span>
         <span className="flex items-center gap-1.5">
-          <ShieldCheck className="h-3.5 w-3.5 text-[#1f7a1f]" />
+          <ShieldCheck className="h-3.5 w-3.5 text-[#32CD32]" />
           Gisborne local
         </span>
       </div>

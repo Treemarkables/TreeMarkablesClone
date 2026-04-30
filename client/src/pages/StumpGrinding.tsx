@@ -4,62 +4,13 @@ import Footer from "@/components/Footer";
 import ContactSection from "@/components/ContactSection";
 import FAQSection from "@/components/FAQSection";
 import SEO from "@/components/SEO";
-import { Shield, Clock, Star, Scissors, TreePine, Phone, AlertTriangle, Settings, ArrowRight } from "lucide-react";
+import { Shield, Clock, Scissors, TreePine, Phone, AlertTriangle, Settings, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import InquiryForm from "@/components/InquiryForm";
+import GoogleReviewsGrid from "@/components/GoogleReviewsGrid";
 const heroBackground = "/stump-grinding-hero.jpg";
-
-const reviews = [
-  {
-    id: "1",
-    name: "James Mitchell",
-    location: "Makaraka, Gisborne",
-    rating: 5,
-    comment: "Outstanding stump grinding service! They removed three large stumps from our property quickly and efficiently. The cleanup was thorough and the price was very reasonable. Highly recommend Treemarkables for any stump removal needs.",
-    service: "Stump Grinding"
-  },
-  {
-    id: "2",
-    name: "Linda Thompson",
-    location: "Te Hapara, Gisborne",
-    rating: 5,
-    comment: "Professional and reliable service. The team arrived on time, worked efficiently, and left our yard clean. We can finally use that corner of our garden for planting. Great job!",
-    service: "Stump Removal"
-  },
-  {
-    id: "3",
-    name: "Peter Wilson",
-    location: "Kaiti, Gisborne",
-    rating: 5,
-    comment: "Excellent workmanship and fair pricing. They ground down a massive pohutukawa stump that other companies said was too difficult. The Treemarkables team made it look easy.",
-    service: "Large Stump Grinding"
-  },
-  {
-    id: "4",
-    name: "Michelle Brown",
-    location: "Wainui, Gisborne",
-    rating: 5,
-    comment: "Very happy with the stump grinding service. Quick quote, professional work, and complete cleanup. Would definitely use Treemarkables again for any tree or stump work.",
-    service: "Stump Grinding"
-  }
-];
-
-const StarRating = ({ rating }: { rating: number }) => {
-  return (
-    <div className="flex gap-1">
-      {[...Array(5)].map((_, i) => (
-        <Star
-          key={i}
-          className={`w-4 h-4 ${
-            i < rating ? 'fill-primary text-primary' : 'text-muted-foreground'
-          }`}
-        />
-      ))}
-    </div>
-  );
-};
 
 export default function StumpGrinding() {
   // Add Google tag event script for form submission tracking
@@ -386,43 +337,11 @@ export default function StumpGrinding() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-20 bg-muted/30">
-        <div className="max-w-6xl mx-auto px-6">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-foreground mb-6">
-              Testimonials
-            </h2>
-          </div>
-
-          <div className="grid md:grid-cols-2 gap-8 mb-12">
-            {reviews.slice(0, 4).map((review) => (
-              <div key={review.id} className="bg-white p-6 rounded-lg shadow-sm" data-testid={`review-card-${review.id}`}>
-                <p className="text-muted-foreground mb-4 italic leading-relaxed" data-testid={`review-comment-${review.id}`}>
-                  {review.comment}
-                </p>
-                <div className="flex justify-between items-center">
-                  <div>
-                    <h3 className="font-semibold text-foreground" data-testid={`review-name-${review.id}`}>
-                      {review.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground" data-testid={`review-location-${review.id}`}>
-                      {review.location}
-                    </p>
-                  </div>
-                  <StarRating rating={review.rating} />
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="text-center">
-            <Button size="lg" onClick={handleGetQuote}>
-              Talk to us today
-            </Button>
-          </div>
-        </div>
-      </section>
+      <GoogleReviewsGrid
+        heading="What Gisborne homeowners say"
+        ctaLabel="Talk to us today"
+        onCtaClick={handleGetQuote}
+      />
 
       {/* Service Areas Section */}
       <section className="py-8 md:py-16 bg-muted/30">
