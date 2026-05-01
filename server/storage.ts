@@ -79,6 +79,28 @@ import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray } fro
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
 
+// Compute an invoice's ex-GST revenue contribution.
+//
+// `invoice.amount` was historically populated inconsistently — for some invoices
+// it holds the inc-GST customer-facing total, for others the ex-GST subtotal —
+// so dividing it by 1.15 unconditionally double-strips GST on the latter set.
+// `invoice.items[].amount` is reliably ex-GST (the line totals shown on the
+// invoice template), so we sum those when present and only fall back to the
+// /1.15 path when an invoice has no items.
+export function invoiceRevenueExGst(invoice: { amount?: any; items?: any }): number {
+  const items = Array.isArray(invoice.items) ? invoice.items : null;
+  if (items && items.length > 0) {
+    let sum = 0;
+    let any = false;
+    for (const it of items) {
+      const v = parseFloat(String(it?.amount ?? '0'));
+      if (!isNaN(v)) { sum += v; any = true; }
+    }
+    if (any) return sum;
+  }
+  return parseFloat(invoice.amount?.toString() || '0') / 1.15;
+}
+
 // modify the interface with any CRUD methods
 // you might need
 
@@ -2837,11 +2859,13 @@ class DatabaseStorage implements IStorage {
     const completedJobIds = new Set(completedJobsForRevenue.map(job => job.id));
     
     // Sum invoice amounts directly from the period invoices (already date-filtered above).
-    // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST (NZ 15%),
-    // so divide to strip the tax. Customer-facing invoice renders keep inc-GST.
+    // Internal metrics show ex-GST per business rule. invoice.amount has historically
+    // held inc-GST on some rows and ex-GST on others — invoiceRevenueExGst() prefers
+    // the always-ex-GST items[].amount sum and only falls back to amount/1.15 for
+    // rows without items.
     let totalRevenue = 0;
     for (const inv of periodInvoices) {
-      totalRevenue += parseFloat(inv.amount?.toString() || '0') / 1.15;
+      totalRevenue += invoiceRevenueExGst(inv);
     }
     const completedJobs = filteredJobs.filter(job => job.status === 'completed' || job.status === 'invoiced');
     
@@ -2971,11 +2995,12 @@ class DatabaseStorage implements IStorage {
     });
 
     // Step 2: build revenue and job-id maps from those invoices.
-    // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST (NZ 15%),
-    // so divide to strip the tax. Margin/profit calculations below all flow from this map.
+    // Internal metrics show ex-GST per business rule. See invoiceRevenueExGst()
+    // for why we don't just divide invoice.amount by 1.15 (some invoices stored
+    // amount as ex-GST, which would be double-stripped).
     const jobInvoiceMap = new Map<string, number>(); // jobId → total invoiced amount (ex-GST)
     for (const inv of activeInvoices) {
-      const amount = parseFloat(inv.amount?.toString() || '0') / 1.15;
+      const amount = invoiceRevenueExGst(inv);
       jobInvoiceMap.set(inv.jobId!, (jobInvoiceMap.get(inv.jobId!) || 0) + amount);
     }
 
@@ -3336,12 +3361,13 @@ class DatabaseStorage implements IStorage {
           ? db.select().from(schema.proposals).where(inArray(schema.proposals.jobId, qualifyingJobIds))
           : Promise.resolve([] as any[]),
       ]);
-      // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
-      // (NZ 15%), so divide to strip the tax.
+      // Internal metrics show ex-GST per business rule. Use invoiceRevenueExGst()
+      // because invoice.amount is inconsistently stored (inc-GST on some rows,
+      // ex-GST on others); the helper prefers items[].amount which is always ex-GST.
       const allTimeInvoiceMap = new Map<string, number>();
       for (const inv of allTimeInvoices) {
         if (inv.jobId) {
-          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + (parseFloat(inv.amount?.toString() || '0') / 1.15));
+          allTimeInvoiceMap.set(inv.jobId, (allTimeInvoiceMap.get(inv.jobId) || 0) + invoiceRevenueExGst(inv));
         }
       }
 
@@ -3405,12 +3431,13 @@ class DatabaseStorage implements IStorage {
       // revenue for jobs worked on in the period) — fetched above in phase 2.
 
       // Map job IDs → total invoiced amount (ex-GST).
-      // invoice.amount is inc-GST (NZ 15%); internal metrics show ex-GST per business rule.
+      // See invoiceRevenueExGst() for why we don't just divide invoice.amount by
+      // 1.15 (it's inconsistently stored across rows).
       const jobInvoiceMap = new Map<string, number>();
       for (const invoice of allInvoices) {
         if (invoice.jobId) {
           const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
+          const invoiceAmount = invoiceRevenueExGst(invoice);
           jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
         }
       }

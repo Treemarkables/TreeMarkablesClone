@@ -14,7 +14,7 @@ declare module 'express-session' {
     employeeId?: string;
   }
 }
-import { storage } from "./storage";
+import { storage, invoiceRevenueExGst } from "./storage";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
@@ -11100,9 +11100,9 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // completed in the window, drifting away from the Revenue card figure.
       const jobInvoiceMap = new Map<string, number>();
       const jobInvoiceDateMap = new Map<string, string>(); // jobId -> latest invoice issue date in window
-      // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
-      // (NZ 15%), so divide to strip the tax. This keeps the drilldown rows and
-      // total in sync with the Revenue card (getDashboardStats / getRevenueStats).
+      // Internal metrics show ex-GST per business rule. invoiceRevenueExGst()
+      // prefers items[].amount (always ex-GST) over amount/1.15, because amount
+      // has been stored inconsistently (inc-GST on some rows, ex-GST on others).
       for (const invoice of allInvoices) {
         if (invoice.status === 'cancelled' || !invoice.jobId) continue;
         // Anchor on issueDate; fall back to createdAt so invoices without an issueDate still count.
@@ -11114,7 +11114,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           if (toDate && anchor > toDate) continue;
         }
         const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-        const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
+        const invoiceAmount = invoiceRevenueExGst(invoice);
         jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
         if (invoice.issueDate) {
           const dateStr = invoice.issueDate.toString();
