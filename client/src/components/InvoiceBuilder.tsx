@@ -126,6 +126,9 @@ export function InvoiceBuilder({
   const [editableNotes, setEditableNotes] = useState("");
   const [customDueDate, setCustomDueDate] = useState<string>("");
   const [lineItems, setLineItems] = useState<InvoiceLineItem[]>([]);
+  // Which line item is currently expanded for editing. null = all rows
+  // collapsed (compact display). Click a row to expand its editor.
+  const [editingInvoiceItemId, setEditingInvoiceItemId] = useState<string | null>(null);
   const [sections, setSections] = useState<InvoiceSectionDraft[]>([]);
   const [deletedSectionIds, setDeletedSectionIds] = useState<string[]>([]);
   const [photoUploadingIdx, setPhotoUploadingIdx] = useState<number | null>(null);
@@ -1426,63 +1429,96 @@ export function InvoiceBuilder({
                   />
                 </div>
 
-                {/* Line Items */}
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                    <Label className="text-sm font-medium">Line Items</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={importFromQuoteOrProposal}
-                        disabled={loadingProposals || loadingQuotes}
-                        data-testid="button-import-from-quote"
-                      >
-                        <FileDown className="h-4 w-4 mr-1" />
-                        <span className="hidden sm:inline">
-                          Import from Quote/Proposal
-                        </span>
-                        <span className="sm:hidden">Import</span>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => addLineItem()}
-                        data-testid="button-add-line-item"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Item
-                      </Button>
-                    </div>
+                {/* Line Items — collapsed-row layout: each row shows just the
+                    description + total. Click a row to expand its full editor
+                    (category, qty, unit price). The "Search or add new..." row
+                    at the bottom expands the editor for a brand-new item. */}
+                <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
+                    <Label className="text-sm font-semibold">Line items</Label>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={importFromQuoteOrProposal}
+                      disabled={loadingProposals || loadingQuotes}
+                      data-testid="button-import-from-quote"
+                      className="h-7 text-xs"
+                    >
+                      <FileDown className="h-3.5 w-3.5 mr-1" />
+                      <span className="hidden sm:inline">Import</span>
+                      <span className="sm:hidden">Import</span>
+                    </Button>
                   </div>
 
-                  {/* Category Legend */}
-                  <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      Labour (Fixed)
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                      Labour (Charge-out)
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                      Materials
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-purple-500"></span>
-                      Equipment
-                    </span>
-                  </div>
+                  <div>
+                    {lineItems.map((item, index) => {
+                      const isEditing = editingInvoiceItemId === item.id;
+                      const categoryDot =
+                        item.category === "labor_fixed"
+                          ? "bg-blue-500"
+                          : item.category === "labor_chargeout"
+                            ? "bg-green-500"
+                            : item.category === "materials"
+                              ? "bg-orange-500"
+                              : item.category === "equipment"
+                                ? "bg-purple-500"
+                                : item.category === "disposal"
+                                  ? "bg-red-500"
+                                  : "bg-gray-300";
 
-                  <div className="space-y-3">
-                    {lineItems.map((item, index) => (
+                      // Collapsed row — clean, matches mock: bold description
+                      // (with a small category dot), total on the right, × to
+                      // delete. Clicking the body expands the editor.
+                      if (!isEditing) {
+                        return (
+                          <div
+                            key={item.id}
+                            className={`group/row flex items-start gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer ${index === 0 ? "" : "border-t border-gray-100"}`}
+                            onClick={() => setEditingInvoiceItemId(item.id)}
+                            data-testid={`row-line-item-${index}`}
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 text-[15px] font-semibold text-gray-900 break-words">
+                                <span className={`inline-block w-2 h-2 rounded-full ${categoryDot} flex-shrink-0`} />
+                                <span className="break-words">
+                                  {item.description || (
+                                    <span className="font-normal text-gray-400 italic">No description</span>
+                                  )}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0">
+                              <span className="text-sm text-gray-500 tabular-nums">
+                                Qty: {item.quantity}
+                              </span>
+                              <span className="text-[15px] font-semibold text-gray-900 tabular-nums">
+                                ${item.total.toFixed(2)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeLineItem(item.id);
+                                }}
+                                className="p-1 text-gray-300 hover:text-red-500 rounded opacity-0 group-hover/row:opacity-100 transition-opacity"
+                                data-testid={`button-remove-item-${index}`}
+                                aria-label="Remove line item"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      // Expanded editor — original always-on layout, but with
+                      // a "Done" button so the user can collapse the row when
+                      // finished. Same fields, same data flow as before.
+                      return (
                       <div
                         key={item.id}
-                        className="bg-muted/30 rounded-lg border p-3 space-y-3"
+                        className={`bg-blue-50/40 p-3 space-y-3 ${index === 0 ? "" : "border-t border-gray-100"}`}
                       >
                         {/* Header row with category badge and delete button */}
                         <div className="flex items-center justify-between gap-2">
@@ -1526,16 +1562,33 @@ export function InvoiceBuilder({
                               <SelectItem value="other">Other</SelectItem>
                             </SelectContent>
                           </Select>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeLineItem(item.id)}
-                            className="h-7 w-7 p-0"
-                            data-testid={`button-remove-item-${index}`}
-                          >
-                            <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-600" />
-                          </Button>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEditingInvoiceItemId(null)}
+                              className="h-7 px-2 text-xs"
+                              data-testid={`button-done-edit-${index}`}
+                            >
+                              Done
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                if (editingInvoiceItemId === item.id) {
+                                  setEditingInvoiceItemId(null);
+                                }
+                                removeLineItem(item.id);
+                              }}
+                              className="h-7 w-7 p-0"
+                              data-testid={`button-remove-item-${index}`}
+                            >
+                              <Trash2 className="h-4 w-4 text-muted-foreground hover:text-red-600" />
+                            </Button>
+                          </div>
                         </div>
 
                         {/* Description field with materials dropdown */}
@@ -1773,27 +1826,48 @@ export function InvoiceBuilder({
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    );
+                    })}
 
-                  {/* Totals */}
-                  <div className="bg-white p-4 rounded border space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">
-                        Subtotal (excl GST):
-                      </span>
-                      <span className="font-medium">
-                        ${subtotal.toFixed(2)}
-                      </span>
+                    {/* Search or add new — collapses into a normal item row
+                        once the user starts editing it. */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const newId = Math.random().toString();
+                        setLineItems((prev) => [
+                          ...prev,
+                          { id: newId, description: "", quantity: 1, unitPrice: 0, total: 0, category: "other" },
+                        ]);
+                        setEditingInvoiceItemId(newId);
+                      }}
+                      className={`w-full text-left text-[15px] text-gray-400 hover:text-blue-600 transition-colors px-4 py-3 ${lineItems.length === 0 ? "" : "border-t border-gray-100"}`}
+                      data-testid="button-add-line-item"
+                    >
+                      Search or add new...
+                    </button>
+
+                    {/* Section subtotal footer */}
+                    <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
+                      <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Subtotal</span>
+                      <span className="text-sm font-bold text-gray-900 tabular-nums">${subtotal.toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">GST (15%):</span>
-                      <span className="font-medium">${gst.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold border-t pt-2">
-                      <span>Total:</span>
-                      <span className="text-blue-600">${total.toFixed(2)}</span>
-                    </div>
+                  </div>
+                </div>
+
+                {/* Totals — shown below the line-items card */}
+                <div className="space-y-1.5 pt-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Subtotal</span>
+                    <span className="font-medium tabular-nums">${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">GST (15%)</span>
+                    <span className="font-medium tabular-nums">${gst.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2">
+                    <span>Total</span>
+                    <span className="tabular-nums">${total.toFixed(2)}</span>
                   </div>
                 </div>
               </div>

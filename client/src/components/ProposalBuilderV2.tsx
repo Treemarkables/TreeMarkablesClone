@@ -1080,90 +1080,93 @@ function LineItemsBlock({
   }
 
   return (
-    <div className="space-y-2">
-      {/* Owner-facing line items: stacked card layout per item so descriptions
-          and totals get the full modal width. The customer-facing template
-          (ProposalTemplate.tsx) renders these as a normal one-row-per-item
-          table. */}
-      {block.lineItems.map((item) =>
-        editingId === item.id ? (
-          <Fragment key={item.id + "-edit"}>
-            {RowEditor({
-              d: editDraft,
-              setD: (fn) => setEditDraft((prev) => fn(prev)),
-              onCommit: commitEdit,
-              onCancel: () => setEditingId(null),
-              matSearchVal: matSearch,
-              setMatSearchVal: setMatSearch,
-            })}
-          </Fragment>
-        ) : (
+    <div>
+      {/* Compact line items: each row shows description + code subtitle on the
+          left and the line total on the right, with a delete × that appears on
+          hover. Clicking a row opens the existing RowEditor for editing — that
+          is where qty / cost / markup / GST inclusivity / optional flag live,
+          so we keep all the controls intact while presenting a clean list. */}
+      {block.lineItems.map((item, idx) => {
+        if (editingId === item.id) {
+          return (
+            <Fragment key={item.id + "-edit"}>
+              <div className={idx === 0 ? "" : "border-t border-gray-100"}>
+                {RowEditor({
+                  d: editDraft,
+                  setD: (fn) => setEditDraft((prev) => fn(prev)),
+                  onCommit: commitEdit,
+                  onCancel: () => setEditingId(null),
+                  matSearchVal: matSearch,
+                  setMatSearchVal: setMatSearch,
+                })}
+              </div>
+            </Fragment>
+          );
+        }
+        return (
           <div
             key={item.id}
-            className="bg-white border border-gray-200 rounded-md p-3 hover:bg-gray-50 cursor-pointer group/row"
+            className={`group/row flex items-start gap-3 px-4 py-3 hover:bg-gray-50 cursor-pointer ${idx === 0 ? "" : "border-t border-gray-100"}`}
             onClick={() => startEdit(item)}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="text-sm font-medium text-gray-900 flex-1 min-w-0 break-words">
+            <div className="flex-1 min-w-0">
+              <div className="text-[15px] font-semibold text-gray-900 break-words">
                 {item.description}
-                {item.pricingType === "choice" && <span className="ml-1 text-xs text-blue-500">(choice)</span>}
-                {item.isOptional && <span className="ml-1 text-xs text-gray-400">(optional)</span>}
+                {item.pricingType === "choice" && <span className="ml-2 text-xs font-normal text-blue-500">(choice)</span>}
+                {item.isOptional && <span className="ml-2 text-xs font-normal text-gray-400">(optional)</span>}
               </div>
+              {item.category && (
+                <div className="mt-0.5 text-xs text-gray-500">Code: {item.category}</div>
+              )}
+            </div>
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <span className="text-sm text-gray-500 tabular-nums">
+                Qty: {item.quantity}
+              </span>
+              <span className="text-[15px] font-semibold text-gray-900 tabular-nums">
+                {fmtNZD(item.totalPrice)}
+              </span>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); removeItem(item.id!); }}
-                className="p-1 text-gray-300 hover:text-red-500 rounded opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0"
+                className="p-1 text-gray-300 hover:text-red-500 rounded opacity-0 group-hover/row:opacity-100 transition-opacity"
+                aria-label="Remove line item"
               >
-                <Trash2 className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
-              {item.category && (
-                <div><span className="text-gray-400">Code:</span> {item.category}</div>
-              )}
-              <div><span className="text-gray-400">Qty:</span> {item.quantity}</div>
-              {item.pricingType !== "choice" && (
-                <>
-                  <div><span className="text-gray-400">Cost ex GST:</span> {fmtNZD(item.costPrice ?? item.unitPrice)}</div>
-                  <div><span className="text-gray-400">Markup:</span> {item.markupPct ? fmtPct(item.markupPct) : "—"}</div>
-                  <div><span className="text-gray-400">Price ex GST:</span> {fmtNZD(item.unitPrice)}</div>
-                </>
-              )}
-            </div>
-            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-sm">
-              <span className="text-xs text-gray-500 uppercase tracking-wide">Total ex GST</span>
-              <span className="font-semibold text-gray-900">{fmtNZD(item.totalPrice)}</span>
-            </div>
           </div>
-        )
-      )}
+        );
+      })}
 
-      {/* Search or Add New */}
+      {/* Search or Add New — clean inline row, no dashed border */}
       {showAdd ? (
         <Fragment key={`add-row-${addRowKey}`}>
-          {RowEditor({
-            d: draft,
-            setD: (fn) => setDraft((prev) => fn(prev)),
-            onCommit: commitDraft,
-            onCancel: () => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); },
-            matSearchVal: matSearch,
-            setMatSearchVal: setMatSearch,
-          })}
+          <div className={block.lineItems.length === 0 ? "" : "border-t border-gray-100"}>
+            {RowEditor({
+              d: draft,
+              setD: (fn) => setDraft((prev) => fn(prev)),
+              onCommit: commitDraft,
+              onCancel: () => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); },
+              matSearchVal: matSearch,
+              setMatSearchVal: setMatSearch,
+            })}
+          </div>
         </Fragment>
       ) : (
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="w-full text-left text-sm text-gray-400 hover:text-blue-600 hover:underline transition-colors px-3 py-2 border border-dashed border-gray-200 rounded-md"
+          className={`w-full text-left text-[15px] text-gray-400 hover:text-blue-600 transition-colors px-4 py-3 ${block.lineItems.length === 0 ? "" : "border-t border-gray-100"}`}
         >
-          Search or Add New...
+          Search or add new...
         </button>
       )}
 
-      {/* Section subtotal */}
-      <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+      {/* Section subtotal — flat row at the bottom of the block */}
+      <div className="flex items-center justify-between px-4 py-2.5 border-t border-gray-100 bg-gray-50">
         <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Subtotal</span>
-        <span className="text-sm font-bold text-gray-900">{fmtNZD(subtotal)}</span>
+        <span className="text-sm font-bold text-gray-900 tabular-nums">{fmtNZD(subtotal)}</span>
       </div>
     </div>
   );
@@ -2194,45 +2197,51 @@ export function ProposalBuilderV2({
               <div className="px-6 sm:px-10 py-2">
                 <AddBlockButton onAdd={(type) => addBlock(type, -1)} />
 
-                {blocks.map((block, idx) => (
-                  <div
-                    key={block.id}
-                    className={`mb-1 transition-opacity ${draggingId === block.id ? "opacity-40" : ""}`}
-                  >
-                    <div className={`border-t ${dragOverId === block.id ? "border-blue-300 bg-blue-50/30" : "border-gray-100"}`}>
-                      <BlockHeader
-                        block={block}
-                        onTitleChange={(t) => updateBlock(block.id, { title: t })}
-                        onRemove={() => removeBlock(block.id)}
-                        onDragStart={() => setDraggingId(block.id)}
-                        onDragOver={(e) => { e.preventDefault(); setDragOverId(block.id); }}
-                        onDrop={(e) => { e.preventDefault(); handleDrop(block.id); }}
-                        isDragOver={dragOverId === block.id}
-                        onSectionTypeChange={(t) => updateBlock(block.id, { sectionType: t })}
-                      />
-                      {block.type === "description" && (
-                        <DescriptionBlock block={block} onUpdate={(u) => updateBlock(block.id, u)} />
-                      )}
-                      {block.type === "photos" && (
-                        <PhotoBlock
+                {blocks.map((block, idx) => {
+                  const isLineItemsBlock = block.type === "lineItems";
+                  const wrapperClass = isLineItemsBlock
+                    ? `bg-white border rounded-lg overflow-hidden ${dragOverId === block.id ? "border-blue-300" : "border-gray-200"}`
+                    : `border-t ${dragOverId === block.id ? "border-blue-300 bg-blue-50/30" : "border-gray-100"}`;
+                  return (
+                    <div
+                      key={block.id}
+                      className={`mb-1 transition-opacity ${draggingId === block.id ? "opacity-40" : ""}`}
+                    >
+                      <div className={wrapperClass}>
+                        <BlockHeader
                           block={block}
-                          jobId={jobId}
-                          diaryPhotos={diaryPhotos}
-                          onUpdate={(u) => updateBlock(block.id, u)}
+                          onTitleChange={(t) => updateBlock(block.id, { title: t })}
+                          onRemove={() => removeBlock(block.id)}
+                          onDragStart={() => setDraggingId(block.id)}
+                          onDragOver={(e) => { e.preventDefault(); setDragOverId(block.id); }}
+                          onDrop={(e) => { e.preventDefault(); handleDrop(block.id); }}
+                          isDragOver={dragOverId === block.id}
+                          onSectionTypeChange={(t) => updateBlock(block.id, { sectionType: t })}
                         />
-                      )}
-                      {block.type === "lineItems" && (
-                        <LineItemsBlock
-                          block={block}
-                          materials={materials}
-                          onUpdate={(u) => updateBlock(block.id, u)}
-                          onDraftTotalChange={setDraftTotalExtra}
-                        />
-                      )}
+                        {block.type === "description" && (
+                          <DescriptionBlock block={block} onUpdate={(u) => updateBlock(block.id, u)} />
+                        )}
+                        {block.type === "photos" && (
+                          <PhotoBlock
+                            block={block}
+                            jobId={jobId}
+                            diaryPhotos={diaryPhotos}
+                            onUpdate={(u) => updateBlock(block.id, u)}
+                          />
+                        )}
+                        {block.type === "lineItems" && (
+                          <LineItemsBlock
+                            block={block}
+                            materials={materials}
+                            onUpdate={(u) => updateBlock(block.id, u)}
+                            onDraftTotalChange={setDraftTotalExtra}
+                          />
+                        )}
+                      </div>
+                      <AddBlockButton onAdd={(type) => addBlock(type, idx)} />
                     </div>
-                    <AddBlockButton onAdd={(type) => addBlock(type, idx)} />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Totals */}
