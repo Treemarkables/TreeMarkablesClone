@@ -122,6 +122,7 @@ export default function ProfitabilityCalculator() {
   const revenuePerPersonDay = billableStaff > 0 && workingDaysPerPerson > 0
     ? targetRevenue / (billableStaff * workingDaysPerPerson)
     : 0;
+  const dailyTeamKpi = revenuePerPersonDay * billableStaff;
   const hourlyRateNeeded = totalBillableHours > 0 ? targetRevenue / totalBillableHours : 0;
 
   const showVehicleWarning = billableStaff >= VEHICLE_COST_THRESHOLD_STAFF;
@@ -238,6 +239,14 @@ export default function ProfitabilityCalculator() {
             sub={`per billable hour`}
           />
         </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem", marginBottom: "0.7rem" }}>
+          <StatCard
+            label="Daily Team KPI"
+            formatted={fmt(dailyTeamKpi)}
+            sub={`${fmt(revenuePerPersonDay)} × ${billableStaff} staff`}
+            highlight
+          />
+        </div>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "0.7rem", marginBottom: "1.5rem" }}>
           <StatCard
             label="Profit"
@@ -260,6 +269,7 @@ export default function ProfitabilityCalculator() {
             ["Owner's wage", fmt(ownerWage)],
             ["Total costs", fmt(totalCosts)],
             ["Target revenue", fmt(targetRevenue)],
+            ["Daily team KPI", fmt(dailyTeamKpi)],
             ["Profit", fmt(profit)],
             ["Hourly rate needed", fmt2(hourlyRateNeeded)],
           ] as [string, string][]).map(([label, val], i, arr) => {

@@ -1501,10 +1501,10 @@ export default function MetricsDashboard() {
                                         Client
                                       </th>
                                       <th className="pb-2 pr-4 font-medium text-gray-500 dark:text-muted-foreground hidden sm:table-cell">
-                                        Completed Date
+                                        Invoice Date
                                       </th>
                                       <th className="pb-2 font-medium text-gray-500 dark:text-muted-foreground text-right">
-                                        Invoice Value
+                                        Invoice Value (ex GST)
                                       </th>
                                     </tr>
                                   </thead>
@@ -1523,9 +1523,9 @@ export default function MetricsDashboard() {
                                             {job.customerName}
                                           </td>
                                           <td className="py-2 pr-4 text-gray-500 dark:text-muted-foreground hidden sm:table-cell">
-                                            {job.completedDate
+                                            {job.invoiceDate
                                               ? new Date(
-                                                  job.completedDate,
+                                                  job.invoiceDate,
                                                 ).toLocaleDateString("en-NZ")
                                               : "-"}
                                           </td>
@@ -3683,10 +3683,10 @@ export default function MetricsDashboard() {
                         Title
                       </th>
                       <th className="text-left py-3 px-4 font-medium text-sm hidden md:table-cell">
-                        Completed
+                        Invoice Date
                       </th>
                       <th className="text-right py-3 px-4 font-medium text-sm">
-                        Invoice
+                        Invoice (ex GST)
                       </th>
                     </tr>
                   </thead>
@@ -3710,14 +3710,14 @@ export default function MetricsDashboard() {
                           {job.title || "-"}
                         </td>
                         <td className="py-3 px-4 text-sm text-muted-foreground hidden md:table-cell">
-                          {job.completedDate
-                            ? new Date(job.completedDate).toLocaleDateString(
+                          {job.invoiceDate
+                            ? new Date(job.invoiceDate).toLocaleDateString(
                                 "en-NZ",
                               )
                             : "-"}
                         </td>
                         <td className="py-3 px-4 text-sm text-right font-medium text-green-600">
-                          {formatCurrency(job.invoiceAmount || 0)}
+                          {formatCurrency(job.amount || job.invoiceAmount || 0)}
                         </td>
                       </tr>
                     ))}

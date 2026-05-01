@@ -11093,25 +11093,34 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Create customer map
       const customerMap = new Map(allCustomers.map(c => [c.id, c]));
       
-      // Build invoice maps across ALL non-cancelled invoices (no date filter here).
-      // Date filtering is applied to the JOB's completedDate below, matching how
-      // the Revenue card calculates its total via getDashboardStats/getRevenueStats.
+      // Build invoice maps from invoices whose issueDate falls within the requested
+      // date range. This matches how getRevenueStats anchors its totals: revenue is
+      // recognised when the invoice is issued, not when the job was completed. Without
+      // this filter the drilldown total can include older or partial invoices on jobs
+      // completed in the window, drifting away from the Revenue card figure.
       const jobInvoiceMap = new Map<string, number>();
-      const jobInvoiceDateMap = new Map<string, string>(); // jobId -> latest invoice issue date
+      const jobInvoiceDateMap = new Map<string, string>(); // jobId -> latest invoice issue date in window
       // Internal metrics show ex-GST per business rule — invoice.amount is inc-GST
       // (NZ 15%), so divide to strip the tax. This keeps the drilldown rows and
       // total in sync with the Revenue card (getDashboardStats / getRevenueStats).
       for (const invoice of allInvoices) {
-        if (invoice.status !== 'cancelled' && invoice.jobId) {
-          const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
-          const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
-          jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
-          if (invoice.issueDate) {
-            const dateStr = invoice.issueDate.toString();
-            const existing = jobInvoiceDateMap.get(invoice.jobId);
-            if (!existing || dateStr > existing) {
-              jobInvoiceDateMap.set(invoice.jobId, dateStr);
-            }
+        if (invoice.status === 'cancelled' || !invoice.jobId) continue;
+        // Anchor on issueDate; fall back to createdAt so invoices without an issueDate still count.
+        const anchor = invoice.issueDate ? new Date(invoice.issueDate) :
+                       invoice.createdAt ? new Date(invoice.createdAt) : null;
+        if (fromDate || toDate) {
+          if (!anchor) continue;
+          if (fromDate && anchor < fromDate) continue;
+          if (toDate && anchor > toDate) continue;
+        }
+        const existingAmount = jobInvoiceMap.get(invoice.jobId) || 0;
+        const invoiceAmount = parseFloat(invoice.amount?.toString() || '0') / 1.15;
+        jobInvoiceMap.set(invoice.jobId, existingAmount + invoiceAmount);
+        if (invoice.issueDate) {
+          const dateStr = invoice.issueDate.toString();
+          const existing = jobInvoiceDateMap.get(invoice.jobId);
+          if (!existing || dateStr > existing) {
+            jobInvoiceDateMap.set(invoice.jobId, dateStr);
           }
         }
       }
@@ -11174,18 +11183,13 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
           .filter(j => j.amount > 0)
           .sort((a, b) => b.amount - a.amount);
       } else {
-        // Show completed jobs with invoices, filtered by job.completedDate to match
-        // the Revenue card figure (which uses getDashboardStats / getRevenueStats).
+        // Show jobs whose invoices fall in the date window. Anchoring on invoice
+        // issueDate (jobInvoiceMap is already date-filtered above) keeps the
+        // drilldown rows + total aligned with the Revenue card, which also
+        // recognises revenue at invoice time.
+        const invoicedJobIds = new Set(jobInvoiceMap.keys());
         breakdown = filteredJobs
-          .filter(job => {
-            if (job.status !== 'completed') return false;
-            if (!fromDate && !toDate) return true;
-            const completedDate = job.completedDate ? new Date(job.completedDate) : null;
-            if (!completedDate) return false;
-            if (fromDate && completedDate < fromDate) return false;
-            if (toDate && completedDate > toDate) return false;
-            return true;
-          })
+          .filter(job => invoicedJobIds.has(job.id))
           .map(job => {
             const invoiceAmount = jobInvoiceMap.get(job.id) || 0;
             const customer = customerMap.get(job.customerId || '');
@@ -11203,7 +11207,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
             };
           })
           .filter(j => j.amount > 0)
-          .sort((a, b) => new Date(b.completedDate || 0).getTime() - new Date(a.completedDate || 0).getTime());
+          .sort((a, b) => new Date(b.invoiceDate || b.completedDate || 0).getTime() - new Date(a.invoiceDate || a.completedDate || 0).getTime());
       }
       
       const total = breakdown.reduce((sum, j) => sum + j.amount, 0);
