@@ -302,6 +302,17 @@ const calculateJobTotal = (job: any): number => {
   }, 0);
 };
 
+// For multi-day jobs, return the per-day share of the total price.
+// Uses startOfDay (browser-local / NZ time) so the day count is calendar-accurate.
+const calculateDailyTotal = (job: any): number => {
+  const total = calculateJobTotal(job);
+  if (!total || !job.scheduledDate || !job.scheduledEndDate) return total;
+  const startDay = startOfDay(new Date(job.scheduledDate)).getTime();
+  const endDay = startOfDay(new Date(job.scheduledEndDate)).getTime();
+  const numDays = Math.round((endDay - startDay) / 86_400_000) + 1;
+  return numDays > 1 ? Math.round((total / numDays) * 100) / 100 : total;
+};
+
 // Function to transform Employee data to StaffMember format for dispatch board
 const transformEmployeeToStaffMember = (
   employee: Employee,
@@ -2586,7 +2597,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           {getTodaysJobs().map((job) => {
                             const customerName =
                               job.customerName || "Unknown Customer";
-                            const total = calculateJobTotal(job);
+                            const total = calculateDailyTotal(job);
                             const fullAddress = job.address?.trim() || "";
 
                             // Get status badge styling - same as mobile
@@ -3053,7 +3064,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           <div className="divide-y divide-gray-100 w-full">
               {getTodaysJobs().map((job: any) => {
                 const customerName = job.customerName || "Unknown Customer";
-                const total = calculateJobTotal(job);
+                const total = calculateDailyTotal(job);
                 const suburb = job.address?.split(",")[0]?.trim() || "";
 
                 // Get status badge styling

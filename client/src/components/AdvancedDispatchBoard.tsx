@@ -387,6 +387,16 @@ export function AdvancedDispatchBoard({
     }, 0);
   };
 
+  // For multi-day jobs, return the per-day share of the total price.
+  const calculateDailyTotal = (job: any): number => {
+    const total = calculateJobTotal(job);
+    if (!total || !job.scheduledDate || !job.scheduledEndDate) return total;
+    const startDay = startOfDay(new Date(job.scheduledDate)).getTime();
+    const endDay = startOfDay(new Date(job.scheduledEndDate)).getTime();
+    const numDays = Math.round((endDay - startDay) / 86_400_000) + 1;
+    return numDays > 1 ? Math.round((total / numDays) * 100) / 100 : total;
+  };
+
   // Format currency in NZD
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-NZ", {
@@ -401,7 +411,7 @@ export function AdvancedDispatchBoard({
   const renderJobSidebarCard = (job: any, index: number) => {
     const customer = getCustomerName(job.customerId, job);
     const styling = getStatusStyling(job.status);
-    const jobTotal = calculateJobTotal(job);
+    const jobTotal = calculateDailyTotal(job);
 
     // Check if job is scheduled for a different day
     const isScheduledForDifferentDay =
@@ -496,7 +506,7 @@ export function AdvancedDispatchBoard({
       `${format(currentDate, "yyyy-MM-dd")} ${job.scheduledStartTime}`,
     );
     const slotHour = timeSlot.getHours();
-    const jobTotal = calculateJobTotal(job);
+    const jobTotal = calculateDailyTotal(job);
 
     // Check if staffMember is assigned to this job (handle both single ID and array)
     const isAssigned = Array.isArray(job.assignedTo)
