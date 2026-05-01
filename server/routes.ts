@@ -178,7 +178,7 @@ function serializeJobTimestamps(job: any): any {
   const serialized = { ...job };
   
   // Convert timestamp fields to ISO UTC strings
-  const timestampFields = ['scheduledDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
+  const timestampFields = ['scheduledDate', 'scheduledEndDate', 'completedDate', 'workOrderAt', 'createdAt', 'updatedAt', 'startTime', 'endTime', 'lastActivityAt', 'customerConfirmedAt', 'confirmationReplySentAt', 'customerReplyReceivedAt'];
   
   for (const field of timestampFields) {
     if (serialized[field]) {
