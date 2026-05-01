@@ -1271,29 +1271,32 @@ export function GlobalJobCard({
 
       const currentJobId = currentJobIdRef.current;
 
-      // If we have a job ID, upload directly
+      // If we have a job ID, upload directly — batch all pasted images into a
+      // single diary entry so a paste of multiple images doesn't fan out into
+      // N separate cards.
       if (currentJobId) {
-        for (const file of imageFiles) {
-          try {
-            const formData = new FormData();
-            formData.append("photo", file);
-            formData.append("authorName", "User");
-            formData.append("description", "Pasted from clipboard");
+        try {
+          const formData = new FormData();
+          for (const file of imageFiles) formData.append("photos", file);
+          formData.append("authorName", "User");
+          formData.append("description", "Pasted from clipboard");
 
-            const response = await fetch(`/api/jobs/${currentJobId}/photos`, {
+          const response = await fetch(
+            `/api/jobs/${currentJobId}/diary-photos`,
+            {
               method: "POST",
               body: formData,
               credentials: "include",
-            });
+            },
+          );
 
-            if (response.ok) {
-              queryClient.invalidateQueries({
-                queryKey: ["/api/jobs", currentJobId, "diary-timeline"],
-              });
-            }
-          } catch (error) {
-            console.error("📸 Failed to upload pasted image:", error);
+          if (response.ok) {
+            queryClient.invalidateQueries({
+              queryKey: ["/api/jobs", currentJobId, "diary-timeline"],
+            });
           }
+        } catch (error) {
+          console.error("📸 Failed to upload pasted images:", error);
         }
       } else {
         // In create mode, queue the photos for later upload
@@ -2469,7 +2472,9 @@ export function GlobalJobCard({
         setDescriptionPopupOpen(false); // Close popup after mode transition so split-screen renders cleanly
         setSelectedEquipment([]); // Reset equipment selection for next create
 
-        // Upload any pending photos that were added before job was saved
+        // Upload any pending photos that were added before job was saved.
+        // Send them all in one batch so they land in a single diary entry
+        // rather than N separate "Photo Added" cards.
         if (pendingPhotos.length > 0) {
           console.log(
             "📸 Uploading",
@@ -2477,30 +2482,28 @@ export function GlobalJobCard({
             "pending photos to new job:",
             jobId,
           );
-          for (const file of pendingPhotos) {
-            try {
-              const formData = new FormData();
-              formData.append("photo", file);
-              formData.append("authorName", "User");
-              formData.append("description", "Photo added");
+          try {
+            const formData = new FormData();
+            for (const file of pendingPhotos) formData.append("photos", file);
+            formData.append("authorName", "User");
+            formData.append("description", "Photo added");
 
-              const response = await fetch(`/api/jobs/${jobId}/photos`, {
-                method: "POST",
-                body: formData,
-                credentials: "include",
-              });
+            const response = await fetch(`/api/jobs/${jobId}/diary-photos`, {
+              method: "POST",
+              body: formData,
+              credentials: "include",
+            });
 
-              if (!response.ok) {
-                console.error(
-                  "📸 Failed to upload pending photo:",
-                  await response.text(),
-                );
-              } else {
-                console.log("📸 Uploaded pending photo successfully");
-              }
-            } catch (error) {
-              console.error("📸 Error uploading pending photo:", error);
+            if (!response.ok) {
+              console.error(
+                "📸 Failed to upload pending photos:",
+                await response.text(),
+              );
+            } else {
+              console.log("📸 Uploaded pending photos successfully");
             }
+          } catch (error) {
+            console.error("📸 Error uploading pending photos:", error);
           }
           // Clear pending photos after upload
           setPendingPhotos([]);

@@ -6367,6 +6367,49 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Upload multiple photos at once and create a SINGLE diary entry that holds
+  // all of them. Use this whenever a single user action ("upload photos") yields
+  // more than one image — keeps the diary timeline tidy instead of producing N
+  // separate "Photo Added" cards. Falls back gracefully to one photo if only
+  // one is sent.
+  app.post('/api/jobs/:jobId/diary-photos', imageUpload.array('photos', 50), async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      const files = (req.files as Express.Multer.File[] | undefined) || [];
+
+      if (files.length === 0) {
+        return res.status(400).json({ success: false, message: 'No photos provided' });
+      }
+
+      const photoStorage = new PhotoStorageService();
+      const photoUrls: string[] = [];
+      for (const file of files) {
+        const { url } = await photoStorage.uploadPhoto(file.buffer, file.originalname, file.mimetype);
+        photoUrls.push(url);
+      }
+
+      const isMulti = photoUrls.length > 1;
+      const entry = await storage.createJobDiaryEntry({
+        jobId,
+        entryType: 'photo',
+        title: isMulti ? `${photoUrls.length} Photos Added` : 'Photo Added',
+        description: req.body.description || (isMulti ? `${photoUrls.length} photos added` : 'Photo added'),
+        authorName: req.body.authorName || 'User',
+        photoUrl: photoUrls[0],
+        photos: photoUrls,
+        isPrivate: false,
+      });
+
+      res.json({ success: true, data: entry });
+    } catch (error) {
+      console.error('Error uploading diary photos:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error uploading photos',
+      });
+    }
+  });
+
   // Upload a Before/After photo pair: AI decides which is which, labels are burned
   // into the saved files, one diary entry is created with both photos in order.
   app.post(

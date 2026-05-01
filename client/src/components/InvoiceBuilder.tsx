@@ -1715,8 +1715,11 @@ export function InvoiceBuilder({
                           )}
                         </div>
 
-                        {/* Quantity, Unit Price, and Total in a row */}
-                        <div className="grid grid-cols-3 gap-3">
+                        {/* Owner-facing builder: stack fields full-width so
+                            descriptions and totals don't get clipped. The
+                            customer-facing invoice (InvoiceTemplate) keeps
+                            its row layout. */}
+                        <div className="space-y-3">
                           <div>
                             <Label className="text-xs text-muted-foreground mb-1 block">
                               {item.category?.startsWith("labor")

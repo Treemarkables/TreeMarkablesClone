@@ -37,80 +37,75 @@ export function PhotoCaptureModal({
 
   const uploadPhotoMutation = useMutation({
     mutationFn: async (files: File[]) => {
-      const results = [];
-
-      for (const file of files) {
-        // Compress image before upload for 5-10x faster uploads
-        let fileToUpload = file;
-        if (file.type.startsWith("image/")) {
-          try {
-            fileToUpload = await compressImage(file);
-            console.log(
-              "📸 Compressed:",
-              file.name,
-              "from",
-              (file.size / 1024).toFixed(0),
-              "KB to",
-              (fileToUpload.size / 1024).toFixed(0),
-              "KB",
-            );
-          } catch (error) {
-            console.warn("📸 Compression failed, using original:", error);
+      // Compress in parallel before bundling into one multipart request, so
+      // multiple photos uploaded together land in a SINGLE diary entry.
+      const prepared = await Promise.all(
+        files.map(async (file) => {
+          if (file.type.startsWith("image/")) {
+            try {
+              const compressed = await compressImage(file);
+              console.log(
+                "📸 Compressed:",
+                file.name,
+                "from",
+                (file.size / 1024).toFixed(0),
+                "KB to",
+                (compressed.size / 1024).toFixed(0),
+                "KB",
+              );
+              return compressed;
+            } catch (error) {
+              console.warn("📸 Compression failed, using original:", error);
+            }
           }
+          return file;
+        }),
+      );
+
+      const formData = new FormData();
+      for (const f of prepared) formData.append("photos", f);
+      formData.append("authorName", "User");
+      formData.append("description", "Photo added");
+
+      const timestamp = Date.now();
+      const url = `/api/jobs/${jobId}/diary-photos?_bypass=${timestamp}`;
+
+      console.log("📸 Uploading", prepared.length, "photo(s) in one batch:", url);
+
+      // Allow a generous timeout — multi-photo uploads on slow connections.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+          credentials: "include",
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+          },
+        });
+        clearTimeout(timeoutId);
+
+        if (!response.ok) {
+          const error = await response.json();
+          console.error("📸 Upload failed:", error);
+          throw new Error(error.message || "Failed to upload photos");
         }
 
-        const formData = new FormData();
-        formData.append("photo", fileToUpload);
-        formData.append("authorName", "User");
-        formData.append("description", "Photo added");
-
-        // CRITICAL: Add timestamp to bypass ALL caching layers (service worker, browser, iOS)
-        const timestamp = Date.now();
-        const url = `/api/jobs/${jobId}/photos?_bypass=${timestamp}`;
-
-        console.log("📸 Uploading photo with cache bypass:", url);
-
-        // Use AbortController with timeout to prevent hung uploads
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s timeout
-
-        try {
-          const response = await fetch(url, {
-            method: "POST",
-            body: formData,
-            signal: controller.signal,
-            credentials: "include",
-            cache: "no-store",
-            headers: {
-              "Cache-Control": "no-cache, no-store, must-revalidate",
-              Pragma: "no-cache",
-            },
-          });
-          clearTimeout(timeoutId);
-
-          console.log("📸 Upload response status:", response.status);
-
-          if (!response.ok) {
-            const error = await response.json();
-            console.error("📸 Upload failed:", error);
-            throw new Error(error.message || "Failed to upload photo");
-          }
-
-          const result = await response.json();
-          console.log("📸 Upload success:", result);
-          results.push(result);
-        } catch (err: any) {
-          clearTimeout(timeoutId);
-          if (err.name === "AbortError") {
-            throw new Error(
-              "Upload timed out. Please check your connection and try again.",
-            );
-          }
-          throw err;
+        return await response.json();
+      } catch (err: any) {
+        clearTimeout(timeoutId);
+        if (err.name === "AbortError") {
+          throw new Error(
+            "Upload timed out. Please check your connection and try again.",
+          );
         }
+        throw err;
       }
-
-      return results;
     },
     onSuccess: (data) => {
       // Invalidate ALL diary queries for this job (including all filter types)

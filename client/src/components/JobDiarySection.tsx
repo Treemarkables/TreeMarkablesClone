@@ -589,12 +589,13 @@ interface ServiceM8DiaryEntry {
 // Types for diary entries
 interface DiaryEntry {
   id: string;
-  type: "note" | "sms" | "email" | "job_event" | "proposal" | "call" | "photo";
+  type: "note" | "sms" | "email" | "job_event" | "proposal" | "quote" | "call" | "photo";
   title: string;
   content: string;
   author: string;
   timestamp: string;
   photoUrl?: string;
+  photos?: string[];
   tags?: string[];
   metadata?: {
     phoneNumber?: string;
@@ -1117,6 +1118,17 @@ export function JobDiarySection({
           // CRITICAL FIX: Use entry.photoUrl directly (it's a string, not an array)
           // The database column is photo_url, which comes through as photoUrl in the API response
           const photoUrl = entry.photoUrl || undefined;
+          // photos[] holds the full set when multiple images were uploaded as a
+          // single batch (one diary entry, many photos). Fall back to the
+          // single photoUrl so legacy single-photo entries still render.
+          const photosArr: string[] | undefined = Array.isArray(entry.photos)
+            ? entry.photos.filter((u: any): u is string => typeof u === "string" && u.length > 0)
+            : undefined;
+          const photos = photosArr && photosArr.length > 0
+            ? photosArr
+            : photoUrl
+              ? [photoUrl]
+              : undefined;
 
           // Support both snake_case (entry_type) and camelCase (entryType)
           const entryType = entry.entryType || entry.entry_type;
@@ -1150,6 +1162,7 @@ export function JobDiarySection({
             author: entry.authorName || entry.author_name || "System",
             timestamp: entry.createdAt || entry.created_at,
             photoUrl: photoUrl,
+            photos: photos,
             tags: entry.tags || undefined,
             metadata: {
               ...entry.metadata, // Preserve existing metadata (email, phone, etc.)
@@ -1181,13 +1194,15 @@ export function JobDiarySection({
         });
       }
 
-      // Add local proposals
+      // Add local proposals — templateUsed='quote' is the discriminator that
+      // separates quotes from proposals in the same table.
       if (proposalsResponse.data) {
         proposalsResponse.data.forEach((proposal: any) => {
+          const isQuote = proposal.templateUsed === "quote";
           entries.push({
             id: proposal.id,
-            type: "proposal",
-            title: `Proposal Created: ${proposal.proposalNumber}`,
+            type: isQuote ? "quote" : "proposal",
+            title: `${isQuote ? "Quote" : "Proposal"} Created: ${proposal.proposalNumber}`,
             content: proposal.title || proposal.description,
             author: proposal.createdBy || "System",
             timestamp: proposal.createdAt,
@@ -1350,11 +1365,15 @@ export function JobDiarySection({
     },
   });
 
-  // Collect all photos from diary entries for gallery view
+  // Collect all photos from diary entries for gallery view. Pull from the
+  // photos[] array when present (multi-photo entries) and fall back to
+  // photoUrl for legacy single-photo entries.
   const allPhotos = React.useMemo(() => {
     const photos: string[] = [];
     diaryEntries.forEach((entry) => {
-      if (entry.photoUrl) {
+      if (entry.photos && entry.photos.length > 0) {
+        photos.push(...entry.photos);
+      } else if (entry.photoUrl) {
         photos.push(entry.photoUrl);
       }
     });
@@ -1363,18 +1382,29 @@ export function JobDiarySection({
 
   // Photo entries with metadata, used by the Photos tab grid so each tile
   // can show its timestamp and author and link back to the right gallery
-  // index on click.
+  // index on click. Expand multi-photo entries so each photo gets its own
+  // tile in the grid.
   const photoEntries = React.useMemo<
     Array<{ url: string; timestamp: string; author: string; id: string }>
   >(() => {
-    return diaryEntries
-      .filter((entry: DiaryEntry) => !!entry.photoUrl)
-      .map((entry: DiaryEntry) => ({
-        url: entry.photoUrl as string,
-        timestamp: entry.timestamp,
-        author: entry.author,
-        id: entry.id,
-      }));
+    const out: Array<{ url: string; timestamp: string; author: string; id: string }> = [];
+    diaryEntries.forEach((entry: DiaryEntry) => {
+      const urls =
+        entry.photos && entry.photos.length > 0
+          ? entry.photos
+          : entry.photoUrl
+            ? [entry.photoUrl]
+            : [];
+      urls.forEach((url, i) => {
+        out.push({
+          url,
+          timestamp: entry.timestamp,
+          author: entry.author,
+          id: urls.length > 1 ? `${entry.id}-${i}` : entry.id,
+        });
+      });
+    });
+    return out;
   }, [diaryEntries]);
 
   // Group consecutive photo entries for compact display, and stitch
@@ -1465,7 +1495,12 @@ export function JobDiarySection({
   const extractDocumentInfo = (entry: DiaryEntry) => {
     const content = `${entry.title} ${entry.content}`.toLowerCase();
 
-    // Check for quote
+    // Check for quote — quote-typed diary entries are sourced from the
+    // proposals table with templateUsed='quote' (proposalNumber kept in
+    // metadata). Fall back to a regex match for legacy QTE-* numbers.
+    if (entry.type === "quote" && entry.metadata?.proposalNumber) {
+      return { type: "quote", number: entry.metadata.proposalNumber };
+    }
     const quoteMatch = (entry.title + " " + entry.content).match(/QTE-\d+/i);
     if ((content.includes("quote") || content.includes("qte-")) && quoteMatch) {
       return { type: "quote", number: quoteMatch[0] };
@@ -3057,6 +3092,12 @@ export function JobDiarySection({
                         border: "border-indigo-200 dark:border-indigo-800",
                         icon: "bg-indigo-100 dark:bg-indigo-900/50",
                       };
+                    case "quote":
+                      return {
+                        bg: "bg-teal-50 dark:bg-teal-900/20",
+                        border: "border-teal-200 dark:border-teal-800",
+                        icon: "bg-teal-100 dark:bg-teal-900/50",
+                      };
                     case "job_event":
                       return {
                         bg: "bg-green-50 dark:bg-green-900/20",
@@ -3103,6 +3144,9 @@ export function JobDiarySection({
                             {entry.type === "proposal" && (
                               <Presentation className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                             )}
+                            {entry.type === "quote" && (
+                              <Receipt className="w-3.5 h-3.5 text-teal-600 dark:text-teal-400" />
+                            )}
                             {entry.type === "job_event" && (
                               <CheckCircle className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
                             )}
@@ -3112,6 +3156,7 @@ export function JobDiarySection({
                             {![
                               "note",
                               "proposal",
+                              "quote",
                               "job_event",
                               "call",
                             ].includes(entry.type) && (
@@ -3124,11 +3169,13 @@ export function JobDiarySection({
                                 ? "Note"
                                 : entry.type === "proposal"
                                   ? "Proposal"
-                                  : entry.type === "job_event"
-                                    ? "Event"
-                                    : entry.type === "call"
-                                      ? "Call"
-                                      : "Entry"}
+                                  : entry.type === "quote"
+                                    ? "Quote"
+                                    : entry.type === "job_event"
+                                      ? "Event"
+                                      : entry.type === "call"
+                                        ? "Call"
+                                        : "Entry"}
                             </span>
                             <div className="flex items-center gap-1.5 text-[10px] text-gray-500 dark:text-gray-400">
                               <Clock className="w-2.5 h-2.5" />
@@ -3289,38 +3336,70 @@ export function JobDiarySection({
                               </div>
                             )}
 
-                            {entry.photoUrl && (
-                              <div className="mt-2">
-                                <img
-                                  src={entry.photoUrl}
-                                  alt="Job photo"
-                                  className="max-w-full h-auto max-h-64 rounded-lg cursor-pointer hover-elevate object-contain"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const photoIndex = allPhotos.indexOf(
-                                      entry.photoUrl || "",
-                                    );
-                                    setViewingPhotoIndex(
-                                      photoIndex >= 0 ? photoIndex : 0,
-                                    );
-                                  }}
-                                  onError={(e) => {
-                                    console.error(
-                                      "Image failed to load:",
-                                      entry.photoUrl,
-                                    );
-                                    e.currentTarget.style.display = "none";
-                                  }}
-                                  onLoad={() => {
-                                    console.log(
-                                      "Image loaded successfully:",
-                                      entry.photoUrl,
-                                    );
-                                  }}
-                                  data-testid="img-diary-photo"
-                                />
-                              </div>
-                            )}
+                            {(() => {
+                              // Multiple photos uploaded together share one
+                              // diary entry — render them in a single grid so
+                              // the timeline shows one card per upload action.
+                              const entryPhotos =
+                                entry.photos && entry.photos.length > 0
+                                  ? entry.photos
+                                  : entry.photoUrl
+                                    ? [entry.photoUrl]
+                                    : [];
+                              if (entryPhotos.length === 0) return null;
+                              if (entryPhotos.length === 1) {
+                                const url = entryPhotos[0];
+                                return (
+                                  <div className="mt-2">
+                                    <img
+                                      src={url}
+                                      alt="Job photo"
+                                      className="max-w-full h-auto max-h-64 rounded-lg cursor-pointer hover-elevate object-contain"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const photoIndex = allPhotos.indexOf(url);
+                                        setViewingPhotoIndex(
+                                          photoIndex >= 0 ? photoIndex : 0,
+                                        );
+                                      }}
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                      }}
+                                      data-testid="img-diary-photo"
+                                    />
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div
+                                  className={`mt-2 grid gap-1.5 ${
+                                    entryPhotos.length === 2
+                                      ? "grid-cols-2"
+                                      : entryPhotos.length <= 4
+                                        ? "grid-cols-2"
+                                        : "grid-cols-3"
+                                  }`}
+                                  data-testid="img-diary-photos"
+                                >
+                                  {entryPhotos.map((url, i) => (
+                                    <img
+                                      key={`${entry.id}-${i}`}
+                                      src={url}
+                                      alt={`Job photo ${i + 1}`}
+                                      className="w-full aspect-square object-cover rounded-lg cursor-pointer hover-elevate"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const idx = allPhotos.indexOf(url);
+                                        setViewingPhotoIndex(idx >= 0 ? idx : 0);
+                                      }}
+                                      onError={(e) => {
+                                        e.currentTarget.style.display = "none";
+                                      }}
+                                    />
+                                  ))}
+                                </div>
+                              );
+                            })()}
 
                             {/* Audio player for call recordings */}
                             {entry.type === "call" &&
@@ -3464,15 +3543,17 @@ export function JobDiarySection({
                             }
                           }
 
+                          const isQuoteEntry = entry.type === "quote";
                           const shouldShowButton =
                             entry.type === "proposal" ||
+                            isQuoteEntry ||
                             ((entry.type === "email" || entry.type === "sms") &&
                               proposalNumber);
                           if (!shouldShowButton) return null;
 
                           return (
                             <div className="mt-2 flex items-center gap-2 flex-wrap">
-                              {entry.type === "proposal" && (
+                              {(entry.type === "proposal" || isQuoteEntry) && (
                                 <Badge
                                   variant="outline"
                                   className="text-xs whitespace-nowrap"
@@ -3480,7 +3561,7 @@ export function JobDiarySection({
                                   {entry.metadata?.status || "draft"}
                                 </Badge>
                               )}
-                              {entry.type === "proposal" &&
+                              {(entry.type === "proposal" || isQuoteEntry) &&
                                 entry.metadata?.viewedDate && (
                                   <Badge
                                     variant="secondary"
@@ -3497,14 +3578,16 @@ export function JobDiarySection({
                                 className="text-xs h-6 whitespace-nowrap"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  if (proposalNumber) {
+                                  if (isQuoteEntry && onQuoteClick) {
+                                    onQuoteClick(proposalNumber || "");
+                                  } else if (proposalNumber) {
                                     handleOpenProposal(proposalNumber);
                                   }
                                 }}
-                                data-testid="button-view-proposal"
+                                data-testid={isQuoteEntry ? "button-view-quote" : "button-view-proposal"}
                               >
                                 <ExternalLink className="w-3 h-3 mr-1" />
-                                View Proposal
+                                {isQuoteEntry ? "View Quote" : "View Proposal"}
                               </Button>
                             </div>
                           );

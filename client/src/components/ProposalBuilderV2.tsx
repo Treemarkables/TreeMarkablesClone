@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
   X, Plus, Upload, Trash2, Mail, MessageSquare, Check, Crown,
-  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft,
+  GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
 } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
 import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
@@ -723,7 +723,7 @@ function LineItemsBlock({
   const [addRowKey, setAddRowKey] = useState(0);
 
   // Close the catalogue dropdown when clicking anywhere outside the description cell
-  const descCellRef = useRef<HTMLTableCellElement>(null);
+  const descCellRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!showMats) return;
     const handler = (e: MouseEvent) => {
@@ -894,285 +894,277 @@ function LineItemsBlock({
     const priceEx = draftPriceExGst(d);
     const total = draftTotal(d);
     return (
-      <>
-        <tr data-row-editor="1" className="bg-blue-50/60">
-          <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
+      <div
+        data-row-editor="1"
+        ref={descCellRef}
+        className="bg-blue-50/60 border border-blue-200 rounded-md p-3 space-y-3"
+      >
+        {/* Description (full width) — anchor for the catalogue dropdown */}
+        <div className="relative">
+          <label className="text-xs text-gray-500 mb-1 block">Description</label>
+          <Input
+            value={matSearchVal || d.description}
+            onChange={(e) => {
+              setMatSearchVal(e.target.value);
+              setD((prev) => ({ ...prev, description: e.target.value }));
+              setShowMats(true);
+            }}
+            onKeyDown={(e) => { if (e.key === "Escape") { setShowMats(false); e.currentTarget.blur(); } }}
+            className="h-9 text-sm"
+            placeholder="Description or catalogue search…"
+            autoFocus={!editingId}
+          />
+          {showMats && filteredMats.length > 0 && (
+            <div className="absolute top-full left-0 right-0 z-50 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto mt-0.5">
+              {filteredMats.slice(0, 20).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault(); // prevent blur before click fires
+                    selectMaterial(m);
+                  }}
+                  className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-gray-50 text-left"
+                >
+                  <span className="font-medium">{m.name}</span>
+                  <span className="text-gray-400">
+                    ${typeof m.price === "number" ? m.price.toFixed(2) : parseFloat(m.price as string || "0").toFixed(2)}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Item Code (full width) */}
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">Item Code</label>
+          <Input
+            value={d.itemCode}
+            onChange={(e) => setD((prev) => ({ ...prev, itemCode: e.target.value }))}
+            className="h-9 text-sm"
+            placeholder="Code"
+          />
+        </div>
+
+        {/* Qty (full width) */}
+        <div>
+          <label className="text-xs text-gray-500 mb-1 block">Qty</label>
+          <Input
+            type="text"
+            inputMode="numeric"
+            value={d.quantity}
+            onChange={(e) => setD((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
+            className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+          />
+        </div>
+
+        {/* Cost / Markup / Fixed price — depend on pricing type, each full width */}
+        {d.pricingType === "fixed" ? (
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">Fixed Price</label>
             <Input
-              value={d.itemCode}
-              onChange={(e) => setD((prev) => ({ ...prev, itemCode: e.target.value }))}
-              className="h-7 text-xs"
-              placeholder="Code"
+              type="number"
+              value={d.fixedPrice === 0 ? '' : d.fixedPrice}
+              onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
+              onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
+              className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              placeholder="0.00"
             />
-          </td>
-          <td ref={descCellRef} className="border border-gray-200 px-1 py-1 relative">
-            <Input
-              value={matSearchVal || d.description}
-              onChange={(e) => {
-                setMatSearchVal(e.target.value);
-                setD((prev) => ({ ...prev, description: e.target.value }));
-                setShowMats(true);
-              }}
-              onKeyDown={(e) => { if (e.key === "Escape") { setShowMats(false); e.currentTarget.blur(); } }}
-              className="h-7 text-xs"
-              placeholder="Description or catalogue search…"
-              autoFocus={!editingId}
-            />
-            {showMats && filteredMats.length > 0 && (
-              <div className="absolute top-full left-0 z-50 w-64 bg-white border border-gray-200 rounded-md shadow-lg max-h-40 overflow-y-auto mt-0.5">
-                {filteredMats.slice(0, 20).map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    onMouseDown={(e) => {
-                      e.preventDefault(); // prevent blur before click fires
-                      selectMaterial(m);
-                    }}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs hover:bg-gray-50 text-left"
-                  >
-                    <span className="font-medium">{m.name}</span>
-                    <span className="text-gray-400">
-                      ${typeof m.price === "number" ? m.price.toFixed(2) : parseFloat(m.price as string || "0").toFixed(2)}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </td>
-          <td className="border border-gray-200 px-1 py-1">
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={d.quantity}
-              onChange={(e) => setD((prev) => ({ ...prev, quantity: parseFloat(e.target.value) || 0 }))}
-              className="h-7 text-xs text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-          </td>
-          <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
-            {d.pricingType === "fixed" ? (
-              <Input
-                type="number"
-                value={d.fixedPrice === 0 ? '' : d.fixedPrice}
-                onChange={(e) => setD((prev) => ({ ...prev, fixedPrice: parseFloat(e.target.value) || 0 }))}
-                onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
-                className="h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                placeholder=""
-              />
-            ) : (
+          </div>
+        ) : d.pricingType === "normal" ? (
+          <>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Cost ex GST</label>
               <Input
                 type="number"
                 value={d.costExGst === 0 ? '' : d.costExGst}
                 onChange={(e) => setD((prev) => ({ ...prev, costExGst: parseFloat(e.target.value) || 0 }))}
                 onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.costExGst || 0) > 0) { onCommit(); onCancel(); } }}
-                className="h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                placeholder=""
+                className="h-9 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                placeholder="0.00"
               />
-            )}
-          </td>
-          <td className="hidden sm:table-cell border border-gray-200 px-1 py-1">
-            {d.pricingType !== "fixed" ? (
-              <div className="flex items-center">
-                <Input
-                  type="number"
-                  value={d.markupPct}
-                  onChange={(e) => setD((prev) => ({ ...prev, markupPct: parseFloat(e.target.value) || 0 }))}
-                  className="h-7 text-xs text-right"
-                  placeholder="0"
-                />
-                <span className="text-xs text-gray-500 ml-0.5">%</span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400 px-2">—</span>
-            )}
-          </td>
-          <td className="hidden sm:table-cell border border-gray-200 px-2 py-1 text-right text-xs text-gray-700">
-            {d.pricingType === "choice" ? "varies" : fmtNZD(priceEx)}
-          </td>
-          <td className="border border-gray-200 px-2 py-1 text-right text-xs font-medium">
-            {d.pricingType === "choice" ? (
-              "varies"
-            ) : (
-              <>
-                {/* Mobile: editable fixed-price input (since cost/markup columns are hidden) */}
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  value={d.fixedPrice === 0 ? '' : d.fixedPrice}
-                  onChange={(e) => setD((prev) => ({
-                    ...prev,
-                    pricingType: "fixed",
-                    fixedPrice: parseFloat(e.target.value) || 0,
-                  }))}
-                  onBlur={() => { if (d.description?.trim() && (d.quantity || 0) > 0 && (d.fixedPrice || 0) > 0) { onCommit(); onCancel(); } }}
-                  className="sm:hidden h-7 text-xs text-right [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                  placeholder="0.00"
-                />
-                {/* Desktop: read-only computed total */}
-                <span className="hidden sm:inline">{fmtNZD(total)}</span>
-              </>
-            )}
-          </td>
-          <td className="border border-gray-200 px-1 py-1 align-top">
-            <div className="flex gap-1">
-              <button type="button" onClick={onCommit} className="p-1 text-green-600 hover:bg-green-50 rounded">
-                <Check className="w-3.5 h-3.5" />
+            </div>
+            <div>
+              <label className="text-xs text-gray-500 mb-1 block">Markup %</label>
+              <Input
+                type="number"
+                value={d.markupPct}
+                onChange={(e) => setD((prev) => ({ ...prev, markupPct: parseFloat(e.target.value) || 0 }))}
+                className="h-9 text-sm"
+                placeholder="0"
+              />
+            </div>
+          </>
+        ) : null}
+
+        {/* Pricing type controls */}
+        <div className="flex flex-wrap items-center gap-3 pt-1 border-t border-blue-200/60">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-gray-500">Pricing:</span>
+            <Select
+              value={d.pricingType}
+              onValueChange={(v) => setD((prev) => ({ ...prev, pricingType: v as PricingType }))}
+            >
+              <SelectTrigger className="h-7 text-xs w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="fixed">Fixed</SelectItem>
+                <SelectItem value="choice">Choice</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {d.pricingType !== "choice" && (
+            <div className="flex items-center gap-1">
+              <span className="text-xs text-gray-500">Price entered:</span>
+              <button
+                type="button"
+                onClick={() => setD((prev) => ({ ...prev, priceIncludesTax: false }))}
+                className={`px-1.5 py-0.5 text-xs rounded transition-colors ${!d.priceIncludesTax ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              >
+                ex GST
               </button>
-              <button type="button" onClick={onCancel} className="p-1 text-gray-400 hover:bg-gray-100 rounded">
-                <X className="w-3.5 h-3.5" />
+              <button
+                type="button"
+                onClick={() => setD((prev) => ({ ...prev, priceIncludesTax: true }))}
+                className={`px-1.5 py-0.5 text-xs rounded transition-colors ${d.priceIncludesTax ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
+              >
+                inc GST
               </button>
             </div>
-          </td>
-        </tr>
-        {/* Pricing type selector */}
-        <tr data-row-editor="1" className="bg-blue-50/40">
-          <td colSpan={8} className="border border-gray-200 px-2 py-1.5">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-gray-500">Pricing:</span>
-                <Select
-                  value={d.pricingType}
-                  onValueChange={(v) => setD((prev) => ({ ...prev, pricingType: v as PricingType }))}
-                >
-                  <SelectTrigger className="h-7 text-xs w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="normal">Normal</SelectItem>
-                    <SelectItem value="fixed">Fixed</SelectItem>
-                    <SelectItem value="choice">Choice</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {d.pricingType !== "choice" && (
-                <div className="flex items-center gap-1">
-                  <span className="text-xs text-gray-500">Price entered:</span>
-                  <button
-                    type="button"
-                    onClick={() => setD((prev) => ({ ...prev, priceIncludesTax: false }))}
-                    className={`px-1.5 py-0.5 text-xs rounded transition-colors ${!d.priceIncludesTax ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
-                  >
-                    ex GST
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setD((prev) => ({ ...prev, priceIncludesTax: true }))}
-                    className={`px-1.5 py-0.5 text-xs rounded transition-colors ${d.priceIncludesTax ? "bg-blue-500 text-white" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}
-                  >
-                    inc GST
-                  </button>
-                </div>
-              )}
-              {d.pricingType === "choice" && (
-                <div className="flex-1">
-                  <ChoiceEditor
-                    choices={d.choices}
-                    onChange={(choices) => setD((prev) => ({ ...prev, choices }))}
-                  />
-                </div>
-              )}
-            </div>
-          </td>
-        </tr>
-      </>
+          )}
+        </div>
+
+        {d.pricingType === "choice" && (
+          <div>
+            <ChoiceEditor
+              choices={d.choices}
+              onChange={(choices) => setD((prev) => ({ ...prev, choices }))}
+            />
+          </div>
+        )}
+
+        {/* Live preview of computed Price ex GST + Total */}
+        {d.pricingType !== "choice" && (
+          <div className="flex items-center justify-between text-xs pt-1">
+            <span className="text-gray-500">
+              Price ex GST: <span className="text-gray-700 font-medium">{fmtNZD(priceEx)}</span>
+            </span>
+            <span className="text-gray-700">
+              Total: <span className="font-semibold">{fmtNZD(total)}</span>
+            </span>
+          </div>
+        )}
+
+        {/* Commit / cancel */}
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-200 rounded hover:bg-gray-50"
+          >
+            <X className="w-3.5 h-3.5" /> Cancel
+          </button>
+          <button
+            type="button"
+            onClick={onCommit}
+            className="flex items-center gap-1 px-3 py-1.5 text-xs text-white bg-green-600 rounded hover:bg-green-700"
+          >
+            <Check className="w-3.5 h-3.5" /> Done
+          </button>
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="px-0 py-0">
-      <table className="w-full border-collapse text-sm">
-        <thead className="bg-green-50">
-          <tr>
-            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600 w-20">Item Code</th>
-            <th className="border border-gray-200 px-3 py-2 text-left text-xs font-semibold text-gray-600">Item Name</th>
-            <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-600 w-10">Qty</th>
-            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Cost ex GST</th>
-            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-20">Markup</th>
-            <th className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 w-24">Price ex GST</th>
-            <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-600 w-24">Total ex GST</th>
-            <th className="border border-gray-200 px-1 py-2 w-8" />
-          </tr>
-        </thead>
-        <tbody>
-          {block.lineItems.map((item) =>
-            editingId === item.id ? (
-              <Fragment key={item.id + "-edit"}>
-                {RowEditor({
-                  d: editDraft,
-                  setD: (fn) => setEditDraft((prev) => fn(prev)),
-                  onCommit: commitEdit,
-                  onCancel: () => setEditingId(null),
-                  matSearchVal: matSearch,
-                  setMatSearchVal: setMatSearch,
-                })}
-              </Fragment>
-            ) : (
-              <tr
-                key={item.id}
-                className="hover:bg-gray-50 cursor-pointer group/row"
-                onClick={() => startEdit(item)}
+    <div className="space-y-2">
+      {/* Owner-facing line items: stacked card layout per item so descriptions
+          and totals get the full modal width. The customer-facing template
+          (ProposalTemplate.tsx) renders these as a normal one-row-per-item
+          table. */}
+      {block.lineItems.map((item) =>
+        editingId === item.id ? (
+          <Fragment key={item.id + "-edit"}>
+            {RowEditor({
+              d: editDraft,
+              setD: (fn) => setEditDraft((prev) => fn(prev)),
+              onCommit: commitEdit,
+              onCancel: () => setEditingId(null),
+              matSearchVal: matSearch,
+              setMatSearchVal: setMatSearch,
+            })}
+          </Fragment>
+        ) : (
+          <div
+            key={item.id}
+            className="bg-white border border-gray-200 rounded-md p-3 hover:bg-gray-50 cursor-pointer group/row"
+            onClick={() => startEdit(item)}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="text-sm font-medium text-gray-900 flex-1 min-w-0 break-words">
+                {item.description}
+                {item.pricingType === "choice" && <span className="ml-1 text-xs text-blue-500">(choice)</span>}
+                {item.isOptional && <span className="ml-1 text-xs text-gray-400">(optional)</span>}
+              </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); removeItem(item.id!); }}
+                className="p-1 text-gray-300 hover:text-red-500 rounded opacity-0 group-hover/row:opacity-100 transition-opacity flex-shrink-0"
               >
-                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-xs text-gray-500">{item.category || "—"}</td>
-                <td className="border border-gray-200 px-3 py-2 text-sm text-gray-900 font-medium">
-                  {item.description}
-                  {item.pricingType === "choice" && <span className="ml-1 text-xs text-blue-500">(choice)</span>}
-                  {item.isOptional && <span className="ml-1 text-xs text-gray-400">(optional)</span>}
-                </td>
-                <td className="border border-gray-200 px-2 py-2 text-center text-sm text-gray-700">{item.quantity}</td>
-                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">{fmtNZD(item.costPrice ?? item.unitPrice)}</td>
-                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-sm text-gray-600">
-                  {item.markupPct ? fmtPct(item.markupPct) : "—"}
-                </td>
-                <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-sm text-gray-700">{fmtNZD(item.unitPrice)}</td>
-                <td className="border border-gray-200 px-2 py-2 text-right text-sm font-semibold text-gray-900">{fmtNZD(item.totalPrice)}</td>
-                <td className="border border-gray-200 px-1 py-2">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); removeItem(item.id!); }}
-                    className="p-1 text-gray-300 hover:text-red-500 rounded opacity-0 group-hover/row:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </td>
-              </tr>
-            )
-          )}
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-gray-600">
+              {item.category && (
+                <div><span className="text-gray-400">Code:</span> {item.category}</div>
+              )}
+              <div><span className="text-gray-400">Qty:</span> {item.quantity}</div>
+              {item.pricingType !== "choice" && (
+                <>
+                  <div><span className="text-gray-400">Cost ex GST:</span> {fmtNZD(item.costPrice ?? item.unitPrice)}</div>
+                  <div><span className="text-gray-400">Markup:</span> {item.markupPct ? fmtPct(item.markupPct) : "—"}</div>
+                  <div><span className="text-gray-400">Price ex GST:</span> {fmtNZD(item.unitPrice)}</div>
+                </>
+              )}
+            </div>
+            <div className="mt-2 pt-2 border-t border-gray-100 flex items-center justify-between text-sm">
+              <span className="text-xs text-gray-500 uppercase tracking-wide">Total ex GST</span>
+              <span className="font-semibold text-gray-900">{fmtNZD(item.totalPrice)}</span>
+            </div>
+          </div>
+        )
+      )}
 
-          {/* Search or Add New row */}
-          {showAdd ? (
-            <Fragment key={`add-row-${addRowKey}`}>
-              {RowEditor({
-                d: draft,
-                setD: (fn) => setDraft((prev) => fn(prev)),
-                onCommit: commitDraft,
-                onCancel: () => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); },
-                matSearchVal: matSearch,
-                setMatSearchVal: setMatSearch,
-              })}
-            </Fragment>
-          ) : (
-            <tr>
-              <td colSpan={8} className="border border-gray-200 px-3 py-2">
-                <button
-                  type="button"
-                  onClick={() => setShowAdd(true)}
-                  className="text-sm text-gray-400 hover:text-blue-600 hover:underline transition-colors text-left w-full"
-                >
-                  Search or Add New...
-                </button>
-              </td>
-            </tr>
-          )}
+      {/* Search or Add New */}
+      {showAdd ? (
+        <Fragment key={`add-row-${addRowKey}`}>
+          {RowEditor({
+            d: draft,
+            setD: (fn) => setDraft((prev) => fn(prev)),
+            onCommit: commitDraft,
+            onCancel: () => { setShowAdd(false); setDraft(defaultDraft()); setMatSearch(""); },
+            matSearchVal: matSearch,
+            setMatSearchVal: setMatSearch,
+          })}
+        </Fragment>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="w-full text-left text-sm text-gray-400 hover:text-blue-600 hover:underline transition-colors px-3 py-2 border border-dashed border-gray-200 rounded-md"
+        >
+          Search or Add New...
+        </button>
+      )}
 
-          {/* Section subtotal */}
-          <tr className="bg-gray-50">
-            <td className="hidden sm:table-cell" colSpan={5} />
-            <td className="sm:hidden" colSpan={1} />
-            <td className="hidden sm:table-cell border border-gray-200 px-3 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">SUBTOTAL</td>
-            <td className="sm:hidden border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide">SUBTOTAL</td>
-            <td className="border border-gray-200 px-2 py-2 text-right text-sm font-bold text-gray-900">{fmtNZD(subtotal)}</td>
-            <td className="border border-gray-200" />
-          </tr>
-        </tbody>
-      </table>
+      {/* Section subtotal */}
+      <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-md px-3 py-2">
+        <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Subtotal</span>
+        <span className="text-sm font-bold text-gray-900">{fmtNZD(subtotal)}</span>
+      </div>
     </div>
   );
 }
@@ -1655,6 +1647,14 @@ export function ProposalBuilderV2({
     latestPayloadRef.current = buildPayload();
     latestDraftIdRef.current = draftId ?? null;
     if (snap === lastSnapshot.current) return;
+    // Auto-save only takes over after the user has committed once with the
+    // Save button (or opened an existing record in edit mode, which seeds
+    // draftId from proposalId). Until then, edits stay local — closing the
+    // builder without Save discards the in-progress quote/proposal.
+    if (!draftId) {
+      setAutoSaveStatus("unsaved");
+      return;
+    }
     setAutoSaveStatus("unsaved");
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
@@ -1677,8 +1677,12 @@ export function ProposalBuilderV2({
   // added a line item and closed within that window, the save never fired
   // and the line item was lost. A keepalive fetch here makes the request
   // survive the unmount. Mirrors the pattern in GlobalJobCard's auto-save.
+  // Only flushes when a draft already exists (i.e. the user has pressed
+  // Save once); otherwise closing the builder is a deliberate discard.
   useEffect(() => {
     return () => {
+      const pendingDraftId = latestDraftIdRef.current;
+      if (!pendingDraftId) return;
       const snap = latestSnapshotRef.current;
       const payload = latestPayloadRef.current;
       if (!snap || !payload || snap === lastSnapshot.current) return;
@@ -1689,13 +1693,8 @@ export function ProposalBuilderV2({
             s.description || s.photos.length > 0 || s.lineItems.length > 0,
         );
       if (!hasContent) return;
-      const pendingDraftId = latestDraftIdRef.current;
-      const url = pendingDraftId
-        ? `/api/proposals/${pendingDraftId}`
-        : "/api/proposals";
-      const method = pendingDraftId ? "PUT" : "POST";
-      fetch(url, {
-        method,
+      fetch(`/api/proposals/${pendingDraftId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
         keepalive: true,
@@ -1806,7 +1805,10 @@ export function ProposalBuilderV2({
   };
 
   const handleClose = async () => {
-    if (autoSaveStatus === "unsaved") {
+    // Only flush pending changes if a draft already exists. Closing without
+    // ever pressing Save discards the in-progress quote/proposal — the user
+    // explicitly opted out of persisting it.
+    if (draftId && autoSaveStatus === "unsaved") {
       setAutoSaveStatus("saving");
       try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* close anyway */ }
     }
@@ -1946,6 +1948,28 @@ export function ProposalBuilderV2({
               >
                 <MessageSquare className="w-4 h-4" />
                 <span className="hidden sm:inline">SMS</span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  // First click: persists the draft and unlocks auto-save.
+                  // Subsequent clicks: flush the latest edits immediately
+                  // instead of waiting for the 2s debounce.
+                  if (!draftId) {
+                    await ensureDraftSaved();
+                  } else if (autoSaveTimer.current) {
+                    clearTimeout(autoSaveTimer.current);
+                    setAutoSaveStatus("saving");
+                    try { await saveDraftMutation.mutateAsync(buildPayload()); } catch { /* surfaced via toast */ }
+                  }
+                }}
+                disabled={autoSaveStatus === "saving"}
+                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-sm font-medium text-white bg-indigo-600 rounded-md shadow-sm hover:bg-indigo-700 disabled:opacity-60 transition-colors"
+                aria-label={isQuote ? "Save quote" : "Save proposal"}
+                title="Save"
+              >
+                <Save className="w-4 h-4" />
+                <span className="hidden sm:inline">Save</span>
               </button>
               {/* Preview button removed — the customer view now lives inline
                   below the editor (scroll down to see it), matching the
