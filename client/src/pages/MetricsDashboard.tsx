@@ -261,7 +261,7 @@ export default function MetricsDashboard() {
   const [reportFormat, setReportFormat] = useState<string>("pdf");
 
   // Date range state
-  const [dateRangePreset, setDateRangePreset] = useState<string>("all");
+  const [dateRangePreset, setDateRangePreset] = useState<string>("7");
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
