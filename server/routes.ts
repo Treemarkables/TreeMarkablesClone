@@ -23899,7 +23899,7 @@ Transcription: ${transcriptText}`;
         : null;
 
       // Use transaction to ensure atomicity of update + delete + recreate
-      await storage.db.transaction(async (tx) => {
+      await db.transaction(async (tx) => {
         // Update the assessment
         await tx.update(schema.jhaAssessments)
           .set({
