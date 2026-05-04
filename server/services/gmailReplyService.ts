@@ -3,6 +3,14 @@ import { simpleParser } from 'mailparser';
 import { db } from '../db';
 import { jobs, jobDiaryEntries, customers, conversationMessages } from '../../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
+import { PhotoStorageService } from '../photoStorage';
+
+interface ParsedEmailAttachment {
+  filename?: string;
+  contentType: string;
+  content: Buffer;
+  size?: number;
+}
 
 interface ParsedEmailReply {
   from: string;
@@ -15,6 +23,7 @@ interface ParsedEmailReply {
   inReplyTo?: string;
   references?: string[];
   uid?: number; // IMAP UID for marking as seen after successful processing
+  attachments?: ParsedEmailAttachment[];
 }
 
 class GmailReplyService {
@@ -146,6 +155,18 @@ class GmailReplyService {
                       return;
                     }
 
+                    // mailparser delivers attachments as { filename, contentType, content (Buffer), size, ... }.
+                    // Keep image attachments so the diary entry can render them; non-image
+                    // parts (PDFs, signatures, etc.) are ignored here on purpose.
+                    const imageAttachments: ParsedEmailAttachment[] = (parsed.attachments || [])
+                      .filter((a: any) => typeof a?.contentType === 'string' && a.contentType.toLowerCase().startsWith('image/') && Buffer.isBuffer(a.content))
+                      .map((a: any) => ({
+                        filename: a.filename,
+                        contentType: a.contentType,
+                        content: a.content,
+                        size: a.size,
+                      }));
+
                     const emailData: ParsedEmailReply = {
                       from: fromEmail,
                       to: toEmail,
@@ -156,7 +177,8 @@ class GmailReplyService {
                       messageId: parsed.messageId,
                       inReplyTo: parsed.inReplyTo,
                       references: parsed.references,
-                      uid: emailUid // Store UID for later marking as seen
+                      uid: emailUid, // Store UID for later marking as seen
+                      attachments: imageAttachments.length > 0 ? imageAttachments : undefined,
                     };
 
                     emailsToProcess.push(emailData);
@@ -461,6 +483,28 @@ class GmailReplyService {
           }
         }
 
+        // Upload image attachments so they render on the diary entry. One failed
+        // upload shouldn't block the email body from being recorded — log and move on.
+        const photoUrls: string[] = [];
+        if (email.attachments && email.attachments.length > 0) {
+          const photoStorage = new PhotoStorageService();
+          for (const att of email.attachments) {
+            try {
+              const { url } = await photoStorage.uploadPhoto(
+                att.content,
+                att.filename || `email-attachment-${Date.now()}`,
+                att.contentType,
+              );
+              photoUrls.push(url);
+            } catch (uploadErr) {
+              console.error(`📧 Failed to upload email image attachment "${att.filename}":`, uploadErr);
+            }
+          }
+          if (photoUrls.length > 0) {
+            console.log(`📧 ✅ Uploaded ${photoUrls.length} image attachment(s) from email reply`);
+          }
+        }
+
         // Create job diary entry for the email reply
         await db.insert(jobDiaryEntries).values({
           jobId: job.id,
@@ -471,6 +515,10 @@ class GmailReplyService {
           authorName: customer.name,
           authorRole: 'customer',
           tags: ['communication', 'email', 'customer-reply'],
+          ...(photoUrls.length > 0 && {
+            photoUrl: photoUrls[0],
+            photos: photoUrls,
+          }),
           metadata: {
             emailAddress: email.from,
             messageId: email.messageId,
@@ -478,7 +526,8 @@ class GmailReplyService {
             receivedAt: email.date.toISOString(),
             direction: 'incoming',
             subject: email.subject,
-            rawBody: email.textBody // Store raw body for debugging
+            rawBody: email.textBody, // Store raw body for debugging
+            ...(photoUrls.length > 0 && { attachmentCount: photoUrls.length }),
           }
         });
 
