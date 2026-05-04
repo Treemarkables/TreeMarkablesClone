@@ -16806,16 +16806,47 @@ Transcription: ${transcriptText}`;
           });
         }
       } else {
-        // SendGrid multipart/form-data webhook - apply multer middleware
+        // SendGrid multipart/form-data webhook - apply multer middleware.
+        // .any() (rather than .none()) so file attachments land in req.files.
+        // SendGrid posts attachments as fields named attachment1, attachment2, ...
+        // with dynamic names, which is exactly what .any() handles.
         await new Promise<void>((resolve, reject) => {
-          emailWebhookUpload.none()(req, res, (err: any) => {
+          emailWebhookUpload.any()(req, res, (err: any) => {
             if (err) reject(err);
             else resolve();
           });
         });
       }
-      
+
       const { from, to, subject, text, html, headers } = req.body;
+
+      // Upload any image attachments now so we can attach them to whichever diary
+      // entry path matches below (UUID, job number, or quote number).
+      const emailImageUrls: string[] = [];
+      const incomingFiles = (req as any).files as Express.Multer.File[] | undefined;
+      if (Array.isArray(incomingFiles) && incomingFiles.length > 0) {
+        const photoStorage = new PhotoStorageService();
+        for (const f of incomingFiles) {
+          if (typeof f.mimetype === 'string' && f.mimetype.toLowerCase().startsWith('image/') && Buffer.isBuffer(f.buffer)) {
+            try {
+              const { url } = await photoStorage.uploadPhoto(
+                f.buffer,
+                f.originalname || `email-attachment-${Date.now()}`,
+                f.mimetype,
+              );
+              emailImageUrls.push(url);
+            } catch (uploadErr) {
+              console.error(`📧 Failed to upload email image attachment "${f.originalname}":`, uploadErr);
+            }
+          }
+        }
+        if (emailImageUrls.length > 0) {
+          console.log(`📧 ✅ Uploaded ${emailImageUrls.length} image attachment(s) from inbound email`);
+        }
+      }
+      const emailPhotoFields = emailImageUrls.length > 0
+        ? { photoUrl: emailImageUrls[0], photos: emailImageUrls }
+        : {};
       
       console.log(`📧 Processing email from: ${from}, to: ${to}, subject: ${subject}`);
       
@@ -16894,9 +16925,11 @@ Transcription: ${transcriptText}`;
           content: actualSubject || '',
           authorName: actualFromName || actualFromEmail,
           authorRole: 'customer',
+          ...emailPhotoFields,
           metadata: {
             emailAddress: actualFromEmail || actualFrom,
-            ...(isForwardingAddress && { forwardedBy })
+            ...(isForwardingAddress && { forwardedBy }),
+            ...(emailImageUrls.length > 0 && { attachmentCount: emailImageUrls.length }),
           }
         });
         await storage.updateJob(job.id, { lastActivityAt: new Date() });
@@ -16957,12 +16990,14 @@ Transcription: ${transcriptText}`;
             content: actualSubject || '',
             authorName: actualFromName || actualFromEmail,
             authorRole: 'customer',
+            ...emailPhotoFields,
             metadata: {
               emailAddress: actualFromEmail || actualFrom,
-              ...(isForwardingAddress && { forwardedBy })
+              ...(isForwardingAddress && { forwardedBy }),
+              ...(emailImageUrls.length > 0 && { attachmentCount: emailImageUrls.length }),
             }
           });
-          
+
           // Update job's lastActivityAt to trigger activity indicator and sorting
           await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
@@ -17043,12 +17078,14 @@ Transcription: ${transcriptText}`;
             content: actualSubject || '',
             authorName: actualFromName || actualFromEmail,
             authorRole: 'customer',
+            ...emailPhotoFields,
             metadata: {
               emailAddress: actualFromEmail || actualFrom,
-              ...(isForwardingAddress && { forwardedBy })
+              ...(isForwardingAddress && { forwardedBy }),
+              ...(emailImageUrls.length > 0 && { attachmentCount: emailImageUrls.length }),
             }
           });
-          
+
           // Update job's lastActivityAt to trigger activity indicator and sorting
           await storage.updateJob(job.id, { lastActivityAt: new Date() });
           jobFound = true;
@@ -18412,29 +18449,57 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     }
   });
 
-  // Booked workload — jobs scheduled in the upcoming N days (forward-looking)
+  // Booked workload — jobs scheduled in a calendar week (Mon–Sun in NZ time)
+  // or, for legacy callers, a rolling N-day window from today.
   app.get('/api/analytics/booked-workload', async (req: Request, res: Response) => {
     try {
+      const periodParam = String(req.query.period || '');
+      const validPeriods = ['this_week', 'next_week', 'week_after'] as const;
+      type Period = typeof validPeriods[number];
+      const period: Period | null = (validPeriods as readonly string[]).includes(periodParam)
+        ? (periodParam as Period)
+        : null;
+
       const requestedDays = parseInt(req.query.days as string, 10);
       const days = Number.isFinite(requestedDays)
         ? Math.max(1, Math.min(365, requestedDays))
         : 7;
 
       const nowNZ = toZonedTime(new Date(), 'Pacific/Auckland');
-      const startStr = `${nowNZ.getFullYear()}-${String(nowNZ.getMonth() + 1).padStart(2, '0')}-${String(nowNZ.getDate()).padStart(2, '0')}`;
-      const endNZ = new Date(nowNZ);
-      endNZ.setDate(endNZ.getDate() + days - 1);
+      let startNZ: Date;
+      let endNZ: Date;
+
+      if (period) {
+        // dow: 0=Sun..6=Sat. We want Monday as week start, so days-since-Monday is (dow+6)%7.
+        const dow = nowNZ.getDay();
+        const daysSinceMonday = (dow + 6) % 7;
+        const monday = new Date(nowNZ);
+        monday.setDate(nowNZ.getDate() - daysSinceMonday);
+        if (period === 'next_week') monday.setDate(monday.getDate() + 7);
+        else if (period === 'week_after') monday.setDate(monday.getDate() + 14);
+        startNZ = monday;
+        endNZ = new Date(monday);
+        endNZ.setDate(monday.getDate() + 6);
+      } else {
+        startNZ = nowNZ;
+        endNZ = new Date(nowNZ);
+        endNZ.setDate(endNZ.getDate() + days - 1);
+      }
+
+      const startStr = `${startNZ.getFullYear()}-${String(startNZ.getMonth() + 1).padStart(2, '0')}-${String(startNZ.getDate()).padStart(2, '0')}`;
       const endStr = `${endNZ.getFullYear()}-${String(endNZ.getMonth() + 1).padStart(2, '0')}-${String(endNZ.getDate()).padStart(2, '0')}`;
 
       const fromUTC = fromZonedTime(`${startStr}T00:00:00`, 'Pacific/Auckland');
       const toUTC = fromZonedTime(`${endStr}T23:59:59.999`, 'Pacific/Auckland');
 
-      const [{ jobs: allJobs }, employees, allQuotes, allInvoices, allProposals] = await Promise.all([
+      const [{ jobs: allJobs }, employees, allQuotes, allInvoices, allProposals, allProposalLineItems, allProposalChoices] = await Promise.all([
         storage.getAllJobs({ limit: 999999 }),
         storage.getAllEmployees(),
         storage.getAllQuotes(),
         storage.getAllInvoices(),
         storage.getAllProposals(),
+        db.select().from(schema.proposalLineItems),
+        db.select().from(schema.proposalLineItemChoices),
       ]);
 
       const bookedJobs = allJobs.filter(job => {
@@ -18444,26 +18509,51 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return sched >= fromUTC && sched <= toUTC;
       });
 
-      // Fallback price lookup: invoice sum (actual billing) → accepted proposal → quote.
-      // Proposals are this app's primary booking instrument; jobs.total_amount often lags
-      // behind the accepted proposal until manually set.
+      // Fallback price lookup: proposal (line items or stored subtotal) → invoice sum → quote.
+      // Proposals are the primary booking instrument; the Job Card reads proposal line
+      // items regardless of proposal status (draft/sent/viewed/accepted) when the
+      // proposal's stored subtotal is stale, so this report mirrors that priority.
       const invoicesByJob = new Map<string, number>();
       for (const inv of allInvoices) {
         if (!inv.jobId) continue;
         const amt = parseFloat(inv.amount || '0');
         if (amt > 0) invoicesByJob.set(inv.jobId, (invoicesByJob.get(inv.jobId) ?? 0) + amt);
       }
+
+      // Sum each proposal's selected line items, ex-GST, mirroring the Job Card calc.
+      const choicePriceById = new Map<string, number>();
+      for (const c of allProposalChoices) {
+        choicePriceById.set(c.id, parseFloat(c.price || '0'));
+      }
+      const proposalLineItemsExGst = new Map<string, number>();
+      for (const li of allProposalLineItems) {
+        if (li.selected === false) continue;
+        let raw = 0;
+        if (li.pricingType === 'choice' && li.selectedChoiceId) {
+          raw = choicePriceById.get(li.selectedChoiceId) ?? 0;
+        } else if (li.pricingType === 'fixed' && li.fixedPrice) {
+          raw = parseFloat(li.fixedPrice || '0');
+        } else {
+          raw = parseFloat(li.totalPrice || '0');
+        }
+        if (!(raw > 0)) continue;
+        const exGst = li.priceIncludesTax ? raw / 1.15 : raw;
+        proposalLineItemsExGst.set(li.proposalId, (proposalLineItemsExGst.get(li.proposalId) ?? 0) + exGst);
+      }
+
+      // Most recent proposal per job, any status. Use stored subtotal if non-zero,
+      // otherwise sum of selected line items (the Job Card's same fallback).
       const proposalsByJob = new Map<string, { amount: number; createdAt: number }>();
       for (const p of allProposals) {
         if (!p.jobId) continue;
-        if (p.status !== 'accepted') continue;
-        // subtotal is ex-GST; the dashboard reports ex-GST throughout.
-        const amt = parseFloat(p.subtotal || '0');
+        const stored = parseFloat(p.subtotal || '0');
+        const computed = proposalLineItemsExGst.get(p.id) ?? 0;
+        const amt = stored > 0 ? stored : computed;
         if (amt <= 0) continue;
         const created = p.createdAt ? new Date(p.createdAt).getTime() : 0;
         const existing = proposalsByJob.get(p.jobId);
         if (!existing || created > existing.createdAt) {
-          proposalsByJob.set(p.jobId, { amount: amt, createdAt: created });
+          proposalsByJob.set(p.jobId, { amount: Math.round(amt * 100) / 100, createdAt: created });
         }
       }
       const quotesByJob = new Map<string, { amount: number; createdAt: number }>();
@@ -18478,23 +18568,54 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         }
       }
 
-      let unpricedJobCount = 0;
-      const totalValue = bookedJobs.reduce((sum, j) => {
-        // jobs.subtotal is reliably ex-GST; jobs.total_amount mixes ex- and inc-GST
-        // depending on how the row was created. Prefer subtotal so the card stays ex-GST.
+      // jobs.subtotal is reliably ex-GST; jobs.total_amount mixes ex- and inc-GST
+      // depending on how the row was created. Prefer subtotal so the card stays ex-GST.
+      const resolveValue = (j: typeof bookedJobs[number]): { value: number; source: 'job' | 'invoice' | 'proposal' | 'quote' | null } => {
         const subtotal = parseFloat(j.subtotal || '0');
-        if (subtotal > 0) return sum + subtotal;
+        if (subtotal > 0) return { value: subtotal, source: 'job' };
         const direct = parseFloat(j.totalAmount || '0');
-        if (direct > 0) return sum + direct;
-        const invFallback = invoicesByJob.get(j.id) ?? 0;
-        if (invFallback > 0) return sum + invFallback;
+        if (direct > 0) return { value: direct, source: 'job' };
+        // Proposal next: matches the Job Card display, which trusts proposal line
+        // items even on draft/sent/viewed proposals when subtotal/totalAmount are 0.
         const proposalFallback = proposalsByJob.get(j.id)?.amount ?? 0;
-        if (proposalFallback > 0) return sum + proposalFallback;
+        if (proposalFallback > 0) return { value: proposalFallback, source: 'proposal' };
+        // totalIncludingGst as last-resort: sometimes the only price on legacy/imported
+        // rows where subtotal/total_amount/proposal were never written. Strip GST.
+        const incGst = parseFloat(j.totalIncludingGst || '0');
+        if (incGst > 0) {
+          const taxRate = parseFloat(j.taxRate || '15');
+          const exGst = taxRate > 0 ? incGst / (1 + taxRate / 100) : incGst;
+          return { value: Math.round(exGst * 100) / 100, source: 'job' };
+        }
+        const invFallback = invoicesByJob.get(j.id) ?? 0;
+        if (invFallback > 0) return { value: invFallback, source: 'invoice' };
         const quoteFallback = quotesByJob.get(j.id)?.amount ?? 0;
-        if (quoteFallback > 0) return sum + quoteFallback;
-        unpricedJobCount += 1;
-        return sum;
-      }, 0);
+        if (quoteFallback > 0) return { value: quoteFallback, source: 'quote' };
+        return { value: 0, source: null };
+      };
+
+      const jobsList = bookedJobs.map(j => {
+        const { value, source } = resolveValue(j);
+        return {
+          id: j.id,
+          jobNumber: j.jobNumber,
+          customerName: (j as any).customerName ?? null,
+          title: j.title ?? null,
+          status: j.status,
+          scheduledDate: j.scheduledDate,
+          estimatedManHours: parseFloat(j.estimatedManHours || '0'),
+          value,
+          valueSource: source,
+        };
+      });
+      jobsList.sort((a, b) => {
+        const av = a.scheduledDate ? new Date(a.scheduledDate).getTime() : 0;
+        const bv = b.scheduledDate ? new Date(b.scheduledDate).getTime() : 0;
+        return av - bv;
+      });
+
+      const totalValue = jobsList.reduce((sum, j) => sum + j.value, 0);
+      const unpricedJobCount = jobsList.filter(j => j.value === 0).length;
       const totalHours = bookedJobs.reduce((sum, j) => sum + parseFloat(j.estimatedManHours || '0'), 0);
 
       const hoursPerDay = 8;
@@ -18503,10 +18624,13 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       ).length || 1;
       const crewDays = totalHours / (hoursPerDay * Math.max(activeCrewCount, 1));
 
+      const dayCount = Math.round((endNZ.getTime() - startNZ.getTime()) / 86_400_000) + 1;
+
       res.json({
         success: true,
         data: {
-          days,
+          period,
+          days: period ? dayCount : days,
           from: startStr,
           to: endStr,
           jobCount: bookedJobs.length,
@@ -18515,6 +18639,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           activeCrewCount,
           crewDays,
           unpricedJobCount,
+          jobs: jobsList,
         },
       });
     } catch (error) {

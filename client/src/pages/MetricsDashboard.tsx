@@ -49,6 +49,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
+import { formatNZTime } from "@shared/dateUtils";
 
 interface DashboardStats {
   totalLeads: number;
@@ -265,8 +267,16 @@ export default function MetricsDashboard() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
-  // Booked Workload — forward-looking window (days from today)
-  const [bookedWindowDays, setBookedWindowDays] = useState<number>(7);
+  // Booked Workload — calendar-week window (Mon–Sun in NZ time)
+  type BookedPeriod = "this_week" | "next_week" | "week_after";
+  const [bookedPeriod, setBookedPeriod] = useState<BookedPeriod>("this_week");
+  const bookedPeriodLabels: Record<BookedPeriod, string> = {
+    this_week: "This week",
+    next_week: "Next week",
+    week_after: "Week after",
+  };
+  const [bookedJobsDialogOpen, setBookedJobsDialogOpen] = useState(false);
+  const [selectedBookedJobId, setSelectedBookedJobId] = useState<string | null>(null);
 
   // Revenue Calculator state
   const [calcPeriod, setCalcPeriod] = useState<"weekly" | "monthly">("monthly");
@@ -860,8 +870,20 @@ export default function MetricsDashboard() {
   });
   const dispatchAI = dispatchAIResponse?.data;
 
-  // Booked Workload — jobs scheduled in the upcoming N days
+  // Booked Workload — jobs scheduled in a calendar week (Mon–Sun, NZ time)
+  interface BookedWorkloadJob {
+    id: string;
+    jobNumber: string;
+    customerName: string | null;
+    title: string | null;
+    status: string;
+    scheduledDate: string | null;
+    estimatedManHours: number;
+    value: number;
+    valueSource: "job" | "invoice" | "proposal" | "quote" | null;
+  }
   interface BookedWorkloadData {
+    period: BookedPeriod | null;
     days: number;
     from: string;
     to: string;
@@ -870,12 +892,14 @@ export default function MetricsDashboard() {
     totalHours: number;
     activeCrewCount: number;
     crewDays: number;
+    unpricedJobCount: number;
+    jobs: BookedWorkloadJob[];
   }
   const { data: bookedWorkloadResp, isLoading: bookedWorkloadLoading } =
     useQuery<{ success: boolean; data: BookedWorkloadData }>({
-      queryKey: ["/api/analytics/booked-workload", bookedWindowDays],
+      queryKey: ["/api/analytics/booked-workload", bookedPeriod],
       queryFn: () =>
-        fetch(`/api/analytics/booked-workload?days=${bookedWindowDays}`).then(
+        fetch(`/api/analytics/booked-workload?period=${bookedPeriod}`).then(
           (res) => res.json(),
         ),
       staleTime: 60_000,
@@ -1913,55 +1937,34 @@ export default function MetricsDashboard() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-md">
-                    {[7, 14, 30].map((n) => (
+                    {(
+                      ["this_week", "next_week", "week_after"] as BookedPeriod[]
+                    ).map((p) => (
                       <Button
-                        key={n}
-                        variant={bookedWindowDays === n ? "default" : "ghost"}
+                        key={p}
+                        variant={bookedPeriod === p ? "default" : "ghost"}
                         size="sm"
-                        onClick={() => setBookedWindowDays(n)}
+                        onClick={() => setBookedPeriod(p)}
                         className={`h-7 px-3 text-xs ${
-                          bookedWindowDays === n
+                          bookedPeriod === p
                             ? "bg-blue-600 hover:bg-blue-700"
                             : ""
                         }`}
-                        data-testid={`button-booked-window-${n}`}
+                        data-testid={`button-booked-period-${p}`}
                       >
-                        Next {n}d
+                        {bookedPeriodLabels[p]}
                       </Button>
                     ))}
                   </div>
-                  <Input
-                    type="date"
-                    value={(() => {
-                      const d = new Date();
-                      d.setDate(d.getDate() + bookedWindowDays - 1);
-                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                    })()}
-                    min={(() => {
-                      const d = new Date();
-                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-                    })()}
-                    onChange={(e) => {
-                      if (!e.target.value) return;
-                      const [y, m, day] = e.target.value.split("-").map(Number);
-                      const picked = new Date(y, m - 1, day);
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      picked.setHours(0, 0, 0, 0);
-                      const days =
-                        Math.round(
-                          (picked.getTime() - today.getTime()) / 86400000,
-                        ) + 1;
-                      setBookedWindowDays(Math.max(1, Math.min(365, days)));
-                    }}
-                    className="h-7 w-[150px] text-xs"
-                    data-testid="input-booked-window-date"
-                  />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                Jobs scheduled from today through the next {bookedWindowDays}{" "}
-                days (status: scheduled, work order, in progress).
+                Jobs scheduled {bookedPeriodLabels[bookedPeriod].toLowerCase()}
+                {bookedWorkload?.from && bookedWorkload?.to
+                  ? ` (${bookedWorkload.from} – ${bookedWorkload.to})`
+                  : ""}{" "}
+                — Mon to Sun, NZ time. Status: scheduled, work order, in
+                progress.
               </p>
             </CardHeader>
             <CardContent>
@@ -1971,8 +1974,11 @@ export default function MetricsDashboard() {
                 </div>
               ) : (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  <div
-                    className="bg-card border border-border rounded-lg p-3"
+                  <button
+                    type="button"
+                    onClick={() => setBookedJobsDialogOpen(true)}
+                    disabled={(bookedWorkload?.jobCount ?? 0) === 0}
+                    className="bg-card border border-border rounded-lg p-3 text-left hover-elevate disabled:opacity-60 disabled:cursor-default"
                     data-testid="booked-workload-jobs"
                   >
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
@@ -1982,7 +1988,12 @@ export default function MetricsDashboard() {
                     <div className="text-2xl font-bold">
                       {bookedWorkload?.jobCount ?? 0}
                     </div>
-                  </div>
+                    {(bookedWorkload?.jobCount ?? 0) > 0 && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">
+                        Click to view list
+                      </p>
+                    )}
+                  </button>
                   <div
                     className="bg-card border border-border rounded-lg p-3"
                     data-testid="booked-workload-value"
@@ -2036,6 +2047,89 @@ export default function MetricsDashboard() {
               )}
             </CardContent>
           </Card>
+
+          {/* Booked Workload — job-list dialog */}
+          <Dialog
+            open={bookedJobsDialogOpen}
+            onOpenChange={setBookedJobsDialogOpen}
+          >
+            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  Booked Jobs · {bookedPeriodLabels[bookedPeriod]}
+                </DialogTitle>
+                <DialogDescription>
+                  {bookedWorkload?.jobCount ?? 0} job
+                  {(bookedWorkload?.jobCount ?? 0) === 1 ? "" : "s"} ·{" "}
+                  {formatCurrency(bookedWorkload?.totalValue ?? 0)} ex-GST
+                  {bookedWorkload?.from && bookedWorkload?.to
+                    ? ` · ${bookedWorkload.from} – ${bookedWorkload.to}`
+                    : ""}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col gap-2">
+                {(bookedWorkload?.jobs ?? []).map((j: any) => (
+                  <button
+                    key={j.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedBookedJobId(j.id);
+                      setBookedJobsDialogOpen(false);
+                    }}
+                    className="bg-card border border-border rounded-lg p-3 text-left hover-elevate"
+                    data-testid={`booked-job-${j.jobNumber}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <span>#{j.jobNumber}</span>
+                          <span className="text-muted-foreground truncate">
+                            {j.customerName ?? "(no customer)"}
+                          </span>
+                        </div>
+                        {j.title && (
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {j.title}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {j.scheduledDate
+                            ? formatNZTime(j.scheduledDate, "datetime")
+                            : "—"}
+                          {j.estimatedManHours
+                            ? ` · ${j.estimatedManHours}h est.`
+                            : ""}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div
+                          className={`text-sm font-semibold ${
+                            j.value > 0 ? "text-green-600" : "text-amber-600"
+                          }`}
+                        >
+                          {j.value > 0 ? formatCurrency(j.value) : "Unpriced"}
+                        </div>
+                        {j.valueSource && j.valueSource !== "job" && (
+                          <p className="text-[10px] text-muted-foreground">
+                            from {j.valueSource}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {selectedBookedJobId && (
+            <GlobalJobCard
+              isOpen={!!selectedBookedJobId}
+              onClose={() => setSelectedBookedJobId(null)}
+              mode="edit"
+              jobId={selectedBookedJobId}
+            />
+          )}
 
           {/* Xero Profit & Loss Section */}
           <div className="mb-6">
