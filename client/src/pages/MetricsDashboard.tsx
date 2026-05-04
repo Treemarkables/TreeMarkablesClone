@@ -1160,7 +1160,7 @@ export default function MetricsDashboard() {
                 {(() => {
                   const nzOpts = { timeZone: "Pacific/Auckland" } as const;
                   const fmt = (d: string, extra?: Intl.DateTimeFormatOptions) =>
-                    new Date(d + "T12:00:00Z").toLocaleDateString("en-NZ", {
+                    new Date(d + "T00:00:00Z").toLocaleDateString("en-NZ", {
                       day: "numeric",
                       month: "short",
                       year: "numeric",
