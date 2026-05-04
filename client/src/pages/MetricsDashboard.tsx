@@ -1911,23 +1911,52 @@ export default function MetricsDashboard() {
                     Booked Workload
                   </CardTitle>
                 </div>
-                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-md">
-                  {[7, 14, 30].map((n) => (
-                    <Button
-                      key={n}
-                      variant={bookedWindowDays === n ? "default" : "ghost"}
-                      size="sm"
-                      onClick={() => setBookedWindowDays(n)}
-                      className={`h-7 px-3 text-xs ${
-                        bookedWindowDays === n
-                          ? "bg-blue-600 hover:bg-blue-700"
-                          : ""
-                      }`}
-                      data-testid={`button-booked-window-${n}`}
-                    >
-                      Next {n}d
-                    </Button>
-                  ))}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-md">
+                    {[7, 14, 30].map((n) => (
+                      <Button
+                        key={n}
+                        variant={bookedWindowDays === n ? "default" : "ghost"}
+                        size="sm"
+                        onClick={() => setBookedWindowDays(n)}
+                        className={`h-7 px-3 text-xs ${
+                          bookedWindowDays === n
+                            ? "bg-blue-600 hover:bg-blue-700"
+                            : ""
+                        }`}
+                        data-testid={`button-booked-window-${n}`}
+                      >
+                        Next {n}d
+                      </Button>
+                    ))}
+                  </div>
+                  <Input
+                    type="date"
+                    value={(() => {
+                      const d = new Date();
+                      d.setDate(d.getDate() + bookedWindowDays - 1);
+                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                    })()}
+                    min={(() => {
+                      const d = new Date();
+                      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+                    })()}
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const [y, m, day] = e.target.value.split("-").map(Number);
+                      const picked = new Date(y, m - 1, day);
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      picked.setHours(0, 0, 0, 0);
+                      const days =
+                        Math.round(
+                          (picked.getTime() - today.getTime()) / 86400000,
+                        ) + 1;
+                      setBookedWindowDays(Math.max(1, Math.min(365, days)));
+                    }}
+                    className="h-7 w-[150px] text-xs"
+                    data-testid="input-booked-window-date"
+                  />
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
@@ -1965,6 +1994,16 @@ export default function MetricsDashboard() {
                     <div className="text-2xl font-bold text-green-600">
                       {formatCurrency(bookedWorkload?.totalValue ?? 0)}
                     </div>
+                    {(bookedWorkload?.unpricedJobCount ?? 0) > 0 && (
+                      <p
+                        className="text-[10px] text-amber-600 mt-0.5"
+                        data-testid="booked-workload-unpriced"
+                      >
+                        {bookedWorkload?.unpricedJobCount} unpriced job
+                        {bookedWorkload?.unpricedJobCount === 1 ? "" : "s"} not
+                        included
+                      </p>
+                    )}
                   </div>
                   <div
                     className="bg-card border border-border rounded-lg p-3"

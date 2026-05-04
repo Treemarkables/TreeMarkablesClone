@@ -698,7 +698,10 @@ export function CalendarGrid({
     return Math.max(1, Math.round((endMs - startMs) / 86400000) + 1);
   };
 
-  // Revenue attributed to one day of the job (exc-GST, split evenly across all days)
+  // Per-day share of a job's exc-GST price. Multi-day jobs render in N day cells
+  // across week/2week views, so the price MUST be divided by jobDayCount or the
+  // same total double-counts in every cell. Use this for any per-day price label
+  // — do not introduce a separate "full price" helper for cell rendering.
   const jobRevenue = (job: Job): number => {
     const raw = (() => {
       const sub = parseFloat(job.subtotal || "0");
@@ -746,15 +749,10 @@ export function CalendarGrid({
       ? "$0"
       : `$${amount >= 1000 ? (amount / 1000).toFixed(amount % 1000 === 0 ? 0 : 1) + "k" : Math.round(amount).toLocaleString()}`;
 
-  // Job price exc. GST. Returns 0 if no price has been set yet.
-  const getJobPrice = (job: Job): number => {
-    const sub = parseFloat(job.subtotal || "0");
-    if (sub > 0) return sub;
-    const incGst = parseFloat(job.totalIncludingGst || "0");
-    if (incGst > 0) return incGst / 1.15;
-    const total = parseFloat(job.totalAmount || "0");
-    return total > 0 ? total / 1.15 : 0;
-  };
+  // Per-day exc-GST price for a job, used by cell labels. Aliased to jobRevenue
+  // so cells in week/2week views show the per-day share, not the full total
+  // duplicated across every day. Do NOT reintroduce a non-splitting variant.
+  const getJobPrice = jobRevenue;
 
   // Round to the same $100 display unit that the k-formatter uses, so the badge
   // ("$3.0k") and "to go" always add up to the target on screen.

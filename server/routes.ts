@@ -18429,9 +18429,12 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       const fromUTC = fromZonedTime(`${startStr}T00:00:00`, 'Pacific/Auckland');
       const toUTC = fromZonedTime(`${endStr}T23:59:59.999`, 'Pacific/Auckland');
 
-      const [{ jobs: allJobs }, employees] = await Promise.all([
+      const [{ jobs: allJobs }, employees, allQuotes, allInvoices, allProposals] = await Promise.all([
         storage.getAllJobs({ limit: 999999 }),
         storage.getAllEmployees(),
+        storage.getAllQuotes(),
+        storage.getAllInvoices(),
+        storage.getAllProposals(),
       ]);
 
       const bookedJobs = allJobs.filter(job => {
@@ -18441,7 +18444,57 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         return sched >= fromUTC && sched <= toUTC;
       });
 
-      const totalValue = bookedJobs.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0);
+      // Fallback price lookup: invoice sum (actual billing) → accepted proposal → quote.
+      // Proposals are this app's primary booking instrument; jobs.total_amount often lags
+      // behind the accepted proposal until manually set.
+      const invoicesByJob = new Map<string, number>();
+      for (const inv of allInvoices) {
+        if (!inv.jobId) continue;
+        const amt = parseFloat(inv.amount || '0');
+        if (amt > 0) invoicesByJob.set(inv.jobId, (invoicesByJob.get(inv.jobId) ?? 0) + amt);
+      }
+      const proposalsByJob = new Map<string, { amount: number; createdAt: number }>();
+      for (const p of allProposals) {
+        if (!p.jobId) continue;
+        if (p.status !== 'accepted') continue;
+        // subtotal is ex-GST; the dashboard reports ex-GST throughout.
+        const amt = parseFloat(p.subtotal || '0');
+        if (amt <= 0) continue;
+        const created = p.createdAt ? new Date(p.createdAt).getTime() : 0;
+        const existing = proposalsByJob.get(p.jobId);
+        if (!existing || created > existing.createdAt) {
+          proposalsByJob.set(p.jobId, { amount: amt, createdAt: created });
+        }
+      }
+      const quotesByJob = new Map<string, { amount: number; createdAt: number }>();
+      for (const q of allQuotes) {
+        if (!q.jobId) continue;
+        const amt = parseFloat(q.amount || '0');
+        if (amt <= 0) continue;
+        const created = q.createdAt ? new Date(q.createdAt).getTime() : 0;
+        const existing = quotesByJob.get(q.jobId);
+        if (!existing || created > existing.createdAt) {
+          quotesByJob.set(q.jobId, { amount: amt, createdAt: created });
+        }
+      }
+
+      let unpricedJobCount = 0;
+      const totalValue = bookedJobs.reduce((sum, j) => {
+        // jobs.subtotal is reliably ex-GST; jobs.total_amount mixes ex- and inc-GST
+        // depending on how the row was created. Prefer subtotal so the card stays ex-GST.
+        const subtotal = parseFloat(j.subtotal || '0');
+        if (subtotal > 0) return sum + subtotal;
+        const direct = parseFloat(j.totalAmount || '0');
+        if (direct > 0) return sum + direct;
+        const invFallback = invoicesByJob.get(j.id) ?? 0;
+        if (invFallback > 0) return sum + invFallback;
+        const proposalFallback = proposalsByJob.get(j.id)?.amount ?? 0;
+        if (proposalFallback > 0) return sum + proposalFallback;
+        const quoteFallback = quotesByJob.get(j.id)?.amount ?? 0;
+        if (quoteFallback > 0) return sum + quoteFallback;
+        unpricedJobCount += 1;
+        return sum;
+      }, 0);
       const totalHours = bookedJobs.reduce((sum, j) => sum + parseFloat(j.estimatedManHours || '0'), 0);
 
       const hoursPerDay = 8;
@@ -18461,6 +18514,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           totalHours,
           activeCrewCount,
           crewDays,
+          unpricedJobCount,
         },
       });
     } catch (error) {
