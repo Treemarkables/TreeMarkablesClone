@@ -16250,29 +16250,26 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         });
       }
 
-      // Use transaction to ensure atomicity of call linking and diary entry creation
-      const result = await db.transaction(async (tx) => {
-        // Link call to job
-        const [updatedCall] = await tx.update(schema.calls)
-          .set({ jobId })
-          .where(eq(schema.calls.id, callId))
-          .returning();
+      // Sequential because the neon-http driver does not support db.transaction().
+      // If the diary insert fails after the call link succeeds, the call still
+      // points at the job (the user-visible link they asked for) and a retry will
+      // create the diary entry.
+      const [updatedCall] = await db.update(schema.calls)
+        .set({ jobId })
+        .where(eq(schema.calls.id, callId))
+        .returning();
 
-        // Create job diary entry for the call
-        const [createdDiary] = await tx.insert(schema.jobDiaryEntries)
-          .values(diaryValidation.data)
-          .returning();
+      const [createdDiary] = await db.insert(schema.jobDiaryEntries)
+        .values(diaryValidation.data)
+        .returning();
 
-        return { updatedCall, createdDiary };
-      });
-
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: {
-          call: result.updatedCall,
-          diaryEntry: result.createdDiary
+          call: updatedCall,
+          diaryEntry: createdDiary
         },
-        message: 'Call attached to job successfully' 
+        message: 'Call attached to job successfully'
       });
     } catch (error) {
       console.error('Error attaching call to job:', error);
@@ -18412,6 +18409,63 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     } catch (error) {
       console.error('Error generating dispatch AI insights:', error);
       res.status(500).json({ success: false, message: 'Error generating dispatch insights' });
+    }
+  });
+
+  // Booked workload — jobs scheduled in the upcoming N days (forward-looking)
+  app.get('/api/analytics/booked-workload', async (req: Request, res: Response) => {
+    try {
+      const requestedDays = parseInt(req.query.days as string, 10);
+      const days = Number.isFinite(requestedDays)
+        ? Math.max(1, Math.min(365, requestedDays))
+        : 7;
+
+      const nowNZ = toZonedTime(new Date(), 'Pacific/Auckland');
+      const startStr = `${nowNZ.getFullYear()}-${String(nowNZ.getMonth() + 1).padStart(2, '0')}-${String(nowNZ.getDate()).padStart(2, '0')}`;
+      const endNZ = new Date(nowNZ);
+      endNZ.setDate(endNZ.getDate() + days - 1);
+      const endStr = `${endNZ.getFullYear()}-${String(endNZ.getMonth() + 1).padStart(2, '0')}-${String(endNZ.getDate()).padStart(2, '0')}`;
+
+      const fromUTC = fromZonedTime(`${startStr}T00:00:00`, 'Pacific/Auckland');
+      const toUTC = fromZonedTime(`${endStr}T23:59:59.999`, 'Pacific/Auckland');
+
+      const [{ jobs: allJobs }, employees] = await Promise.all([
+        storage.getAllJobs({ limit: 999999 }),
+        storage.getAllEmployees(),
+      ]);
+
+      const bookedJobs = allJobs.filter(job => {
+        if (!job.scheduledDate) return false;
+        if (!['scheduled', 'work_order', 'in_progress'].includes(job.status)) return false;
+        const sched = new Date(job.scheduledDate);
+        return sched >= fromUTC && sched <= toUTC;
+      });
+
+      const totalValue = bookedJobs.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0);
+      const totalHours = bookedJobs.reduce((sum, j) => sum + parseFloat(j.estimatedManHours || '0'), 0);
+
+      const hoursPerDay = 8;
+      const activeCrewCount = employees.filter(e =>
+        e.role === 'crew' || e.role === 'climber' || e.role === 'groundsman'
+      ).length || 1;
+      const crewDays = totalHours / (hoursPerDay * Math.max(activeCrewCount, 1));
+
+      res.json({
+        success: true,
+        data: {
+          days,
+          from: startStr,
+          to: endStr,
+          jobCount: bookedJobs.length,
+          totalValue,
+          totalHours,
+          activeCrewCount,
+          crewDays,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching booked workload:', error);
+      res.status(500).json({ success: false, message: 'Error fetching booked workload' });
     }
   });
 
@@ -23898,80 +23952,76 @@ Transcription: ${transcriptText}`;
         ? Math.max(...selectedHazards.map(h => h.residualRisk || h.initialRisk))
         : null;
 
-      // Use transaction to ensure atomicity of update + delete + recreate
-      await db.transaction(async (tx) => {
-        // Update the assessment
-        await tx.update(schema.jhaAssessments)
-          .set({
-            activityDescription: assessmentData.activityDescription,
-            ppeRequired: assessmentData.ppeRequired || [],
-            teamLeader: assessmentData.teamLeader || null,
-            location: assessmentData.location || null,
-            comments: assessmentData.comments || null,
-            photos: photos || [],
-            overallRiskRating,
-            jobId: assessmentData.jobId || null,
-            updatedAt: new Date()
-          })
-          .where(eq(schema.jhaAssessments.id, req.params.id));
+      // Sequential because the neon-http driver does not support db.transaction().
+      // The original transaction guarded a clean-slate rebuild (delete all steps +
+      // controls, then recreate). Without atomicity, a failure mid-rebuild could
+      // leave the assessment with a partial set of steps — but the next save will
+      // run the same delete-then-recreate and converge to a correct state.
+      await db.update(schema.jhaAssessments)
+        .set({
+          activityDescription: assessmentData.activityDescription,
+          ppeRequired: assessmentData.ppeRequired || [],
+          teamLeader: assessmentData.teamLeader || null,
+          location: assessmentData.location || null,
+          comments: assessmentData.comments || null,
+          photos: photos || [],
+          overallRiskRating,
+          jobId: assessmentData.jobId || null,
+          updatedAt: new Date()
+        })
+        .where(eq(schema.jhaAssessments.id, req.params.id));
 
-        // Delete existing steps and controls (clean slate approach)
-        await tx.delete(schema.jhaStepControls)
-          .where(sql`step_id IN (SELECT id FROM jha_steps WHERE assessment_id = ${req.params.id})`);
-        await tx.delete(schema.jhaSteps)
-          .where(eq(schema.jhaSteps.assessmentId, req.params.id));
+      await db.delete(schema.jhaStepControls)
+        .where(sql`step_id IN (SELECT id FROM jha_steps WHERE assessment_id = ${req.params.id})`);
+      await db.delete(schema.jhaSteps)
+        .where(eq(schema.jhaSteps.assessmentId, req.params.id));
 
-        // Recreate steps for each selected hazard
-        if (selectedHazards && selectedHazards.length > 0) {
-          for (let i = 0; i < selectedHazards.length; i++) {
-            const hazard = selectedHazards[i];
-            
-            // Create the step
-            const [step] = await tx.insert(schema.jhaSteps)
-              .values({
-                assessmentId: req.params.id,
-                stepNumber: i + 1,
-                stepName: null,
-                hazardName: hazard.hazardName,
-                hazardDescription: null,
-                hazardTemplateId: hazard.hazardTemplateId?.toString() || null,
-                initialRiskRating: hazard.initialRisk,
-                residualRiskRating: hazard.residualRisk || hazard.initialRisk,
-                riskControl: hazard.riskControl || null,
-                responsiblePerson: hazard.responsiblePerson || null,
-                responsiblePersonId: null
-              })
-              .returning();
+      if (selectedHazards && selectedHazards.length > 0) {
+        for (let i = 0; i < selectedHazards.length; i++) {
+          const hazard = selectedHazards[i];
 
-            // Create control measures for this step
-            if (hazard.selectedControls && hazard.selectedControls.length > 0) {
-              for (const controlId of hazard.selectedControls) {
-                await tx.insert(schema.jhaStepControls)
-                  .values({
-                    stepId: step.id,
-                    controlMeasureTemplateId: controlId.toString(),
-                    description: '', // Will be populated from template
-                    hierarchyLevel: 3,
-                    isImplemented: true,
-                    sortOrder: 0
-                  });
-              }
+          const [step] = await db.insert(schema.jhaSteps)
+            .values({
+              assessmentId: req.params.id,
+              stepNumber: i + 1,
+              stepName: null,
+              hazardName: hazard.hazardName,
+              hazardDescription: null,
+              hazardTemplateId: hazard.hazardTemplateId?.toString() || null,
+              initialRiskRating: hazard.initialRisk,
+              residualRiskRating: hazard.residualRisk || hazard.initialRisk,
+              riskControl: hazard.riskControl || null,
+              responsiblePerson: hazard.responsiblePerson || null,
+              responsiblePersonId: null
+            })
+            .returning();
+
+          if (hazard.selectedControls && hazard.selectedControls.length > 0) {
+            for (const controlId of hazard.selectedControls) {
+              await db.insert(schema.jhaStepControls)
+                .values({
+                  stepId: step.id,
+                  controlMeasureTemplateId: controlId.toString(),
+                  description: '',
+                  hierarchyLevel: 3,
+                  isImplemented: true,
+                  sortOrder: 0
+                });
             }
           }
         }
+      }
 
-        // Add new signature if provided (append-only, don't touch existing signatures)
-        if (sharedSignature && sharedSignature.trim()) {
-          await tx.insert(schema.jhaSignatures)
-            .values({
-              assessmentId: req.params.id,
-              workerName: 'Worker', // Could be enhanced to collect actual name
-              workerId: null,
-              signatureDataUrl: sharedSignature,
-              signedAt: new Date()
-            });
-        }
-      });
+      if (sharedSignature && sharedSignature.trim()) {
+        await db.insert(schema.jhaSignatures)
+          .values({
+            assessmentId: req.params.id,
+            workerName: 'Worker',
+            workerId: null,
+            signatureDataUrl: sharedSignature,
+            signedAt: new Date()
+          });
+      }
 
       // Fetch the updated assessment to return
       const updatedAssessment = await storage.getJhaAssessment(req.params.id);
@@ -25059,6 +25109,20 @@ If you cannot find a value, use null. Do not guess.`
     } catch (error) {
       console.error('Error creating mulch drop:', error);
       return res.status(500).json({ success: false, message: 'Failed to create mulch drop' });
+    }
+  });
+
+  app.post('/api/mulch-drops/reorder', async (req: Request, res: Response) => {
+    try {
+      const { orderedIds } = req.body as { orderedIds?: unknown };
+      if (!Array.isArray(orderedIds) || !orderedIds.every(id => typeof id === 'string')) {
+        return res.status(400).json({ success: false, message: 'orderedIds must be an array of strings' });
+      }
+      await storage.reorderMulchDrops(orderedIds);
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error reordering mulch drops:', error);
+      return res.status(500).json({ success: false, message: 'Failed to reorder mulch drops' });
     }
   });
 

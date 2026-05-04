@@ -58,8 +58,26 @@ import {
   Loader2,
   X,
   ImageIcon,
+  GripVertical,
 } from "lucide-react";
 import { SiFacebook } from "react-icons/si";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import type { MulchDrop } from "@shared/schema";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -138,15 +156,39 @@ function DropCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: drop.id });
 
   const status = (drop.status ?? "pending") as Status;
   const photos = drop.photos ?? [];
 
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
-    <Card className="w-full">
+    <Card ref={setNodeRef} style={style} className="w-full">
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex items-start gap-2">
+            <button
+              {...attributes}
+              {...listeners}
+              type="button"
+              aria-label="Drag to reorder"
+              className="touch-none cursor-grab active:cursor-grabbing text-muted-foreground mt-0.5 -ml-1"
+            >
+              <GripVertical className="h-4 w-4" />
+            </button>
+            <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-base">{drop.name}</span>
               {drop.source === "facebook" && (
@@ -164,6 +206,7 @@ function DropCard({
                 </a>
               </div>
             )}
+            </div>
           </div>
           <div className="flex items-center gap-1">
             <Button
@@ -408,6 +451,51 @@ export default function MulchDrops() {
       toast({ title: "Failed to remove photo", variant: "destructive" }),
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: (orderedIds: string[]) =>
+      apiRequest("POST", "/api/mulch-drops/reorder", { orderedIds }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] }),
+    onError: () => {
+      toast({ title: "Failed to save new order", variant: "destructive" });
+      queryClient.invalidateQueries({ queryKey: ["/api/mulch-drops"] });
+    },
+  });
+
+  // ─── Drag-and-drop ──────────────────────────────────────────────────────────
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = filtered.findIndex((d) => d.id === active.id);
+    const newIndex = filtered.findIndex((d) => d.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(filtered, oldIndex, newIndex);
+    const orderedIds = reordered.map((d) => d.id);
+
+    // Optimistic update so the card doesn't snap back while the request flies.
+    queryClient.setQueryData<{ success: boolean; data: MulchDrop[] }>(
+      ["/api/mulch-drops"],
+      (prev) => {
+        if (!prev) return prev;
+        const visibleSet = new Set(orderedIds);
+        let nextIdx = 0;
+        const next = prev.data.map((d) => {
+          if (!visibleSet.has(d.id)) return d;
+          return prev.data.find((x) => x.id === orderedIds[nextIdx++])!;
+        });
+        return { ...prev, data: next };
+      },
+    );
+    reorderMutation.mutate(orderedIds);
+  };
+
   // ─── Status toggle ──────────────────────────────────────────────────────────
   const handleStatusToggle = (id: string, next: Status) => {
     updateMutation.mutate({ id, data: { status: next } });
@@ -646,23 +734,34 @@ export default function MulchDrops() {
             <p className="text-xs mt-1">Tap "Add Drop" to create one</p>
           </div>
         ) : (
-          <div className="p-3 space-y-3">
-            {filtered.map((drop) => (
-              <DropCard
-                key={drop.id}
-                drop={drop}
-                onEdit={openEdit}
-                onDelete={(id) => setDeleteId(id)}
-                onStatusToggle={handleStatusToggle}
-                onPhotoUpload={(id, file) =>
-                  uploadPhotoMutation.mutate({ id, file })
-                }
-                onPhotoDelete={(id, photoUrl) =>
-                  deletePhotoMutation.mutate({ id, photoUrl })
-                }
-              />
-            ))}
-          </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={filtered.map((d) => d.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="p-3 space-y-3">
+                {filtered.map((drop) => (
+                  <DropCard
+                    key={drop.id}
+                    drop={drop}
+                    onEdit={openEdit}
+                    onDelete={(id) => setDeleteId(id)}
+                    onStatusToggle={handleStatusToggle}
+                    onPhotoUpload={(id, file) =>
+                      uploadPhotoMutation.mutate({ id, file })
+                    }
+                    onPhotoDelete={(id, photoUrl) =>
+                      deletePhotoMutation.mutate({ id, photoUrl })
+                    }
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 

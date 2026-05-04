@@ -3884,6 +3884,7 @@ export const mulchDrops = pgTable("mulch_drops", {
   photos: text("photos").array().default([]),
   notes: text("notes"),                    // general internal notes
   source: text("source").default('manual'), // manual | facebook
+  sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

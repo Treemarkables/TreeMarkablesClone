@@ -265,6 +265,9 @@ export default function MetricsDashboard() {
   const [startDate, setStartDate] = useState<string>("");
   const [endDate, setEndDate] = useState<string>("");
 
+  // Booked Workload — forward-looking window (days from today)
+  const [bookedWindowDays, setBookedWindowDays] = useState<number>(7);
+
   // Revenue Calculator state
   const [calcPeriod, setCalcPeriod] = useState<"weekly" | "monthly">("monthly");
   const [calcRevenueTarget, setCalcRevenueTarget] = useState<number>(20000);
@@ -856,6 +859,28 @@ export default function MetricsDashboard() {
     retry: false,
   });
   const dispatchAI = dispatchAIResponse?.data;
+
+  // Booked Workload — jobs scheduled in the upcoming N days
+  interface BookedWorkloadData {
+    days: number;
+    from: string;
+    to: string;
+    jobCount: number;
+    totalValue: number;
+    totalHours: number;
+    activeCrewCount: number;
+    crewDays: number;
+  }
+  const { data: bookedWorkloadResp, isLoading: bookedWorkloadLoading } =
+    useQuery<{ success: boolean; data: BookedWorkloadData }>({
+      queryKey: ["/api/analytics/booked-workload", bookedWindowDays],
+      queryFn: () =>
+        fetch(`/api/analytics/booked-workload?days=${bookedWindowDays}`).then(
+          (res) => res.json(),
+        ),
+      staleTime: 60_000,
+    });
+  const bookedWorkload = bookedWorkloadResp?.data;
 
   // Checklist usage — % of completed jobs in the date range that had each item ticked.
   const { data: checklistUsageResp, isLoading: checklistUsageLoading } = useQuery<{
@@ -1873,6 +1898,103 @@ export default function MetricsDashboard() {
                   </>
                 );
               })()}
+            </CardContent>
+          </Card>
+
+          {/* Booked Workload — forward-looking */}
+          <Card data-testid="card-booked-workload">
+            <CardHeader className="pb-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Briefcase className="h-5 w-5 text-blue-600" />
+                  <CardTitle className="text-base font-semibold">
+                    Booked Workload
+                  </CardTitle>
+                </div>
+                <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-md">
+                  {[7, 14, 30].map((n) => (
+                    <Button
+                      key={n}
+                      variant={bookedWindowDays === n ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setBookedWindowDays(n)}
+                      className={`h-7 px-3 text-xs ${
+                        bookedWindowDays === n
+                          ? "bg-blue-600 hover:bg-blue-700"
+                          : ""
+                      }`}
+                      data-testid={`button-booked-window-${n}`}
+                    >
+                      Next {n}d
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Jobs scheduled from today through the next {bookedWindowDays}{" "}
+                days (status: scheduled, work order, in progress).
+              </p>
+            </CardHeader>
+            <CardContent>
+              {bookedWorkloadLoading && !bookedWorkload ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <div
+                    className="bg-card border border-border rounded-lg p-3"
+                    data-testid="booked-workload-jobs"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                      <Briefcase className="h-3.5 w-3.5" />
+                      Jobs Booked
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {bookedWorkload?.jobCount ?? 0}
+                    </div>
+                  </div>
+                  <div
+                    className="bg-card border border-border rounded-lg p-3"
+                    data-testid="booked-workload-value"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      Booked Value
+                    </div>
+                    <div className="text-2xl font-bold text-green-600">
+                      {formatCurrency(bookedWorkload?.totalValue ?? 0)}
+                    </div>
+                  </div>
+                  <div
+                    className="bg-card border border-border rounded-lg p-3"
+                    data-testid="booked-workload-hours"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      Estimated Hours
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {(bookedWorkload?.totalHours ?? 0).toFixed(1)}
+                    </div>
+                  </div>
+                  <div
+                    className="bg-card border border-border rounded-lg p-3"
+                    data-testid="booked-workload-crew-days"
+                  >
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      Crew-Days of Work
+                    </div>
+                    <div className="text-2xl font-bold">
+                      {(bookedWorkload?.crewDays ?? 0).toFixed(1)}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      at 8h/day · {bookedWorkload?.activeCrewCount ?? 0} crew
+                    </p>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

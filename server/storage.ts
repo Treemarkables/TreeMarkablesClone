@@ -1017,6 +1017,7 @@ export interface IStorage {
 
   // Mulch Drops
   createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop>;
+  reorderMulchDrops(orderedIds: string[]): Promise<void>;
   getMulchDrop(id: string): Promise<schema.MulchDrop | null>;
   getMulchDrops(status?: string): Promise<schema.MulchDrop[]>;
   updateMulchDrop(id: string, updates: schema.UpdateMulchDrop): Promise<schema.MulchDrop>;
@@ -2134,77 +2135,72 @@ class DatabaseStorage implements IStorage {
     jobAddress?: string;
     call: Call;
   }): Promise<{ job: Job; customer: Customer; call: Call }> {
-    // Use transaction to ensure atomicity
-    return await db.transaction(async (tx) => {
-      // Find or create customer
-      let customer;
-      if (params.customerPhone) {
-        const normalizedPhone = this.normalizePhone(params.customerPhone);
-        if (normalizedPhone) {
-          const [existingCustomer] = await tx
-            .select()
-            .from(schema.customers)
-            .where(eq(schema.customers.normalizedPhone, normalizedPhone))
-            .limit(1);
-          customer = existingCustomer;
-        }
+    // Sequential because the neon-http driver does not support db.transaction().
+    // Each step is independently safe to retry — a partial failure leaves the
+    // call attached to whatever it was last linked to, and the next call to
+    // this method will re-find the customer (idempotent on phone match) and
+    // create a fresh job.
+    let customer;
+    if (params.customerPhone) {
+      const normalizedPhone = this.normalizePhone(params.customerPhone);
+      if (normalizedPhone) {
+        const [existingCustomer] = await db
+          .select()
+          .from(schema.customers)
+          .where(eq(schema.customers.normalizedPhone, normalizedPhone))
+          .limit(1);
+        customer = existingCustomer;
       }
-      
-      if (!customer) {
-        // Create new customer
-        const [newCustomer] = await tx.insert(schema.customers).values({
-          name: params.customerName,
-          phone: params.customerPhone || null,
-          normalizedPhone: this.normalizePhone(params.customerPhone),
-          email: params.customerEmail || null,
-          address: params.customerAddress || null,
-          source: 'phone',
-        }).returning();
-        customer = newCustomer;
-      }
+    }
 
-      // Link call to customer
-      const [updatedCall1] = await tx.update(schema.calls)
-        .set({ customerId: customer.id })
-        .where(eq(schema.calls.id, params.callId))
-        .returning();
-
-      // Create job
-      const [job] = await tx.insert(schema.jobs).values({
-        customerId: customer.id,
-        title: params.jobTitle,
-        description: params.jobDescription || `Job created from call on ${new Date().toLocaleString()}`,
-        address: params.jobAddress || params.customerAddress || customer.address || 'Address not specified',
-        leadSource: 'phone',
-        status: 'quote',
+    if (!customer) {
+      const [newCustomer] = await db.insert(schema.customers).values({
+        name: params.customerName,
+        phone: params.customerPhone || null,
+        normalizedPhone: this.normalizePhone(params.customerPhone),
+        email: params.customerEmail || null,
+        address: params.customerAddress || null,
+        source: 'phone',
       }).returning();
+      customer = newCustomer;
+    }
 
-      // Link call to job
-      const [updatedCall2] = await tx.update(schema.calls)
-        .set({ jobId: job.id })
-        .where(eq(schema.calls.id, params.callId))
-        .returning();
+    await db.update(schema.calls)
+      .set({ customerId: customer.id })
+      .where(eq(schema.calls.id, params.callId));
 
-      // Create job diary entry for the call
-      const diaryContent = params.call.transcript 
-        ? `Call recording and transcript from ${params.call.phoneNumber}\n\nTranscript:\n${params.call.transcript}`
-        : `Call recording from ${params.call.phoneNumber}`;
-      
-      await tx.insert(schema.jobDiaryEntries).values({
-        jobId: job.id,
-        entryType: 'note',
-        title: `Phone Call - ${new Date(params.call.createdAt).toLocaleString()}`,
-        description: diaryContent,
-        authorName: 'Mobile App',
-        authorRole: 'system',
-      });
+    const [job] = await db.insert(schema.jobs).values({
+      customerId: customer.id,
+      title: params.jobTitle,
+      description: params.jobDescription || `Job created from call on ${new Date().toLocaleString()}`,
+      address: params.jobAddress || params.customerAddress || customer.address || 'Address not specified',
+      leadSource: 'phone',
+      status: 'quote',
+    }).returning();
 
-      return {
-        job,
-        customer,
-        call: updatedCall2
-      };
+    const [updatedCall2] = await db.update(schema.calls)
+      .set({ jobId: job.id })
+      .where(eq(schema.calls.id, params.callId))
+      .returning();
+
+    const diaryContent = params.call.transcript
+      ? `Call recording and transcript from ${params.call.phoneNumber}\n\nTranscript:\n${params.call.transcript}`
+      : `Call recording from ${params.call.phoneNumber}`;
+
+    await db.insert(schema.jobDiaryEntries).values({
+      jobId: job.id,
+      entryType: 'note',
+      title: `Phone Call - ${new Date(params.call.createdAt).toLocaleString()}`,
+      description: diaryContent,
+      authorName: 'Mobile App',
+      authorRole: 'system',
     });
+
+    return {
+      job,
+      customer,
+      call: updatedCall2
+    };
   }
 
   // Complete database wipe methods for Option A
@@ -2571,18 +2567,19 @@ class DatabaseStorage implements IStorage {
     // whenever a child exists (e.g. before/after composites insert a photos
     // row at upload time). Null the references first so the parent delete
     // succeeds; both children are independent records and survive without it.
-    return await db.transaction(async (tx) => {
-      await tx.update(schema.photos)
-        .set({ jobDiaryEntryId: null })
-        .where(eq(schema.photos.jobDiaryEntryId, id));
-      await tx.update(schema.callRecords)
-        .set({ jobDiaryEntryId: null })
-        .where(eq(schema.callRecords.jobDiaryEntryId, id));
-      const result = await tx.delete(schema.jobDiaryEntries)
-        .where(eq(schema.jobDiaryEntries.id, id))
-        .returning();
-      return result.length > 0;
-    });
+    // (Sequential rather than transactional because the neon-http driver does
+    // not support db.transaction(); a partial failure leaves orphan NULL refs,
+    // which is the desired end state anyway.)
+    await db.update(schema.photos)
+      .set({ jobDiaryEntryId: null })
+      .where(eq(schema.photos.jobDiaryEntryId, id));
+    await db.update(schema.callRecords)
+      .set({ jobDiaryEntryId: null })
+      .where(eq(schema.callRecords.jobDiaryEntryId, id));
+    const result = await db.delete(schema.jobDiaryEntries)
+      .where(eq(schema.jobDiaryEntries.id, id))
+      .returning();
+    return result.length > 0;
   }
   async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> {
     return await db.select().from(schema.jobDiaryEntries)
@@ -6998,9 +6995,37 @@ class DatabaseStorage implements IStorage {
   async getMulchDrops(status?: string): Promise<schema.MulchDrop[]> {
     const query = db.select().from(schema.mulchDrops);
     if (status) {
-      return query.where(eq(schema.mulchDrops.status, status)).orderBy(schema.mulchDrops.createdAt);
+      return query.where(eq(schema.mulchDrops.status, status)).orderBy(schema.mulchDrops.sortOrder, schema.mulchDrops.createdAt);
     }
-    return query.orderBy(schema.mulchDrops.createdAt);
+    return query.orderBy(schema.mulchDrops.sortOrder, schema.mulchDrops.createdAt);
+  }
+
+  async reorderMulchDrops(orderedIds: string[]): Promise<void> {
+    if (!orderedIds.length) return;
+    // Pull all drops sorted as currently displayed
+    const all = await db.select().from(schema.mulchDrops);
+    const byId = new Map(all.map(d => [d.id, d]));
+    const sorted = [...all].sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    });
+    // Walk current order; when we hit an item from orderedIds, slot in the next from the new order.
+    // This preserves the position of items not in the reordered set (e.g. items hidden by a status filter).
+    const movingSet = new Set(orderedIds);
+    let nextIdx = 0;
+    const newOrder = sorted.map(d => {
+      if (movingSet.has(d.id)) {
+        const replacementId = orderedIds[nextIdx++];
+        return byId.get(replacementId) ?? d;
+      }
+      return d;
+    });
+    for (let i = 0; i < newOrder.length; i++) {
+      if (newOrder[i].sortOrder === i) continue;
+      await db.update(schema.mulchDrops)
+        .set({ sortOrder: i })
+        .where(eq(schema.mulchDrops.id, newOrder[i].id));
+    }
   }
 
   async updateMulchDrop(id: string, updates: schema.UpdateMulchDrop): Promise<schema.MulchDrop> {
