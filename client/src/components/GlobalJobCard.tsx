@@ -3118,28 +3118,53 @@ export function GlobalJobCard({
       );
       const data = await response.json();
 
+      // Pre-populate endDate from the job's scheduledEndDate if set
+      let existingEndDate = "";
+      if (editingJob?.scheduledEndDate) {
+        const endDateNZ = utcToNZTime(new Date(editingJob.scheduledEndDate));
+        existingEndDate = endDateNZ.date;
+      }
+
       if (data.success && data.data && data.data.length > 0) {
-        // Pre-populate the form with existing assignment data
-        const firstAssignment = data.data[0];
-        const startDateUTC = new Date(firstAssignment.startTime);
-        const endDateUTC = new Date(firstAssignment.endTime);
+        // Prefer the assignment matching the job's scheduledDate — drag-drop
+        // uses addOnly:true so older rows can survive at different times,
+        // and the server returns them sorted by startTime ASC. Picking [0]
+        // would silently load the stale earliest row.
+        const jobScheduledMs = editingJob?.scheduledDate
+          ? new Date(editingJob.scheduledDate).getTime()
+          : null;
+        const chosenAssignment =
+          (jobScheduledMs !== null
+            ? data.data.find(
+                (a: any) =>
+                  Math.abs(
+                    new Date(a.startTime).getTime() - jobScheduledMs,
+                  ) < 60_000,
+              )
+            : null) || data.data[0];
+
+        const startDateUTC = new Date(chosenAssignment.startTime);
+        const endDateUTC = new Date(chosenAssignment.endTime);
         const durationMinutes =
           (endDateUTC.getTime() - startDateUTC.getTime()) / 60000;
 
         // Convert UTC time from database to NZ time for display
         const startNZ = utcToNZTime(startDateUTC);
 
-        // Remove duplicate employee IDs when loading existing assignments
+        // Only include employees whose assignment shares the chosen start
+        // time — keeps stale rows at other times out of the form.
+        const chosenStartMs = startDateUTC.getTime();
         const uniqueEmployeeIds = [
-          ...new Set(data.data.map((a: any) => a.employeeId)),
-        ];
-
-        // Pre-populate endDate from the job's scheduledEndDate if set
-        let existingEndDate = "";
-        if (editingJob?.scheduledEndDate) {
-          const endDateNZ = utcToNZTime(new Date(editingJob.scheduledEndDate));
-          existingEndDate = endDateNZ.date;
-        }
+          ...new Set(
+            data.data
+              .filter(
+                (a: any) =>
+                  Math.abs(new Date(a.startTime).getTime() - chosenStartMs) <
+                  60_000,
+              )
+              .map((a: any) => a.employeeId),
+          ),
+        ] as string[];
 
         setSchedulingData({
           date: startNZ.date, // NZ date, not UTC!
@@ -3148,7 +3173,32 @@ export function GlobalJobCard({
           duration: durationMinutes.toString(),
           day2Duration: "",
           assignedTo: uniqueEmployeeIds,
-          notes: firstAssignment.notes || "",
+          notes: chosenAssignment.notes || "",
+          sendClientNotification: false,
+          sendProposalEmail: false,
+          scheduleBookingReminders: false,
+        });
+      } else if (editingJob?.scheduledDate) {
+        // No staff assignments yet but the job already has a scheduledDate
+        // (e.g. set elsewhere). Open the modal at that time instead of blank,
+        // so saving doesn't write an empty/default startTime back to the job.
+        const startDateUTC = new Date(editingJob.scheduledDate);
+        const startNZ = utcToNZTime(startDateUTC);
+        const durationMinutes = editingJob?.estimatedDuration
+          ? Math.round(Number(editingJob.estimatedDuration) * 60)
+          : 60;
+        const existingAssignedTo = Array.isArray(editingJob.assignedTo)
+          ? (editingJob.assignedTo as string[])
+          : [];
+
+        setSchedulingData({
+          date: startNZ.date,
+          endDate: existingEndDate,
+          startTime: startNZ.time,
+          duration: durationMinutes.toString(),
+          day2Duration: "",
+          assignedTo: existingAssignedTo,
+          notes: "",
           sendClientNotification: false,
           sendProposalEmail: false,
           scheduleBookingReminders: false,

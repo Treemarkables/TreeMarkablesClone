@@ -387,8 +387,14 @@ function JobConfirmationReplyCard({
         </div>
       ) : error ? (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-red-600 dark:text-red-400">
+          <span
+            className="text-xs text-red-600 dark:text-red-400 break-words"
+            title={(error as Error)?.message}
+          >
             Couldn't draft a reply.
+            {(error as Error)?.message
+              ? ` (${(error as Error).message})`
+              : ''}
           </span>
           <Button
             size="sm"
@@ -525,8 +531,14 @@ function SuggestedReplyDraft({
         </div>
       ) : error ? (
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-red-600 dark:text-red-400">
+          <span
+            className="text-[11px] text-red-600 dark:text-red-400 break-words"
+            title={(error as Error)?.message}
+          >
             Couldn't draft a reply.
+            {(error as Error)?.message
+              ? ` (${(error as Error).message})`
+              : ''}
           </span>
           <Button
             size="sm"

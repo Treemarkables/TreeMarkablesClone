@@ -6756,7 +6756,10 @@ Draft the reply now.`;
       return res.json({ success: true, data: { subject, body } });
     } catch (error) {
       console.error('Error drafting confirmation reply:', error);
-      return res.status(500).json({ success: false, message: 'Failed to draft reply' });
+      const cause = error instanceof Error ? error.message : String(error);
+      return res
+        .status(500)
+        .json({ success: false, message: `Failed to draft reply: ${cause}` });
     }
   });
 
@@ -6855,7 +6858,10 @@ Draft the reply now.`;
       return res.json({ success: true, data: { subject, body } });
     } catch (error) {
       console.error('Error drafting reply to diary entry:', error);
-      return res.status(500).json({ success: false, message: 'Failed to draft reply' });
+      const cause = error instanceof Error ? error.message : String(error);
+      return res
+        .status(500)
+        .json({ success: false, message: `Failed to draft reply: ${cause}` });
     }
   });
 
