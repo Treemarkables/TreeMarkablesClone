@@ -576,37 +576,53 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
         });
       } catch (error: any) {
         console.error('Error creating Xero invoice:', error);
-        
+
         // Update job with error status
         await storage.updateJob(jobId, {
           xeroStatus: 'error',
           sentToXeroDate: new Date(),
         });
-        
-        // Provide detailed error message for Xero validation errors.
-        // xero-node v13 rejects with { response, body } — the parsed Xero
-        // response is at error.body (NOT error.response.body, which is the
-        // raw http.IncomingMessage).
-        let errorMessage = 'Failed to create invoice in Xero';
-        const xeroBody = error?.body ?? error?.response?.body;
 
-        if (xeroBody?.Elements?.[0]?.ValidationErrors) {
-          const validationErrors = xeroBody.Elements[0].ValidationErrors;
-          const errorDetails = validationErrors.map((e: any) => e.Message).join('; ');
-          errorMessage = `Xero validation error: ${errorDetails}`;
+        // xero-node v13 rejects either with { response, body } (object form)
+        // or with JSON.stringify({response,body}) (string form, depending on
+        // the SDK code path). Normalise both into a plain object so we can
+        // extract the validation errors uniformly.
+        let errObj: any = error;
+        if (typeof error === 'string') {
+          try { errObj = JSON.parse(error); } catch { errObj = { message: error }; }
+        }
+        const rawBody = errObj?.body ?? errObj?.response?.body;
+        const xeroBody = typeof rawBody === 'string'
+          ? (() => { try { return JSON.parse(rawBody); } catch { return null; } })()
+          : rawBody;
+        const elementErrors: string[] =
+          xeroBody?.Elements?.flatMap((el: any) =>
+            (el?.ValidationErrors ?? []).map((v: any) => v?.Message).filter(Boolean)
+          ) ?? [];
+
+        let errorMessage = 'Failed to create invoice in Xero';
+        if (elementErrors.length > 0) {
+          errorMessage = `Xero rejected the invoice: ${elementErrors.join('; ')}`;
         } else if (xeroBody?.Message) {
           errorMessage = `Xero error: ${xeroBody.Message}`;
-        } else if (error?.message) {
-          errorMessage = `Xero error: ${error.message}`;
+        } else if (errObj?.message) {
+          errorMessage = `Xero error: ${errObj.message}`;
         }
-        
-        res.status(500).json({ 
-          success: false, 
+
+        const isDuplicateNumber = elementErrors.some(m => /unique/i.test(m));
+        const suggestion = isDuplicateNumber
+          ? `Xero won't accept invoice #${job.jobNumber} because that number is already in use in Xero (a previous invoice with the same number — even if voided or deleted — still reserves it). In Xero, find invoice #${job.jobNumber}, edit it, and change its invoice number (e.g. ${job.jobNumber}-V) to free up the number, then send again.`
+          : 'If this error persists, please verify that the Account Code and Tax Type exist in your Xero organization. You can configure these in Settings > Xero Configuration.';
+
+        res.status(500).json({
+          success: false,
           message: errorMessage,
+          errorCode: isDuplicateNumber ? 'DUPLICATE_INVOICE_NUMBER' : undefined,
+          jobNumber: job.jobNumber,
           details: {
             accountCode,
             taxType,
-            suggestion: 'If this error persists, please verify that the Account Code and Tax Type exist in your Xero organization. You can configure these in Settings > Xero Configuration.'
+            suggestion,
           }
         });
       }

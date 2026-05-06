@@ -2651,16 +2651,18 @@ export function GlobalJobCard({
       const response = await apiRequest("POST", "/api/xero/send-invoice", {
         jobId: editingJob.id,
       });
-      return response.json();
+      const data = await response.json();
+      if (!response.ok) throw { ...data, statusCode: response.status };
+      return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error("Error sending to Xero:", error);
       toast({
         title: "Xero Error",
-        description: "Failed to send invoice to Xero. Please try again.",
+        description: error?.message || "Failed to send invoice to Xero. Please try again.",
         variant: "destructive",
       });
     },

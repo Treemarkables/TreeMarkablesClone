@@ -1557,6 +1557,49 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     }
   };
 
+  // Auto fall-through: when a query has zero matches in the cached active-jobs
+  // set, run Deep Search automatically so completed/invoiced jobs surface
+  // without a second click. Predicate mirrors the quick-search filter below.
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (trimmed.length < 3) return;
+    if (jobsLoading) return;
+    if (isDeepSearchActive || isDeepSearchLoading) return;
+
+    const handle = setTimeout(() => {
+      const rawQuery = trimmed.toLowerCase();
+      const query = rawQuery.startsWith("#") ? rawQuery.slice(1) : rawQuery;
+
+      const hasQuickHit = jobs.some((job) => {
+        if (job.status === "unsuccessful" || job.status === "archived") return false;
+        if (job.status === "completed" || job.status === "invoiced") return false;
+        const customerName = job.customerName?.toLowerCase() || "";
+        const address = job.address?.toLowerCase() || "";
+        const serviceType = job.serviceType?.toLowerCase() || "";
+        const description = job.description?.toLowerCase() || "";
+        const jobId = job.id?.toLowerCase() || "";
+        const jobNumber = String(job.jobNumber ?? "").toLowerCase();
+        return (
+          customerName.includes(query) ||
+          address.includes(query) ||
+          serviceType.includes(query) ||
+          description.includes(query) ||
+          jobId.includes(query) ||
+          jobNumber.includes(query)
+        );
+      });
+
+      if (!hasQuickHit) {
+        performDeepSearch(searchQuery);
+      }
+    }, 400);
+
+    return () => clearTimeout(handle);
+    // performDeepSearch intentionally omitted — it's recreated each render and
+    // we rely on closure-captures-latest for its dependencies.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, jobs, jobsLoading, isDeepSearchActive, isDeepSearchLoading]);
+
   const getTodaysJobs = () => {
     // If deep search is active, return deep search results
     if (isDeepSearchActive) {

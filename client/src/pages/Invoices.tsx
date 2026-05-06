@@ -118,10 +118,18 @@ export default function Invoices() {
             variant: "destructive",
           });
         }
+      } else if (error.errorCode === "DUPLICATE_INVOICE_NUMBER") {
+        toast({
+          title: `Invoice #${error.jobNumber ?? ""} already exists in Xero`,
+          description:
+            error.details?.suggestion ||
+            "That invoice number is already in use in Xero (even voided/deleted invoices still reserve the number). Renumber the existing one in Xero, then resend.",
+          variant: "destructive",
+        });
       } else {
         toast({
           title: "Error",
-          description: error.message || "Failed to send invoice to Xero",
+          description: error.details?.suggestion || error.message || "Failed to send invoice to Xero",
           variant: "destructive",
         });
       }
