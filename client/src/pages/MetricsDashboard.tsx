@@ -268,12 +268,13 @@ export default function MetricsDashboard() {
   const [endDate, setEndDate] = useState<string>("");
 
   // Booked Workload — calendar-week window (Mon–Sun in NZ time)
-  type BookedPeriod = "this_week" | "next_week" | "week_after";
+  type BookedPeriod = "this_week" | "next_week" | "week_after" | "next_month";
   const [bookedPeriod, setBookedPeriod] = useState<BookedPeriod>("this_week");
   const bookedPeriodLabels: Record<BookedPeriod, string> = {
     this_week: "This week",
     next_week: "Next week",
     week_after: "Week after",
+    next_month: "Next month",
   };
   const [bookedJobsDialogOpen, setBookedJobsDialogOpen] = useState(false);
   const [selectedBookedJobId, setSelectedBookedJobId] = useState<string | null>(null);
@@ -1938,7 +1939,7 @@ export default function MetricsDashboard() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-md">
                     {(
-                      ["this_week", "next_week", "week_after"] as BookedPeriod[]
+                      ["this_week", "next_week", "week_after", "next_month"] as BookedPeriod[]
                     ).map((p) => (
                       <Button
                         key={p}

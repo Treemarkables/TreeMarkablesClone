@@ -18465,7 +18465,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   app.get('/api/analytics/booked-workload', async (req: Request, res: Response) => {
     try {
       const periodParam = String(req.query.period || '');
-      const validPeriods = ['this_week', 'next_week', 'week_after'] as const;
+      const validPeriods = ['this_week', 'next_week', 'week_after', 'next_month'] as const;
       type Period = typeof validPeriods[number];
       const period: Period | null = (validPeriods as readonly string[]).includes(periodParam)
         ? (periodParam as Period)
@@ -18488,9 +18488,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         monday.setDate(nowNZ.getDate() - daysSinceMonday);
         if (period === 'next_week') monday.setDate(monday.getDate() + 7);
         else if (period === 'week_after') monday.setDate(monday.getDate() + 14);
+        const spanDays = period === 'next_month' ? 28 : 7;
         startNZ = monday;
         endNZ = new Date(monday);
-        endNZ.setDate(monday.getDate() + 6);
+        endNZ.setDate(monday.getDate() + spanDays - 1);
       } else {
         startNZ = nowNZ;
         endNZ = new Date(nowNZ);
