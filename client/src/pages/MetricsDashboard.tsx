@@ -444,14 +444,17 @@ export default function MetricsDashboard() {
         return { from: todayStr, to: todayStr };
       }
       case "7": {
-        // This Week: Monday of the current week → today
+        // This Week: Monday → Sunday of the current calendar week (NZ).
+        // Matches the Booked Workload card so dates line up across the page.
         const dow = today.getDay(); // 0=Sun, 1=Mon … 6=Sat
         const diffToMonday = dow === 0 ? -6 : 1 - dow;
         const monday = new Date(today);
         monday.setDate(today.getDate() + diffToMonday);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
         return {
           from: monday.toISOString().split("T")[0],
-          to: today.toISOString().split("T")[0],
+          to: sunday.toISOString().split("T")[0],
         };
       }
       case "mon-fri": {
