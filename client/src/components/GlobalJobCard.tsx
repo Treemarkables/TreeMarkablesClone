@@ -4929,7 +4929,7 @@ The Treemarkables Team`;
                     disabled={resetXeroSyncMutation.isPending}
                   >
                     <RotateCcw className="w-4 h-4 mr-2 text-amber-600" />
-                    Re-send to Xero
+                    Reset Xero Sync
                   </DropdownMenuItem>
                 )}
                 {editingJob?.status === "completed" && (
@@ -9975,7 +9975,7 @@ The Treemarkables Team`;
                   data-testid="more-sheet-resend-xero"
                 >
                   <ResendXeroIcon className="h-16 w-16 drop-shadow-md group-active:scale-90 transition-transform duration-100" />
-                  <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Re-send to Xero</span>
+                  <span className="text-[10px] font-medium text-gray-600 text-center leading-tight">Reset Xero Sync</span>
                 </button>
               )}
 
@@ -11604,7 +11604,7 @@ The Treemarkables Team`;
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Re-send to Xero?</AlertDialogTitle>
+            <AlertDialogTitle>Reset Xero Sync?</AlertDialogTitle>
             <AlertDialogDescription>
               This will unlock the Send to Xero button so you can send a new
               invoice.

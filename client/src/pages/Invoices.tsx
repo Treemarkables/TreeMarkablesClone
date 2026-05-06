@@ -31,6 +31,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import type { Job, Customer, Invoice } from "@shared/schema";
+import { GlobalJobCard } from "@/components/GlobalJobCard";
 
 interface ApiResponse<T> {
   success: boolean;
@@ -55,6 +56,7 @@ export default function Invoices() {
     amount: "",
     notes: "",
   });
+  const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Fetch all invoices with customer and job data
@@ -381,8 +383,19 @@ export default function Invoices() {
               {filteredInvoices.map((invoice) => (
                 <Card
                   key={invoice.id}
-                  className="hover-elevate min-w-0"
+                  className={`hover-elevate min-w-0 ${invoice.jobId ? "cursor-pointer" : ""}`}
                   data-testid={`card-invoice-${invoice.id}`}
+                  onClick={() => {
+                    if (invoice.jobId) setSelectedJobId(invoice.jobId);
+                  }}
+                  role={invoice.jobId ? "button" : undefined}
+                  tabIndex={invoice.jobId ? 0 : undefined}
+                  onKeyDown={(e) => {
+                    if (invoice.jobId && (e.key === "Enter" || e.key === " ")) {
+                      e.preventDefault();
+                      setSelectedJobId(invoice.jobId);
+                    }
+                  }}
                 >
                   <CardHeader className="flex flex-row items-start justify-between gap-2 space-y-0 pb-4">
                     <div className="space-y-1 flex-1 min-w-0">
@@ -480,7 +493,7 @@ export default function Invoices() {
                       )}
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
                       <Button
                         variant="outline"
                         size="sm"
@@ -521,7 +534,7 @@ export default function Invoices() {
                           <RotateCcw className="h-4 w-4" />
                           {resetXeroSyncMutation.isPending
                             ? "Resetting..."
-                            : "Re-send to Xero"}
+                            : "Reset Xero Sync"}
                         </Button>
                       )}
                     </div>
@@ -632,6 +645,15 @@ export default function Invoices() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {selectedJobId && (
+        <GlobalJobCard
+          isOpen={!!selectedJobId}
+          onClose={() => setSelectedJobId(null)}
+          mode="edit"
+          jobId={selectedJobId}
+        />
+      )}
     </div>
   );
 }
