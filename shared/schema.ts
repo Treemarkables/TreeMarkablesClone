@@ -1189,6 +1189,15 @@ export const businessSettings = pgTable("business_settings", {
   bookingReminderSmsTemplateId: varchar("booking_reminder_sms_template_id"),
   bookingReminderDefaultOn: boolean("booking_reminder_default_on").default(false), // Pre-tick the per-job toggle when scheduling
 
+  // Inquiry auto-reply (sent to the customer immediately on website form submission)
+  // The default copy follows what Jules asked for: "Hey, we have received your
+  // inquiry. Jules will be in touch within 24 hours to schedule in your quote."
+  inquiryAutoReplyEnabled: boolean("inquiry_auto_reply_enabled").default(true),
+  inquiryAutoReplyChannel: text("inquiry_auto_reply_channel").default("email"), // 'email' | 'sms' | 'both'
+  inquiryAutoReplyEmailSubject: text("inquiry_auto_reply_email_subject").default("We've received your inquiry — Treemarkables"),
+  inquiryAutoReplyEmailMessage: text("inquiry_auto_reply_email_message").default("Hi {customerName},\n\nThanks for getting in touch with Treemarkables. We've received your inquiry and Jules will be in touch within 24 hours to schedule in your quote.\n\nIf it's urgent, feel free to reply to this email or give us a call.\n\nThanks,\nThe Treemarkables Team"),
+  inquiryAutoReplySmsMessage: text("inquiry_auto_reply_sms_message").default("Hi {firstName}, thanks for your inquiry with Treemarkables. Jules will be in touch within 24 hours to schedule in your quote."),
+
   // Metadata
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
@@ -1228,6 +1237,10 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
     label: z.string().optional(),
     channel: z.enum(['email', 'sms', 'both']).optional(),
   })).optional(),
+  inquiryAutoReplyChannel: z.enum(['email', 'sms', 'both']).optional(),
+  inquiryAutoReplyEmailSubject: z.string().max(200).optional(),
+  inquiryAutoReplyEmailMessage: z.string().max(5000).optional(),
+  inquiryAutoReplySmsMessage: z.string().max(306).optional(),
 });
 
 // Business Settings Update Schema - partial with same constraints
@@ -4136,6 +4149,54 @@ export const insertJobChecklistCompletionSchema = createInsertSchema(jobChecklis
 
 export type JobChecklistCompletion = typeof jobChecklistCompletions.$inferSelect;
 export type InsertJobChecklistCompletion = z.infer<typeof insertJobChecklistCompletionSchema>;
+
+// ==========================================
+// ON-SITE QUOTING PROCESS
+// ==========================================
+// Configurable list of steps the quoter walks through during an on-site quote.
+// Mirrors the role_checklist_tasks pattern: built-ins seeded once, users can
+// disable/edit/reorder them or add their own from Settings. The itemId slug
+// is the stable key referenced by completions, so it stays put even if the
+// label is renamed.
+export const quotingProcessSteps = pgTable("quoting_process_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  itemId: text("item_id").notNull().unique(),
+  label: text("label").notNull(),
+  iconName: text("icon_name").notNull().default("Check"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertQuotingProcessStepSchema = createInsertSchema(quotingProcessSteps).omit({ id: true, createdAt: true, updatedAt: true });
+export type QuotingProcessStep = typeof quotingProcessSteps.$inferSelect;
+export type InsertQuotingProcessStep = z.infer<typeof insertQuotingProcessStepSchema>;
+
+// One row per (jobId, itemId) when a step is ticked off during the visit.
+// Absence of a row means "not done". Toggling off deletes the row, which also
+// clears the captured note/photos — same convention as job_checklist_completions.
+export const jobQuotingProcessCompletions = pgTable("job_quoting_process_completions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").notNull().references(() => jobs.id, { onDelete: 'cascade' }),
+  itemId: text("item_id").notNull(),
+  completedAt: timestamp("completed_at").notNull().defaultNow(),
+  completedByEmployeeId: varchar("completed_by_employee_id").references(() => employees.id),
+  completedByName: text("completed_by_name"),
+  note: text("note"),
+  photos: text("photos").array(),
+}, (table) => ({
+  jobItemUnique: unique("job_quoting_process_completions_job_item_unique").on(table.jobId, table.itemId),
+  jobIdx: index("job_quoting_process_completions_job_idx").on(table.jobId),
+}));
+
+export const insertJobQuotingProcessCompletionSchema = createInsertSchema(jobQuotingProcessCompletions).omit({
+  id: true,
+  completedAt: true,
+});
+export type JobQuotingProcessCompletion = typeof jobQuotingProcessCompletions.$inferSelect;
+export type InsertJobQuotingProcessCompletion = z.infer<typeof insertJobQuotingProcessCompletionSchema>;
 
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

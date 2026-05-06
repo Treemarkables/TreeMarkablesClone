@@ -56,6 +56,7 @@ import {
   Sprout,
   List,
   ListChecks,
+  ClipboardCheck,
   Pencil,
   Link2,
   Star,
@@ -92,6 +93,7 @@ import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
 import { JobChecklistPanel } from "./JobChecklistPanel";
+import { JobQuotingPanel } from "./JobQuotingPanel";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -5099,6 +5101,31 @@ The Treemarkables Team`;
             <ListChecks className="w-3.5 h-3.5" />
             Checklist
           </button>
+          {/* On-site quoting process — only relevant while a job is in lead/quote
+              stage. Once it advances to work_order/scheduled/completed the tab
+              hides so the sidebar stays focused on the job's current state. */}
+          {(currentStatus === "lead" || currentStatus === "quote") && (
+            <button
+              className={`flex-1 md:flex-none p-3 min-h-[44px] text-xs font-medium border-r md:border-r-0 md:border-b inline-flex items-center justify-center gap-1.5 ${
+                currentStatus === "quote"
+                  ? "border-orange-200"
+                  : "border-yellow-200"
+              } ${
+                sidebarTab === "quoting"
+                  ? currentStatus === "quote"
+                    ? "bg-orange-500 text-white"
+                    : "bg-yellow-500 text-white"
+                  : currentStatus === "quote"
+                    ? "text-orange-700 hover:bg-orange-200"
+                    : "text-yellow-700 hover:bg-yellow-200"
+              }`}
+              onClick={() => setSidebarTab("quoting")}
+              data-testid="sidebar-quoting"
+            >
+              <ClipboardCheck className="w-3.5 h-3.5" />
+              Quoting
+            </button>
+          )}
           {/* Mobile-only Diary tab. On sm+ the diary lives in its own right-hand
               panel beside the sidebar tabs, so this button is hidden there. */}
           <button
@@ -9654,6 +9681,23 @@ The Treemarkables Team`;
                             <ListChecks className="w-8 h-8 mx-auto mb-2" />
                             <p className="text-sm">
                               Save the job to track its compliance checklist
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {sidebarTab === "quoting" && (
+                    <>
+                      {editingJob ? (
+                        <JobQuotingPanel jobId={editingJob.id} />
+                      ) : (
+                        <div className="p-4">
+                          <div className="text-center py-8 text-gray-500">
+                            <ClipboardCheck className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">
+                              Save the job to start the quoting process
                             </p>
                           </div>
                         </div>

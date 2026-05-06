@@ -2518,9 +2518,53 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
       //   validatedLeadSource
       // );
 
-      res.json({ 
-        success: true, 
-        message: 'Thank you! We will contact you within 24 hours for your free quote.' 
+      // Customer auto-reply: send the configured "we received your inquiry"
+      // confirmation. Non-blocking — log on failure so a downed email/SMS
+      // provider never breaks the form submission.
+      try {
+        const bizSettings = await storage.getBusinessSettings();
+        if (bizSettings?.inquiryAutoReplyEnabled) {
+          const channel = (bizSettings.inquiryAutoReplyChannel || 'email') as 'email' | 'sms' | 'both';
+          const firstName = trimmedName.split(/\s+/)[0] || trimmedName || 'there';
+          const subject = bizSettings.inquiryAutoReplyEmailSubject || "We've received your inquiry — Treemarkables";
+          const emailTemplate = bizSettings.inquiryAutoReplyEmailMessage || '';
+          const smsTemplate = bizSettings.inquiryAutoReplySmsMessage || '';
+
+          const fillVars = (s: string) =>
+            s
+              .replace(/\{customerName\}/g, trimmedName || 'there')
+              .replace(/\{firstName\}/g, firstName)
+              .replace(/\{businessName\}/g, bizSettings.businessName || 'Treemarkables')
+              .replace(/\{businessPhone\}/g, bizSettings.businessPhone || '');
+
+          if ((channel === 'email' || channel === 'both') && lowerEmail) {
+            const emailBodyText = fillVars(emailTemplate);
+            const emailBodyHtml = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;">${
+              emailBodyText.split('\n').map(line => line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '').join('<br>')
+            }</div>`;
+            emailService.sendEmail({
+              to: lowerEmail,
+              subject: fillVars(subject),
+              text: emailBodyText,
+              html: emailBodyHtml,
+            }).catch(err => console.error('[contact] auto-reply email failed:', err));
+          }
+
+          if ((channel === 'sms' || channel === 'both') && cleanPhone && isMobileNumber) {
+            const smsBody = fillVars(smsTemplate);
+            if (smsBody.trim()) {
+              smsService.sendSMS({ to: cleanPhone, message: smsBody })
+                .catch(err => console.error('[contact] auto-reply SMS failed:', err));
+            }
+          }
+        }
+      } catch (autoReplyErr) {
+        console.error('[contact] Error sending inquiry auto-reply:', autoReplyErr);
+      }
+
+      res.json({
+        success: true,
+        message: 'Thank you! We will contact you within 24 hours for your free quote.'
       });
 
     } catch (error) {
@@ -25692,6 +25736,242 @@ If you cannot find a value, use null. Do not guess.`
     } catch (error) {
       console.error('Error deleting role checklist task:', error);
       return res.status(500).json({ success: false, message: 'Failed to delete role checklist task' });
+    }
+  });
+
+  // ─── On-site Quoting Process ─────────────────────────────────────────────
+  // Steps the quoter walks through during an on-site quote. Mirrors
+  // role_checklist_tasks: built-ins seeded once, users can disable/edit/reorder
+  // them or add their own from Settings. Per-job tick state lives in
+  // job_quoting_process_completions, with optional note + photos per step.
+  const BUILT_IN_QUOTING_PROCESS_STEPS: Array<{
+    itemId: string;
+    label: string;
+    iconName: string;
+    sortOrder: number;
+  }> = [
+    { itemId: 'greet-customer',     label: 'Greet customer',                   iconName: 'Users',          sortOrder: 0 },
+    { itemId: 'walk-site',          label: 'Walk the site',                    iconName: 'MapPin',         sortOrder: 1 },
+    { itemId: 'identify-hazards',   label: 'Identify hazards',                 iconName: 'TriangleAlert',  sortOrder: 2 },
+    { itemId: 'discuss-scope',      label: 'Discuss scope with customer',      iconName: 'MessageSquare',  sortOrder: 3 },
+    { itemId: 'confirm-access',     label: 'Confirm access & timing',          iconName: 'Clock',          sortOrder: 4 },
+    { itemId: 'photo-evidence',     label: 'Capture photos',                   iconName: 'Camera',         sortOrder: 5 },
+    { itemId: 'present-pricing',    label: 'Present pricing',                  iconName: 'ClipboardCheck', sortOrder: 6 },
+    { itemId: 'confirm-next-step',  label: 'Confirm next step with customer',  iconName: 'Check',          sortOrder: 7 },
+  ];
+
+  const ensureQuotingProcessStepsSeeded = async () => {
+    const { db } = await import('./db');
+    const { quotingProcessSteps } = await import('../shared/schema');
+    const existing = await db.select().from(quotingProcessSteps).limit(1);
+    if (existing.length === 0) {
+      await db.insert(quotingProcessSteps).values(
+        BUILT_IN_QUOTING_PROCESS_STEPS.map(s => ({ ...s, isBuiltIn: true })),
+      ).onConflictDoNothing();
+    }
+  };
+
+  // GET /api/quoting-process-steps — all steps (enabled + disabled), ordered.
+  // Settings UI shows everything; the job-card panel filters disabled out.
+  app.get('/api/quoting-process-steps', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { quotingProcessSteps } = await import('../shared/schema');
+      const { asc } = await import('drizzle-orm');
+      await ensureQuotingProcessStepsSeeded();
+      const items = await db.select().from(quotingProcessSteps).orderBy(asc(quotingProcessSteps.sortOrder), asc(quotingProcessSteps.createdAt));
+      return res.json({ success: true, data: items });
+    } catch (error) {
+      console.error('Error fetching quoting process steps:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch quoting process steps' });
+    }
+  });
+
+  // POST /api/quoting-process-steps — adds a user-defined custom step.
+  app.post('/api/quoting-process-steps', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { quotingProcessSteps } = await import('../shared/schema');
+      const { max } = await import('drizzle-orm');
+      const { label, iconName, sortOrder, itemId } = req.body ?? {};
+      if (!label || typeof label !== 'string' || !label.trim()) {
+        return res.status(400).json({ success: false, message: 'label is required' });
+      }
+      const slug = (itemId && typeof itemId === 'string' && itemId.trim())
+        ? itemId.trim()
+        : `custom-${label.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40)}-${Date.now().toString(36)}`;
+      const [maxResult] = await db
+        .select({ maxOrder: max(quotingProcessSteps.sortOrder) })
+        .from(quotingProcessSteps);
+      const nextOrder = sortOrder ?? ((maxResult?.maxOrder ?? -1) + 1);
+      const [result] = await db.insert(quotingProcessSteps).values({
+        itemId: slug,
+        label: label.trim(),
+        iconName: typeof iconName === 'string' && iconName.trim() ? iconName.trim() : 'Check',
+        sortOrder: nextOrder,
+        isEnabled: true,
+        isBuiltIn: false,
+      }).returning();
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error creating quoting process step:', error);
+      return res.status(500).json({ success: false, message: 'Failed to create quoting process step' });
+    }
+  });
+
+  // PUT /api/quoting-process-steps/:id — update label, icon, sortOrder, isEnabled.
+  // itemId is immutable (referenced by completions).
+  app.put('/api/quoting-process-steps/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { quotingProcessSteps } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const updates: Record<string, any> = { updatedAt: new Date() };
+      if (typeof req.body.label === 'string' && req.body.label.trim()) updates.label = req.body.label.trim();
+      if (typeof req.body.iconName === 'string' && req.body.iconName.trim()) updates.iconName = req.body.iconName.trim();
+      if (typeof req.body.sortOrder === 'number') updates.sortOrder = req.body.sortOrder;
+      if (typeof req.body.isEnabled === 'boolean') updates.isEnabled = req.body.isEnabled;
+      const [result] = await db.update(quotingProcessSteps).set(updates).where(eq(quotingProcessSteps.id, req.params.id)).returning();
+      if (!result) return res.status(404).json({ success: false, message: 'Step not found' });
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error updating quoting process step:', error);
+      return res.status(500).json({ success: false, message: 'Failed to update quoting process step' });
+    }
+  });
+
+  // DELETE /api/quoting-process-steps/:id — only user-added steps.
+  app.delete('/api/quoting-process-steps/:id', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { db } = await import('./db');
+      const { quotingProcessSteps } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const [step] = await db.select().from(quotingProcessSteps).where(eq(quotingProcessSteps.id, req.params.id));
+      if (!step) return res.status(404).json({ success: false, message: 'Step not found' });
+      if (step.isBuiltIn) {
+        return res.status(400).json({ success: false, message: 'Built-in steps cannot be deleted — disable them instead' });
+      }
+      await db.delete(quotingProcessSteps).where(eq(quotingProcessSteps.id, req.params.id));
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting quoting process step:', error);
+      return res.status(500).json({ success: false, message: 'Failed to delete quoting process step' });
+    }
+  });
+
+  // GET /api/jobs/:jobId/quoting-process — all completion rows for this job.
+  app.get('/api/jobs/:jobId/quoting-process', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { jobId } = req.params;
+      if (jobId.startsWith('temp-')) {
+        return res.json({ success: true, data: [] });
+      }
+      const { db } = await import('./db');
+      const { jobQuotingProcessCompletions } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const rows = await db.select().from(jobQuotingProcessCompletions).where(eq(jobQuotingProcessCompletions.jobId, jobId));
+      return res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Error fetching quoting process completions:', error);
+      return res.status(500).json({ success: false, message: 'Failed to fetch quoting process completions' });
+    }
+  });
+
+  // POST /api/jobs/:jobId/quoting-process/:itemId — body { completed, note?, photos? }
+  // Toggle on (upsert) or toggle off (delete row). When upserting, note/photos
+  // overwrite previous values so the client just sends the current state.
+  app.post('/api/jobs/:jobId/quoting-process/:itemId', async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { jobId, itemId } = req.params;
+      const { completed, note, photos } = req.body ?? {};
+      if (jobId.startsWith('temp-')) {
+        return res.status(400).json({ success: false, message: 'Save the job before recording quoting steps' });
+      }
+
+      const { db } = await import('./db');
+      const { quotingProcessSteps, jobQuotingProcessCompletions } = await import('../shared/schema');
+      const { eq, and } = await import('drizzle-orm');
+
+      // Validate itemId against the catalogue so a stale client can't write a retired step.
+      const [step] = await db.select({ id: quotingProcessSteps.id }).from(quotingProcessSteps).where(eq(quotingProcessSteps.itemId, itemId)).limit(1);
+      if (!step) {
+        return res.status(400).json({ success: false, message: `Unknown quoting step: ${itemId}` });
+      }
+
+      if (completed === false) {
+        await db.delete(jobQuotingProcessCompletions).where(
+          and(eq(jobQuotingProcessCompletions.jobId, jobId), eq(jobQuotingProcessCompletions.itemId, itemId)),
+        );
+        return res.json({ success: true, data: null });
+      }
+
+      const employee = await storage.getEmployee(req.session.employeeId);
+      const employeeName = employee
+        ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
+        : null;
+
+      const noteValue = typeof note === 'string' ? note : null;
+      const photosValue = Array.isArray(photos) ? photos.filter((p) => typeof p === 'string') : null;
+
+      const [result] = await db
+        .insert(jobQuotingProcessCompletions)
+        .values({
+          jobId,
+          itemId,
+          completedByEmployeeId: req.session.employeeId,
+          completedByName: employeeName,
+          note: noteValue,
+          photos: photosValue,
+        })
+        .onConflictDoUpdate({
+          target: [jobQuotingProcessCompletions.jobId, jobQuotingProcessCompletions.itemId],
+          set: {
+            note: noteValue,
+            photos: photosValue,
+            completedAt: new Date(),
+            completedByEmployeeId: req.session.employeeId,
+            completedByName: employeeName,
+          },
+        })
+        .returning();
+
+      return res.json({ success: true, data: result });
+    } catch (error) {
+      console.error('Error toggling quoting process step:', error);
+      return res.status(500).json({ success: false, message: 'Failed to update quoting process step' });
+    }
+  });
+
+  // POST /api/jobs/:jobId/quoting-process/photo-upload — uploads a single photo
+  // for a step and returns its URL. The client then includes that URL in the
+  // photos[] array on the next POST to .../quoting-process/:itemId. Kept
+  // separate from /api/jobs/:jobId/photos so it doesn't pollute the job's
+  // before/after photo gallery.
+  app.post('/api/jobs/:jobId/quoting-process/photo-upload', imageUpload.single('photo'), async (req: Request, res: Response) => {
+    if (!req.session.employeeId) return res.status(401).json({ success: false, message: 'Not authenticated' });
+    try {
+      const { jobId } = req.params;
+      if (jobId.startsWith('temp-')) {
+        return res.status(400).json({ success: false, message: 'Save the job before uploading photos' });
+      }
+      const file = (req as any).file as Express.Multer.File | undefined;
+      if (!file) {
+        return res.status(400).json({ success: false, message: 'No photo provided' });
+      }
+      const fileExt = path.extname(path.basename(file.originalname)).toLowerCase() || '.jpg';
+      const fileName = `${jobId}_quoting_${Date.now()}_${Math.random().toString(36).slice(2, 8)}${fileExt}`;
+      const fullPath = path.join(photosDir, fileName);
+      fs.writeFileSync(fullPath, file.buffer);
+      return res.json({ success: true, url: `/photos/${fileName}` });
+    } catch (error) {
+      console.error('Error uploading quoting process photo:', error);
+      return res.status(500).json({ success: false, message: 'Failed to upload photo' });
     }
   });
 

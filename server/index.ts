@@ -562,6 +562,18 @@ function startBackgroundWorkersAfterListen() {
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_email_template_id VARCHAR;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_sms_template_id VARCHAR;
         ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS booking_reminder_default_on BOOLEAN DEFAULT false;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS inquiry_auto_reply_enabled BOOLEAN DEFAULT true;
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS inquiry_auto_reply_channel TEXT DEFAULT 'email';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS inquiry_auto_reply_email_subject TEXT DEFAULT 'We''ve received your inquiry — Treemarkables';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS inquiry_auto_reply_email_message TEXT DEFAULT 'Hi {customerName},
+
+Thanks for getting in touch with Treemarkables. We''ve received your inquiry and Jules will be in touch within 24 hours to schedule in your quote.
+
+If it''s urgent, feel free to reply to this email or give us a call.
+
+Thanks,
+The Treemarkables Team';
+        ALTER TABLE business_settings ADD COLUMN IF NOT EXISTS inquiry_auto_reply_sms_message TEXT DEFAULT 'Hi {firstName}, thanks for your inquiry with Treemarkables. Jules will be in touch within 24 hours to schedule in your quote.';
         CREATE TABLE IF NOT EXISTS booking_reminders (
           id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
           job_id VARCHAR NOT NULL,

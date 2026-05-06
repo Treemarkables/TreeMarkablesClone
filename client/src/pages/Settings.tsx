@@ -57,6 +57,14 @@ const settingsOptions = [
     path: "/settings/role-checklist-tasks"
   },
   {
+    id: "quoting-process",
+    title: "On-site Quoting Process",
+    description: "Steps shown on the Quoting tab of every lead and quote job",
+    icon: ClipboardCheck,
+    color: "bg-green-100 text-green-600",
+    path: "/settings/quoting-process"
+  },
+  {
     id: "staff",
     title: "Staff",
     description: "Manage team members, roles and permissions",
@@ -103,6 +111,14 @@ const settingsOptions = [
     icon: Bell,
     color: "bg-yellow-100 text-yellow-600",
     path: "/settings/notifications"
+  },
+  {
+    id: "inquiry-auto-reply",
+    title: "Inquiry Auto-Reply",
+    description: "Confirmation message sent when a customer submits a website quote form",
+    icon: Mail,
+    color: "bg-orange-100 text-orange-600",
+    path: "/settings/inquiry-auto-reply"
   },
   {
     id: "quote-followup",
