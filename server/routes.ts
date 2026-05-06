@@ -18514,9 +18514,16 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         db.select().from(schema.proposalLineItemChoices),
       ]);
 
+      // "Booked" = anything on the calendar in this window, whether still to do
+      // or already done. We exclude leads/quotes (never booked), cancelled/
+      // unsuccessful (booking fell through), and archived (housekeeping) so the
+      // total reflects work that actually was/is scheduled to happen.
+      const BOOKED_STATUSES = new Set([
+        'scheduled', 'work_order', 'in_progress', 'completed', 'invoiced'
+      ]);
       const bookedJobs = allJobs.filter(job => {
         if (!job.scheduledDate) return false;
-        if (!['scheduled', 'work_order', 'in_progress'].includes(job.status)) return false;
+        if (!BOOKED_STATUSES.has(job.status)) return false;
         const sched = new Date(job.scheduledDate);
         return sched >= fromUTC && sched <= toUTC;
       });

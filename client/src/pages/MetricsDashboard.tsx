@@ -1964,8 +1964,8 @@ export default function MetricsDashboard() {
                 {bookedWorkload?.from && bookedWorkload?.to
                   ? ` (${bookedWorkload.from} – ${bookedWorkload.to})`
                   : ""}{" "}
-                — Mon to Sun, NZ time. Status: scheduled, work order, in
-                progress.
+                — Mon to Sun, NZ time. Includes scheduled, work order, in
+                progress, completed and invoiced jobs.
               </p>
             </CardHeader>
             <CardContent>
