@@ -1995,8 +1995,11 @@ export default function MetricsDashboard() {
                       </p>
                     )}
                   </button>
-                  <div
-                    className="bg-card border border-border rounded-lg p-3"
+                  <button
+                    type="button"
+                    onClick={() => setBookedJobsDialogOpen(true)}
+                    disabled={(bookedWorkload?.jobCount ?? 0) === 0}
+                    className="bg-card border border-border rounded-lg p-3 text-left hover-elevate disabled:opacity-60 disabled:cursor-default"
                     data-testid="booked-workload-value"
                   >
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-1">
@@ -2016,7 +2019,13 @@ export default function MetricsDashboard() {
                         included
                       </p>
                     )}
-                  </div>
+                    {(bookedWorkload?.jobCount ?? 0) > 0 &&
+                      (bookedWorkload?.unpricedJobCount ?? 0) === 0 && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5">
+                          Click to view list
+                        </p>
+                      )}
+                  </button>
                   <div
                     className="bg-card border border-border rounded-lg p-3"
                     data-testid="booked-workload-hours"
