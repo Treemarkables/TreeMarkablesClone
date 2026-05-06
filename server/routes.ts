@@ -13769,12 +13769,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     }
   });
 
-  // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity
+  // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity.
+  // Status revert: only flip 'scheduled' back to 'work_order'. A 'quote' job
+  // booked in for a site visit keeps its 'quote' status when unscheduled
+  // (the booking was a quoting visit, not a work-crew assignment).
   app.post('/api/jobs/:jobId/unschedule', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       await storage.deleteJobStaffAssignmentsByJob(jobId);
       await storage.deleteScheduleEventsByJob(jobId);
+      const existing = await storage.getJob(jobId);
+      const nextStatus = existing?.status === 'scheduled' ? 'work_order' : existing?.status;
       const job = await storage.updateJob(jobId, {
         scheduledDate: null,
         scheduledEndDate: null,
@@ -13782,7 +13787,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         scheduledEndTime: null,
         assignedTo: [],
         assignedTeam: [],
-        status: 'work_order',
+        ...(nextStatus ? { status: nextStatus } : {}),
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });

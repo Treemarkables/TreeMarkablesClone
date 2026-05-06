@@ -188,6 +188,7 @@ import {
 } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
+import { statusAfterBooking } from "@shared/jobStatus";
 import { LinkifyMultiline } from "@/lib/linkify";
 import { Link } from "wouter";
 
@@ -3633,6 +3634,13 @@ The Treemarkables Team`;
         scheduledEndDateISO = lastDayEndUTC.toISOString();
       }
 
+      // Only flip status when the booking represents the actual work crew —
+      // i.e. a work_order being scheduled. A 'quote' job booked in is a
+      // quoting site visit and must stay 'quote'; a 'lead' becomes 'quote'.
+      // statusAfterBooking() returns null for everything else (already
+      // scheduled, completed, etc.) so we leave status untouched.
+      const nextStatus = statusAfterBooking(editingJob.status);
+
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -3642,7 +3650,7 @@ The Treemarkables Team`;
           scheduledStartTime: timeStr, // NZ local time (HH:MM format)
           scheduledEndTime: endTimeNZ.time, // NZ local time (HH:MM format)
           assignedTo: uniqueEmployeeIds,
-          status: "scheduled", // Automatically change status to scheduled
+          ...(nextStatus ? { status: nextStatus } : {}),
         }),
       });
 
@@ -3805,26 +3813,30 @@ The Treemarkables Team`;
           }
         }
 
-        // Update form's status to match database
-        form.setValue("status", "scheduled");
+        // Update form's status to match the transition we actually applied
+        // (or leave it alone when statusAfterBooking returned null — e.g. a
+        // 'quote' job being booked for a site visit).
+        if (nextStatus) {
+          form.setValue("status", nextStatus);
 
-        // Immediately patch the job's cache entry so any form reset triggered by
-        // invalidation picks up status='scheduled' (not stale 'quote').
-        // Follows the same pattern as the auto-save cache update (RC4 FIX).
-        queryClient.setQueryData(
-          ["/api/jobs", editingJob.id],
-          (old: unknown) => {
-            if (!old || typeof old !== "object") return old;
-            const wrapper = old as Record<string, unknown>;
-            if (wrapper.data && typeof wrapper.data === "object") {
-              return {
-                ...wrapper,
-                data: { ...(wrapper.data as object), status: "scheduled" },
-              };
-            }
-            return { ...wrapper, status: "scheduled" };
-          },
-        );
+          // Immediately patch the job's cache entry so any form reset triggered by
+          // invalidation picks up the new status (not the stale prior value).
+          // Follows the same pattern as the auto-save cache update (RC4 FIX).
+          queryClient.setQueryData(
+            ["/api/jobs", editingJob.id],
+            (old: unknown) => {
+              if (!old || typeof old !== "object") return old;
+              const wrapper = old as Record<string, unknown>;
+              if (wrapper.data && typeof wrapper.data === "object") {
+                return {
+                  ...wrapper,
+                  data: { ...(wrapper.data as object), status: nextStatus },
+                };
+              }
+              return { ...wrapper, status: nextStatus };
+            },
+          );
+        }
 
         // Flush form to a clean baseline — prevents the 1.5s debounce from firing
         // with stale status='quote' after the query invalidation resets the form.
@@ -9959,7 +9971,11 @@ The Treemarkables Team`;
                   disabled={resetXeroSyncMutation.isPending}
                   onClick={() => {
                     setShowMoreActionsSheet(false);
-                    setShowXeroResetConfirm(true);
+                    // Wait for the Sheet's exit animation before opening the
+                    // AlertDialog. Closing a Radix Sheet and opening a Radix
+                    // Dialog in the same frame leaves pointer-events:none on
+                    // <body>, freezing the job card after dismissal.
+                    setTimeout(() => setShowXeroResetConfirm(true), 250);
                   }}
                   data-testid="more-sheet-resend-xero"
                 >
