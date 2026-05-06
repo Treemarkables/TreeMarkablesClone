@@ -7631,15 +7631,43 @@ The Treemarkables Team`;
                                 </span>
                                 <div className="flex items-center gap-1">
                                   {(() => {
-                                    // Priority: proposal subtotal > proposal sections line items > job line items > job totalAmount > quote amount
-                                    // Proposal subtotal is already exc GST (before tax), so use directly
+                                    // Priority order matches the top-header
+                                    // price (line ~4596) so the two displays
+                                    // never disagree: live line items win
+                                    // first, then proposal, quote, job stored,
+                                    // invoice. Line-item math mirrors the
+                                    // top-header logic too.
+                                    const lineItems = watchedLineItems;
+                                    const lineItemsTotal = lineItems.reduce(
+                                      (sum: number, item: any) => {
+                                        const exGst =
+                                          item.totalExGst ??
+                                          (item.priceExGst != null
+                                            ? item.priceExGst *
+                                              (item.quantity || 1)
+                                            : null);
+                                        if (exGst != null)
+                                          return sum + exGst;
+                                        const itemTotal =
+                                          parseFloat(item.total) || 0;
+                                        return (
+                                          sum +
+                                          (item.priceIncludesTax
+                                            ? itemTotal / 1.15
+                                            : itemTotal)
+                                        );
+                                      },
+                                      0,
+                                    );
+
+                                    // Proposal subtotal (already exc GST). Fall
+                                    // back to summing proposal sections when
+                                    // the stored subtotal is stale/zero.
                                     const proposalSubtotalStored =
                                       parseFloat(
                                         jobProposalResponse?.data?.[0]
                                           ?.subtotal || "0",
                                       ) || 0;
-
-                                    // Also try summing line items from proposal sections (handles stale subtotal field)
                                     let proposalSectionsTotal = 0;
                                     const proposalSections =
                                       jobProposalResponse?.data?.[0]
@@ -7667,77 +7695,43 @@ The Treemarkables Team`;
                                         },
                                       );
                                     }
-
                                     const proposalSubtotal =
                                       proposalSubtotalStored > 0
                                         ? proposalSubtotalStored
                                         : proposalSectionsTotal;
 
-                                    if (proposalSubtotal > 0) {
-                                      return (
-                                        <>
-                                          <span className="text-lg font-semibold text-gray-900">
-                                            $
-                                            {proposalSubtotal.toLocaleString(
-                                              "en-NZ",
-                                              { minimumFractionDigits: 2 },
-                                            )}
-                                          </span>
-                                          <span className="text-xs text-gray-500">
-                                            exc GST
-                                          </span>
-                                        </>
-                                      );
-                                    }
+                                    // Quote amount is typically stored inc-GST
+                                    const quoteExGst =
+                                      (parseFloat(
+                                        jobQuoteResponse?.data?.[0]?.amount ||
+                                          "0",
+                                      ) || 0) / 1.15;
 
-                                    // Calculate from line items (these are typically exc GST unit prices)
-                                    const lineItems = watchedLineItems;
-                                    let totalExcGst = lineItems.reduce(
-                                      (sum: number, item: any) => {
-                                        const itemTotal =
-                                          parseFloat(item.total) || 0;
-                                        // If price includes tax, back out the GST
-                                        if (item.priceIncludesTax) {
-                                          return sum + itemTotal / 1.15;
-                                        }
-                                        return sum + itemTotal;
-                                      },
-                                      0,
-                                    );
+                                    // Job stored: prefer explicit subtotal
+                                    // (exc-GST), else divide totalAmount/1.15
+                                    const jobSubtotal =
+                                      parseFloat(editingJob?.subtotal || "0") ||
+                                      0;
+                                    const jobStoredExGst =
+                                      jobSubtotal > 0
+                                        ? jobSubtotal
+                                        : (parseFloat(
+                                            editingJob?.totalAmount || "0",
+                                          ) || 0) / 1.15;
 
-                                    // Fallback to job totalAmount (stored as inc GST typically)
-                                    if (
-                                      totalExcGst === 0 &&
-                                      editingJob?.totalAmount
-                                    ) {
-                                      totalExcGst =
-                                        (parseFloat(editingJob.totalAmount) ||
-                                          0) / 1.15;
-                                    }
+                                    // Invoice total (already exc GST)
+                                    const invoiceExGst =
+                                      parseFloat(
+                                        (jobInvoiceResponse as any)?.data?.[0]
+                                          ?.total || "0",
+                                      ) || 0;
 
-                                    // Fallback to quote amount
-                                    if (
-                                      totalExcGst === 0 &&
-                                      jobQuoteResponse?.data?.[0]?.amount
-                                    ) {
-                                      totalExcGst =
-                                        (parseFloat(
-                                          jobQuoteResponse.data[0].amount,
-                                        ) || 0) / 1.15;
-                                    }
-
-                                    // Fallback to invoice total (invoice total is already exc GST)
-                                    if (
-                                      totalExcGst === 0 &&
-                                      (jobInvoiceResponse as any)?.data?.[0]
-                                        ?.total
-                                    ) {
-                                      totalExcGst =
-                                        parseFloat(
-                                          (jobInvoiceResponse as any).data[0]
-                                            .total,
-                                        ) || 0;
-                                    }
+                                    const totalExcGst =
+                                      lineItemsTotal ||
+                                      proposalSubtotal ||
+                                      quoteExGst ||
+                                      jobStoredExGst ||
+                                      invoiceExGst;
 
                                     return (
                                       <>
@@ -9970,12 +9964,13 @@ The Treemarkables Team`;
                   className="flex flex-col items-center gap-2 p-2 rounded-xl transition-colors disabled:opacity-40 group"
                   disabled={resetXeroSyncMutation.isPending}
                   onClick={() => {
-                    setShowMoreActionsSheet(false);
-                    // Wait for the Sheet's exit animation before opening the
-                    // AlertDialog. Closing a Radix Sheet and opening a Radix
-                    // Dialog in the same frame leaves pointer-events:none on
-                    // <body>, freezing the job card after dismissal.
-                    setTimeout(() => setShowXeroResetConfirm(true), 250);
+                    // Open the AlertDialog ON TOP of the Sheet rather than
+                    // closing the Sheet first. Closing a Radix Sheet and
+                    // opening a Radix AlertDialog in close succession races
+                    // their pointer-events:none cleanup and freezes <body>.
+                    // The Sheet gets dismissed by the AlertDialog's confirm
+                    // action below.
+                    setShowXeroResetConfirm(true);
                   }}
                   data-testid="more-sheet-resend-xero"
                 >
@@ -11625,6 +11620,10 @@ The Treemarkables Team`;
             <AlertDialogAction
               onClick={() => {
                 setShowXeroResetConfirm(false);
+                // Close the More sheet too — confirm means the user is done
+                // with the action menu. Cancel leaves the sheet open so they
+                // can pick something else.
+                setShowMoreActionsSheet(false);
                 resetXeroSyncMutation.mutate();
               }}
               className="bg-amber-600 hover:bg-amber-700"
