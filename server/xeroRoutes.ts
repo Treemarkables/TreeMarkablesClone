@@ -583,15 +583,21 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           sentToXeroDate: new Date(),
         });
         
-        // Provide detailed error message for Xero validation errors
+        // Provide detailed error message for Xero validation errors.
+        // xero-node v13 rejects with { response, body } — the parsed Xero
+        // response is at error.body (NOT error.response.body, which is the
+        // raw http.IncomingMessage).
         let errorMessage = 'Failed to create invoice in Xero';
-        
-        if (error?.response?.body?.Elements?.[0]?.ValidationErrors) {
-          const validationErrors = error.response.body.Elements[0].ValidationErrors;
+        const xeroBody = error?.body ?? error?.response?.body;
+
+        if (xeroBody?.Elements?.[0]?.ValidationErrors) {
+          const validationErrors = xeroBody.Elements[0].ValidationErrors;
           const errorDetails = validationErrors.map((e: any) => e.Message).join('; ');
-          errorMessage = `Xero validation error: ${errorDetails}. Please check your Xero settings (Account Code: ${accountCode}, Tax Type: ${taxType}) in Settings > Xero Configuration.`;
-        } else if (error?.response?.body?.Message) {
-          errorMessage = `Xero error: ${error.response.body.Message}. This may be caused by incorrect Account Code (${accountCode}) or Tax Type (${taxType}). Please verify these settings exist in your Xero chart of accounts.`;
+          errorMessage = `Xero validation error: ${errorDetails}`;
+        } else if (xeroBody?.Message) {
+          errorMessage = `Xero error: ${xeroBody.Message}`;
+        } else if (error?.message) {
+          errorMessage = `Xero error: ${error.message}`;
         }
         
         res.status(500).json({ 

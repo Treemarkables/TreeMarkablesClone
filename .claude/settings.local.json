@@ -35,7 +35,8 @@
       "Bash(git *)",
       "Bash(nohup npm *)",
       "Bash(disown)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(awk '/^export const jobs = pgTable/,/^}\\);/' /home/runner/workspace/shared/schema.ts)"
     ]
   }
 }
