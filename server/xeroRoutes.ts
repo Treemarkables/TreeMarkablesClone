@@ -504,7 +504,10 @@ export function registerXeroRoutes(app: any, storage: IStorage) {
           lineItems,
           date: new Date().toISOString().split('T')[0], // Today's date in YYYY-MM-DD
           dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 7 days from now
-          invoiceNumber: String(job.jobNumber || job.id), // Match invoice number to job number
+          // Prefer the local invoice's number (so users can suffix it, e.g.
+          // "3963-V2", when the original number has been consumed in Xero
+          // by a voided invoice — voids are permanent and reserve the number).
+          invoiceNumber: String(invoice?.invoiceNumber || job.jobNumber || job.id),
           reference: `Job #${job.jobNumber || job.id}`,
           status: 'AUTHORISED' as any,
         };
