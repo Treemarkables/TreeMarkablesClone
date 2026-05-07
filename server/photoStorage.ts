@@ -32,21 +32,21 @@ export type PhotoLabel = "BEFORE" | "AFTER";
 async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
   const meta = await sharp(buffer).metadata();
   const w = meta.width ?? 1200;
-  const fontSize = Math.max(48, Math.round(w / 18));
-  const padX = Math.round(fontSize * 0.6);
+  const fontSize = Math.max(48, Math.round(w / 14));
+  const padX = Math.round(fontSize * 0.7);
   const padY = Math.round(fontSize * 0.3);
   const letterSpacing = 2;
   const boxW = Math.round(
     label.length * fontSize * 0.72 + (label.length - 1) * letterSpacing + padX * 2,
   );
   const boxH = Math.round(fontSize + padY * 2);
-  const offset = Math.round(fontSize * 0.6);
-  const strokeW = Math.max(3, Math.round(fontSize / 14));
+  const offset = Math.round(fontSize * 0.5);
+  const strokeW = Math.max(3, Math.round(fontSize / 16));
   const inset = strokeW / 2;
   const svg = `<svg width="${boxW}" height="${boxH}" xmlns="http://www.w3.org/2000/svg">
-    <rect x="${inset}" y="${inset}" width="${boxW - strokeW}" height="${boxH - strokeW}" rx="${Math.round((boxH - strokeW) / 2)}" fill="white" stroke="#39FF14" stroke-width="${strokeW}"/>
+    <rect x="${inset}" y="${inset}" width="${boxW - strokeW}" height="${boxH - strokeW}" rx="${Math.round((boxH - strokeW) / 2)}" fill="#39FF14" stroke="black" stroke-width="${strokeW}"/>
     <text x="${padX}" y="${Math.round(fontSize + padY * 0.7)}" font-family="Inter, Arial, sans-serif"
-          font-size="${fontSize}" font-weight="700" fill="black" letter-spacing="${letterSpacing}">${label}</text>
+          font-size="${fontSize}" font-weight="800" fill="black" letter-spacing="${letterSpacing}">${label}</text>
   </svg>`;
   return sharp(buffer)
     .composite([{ input: Buffer.from(svg), top: offset, left: offset }])
@@ -54,9 +54,10 @@ async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
     .toBuffer();
 }
 
-// Stitch two images into one side-by-side JPEG with BEFORE/AFTER labels burned in.
-// HEIC/HEIF inputs are converted to JPEG first. Each side is resized to a common
-// height (the smaller of the two) and a thin divider sits between them.
+// Stitch two images into a vertical 9:16 BEFORE-on-top / AFTER-on-bottom JPEG
+// sized for mobile Facebook feed posts. Each photo cover-fits its half, a thin
+// neon-green band divides them, and a black branding strip with "TREEMARKABLES
+// • GISBORNE TREE CARE" sits at the foot. HEIC/HEIF inputs become JPEG first.
 export async function composeBeforeAfter(
   beforeInput: { buffer: Buffer; mimeType: string; filename: string },
   afterInput: { buffer: Buffer; mimeType: string; filename: string },
@@ -79,38 +80,41 @@ export async function composeBeforeAfter(
     burnLabel(afterJpeg, "AFTER"),
   ]);
 
-  const [beforeMeta, afterMeta] = await Promise.all([
-    sharp(beforeLabelled).metadata(),
-    sharp(afterLabelled).metadata(),
-  ]);
+  const targetW = 1080;
+  const targetH = 1920;
+  const dividerH = 8;
+  const footerH = 90;
+  const halfH = Math.floor((targetH - dividerH - footerH) / 2);
 
-  // Force a true 50/50 split: each half gets identical dimensions and the source
-  // is cover-fit (centre-cropped) into that box. Picking the smaller width and
-  // height across the two avoids upscaling either photo.
-  const halfWidth = Math.min(beforeMeta.width ?? 1080, afterMeta.width ?? 1080);
-  const targetHeight = Math.min(beforeMeta.height ?? 1080, afterMeta.height ?? 1080);
-  const [leftBuf, rightBuf] = await Promise.all([
+  const [topBuf, bottomBuf] = await Promise.all([
     sharp(beforeLabelled)
-      .resize({ width: halfWidth, height: targetHeight, fit: "cover", position: "centre" })
+      .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
       .toBuffer(),
     sharp(afterLabelled)
-      .resize({ width: halfWidth, height: targetHeight, fit: "cover", position: "centre" })
+      .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
       .toBuffer(),
   ]);
-  const dividerW = Math.max(2, Math.round(targetHeight / 360));
-  const totalW = halfWidth * 2 + dividerW;
+
+  const footerFontSize = 34;
+  const footerSvg = `<svg width="${targetW}" height="${footerH}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${targetW}" height="${footerH}" fill="black"/>
+    <text x="${targetW / 2}" y="${Math.round(footerH / 2 + footerFontSize / 3)}" font-family="Inter, Arial, sans-serif"
+          font-size="${footerFontSize}" font-weight="700" letter-spacing="4" fill="#39FF14" text-anchor="middle">TREEMARKABLES &#8226; GISBORNE TREE CARE</text>
+  </svg>`;
+  const footerBuf = await sharp(Buffer.from(footerSvg)).png().toBuffer();
 
   return sharp({
     create: {
-      width: totalW,
-      height: targetHeight,
+      width: targetW,
+      height: targetH,
       channels: 3,
-      background: { r: 0, g: 0, b: 0 },
+      background: { r: 0x39, g: 0xff, b: 0x14 },
     },
   })
     .composite([
-      { input: leftBuf, left: 0, top: 0 },
-      { input: rightBuf, left: halfWidth + dividerW, top: 0 },
+      { input: topBuf, left: 0, top: 0 },
+      { input: bottomBuf, left: 0, top: halfH + dividerH },
+      { input: footerBuf, left: 0, top: halfH * 2 + dividerH },
     ])
     .jpeg({ quality: 88 })
     .toBuffer();

@@ -2360,6 +2360,10 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         console.error('Error finding/creating customer for contact form:', customerErr);
       }
 
+      // Hoisted so the auto-reply block below can attach a receipt entry to
+      // the job diary once the confirmation email/SMS is sent.
+      let createdJob: any = undefined;
+
       try {
         // Step 2: find an existing open conversation or create a new one,
         // attached to the customer record above.
@@ -2401,7 +2405,6 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
         // state in the jobs.status enum). If the customer already has an open
         // lead-status job, reuse it instead of creating a duplicate — repeat
         // form submissions should refresh the existing lead, not pile up.
-        let createdJob: any = undefined;
         let reusedExistingJob = false;
         if (customer?.id) {
           try {
@@ -2539,21 +2542,61 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
 
           if ((channel === 'email' || channel === 'both') && lowerEmail) {
             const emailBodyText = fillVars(emailTemplate);
+            const emailSubject = fillVars(subject);
             const emailBodyHtml = `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.5;color:#222;">${
               emailBodyText.split('\n').map(line => line ? line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '').join('<br>')
             }</div>`;
             emailService.sendEmail({
               to: lowerEmail,
-              subject: fillVars(subject),
+              subject: emailSubject,
               text: emailBodyText,
               html: emailBodyHtml,
-            }).catch(err => console.error('[contact] auto-reply email failed:', err));
+            })
+              .then(async () => {
+                if (createdJob?.id) {
+                  try {
+                    await storage.createJobDiaryEntry({
+                      jobId: createdJob.id,
+                      entryType: 'email',
+                      title: `Auto-reply sent: ${emailSubject}`,
+                      description: `Auto-reply email sent to ${lowerEmail}\n\nSubject: ${emailSubject}\n\nMessage:\n${emailBodyText}`,
+                      authorName: 'System',
+                      authorRole: 'system',
+                      tags: ['communication', 'email', 'auto-reply'],
+                      metadata: { emailAddress: lowerEmail },
+                    });
+                    await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
+                  } catch (diaryErr) {
+                    console.error('[contact] Failed to record auto-reply email receipt:', diaryErr);
+                  }
+                }
+              })
+              .catch(err => console.error('[contact] auto-reply email failed:', err));
           }
 
           if ((channel === 'sms' || channel === 'both') && cleanPhone && isMobileNumber) {
             const smsBody = fillVars(smsTemplate);
             if (smsBody.trim()) {
               smsService.sendSMS({ to: cleanPhone, message: smsBody })
+                .then(async () => {
+                  if (createdJob?.id) {
+                    try {
+                      await storage.createJobDiaryEntry({
+                        jobId: createdJob.id,
+                        entryType: 'sms',
+                        title: 'Auto-reply SMS sent',
+                        description: `Auto-reply SMS sent to ${cleanPhone}\n\nMessage:\n${smsBody}`,
+                        authorName: 'System',
+                        authorRole: 'system',
+                        tags: ['communication', 'sms', 'auto-reply'],
+                        metadata: { phoneNumber: cleanPhone },
+                      });
+                      await storage.updateJob(createdJob.id, { lastActivityAt: new Date() });
+                    } catch (diaryErr) {
+                      console.error('[contact] Failed to record auto-reply SMS receipt:', diaryErr);
+                    }
+                  }
+                })
                 .catch(err => console.error('[contact] auto-reply SMS failed:', err));
             }
           }
@@ -6597,16 +6640,16 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     try {
       const photoStorage = new PhotoStorageService();
       const result = await photoStorage.regenerateAllThumbnails();
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: `Regenerated ${result.regenerated} of ${result.total} thumbnails`,
         data: result
       });
     } catch (error) {
       console.error('Error regenerating thumbnails:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Error regenerating thumbnails' 
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error regenerating thumbnails'
       });
     }
   });
