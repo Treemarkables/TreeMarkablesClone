@@ -6502,6 +6502,32 @@ The Treemarkables Team`;
                         {/* ServiceM8-Style Job Scope Card (Mobile only position) */}
                         <div className="md:hidden mt-2">
                           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                            {/* Checklist Header (Mobile) */}
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-gray-700 font-medium flex items-center gap-2">
+                                <ListChecks className="h-4 w-4" />
+                                Checklist
+                                {checklist.length > 0 && (
+                                  <span className="text-xs text-gray-500 font-normal">
+                                    ({checklist.filter((i) => i.completed).length}/{checklist.length})
+                                  </span>
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setChecklistCollapsed((c) => !c);
+                                }}
+                                className="flex items-center gap-1 text-xs font-medium text-muted-foreground border border-border rounded-full px-2 py-0.5 hover-elevate"
+                                data-testid="button-toggle-checklist-mobile"
+                              >
+                                {checklistCollapsed ? "Show" : "Hide"}
+                                <ChevronDown
+                                  className={`h-3 w-3 transition-transform duration-200 ${checklistCollapsed ? "" : "rotate-180"}`}
+                                />
+                              </button>
+                            </div>
                             {/* Checklist Items */}
                             {!checklistCollapsed && (
                               <div className="space-y-2 mb-3">

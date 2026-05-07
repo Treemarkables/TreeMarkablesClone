@@ -1293,6 +1293,26 @@ function App() {
     }
   }, []);
 
+  // Watchdog for Radix Dialog/Sheet leaving `body { pointer-events: none }`
+  // stuck after rapid nested open/close cycles (notably in the job card).
+  // When that happens every click on the page is dead — including the
+  // sidebar menu button. If body is locked but no dialog is actually open,
+  // clear the lock so the UI self-heals.
+  useEffect(() => {
+    const clearIfStale = () => {
+      if (document.body.style.pointerEvents !== 'none') return;
+      const hasOpenDialog = document.querySelector(
+        '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"]'
+      );
+      if (!hasOpenDialog) {
+        document.body.style.pointerEvents = '';
+      }
+    };
+    const observer = new MutationObserver(clearIfStale);
+    observer.observe(document.body, { attributes: true, attributeFilter: ['style'] });
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>

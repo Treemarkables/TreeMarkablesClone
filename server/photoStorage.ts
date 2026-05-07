@@ -32,7 +32,7 @@ export type PhotoLabel = "BEFORE" | "AFTER";
 async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
   const meta = await sharp(buffer).metadata();
   const w = meta.width ?? 1200;
-  const fontSize = Math.max(48, Math.round(w / 14));
+  const fontSize = Math.max(24, Math.round(w / 28));
   const padX = Math.round(fontSize * 0.7);
   const padY = Math.round(fontSize * 0.3);
   const letterSpacing = 2;

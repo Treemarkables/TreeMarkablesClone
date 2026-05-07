@@ -2182,7 +2182,7 @@ export function JobDiarySection({
                         src={photo.url}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain"
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="text-[10px] text-white whitespace-nowrap truncate">
@@ -2676,7 +2676,7 @@ export function JobDiarySection({
                           {photos.map((photo, photoIndex) => (
                             <div
                               key={photo.id}
-                              className={`relative rounded-lg overflow-hidden cursor-pointer hover-elevate ${
+                              className={`relative rounded-lg overflow-hidden cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800 ${
                                 photos.length === 1
                                   ? ""
                                   : photos.length === 3 && photoIndex === 0
@@ -2696,7 +2696,7 @@ export function JobDiarySection({
                                 className={
                                   photos.length === 1
                                     ? "w-full h-auto max-h-48 object-contain"
-                                    : "w-full h-full object-cover"
+                                    : "w-full h-full object-contain"
                                 }
                                 onError={(e) =>
                                   (e.currentTarget.style.display = "none")
@@ -3398,7 +3398,7 @@ export function JobDiarySection({
                                       key={`${entry.id}-${i}`}
                                       src={url}
                                       alt={`Job photo ${i + 1}`}
-                                      className="w-full aspect-square object-cover rounded-lg cursor-pointer hover-elevate"
+                                      className="w-full aspect-square object-contain rounded-lg cursor-pointer hover-elevate bg-gray-100 dark:bg-gray-800"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         const idx = allPhotos.indexOf(url);

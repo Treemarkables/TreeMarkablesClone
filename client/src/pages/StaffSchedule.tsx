@@ -385,6 +385,33 @@ export default function StaffSchedule() {
     });
   };
 
+  // Swipe-to-navigate. The timeline grid scrolls horizontally on its own, so
+  // we capture its scrollLeft on touch start and skip the date change if the
+  // user was actually scrolling the timeline rather than swiping the page.
+  const timelineRef = useRef<HTMLDivElement | null>(null);
+  const swipeTouchStartX = useRef<number | null>(null);
+  const swipeTouchStartY = useRef<number | null>(null);
+  const swipeStartScrollLeft = useRef<number>(0);
+
+  const handleSwipeTouchStart = (e: React.TouchEvent) => {
+    swipeTouchStartX.current = e.touches[0].clientX;
+    swipeTouchStartY.current = e.touches[0].clientY;
+    swipeStartScrollLeft.current = timelineRef.current?.scrollLeft ?? 0;
+  };
+
+  const handleSwipeTouchEnd = (e: React.TouchEvent) => {
+    if (swipeTouchStartX.current === null || swipeTouchStartY.current === null) return;
+    const deltaX = e.changedTouches[0].clientX - swipeTouchStartX.current;
+    const deltaY = e.changedTouches[0].clientY - swipeTouchStartY.current;
+    const scrollDelta = Math.abs((timelineRef.current?.scrollLeft ?? 0) - swipeStartScrollLeft.current);
+    swipeTouchStartX.current = null;
+    swipeTouchStartY.current = null;
+    if (scrollDelta > 5) return;
+    if (Math.abs(deltaX) > 60 && Math.abs(deltaX) > Math.abs(deltaY) * 1.5) {
+      navigate(deltaX < 0 ? 1 : -1);
+    }
+  };
+
   const openJob = (job: Job) => {
     setSelectedJob(job);
     setShowJobCard(true);
@@ -392,7 +419,11 @@ export default function StaffSchedule() {
 
   // ── Render ──
   return (
-    <div className="flex flex-col h-full bg-white overflow-hidden">
+    <div
+      className="flex flex-col h-full bg-white overflow-hidden"
+      onTouchStart={handleSwipeTouchStart}
+      onTouchEnd={handleSwipeTouchEnd}
+    >
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200 shrink-0">
@@ -487,7 +518,7 @@ export default function StaffSchedule() {
       </div>
 
       {/* ── Timeline grid ── */}
-      <div className="flex-1 overflow-auto">
+      <div ref={timelineRef} className="flex-1 overflow-auto">
         <div style={{ minWidth: STAFF_COL_W + hourLabels.length * MIN_HOUR_COL_W }}>
 
           {/* Hour header */}
