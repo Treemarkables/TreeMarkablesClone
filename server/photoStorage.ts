@@ -75,10 +75,6 @@ export async function composeBeforeAfter(
   };
 
   const [beforeJpeg, afterJpeg] = await Promise.all([toJpegBuffer(beforeInput), toJpegBuffer(afterInput)]);
-  const [beforeLabelled, afterLabelled] = await Promise.all([
-    burnLabel(beforeJpeg, "BEFORE"),
-    burnLabel(afterJpeg, "AFTER"),
-  ]);
 
   const targetW = 1080;
   const targetH = 1920;
@@ -86,13 +82,20 @@ export async function composeBeforeAfter(
   const footerH = 90;
   const halfH = Math.floor((targetH - dividerH - footerH) / 2);
 
+  // Resize first, then burn the labels onto the cropped halves — burning before
+  // the cover-fit resize means the label corner gets cropped away whenever the
+  // source aspect ratio doesn't match the half's aspect ratio.
+  const [topResized, bottomResized] = await Promise.all([
+    sharp(beforeJpeg)
+      .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
+      .toBuffer(),
+    sharp(afterJpeg)
+      .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
+      .toBuffer(),
+  ]);
   const [topBuf, bottomBuf] = await Promise.all([
-    sharp(beforeLabelled)
-      .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
-      .toBuffer(),
-    sharp(afterLabelled)
-      .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
-      .toBuffer(),
+    burnLabel(topResized, "BEFORE"),
+    burnLabel(bottomResized, "AFTER"),
   ]);
 
   const footerFontSize = 34;
