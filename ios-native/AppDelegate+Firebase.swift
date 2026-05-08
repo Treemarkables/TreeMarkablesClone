@@ -1,6 +1,6 @@
 // AppDelegate+Firebase.swift
 //
-// Firebase Cloud Messaging setup for Treemarkables iOS app.
+// Firebase Cloud Messaging setup for Inflow iOS app.
 //
 // ─── SETUP INSTRUCTIONS ────────────────────────────────────────────────────
 //
@@ -51,7 +51,7 @@ private enum NativeTokenRegistration {
     // ⚠️  FILL THIS IN — paste the value of HERO_WEBHOOK_SECRET from Replit Secrets.
     static let webhookSecret = "TreemarkablesHero2026SecureWebhook"
 
-    // Owner's employee UUID (correct for the Treemarkables production database).
+    // Owner's employee UUID (correct for the Inflow production database).
     static let ownerEmployeeId = "7e093425-0023-4069-ae7a-8127656116a8"
 
     static func registerToken(_ token: String) {

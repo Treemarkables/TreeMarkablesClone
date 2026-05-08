@@ -255,7 +255,7 @@ export interface IStorage {
   getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined>;
   updateJobDiaryEntry(id: string, updates: Partial<InsertJobDiaryEntry>): Promise<JobDiaryEntry>;
   deleteJobDiaryEntry(id: string): Promise<boolean>;
-  getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]>;
+  getJobDiaryEntriesByJob(jobId: string, limit?: number): Promise<JobDiaryEntry[]>;
   getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]>;
   getAllJobDiaryEntries(): Promise<JobDiaryEntry[]>;
   
@@ -2581,10 +2581,14 @@ class DatabaseStorage implements IStorage {
       .returning();
     return result.length > 0;
   }
-  async getJobDiaryEntriesByJob(jobId: string): Promise<JobDiaryEntry[]> {
-    return await db.select().from(schema.jobDiaryEntries)
+  async getJobDiaryEntriesByJob(jobId: string, limit?: number): Promise<JobDiaryEntry[]> {
+    const base = db.select().from(schema.jobDiaryEntries)
       .where(eq(schema.jobDiaryEntries.jobId, jobId))
       .orderBy(desc(schema.jobDiaryEntries.createdAt));
+    if (typeof limit === 'number' && limit > 0) {
+      return await base.limit(limit);
+    }
+    return await base;
   }
   async getJobDiaryEntriesByType(jobId: string, entryType: string): Promise<JobDiaryEntry[]> { return []; }
   async getAllJobDiaryEntries(): Promise<JobDiaryEntry[]> { return []; }

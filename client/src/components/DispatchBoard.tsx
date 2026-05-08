@@ -2100,42 +2100,44 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       updates.status = next;
     }
 
-    setIsConfirmingDrop(true);
-    try {
-      await fetch(`/api/jobs/${jobId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updates),
-      });
+    // Close the modal immediately — the user has provided everything we need,
+    // so the rest of the work runs in the background. The dispatch board
+    // refetches when the staff-assignments POST resolves; on failure we toast.
+    setPendingDrop(null);
+    (async () => {
+      try {
+        await fetch(`/api/jobs/${jobId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(updates),
+        });
 
-      await fetch(`/api/jobs/${jobId}/staff-assignments`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          staffAssignments: result.employeeIds.map((employeeId) => ({
-            employeeId,
-            startTime: startDateTime.toISOString(),
-            endTime: endDateTime.toISOString(),
-            notes: "",
-          })),
-          sendNotifications: false,
-          sendClientNotification: false,
-          addOnly: true,
-        }),
-      });
+        await fetch(`/api/jobs/${jobId}/staff-assignments`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            staffAssignments: result.employeeIds.map((employeeId) => ({
+              employeeId,
+              startTime: startDateTime.toISOString(),
+              endTime: endDateTime.toISOString(),
+              notes: "",
+            })),
+            sendNotifications: false,
+            sendClientNotification: false,
+            addOnly: true,
+          }),
+        });
 
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
-      setPendingDrop(null);
-    } catch {
-      toast({
-        title: "Scheduling Failed",
-        description: "Could not schedule the job. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsConfirmingDrop(false);
-    }
+        queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
+      } catch {
+        toast({
+          title: "Scheduling Failed",
+          description: "Could not schedule the job. Please try again.",
+          variant: "destructive",
+        });
+      }
+    })();
   };
 
   const handleCreateJob = () => {

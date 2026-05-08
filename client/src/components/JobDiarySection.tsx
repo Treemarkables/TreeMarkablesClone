@@ -85,6 +85,17 @@ import { MdStickyNote2, MdEmail } from "react-icons/md";
 // direction of each email and stitch replies underneath their preceding sent
 // email so the UI can show one consolidated thread card per conversation.
 
+// Diary entries store the original photo URL (multi-MB on mobile). The backend
+// generates a 600px webp thumbnail at /objects/photos/thumb_{name}.webp and
+// will create one on-the-fly if missing. Swap the grid to thumbs so the Photos
+// tab loads quickly on mobile; fall back to the original on error.
+function toPhotoThumbUrl(url: string): string {
+  if (!url) return url;
+  const m = url.match(/^(\/objects\/photos\/)(?!thumb_)(.+?)\.(jpg|jpeg|png)$/i);
+  if (!m) return url;
+  return `${m[1]}thumb_${m[2]}.webp`;
+}
+
 type EmailDirection = "sent" | "received" | "unknown";
 
 function getEmailDirection(entry: { title: string; content: string }): EmailDirection {
@@ -671,6 +682,13 @@ export function JobDiarySection({
   const [activeComposer, setActiveComposer] = useState<
     "note" | "sms" | "email" | null
   >(null);
+  // Cap initial diary fetch at 100 entries so jobs with long history paint
+  // fast. Set to null when the user clicks "Load older entries" to fetch all.
+  const [diaryLimit, setDiaryLimit] = useState<number | null>(100);
+  // True when the limited diary fetch came back full — i.e. there may be older
+  // entries the server didn't send. Used to decide whether to render the
+  // "Load older entries" button at the bottom of the timeline.
+  const [diaryHasMore, setDiaryHasMore] = useState(false);
   const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
   const [selectedProposalId, setSelectedProposalId] = useState<string | null>(
     null,
@@ -908,18 +926,6 @@ export function JobDiarySection({
   // Force cache invalidation on mobile devices to prevent stale data
   const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-  useEffect(() => {
-    if (isMobile) {
-      // On mobile, aggressively invalidate all diary caches on mount
-      queryClient.invalidateQueries({
-        queryKey: ["/api/jobs", jobId, "diary-timeline"],
-      });
-      queryClient.removeQueries({
-        queryKey: ["/api/jobs", jobId, "diary-timeline"],
-      });
-    }
-  }, [isMobile, jobId, queryClient]);
-
   // Check for bootstrap data (from index.html pre-fetch)
   // DISABLED: Bootstrap cache causes issues with email entries
   const bootstrapData = undefined; //(window as any).__DIARY_BOOTSTRAP__;
@@ -958,15 +964,20 @@ export function JobDiarySection({
     select: (response: any) => response.data || response,
   });
 
-  // Fetch email templates
+  // Fetch email templates — only when composing an email (templates feed the
+  // composer's template dropdown, nothing else needs them).
   const { data: emailTemplates = [] } = useQuery({
     queryKey: ["/api/email-templates"],
+    enabled: activeComposer === "email",
+    staleTime: 5 * 60 * 1000,
     select: (response: any) => response.data || [],
   });
 
-  // Fetch SMS templates
+  // Fetch SMS templates — only when composing an SMS.
   const { data: smsTemplates = [] } = useQuery({
     queryKey: ["/api/sms-templates"],
+    enabled: activeComposer === "sms",
+    staleTime: 5 * 60 * 1000,
     select: (response: any) => response.data || [],
   });
 
@@ -1054,78 +1065,47 @@ export function JobDiarySection({
     isLoading,
     refetch,
   } = useQuery({
-    queryKey: ["/api/jobs", jobId, "diary-timeline"],
-    // DISABLED: Bootstrap cache was using old data format
-    // Use bootstrap data as initial data if available
-    initialData: false
-      ? (() => {
-          console.log("🚀 Seeding React Query with bootstrap data");
-          // Transform bootstrap data to DiaryEntry format
-          return bootstrapData.data.map((entry: any) => ({
-            id: entry.id,
-            type: entry.entryType || "note",
-            title: entry.title,
-            content: entry.description,
-            author: entry.authorName || "System",
-            timestamp: entry.createdAt,
-            photoUrl: entry.photoUrl || (entry.photos && entry.photos[0]),
-            metadata: entry.metadata || {},
-          }));
-        })()
-      : undefined,
-    staleTime: 0, // Always consider data stale
-    gcTime: 0, // Don't cache in memory
-    refetchOnMount: "always", // Always refetch on mount
-    refetchOnWindowFocus: true, // Refetch when window regains focus
-    networkMode: "always", // CRITICAL: Force query on iOS PWAs that falsely report offline
+    queryKey: ["/api/jobs", jobId, "diary-timeline", diaryLimit],
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: false,
+    networkMode: "always", // iOS PWAs can falsely report offline — force the request
     retry: true,
     retryOnMount: true,
     queryFn: async (): Promise<DiaryEntry[]> => {
-      // Add cache-busting timestamp to force fresh data
-      const timestamp = Date.now();
+      const diaryUrl = diaryLimit
+        ? `/api/jobs/${jobId}/diary?limit=${diaryLimit}`
+        : `/api/jobs/${jobId}/diary`;
 
-      const [localResponse, servicem8Response, scheduleResponse] =
-        await Promise.all([
-          // Fetch local diary data (original endpoints)
-          Promise.all([
-            apiRequest("GET", `/api/jobs/${jobId}/diary?_t=${timestamp}`).then(
-              (res) => res.json(),
-            ),
-            apiRequest(
-              "GET",
-              `/api/communications?jobId=${jobId}&_t=${timestamp}`,
-            ).then((res) => res.json()),
-            apiRequest(
-              "GET",
-              `/api/proposals?jobId=${jobId}&_t=${timestamp}`,
-            ).then((res) => res.json()),
-          ]),
-          // Fetch ServiceM8 diary data (with error handling)
-          apiRequest(
-            "GET",
-            `/api/servicem8/jobs/${jobId}/diary?_t=${timestamp}`,
-          )
-            .then((res) => res.json())
-            .catch(() => ({ data: [] })),
-          // Fetch job staff assignments (upcoming bookings)
-          apiRequest(
-            "GET",
-            `/api/jobs/${jobId}/staff-assignments?_t=${timestamp}`,
-          )
-            .then((res) => res.json())
-            .catch(() => ({ data: [] })),
-        ]);
-
-      const [diaryResponse, communicationsResponse, proposalsResponse] =
-        localResponse;
+      const [
+        diaryResponse,
+        proposalsResponse,
+        servicem8Response,
+        scheduleResponse,
+      ] = await Promise.all([
+        apiRequest("GET", diaryUrl).then((res) => res.json()),
+        apiRequest("GET", `/api/proposals?jobId=${jobId}`).then((res) =>
+          res.json(),
+        ),
+        apiRequest("GET", `/api/servicem8/jobs/${jobId}/diary`)
+          .then((res) => res.json())
+          .catch(() => ({ data: [] })),
+        apiRequest("GET", `/api/jobs/${jobId}/staff-assignments`)
+          .then((res) => res.json())
+          .catch(() => ({ data: [] })),
+      ]);
       const entries: DiaryEntry[] = [];
+
+      // If the server returned a full page, there may be more older entries.
+      // (When diaryLimit is null we asked for all and there's nothing more.)
+      const localCount = Array.isArray(diaryResponse.data)
+        ? diaryResponse.data.length
+        : 0;
+      setDiaryHasMore(diaryLimit !== null && localCount >= diaryLimit);
 
       // Add local diary entries
       if (diaryResponse.data) {
-        console.log(
-          "🔍 RAW API RESPONSE:",
-          JSON.stringify(diaryResponse.data, null, 2),
-        );
         diaryResponse.data.forEach((entry: any) => {
           // CRITICAL FIX: Use entry.photoUrl directly (it's a string, not an array)
           // The database column is photo_url, which comes through as photoUrl in the API response
@@ -1144,14 +1124,6 @@ export function JobDiarySection({
 
           // Support both snake_case (entry_type) and camelCase (entryType)
           const entryType = entry.entryType || entry.entry_type;
-          console.log(
-            "🔍 Processing entry:",
-            entry.id,
-            "entryType:",
-            entryType,
-            "entry:",
-            entry,
-          );
 
           entries.push({
             id: entry.id,
@@ -1183,24 +1155,6 @@ export function JobDiarySection({
                 entryType === "proposal"
                   ? entry.title.replace("Proposal Created: ", "")
                   : undefined,
-            },
-          });
-        });
-      }
-
-      // Add local communications
-      if (communicationsResponse.data) {
-        communicationsResponse.data.forEach((comm: any) => {
-          entries.push({
-            id: comm.id,
-            type: comm.type === "email" ? "email" : "sms",
-            title: comm.subject || `${comm.type.toUpperCase()} Message`,
-            content: comm.content || comm.message,
-            author: comm.sender || "System",
-            timestamp: comm.createdAt || comm.timestamp,
-            metadata: {
-              phoneNumber: comm.phoneNumber,
-              emailAddress: comm.emailAddress,
             },
           });
         });
@@ -2179,10 +2133,14 @@ export function JobDiarySection({
                       data-testid={`photo-tile-${photo.id ?? idx}`}
                     >
                       <img
-                        src={photo.url}
+                        src={toPhotoThumbUrl(photo.url)}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
                         className="w-full h-full object-contain"
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (img.src !== photo.url) img.src = photo.url;
+                        }}
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="text-[10px] text-white whitespace-nowrap truncate">
@@ -3648,6 +3606,18 @@ export function JobDiarySection({
                   </div>
                 );
               })}
+              {diaryHasMore && (
+                <div className="flex justify-center pt-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDiaryLimit(null)}
+                    data-testid="button-load-older-diary-entries"
+                  >
+                    Load older entries
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </ScrollArea>

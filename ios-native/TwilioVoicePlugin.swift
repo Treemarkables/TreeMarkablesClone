@@ -106,7 +106,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - CallKit Setup
 
     private func setupCallKit() {
-        let config = CXProviderConfiguration(localizedName: "Treemarkables")
+        let config = CXProviderConfiguration(localizedName: "Inflow")
         config.maximumCallGroups = 1
         config.maximumCallsPerCallGroup = 1
         config.includesCallsInRecents = true
@@ -141,7 +141,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         let callerNumber = callInvite.from ?? "Unknown"
         update.remoteHandle = CXHandle(type: .phoneNumber, value: callerNumber)
         update.hasVideo = false
-        update.localizedCallerName = "Treemarkables Customer"
+        update.localizedCallerName = "Inflow Customer"
 
         callKitProvider?.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error = error {

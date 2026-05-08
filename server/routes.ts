@@ -6106,39 +6106,38 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   app.get('/api/jobs/:jobId/diary', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
-      const { entryType } = req.query;
-      
+      const { entryType, limit: limitParam } = req.query;
+
       // Set aggressive no-cache headers to prevent mobile browser caching
       res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
       res.setHeader('Surrogate-Control', 'no-store');
-      
+
       // Handle temporary job IDs
       if (jobId.startsWith('temp-')) {
         const tempEntries = (global as any).tempDiaryEntries?.get(jobId) || [];
-        console.log(`📖 Fetching temporary diary entries for ${jobId}:`, tempEntries.length);
         res.json({ success: true, data: tempEntries });
         return;
       }
-      
+
+      // Cap server-side at 500 to bound payload size even if the client asks
+      // for more.
+      let limit: number | undefined;
+      if (typeof limitParam === 'string' && limitParam.length > 0) {
+        const parsed = parseInt(limitParam, 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          limit = Math.min(parsed, 500);
+        }
+      }
+
       let entries;
       if (entryType && typeof entryType === 'string') {
         entries = await storage.getJobDiaryEntriesByType(jobId, entryType);
       } else {
-        entries = await storage.getJobDiaryEntriesByJob(jobId);
+        entries = await storage.getJobDiaryEntriesByJob(jobId, limit);
       }
-      
-      console.log(`📖 Fetching diary entries for job ${jobId}:`, entries.length);
-      
-      // DEBUG: Log all entries to see what we're getting
-      entries.forEach((entry: any) => {
-        console.log(`📝 Entry ${entry.id} - Type: ${entry.entry_type || entry.entryType}, Title: ${entry.title}`);
-        if (entry.entry_type === 'email' || entry.entry_type === 'sms' || entry.entryType === 'email' || entry.entryType === 'sms') {
-          console.log(`📧 Email/SMS Entry ${entry.id} - Metadata:`, JSON.stringify(entry.metadata));
-        }
-      });
-      
+
       // Transform entries to add photoUrl field and convert snake_case to camelCase
       const transformedEntries = entries.map((entry: any) => {
         const transformed: any = {
@@ -13546,27 +13545,28 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Calculate and update estimated man-hours based on staff assignments
       await manHoursService.updateEstimatedManHours(jobId);
 
-      // Send notifications if requested (will be queued for business hours)
-      if (sendNotifications) {
-        for (const assignment of created) {
-          const employee = await storage.getEmployee(assignment.employeeId);
-          
-          // Email/SMS notifications to staff disabled per user request
-          // if (employee && employee.email) {
-          //   await queueScheduleNotification(employee, job, assignment);
-          // }
-          
-          // Send push notification immediately
-          if (employee && job) {
-            await notificationHelper.notifyJobAssignment(
-              employee.id,
-              job.jobNumber || '',
-              job.title || '',
-              job.id
-            );
+      // Push notifications to staff are deferred — they don't affect the
+      // response and the frontend doesn't wait on them. Run after the
+      // response is sent so the modal feels instant on the client.
+      const deferredPushNotifications = sendNotifications
+        ? async () => {
+            for (const assignment of created) {
+              try {
+                const employee = await storage.getEmployee(assignment.employeeId);
+                if (employee && job) {
+                  await notificationHelper.notifyJobAssignment(
+                    employee.id,
+                    job.jobNumber || '',
+                    job.title || '',
+                    job.id
+                  );
+                }
+              } catch (err) {
+                console.error('❌ Deferred push notification failed:', err);
+              }
+            }
           }
-        }
-      }
+        : null;
 
       // Send client notification email if requested
       let clientEmailMissing = false;
@@ -13663,102 +13663,102 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         }
       }
 
-      // Schedule customer booking reminders if requested. Failure here must
-      // not fail the assignment request — reminders are an enhancement, not
-      // a hard dependency of the booking flow.
-      if (scheduleBookingReminders) {
-        try {
-          await storage.updateJob(jobId, { bookingRemindersEnabled: true });
-          const { scheduleRemindersForJob } = await import('./services/bookingReminderService');
-          const result = await scheduleRemindersForJob(jobId);
-          console.log(`📅 Booking reminders scheduled for job ${jobId}: created=${result.created}, skipped=${result.skipped}`);
-        } catch (reminderError) {
-          console.error('❌ Error scheduling booking reminders:', reminderError);
-        }
-      }
-
-      // Create diary entry for staff scheduling
-      try {
-        const employeeNames = [];
-        for (const assignment of created) {
-          const employee = await storage.getEmployee(assignment.employeeId);
-          if (employee) {
-            employeeNames.push(`${employee.firstName} ${employee.lastName}`);
-          }
-        }
-
-        const staffList = employeeNames.join(', ');
-        const scheduleDate = startTime.toLocaleDateString('en-NZ', { 
-          timeZone: 'Pacific/Auckland',
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        });
-        const startTimeStr = startTime.toLocaleTimeString('en-NZ', { 
-          timeZone: 'Pacific/Auckland',
-          hour: '2-digit', 
-          minute: '2-digit' 
-        });
-        const endTimeStr = endTime.toLocaleTimeString('en-NZ', { 
-          timeZone: 'Pacific/Auckland',
-          hour: '2-digit', 
-          minute: '2-digit' 
-        });
-
-        console.log('Creating staff scheduling diary entry:', { jobId, employeeNames, scheduleDate });
-
-        const diaryEntry = await storage.createJobDiaryEntry({
-          jobId,
-          entryType: 'milestone',
-          title: `Staff Scheduled - ${scheduleDate} at ${startTimeStr}`,
-          description: `${employeeNames.length} staff member(s) scheduled: ${staffList}\nScheduled from ${startTimeStr} to ${endTimeStr}`,
-          authorName: 'System',
-          content: `Scheduled on ${scheduleDate} from ${startTimeStr} to ${endTimeStr}`,
-          metadata: JSON.stringify({
-            staffIds: employeeIds,
-            staffNames: employeeNames,
-            date: scheduleDate,
-            startTime: startTime.toISOString(),
-            endTime: endTime.toISOString()
-          }),
-          isPrivate: false
-        });
-
-        console.log('✅ Staff scheduling diary entry created:', diaryEntry.id);
-      } catch (diaryError) {
-        console.error('❌ Error creating diary entry for staff scheduling:', diaryError);
-        console.error('Diary error stack:', diaryError instanceof Error ? diaryError.stack : diaryError);
-        // Don't fail the request if diary entry creation fails
-      }
-
-      // Sync every scheduled job to Google Calendar — the connected calendar is
-      // the operator's company-wide schedule, not a per-staff personal calendar,
-      // so it should reflect every booking regardless of who's assigned. The
-      // earlier "self-only" gate hid most of the schedule from Google Calendar
-      // because the operator usually books crew members rather than themself.
-      try {
-        const calendarJob = { ...job } as any;
-        if (job.customerId) {
-          const customer = await storage.getCustomer(job.customerId);
-          if (customer) {
-            calendarJob.customerName = customer.name;
-          }
-        }
-        const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
-        if (googleEventId) {
-          console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
-        }
-      } catch (calendarError) {
-        console.error('❌ Error syncing to Google Calendar:', calendarError);
-        // Don't fail the request if calendar sync fails
-      }
-
+      // Respond now. The remaining work — push notifications, booking
+      // reminders, the staff-scheduling diary entry, and Google Calendar
+      // sync — is non-critical and was already wrapped in try/catch with
+      // "don't fail the request" semantics. Defer it so the client (which
+      // closes its modal on the response) feels instant.
       res.json({
         success: true,
         data: created,
         message: `${created.length} staff member(s) scheduled successfully`,
         clientEmailMissing,
         clientEmailFailed
+      });
+
+      setImmediate(async () => {
+        if (deferredPushNotifications) {
+          await deferredPushNotifications();
+        }
+
+        if (scheduleBookingReminders) {
+          try {
+            await storage.updateJob(jobId, { bookingRemindersEnabled: true });
+            const { scheduleRemindersForJob } = await import('./services/bookingReminderService');
+            const result = await scheduleRemindersForJob(jobId);
+            console.log(`📅 Booking reminders scheduled for job ${jobId}: created=${result.created}, skipped=${result.skipped}`);
+          } catch (reminderError) {
+            console.error('❌ Error scheduling booking reminders:', reminderError);
+          }
+        }
+
+        try {
+          const employeeNames = [];
+          for (const assignment of created) {
+            const employee = await storage.getEmployee(assignment.employeeId);
+            if (employee) {
+              employeeNames.push(`${employee.firstName} ${employee.lastName}`);
+            }
+          }
+
+          const staffList = employeeNames.join(', ');
+          const scheduleDate = startTime.toLocaleDateString('en-NZ', {
+            timeZone: 'Pacific/Auckland',
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric'
+          });
+          const startTimeStr = startTime.toLocaleTimeString('en-NZ', {
+            timeZone: 'Pacific/Auckland',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+          const endTimeStr = endTime.toLocaleTimeString('en-NZ', {
+            timeZone: 'Pacific/Auckland',
+            hour: '2-digit',
+            minute: '2-digit'
+          });
+
+          console.log('Creating staff scheduling diary entry:', { jobId, employeeNames, scheduleDate });
+
+          const diaryEntry = await storage.createJobDiaryEntry({
+            jobId,
+            entryType: 'milestone',
+            title: `Staff Scheduled - ${scheduleDate} at ${startTimeStr}`,
+            description: `${employeeNames.length} staff member(s) scheduled: ${staffList}\nScheduled from ${startTimeStr} to ${endTimeStr}`,
+            authorName: 'System',
+            content: `Scheduled on ${scheduleDate} from ${startTimeStr} to ${endTimeStr}`,
+            metadata: JSON.stringify({
+              staffIds: employeeIds,
+              staffNames: employeeNames,
+              date: scheduleDate,
+              startTime: startTime.toISOString(),
+              endTime: endTime.toISOString()
+            }),
+            isPrivate: false
+          });
+
+          console.log('✅ Staff scheduling diary entry created:', diaryEntry.id);
+        } catch (diaryError) {
+          console.error('❌ Error creating diary entry for staff scheduling:', diaryError);
+          console.error('Diary error stack:', diaryError instanceof Error ? diaryError.stack : diaryError);
+        }
+
+        try {
+          const calendarJob = { ...job } as any;
+          if (job.customerId) {
+            const customer = await storage.getCustomer(job.customerId);
+            if (customer) {
+              calendarJob.customerName = customer.name;
+            }
+          }
+          const googleEventId = await googleCalendarService.syncJobToCalendar(calendarJob, created);
+          if (googleEventId) {
+            console.log(`✅ Job synced to Google Calendar: ${googleEventId}`);
+          }
+        } catch (calendarError) {
+          console.error('❌ Error syncing to Google Calendar:', calendarError);
+        }
       });
     } catch (error) {
       console.error('Error creating staff assignments:', error);

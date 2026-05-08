@@ -36,7 +36,12 @@
       "Bash(nohup npm *)",
       "Bash(disown)",
       "Read(//tmp/**)",
-      "Bash(awk '/^export const jobs = pgTable/,/^}\\);/' /home/runner/workspace/shared/schema.ts)"
+      "Bash(awk '/^export const jobs = pgTable/,/^}\\);/' /home/runner/workspace/shared/schema.ts)",
+      "Bash(dig +short app.inflowapp.co.nz A)",
+      "Bash(dig +short app.inflowapp.co.nz TXT)",
+      "Bash(getent hosts *)",
+      "Bash(nslookup app.inflowapp.co.nz)",
+      "Bash(nslookup -type=TXT app.inflowapp.co.nz)"
     ]
   }
 }

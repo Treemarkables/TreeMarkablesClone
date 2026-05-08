@@ -1,8 +1,8 @@
 import { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.treemarkables.app",
-  appName: "Treemarkables",
+  appId: "co.nz.inflowapp",
+  appName: "Inflow",
   webDir: "dist/public",
   server: {
     url: "https://app.treemarkables.co.nz",

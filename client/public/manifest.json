@@ -1,7 +1,7 @@
 {
-  "name": "Treemarkables Job Manager",
-  "short_name": "TreeJobs",
-  "description": "Professional tree removal job management system",
+  "name": "Inflow",
+  "short_name": "Inflow",
+  "description": "Job management for field-services teams",
   "start_url": "/dispatch",
   "display": "standalone",
   "background_color": "#000000",

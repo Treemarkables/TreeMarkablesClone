@@ -2809,9 +2809,12 @@ export function GlobalJobCard({
     }
   }, [jobInvoiceResponse]);
 
-  // Fetch all equipment for quick-add dropdown
+  // Fetch all equipment for quick-add dropdown — only when billing tab is
+  // active (matches materials/services gating above). Falls back to [] elsewhere
+  // so the licence-map code below stays correct.
   const { data: equipmentData } = useQuery({
     queryKey: ["/api/equipment"],
+    enabled: isOpen && (activeTab === "billing" || sidebarTab === "billing"),
   });
 
   const allEquipment = Array.isArray((equipmentData as any)?.data)
@@ -3645,6 +3648,25 @@ The Treemarkables Team`;
       // scheduled, completed, etc.) so we leave status untouched.
       const nextStatus = statusAfterBooking(editingJob.status);
 
+      // Close the modal immediately. The user has filled everything in; the
+      // rest of the work (job update, staff assignments, side effects) runs
+      // in the background. Failures surface as a toast. This makes the
+      // confirm feel instant even when the backend takes a couple of seconds.
+      setIsSchedulingModalOpen(false);
+      setSchedulingData({
+        date: "",
+        endDate: "",
+        startTime: "",
+        duration: "",
+        day2Duration: "",
+        assignedTo: [],
+        notes: "",
+        sendClientNotification: false,
+        sendProposalEmail: false,
+        scheduleBookingReminders: false,
+      });
+      setStaffConflicts([]);
+
       const jobUpdateResponse = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -3865,21 +3887,6 @@ The Treemarkables Team`;
         queryClient.invalidateQueries({ queryKey: ["/api/staff-assignments"] });
         queryClient.invalidateQueries({ queryKey: ["/api/schedule-events"] });
         queryClient.invalidateQueries({ queryKey: ["/api/scheduling/revenue"] });
-
-        setIsSchedulingModalOpen(false);
-        setSchedulingData({
-          date: "",
-          endDate: "",
-          startTime: "",
-          duration: "",
-          day2Duration: "",
-          assignedTo: [],
-          notes: "",
-          sendClientNotification: false,
-          sendProposalEmail: false,
-          scheduleBookingReminders: false,
-        });
-        setStaffConflicts([]);
       } else {
         throw new Error(data.message || "Failed to schedule");
       }
