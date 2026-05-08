@@ -25,8 +25,8 @@ export function LogoSidebarTrigger({ className = "", size = 44 }: LogoSidebarTri
       style={{
         width: size,
         height: size,
-        backgroundImage: "url(/logos/treemarkables-logo.png)",
-        backgroundSize: "118%",
+        backgroundImage: "url(/inflow-icon-192.png?v=6)",
+        backgroundSize: "100%",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
         overflow: "hidden",

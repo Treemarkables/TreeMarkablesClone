@@ -49,7 +49,8 @@
       "Bash(env)",
       "Bash(magick -size 1254x1254 xc:none -fill black -draw \"roundrectangle 0,0 1253,1253 200,200\" canvas.png)",
       "Bash(magick canvas.png \\\\\\( symbol-alpha.png -resize 900x900 \\\\\\) -gravity center -composite inflow-symbol-master.png)",
-      "Bash(magick identify *)"
+      "Bash(magick identify *)",
+      "Bash(magick *)"
     ]
   }
 }

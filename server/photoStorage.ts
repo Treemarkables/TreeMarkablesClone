@@ -29,9 +29,14 @@ export const objectStorageClient = new Storage({
 
 export type PhotoLabel = "BEFORE" | "AFTER";
 
-async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
+async function burnLabel(
+  buffer: Buffer,
+  label: PhotoLabel,
+  opts?: { topInset?: number },
+): Promise<Buffer> {
   const meta = await sharp(buffer).metadata();
   const w = meta.width ?? 1200;
+  const h = meta.height ?? 1200;
   const fontSize = Math.max(24, Math.round(w / 28));
   const padX = Math.round(fontSize * 0.7);
   const padY = Math.round(fontSize * 0.3);
@@ -48,8 +53,10 @@ async function burnLabel(buffer: Buffer, label: PhotoLabel): Promise<Buffer> {
     <text x="${padX}" y="${Math.round(fontSize + padY * 0.7)}" font-family="Inter, Arial, sans-serif"
           font-size="${fontSize}" font-weight="800" fill="black" letter-spacing="${letterSpacing}">${label}</text>
   </svg>`;
+  const left = Math.max(offset, w - boxW - offset);
+  const top = Math.min(Math.max(offset, opts?.topInset ?? offset), Math.max(offset, h - boxH - offset));
   return sharp(buffer)
-    .composite([{ input: Buffer.from(svg), top: offset, left: offset }])
+    .composite([{ input: Buffer.from(svg), top, left }])
     .jpeg({ quality: 88 })
     .toBuffer();
 }
@@ -93,8 +100,14 @@ export async function composeBeforeAfter(
       .resize({ width: targetW, height: halfH, fit: "cover", position: "centre" })
       .toBuffer(),
   ]);
+  // The BEFORE half sits at the very top of the 9:16 frame, which Facebook /
+  // Instagram Reels covers with the iOS status bar + Reels header overlay
+  // (~12% of frame height). Push the BEFORE badge down into the safe zone so
+  // it isn't hidden once the post is opened. AFTER is mid-screen so the
+  // default top offset is fine.
+  const beforeSafeTopInset = Math.round(targetH * 0.12);
   const [topBuf, bottomBuf] = await Promise.all([
-    burnLabel(topResized, "BEFORE"),
+    burnLabel(topResized, "BEFORE", { topInset: beforeSafeTopInset }),
     burnLabel(bottomResized, "AFTER"),
   ]);
 

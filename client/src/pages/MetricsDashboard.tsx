@@ -1346,6 +1346,22 @@ export default function MetricsDashboard() {
                     valueColor: netProfit >= 0 ? "" : "text-red-600",
                   },
                   {
+                    label: "Avg Profit Margin",
+                    value:
+                      (revenueStats?.jobsWithProfitTracking || 0) > 0
+                        ? `${(revenueStats?.grossMargin ?? 0).toFixed(1)}%`
+                        : "—",
+                    sub:
+                      (revenueStats?.jobsWithProfitTracking || 0) > 0
+                        ? `${revenueStats?.jobsWithProfitTracking} job${revenueStats?.jobsWithProfitTracking === 1 ? "" : "s"} with cost data`
+                        : "No jobs with cost data",
+                    valueColor:
+                      (revenueStats?.jobsWithProfitTracking || 0) > 0 &&
+                      (revenueStats?.grossMargin ?? 0) < 0
+                        ? "text-red-600"
+                        : "",
+                  },
+                  {
                     label: "Labour (est.)",
                     value: formatCurrency(labour).replace("NZ$", "$"),
                     sub: `~40% of ${hasXero ? "Xero revenue" : "revenue"}`,
