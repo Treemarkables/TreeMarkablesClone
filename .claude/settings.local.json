@@ -41,7 +41,11 @@
       "Bash(dig +short app.inflowapp.co.nz TXT)",
       "Bash(getent hosts *)",
       "Bash(nslookup app.inflowapp.co.nz)",
-      "Bash(nslookup -type=TXT app.inflowapp.co.nz)"
+      "Bash(nslookup -type=TXT app.inflowapp.co.nz)",
+      "Bash(dig +short A inflowapp.co.nz @8.8.8.8)",
+      "Bash(dig +short A app.inflowapp.co.nz @8.8.8.8)",
+      "Bash(dig +short A www.inflowapp.co.nz @8.8.8.8)",
+      "Bash(command *)"
     ]
   }
 }
