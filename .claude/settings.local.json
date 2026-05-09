@@ -50,7 +50,10 @@
       "Bash(magick -size 1254x1254 xc:none -fill black -draw \"roundrectangle 0,0 1253,1253 200,200\" canvas.png)",
       "Bash(magick canvas.png \\\\\\( symbol-alpha.png -resize 900x900 \\\\\\) -gravity center -composite inflow-symbol-master.png)",
       "Bash(magick identify *)",
-      "Bash(magick *)"
+      "Bash(magick *)",
+      "Bash(cp /tmp/inflow-icon-512-new.png client/public/inflow-icon-512.png)",
+      "Bash(cp /tmp/inflow-icon-192-new.png client/public/inflow-icon-192.png)",
+      "Bash(cp /tmp/inflow-icon-180-new.png client/public/inflow-icon-180.png)"
     ]
   }
 }
