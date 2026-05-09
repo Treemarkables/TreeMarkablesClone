@@ -85,17 +85,6 @@ import { MdStickyNote2, MdEmail } from "react-icons/md";
 // direction of each email and stitch replies underneath their preceding sent
 // email so the UI can show one consolidated thread card per conversation.
 
-// Diary entries store the original photo URL (multi-MB on mobile). The backend
-// generates a 600px webp thumbnail at /objects/photos/thumb_{name}.webp and
-// will create one on-the-fly if missing. Swap the grid to thumbs so the Photos
-// tab loads quickly on mobile; fall back to the original on error.
-function toPhotoThumbUrl(url: string): string {
-  if (!url) return url;
-  const m = url.match(/^(\/objects\/photos\/)(?!thumb_)(.+?)\.(jpg|jpeg|png)$/i);
-  if (!m) return url;
-  return `${m[1]}thumb_${m[2]}.webp`;
-}
-
 type EmailDirection = "sent" | "received" | "unknown";
 
 function getEmailDirection(entry: { title: string; content: string }): EmailDirection {
@@ -2133,14 +2122,13 @@ export function JobDiarySection({
                       data-testid={`photo-tile-${photo.id ?? idx}`}
                     >
                       <img
-                        src={toPhotoThumbUrl(photo.url)}
+                        src={photo.url}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
-                        className="w-full h-full object-contain"
-                        onError={(e) => {
-                          const img = e.currentTarget;
-                          if (img.src !== photo.url) img.src = photo.url;
-                        }}
+                        className="w-full h-full object-cover"
+                        onError={(e) =>
+                          (e.currentTarget.style.display = "none")
+                        }
                       />
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent px-2 py-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <div className="text-[10px] text-white whitespace-nowrap truncate">
