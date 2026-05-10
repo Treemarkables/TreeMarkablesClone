@@ -286,5 +286,12 @@ export class AutomatedTriggers {
   }
 }
 
-// Start background tasks when module is loaded
-AutomatedTriggers.startBackgroundTasks();
+// Start background tasks when module is loaded — gated by RUN_CRONS so the
+// standby instance during a multi-stack deployment (Replit↔DO soak) doesn't
+// fire duplicate SMS/email/notification work. Matches the gate in
+// server/index.ts:646.
+if (process.env.RUN_CRONS === 'false') {
+  console.log('⏸️  [AutomatedTriggers] RUN_CRONS=false — automated communication background tasks suppressed on this instance');
+} else {
+  AutomatedTriggers.startBackgroundTasks();
+}
