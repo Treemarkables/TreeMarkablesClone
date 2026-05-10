@@ -170,10 +170,9 @@ Per CLAUDE.md convention, ~15 references across client + server. During Phase 2,
 
 - **Phase 0:** ✅ complete (2026-05-10)
 - **Item A1** (`server/photoStorage.ts`): ✅ committed (`e55263f0`). Env-var gated; Replit unchanged
-- **Item A2** (`server/services/googleCalendarService.ts`): ✅ committed (`e55263f0`). Env-var gated; Replit unchanged. **Still needs:** Google OAuth client + one-time refresh-token mint before DO can use the new path
+- **Item A2** (`server/services/googleCalendarService.ts`): ✅ committed (`e55263f0`). Env-var gated; Replit unchanged. **OAuth client + refresh token minted (2026-05-11):** values stored in user's secure note as `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, `GOOGLE_CALENDAR_REFRESH_TOKEN`. App published (External, single test user) to avoid 7-day refresh-token expiry.
 - **Item A3** (`server/services/twilioClient.ts`): ✅ already implemented before migration started — env-var path was already in place
+- **GCS bucket + service-account JSON:** ✅ done (2026-05-10). Bucket `treemarkables-photos` in `australia-southeast1`, uniform access, public access prevention on. Service account JSON downloaded locally; `client_email` granted Storage Object Admin on the bucket. `PRIVATE_OBJECT_DIR` value for DO: `/treemarkables-photos/.private`
+- **Replit Secrets extracted:** ✅ done (2026-05-11). All set vars dumped via `scripts/dump-replit-secrets.sh` and stored in user's secure note. Script stays in repo until Phase 5 cleanup.
 - **Phase 1 prerequisites still outstanding:**
   - DO App Platform app created + GitHub connected
-  - GCS bucket + service-account JSON created in user's Google Cloud project
-  - Google OAuth client + refresh token minted for Calendar
-  - Replit Secrets extracted to a private note for re-entry on DO

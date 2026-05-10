@@ -1,0 +1,81 @@
+#!/bin/bash
+# Temporary helper for the Replit → DO migration.
+# Prints the project's secrets in KEY=value form, ready to paste into DO App
+# Platform's bulk-edit env vars dialog. Skips Replit-injected system vars and
+# anything not set. Delete this script in Phase 5 once Replit is decommissioned.
+
+set -euo pipefail
+
+NAMES=(
+  ADDY_API_KEY
+  ADDY_API_SECRET
+  ALLOW_EMPLOYEE_ID_LOGIN
+  DATABASE_URL
+  FACEBOOK_ACCESS_TOKEN
+  FACEBOOK_AD_ACCOUNT_ID
+  FACEBOOK_INBOUND_ENABLED
+  FACEBOOK_PAGE_ACCESS_TOKEN
+  FACEBOOK_PAGE_ID
+  FACEBOOK_VERIFY_TOKEN
+  FACEBOOK_WEBHOOK_VERIFY_TOKEN
+  FIREBASE_API_KEY
+  FIREBASE_APP_ID
+  FIREBASE_AUTH_DOMAIN
+  FIREBASE_MESSAGING_SENDER_ID
+  FIREBASE_PROJECT_ID
+  FIREBASE_SERVICE_ACCOUNT
+  FIREBASE_STORAGE_BUCKET
+  FIREBASE_VAPID_KEY
+  GMAIL_APP_PASSWORD
+  GMAIL_USER
+  GOOGLE_MY_BUSINESS_API_KEY
+  GOOGLE_PLACE_ID
+  GOOGLE_PLACES_API_KEY
+  HERO_PHONE_NUMBER
+  HERO_WEBHOOK_SECRET
+  NODE_ENV
+  OPENAI_API_KEY
+  OWNER_PHONE_NUMBER
+  PORT
+  PRIVATE_OBJECT_DIR
+  RECAPTCHA_SECRET_KEY
+  RESEND_API_KEY
+  RESEND_EVENTS_WEBHOOK_SECRET
+  RESEND_WEBHOOK_SECRET
+  RUN_CRONS
+  SESSION_SECRET
+  SMSEVERYONE_PASSWORD
+  SMSEVERYONE_SENDER_ID
+  SMSEVERYONE_USERNAME
+  STATIC_DIR
+  TWILIO_ACCOUNT_SID
+  TWILIO_API_KEY
+  TWILIO_API_KEY_SECRET
+  TWILIO_API_SECRET
+  TWILIO_AUTH_TOKEN
+  TWILIO_CLIENT_IDENTITY
+  TWILIO_PHONE_NUMBER
+  TWILIO_TWIML_APP_SID
+  VONAGE_API_KEY
+  VONAGE_API_SECRET
+  VONAGE_FORWARD_TO_NUMBER
+  VONAGE_NUMBER
+  VONAGE_WEBHOOK_SECRET
+  XERO_CLIENT_ID
+  XERO_CLIENT_SECRET
+  ZAPIER_WEBHOOK_URL
+)
+
+missing=()
+for name in "${NAMES[@]}"; do
+  if [ -n "${!name:-}" ]; then
+    printf '%s=%s\n' "$name" "${!name}"
+  else
+    missing+=("$name")
+  fi
+done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  printf '\n# --- Not set in this environment (%d): ---\n' "${#missing[@]}" >&2
+  printf '# %s\n' "${missing[@]}" >&2
+fi
