@@ -3,6 +3,8 @@
 Read this file in full before making any changes to this project.
 Also read `replit.md` for the full system architecture.
 
+**Active initiative:** A migration off Replit to Digital Ocean is in progress. Read `MIGRATION_PLAN.md` for the current phase, decisions, and audit findings before any infrastructure or deploy-touching work. (This pointer will be removed at Phase 5 cleanup.)
+
 ---
 
 ## Off-limits files — never modify without explicit user instruction
