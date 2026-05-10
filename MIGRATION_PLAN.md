@@ -174,5 +174,6 @@ Per CLAUDE.md convention, ~15 references across client + server. During Phase 2,
 - **Item A3** (`server/services/twilioClient.ts`): ✅ already implemented before migration started — env-var path was already in place
 - **GCS bucket + service-account JSON:** ✅ done (2026-05-10). Bucket `treemarkables-photos` in `australia-southeast1`, uniform access, public access prevention on. Service account JSON downloaded locally; `client_email` granted Storage Object Admin on the bucket. `PRIVATE_OBJECT_DIR` value for DO: `/treemarkables-photos/.private`
 - **Replit Secrets extracted:** ✅ done (2026-05-11). All set vars dumped via `scripts/dump-replit-secrets.sh` and stored in user's secure note. Script stays in repo until Phase 5 cleanup.
+- **Migration code merged to `main` and pushed to GitHub:** ✅ done (2026-05-11). 5 LFS-tracked files (3 SQL pg_dump backups, 2 Replit-cache zips, ~470 MB) stripped from history via `git filter-branch`. SQL backups archived to user's Google Drive before strip. `.gitattributes` removed. Both `main` and `claude` on GitHub now point at the clean `205e445e` tip.
 - **Phase 1 prerequisites still outstanding:**
   - DO App Platform app created + GitHub connected
