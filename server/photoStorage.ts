@@ -1,5 +1,8 @@
-// Simple photo storage service for Replit Object Storage
-// Reference: javascript_object_storage integration
+// Photo storage service backed by Google Cloud Storage.
+// Two credential paths, picked at startup based on env:
+//   1. GOOGLE_APPLICATION_CREDENTIALS_JSON set → direct service-account auth (used on DO)
+//   2. otherwise → Replit Object Storage sidecar at 127.0.0.1:1106 (used on Replit)
+// The Replit fallback is removed in Phase 5 of the DO migration once Replit is gone.
 
 import { Storage } from "@google-cloud/storage";
 import { randomUUID } from "crypto";
@@ -9,23 +12,37 @@ import sharp from "sharp";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-export const objectStorageClient = new Storage({
-  credentials: {
-    audience: "replit",
-    subject_token_type: "access_token",
-    token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
-    type: "external_account",
-    credential_source: {
-      url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
-      format: {
-        type: "json",
-        subject_token_field_name: "access_token",
+function createObjectStorageClient(): Storage {
+  const credsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
+  if (credsJson) {
+    const credentials = JSON.parse(credsJson);
+    console.log(`📦 GCS client: direct service-account credentials (project: ${credentials.project_id})`);
+    return new Storage({
+      credentials,
+      projectId: credentials.project_id,
+    });
+  }
+  console.log(`📦 GCS client: Replit Object Storage sidecar at ${REPLIT_SIDECAR_ENDPOINT}`);
+  return new Storage({
+    credentials: {
+      audience: "replit",
+      subject_token_type: "access_token",
+      token_url: `${REPLIT_SIDECAR_ENDPOINT}/token`,
+      type: "external_account",
+      credential_source: {
+        url: `${REPLIT_SIDECAR_ENDPOINT}/credential`,
+        format: {
+          type: "json",
+          subject_token_field_name: "access_token",
+        },
       },
+      universe_domain: "googleapis.com",
     },
-    universe_domain: "googleapis.com",
-  },
-  projectId: "",
-});
+    projectId: "",
+  });
+}
+
+export const objectStorageClient = createObjectStorageClient();
 
 export type PhotoLabel = "BEFORE" | "AFTER";
 

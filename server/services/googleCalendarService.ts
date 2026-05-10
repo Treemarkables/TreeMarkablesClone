@@ -2,16 +2,43 @@ import { google } from 'googleapis';
 
 let connectionSettings: any;
 
+// Module-level cache for the direct-OAuth path. Refresh token lives in env;
+// access tokens are short-lived (~1 h) so we cache and refresh on demand.
+let cachedAccessToken: string | null = null;
+let cachedAccessTokenExpiresAt = 0;
+
 async function getAccessToken() {
+  // Direct Google OAuth path (Digital Ocean / non-Replit envs).
+  // Requires a one-time OAuth consent flow to mint the refresh token, which is
+  // then stored in GOOGLE_CALENDAR_REFRESH_TOKEN. See MIGRATION_PLAN.md A2.
+  const directClientId = process.env.GOOGLE_CALENDAR_CLIENT_ID;
+  const directClientSecret = process.env.GOOGLE_CALENDAR_CLIENT_SECRET;
+  const directRefreshToken = process.env.GOOGLE_CALENDAR_REFRESH_TOKEN;
+  if (directClientId && directClientSecret && directRefreshToken) {
+    if (cachedAccessToken && cachedAccessTokenExpiresAt > Date.now() + 60_000) {
+      return cachedAccessToken;
+    }
+    const oauth2Client = new google.auth.OAuth2(directClientId, directClientSecret);
+    oauth2Client.setCredentials({ refresh_token: directRefreshToken });
+    const { credentials } = await oauth2Client.refreshAccessToken();
+    if (!credentials.access_token) {
+      throw new Error('Google Calendar: refreshAccessToken returned no access_token');
+    }
+    cachedAccessToken = credentials.access_token;
+    cachedAccessTokenExpiresAt = credentials.expiry_date ?? Date.now() + 50 * 60 * 1000;
+    return cachedAccessToken;
+  }
+
+  // Replit Connectors path (legacy — removed in Phase 5).
   if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
     return connectionSettings.settings.access_token;
   }
-  
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+  const xReplitToken = process.env.REPL_IDENTITY
+    ? 'repl ' + process.env.REPL_IDENTITY
+    : process.env.WEB_REPL_RENEWAL
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL
     : null;
 
   if (!xReplitToken) {
