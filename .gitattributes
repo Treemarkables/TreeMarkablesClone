@@ -1,5 +1,0 @@
-public/treemarkables.zip filter=lfs diff=lfs merge=lfs -text
-treemarkables.zip filter=lfs diff=lfs merge=lfs -text
-treemarkables-backup-20260508-031606.sql filter=lfs diff=lfs merge=lfs -text
-treemarkables-backup-20260508-031647.sql filter=lfs diff=lfs merge=lfs -text
-treemarkables-backup-20260508-031848.sql filter=lfs diff=lfs merge=lfs -text
