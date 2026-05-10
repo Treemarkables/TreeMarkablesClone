@@ -27014,9 +27014,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   // Log the webhook URL and configuration status at startup so it's easy to
   // find in the server console when setting up the Resend dashboard.
   const resendEventsSecret = process.env.RESEND_EVENTS_WEBHOOK_SECRET;
-  const deployedBase = process.env.REPLIT_DEPLOYMENT_ID
-    ? `https://${process.env.REPL_SLUG}.replit.app`
-    : '(your deployed URL)';
+  const deployedBase = 'https://app.treemarkables.co.nz';
   console.log('');
   console.log('━━━ Resend Email Events Webhook ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log(`  Endpoint : ${deployedBase}/api/webhooks/resend-events`);
