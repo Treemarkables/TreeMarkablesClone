@@ -169,4 +169,11 @@ Per CLAUDE.md convention, ~15 references across client + server. During Phase 2,
 ## Current status
 
 - **Phase 0:** ✅ complete (2026-05-10)
-- **Next:** decide whether to start item A1 (photoStorage GCS swap) before or after DO account setup. Recommended: start A1 immediately — it's the longest single piece of work and unblocks everything downstream.
+- **Item A1** (`server/photoStorage.ts`): ✅ committed (`e55263f0`). Env-var gated; Replit unchanged
+- **Item A2** (`server/services/googleCalendarService.ts`): ✅ committed (`e55263f0`). Env-var gated; Replit unchanged. **Still needs:** Google OAuth client + one-time refresh-token mint before DO can use the new path
+- **Item A3** (`server/services/twilioClient.ts`): ✅ already implemented before migration started — env-var path was already in place
+- **Phase 1 prerequisites still outstanding:**
+  - DO App Platform app created + GitHub connected
+  - GCS bucket + service-account JSON created in user's Google Cloud project
+  - Google OAuth client + refresh token minted for Calendar
+  - Replit Secrets extracted to a private note for re-entry on DO
