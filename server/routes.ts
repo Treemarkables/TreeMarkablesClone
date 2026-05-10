@@ -26976,8 +26976,12 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     }
   });
 
-  // Daily: flag overdue effectiveness reviews to the reporter's inbox
-  setInterval(async () => {
+  // Daily: flag overdue effectiveness reviews to the reporter's inbox.
+  // Suppressed on standby instances during multi-instance deployments
+  // (e.g. Replit↔DO migration soak window) — see RUN_CRONS in server/index.ts.
+  if (process.env.RUN_CRONS === 'false') {
+    console.log('[Near Miss Review Cron] suppressed (RUN_CRONS=false)');
+  } else setInterval(async () => {
     try {
       const now = new Date();
       const overdue = await db

@@ -520,6 +520,13 @@ function startNotificationQueueWorker() {
   }
 })();
 
+// Cron-style background workers (notification queue, SMS/email pollers,
+// marketing scheduler) run inside the web process. When two instances of the
+// app are pointed at the same database — e.g. during the Replit→DO migration
+// soak window — only ONE must run them, otherwise SMS/FCM/FB publishes fire
+// twice. RUN_CRONS=false on the standby instance suppresses them.
+const cronsEnabled = process.env.RUN_CRONS !== 'false';
+
 function startBackgroundWorkersAfterListen() {
   // Run schema migrations in the background AFTER the server is listening
   (async () => {
@@ -635,7 +642,12 @@ The Treemarkables Team';
     }
   })();
 
-  // Start background workers
+  // Start background workers (only on the leader instance — see cronsEnabled)
+  if (!cronsEnabled) {
+    log("⏸️  RUN_CRONS=false — background cron workers suppressed on this instance", "startup");
+    return;
+  }
+
   startNotificationQueueWorker();
 
   (async () => {
