@@ -3,21 +3,21 @@
 Read this file in full before making any changes to this project.
 Also read `replit.md` for the full system architecture.
 
-**Active initiative:** A migration off Replit to Digital Ocean is in progress. Read `MIGRATION_PLAN.md` for the current phase, decisions, and audit findings before any infrastructure or deploy-touching work. (This pointer will be removed at Phase 5 cleanup.)
+**Migration off Replit:** customer cutover completed 2026-05-12 NZ. Production runs on Digital Ocean App Platform, autodeploying from `main`. The paused Replit deployment is the rollback target until ~2026-05-19; after that, Phase 5 cleanup removes the Replit-specific code and finalizes this file. See `MIGRATION_PLAN.md` for the Phase 5 cleanup queue and history.
 
 ---
 
 ## Off-limits files — never modify without explicit user instruction
 
-These files are owned by Replit Agent or are critical infrastructure:
+These files are critical infrastructure or tooling-owned:
 
-- `.replit` — Replit workflow and deployment config
 - `package.json` — dependency and script management
 - `vite.config.ts` — Vite build config
 - `server/vite.ts` — production static file serving
 - `drizzle.config.ts` — database ORM config
-- `launcher.mjs` — production startup launcher
 - `.claude/settings.local.json` — Claude Code permissions
+
+**Rollback-window holdovers (delete in Phase 5, not before):** `.replit`, `launcher.mjs`. These no longer run in DO production but stay in the tree so the paused Replit deployment remains a valid rollback target.
 
 ---
 
@@ -36,10 +36,14 @@ These files are owned by Replit Agent or are critical infrastructure:
 
 ---
 
-## Workflow and deployment rules
+## Deployment
 
-- **Never** modify Replit workflows or deployment settings
-- Deployments are managed via Replit — do not attempt to deploy directly
+- Production runs on Digital Ocean App Platform (app `plankton-app`, region SGP1). Every push to `main` triggers an autodeploy; for build/runtime logs check the DO dashboard.
+- Customer URL: `https://app.treemarkables.co.nz`. DNS lives at Cloudflare on grey-cloud (DNS-only) — never flip the customer-facing records to orange-cloud (proxied), it double-proxies through DO's own Cloudflare edge and breaks TLS / cache assumptions.
+- Database: Neon Postgres in `ap-southeast-2` (Sydney). Sessions via `connect-pg-simple` against the same DB.
+- Photo storage: GCS bucket `treemarkables-photos` (`australia-southeast1`). `PRIVATE_OBJECT_DIR=/treemarkables-photos/.private` — must not have a trailing space (env reads `.trim()` defensively at `photoStorage.ts` and the matching routes in `server/routes.ts`).
+- Cron + background workers: gated by `RUN_CRONS` (unset → enabled in production). Don't toggle without explicit user instruction.
+- Don't attempt deploys, env-var edits, or Cloudflare DNS edits yourself — those happen via the DO and Cloudflare dashboards.
 
 ---
 
@@ -86,29 +90,20 @@ These files are owned by Replit Agent or are critical infrastructure:
 
 ---
 
-## Branch workflow — coordinating with Replit Agent
+## Branch + commit workflow
 
-Replit Agent commits to `main`. Claude works on the `claude` branch. This is the mechanism that prevents overwrites — Git surfaces real merge conflicts instead of silent clobbers.
+The `claude` branch convention is retired with Replit Agent. Work directly on `main` — there is no other writer to coordinate with.
 
-- Before starting work: `git checkout claude && git merge main` to catch up with any commits Replit Agent has made. Resolve conflicts now, not later.
-- Make all edits on `claude`. Never commit directly to `main`.
-- When work is ready to ship, ask the user before merging back to `main`. The user may prefer to merge via GitHub PR (push `claude` to `subrepl-k6pnm9de` and merge in the web UI) or locally.
 - Make targeted, surgical edits — not broad refactors. Never rewrite files that are currently working.
+- Don't push `main` to `subrepl-k6pnm9de` (GitHub) without explicit user approval — every push triggers a production deploy on DO. Local commits are safe; the push is the side effect.
+- Old branches (`claude`, `subrepl-*`, `replit-agent`) are historical; don't recreate the merge-from-main dance on them.
 
 ---
 
-## Restarting the backend workflow
+## Local dev
 
-After editing backend code under `server/`, restart the backend so the change takes effect. Replit's supervisor does **not** auto-respawn `shell.exec` workflows on crash, so this is two steps:
+`npm run dev` runs `tsx server/index.ts` (no watch mode). It serves both the API and the Vite-built frontend on port 5000.
 
-```
-pkill -f "tsx server/index.ts" 2>/dev/null
-nohup npm run dev > /tmp/backend-dev.log 2>&1 &
-disown
-```
+Frontend edits hot-reload via Vite. Backend edits under `server/` require a restart to take effect — `tsx` is not watching. **Don't kill or restart the dev server yourself** — it's the user's foreground process; ask them to restart it, or have them confirm it's been done before re-verifying. Verify reachability afterwards with `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000` (expect `200`).
 
-This kills only the backend (`npm run dev` at the repo root → `tsx server/index.ts`) and starts a fresh, detached one. It does not touch the mockup sandbox vite (which runs `npm run dev` inside `artifacts/mockup-sandbox/`).
-
-Wait ~5 seconds, then verify with `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:5000` (expect `200`).
-
-Only restart when (a) you're on the `claude` branch, and (b) you just edited backend code. Don't restart speculatively.
+Don't restart speculatively — only after a server-side edit that actually needs to take effect.
