@@ -366,7 +366,7 @@ export class PhotoStorageService {
             res.set({
               "Content-Type": "image/webp",
               "Content-Length": thumbnailBuffer.length.toString(),
-              "Cache-Control": "public, max-age=31536000",
+              "Cache-Control": "private, max-age=31536000",
             });
             res.send(thumbnailBuffer);
             return;
@@ -421,7 +421,7 @@ export class PhotoStorageService {
           res.set({
             "Content-Type": "image/jpeg",
             "Content-Length": optimizedBuffer.length.toString(),
-            "Cache-Control": "public, max-age=31536000",
+            "Cache-Control": "private, max-age=31536000",
           });
 
           res.send(optimizedBuffer);
@@ -432,7 +432,7 @@ export class PhotoStorageService {
           res.set({
             "Content-Type": metadata.contentType || "image/jpeg",
             "Content-Length": metadata.size,
-            "Cache-Control": "public, max-age=31536000",
+            "Cache-Control": "private, max-age=31536000",
           });
           const stream = file.createReadStream();
           stream.pipe(res);
@@ -442,7 +442,7 @@ export class PhotoStorageService {
         res.set({
           "Content-Type": metadata.contentType || "image/jpeg",
           "Content-Length": metadata.size,
-          "Cache-Control": "public, max-age=31536000",
+          "Cache-Control": "private, max-age=31536000",
         });
 
         const stream = file.createReadStream();
