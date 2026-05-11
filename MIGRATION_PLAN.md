@@ -282,3 +282,52 @@ Estimated window: 10-15 minutes. Schedule for low-traffic time (late evening NZ)
 6. **Writes that landed on Sydney-Neon during the broken window are lost.** Resend retries 5xx events, so inbound mail should re-deliver to Replit once DNS flips back. Customer-side writes (job edits, photo uploads) within the broken window are not recoverable.
 
 Replit stays warm for 7 days post-cutover per the original plan; this is the rollback target.
+
+---
+
+## Cutover executed 2026-05-12 (NZ) / 2026-05-11 UTC
+
+**Customers are live on DigitalOcean.** Single maintenance window, no announcement (5 AM NZ, low traffic). Total customer-visible downtime ~25 minutes.
+
+### Timeline (UTC)
+
+| Time | Action | Result |
+|---|---|---|
+| 17:58 | User paused Replit production deployment | `app.treemarkables.co.nz/health` → 404 (deployment removed from routing) |
+| 17:58 | `pg_dump` heliumdb → custom-format file | 4.3 seconds, 35.6 MB |
+| 17:58–18:00 | `pg_restore` into Sydney-Neon (`--clean --if-exists --no-owner --no-acl --jobs=4`) | 2m4s, zero errors |
+| 18:00 | Row-count parity check across 8 marker tables (jobs, customers, photos, session, staff_rates, job_time_entries, notifications, email_events) | Byte-exact match with helium |
+| 18:00–18:02 | Final photo-backlog re-run | `copied=0 skipped=1667 errors=0` — no new photos during soak window |
+| 18:02–18:18 | Cloudflare DNS flips for `.co.nz` zone: `app` and `www` A → CNAME → `plankton-app-9kv78.ondigitalocean.app` (DNS-only / grey-cloud) | Both records saved |
+| 18:18 | User removed `RUN_CRONS` on DO → auto-redeploy | Crons start on new container |
+| 18:23 | DNS propagated via 8.8.8.8; HTTPS live on both `.co.nz` URLs | `x-do-app-origin: a0e67332-...` header confirms DO origin; backlog photo serves byte-exact (3,635,548 bytes) |
+| 18:30+ | User logged in as normal user, confirmed app + marketing pages working | Cutover functionally complete |
+
+### Things that happened along the way
+
+- **Trailing-space `PRIVATE_OBJECT_DIR` discovery during pre-cutover smoke test** (recorded in earlier soak findings) — DO's env var had a literal trailing space, putting soak photos at `.private /photos/...` (space) while our backlog copies landed at `.private/photos/...` (no space). Fixed with `.trim()` defence at the three env read sites (commit `986777fb`) + a one-shot duplication of the 10 existing soak files to the no-space prefix.
+- **Marketing-site blast radius discovery just before pausing Replit.** The same Replit deployment also served `www.treemarkables.co.nz` (200), `www.treemarkables.nz` (200), and `treemarkables.nz` apex (200). DO didn't accept any of those hostnames yet. **Almost broke the marketing site at four URLs by pausing Replit without adding them to DO first.** Caught by the user's question "will treemarkables.co.nz still be active?" — added the four custom domains to DO before proceeding.
+- **`search_path` red herring after pg_restore.** Bare `select count(*) from jobs` failed on Sydney-Neon post-restore ("relation does not exist") because pg_restore reset role-level search_path and Neon's pooler ignores subsequent `ALTER ROLE ... SET search_path`. Resolved by confirming: (a) 111 tables all present in `public` schema, (b) per-session `SET search_path TO public` works fine on the pooler, (c) Drizzle issues exactly that SET on every connection. App unaffected.
+- **Crazy Domains apex CNAME limitation.** The `.nz` zone is on Crazy Domains (sister to Freeparking; the NS records pointed at freeparking.co.nz). Crazy Domains UI doesn't allow changing record type on edit, and apex CNAME would conflict with the existing MX records (Google Workspace) at the same name per RFC. Solved by keeping A records at the apex and just changing the IP from `34.111.179.208` → `162.159.140.98` (Cloudflare-fronted DO edge IP). DO routes by Host header.
+
+### Immediate post-cutover state
+
+- ✅ `app.treemarkables.co.nz` → DO, serving (200, x-do-app-origin verified)
+- ✅ `www.treemarkables.co.nz` → DO, serving (marketing site)
+- 🟡 `treemarkables.nz` + `www.treemarkables.nz` → Crazy Domains DNS edits in propagation (TTL 285s, ETA 5-10 min from edit)
+- ✅ Replit deployment **paused** (warm for 7-day rollback window)
+- ✅ DO crons live (RUN_CRONS env var deleted, redeploy landed)
+- 🟡 Two DO alerts pending investigation: "Failed Deployment" and "Failed Domain Configuration" — likely stale state from pre-DNS-flip domain adds; deploy and customer URLs all serve cleanly
+
+### Phase 5 cleanup queue (no urgency; do any time after 7-day rollback window expires)
+
+- Stop & delete the Replit deployment ("Shut down" in the Manage tab)
+- Cancel Replit subscription
+- Delete 10 legacy `.private /photos/...` (with-space) entries from `treemarkables-photos` GCS bucket
+- Delete the unused `treemarkables-photos-prod` GCS bucket
+- Code deletions (already enumerated in the runbook above): `launcher.mjs`, `.replit`, the Replit port-bind dance in `server/index.ts`, `@replit/vite-plugin-*` packages, Vonage routes + env vars, Facebook Messenger routes + env vars, `/api/webhooks/email` route, `RUN_CRONS` flag, `scripts/dump-replit-secrets.sh`, `scripts/migrate-object-storage.ts`
+- `CLAUDE.md` updates: drop the `claude` branch workflow, drop "Restarting the backend workflow" section, drop the off-limits Replit-infra list, drop the "Active initiative" pointer
+- Cloudflare DNS hygiene: flip `s1._domainkey` + `s2._domainkey` from Proxied → DNS only (DKIM signing shouldn't be CF-proxied); delete the now-stale `do.app.treemarkables.co.nz` record once confident
+- Crazy Domains DNS hygiene: delete the stale `do.app.treemarkables.co.nz` record created accidentally during Phase 2 setup
+- Investigate the unusual MX records at `www.treemarkables.nz` (Google secondary MX at a subdomain is non-standard — likely vestigial)
+- Rename `sendgridMessageId` DB column to `providerMessageId` (or accept as legacy)
