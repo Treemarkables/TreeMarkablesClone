@@ -202,25 +202,37 @@ Per CLAUDE.md convention, ~15 references across client + server. During Phase 2,
 
 Phase 3 and Phase 4 collapse into a single atomic cutover window. Order matters: webhook + cron flips can't precede the DB cutover (writes would land in Sydney-Neon while customers read heliumdb), and can't follow the DNS flip (post-DNS writes hitting Replit are lost). Everything happens inside a single short maintenance window.
 
+### Active inbound integrations (reduced 2026-05-11)
+
+User confirmed: **Vonage, Facebook Messenger, SendGrid are not in use.** **Twilio is deferred** until the iOS Capacitor app ships through the App Store. **The only live inbound webhook surface for the cutover is Resend.**
+
+| Provider | Endpoints | Console | Signing secret env var |
+|---|---|---|---|
+| Resend (event webhooks — opens/clicks/bounces) | `POST /api/webhooks/resend-events` | resend.com → Webhooks | `RESEND_EVENTS_WEBHOOK_SECRET` |
+| Resend (inbound mail) | `POST /api/webhooks/email` | resend.com → Inbound | `RESEND_WEBHOOK_SECRET` |
+
+Both endpoints live under the same Resend account. The flip is at most two console edits.
+
+Also worth knowing — there's a **second inbound-mail path** via Gmail IMAP (the `emailReplyPoller` cron worker; uses `GMAIL_USER` + `GMAIL_APP_PASSWORD`). It pulls from a Gmail mailbox on a schedule, so it has no webhook URL to flip. It moves with the `RUN_CRONS` flip automatically. Confirm whether MX records actually deliver to Gmail (in which case this is the live inbound path) or to Resend Inbound (in which case Gmail polling is redundant); the Phase 5 cleanup can drop whichever isn't live.
+
 ### Open question to resolve before cutover day
 
-Each webhook provider has a URL configured in its console. **We don't yet know whether those URLs target `https://app.treemarkables.co.nz/...` (the customer hostname, follows DNS) or a raw Replit deploy URL (`*.replit.app` / `*.repl.co`, pinned to Replit).**
+Each Resend webhook URL is configured in the Resend dashboard. **We don't yet know whether the URLs target `https://app.treemarkables.co.nz/...` (customer hostname, follows DNS) or a raw Replit deploy URL.**
 
-- If **customer hostname** → DNS flip moves the webhook automatically. No per-provider console edit needed. In-flight retries during the flip may hit either side depending on cached DNS; auto-retry on 5xx covers it.
-- If **raw Replit URL** → per-provider console edit required during the maintenance window. Adds 5-10 min of click-work and a step that can fail.
+- If **customer hostname** → DNS flip moves them automatically. No console edit needed; auto-retry on 5xx covers any in-flight events during the flip.
+- If **raw Replit URL** → one console edit per webhook (two total) inside the maintenance window.
 
-**Action (T-2 days):** log into each console below and record the current URL. If any are raw Replit URLs, pre-stage the new DO URLs (`https://do.app.treemarkables.co.nz/...` until DNS flips, then `https://app.treemarkables.co.nz/...`).
+**Action (T-2 days):** log into resend.com and record the two configured URLs.
 
-### Webhook provider matrix
+### Dead code flagged for Phase 5 cleanup
 
-| Provider | Endpoints | Console | Signing secret env var | Auto-retry? |
-|---|---|---|---|---|
-| Twilio | `POST /api/webhooks/sms`, `/api/webhooks/twilio-answer`, `/api/webhooks/twilio-no-answer`, `/api/webhooks/twilio-voice` | console.twilio.com → Phone Numbers → the prod number → Voice/Messaging | (signature header validated in route; `TWILIO_AUTH_TOKEN`) | Yes — 11 retries over 24h on 5xx |
-| Vonage | `GET/POST /api/webhooks/vonage-voice`, `POST /api/webhooks/vonage-event`, `POST /api/webhooks/vonage-recording` | dashboard.nexmo.com → Numbers → the prod number → Voice settings | `VONAGE_WEBHOOK_SECRET` | Yes — limited retries |
-| Resend (events) | `POST /api/webhooks/resend-events` | resend.com/webhooks | `RESEND_EVENTS_WEBHOOK_SECRET` | Yes |
-| Resend Inbound + SendGrid Inbound Parse | `POST /api/webhooks/email` | resend.com/inbound + app.sendgrid.com → Settings → Inbound Parse | `RESEND_WEBHOOK_SECRET` (Resend) | Resend: yes. SendGrid: limited |
-| Facebook Messenger | `GET /api/webhooks/messenger` (verify), `POST /api/webhooks/messenger` (events). Also `GET /api/webhooks/facebook/messenger` as an alias. | developers.facebook.com → app → Messenger → Webhooks | `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_WEBHOOK_VERIFY_TOKEN` | Yes |
-| Zapier (outbound from us; no inbound to flip) | — | — | `ZAPIER_WEBHOOK_URL` | n/a |
+The codebase still has wired routes for the now-unused integrations. Safe to keep through cutover (no-op without provider config) but should come out in Phase 5 along with the Replit-specific code:
+
+- **Twilio routes** (`routes.ts:8572`, `8850`, `8898`, `8919`) — keep until the iOS Capacitor app ships; revisit at that point. Don't delete in Phase 5 if Twilio is imminent.
+- **Vonage routes** (`routes.ts:9344`, `9372`, `9402`, `9425`) — delete in Phase 5; also drop `VONAGE_*` env vars.
+- **Facebook Messenger routes** (`routes.ts:17569`, `17592`, `25176`, `25178`) — delete in Phase 5; drop `FACEBOOK_*` env vars except any used by other Meta features (verify before deleting Facebook keys that overlap with Facebook Ads or Page posting).
+- **SendGrid multipart branch** of `/api/webhooks/email` (`routes.ts:16907` area) — delete in Phase 5; collapse the handler to Resend-only.
+- **`sendgridMessageId` DB column** — legacy column name now storing Resend IDs. Rename to `providerMessageId` or `resendMessageId` in a Phase 5 schema cleanup. Touches several insert sites in `routes.ts`.
 
 No Stripe (payments don't flow through Stripe — confirmed in Phase 0 audit).
 
@@ -244,7 +256,7 @@ Estimated window: 10-15 minutes. Schedule for low-traffic time (late evening NZ)
 | 3 | Block app traffic on Replit (return a maintenance HTML for all routes, or kill the workflow) so no further writes hit heliumdb | `curl https://app.treemarkables.co.nz/health` returns maintenance page or 503 |
 | 4 | `pg_dump` from helium → `psql` restore into Sydney-Neon (overwrites all soak data). Use the same procedure that created the soak DB. | Row count parity on the 5 highest-traffic tables (jobs, customers, photos, messages, communications) |
 | 5 | Run `tsx scripts/migrate-object-storage.ts` from Replit one final time to pick up any photos uploaded since the last copy | Final summary: `copied=<small N>  errors=0` |
-| 6 | If any webhook URLs were raw Replit URLs (per audit), repoint each console entry to `https://do.app.treemarkables.co.nz/...` | Send a test event from each provider's console where supported (Twilio, Vonage, Resend, Messenger all have test buttons) |
+| 6 | If the two Resend webhook URLs were raw Replit URLs (per T-2 audit), repoint each to `https://do.app.treemarkables.co.nz/...`. If they were on the customer hostname, skip — they'll move with the DNS flip at step 8. | Send a test event from Resend → Webhooks → "Send test event" |
 | 7 | Remove `RUN_CRONS` env var on DO; trigger a redeploy to apply | DO logs show cron startup logs (notification queue, marketing scheduler, email reply poller, etc.) |
 | 8 | Flip Cloudflare's `app.treemarkables.co.nz` CNAME from Replit's URL to `plankton-app-9kv78.ondigitalocean.app`. Keep grey-cloud (DNS only). | `dig +short app.treemarkables.co.nz` from multiple resolvers shows DO's IPs |
 | 9 | Smoke-test the live customer URL: log in, load a job card with a backlog photo, view inbox, submit a contact form | All return 200 with expected content |
@@ -254,13 +266,13 @@ Estimated window: 10-15 minutes. Schedule for low-traffic time (late evening NZ)
 
 - DO request logs show steady traffic ramp as DNS propagates
 - Cron tick logs appear at expected intervals
-- Inbound webhook logs show events from each provider (test send during Step 6, then real traffic)
+- Resend webhook events appear in DO logs (test send during Step 6, then real traffic). If Gmail IMAP is the live inbound path instead, look for `[EmailReplyPoller]` log lines on DO.
 - No `getaddrinfo ENOTFOUND helium` errors (would mean DO is still hitting heliumdb)
 - Spot-check a customer-uploaded photo from the backlog: it should serve from `treemarkables-photos`
 
 ### Rollback (decision criteria + procedure)
 
-**Trigger rollback if:** any of (a) DO can't serve traffic, (b) a critical integration (Twilio voice, Stripe-replacement payment flow, Calendar booking) is broken and not fixable within 30 min, (c) data corruption suspected on Sydney-Neon.
+**Trigger rollback if:** any of (a) DO can't serve traffic, (b) a critical integration (Resend outbound, Google Calendar booking, GCS photo serving) is broken and not fixable within 30 min, (c) data corruption suspected on Sydney-Neon.
 
 **Procedure:**
 
@@ -269,6 +281,6 @@ Estimated window: 10-15 minutes. Schedule for low-traffic time (late evening NZ)
 3. Unset `RUN_CRONS` on Replit, restart workflow.
 4. If webhook consoles were edited, revert them.
 5. Replit's heliumdb is untouched by the cutover sequence — re-enabling Replit traffic is enough; no DB restore needed.
-6. **Writes that landed on Sydney-Neon during the broken window are lost.** If those are unrecoverable from the providers (e.g., a customer SMS reply), apologize and request re-send.
+6. **Writes that landed on Sydney-Neon during the broken window are lost.** Resend retries 5xx events, so inbound mail should re-deliver to Replit once DNS flips back. Customer-side writes (job edits, photo uploads) within the broken window are not recoverable.
 
 Replit stays warm for 7 days post-cutover per the original plan; this is the rollback target.
