@@ -193,4 +193,82 @@ Per CLAUDE.md convention, ~15 references across client + server. During Phase 2,
   - **`Cache-Control: private` fix shipped:** `server/photoStorage.ts` was sending `Cache-Control: public, max-age=31536000` from all four photo-serving response paths (thumbnail-on-the-fly, HEIC convert success, HEIC fallback, normal serve). Combined with the no-auth `/objects/photos/:filename` route at `routes.ts:6624`, that meant DO's Cloudflare edge would cache private user photos under unguessable-but-not-private UUIDs for up to a year — any URL leaked once would stay at the edge. Flipped all four to `Cache-Control: private, max-age=31536000`: browser cache still holds (no perceived perf hit), but Cloudflare won't share across users. Verified on Soak: API calls with `Cache-Control: private` already show `Cf-Cache-Status: MISS`. **Phase 5 follow-up:** `routes.ts:12382` and `routes.ts:12391` (`/uploads`, `/photos` local-disk fallback routes) still send `public, max-age=86400`. Local disk is fallback-only on DO so not actively serving, but flip them to `private` during cleanup. `/logos` at `routes.ts:12401` is intentionally public marketing content — leave alone. Longer-term consideration also for Phase 5: the `/objects/photos/:filename` route has no auth; security-through-obscurity via UUID is OK in practice but signed/expiring URLs would be more defensible.
   - **Google Calendar `invalid_grant` from re-minted refresh token (2026-05-11):** "Book" action in Mail returned toast `Failed to create calendar event`; DO runtime logs showed `GaxiosError: invalid_grant` from `OAuth2Client.refreshAccessToken` (`googleCalendarService.ts:23`). OAuth consent screen was confirmed "In production" so the 7-day Testing-mode expiry didn't apply. Resolution: re-minted refresh token via [OAuth Playground](https://developers.google.com/oauthplayground/) with `Use your own OAuth credentials` + `Force prompt: Consent Screen` + `Access type: Offline`, scope `https://www.googleapis.com/auth/calendar`. Updated `GOOGLE_CALENDAR_REFRESH_TOKEN` on DO with the new value; secure note also updated. Likely root cause: special chars (slashes/underscores in the `1//...` token) mangled by DO's bulk .env paste. Same family as the `PRIVATE_OBJECT_DIR` gotcha. **Phase 4 cutover gotcha:** after any bulk env-var re-paste, verify token-shaped values (anything with `/`, `_`, `-`, multi-line, or unusual length) by either re-pasting per-var via DO's form UI, or by running a quick boot smoke test on each integration (Calendar, GCS, OAuth refresh tokens). Don't trust the bulk paste alone.
   - **Old-photo backlog still on Replit Object Storage (2026-05-11):** internal testers on Soak see thumbnail placeholders/greyed-out images for photos uploaded to job cards *before* the migration. Expected — those photos live in Replit's managed Object Storage bucket; DO's service account has no IAM there. New uploads from Soak land in `treemarkables-photos` and display correctly. **Acceptable during Soak** since the audience is internal-only and the test is validating the new code path, not historical content. **Required at Phase 4 cutover:** copy the existing photo backlog from Replit Object Storage → `treemarkables-photos` so customer URLs in the DB continue resolving after the DNS flip. The Replit sidecar (`127.0.0.1:1106`) is reachable only from inside Replit, so the copy script must run on Replit (using `objectStorageClient` for reads via sidecar + a parallel direct-creds `Storage` client for writes to the new bucket). Preserve object paths so the existing `/objects/photos/<filename>` DB URLs continue resolving post-cutover. Add this as a step in the Phase 4 cutover plan alongside the fresh pg_dump.
-  - **Backlog copy script + trailing-space `PRIVATE_OBJECT_DIR` discovery (2026-05-11):** built `scripts/migrate-object-storage.ts` to dual-client copy (sidecar read → direct-creds write) the Replit-bucket backlog. Dry-run revealed **1,667 photos / 1.5 GB** (two orders larger than the audit's 1.7 MB local-disk estimate; no recordings yet). Smoke test (`--limit 5`) copied cleanly to `treemarkables-photos`, but end-to-end verification via `https://do.app.treemarkables.co.nz/objects/photos/<file>` returned **404**. Root cause: DO's `PRIVATE_OBJECT_DIR` env var had a **trailing space** (likely from the same bulk-paste origin as the earlier `PRIVATE_OBJECT_DIR` and Calendar-refresh-token corruption). The space made DO upload/lookup keys land at `.private /photos/...` (with literal space). Soak photos worked internally because the bug was symmetric, but our backlog copies at `.private/photos/...` (no space) were invisible to DO. **Fixes shipped:** (1) `.trim()` added at the three env read sites (`photoStorage.ts:158`, `routes.ts:8784`, `routes.ts:8973`) so any future whitespace-corrupting paste is neutralized in code. (2) The 10 existing soak files at `.private /photos/...` duplicated to `.private/photos/...` on GCS so DO keeps serving soak photos across the env fix. **User-side step:** strip the trailing space from DO's `PRIVATE_OBJECT_DIR` env var; redeploy will pick up both the env fix and the `.trim()` defence. **Phase 5 cleanup:** delete the 10 legacy `.private /photos/...` (with-space) entries after DO has been confirmed reading from no-space for a while.
+  - **Phase 3 collapses into Phase 4 (drafted 2026-05-11):** the original Phase 3 ("move side effects 24h ahead of the DNS flip") doesn't survive the two-DB design — repointing webhooks at DO while customers still read from heliumdb on Replit means webhook-driven writes (SMS reply, email reply, voicemail upload, Messenger inbound) land in Sydney-Neon and never reach customer reads on heliumdb. So webhook + cron flips have to be *atomic* with the pg_dump→restore→DNS flip. There is no separate Phase 3 anymore; see the Cutover runbook section below.
+  - **Backlog copy script + trailing-space `PRIVATE_OBJECT_DIR` discovery (2026-05-11):** built `scripts/migrate-object-storage.ts` to dual-client copy (sidecar read → direct-creds write) the Replit-bucket backlog. Dry-run revealed **1,667 photos / 1.5 GB** (two orders larger than the audit's 1.7 MB local-disk estimate; no recordings yet). Smoke test (`--limit 5`) copied cleanly to `treemarkables-photos`, but end-to-end verification via `https://do.app.treemarkables.co.nz/objects/photos/<file>` returned **404**. Root cause: DO's `PRIVATE_OBJECT_DIR` env var had a **trailing space** (likely from the same bulk-paste origin as the earlier `PRIVATE_OBJECT_DIR` and Calendar-refresh-token corruption). The space made DO upload/lookup keys land at `.private /photos/...` (with literal space). Soak photos worked internally because the bug was symmetric, but our backlog copies at `.private/photos/...` (no space) were invisible to DO. **Fixes shipped:** (1) `.trim()` added at the three env read sites (`photoStorage.ts:158`, `routes.ts:8784`, `routes.ts:8973`) so any future whitespace-corrupting paste is neutralized in code. (2) The 10 existing soak files at `.private /photos/...` duplicated to `.private/photos/...` on GCS so DO keeps serving soak photos across the env fix. **User-side step:** strip the trailing space from DO's `PRIVATE_OBJECT_DIR` env var; redeploy will pick up both the env fix and the `.trim()` defence. **Phase 5 cleanup:** delete the 10 legacy `.private /photos/...` (with-space) entries after DO has been confirmed reading from no-space for a while. **Full copy completed 2026-05-11:** 1,662 new + 5 smoke-test = 1,667 objects copied, 0 errors. Dest bucket has 1,677 canonical objects + 10 legacy-with-space pending cleanup. Idempotent re-run takes ~2 min wall-clock for zero new files; cutover-day re-run will pick up only the soak-window delta.
+
+---
+
+## Cutover runbook (drafted 2026-05-11)
+
+Phase 3 and Phase 4 collapse into a single atomic cutover window. Order matters: webhook + cron flips can't precede the DB cutover (writes would land in Sydney-Neon while customers read heliumdb), and can't follow the DNS flip (post-DNS writes hitting Replit are lost). Everything happens inside a single short maintenance window.
+
+### Open question to resolve before cutover day
+
+Each webhook provider has a URL configured in its console. **We don't yet know whether those URLs target `https://app.treemarkables.co.nz/...` (the customer hostname, follows DNS) or a raw Replit deploy URL (`*.replit.app` / `*.repl.co`, pinned to Replit).**
+
+- If **customer hostname** → DNS flip moves the webhook automatically. No per-provider console edit needed. In-flight retries during the flip may hit either side depending on cached DNS; auto-retry on 5xx covers it.
+- If **raw Replit URL** → per-provider console edit required during the maintenance window. Adds 5-10 min of click-work and a step that can fail.
+
+**Action (T-2 days):** log into each console below and record the current URL. If any are raw Replit URLs, pre-stage the new DO URLs (`https://do.app.treemarkables.co.nz/...` until DNS flips, then `https://app.treemarkables.co.nz/...`).
+
+### Webhook provider matrix
+
+| Provider | Endpoints | Console | Signing secret env var | Auto-retry? |
+|---|---|---|---|---|
+| Twilio | `POST /api/webhooks/sms`, `/api/webhooks/twilio-answer`, `/api/webhooks/twilio-no-answer`, `/api/webhooks/twilio-voice` | console.twilio.com → Phone Numbers → the prod number → Voice/Messaging | (signature header validated in route; `TWILIO_AUTH_TOKEN`) | Yes — 11 retries over 24h on 5xx |
+| Vonage | `GET/POST /api/webhooks/vonage-voice`, `POST /api/webhooks/vonage-event`, `POST /api/webhooks/vonage-recording` | dashboard.nexmo.com → Numbers → the prod number → Voice settings | `VONAGE_WEBHOOK_SECRET` | Yes — limited retries |
+| Resend (events) | `POST /api/webhooks/resend-events` | resend.com/webhooks | `RESEND_EVENTS_WEBHOOK_SECRET` | Yes |
+| Resend Inbound + SendGrid Inbound Parse | `POST /api/webhooks/email` | resend.com/inbound + app.sendgrid.com → Settings → Inbound Parse | `RESEND_WEBHOOK_SECRET` (Resend) | Resend: yes. SendGrid: limited |
+| Facebook Messenger | `GET /api/webhooks/messenger` (verify), `POST /api/webhooks/messenger` (events). Also `GET /api/webhooks/facebook/messenger` as an alias. | developers.facebook.com → app → Messenger → Webhooks | `FACEBOOK_VERIFY_TOKEN`, `FACEBOOK_WEBHOOK_VERIFY_TOKEN` | Yes |
+| Zapier (outbound from us; no inbound to flip) | — | — | `ZAPIER_WEBHOOK_URL` | n/a |
+
+No Stripe (payments don't flow through Stripe — confirmed in Phase 0 audit).
+
+### Cron flip
+
+Single env-var flip per stack:
+
+- **Replit:** set `RUN_CRONS=false` (currently unset → defaults to enabled).
+- **DO:** delete `RUN_CRONS` env var (currently `false` → unset defaults to enabled).
+
+Both happen inside the maintenance window. Order: kill Replit's crons *before* enabling DO's, to avoid the brief window where both run and a notification queue ticks twice. The gates are at `server/index.ts:528` (central `cronsEnabled`), `routes.ts:26982` (near-miss reminder), `services/automatedTriggers.ts:293` (automated triggers module-load), plus uses of `cronsEnabled` for the notification queue, marketing scheduler, email reply poller, SMS reply poller.
+
+### Maintenance-window sequence (T-0)
+
+Estimated window: 10-15 minutes. Schedule for low-traffic time (late evening NZ).
+
+| Step | Action | Verification |
+|---|---|---|
+| 1 | Announce maintenance start (status page / in-app banner if available) | — |
+| 2 | Set `RUN_CRONS=false` on Replit; restart the Replit workflow to apply | Replit logs show `RUN_CRONS=false — automated communication background tasks suppressed` |
+| 3 | Block app traffic on Replit (return a maintenance HTML for all routes, or kill the workflow) so no further writes hit heliumdb | `curl https://app.treemarkables.co.nz/health` returns maintenance page or 503 |
+| 4 | `pg_dump` from helium → `psql` restore into Sydney-Neon (overwrites all soak data). Use the same procedure that created the soak DB. | Row count parity on the 5 highest-traffic tables (jobs, customers, photos, messages, communications) |
+| 5 | Run `tsx scripts/migrate-object-storage.ts` from Replit one final time to pick up any photos uploaded since the last copy | Final summary: `copied=<small N>  errors=0` |
+| 6 | If any webhook URLs were raw Replit URLs (per audit), repoint each console entry to `https://do.app.treemarkables.co.nz/...` | Send a test event from each provider's console where supported (Twilio, Vonage, Resend, Messenger all have test buttons) |
+| 7 | Remove `RUN_CRONS` env var on DO; trigger a redeploy to apply | DO logs show cron startup logs (notification queue, marketing scheduler, email reply poller, etc.) |
+| 8 | Flip Cloudflare's `app.treemarkables.co.nz` CNAME from Replit's URL to `plankton-app-9kv78.ondigitalocean.app`. Keep grey-cloud (DNS only). | `dig +short app.treemarkables.co.nz` from multiple resolvers shows DO's IPs |
+| 9 | Smoke-test the live customer URL: log in, load a job card with a backlog photo, view inbox, submit a contact form | All return 200 with expected content |
+| 10 | Announce maintenance end. Keep watching DO logs for ~30 min for unexpected errors. | — |
+
+### Verification (post-cutover, T+1h to T+24h)
+
+- DO request logs show steady traffic ramp as DNS propagates
+- Cron tick logs appear at expected intervals
+- Inbound webhook logs show events from each provider (test send during Step 6, then real traffic)
+- No `getaddrinfo ENOTFOUND helium` errors (would mean DO is still hitting heliumdb)
+- Spot-check a customer-uploaded photo from the backlog: it should serve from `treemarkables-photos`
+
+### Rollback (decision criteria + procedure)
+
+**Trigger rollback if:** any of (a) DO can't serve traffic, (b) a critical integration (Twilio voice, Stripe-replacement payment flow, Calendar booking) is broken and not fixable within 30 min, (c) data corruption suspected on Sydney-Neon.
+
+**Procedure:**
+
+1. Flip Cloudflare CNAME back to Replit.
+2. Set `RUN_CRONS=false` on DO (env var), redeploy.
+3. Unset `RUN_CRONS` on Replit, restart workflow.
+4. If webhook consoles were edited, revert them.
+5. Replit's heliumdb is untouched by the cutover sequence — re-enabling Replit traffic is enough; no DB restore needed.
+6. **Writes that landed on Sydney-Neon during the broken window are lost.** If those are unrecoverable from the providers (e.g., a customer SMS reply), apologize and request re-send.
+
+Replit stays warm for 7 days post-cutover per the original plan; this is the rollback target.
