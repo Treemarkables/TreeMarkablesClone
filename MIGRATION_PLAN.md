@@ -216,14 +216,11 @@ So inbound mail lands at Google Workspace regardless of which subdomain it was s
 
 **The cutover webhook surface is exactly one URL:** Resend event webhooks (opens/clicks/bounces) at `POST /api/webhooks/resend-events`. Console: resend.com → Webhooks. Signing secret: `RESEND_EVENTS_WEBHOOK_SECRET`. Inbound mail follows the cron flip automatically — no console edit on Gmail or Cloudflare needed.
 
-### Open question to resolve before cutover day
+### Resend webhook URL — confirmed 2026-05-12
 
-The single Resend events webhook URL is configured in the Resend dashboard. **Is it pointed at `https://app.treemarkables.co.nz/...` (customer hostname, follows DNS) or a raw Replit deploy URL?**
+User checked resend.com → Webhooks: the events webhook is pointed at `https://app.treemarkables.co.nz/api/webhooks/resend-events` (customer hostname). **DNS flip carries it automatically; no console edit at cutover.** Resend retries on 5xx covers any events in flight during DNS propagation.
 
-- **Customer hostname** → DNS flip moves it automatically. No console edit needed; Resend retries on 5xx covers any events in flight.
-- **Raw Replit URL** → one console edit during the maintenance window.
-
-**Action:** log into resend.com → Webhooks → record the configured URL. ~30 seconds.
+**Net effect:** the cutover involves zero third-party console edits. Every flip happens via env vars on Replit/DO and the Cloudflare CNAME.
 
 ### Dead code flagged for Phase 5 cleanup
 
@@ -257,10 +254,10 @@ Estimated window: 10-15 minutes. Schedule for low-traffic time (late evening NZ)
 | 3 | Block app traffic on Replit (return a maintenance HTML for all routes, or kill the workflow) so no further writes hit heliumdb | `curl https://app.treemarkables.co.nz/health` returns maintenance page or 503 |
 | 4 | `pg_dump` from helium → `psql` restore into Sydney-Neon (overwrites all soak data). Use the same procedure that created the soak DB. | Row count parity on the 5 highest-traffic tables (jobs, customers, photos, messages, communications) |
 | 5 | Run `tsx scripts/migrate-object-storage.ts` from Replit one final time to pick up any photos uploaded since the last copy | Final summary: `copied=<small N>  errors=0` |
-| 6 | If the Resend events webhook URL was a raw Replit URL (per pre-cutover audit), repoint it to `https://do.app.treemarkables.co.nz/api/webhooks/resend-events`. If it was on the customer hostname, skip — DNS flip at step 8 handles it. | Send a test event from Resend → Webhooks → "Send test event"; confirm DO request logs show the POST |
+| 6 | Skip — Resend webhook URL is on the customer hostname; DNS flip at step 8 carries it. | n/a (verified post-flip: see step 9) |
 | 7 | Remove `RUN_CRONS` env var on DO; trigger a redeploy to apply | DO logs show cron startup logs (notification queue, marketing scheduler, email reply poller, etc.) |
 | 8 | Flip Cloudflare's `app.treemarkables.co.nz` CNAME from Replit's URL to `plankton-app-9kv78.ondigitalocean.app`. Keep grey-cloud (DNS only). | `dig +short app.treemarkables.co.nz` from multiple resolvers shows DO's IPs |
-| 9 | Smoke-test the live customer URL: log in, load a job card with a backlog photo, view inbox, submit a contact form | All return 200 with expected content |
+| 9 | Smoke-test the live customer URL: log in, load a job card with a backlog photo, view inbox, submit a contact form. Send a test event from Resend → Webhooks to confirm events flow to DO under the new DNS. | All return 200 with expected content; DO logs show Resend POST hitting `/api/webhooks/resend-events` |
 | 10 | Announce maintenance end. Keep watching DO logs for ~30 min for unexpected errors. | — |
 
 ### Verification (post-cutover, T+1h to T+24h)
