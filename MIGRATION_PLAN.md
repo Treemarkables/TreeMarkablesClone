@@ -314,7 +314,7 @@ Replit stays warm for 7 days post-cutover per the original plan; this is the rol
 
 - ✅ `app.treemarkables.co.nz` → DO, serving (200, x-do-app-origin verified)
 - ✅ `www.treemarkables.co.nz` → DO, serving (marketing site)
-- 🟡 `treemarkables.nz` + `www.treemarkables.nz` → Crazy Domains DNS edits in propagation (TTL 285s, ETA 5-10 min from edit)
+- ✅ `treemarkables.nz` + `www.treemarkables.nz` → live on DO (resolved later same evening). Apex stays as A record `162.159.140.98` (CNAME at apex would conflict with Google Workspace MX). `www` had to be converted A → CNAME → `plankton-app-9kv78.ondigitalocean.app` because DO's validator specifically requires a CNAME for subdomains and rejects A records (received a "validation failed after 1h0m36s" email from DO Support before figuring this out). Conversion required first deleting five vestigial Google secondary-MX records misplaced at `www.treemarkables.nz` (real Google MX belongs at the apex) and a stale `replit-verify=...` TXT record — RFC forbids CNAME from coexisting with any other record type at the same name. After cleanup, CNAME accepted; DO provisioned a Google Trust Services cert within minutes
 - ✅ Replit deployment **paused** (warm for 7-day rollback window)
 - ✅ DO crons live (RUN_CRONS env var deleted, redeploy landed)
 - 🟡 Two DO alerts pending investigation: "Failed Deployment" and "Failed Domain Configuration" — likely stale state from pre-DNS-flip domain adds; deploy and customer URLs all serve cleanly
