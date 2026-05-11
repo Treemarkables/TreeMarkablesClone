@@ -155,7 +155,9 @@ export async function composeBeforeAfter(
 
 export class PhotoStorageService {
   private getPrivateObjectDir(): string {
-    const dir = process.env.PRIVATE_OBJECT_DIR || "";
+    // Trim defends against accidental whitespace from bulk env-var pastes —
+    // we got bitten by a trailing space on DO during Phase 2 soak.
+    const dir = (process.env.PRIVATE_OBJECT_DIR || "").trim();
     if (!dir) {
       throw new Error("PRIVATE_OBJECT_DIR not set");
     }

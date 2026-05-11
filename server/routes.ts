@@ -8781,7 +8781,7 @@ Draft the reply now.`;
   // Serve recordings from persistent Object Storage
   app.get('/api/recordings/:filename', async (req: Request, res: Response) => {
     try {
-      const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+      const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
       if (!privateDir) {
         return res.status(500).json({ error: 'Object storage not configured' });
       }
@@ -8970,7 +8970,7 @@ ${phoneTarget}
         }
 
         // Upload to persistent Object Storage
-        const privateDir = process.env.PRIVATE_OBJECT_DIR || '';
+        const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
         let servingUrl = `/api/recordings/${recordingFilename}`;
         if (privateDir) {
           try {
