@@ -2125,7 +2125,7 @@ export function JobDiarySection({
                         src={photo.url}
                         alt={`Diary photo ${idx + 1}`}
                         loading="lazy"
-                        className="w-full h-full object-contain"
+                        className="w-full h-full object-cover"
                         onError={(e) =>
                           (e.currentTarget.style.display = "none")
                         }
