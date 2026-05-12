@@ -65,7 +65,7 @@ export async function notifyEmployees(employeeIds: string[], options: Notificati
  */
 export async function notifyJobAssignment(employeeId: string, jobNumber: string, jobTitle: string, jobId?: string) {
   const prefs = await storage.getNotificationPreferences(employeeId);
-  if (!prefs?.enableJobAssignments) {
+  if (prefs?.jobAssignments === false) {
     return false;
   }
   
@@ -88,7 +88,7 @@ export async function notifyJobAssignment(employeeId: string, jobNumber: string,
  */
 export async function notifyScheduleChange(employeeId: string, jobNumber: string, newDate: string, jobId?: string) {
   const prefs = await storage.getNotificationPreferences(employeeId);
-  if (!prefs?.enableScheduleChanges) {
+  if (prefs?.scheduleChanges === false) {
     return false;
   }
   
@@ -111,7 +111,7 @@ export async function notifyScheduleChange(employeeId: string, jobNumber: string
  */
 export async function notifyNewLead(adminEmployeeId: string, customerName: string, source: string) {
   const prefs = await storage.getNotificationPreferences(adminEmployeeId);
-  if (!prefs?.enableNewLeads) {
+  if (prefs?.newLeads === false) {
     return false;
   }
   
@@ -132,7 +132,7 @@ export async function notifyNewLead(adminEmployeeId: string, customerName: strin
  */
 export async function notifyInvoicePayment(employeeId: string, invoiceNumber: string, amount: string) {
   const prefs = await storage.getNotificationPreferences(employeeId);
-  if (!prefs?.enableInvoicePayments) {
+  if (prefs?.invoicePayments === false) {
     return false;
   }
   
@@ -152,7 +152,7 @@ export async function notifyInvoicePayment(employeeId: string, invoiceNumber: st
  */
 export async function notifyQuoteAccepted(employeeId: string, quoteNumber: string, customerName: string) {
   const prefs = await storage.getNotificationPreferences(employeeId);
-  if (!prefs?.enableQuoteAcceptance) {
+  if (prefs?.quoteAccepted === false) {
     return false;
   }
   
@@ -171,11 +171,6 @@ export async function notifyQuoteAccepted(employeeId: string, quoteNumber: strin
  * Send system alert to admin
  */
 export async function notifySystemAlert(employeeId: string, message: string) {
-  const prefs = await storage.getNotificationPreferences(employeeId);
-  if (!prefs?.enableSystemAlerts) {
-    return false;
-  }
-  
   return notifyEmployee(employeeId, {
     title: '⚠️ System Alert',
     body: message,

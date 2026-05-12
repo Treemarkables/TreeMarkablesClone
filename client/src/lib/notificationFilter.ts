@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 // Every notification `type` that can appear in the bell. Add new entries here
 // when adding new emitters server-side. A missing key in bellPreferences = use
@@ -132,6 +133,7 @@ const QUERY_KEY = ["/api/notifications/preferences"] as const;
 
 export function useBellPreferences() {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
 
   const query = useQuery({
     queryKey: QUERY_KEY,
@@ -174,10 +176,15 @@ export function useBellPreferences() {
       queryClient.setQueryData(QUERY_KEY, next);
       return { previous };
     },
-    onError: (_err, _next, context) => {
+    onError: (err, _next, context) => {
       if (context?.previous) {
         queryClient.setQueryData(QUERY_KEY, context.previous);
       }
+      toast({
+        title: "Couldn't save notification preference",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
     },
     onSuccess: (saved) => {
       queryClient.setQueryData(QUERY_KEY, saved);

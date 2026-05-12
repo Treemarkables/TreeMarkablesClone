@@ -25021,13 +25021,53 @@ Transcription: ${transcriptText}`;
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
 
-      const updates = req.body;
-      const prefs = await storage.updateNotificationPreferences(employeeId, updates);
+      // Whitelist allowed fields so unknown keys can't blow up the Drizzle SET.
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const updates: Partial<typeof schema.notificationPreferences.$inferInsert> = {};
+
+      if (body.bellPreferences !== undefined) {
+        if (
+          typeof body.bellPreferences !== "object" ||
+          body.bellPreferences === null ||
+          Array.isArray(body.bellPreferences) ||
+          !Object.values(body.bellPreferences as Record<string, unknown>).every(
+            (v) => typeof v === "boolean",
+          )
+        ) {
+          return res.status(400).json({
+            success: false,
+            message: 'bellPreferences must be an object of string→boolean',
+          });
+        }
+        updates.bellPreferences = body.bellPreferences as Record<string, boolean>;
+      }
+
+      const BOOLEAN_FIELDS = [
+        "jobAssignments", "scheduleChanges", "jobStatusUpdates",
+        "newLeads", "invoicePayments", "quoteAccepted",
+        "customerMessages", "teamMessages",
+      ] as const;
+      for (const key of BOOLEAN_FIELDS) {
+        if (typeof body[key] === "boolean") {
+          (updates as Record<string, unknown>)[key] = body[key];
+        }
+      }
+
+      // Upsert: a missing row would otherwise silently no-op the UPDATE.
+      let prefs = await storage.getNotificationPreferences(employeeId);
+      if (!prefs) {
+        prefs = await storage.createNotificationPreferences({ employeeId, ...updates });
+      } else {
+        prefs = await storage.updateNotificationPreferences(employeeId, updates);
+      }
 
       res.json({ success: true, data: prefs });
     } catch (error) {
       console.error('Error updating notification preferences:', error);
-      res.status(500).json({ success: false, message: 'Failed to update preferences' });
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to update preferences',
+      });
     }
   });
 
