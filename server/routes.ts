@@ -6005,8 +6005,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         const job = await storage.getJob(jobId);
         const customer = job?.customerId ? await storage.getCustomer(job.customerId) : null;
         
-        // Define which diary entry types should create notifications (excluding 'note')
-        const notifiableTypes = ['email', 'sms', 'proposal', 'photo'];
+        // Diary entry types that produce bell entries (mapped in TYPE_TO_PREF on the client).
+        const notifiableTypes = ['email', 'sms', 'proposal', 'photo', 'note'];
         
         if (notifiableTypes.includes(entry.entryType)) {
           // Map diary entry types to notification types
@@ -6424,23 +6424,35 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
 
       // Upload to object storage in background (don't await)
       const photoStorage = new PhotoStorageService();
+      const authorName = req.body.authorName || 'User';
       photoStorage.uploadPhoto(
         req.file.buffer,
         req.file.originalname,
         req.file.mimetype
       ).then(async ({ url: photoUrl, thumbnailUrl }) => {
         // Update diary entry with real photo URL
-        await storage.createJobDiaryEntry({
+        const entry = await storage.createJobDiaryEntry({
           jobId,
           entryType: 'photo',
           title: 'Photo Added',
           description: req.body.description || 'Photo added',
-          authorName: req.body.authorName || 'User',
+          authorName,
           photoUrl,
           photos: [photoUrl],
           isPrivate: false
         });
         console.log(`✅ Background photo upload complete: ${photoUrl} (thumbnail: ${thumbnailUrl})`);
+        await notificationHelper.createJobActivityNotification({
+          jobId,
+          type: 'photo_added',
+          title: 'Photo Added',
+          message: `${authorName} added a photo`,
+          priority: 'low',
+          authorName,
+          diaryEntryId: entry.id,
+          userId: (req as any).user?.id,
+          metadata: { photoCount: 1 },
+        });
       }).catch(error => {
         console.error('❌ Background photo upload failed:', error);
       });
@@ -6475,15 +6487,30 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       }
 
       const isMulti = photoUrls.length > 1;
+      const authorName = req.body.authorName || 'User';
       const entry = await storage.createJobDiaryEntry({
         jobId,
         entryType: 'photo',
         title: isMulti ? `${photoUrls.length} Photos Added` : 'Photo Added',
         description: req.body.description || (isMulti ? `${photoUrls.length} photos added` : 'Photo added'),
-        authorName: req.body.authorName || 'User',
+        authorName,
         photoUrl: photoUrls[0],
         photos: photoUrls,
         isPrivate: false,
+      });
+
+      await notificationHelper.createJobActivityNotification({
+        jobId,
+        type: 'photo_added',
+        title: isMulti ? `${photoUrls.length} Photos Added` : 'Photo Added',
+        message: isMulti
+          ? `${authorName} added ${photoUrls.length} photos`
+          : `${authorName} added a photo`,
+        priority: 'low',
+        authorName,
+        diaryEntryId: entry.id,
+        userId: (req as any).user?.id,
+        metadata: { photoCount: photoUrls.length },
       });
 
       res.json({ success: true, data: entry });
@@ -7543,7 +7570,7 @@ Draft the reply now.`;
       // Create diary entry for sent proposal email
       if (proposal.jobId) {
         try {
-          await storage.createJobDiaryEntry({
+          const diaryEntry = await storage.createJobDiaryEntry({
             jobId: proposal.jobId,
             entryType: 'email',
             title: `Proposal Sent: ${proposalNumber}`,
@@ -7557,6 +7584,23 @@ Draft the reply now.`;
               total: total.toFixed(2),
               sendgridMessageId: emailResult.messageId
             }
+          });
+
+          await notificationHelper.createJobActivityNotification({
+            jobId: proposal.jobId,
+            type: 'proposal_sent',
+            title: 'Proposal Sent',
+            message: `Proposal ${proposalNumber} sent to ${customer?.name || to}`,
+            priority: 'high',
+            authorName: 'System',
+            diaryEntryId: diaryEntry.id,
+            proposalId,
+            userId: (req as any).user?.id,
+            metadata: {
+              proposalNumber,
+              recipient: to,
+              total: total.toFixed(2),
+            },
           });
 
           // Update job's lastActivityAt and status to 'quote' when proposal is sent
@@ -7771,7 +7815,7 @@ Draft the reply now.`;
       // Diary entry + job activity (mirrors proposal email flow, minus the viewer link).
       if (proposal.jobId) {
         try {
-          await storage.createJobDiaryEntry({
+          const diaryEntry = await storage.createJobDiaryEntry({
             jobId: proposal.jobId,
             entryType: 'email',
             title: `Quote ${quoteNumber} emailed`,
@@ -7788,6 +7832,23 @@ Draft the reply now.`;
               documentType: 'quote',
               documentNumber: quoteNumber,
               sendgridMessageId: emailResult.messageId,
+            },
+          });
+
+          await notificationHelper.createJobActivityNotification({
+            jobId: proposal.jobId,
+            type: 'quote_sent',
+            title: 'Quote Sent',
+            message: `Quote ${quoteNumber} sent to ${to}`,
+            priority: 'high',
+            authorName: (req as any).user?.name || 'System',
+            diaryEntryId: diaryEntry.id,
+            proposalId,
+            userId: (req as any).user?.id,
+            metadata: {
+              quoteNumber,
+              recipient: to,
+              total: total.toFixed(2),
             },
           });
 

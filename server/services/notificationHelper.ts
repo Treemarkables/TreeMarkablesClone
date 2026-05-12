@@ -482,6 +482,61 @@ export async function createNewLeadNotification(params: {
 }
 
 /**
+ * Create a bell notification for a job-side activity (photo, note, proposal sent, etc.)
+ * that didn't flow through the /api/jobs/:jobId/diary route (where notification
+ * creation is already wired up). Looks up the job to attach jobNumber + customerId
+ * for the bell card and deep-links to the diary tab.
+ *
+ * Pass the matching `type` from notificationFilter.TYPE_TO_PREF so the bell's
+ * client-side preference filter routes the entry to the right toggle.
+ */
+export async function createJobActivityNotification(params: {
+  jobId: string;
+  type: string;
+  title: string;
+  message: string;
+  priority?: 'low' | 'medium' | 'high';
+  authorName?: string;
+  diaryEntryId?: string;
+  proposalId?: string;
+  quoteId?: string;
+  userId?: string;
+  metadata?: Record<string, any>;
+}) {
+  try {
+    const job = await storage.getJob(params.jobId);
+    if (!job) {
+      console.warn(`⚠️  Skipping ${params.type} notification: job ${params.jobId} not found`);
+      return false;
+    }
+    await storage.createNotification({
+      title: params.title,
+      message: params.message,
+      type: params.type,
+      priority: params.priority || 'medium',
+      isRead: false,
+      userId: params.userId,
+      jobId: params.jobId,
+      customerId: job.customerId || undefined,
+      proposalId: params.proposalId,
+      quoteId: params.quoteId,
+      diaryEntryId: params.diaryEntryId,
+      actionUrl: `/dispatch?job=${params.jobId}&tab=diary`,
+      metadata: {
+        jobNumber: job.jobNumber,
+        authorName: params.authorName,
+        ...(params.metadata || {}),
+      },
+    });
+    console.log(`🔔 Bell entry: ${params.type} for job ${job.jobNumber}`);
+    return true;
+  } catch (error) {
+    console.error(`Error creating ${params.type} notification:`, error);
+    return false;
+  }
+}
+
+/**
  * Send push notification for a reply received on an existing conversation
  * Call this when a customer replies via email, SMS, or any channel
  */

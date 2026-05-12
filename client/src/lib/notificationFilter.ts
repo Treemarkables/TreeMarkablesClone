@@ -51,26 +51,24 @@ export const TYPE_TO_PREF: Record<string, keyof NotificationPrefs> = {
   email_received: "emailActivity",
 
   sms_reply: "smsActivity",
-  sms_activity: "smsActivity",
 
   proposal_sent: "proposalActivity",
   proposal_accepted: "proposalActivity",
 
   quote_sent: "quoteActivity",
   quote_accepted: "quoteActivity",
-  quote_expired: "quoteActivity",
 
   job_status_change: "jobStatusChanges",
+  job_status_changed: "jobStatusChanges",
+  job_status_update: "jobStatusChanges",
   job_scheduled: "jobStatusChanges",
   job_completed: "jobStatusChanges",
 
   new_lead: "leadActivity",
   new_conversation: "leadActivity",
-  lead_status_change: "leadActivity",
   reminder_stale_lead: "leadActivity",
 
-  payment_received: "paymentActivity",
-  invoice_paid: "paymentActivity",
+  invoice_payment: "paymentActivity",
   reminder_uninvoiced: "paymentActivity",
 
   reschedule_request: "rescheduleRequests",
