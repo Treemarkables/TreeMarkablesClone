@@ -8067,6 +8067,42 @@ Draft the reply now.`;
         quote = await storage.getQuote(quoteId);
       }
 
+      // Persist sender-selected photos onto the invoice itself so they show up
+      // on every downstream surface — the customer's online invoice view
+      // (/invoice/:id reads invoice_sections.images), the PDF served by
+      // /api/invoices/:id/pdf (the Microsoft download-link fallback), and any
+      // future re-send of the same invoice. Without this, the photos only ever
+      // exist as transient CID attachments on the outgoing email.
+      const photosToPersist: string[] = Array.isArray(selectedPhotos)
+        ? selectedPhotos.filter((p: any) => typeof p === 'string' && p.startsWith('/objects/photos/'))
+        : [];
+      if (invoice && photosToPersist.length > 0) {
+        try {
+          const existingSections = await storage.getInvoiceSectionsByInvoice(invoice.id);
+          const existingPhotoSection = existingSections.find(s => s.sectionType === 'photos');
+          if (existingPhotoSection) {
+            // Merge new photos with existing, dedup, preserve insertion order
+            const merged = Array.from(new Set([...(existingPhotoSection.images || []), ...photosToPersist]));
+            await storage.updateInvoiceSection(existingPhotoSection.id, { images: merged });
+            console.log(`📎 Updated invoice photo section ${existingPhotoSection.id} → ${merged.length} photo(s)`);
+          } else {
+            const nextSortOrder = existingSections.reduce((max, s) => Math.max(max, s.sortOrder ?? 0), -1) + 1;
+            const created = await storage.createInvoiceSection({
+              invoiceId: invoice.id,
+              sectionType: 'photos',
+              title: 'Job Photos',
+              content: '',
+              images: photosToPersist,
+              sortOrder: nextSortOrder,
+              isVisible: true,
+            });
+            console.log(`📎 Created invoice photo section ${created.id} with ${photosToPersist.length} photo(s)`);
+          }
+        } catch (sectionErr) {
+          console.error('Error persisting selected photos to invoice sections:', sectionErr);
+        }
+      }
+
       // Reply-To is handled by emailService default (info@treemarkables.nz)
 
       // Generate invoice HTML if invoice data is available
@@ -9955,16 +9991,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         .where(eq(documentTemplates.type, 'invoice')).limit(1);
       const invoiceTemplate2 = invoiceTemplateRows2[0] || null;
 
-      // Photos for the PDF: include the job's after-photos (completion photos) and
-      // before-photos. This is what customers downloading the PDF via the email link
-      // expect to see — the visual record of the work that was invoiced.
-      const jobPhotosForPdf: string[] = [
+      // Photos for the PDF: prefer images persisted on the invoice's photo sections
+      // (these are the ones the sender explicitly attached at send time), then fall
+      // back to the job's after-/before-photos so the PDF still shows something when
+      // an older invoice has no photo section yet.
+      const invoicePhotoSections = await storage.getInvoiceSectionsByInvoice(invoice.id);
+      const sectionPhotos: string[] = invoicePhotoSections
+        .flatMap(s => (s.images || []) as string[]);
+      const fallbackJobPhotos: string[] = [
         ...((job?.afterPhotos as string[] | null) || []),
         ...((job?.beforePhotos as string[] | null) || []),
-      ].filter((p): p is string => typeof p === 'string' && p.startsWith('/objects/photos/'));
+      ];
+      const pdfPhotos: string[] = Array.from(new Set(
+        (sectionPhotos.length > 0 ? sectionPhotos : fallbackJobPhotos)
+          .filter((p): p is string => typeof p === 'string' && p.startsWith('/objects/photos/'))
+      ));
 
       // Generate PDF using the shared helper (same code as email attachment)
-      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2, jobPhotosForPdf);
+      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2, pdfPhotos);
 
       res.setHeader('Content-Type', 'application/pdf');
       // Inline so the PDF renders in-browser when customers click the email link
