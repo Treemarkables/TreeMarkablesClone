@@ -90,6 +90,10 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
 }, ref) => {
   // Use contact name from prop, invoice, or empty string
   const displayContactName = contactName || invoice.contactName || '';
+  // Treat the contact-name override as the billing name when no separate billing name is set,
+  // so per-invoice "Billing Name" edits surface as the primary Bill To line instead of "c/o ...".
+  const effectiveBillingName = billingName
+    || (displayContactName && displayContactName !== customer?.name ? displayContactName : '');
   const [isLoading, setIsLoading] = useState(false);
 
   // Shared company info contract — resolves camelCase template fields + defaults.
@@ -152,7 +156,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
     invoiceNumber: invoice.invoiceNumber,
     issueDate,
     dueDate,
-    billingName: billingName || customer?.name || 'Customer',
+    billingName: effectiveBillingName || customer?.name || 'Customer',
     displayContactName: displayContactName || undefined,
     jobAddress: jobAddress || undefined,
     customerAddress: customer?.address || undefined,
@@ -253,7 +257,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                         <div>
                           <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{invoice.invoiceNumber}</h1>
                           <p className="text-xs mt-1" style={{ color: textSecondary }}>
-                            {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                            {effectiveBillingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                           </p>
                         </div>
                       </div>
@@ -270,7 +274,7 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                         <div className={`flex-1 ${template.logoAlignment === "right" ? "text-left" : "text-right"}`}>
                           <h1 className="text-base font-bold" style={{ color: textPrimary }}>Invoice #{invoice.invoiceNumber}</h1>
                           <p className="text-xs mt-1" style={{ color: textSecondary }}>
-                            {billingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
+                            {effectiveBillingName || customer?.name || 'Customer'} - {format(issueDate, 'dd/MM/yyyy')}
                           </p>
                         </div>
                       </div>
@@ -286,17 +290,12 @@ export const InvoiceTemplate = forwardRef<HTMLDivElement, InvoiceTemplateProps>(
                     <h2 className="text-xs font-semibold text-black mb-2">{sectionLabel['billTo']}</h2>
                     <div>
                       <p className="font-semibold text-black text-xs mb-1" data-testid="text-customer-name">
-                        {billingName || customer?.name || 'Customer'}
+                        {effectiveBillingName || customer?.name || 'Customer'}
                       </p>
                       {(jobAddress || customer?.address) && (
                         <p className="text-xs text-gray-600 mb-1">{jobAddress || customer?.address}</p>
                       )}
-                      {billingName && customer?.name && billingName !== customer.name && (
-                        <p className="text-xs text-gray-600 mb-1">
-                          <span className="mr-1">c/o</span>{customer.name}
-                        </p>
-                      )}
-                      {displayContactName && (!billingName || displayContactName !== customer?.name) && (
+                      {!effectiveBillingName && displayContactName && displayContactName !== customer?.name && (
                         <p className="text-xs text-gray-600 mb-1">
                           <span className="mr-1">c/o</span>{displayContactName}
                         </p>

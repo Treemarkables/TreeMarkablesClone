@@ -1061,7 +1061,7 @@ async function generateInvoicePDFBuffer(
     const gstAmount = subtotal * 0.15;
     const totalAmount = subtotal + gstAmount;
 
-    const billingName = job?.billingNameOverride || customer?.name || 'Customer';
+    const billingName = job?.billingNameOverride || invoiceData?.contactName || customer?.name || 'Customer';
     const issueDate = invoiceData.issueDate ? formatDate(invoiceData.issueDate) : formatDate(new Date());
     const dueDate = invoiceData.dueDate ? formatDate(invoiceData.dueDate) : '';
 
@@ -1148,11 +1148,6 @@ async function generateInvoicePDFBuffer(
           doc.fontSize(9).font('Helvetica-Bold').fillColor('#000000').text(label, 40, doc.y);
           doc.moveDown(0.3);
           doc.fontSize(9).font('Helvetica-Bold').text(billingName, 40, doc.y);
-          if (job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name) {
-            doc.moveDown(0.2);
-            doc.fontSize(8).font('Helvetica').fillColor('#666666').text(`c/o ${customer.name}`, 40, doc.y);
-            doc.fillColor('#000000');
-          }
           doc.moveDown(0.2);
           if (cfg.showAddress !== false && (invoiceData.address || job?.address)) {
             doc.fontSize(8).font('Helvetica').fillColor('#666666')
@@ -8117,8 +8112,7 @@ Draft the reply now.`;
             </div>
             <div style="text-align: right;">
               <div style="font-weight: bold; margin-bottom: 8px;">Bill To:</div>
-              <div>${job?.billingNameOverride || customer?.name || 'Customer'}</div>
-              ${job?.billingNameOverride && customer?.name && job.billingNameOverride !== customer.name ? `<div style="font-size: 11px; color: #666;">c/o ${customer.name}</div>` : ''}
+              <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
               ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
               ${customer?.email ? `<div>${customer.email}</div>` : ''}
             </div>
