@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,14 +12,18 @@ import { Loader2, TreePine } from 'lucide-react';
 export default function Login() {
   const [, setLocation] = useLocation();
   const { login, loginPending } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError('');
-    
+
+    // Read from the form directly so browser-autofilled values are picked up
+    // even when the React onChange never fired (Chrome/Safari autofill quirk).
+    const form = e.currentTarget;
+    const email = (form.elements.namedItem('email') as HTMLInputElement | null)?.value?.trim() ?? '';
+    const password = (form.elements.namedItem('password') as HTMLInputElement | null)?.value ?? '';
+
     if (!email || !password) {
       setError('Please enter both email and password');
       return;
@@ -58,10 +63,9 @@ export default function Login() {
               </Label>
               <Input
                 id="email"
+                name="email"
                 type="email"
                 placeholder="Enter your email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
                 disabled={loginPending}
                 data-testid="input-email"
                 autoComplete="email"
@@ -73,10 +77,9 @@ export default function Login() {
               </Label>
               <Input
                 id="password"
+                name="password"
                 type="password"
                 placeholder="Enter your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
                 disabled={loginPending}
                 data-testid="input-password"
                 autoComplete="current-password"
