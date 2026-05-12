@@ -50,7 +50,6 @@ import SettingsPreferences from "@/pages/SettingsPreferences";
 import BookingReminderSettings from "@/pages/BookingReminderSettings";
 import CommunicationTemplates from "@/pages/CommunicationTemplates";
 import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
-import { NotificationSettings } from "@/components/NotificationSettings";
 import NotificationPreferences from "@/pages/NotificationPreferences";
 import VehicleInspection from "@/pages/VehicleInspection";
 import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
@@ -1162,7 +1161,6 @@ function Router() {
               <h1 className="text-3xl font-bold">Notification Preferences</h1>
               <p className="text-muted-foreground mt-2">Control which events trigger notifications and how you receive them</p>
             </div>
-            <NotificationSettings />
             <NotificationPreferences />
           </div>
         </SidebarLayout>

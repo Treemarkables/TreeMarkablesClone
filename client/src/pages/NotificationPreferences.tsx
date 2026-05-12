@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
   Bell,
+  BellOff,
   Mail,
   MessageSquare,
   Camera,
@@ -28,11 +29,19 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { notificationService } from "@/lib/notificationService";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  requestNotificationPermission,
+  isNotificationSupported,
+  isActualSafari,
+  isRunningAsStandalone,
+} from "@/lib/firebase";
 import {
   useBellPreferences,
   type NotificationType,
 } from "@/lib/notificationFilter";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface PrefSection {
   cardTitle: string;
@@ -252,12 +261,22 @@ export default function NotificationPreferences() {
   // stays in localStorage rather than on the server.
   const [deviceBrowserPrefs, setDeviceBrowserPrefs] = useState<DeviceBrowserPrefs>(
     () => ({
-      browserNotifications: notificationService.isEnabled(),
+      browserNotifications:
+        typeof Notification !== "undefined" &&
+        Notification.permission === "granted",
     }),
   );
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>(
+    () =>
+      typeof Notification !== "undefined" ? Notification.permission : "denied",
+  );
+  const [pushSupported, setPushSupported] = useState(true);
+  const [enabling, setEnabling] = useState(false);
 
   const loadDeviceBrowserPrefs = () => {
-    const permission = notificationService.getPermissionStatus();
+    const permission =
+      typeof Notification !== "undefined" ? Notification.permission : "denied";
+    setPermissionStatus(permission);
     const stored = localStorage.getItem("notificationPreferences");
     let storedBrowser: boolean | undefined;
     if (stored) {
@@ -280,6 +299,7 @@ export default function NotificationPreferences() {
   };
 
   useEffect(() => {
+    setPushSupported(isNotificationSupported());
     loadDeviceBrowserPrefs();
   }, []);
 
@@ -310,23 +330,91 @@ export default function NotificationPreferences() {
   };
 
   const handleEnableBrowserNotifications = async () => {
-    const granted = await notificationService.requestPermission();
-    if (granted) {
+    setEnabling(true);
+    try {
+      const token = await requestNotificationPermission();
+      if (!token) {
+        setPermissionStatus(
+          typeof Notification !== "undefined"
+            ? Notification.permission
+            : "denied",
+        );
+        toast({
+          title: "Permission denied",
+          description: "Please enable notifications in your browser settings",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const res = await apiRequest("POST", "/api/notifications/register-token", {
+        token,
+        deviceInfo: {
+          userAgent: navigator.userAgent,
+          platform: navigator.platform,
+        },
+      });
+      const body = (await res.json().catch(() => null)) as
+        | { success?: boolean; message?: string }
+        | null;
+      if (!body?.success) {
+        toast({
+          title: "Setup incomplete",
+          description: body?.message ?? "Failed to register this device",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      setPermissionStatus("granted");
       setLocalBrowserNotifications(true);
-    } else {
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to enable notifications";
       toast({
-        title: "Permission denied",
-        description: "Please enable notifications in your browser settings",
+        title: "Couldn't enable notifications",
+        description: message,
         variant: "destructive",
       });
+    } finally {
+      setEnabling(false);
     }
   };
 
-  const permissionStatus = notificationService.getPermissionStatus();
+  const testMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/notifications/test");
+      return (await res.json()) as {
+        success: boolean;
+        message?: string;
+        devicesNotified?: number;
+      };
+    },
+    onSuccess: (data) => {
+      if (!data.success) {
+        toast({
+          title: "No devices registered",
+          description: data.message ?? "Enable notifications first",
+          variant: "destructive",
+        });
+      }
+    },
+    onError: (err: unknown) => {
+      const message =
+        err instanceof Error ? err.message : "Failed to send test notification";
+      toast({
+        title: "Test failed",
+        description: message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const safariInTab = isActualSafari() && !isRunningAsStandalone();
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Browser Notifications — per-device, OS permission */}
+      {/* Browser Notifications — per-device, OS permission + FCM token */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -343,41 +431,94 @@ export default function NotificationPreferences() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <Label htmlFor="browser-notifications" className="font-medium">
-                  Enable desktop notifications
-                </Label>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {permissionStatus === "granted"
-                    ? "Browser notifications are enabled on this device"
-                    : permissionStatus === "denied"
-                      ? "Browser notifications are blocked. Enable them in your browser settings to receive push alerts."
-                      : "Click to enable browser notifications on this device"}
-                </p>
+          {!pushSupported ? (
+            safariInTab ? (
+              <Alert>
+                <Bell className="h-4 w-4" />
+                <AlertDescription className="space-y-2">
+                  <p className="font-semibold">
+                    Install to home screen to enable push
+                  </p>
+                  <p className="text-sm">
+                    iOS Safari needs this app installed to the home screen
+                    before push notifications work (iOS 16.4+). Tap the Share
+                    button, then "Add to Home Screen", then open the app from
+                    the new icon and come back here.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <Alert>
+                <BellOff className="h-4 w-4" />
+                <AlertDescription className="space-y-2">
+                  <p className="font-semibold">
+                    Push not supported in this browser
+                  </p>
+                  <p className="text-sm">
+                    Try Chrome, Firefox, or Brave on desktop, or install this
+                    app to your iOS home screen.
+                  </p>
+                </AlertDescription>
+              </Alert>
+            )
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="browser-notifications" className="font-medium">
+                    Enable desktop notifications
+                  </Label>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {permissionStatus === "granted"
+                      ? "Browser notifications are enabled on this device"
+                      : permissionStatus === "denied"
+                        ? "Browser notifications are blocked. Enable them in your browser settings to receive push alerts."
+                        : "Click to enable browser notifications on this device"}
+                  </p>
+                </div>
+                {permissionStatus === "granted" ? (
+                  <Switch
+                    id="browser-notifications"
+                    checked={deviceBrowserPrefs.browserNotifications}
+                    onCheckedChange={(value) =>
+                      setLocalBrowserNotifications(value)
+                    }
+                    data-testid="switch-browser-notifications"
+                  />
+                ) : (
+                  <Button
+                    onClick={handleEnableBrowserNotifications}
+                    size="sm"
+                    disabled={enabling || permissionStatus === "denied"}
+                    data-testid="button-enable-browser-notifications"
+                  >
+                    <Bell className="h-4 w-4 mr-2" />
+                    {enabling ? "Enabling…" : "Enable"}
+                  </Button>
+                )}
               </div>
-              {permissionStatus === "granted" ? (
-                <Switch
-                  id="browser-notifications"
-                  checked={deviceBrowserPrefs.browserNotifications}
-                  onCheckedChange={(value) =>
-                    setLocalBrowserNotifications(value)
-                  }
-                  data-testid="switch-browser-notifications"
-                />
-              ) : (
-                <Button
-                  onClick={handleEnableBrowserNotifications}
-                  size="sm"
-                  data-testid="button-enable-browser-notifications"
-                >
-                  <Bell className="h-4 w-4 mr-2" />
-                  Enable
-                </Button>
+
+              {permissionStatus === "granted" && (
+                <div className="pt-2 border-t border-border flex items-center justify-between gap-4">
+                  <div className="flex-1">
+                    <Label className="font-medium">Send test notification</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Confirm push delivery to this device.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => testMutation.mutate()}
+                    disabled={testMutation.isPending}
+                    data-testid="button-test-notification"
+                  >
+                    {testMutation.isPending ? "Sending…" : "Send test"}
+                  </Button>
+                </div>
               )}
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
 
