@@ -23,155 +23,296 @@ import {
   User,
   DollarSign,
   Calendar,
+  Clock,
+  Wrench,
+  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { notificationService } from "@/lib/notificationService";
+import {
+  useBellPreferences,
+  type NotificationType,
+} from "@/lib/notificationFilter";
 
-interface NotificationPreferences {
+interface PrefSection {
+  cardTitle: string;
+  cardDescription: string;
+  cardIcon: typeof Bell;
+  iconBgClass: string;
+  iconColorClass: string;
+  toggles: {
+    type: NotificationType;
+    label: string;
+    description: string;
+    icon: typeof Bell;
+  }[];
+}
+
+const PREF_SECTIONS: PrefSection[] = [
+  {
+    cardTitle: "Job Diary Activity",
+    cardDescription: "Diary entries on a job — photos, notes, customer messages.",
+    cardIcon: FileText,
+    iconBgClass: "bg-blue-100",
+    iconColorClass: "text-blue-600",
+    toggles: [
+      {
+        type: "photo_added",
+        label: "Photos added",
+        description: "When photos are added to a job",
+        icon: Camera,
+      },
+      {
+        type: "note_added",
+        label: "Notes added",
+        description: "When notes are added to a job",
+        icon: StickyNote,
+      },
+      {
+        type: "email_reply",
+        label: "Email reply from customer",
+        description: "When a customer replies to an email about a job",
+        icon: Mail,
+      },
+      {
+        type: "email_received",
+        label: "New email received",
+        description: "When a new email arrives in the shared inbox",
+        icon: Mail,
+      },
+      {
+        type: "sms_reply",
+        label: "SMS reply from customer",
+        description: "When a customer replies via text",
+        icon: MessageSquare,
+      },
+    ],
+  },
+  {
+    cardTitle: "Customer Conversations",
+    cardDescription: "New inbound conversation threads.",
+    cardIcon: MessageSquare,
+    iconBgClass: "bg-purple-100",
+    iconColorClass: "text-purple-600",
+    toggles: [
+      {
+        type: "new_conversation",
+        label: "New customer conversation",
+        description: "When a new conversation thread is created",
+        icon: MessageSquare,
+      },
+    ],
+  },
+  {
+    cardTitle: "Leads",
+    cardDescription: "New leads and stale-lead reminders.",
+    cardIcon: User,
+    iconBgClass: "bg-yellow-100",
+    iconColorClass: "text-yellow-700",
+    toggles: [
+      {
+        type: "new_lead",
+        label: "New lead",
+        description: "When a new lead is created via the contact form or manually",
+        icon: User,
+      },
+      {
+        type: "reminder_stale_lead",
+        label: "Stale lead reminder",
+        description: "When a lead has been idle longer than the threshold",
+        icon: Clock,
+      },
+    ],
+  },
+  {
+    cardTitle: "Quotes & Proposals",
+    cardDescription: "Quote and proposal lifecycle events.",
+    cardIcon: FileText,
+    iconBgClass: "bg-green-100",
+    iconColorClass: "text-green-700",
+    toggles: [
+      {
+        type: "quote_sent",
+        label: "Quote sent",
+        description: "When a quote email is sent to a customer",
+        icon: FileText,
+      },
+      {
+        type: "quote_accepted",
+        label: "Quote accepted",
+        description: "When a customer accepts a quote",
+        icon: CheckCircle,
+      },
+      {
+        type: "proposal_sent",
+        label: "Proposal sent",
+        description: "When a proposal email is sent to a customer",
+        icon: FileText,
+      },
+      {
+        type: "proposal_accepted",
+        label: "Proposal accepted",
+        description: "When a customer accepts a proposal",
+        icon: CheckCircle,
+      },
+      {
+        type: "reminder_stale_quote",
+        label: "Stale quote reminder",
+        description: "When a quote has been out unanswered",
+        icon: Clock,
+      },
+    ],
+  },
+  {
+    cardTitle: "Jobs",
+    cardDescription: "Job status and lifecycle events.",
+    cardIcon: Wrench,
+    iconBgClass: "bg-orange-100",
+    iconColorClass: "text-orange-600",
+    toggles: [
+      {
+        type: "job_status_change",
+        label: "Job status changed",
+        description: "When a job moves between statuses (lead → quote → scheduled, etc.)",
+        icon: TrendingUp,
+      },
+      {
+        type: "job_scheduled",
+        label: "Job scheduled",
+        description: "When a job is given a scheduled date",
+        icon: Calendar,
+      },
+      {
+        type: "job_completed",
+        label: "Job completed",
+        description: "When a job is marked complete",
+        icon: CheckCircle,
+      },
+    ],
+  },
+  {
+    cardTitle: "Payments & Invoicing",
+    cardDescription: "Invoice payments and reminders.",
+    cardIcon: DollarSign,
+    iconBgClass: "bg-emerald-100",
+    iconColorClass: "text-emerald-700",
+    toggles: [
+      {
+        type: "invoice_payment",
+        label: "Invoice payment received",
+        description: "When a customer pays an invoice",
+        icon: DollarSign,
+      },
+      {
+        type: "reminder_uninvoiced",
+        label: "Uninvoiced job reminder",
+        description: "When a completed job has not yet been invoiced",
+        icon: Clock,
+      },
+    ],
+  },
+  {
+    cardTitle: "Scheduling & Crew",
+    cardDescription: "Reschedule requests, schedule proposals, and crew alerts.",
+    cardIcon: Calendar,
+    iconBgClass: "bg-indigo-100",
+    iconColorClass: "text-indigo-700",
+    toggles: [
+      {
+        type: "reschedule_request",
+        label: "Reschedule request",
+        description: "When a customer asks to reschedule",
+        icon: Calendar,
+      },
+      {
+        type: "schedule_proposal_ready",
+        label: "Schedule proposal ready",
+        description: "When an AI-suggested schedule is ready for review",
+        icon: Settings,
+      },
+      {
+        type: "reminder_no_crew",
+        label: "No crew assigned",
+        description: "When a scheduled job has no crew assigned",
+        icon: Clock,
+      },
+    ],
+  },
+];
+
+interface DeviceBrowserPrefs {
   browserNotifications: boolean;
-  emailNotifications: boolean;
-  smsNotifications: boolean;
-  emailActivity: boolean;
-  smsActivity: boolean;
-  proposalActivity: boolean;
-  photoActivity: boolean;
-  noteActivity: boolean;
-  quoteActivity: boolean;
-  jobStatusChanges: boolean;
-  leadActivity: boolean;
-  paymentActivity: boolean;
-  rescheduleRequests: boolean;
 }
 
 export default function NotificationPreferences() {
   const { toast } = useToast();
-  const [preferences, setPreferences] = useState<NotificationPreferences>({
-    browserNotifications: notificationService.isEnabled(),
-    emailNotifications: true,
-    smsNotifications: true,
-    emailActivity: true,
-    smsActivity: true,
-    proposalActivity: true,
-    photoActivity: true,
-    noteActivity: true,
-    quoteActivity: true,
-    jobStatusChanges: true,
-    leadActivity: true,
-    paymentActivity: true,
-    rescheduleRequests: true,
-  });
+  const { prefs: bellPrefs, isLoading, setPref } = useBellPreferences();
 
-  // Load preferences from localStorage
-  const loadPreferences = () => {
-    const stored = localStorage.getItem("notificationPreferences");
+  // Browser permission/visibility is per-device (OS permission state), so it
+  // stays in localStorage rather than on the server.
+  const [deviceBrowserPrefs, setDeviceBrowserPrefs] = useState<DeviceBrowserPrefs>(
+    () => ({
+      browserNotifications: notificationService.isEnabled(),
+    }),
+  );
 
-    // Get browser permission status
+  const loadDeviceBrowserPrefs = () => {
     const permission = notificationService.getPermissionStatus();
-
-    // Default browserNotifications based on permission status (matches NotificationBell logic)
-    const defaultBrowserNotifications = permission === "granted";
-
-    // Default preferences
-    const defaultPreferences: NotificationPreferences = {
-      browserNotifications: defaultBrowserNotifications,
-      emailNotifications: true,
-      smsNotifications: true,
-      emailActivity: true,
-      smsActivity: true,
-      proposalActivity: true,
-      photoActivity: true,
-      noteActivity: true,
-      quoteActivity: true,
-      jobStatusChanges: true,
-      leadActivity: true,
-      paymentActivity: true,
-      rescheduleRequests: true,
-    };
-
-    let parsedPreferences = defaultPreferences;
-
+    const stored = localStorage.getItem("notificationPreferences");
+    let storedBrowser: boolean | undefined;
     if (stored) {
       try {
         const parsed = JSON.parse(stored);
-        // Merge with defaults to ensure all keys exist
-        parsedPreferences = {
-          ...defaultPreferences,
-          ...parsed,
-        };
-      } catch (error) {
-        console.error("Error loading notification preferences:", error);
+        if (typeof parsed?.browserNotifications === "boolean") {
+          storedBrowser = parsed.browserNotifications;
+        }
+      } catch {
+        // ignore
       }
     }
-
-    // Final browser notification state based on permission
     const browserEnabled =
       permission === "denied"
         ? false
         : permission === "granted"
-          ? (parsedPreferences.browserNotifications ?? true)
+          ? (storedBrowser ?? true)
           : false;
-
-    setPreferences({
-      ...parsedPreferences,
-      browserNotifications: browserEnabled,
-    });
+    setDeviceBrowserPrefs({ browserNotifications: browserEnabled });
   };
 
   useEffect(() => {
-    loadPreferences();
+    loadDeviceBrowserPrefs();
   }, []);
 
-  // Listen for preference changes (same tab via custom event, cross-tab via storage event)
   useEffect(() => {
-    const handlePreferenceChange = () => {
-      loadPreferences();
-    };
-
-    // Same-tab changes
-    window.addEventListener(
-      "notificationPreferencesChanged",
-      handlePreferenceChange,
-    );
-    // Cross-tab changes
-    window.addEventListener("storage", handlePreferenceChange);
-
+    const handler = () => loadDeviceBrowserPrefs();
+    window.addEventListener("notificationPreferencesChanged", handler);
+    window.addEventListener("storage", handler);
     return () => {
-      window.removeEventListener(
-        "notificationPreferencesChanged",
-        handlePreferenceChange,
-      );
-      window.removeEventListener("storage", handlePreferenceChange);
+      window.removeEventListener("notificationPreferencesChanged", handler);
+      window.removeEventListener("storage", handler);
     };
   }, []);
 
-  const handleToggle = (key: keyof NotificationPreferences) => {
-    setPreferences((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
-      localStorage.setItem("notificationPreferences", JSON.stringify(updated));
-
-      // Notify other components in same tab
-      window.dispatchEvent(new Event("notificationPreferencesChanged"));
-
-      return updated;
-    });
+  const setLocalBrowserNotifications = (value: boolean) => {
+    const stored = localStorage.getItem("notificationPreferences");
+    let parsed: Record<string, unknown> = {};
+    if (stored) {
+      try {
+        parsed = JSON.parse(stored) || {};
+      } catch {
+        parsed = {};
+      }
+    }
+    parsed.browserNotifications = value;
+    localStorage.setItem("notificationPreferences", JSON.stringify(parsed));
+    window.dispatchEvent(new Event("notificationPreferencesChanged"));
+    setDeviceBrowserPrefs((p) => ({ ...p, browserNotifications: value }));
   };
 
   const handleEnableBrowserNotifications = async () => {
     const granted = await notificationService.requestPermission();
-
     if (granted) {
-      setPreferences((prev) => {
-        const updated = { ...prev, browserNotifications: true };
-        localStorage.setItem(
-          "notificationPreferences",
-          JSON.stringify(updated),
-        );
-
-        // Notify other components in same tab
-        window.dispatchEvent(new Event("notificationPreferencesChanged"));
-
-        return updated;
-      });
+      setLocalBrowserNotifications(true);
     } else {
       toast({
         title: "Permission denied",
@@ -185,7 +326,7 @@ export default function NotificationPreferences() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      {/* Browser Notifications */}
+      {/* Browser Notifications — per-device, OS permission */}
       <Card className="mb-6">
         <CardHeader>
           <div className="flex items-center gap-3">
@@ -195,7 +336,8 @@ export default function NotificationPreferences() {
             <div className="flex-1">
               <CardTitle>Browser Notifications</CardTitle>
               <CardDescription>
-                Receive desktop notifications when you're using the app
+                OS-level desktop / mobile push when notifications fire. This
+                setting is per-device.
               </CardDescription>
             </div>
           </div>
@@ -209,17 +351,19 @@ export default function NotificationPreferences() {
                 </Label>
                 <p className="text-sm text-muted-foreground mt-1">
                   {permissionStatus === "granted"
-                    ? "Browser notifications are enabled"
+                    ? "Browser notifications are enabled on this device"
                     : permissionStatus === "denied"
-                      ? "Browser notifications are blocked. Please enable them in your browser settings."
-                      : "Click to enable browser notifications"}
+                      ? "Browser notifications are blocked. Enable them in your browser settings to receive push alerts."
+                      : "Click to enable browser notifications on this device"}
                 </p>
               </div>
               {permissionStatus === "granted" ? (
                 <Switch
                   id="browser-notifications"
-                  checked={preferences.browserNotifications}
-                  onCheckedChange={() => handleToggle("browserNotifications")}
+                  checked={deviceBrowserPrefs.browserNotifications}
+                  onCheckedChange={(value) =>
+                    setLocalBrowserNotifications(value)
+                  }
                   data-testid="switch-browser-notifications"
                 />
               ) : (
@@ -237,270 +381,67 @@ export default function NotificationPreferences() {
         </CardContent>
       </Card>
 
-      {/* Diary Activity Notifications */}
-      <Card className="mb-6">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-              <FileText className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <CardTitle>Job Diary Activity</CardTitle>
-              <CardDescription>
-                These toggles also control what appears in the notification bell.
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="email-activity" className="font-medium">
-                    Email activity
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when emails are sent to customers
-                  </p>
-                </div>
+      {/* Bell preference sections — synced across devices via server */}
+      {PREF_SECTIONS.map((section) => (
+        <Card key={section.cardTitle} className="mb-6">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-10 h-10 rounded-full flex items-center justify-center ${section.iconBgClass} ${section.iconColorClass}`}
+              >
+                <section.cardIcon className="h-5 w-5" />
               </div>
-              <Switch
-                id="email-activity"
-                checked={preferences.emailActivity}
-                onCheckedChange={() => handleToggle("emailActivity")}
-                data-testid="switch-email-activity"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <MessageSquare className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="sms-activity" className="font-medium">
-                    SMS activity
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when SMS messages are sent to customers
-                  </p>
-                </div>
+              <div className="flex-1">
+                <CardTitle>{section.cardTitle}</CardTitle>
+                <CardDescription>{section.cardDescription}</CardDescription>
               </div>
-              <Switch
-                id="sms-activity"
-                checked={preferences.smsActivity}
-                onCheckedChange={() => handleToggle("smsActivity")}
-                data-testid="switch-sms-activity"
-              />
             </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="proposal-activity" className="font-medium">
-                    Proposals sent
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when proposals are sent to customers
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="proposal-activity"
-                checked={preferences.proposalActivity}
-                onCheckedChange={() => handleToggle("proposalActivity")}
-                data-testid="switch-proposal-activity"
-              />
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {section.toggles.map((toggle, index) => {
+                const checked = bellPrefs[toggle.type] !== false;
+                const Icon = toggle.icon;
+                return (
+                  <div key={toggle.type}>
+                    {index > 0 && <Separator className="mb-4" />}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Icon className="h-5 w-5 text-muted-foreground" />
+                        <div>
+                          <Label
+                            htmlFor={`pref-${toggle.type}`}
+                            className="font-medium"
+                          >
+                            {toggle.label}
+                          </Label>
+                          <p className="text-sm text-muted-foreground">
+                            {toggle.description}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        id={`pref-${toggle.type}`}
+                        checked={checked}
+                        disabled={isLoading}
+                        onCheckedChange={(value) => setPref(toggle.type, value)}
+                        data-testid={`switch-${toggle.type}`}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+          </CardContent>
+        </Card>
+      ))}
 
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Camera className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="photo-activity" className="font-medium">
-                    Photos added
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when photos are added to jobs
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="photo-activity"
-                checked={preferences.photoActivity}
-                onCheckedChange={() => handleToggle("photoActivity")}
-                data-testid="switch-photo-activity"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <StickyNote className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="note-activity" className="font-medium">
-                    Notes added
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when notes are added to jobs
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="note-activity"
-                checked={preferences.noteActivity}
-                onCheckedChange={() => handleToggle("noteActivity")}
-                data-testid="switch-note-activity"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Job Status & Business Activity */}
-      <Card className="mb-6">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
-              <CheckCircle className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <CardTitle>Business Activity</CardTitle>
-              <CardDescription>
-                Important business events and job status changes
-              </CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <FileText className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="quote-activity" className="font-medium">
-                    Quote activity
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify about quote acceptance, expiration, and status
-                    changes
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="quote-activity"
-                checked={preferences.quoteActivity}
-                onCheckedChange={() => handleToggle("quoteActivity")}
-                data-testid="switch-quote-activity"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Settings className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="job-status" className="font-medium">
-                    Job status changes
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when job status changes (scheduled, completed, etc.)
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="job-status"
-                checked={preferences.jobStatusChanges}
-                onCheckedChange={() => handleToggle("jobStatusChanges")}
-                data-testid="switch-job-status"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <User className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="lead-activity" className="font-medium">
-                    Lead activity
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    New leads, new conversations, and stale-lead reminders
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="lead-activity"
-                checked={preferences.leadActivity}
-                onCheckedChange={() => handleToggle("leadActivity")}
-                data-testid="switch-lead-activity"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <DollarSign className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="payment-activity" className="font-medium">
-                    Payments &amp; invoicing
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Payments received, invoices paid, and uninvoiced-job reminders
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="payment-activity"
-                checked={preferences.paymentActivity}
-                onCheckedChange={() => handleToggle("paymentActivity")}
-                data-testid="switch-payment-activity"
-              />
-            </div>
-
-            <Separator />
-
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Calendar className="h-5 w-5 text-muted-foreground" />
-                <div>
-                  <Label htmlFor="reschedule-requests" className="font-medium">
-                    Scheduling &amp; reminders
-                  </Label>
-                  <p className="text-sm text-muted-foreground">
-                    Reschedule requests, schedule proposals, stale quotes, and missing-crew alerts
-                  </p>
-                </div>
-              </div>
-              <Switch
-                id="reschedule-requests"
-                checked={preferences.rescheduleRequests}
-                onCheckedChange={() => handleToggle("rescheduleRequests")}
-                data-testid="switch-reschedule-requests"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Help Text */}
       <div className="bg-muted/50 rounded-lg p-4">
         <p className="text-sm text-muted-foreground">
-          <strong>Note:</strong> Browser notifications require permission from
-          your browser. You can change notification settings at any time. If
-          you've blocked notifications, you'll need to enable them in your
-          browser settings.
+          <strong>Heads up:</strong> Notification preferences are now synced
+          across your devices — toggle once on any device and it applies
+          everywhere. Browser notifications, above, are still per-device
+          because they depend on each browser's OS permission.
         </p>
       </div>
     </div>

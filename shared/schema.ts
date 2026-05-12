@@ -3768,7 +3768,13 @@ export const notificationPreferences = pgTable("notification_preferences", {
   // Communication notifications
   customerMessages: boolean("customer_messages").notNull().default(true),
   teamMessages: boolean("team_messages").notNull().default(true),
-  
+
+  // In-app bell preferences — per notification type. Key = notifications.type
+  // string (e.g. 'photo_added'), value = boolean visible. Missing key defaults
+  // to visible. The FCM-push fields above are a separate axis (delivery
+  // channel), not duplicated here.
+  bellPreferences: jsonb("bell_preferences").$type<Record<string, boolean>>().notNull().default(sql`'{}'::jsonb`),
+
   createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

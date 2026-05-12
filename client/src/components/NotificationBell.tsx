@@ -45,9 +45,8 @@ import { formatDistanceToNow } from "date-fns";
 import { notificationService } from "@/lib/notificationService";
 import { useToast } from "@/hooks/use-toast";
 import {
-  loadNotificationPrefs,
+  useBellPreferences,
   isNotificationVisible,
-  type NotificationPrefs,
 } from "@/lib/notificationFilter";
 
 interface NotificationWithDetails {
@@ -155,13 +154,13 @@ export function NotificationBell() {
 
   const [pushEnabled, setPushEnabled] = useState(getUserPreference());
   const [lastNotificationCount, setLastNotificationCount] = useState(0);
-  const [prefs, setPrefs] = useState<NotificationPrefs>(loadNotificationPrefs());
+  const { prefs } = useBellPreferences();
 
-  // Listen for preference changes (both same tab and other tabs)
+  // browserNotifications is still localStorage-driven (per-device OS permission),
+  // so keep listening for cross-tab changes to keep pushEnabled in sync.
   useEffect(() => {
     const refresh = () => {
       setPushEnabled(getUserPreference());
-      setPrefs(loadNotificationPrefs());
     };
 
     window.addEventListener("storage", refresh);
