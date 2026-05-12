@@ -1010,7 +1010,8 @@ async function generateInvoicePDFBuffer(
   invoiceData: any,
   job?: any,
   customer?: any,
-  template?: any
+  template?: any,
+  photos: string[] = []
 ): Promise<Buffer> {
   const PDFDocument = (await import('pdfkit')).default;
   // Import shared rendering contract (resolves camelCase DB fields + defaults)
@@ -1018,6 +1019,30 @@ async function generateInvoicePDFBuffer(
   // Resolve the default company logo filesystem path up-front (inside the Promise
   // executor we can't await) so the PDF header renders without extra async calls.
   const defaultLogoPath = await getCompanyLogoFilePath();
+
+  // Pre-fetch + re-encode photo buffers to JPEG (PDFKit only accepts JPEG/PNG).
+  // Done up-front because the PDFKit Promise executor below is synchronous.
+  // Originals are preferred over thumbnails so the PDF gets full-quality photos.
+  const photoBuffers: Buffer[] = [];
+  if (photos.length > 0) {
+    const photoStorage = new PhotoStorageService();
+    for (const photoUrl of photos) {
+      if (!photoUrl || !photoUrl.startsWith('/objects/photos/')) continue;
+      try {
+        const photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+        if (!photoData || !photoData.buffer) continue;
+        // Re-encode to JPEG (also fixes EXIF orientation) so PDFKit can embed it.
+        const jpegBuffer = await sharp(photoData.buffer)
+          .rotate()
+          .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        photoBuffers.push(jpegBuffer);
+      } catch (err) {
+        console.warn(`⚠️ Could not load photo for PDF embed: ${photoUrl}`, err);
+      }
+    }
+  }
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -1324,6 +1349,44 @@ async function generateInvoicePDFBuffer(
         }
         default:
           break;
+      }
+    }
+
+    // Job Photos — rendered after the standard blocks regardless of template config.
+    // Two photos per row, A4 portrait, paginated automatically.
+    if (photoBuffers.length > 0) {
+      const pageBottom = 800; // bottom margin guard (A4 height 842 - ~40 margin)
+      const startX = 40;
+      const tableW = 515;
+      const gap = 15;
+      const cellW = Math.floor((tableW - gap) / 2); // ~250
+      const cellH = Math.round(cellW * 0.75);       // 4:3 aspect
+
+      // Section heading
+      if (doc.y + 40 > pageBottom) doc.addPage();
+      doc.moveDown(0.5);
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000')
+        .text('Job Photos', startX, doc.y, { width: tableW });
+      doc.moveDown(0.3);
+      doc.moveTo(startX, doc.y).lineTo(startX + tableW, doc.y).lineWidth(0.5).stroke('#cccccc');
+      doc.moveDown(0.4);
+
+      for (let i = 0; i < photoBuffers.length; i += 2) {
+        if (doc.y + cellH > pageBottom) doc.addPage();
+        const rowY = doc.y;
+        try {
+          doc.image(photoBuffers[i], startX, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+        } catch (err) {
+          console.warn('⚠️ Failed to embed photo into PDF (left cell):', err);
+        }
+        if (photoBuffers[i + 1]) {
+          try {
+            doc.image(photoBuffers[i + 1], startX + cellW + gap, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+          } catch (err) {
+            console.warn('⚠️ Failed to embed photo into PDF (right cell):', err);
+          }
+        }
+        doc.y = rowY + cellH + 10;
       }
     }
 
@@ -8083,136 +8146,163 @@ Draft the reply now.`;
              </div>`
           : '';
 
+        // Email-safe layout: nested tables, not flexbox. Outlook / Hotmail / Apple-Mail
+        // inconsistently render `display: flex`, which is why the previous version showed
+        // up vertically-stacked and caused a horizontal side-scroll on iOS Hotmail.
+        const lineItemsRowsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
+          const itemTotal = item.total || item.amount;
+          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+          return `
+            <tr>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${item.quantity || 1}</td>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${item.description || ''}</td>
+              <td style="padding: 10px 8px; text-align: right; border-bottom: 1px solid #ddd; vertical-align: top; white-space: nowrap;">${formatCurrency(total)}</td>
+            </tr>
+          `;
+        }).join('') : `
+            <tr>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">1</td>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
+              <td style="padding: 10px 8px; text-align: right; border-bottom: 1px solid #ddd; vertical-align: top; white-space: nowrap;">${formatCurrency(subtotal)}</td>
+            </tr>
+        `;
+
+        const dueDateFormatted = invoiceDetails.dueDate
+          ? new Date(invoiceDetails.dueDate).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
+          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
+
         invoiceHtml = `
-        <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
-          <!-- Header with Logo and Company Info -->
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #000;">
-            <div>
-              ${logoBlockHtml}
-            </div>
-            <div style="text-align: right; font-size: 13px;">
-              <div style="font-weight: bold; margin-bottom: 8px;">Treemarkables LTD</div>
-              <div>GST Number: 33 047 160 882</div>
-              <div>213 Stanley Road</div>
-              <div>Gisborne 4010</div>
-              <div style="margin-top: 8px;">Phone: 027 216 6882</div>
-              <div>Email: info@treemarkables.nz</div>
-            </div>
-          </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 640px; margin: 0 auto; background: #ffffff; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #000;">
+          <tr>
+            <td style="padding: 24px;">
 
-          ${pdfDownloadBanner}
-
-          <!-- Invoice Type and Details -->
-          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div>
-              <div style="font-size: 24px; font-weight: bold; margin-bottom: 12px;">TAX INVOICE</div>
-              <div style="margin-bottom: 4px;"><strong>Invoice No.:</strong> ${invoiceDetails.invoiceNumber || ''}</div>
-              <div style="margin-bottom: 4px;"><strong>Cust Order No.:</strong> ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}</div>
-              <div><strong>Date:</strong> ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-weight: bold; margin-bottom: 8px;">Bill To:</div>
-              <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
-              ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
-              ${customer?.email ? `<div>${customer.email}</div>` : ''}
-            </div>
-          </div>
-
-          <!-- Work Carried Out At -->
-          ${invoiceDetails.address || job?.address ? `
-          <div style="margin-bottom: 20px; padding: 12px; background: #f5f5f5;">
-            <strong>WORK CARRIED OUT AT</strong> ${invoiceDetails.address || job?.address}
-          </div>
-          ` : ''}
-
-          <!-- Line Items Table -->
-          <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
-            <thead>
-              <tr style="border-bottom: 2px solid #000;">
-                <th style="text-align: left; padding: 12px 8px; font-weight: bold;">QTY</th>
-                <th style="text-align: left; padding: 12px 8px; font-weight: bold;">DESCRIPTION</th>
-                <th style="text-align: right; padding: 12px 8px; font-weight: bold;">PRICE</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
-                const itemTotal = item.total || item.amount;
-                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
-                return `
-                <tr style="border-bottom: 1px solid #ddd;">
-                  <td style="padding: 12px 8px; text-align: left;">${item.quantity || 1}</td>
-                  <td style="padding: 12px 8px; text-align: left;">${item.description || ''}</td>
-                  <td style="padding: 12px 8px; text-align: right;">${formatCurrency(total)}</td>
+              <!-- Header: logo (left) + company info (right) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px; border-bottom: 2px solid #000;">
+                <tr>
+                  <td width="50%" valign="top" style="padding-bottom: 16px;">
+                    ${logoBlockHtml}
+                  </td>
+                  <td width="50%" valign="top" align="right" style="padding-bottom: 16px; font-size: 12px;">
+                    <div style="font-weight: bold; margin-bottom: 6px;">Treemarkables LTD</div>
+                    <div>GST Number: 33 047 160 882</div>
+                    <div>213 Stanley Road</div>
+                    <div>Gisborne 4010</div>
+                    <div style="margin-top: 6px;">Phone: 027 216 6882</div>
+                    <div>Email: info@treemarkables.nz</div>
+                  </td>
                 </tr>
-                `;
-              }).join('') : `
-                <tr style="border-bottom: 1px solid #ddd;">
-                  <td style="padding: 12px 8px;">1</td>
-                  <td style="padding: 12px 8px;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
-                  <td style="padding: 12px 8px; text-align: right;">${formatCurrency(subtotal)}</td>
+              </table>
+
+              ${pdfDownloadBanner}
+
+              <!-- Invoice meta + Bill To -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td width="55%" valign="top">
+                    <div style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">TAX INVOICE</div>
+                    <div style="margin-bottom: 4px;"><strong>Invoice No.:</strong> ${invoiceDetails.invoiceNumber || ''}</div>
+                    <div style="margin-bottom: 4px;"><strong>Cust Order No.:</strong> ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}</div>
+                    <div><strong>Date:</strong> ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</div>
+                  </td>
+                  <td width="45%" valign="top" align="right">
+                    <div style="font-weight: bold; margin-bottom: 6px;">Bill To:</div>
+                    <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
+                    ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
+                    ${customer?.email ? `<div style="word-break: break-all;">${customer.email}</div>` : ''}
+                  </td>
                 </tr>
-              `}
-            </tbody>
-          </table>
+              </table>
 
-          <!-- Totals Section -->
-          <div style="display: flex; justify-content: flex-end; margin-bottom: 30px;">
-            <div style="width: 300px;">
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
-                <span>SUBTOTAL</span>
-                <span>${formatCurrency(subtotal)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
-                <span>GST</span>
-                <span>${formatCurrency(gstAmount)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 16px;">
-                <span>TOTAL</span>
-                <span>${formatCurrency(totalAmount)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
-                <span>PAID</span>
-                <span>$0.00</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold;">
-                <span>BALANCE DUE</span>
-                <span>${formatCurrency(totalAmount)}</span>
-              </div>
-            </div>
-          </div>
+              <!-- Work Carried Out At -->
+              ${invoiceDetails.address || job?.address ? `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
+                <tr>
+                  <td style="padding: 10px 12px; background: #f5f5f5;">
+                    <strong>WORK CARRIED OUT AT</strong> ${invoiceDetails.address || job?.address}
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
 
-          <!-- Work Completed -->
-          <div style="margin-bottom: 20px;">
-            <strong>WORK COMPLETED</strong>
-          </div>
+              <!-- Line Items -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000; width: 60px;">QTY</th>
+                    <th align="left" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000;">DESCRIPTION</th>
+                    <th align="right" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000; width: 100px;">PRICE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${lineItemsRowsHtml}
+                </tbody>
+              </table>
 
-          <!-- Payment and Terms -->
-          <div style="margin-bottom: 20px;">
-            <div style="font-weight: bold; margin-bottom: 8px;">How to Pay</div>
-            <div style="margin-bottom: 6px;">We accept payment by: Cash and bank transfer</div>
-          </div>
+              <!-- Totals (right-aligned via nested table) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td align="right">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="260" style="border-collapse: collapse;">
+                      <tr>
+                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">SUBTOTAL</td>
+                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">${formatCurrency(subtotal)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">GST</td>
+                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">${formatCurrency(gstAmount)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 10px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 15px;">TOTAL</td>
+                        <td align="right" style="padding: 10px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 15px; white-space: nowrap;">${formatCurrency(totalAmount)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">PAID</td>
+                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">$0.00</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; font-weight: bold;">BALANCE DUE</td>
+                        <td align="right" style="padding: 6px 0; font-weight: bold; white-space: nowrap;">${formatCurrency(totalAmount)}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
-          <!-- Bank Details -->
-          <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-            <div>
-              <div style="font-weight: bold; margin-bottom: 4px;">Bank Details</div>
-              <div>Account Name: Treemarkables</div>
-              <div>Account Number:</div>
-              <div>06 0637 0768850 00</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-weight: bold; margin-bottom: 4px;">Cheque</div>
-              <div>Harora st.</div>
-              <div>Gisborne</div>
-              <div>4010</div>
-            </div>
-          </div>
+              <!-- Work Completed -->
+              <div style="margin-bottom: 16px;"><strong>WORK COMPLETED</strong></div>
 
-          <!-- Footer -->
-          <div style="text-align: center; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
-            Payment due within 7 days · Due: ${invoiceDetails.dueDate ? new Date(invoiceDetails.dueDate).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-        </div>
+              <!-- Payment and Terms -->
+              <div style="margin-bottom: 16px;">
+                <div style="font-weight: bold; margin-bottom: 6px;">How to Pay</div>
+                <div>We accept payment by: Cash and bank transfer</div>
+              </div>
+
+              <!-- Bank Details (left) + Cheque (right) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td width="55%" valign="top">
+                    <div style="font-weight: bold; margin-bottom: 4px;">Bank Details</div>
+                    <div>Account Name: Treemarkables</div>
+                    <div>Account Number:</div>
+                    <div>06 0637 0768850 00</div>
+                  </td>
+                  <td width="45%" valign="top" align="right">
+                    <div style="font-weight: bold; margin-bottom: 4px;">Cheque</div>
+                    <div>Harora st.</div>
+                    <div>Gisborne</div>
+                    <div>4010</div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Footer -->
+              <div style="text-align: center; padding-top: 16px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+                Payment due within 7 days &middot; Due: ${dueDateFormatted}
+              </div>
+
+            </td>
+          </tr>
+        </table>
         `;
       }
       
@@ -8248,7 +8338,10 @@ Draft the reply now.`;
           const invoiceTemplateRows = await db.select().from(documentTemplates)
             .where(eq(documentTemplates.type, 'invoice')).limit(1);
           const invoiceTemplate = invoiceTemplateRows[0] || null;
-          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate);
+          const pdfPhotos = Array.isArray(selectedPhotos)
+            ? selectedPhotos.filter((p: any) => typeof p === 'string' && p.startsWith('/objects/photos/'))
+            : [];
+          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate, pdfPhotos);
           emailAttachments.push({
             content: pdfBuffer.toString('base64'),
             filename: `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`,
@@ -9861,9 +9954,17 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const invoiceTemplateRows2 = await db.select().from(documentTemplates)
         .where(eq(documentTemplates.type, 'invoice')).limit(1);
       const invoiceTemplate2 = invoiceTemplateRows2[0] || null;
-      
+
+      // Photos for the PDF: include the job's after-photos (completion photos) and
+      // before-photos. This is what customers downloading the PDF via the email link
+      // expect to see — the visual record of the work that was invoiced.
+      const jobPhotosForPdf: string[] = [
+        ...((job?.afterPhotos as string[] | null) || []),
+        ...((job?.beforePhotos as string[] | null) || []),
+      ].filter((p): p is string => typeof p === 'string' && p.startsWith('/objects/photos/'));
+
       // Generate PDF using the shared helper (same code as email attachment)
-      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2);
+      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2, jobPhotosForPdf);
 
       res.setHeader('Content-Type', 'application/pdf');
       // Inline so the PDF renders in-browser when customers click the email link
