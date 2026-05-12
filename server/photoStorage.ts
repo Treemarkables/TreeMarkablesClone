@@ -70,7 +70,9 @@ async function burnLabel(
     <text x="${padX}" y="${Math.round(fontSize + padY * 0.7)}" font-family="Inter, Arial, sans-serif"
           font-size="${fontSize}" font-weight="800" fill="black" letter-spacing="${letterSpacing}">${label}</text>
   </svg>`;
-  const left = Math.max(offset, w - boxW - offset);
+  // Keep the badge clear of the left edge so it isn't clipped by FB ad / Reels
+  // safe zones — ~4% of frame width sits inside the recommended margin.
+  const left = Math.max(offset, Math.round(w * 0.04));
   const top = Math.min(Math.max(offset, opts?.topInset ?? offset), Math.max(offset, h - boxH - offset));
   return sharp(buffer)
     .composite([{ input: Buffer.from(svg), top, left }])
@@ -119,13 +121,13 @@ export async function composeBeforeAfter(
   ]);
   // The BEFORE half sits at the very top of the 9:16 frame, which Facebook /
   // Instagram Reels covers with the iOS status bar + Reels header overlay
-  // (~12% of frame height). Push the BEFORE badge down into the safe zone so
-  // it isn't hidden once the post is opened. AFTER is mid-screen so the
-  // default top offset is fine.
-  const beforeSafeTopInset = Math.round(targetH * 0.12);
+  // (~12% of frame height). Push BEFORE down into the safe zone, and mirror
+  // the same top inset on AFTER so both badges sit at the same vertical
+  // position inside their respective halves.
+  const labelTopInset = Math.round(targetH * 0.12);
   const [topBuf, bottomBuf] = await Promise.all([
-    burnLabel(topResized, "BEFORE", { topInset: beforeSafeTopInset }),
-    burnLabel(bottomResized, "AFTER"),
+    burnLabel(topResized, "BEFORE", { topInset: labelTopInset }),
+    burnLabel(bottomResized, "AFTER", { topInset: labelTopInset }),
   ]);
 
   const footerFontSize = 34;
