@@ -21,8 +21,21 @@ export default function Login() {
     // Read from the form directly so browser-autofilled values are picked up
     // even when the React onChange never fired (Chrome/Safari autofill quirk).
     const form = e.currentTarget;
-    const email = (form.elements.namedItem('email') as HTMLInputElement | null)?.value?.trim() ?? '';
-    const password = (form.elements.namedItem('password') as HTMLInputElement | null)?.value ?? '';
+    const readField = (name: string) =>
+      (form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? '';
+
+    let email = readField('email').trim();
+    let password = readField('password');
+
+    // Password managers (Google PW Manager / Touch-ID flow) sometimes fire the
+    // form's submit a tick before the autofilled values have propagated to
+    // the input's .value. If we read empty fields right now, wait a beat and
+    // try again instead of bouncing the user with "please enter both".
+    if (!email || !password) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      email = readField('email').trim();
+      password = readField('password');
+    }
 
     if (!email || !password) {
       setError('Please enter both email and password');
