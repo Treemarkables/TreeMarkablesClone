@@ -162,6 +162,12 @@ export function useBellPreferences() {
       }
       return serverPrefs;
     },
+    // The global queryClient defaults set refetchInterval: 30000, which would
+    // race against in-flight mutations and could clobber a freshly-saved
+    // toggle with the pre-mutation server state. Bell prefs only change from
+    // user input on this device, so no background polling is needed.
+    refetchInterval: false,
+    refetchOnWindowFocus: false,
     staleTime: 30_000,
     retry: 1,
   });
@@ -191,7 +197,12 @@ export function useBellPreferences() {
     isLoading: query.isLoading,
     isError: query.isError,
     setPref: (type: NotificationType, visible: boolean) => {
-      const next: BellPreferences = { ...prefs };
+      // Read latest from the cache, not the render-time closure, so two
+      // toggles fired in the same frame don't each start from the same stale
+      // base and clobber each other on the server.
+      const latest =
+        queryClient.getQueryData<BellPreferences>(QUERY_KEY) ?? prefs;
+      const next: BellPreferences = { ...latest };
       if (visible) {
         delete next[type];
       } else {
