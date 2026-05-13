@@ -1611,6 +1611,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
 
+          // Migration safety: kill any legacy domain-scoped session cookie
+          // (.treemarkables.co.nz) that may still be in the browser jar from
+          // before the host-only cookie migration. Without this, the browser
+          // sends both old and new cookies and the server can read the old
+          // (invalid) one first, returning 401 and forcing a second login.
+          res.clearCookie('treemarkables.sid', {
+            path: '/',
+            httpOnly: true,
+            secure: true,
+            sameSite: 'none',
+            domain: '.treemarkables.co.nz',
+          });
+
           res.json({
             success: true,
             data: {
@@ -1703,6 +1716,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         httpOnly: true,
         secure: true,
         sameSite: 'none',
+      });
+      // Also clear the legacy domain-scoped variant so browsers that still
+      // have it from before the host-only migration don't send it on the
+      // next login and confuse the session lookup.
+      res.clearCookie('treemarkables.sid', {
+        path: '/',
+        httpOnly: true,
+        secure: true,
+        sameSite: 'none',
+        domain: '.treemarkables.co.nz',
       });
       
       res.json({
