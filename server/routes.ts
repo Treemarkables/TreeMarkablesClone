@@ -1006,11 +1006,57 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
 // Accepts either a DB invoice record (.items) or frontend invoice data
 // (.lineItems) so it works whether or not the invoice has been saved to the DB.
 // ---------------------------------------------------------------------------
+// Photo URLs in this codebase come in two flavours:
+//   • `/objects/photos/{name}` — uploaded via PhotoStorageService, lives in GCS
+//   • `/photos/{name}`         — uploaded via /api/jobs/:id/photos/batch, lives
+//                                on the local uploads/ disk
+// Anything that needs the actual bytes (PDF embedding, inline-CID email images)
+// has to be able to load both. This helper returns the buffer + content-type for
+// either format, or null if the path doesn't match or the file is missing.
+async function loadPhotoBytesForAttachment(
+  photoUrl: string,
+  storage?: PhotoStorageService,
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  if (!photoUrl || typeof photoUrl !== 'string') return null;
+  try {
+    if (photoUrl.startsWith('/objects/photos/')) {
+      const svc = storage || new PhotoStorageService();
+      const data = await svc.downloadPhotoBuffer(photoUrl);
+      if (data?.buffer) return { buffer: data.buffer, contentType: data.contentType || 'image/jpeg' };
+      return null;
+    }
+    if (photoUrl.startsWith('/photos/')) {
+      const fileName = photoUrl.slice('/photos/'.length);
+      // Strip any directory traversal — express.static blocks it but we read raw
+      if (fileName.includes('..') || fileName.includes('/')) return null;
+      const filePath = path.join(photosDir, fileName);
+      if (!fs.existsSync(filePath)) return null;
+      const buffer = fs.readFileSync(filePath);
+      const ext = path.extname(fileName).toLowerCase();
+      const contentType = ext === '.png' ? 'image/png'
+        : ext === '.webp' ? 'image/webp'
+        : ext === '.heic' || ext === '.heif' ? 'image/heic'
+        : 'image/jpeg';
+      return { buffer, contentType };
+    }
+    return null;
+  } catch (err) {
+    console.warn(`⚠️ Could not load photo bytes for ${photoUrl}:`, err);
+    return null;
+  }
+}
+
+// Returns true if a photo URL is one we know how to load (either GCS or local).
+function isSupportedPhotoUrl(p: unknown): p is string {
+  return typeof p === 'string' && (p.startsWith('/objects/photos/') || p.startsWith('/photos/'));
+}
+
 async function generateInvoicePDFBuffer(
   invoiceData: any,
   job?: any,
   customer?: any,
-  template?: any
+  template?: any,
+  photos: string[] = []
 ): Promise<Buffer> {
   const PDFDocument = (await import('pdfkit')).default;
   // Import shared rendering contract (resolves camelCase DB fields + defaults)
@@ -1018,6 +1064,31 @@ async function generateInvoicePDFBuffer(
   // Resolve the default company logo filesystem path up-front (inside the Promise
   // executor we can't await) so the PDF header renders without extra async calls.
   const defaultLogoPath = await getCompanyLogoFilePath();
+
+  // Pre-fetch + re-encode photo buffers to JPEG (PDFKit only accepts JPEG/PNG).
+  // Done up-front because the PDFKit Promise executor below is synchronous.
+  // Originals are preferred over thumbnails so the PDF gets full-quality photos.
+  const photoBuffers: Buffer[] = [];
+  if (photos.length > 0) {
+    const photoStorage = new PhotoStorageService();
+    for (const photoUrl of photos) {
+      if (!isSupportedPhotoUrl(photoUrl)) continue;
+      try {
+        const photoData = await loadPhotoBytesForAttachment(photoUrl, photoStorage);
+        if (!photoData?.buffer) continue;
+        // Re-encode to JPEG (also fixes EXIF orientation, handles HEIC/webp) so
+        // PDFKit can embed it.
+        const jpegBuffer = await sharp(photoData.buffer)
+          .rotate()
+          .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80 })
+          .toBuffer();
+        photoBuffers.push(jpegBuffer);
+      } catch (err) {
+        console.warn(`⚠️ Could not load photo for PDF embed: ${photoUrl}`, err);
+      }
+    }
+  }
 
   return new Promise<Buffer>((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -1324,6 +1395,44 @@ async function generateInvoicePDFBuffer(
         }
         default:
           break;
+      }
+    }
+
+    // Job Photos — rendered after the standard blocks regardless of template config.
+    // Two photos per row, A4 portrait, paginated automatically.
+    if (photoBuffers.length > 0) {
+      const pageBottom = 800; // bottom margin guard (A4 height 842 - ~40 margin)
+      const startX = 40;
+      const tableW = 515;
+      const gap = 15;
+      const cellW = Math.floor((tableW - gap) / 2); // ~250
+      const cellH = Math.round(cellW * 0.75);       // 4:3 aspect
+
+      // Section heading
+      if (doc.y + 40 > pageBottom) doc.addPage();
+      doc.moveDown(0.5);
+      doc.fontSize(11).font('Helvetica-Bold').fillColor('#000000')
+        .text('Job Photos', startX, doc.y, { width: tableW });
+      doc.moveDown(0.3);
+      doc.moveTo(startX, doc.y).lineTo(startX + tableW, doc.y).lineWidth(0.5).stroke('#cccccc');
+      doc.moveDown(0.4);
+
+      for (let i = 0; i < photoBuffers.length; i += 2) {
+        if (doc.y + cellH > pageBottom) doc.addPage();
+        const rowY = doc.y;
+        try {
+          doc.image(photoBuffers[i], startX, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+        } catch (err) {
+          console.warn('⚠️ Failed to embed photo into PDF (left cell):', err);
+        }
+        if (photoBuffers[i + 1]) {
+          try {
+            doc.image(photoBuffers[i + 1], startX + cellW + gap, rowY, { fit: [cellW, cellH], align: 'center', valign: 'center' });
+          } catch (err) {
+            console.warn('⚠️ Failed to embed photo into PDF (right cell):', err);
+          }
+        }
+        doc.y = rowY + cellH + 10;
       }
     }
 
@@ -8004,6 +8113,42 @@ Draft the reply now.`;
         quote = await storage.getQuote(quoteId);
       }
 
+      // Persist sender-selected photos onto the invoice itself so they show up
+      // on every downstream surface — the customer's online invoice view
+      // (/invoice/:id reads invoice_sections.images), the PDF served by
+      // /api/invoices/:id/pdf (the Microsoft download-link fallback), and any
+      // future re-send of the same invoice. Without this, the photos only ever
+      // exist as transient CID attachments on the outgoing email.
+      const photosToPersist: string[] = Array.isArray(selectedPhotos)
+        ? selectedPhotos.filter(isSupportedPhotoUrl)
+        : [];
+      if (invoice && photosToPersist.length > 0) {
+        try {
+          const existingSections = await storage.getInvoiceSectionsByInvoice(invoice.id);
+          const existingPhotoSection = existingSections.find(s => s.sectionType === 'photos');
+          if (existingPhotoSection) {
+            // Merge new photos with existing, dedup, preserve insertion order
+            const merged = Array.from(new Set([...(existingPhotoSection.images || []), ...photosToPersist]));
+            await storage.updateInvoiceSection(existingPhotoSection.id, { images: merged });
+            console.log(`📎 Updated invoice photo section ${existingPhotoSection.id} → ${merged.length} photo(s)`);
+          } else {
+            const nextSortOrder = existingSections.reduce((max, s) => Math.max(max, s.sortOrder ?? 0), -1) + 1;
+            const created = await storage.createInvoiceSection({
+              invoiceId: invoice.id,
+              sectionType: 'photos',
+              title: 'Job Photos',
+              content: '',
+              images: photosToPersist,
+              sortOrder: nextSortOrder,
+              isVisible: true,
+            });
+            console.log(`📎 Created invoice photo section ${created.id} with ${photosToPersist.length} photo(s)`);
+          }
+        } catch (sectionErr) {
+          console.error('Error persisting selected photos to invoice sections:', sectionErr);
+        }
+      }
+
       // Reply-To is handled by emailService default (info@treemarkables.nz)
 
       // Generate invoice HTML if invoice data is available
@@ -8073,146 +8218,175 @@ Draft the reply now.`;
         // replacing the logo with text is no longer required.
         const logoBlockHtml = `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
 
-        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF attachment
-        // is stripped by their spam filters regardless of inline-image presence. We replace the
-        // attachment with a prominent download button that fetches the PDF from the public endpoint.
+        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF
+        // attachment is silently stripped by their spam filters. Instead of attaching
+        // the PDF, we surface a single banner that links to the online invoice page
+        // — that page renders the photos in-browser and exposes its own "Download PDF"
+        // button, so one link is enough.
         const pdfDownloadBanner = (recipientIsMicrosoft && invoiceDetails?.id)
           ? `<div style="margin: 0 0 30px 0; padding: 18px 20px; background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; text-align: center;">
-               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">Your invoice PDF is ready to download</div>
-               <a href="https://app.treemarkables.co.nz/api/invoices/${invoiceDetails.id}/pdf" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">Download Invoice PDF</a>
+               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">View your invoice online to see photos and download the PDF</div>
+               <a href="https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">View invoice online</a>
              </div>`
           : '';
 
+        // Email-safe layout: nested tables, not flexbox. Outlook / Hotmail / Apple-Mail
+        // inconsistently render `display: flex`, which is why the previous version showed
+        // up vertically-stacked and caused a horizontal side-scroll on iOS Hotmail.
+        const lineItemsRowsHtml = lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
+          const itemTotal = item.total || item.amount;
+          const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
+          return `
+            <tr>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${item.quantity || 1}</td>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${item.description || ''}</td>
+              <td style="padding: 10px 8px; text-align: right; border-bottom: 1px solid #ddd; vertical-align: top; white-space: nowrap;">${formatCurrency(total)}</td>
+            </tr>
+          `;
+        }).join('') : `
+            <tr>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">1</td>
+              <td style="padding: 10px 8px; text-align: left; border-bottom: 1px solid #ddd; vertical-align: top;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
+              <td style="padding: 10px 8px; text-align: right; border-bottom: 1px solid #ddd; vertical-align: top; white-space: nowrap;">${formatCurrency(subtotal)}</td>
+            </tr>
+        `;
+
+        const dueDateFormatted = invoiceDetails.dueDate
+          ? new Date(invoiceDetails.dueDate).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })
+          : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' });
+
         invoiceHtml = `
-        <div style="max-width: 900px; margin: 0 auto; padding: 40px; background: white; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5;">
-          <!-- Header with Logo and Company Info -->
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 20px; border-bottom: 2px solid #000;">
-            <div>
-              ${logoBlockHtml}
-            </div>
-            <div style="text-align: right; font-size: 13px;">
-              <div style="font-weight: bold; margin-bottom: 8px;">Treemarkables LTD</div>
-              <div>GST Number: 33 047 160 882</div>
-              <div>213 Stanley Road</div>
-              <div>Gisborne 4010</div>
-              <div style="margin-top: 8px;">Phone: 027 216 6882</div>
-              <div>Email: info@treemarkables.nz</div>
-            </div>
-          </div>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 640px; margin: 0 auto; background: #ffffff; font-family: Arial, sans-serif; font-size: 14px; line-height: 1.5; color: #000;">
+          <tr>
+            <td style="padding: 24px;">
 
-          ${pdfDownloadBanner}
-
-          <!-- Invoice Type and Details -->
-          <div style="display: flex; justify-content: space-between; margin-bottom: 30px;">
-            <div>
-              <div style="font-size: 24px; font-weight: bold; margin-bottom: 12px;">TAX INVOICE</div>
-              <div style="margin-bottom: 4px;"><strong>Invoice No.:</strong> ${invoiceDetails.invoiceNumber || ''}</div>
-              <div style="margin-bottom: 4px;"><strong>Cust Order No.:</strong> ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}</div>
-              <div><strong>Date:</strong> ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-weight: bold; margin-bottom: 8px;">Bill To:</div>
-              <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
-              ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
-              ${customer?.email ? `<div>${customer.email}</div>` : ''}
-            </div>
-          </div>
-
-          <!-- Work Carried Out At -->
-          ${invoiceDetails.address || job?.address ? `
-          <div style="margin-bottom: 20px; padding: 12px; background: #f5f5f5;">
-            <strong>WORK CARRIED OUT AT</strong> ${invoiceDetails.address || job?.address}
-          </div>
-          ` : ''}
-
-          <!-- Line Items Table -->
-          <table style="width: 100%; margin-bottom: 20px; border-collapse: collapse;">
-            <thead>
-              <tr style="border-bottom: 2px solid #000;">
-                <th style="text-align: left; padding: 12px 8px; font-weight: bold;">QTY</th>
-                <th style="text-align: left; padding: 12px 8px; font-weight: bold;">DESCRIPTION</th>
-                <th style="text-align: right; padding: 12px 8px; font-weight: bold;">PRICE</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${lineItems && lineItems.length > 0 ? lineItems.map((item: any) => {
-                const itemTotal = item.total || item.amount;
-                const total = typeof itemTotal === 'string' ? parseFloat(itemTotal) : (itemTotal || 0);
-                return `
-                <tr style="border-bottom: 1px solid #ddd;">
-                  <td style="padding: 12px 8px; text-align: left;">${item.quantity || 1}</td>
-                  <td style="padding: 12px 8px; text-align: left;">${item.description || ''}</td>
-                  <td style="padding: 12px 8px; text-align: right;">${formatCurrency(total)}</td>
+              <!-- Header: logo (left) + company info (right) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px; border-bottom: 2px solid #000;">
+                <tr>
+                  <td width="50%" valign="top" style="padding-bottom: 16px;">
+                    ${logoBlockHtml}
+                  </td>
+                  <td width="50%" valign="top" align="right" style="padding-bottom: 16px; font-size: 12px;">
+                    <div style="font-weight: bold; margin-bottom: 6px;">Treemarkables LTD</div>
+                    <div>GST Number: 33 047 160 882</div>
+                    <div>213 Stanley Road</div>
+                    <div>Gisborne 4010</div>
+                    <div style="margin-top: 6px;">Phone: 027 216 6882</div>
+                    <div>Email: info@treemarkables.nz</div>
+                  </td>
                 </tr>
-                `;
-              }).join('') : `
-                <tr style="border-bottom: 1px solid #ddd;">
-                  <td style="padding: 12px 8px;">1</td>
-                  <td style="padding: 12px 8px;">${invoiceDetails.notes || invoiceDetails.jobTitle || 'Tree Service'}</td>
-                  <td style="padding: 12px 8px; text-align: right;">${formatCurrency(subtotal)}</td>
+              </table>
+
+              ${pdfDownloadBanner}
+
+              <!-- Invoice meta + Bill To -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td width="55%" valign="top">
+                    <div style="font-size: 22px; font-weight: bold; margin-bottom: 10px;">TAX INVOICE</div>
+                    <div style="margin-bottom: 4px;"><strong>Invoice No.:</strong> ${invoiceDetails.invoiceNumber || ''}</div>
+                    <div style="margin-bottom: 4px;"><strong>Cust Order No.:</strong> ${job?.jobNumber ? 'Job #' + job.jobNumber : 'N/A'}</div>
+                    <div><strong>Date:</strong> ${formatDate(invoiceDetails.issueDate) || formatDate(new Date())}</div>
+                  </td>
+                  <td width="45%" valign="top" align="right">
+                    <div style="font-weight: bold; margin-bottom: 6px;">Bill To:</div>
+                    <div>${job?.billingNameOverride || invoiceDetails?.contactName || customer?.name || 'Customer'}</div>
+                    ${customer?.phone ? `<div>${customer.phone}</div>` : ''}
+                    ${customer?.email ? `<div style="word-break: break-all;">${customer.email}</div>` : ''}
+                  </td>
                 </tr>
-              `}
-            </tbody>
-          </table>
+              </table>
 
-          <!-- Totals Section -->
-          <div style="display: flex; justify-content: flex-end; margin-bottom: 30px;">
-            <div style="width: 300px;">
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
-                <span>SUBTOTAL</span>
-                <span>${formatCurrency(subtotal)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
-                <span>GST</span>
-                <span>${formatCurrency(gstAmount)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 16px;">
-                <span>TOTAL</span>
-                <span>${formatCurrency(totalAmount)}</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #ddd;">
-                <span>PAID</span>
-                <span>$0.00</span>
-              </div>
-              <div style="display: flex; justify-content: space-between; padding: 8px 0; font-weight: bold;">
-                <span>BALANCE DUE</span>
-                <span>${formatCurrency(totalAmount)}</span>
-              </div>
-            </div>
-          </div>
+              <!-- Work Carried Out At -->
+              ${invoiceDetails.address || job?.address ? `
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
+                <tr>
+                  <td style="padding: 10px 12px; background: #f5f5f5;">
+                    <strong>WORK CARRIED OUT AT</strong> ${invoiceDetails.address || job?.address}
+                  </td>
+                </tr>
+              </table>
+              ` : ''}
 
-          <!-- Work Completed -->
-          <div style="margin-bottom: 20px;">
-            <strong>WORK COMPLETED</strong>
-          </div>
+              <!-- Line Items -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 20px;">
+                <thead>
+                  <tr>
+                    <th align="left" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000; width: 60px;">QTY</th>
+                    <th align="left" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000;">DESCRIPTION</th>
+                    <th align="right" style="padding: 10px 8px; font-weight: bold; border-bottom: 2px solid #000; width: 100px;">PRICE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${lineItemsRowsHtml}
+                </tbody>
+              </table>
 
-          <!-- Payment and Terms -->
-          <div style="margin-bottom: 20px;">
-            <div style="font-weight: bold; margin-bottom: 8px;">How to Pay</div>
-            <div style="margin-bottom: 6px;">We accept payment by: Cash and bank transfer</div>
-          </div>
+              <!-- Totals (right-aligned via nested table) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td align="right">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="260" style="border-collapse: collapse;">
+                      <tr>
+                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">SUBTOTAL</td>
+                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">${formatCurrency(subtotal)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">GST</td>
+                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">${formatCurrency(gstAmount)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 10px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 15px;">TOTAL</td>
+                        <td align="right" style="padding: 10px 0; border-bottom: 2px solid #000; font-weight: bold; font-size: 15px; white-space: nowrap;">${formatCurrency(totalAmount)}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; border-bottom: 1px solid #ddd;">PAID</td>
+                        <td align="right" style="padding: 6px 0; border-bottom: 1px solid #ddd; white-space: nowrap;">$0.00</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 6px 0; font-weight: bold;">BALANCE DUE</td>
+                        <td align="right" style="padding: 6px 0; font-weight: bold; white-space: nowrap;">${formatCurrency(totalAmount)}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
 
-          <!-- Bank Details -->
-          <div style="display: flex; justify-content: space-between; margin-bottom: 20px;">
-            <div>
-              <div style="font-weight: bold; margin-bottom: 4px;">Bank Details</div>
-              <div>Account Name: Treemarkables</div>
-              <div>Account Number:</div>
-              <div>06 0637 0768850 00</div>
-            </div>
-            <div style="text-align: right;">
-              <div style="font-weight: bold; margin-bottom: 4px;">Cheque</div>
-              <div>Harora st.</div>
-              <div>Gisborne</div>
-              <div>4010</div>
-            </div>
-          </div>
+              <!-- Work Completed -->
+              <div style="margin-bottom: 16px;"><strong>WORK COMPLETED</strong></div>
 
-          <!-- Footer -->
-          <div style="text-align: center; padding-top: 20px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
-            Payment due within 7 days · Due: ${invoiceDetails.dueDate ? new Date(invoiceDetails.dueDate).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toLocaleDateString('en-NZ', { day: '2-digit', month: 'short', year: 'numeric' })}
-          </div>
-        </div>
+              <!-- Payment and Terms -->
+              <div style="margin-bottom: 16px;">
+                <div style="font-weight: bold; margin-bottom: 6px;">How to Pay</div>
+                <div>We accept payment by: Cash and bank transfer</div>
+              </div>
+
+              <!-- Bank Details (left) + Cheque (right) -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse; margin-bottom: 24px;">
+                <tr>
+                  <td width="55%" valign="top">
+                    <div style="font-weight: bold; margin-bottom: 4px;">Bank Details</div>
+                    <div>Account Name: Treemarkables</div>
+                    <div>Account Number:</div>
+                    <div>06 0637 0768850 00</div>
+                  </td>
+                  <td width="45%" valign="top" align="right">
+                    <div style="font-weight: bold; margin-bottom: 4px;">Cheque</div>
+                    <div>Harora st.</div>
+                    <div>Gisborne</div>
+                    <div>4010</div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Footer -->
+              <div style="text-align: center; padding-top: 16px; border-top: 1px solid #ddd; font-size: 12px; color: #666;">
+                Payment due within 7 days &middot; Due: ${dueDateFormatted}
+              </div>
+
+            </td>
+          </tr>
+        </table>
         `;
       }
       
@@ -8248,7 +8422,10 @@ Draft the reply now.`;
           const invoiceTemplateRows = await db.select().from(documentTemplates)
             .where(eq(documentTemplates.type, 'invoice')).limit(1);
           const invoiceTemplate = invoiceTemplateRows[0] || null;
-          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate);
+          const pdfPhotos = Array.isArray(selectedPhotos)
+            ? selectedPhotos.filter(isSupportedPhotoUrl)
+            : [];
+          const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate, pdfPhotos);
           emailAttachments.push({
             content: pdfBuffer.toString('base64'),
             filename: `Invoice-${invoiceForPdf.invoiceNumber || 'unknown'}.pdf`,
@@ -8307,31 +8484,10 @@ Draft the reply now.`;
       if (selectedPhotos && selectedPhotos.length > 0) {
         if (recipientIsMicrosoft) {
           // Skip CID embedding for Microsoft recipients so the PDF is not stripped.
-          // Build a text-only section that tells the customer how to view the photos.
-          const photoCount = selectedPhotos.filter((p: string) => p.startsWith('/objects/photos/')).length;
-          const invoiceViewId = invoice?.id || invoiceId || (validatedInvoiceData as any)?.id;
-          const protocol = req.protocol;
-          const host = req.get('host') || 'treemarkables.co.nz';
-          const invoiceViewUrl = invoiceViewId
-            ? `${protocol}://${host}/invoice/${invoiceViewId}`
-            : `${protocol}://${host}`;
-
-          if (photoCount > 0) {
-            photoGalleryHtml = `
-              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
-                          border-radius: 8px; font-family: Arial, sans-serif;">
-                <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">
-                  Job Photos (${photoCount})
-                </p>
-                <p style="margin: 0; color: #555; font-size: 13px;">
-                  ${photoCount} photo${photoCount !== 1 ? 's' : ''} ${photoCount !== 1 ? 'were' : 'was'} taken at this job.
-                  <a href="${invoiceViewUrl}" style="color: #f97316; font-weight: 600;">View your invoice online</a>
-                  to see the photos.
-                </p>
-              </div>
-            `;
-          }
-          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — PDF deliverability mode`);
+          // No fallback text needed — the pdfDownloadBanner above already links the
+          // customer to the online invoice page where the photos render in-browser.
+          const photoCount = selectedPhotos.filter(isSupportedPhotoUrl).length;
+          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — using single online-view banner`);
         } else {
           const photoStorage = new PhotoStorageService();
           const photoHtmlParts: string[] = [];
@@ -8340,24 +8496,32 @@ Draft the reply now.`;
 
           for (let i = 0; i < selectedPhotos.length; i++) {
             const photoUrl = selectedPhotos[i];
-            if (!photoUrl.startsWith('/objects/photos/')) continue;
+            if (!isSupportedPhotoUrl(photoUrl)) continue;
 
             const fileName = path.basename(photoUrl);
-            const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
-            const thumbPath = `/objects/photos/${thumbFileName}`;
             const cid = `job-photo-${i}`;
 
-            // Try thumbnail first (small, fast); fall back to original if thumbnail missing
-            let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
+            // For GCS-backed photos, try the thumbnail first (small, fast); fall
+            // back to the original if missing. For local /photos/ paths, just
+            // load the file directly.
+            let photoData: { buffer: Buffer; contentType: string } | null = null;
+            if (photoUrl.startsWith('/objects/photos/')) {
+              const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
+              const thumbPath = `/objects/photos/${thumbFileName}`;
+              const thumb = await photoStorage.downloadPhotoBuffer(thumbPath);
+              if (thumb?.buffer) {
+                photoData = { buffer: thumb.buffer, contentType: thumb.contentType || 'image/webp' };
+              }
+            }
             if (!photoData) {
-              photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+              photoData = await loadPhotoBytesForAttachment(photoUrl, photoStorage);
             }
 
             if (photoData && photoData.buffer) {
               // Attach as inline CID image — email client renders it directly in the body
               emailAttachments.push({
                 content: photoData.buffer.toString('base64'),
-                filename: thumbFileName,
+                filename: fileName,
                 type: photoData.contentType || 'image/jpeg',
                 content_id: cid
               });
@@ -9861,9 +10025,24 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       const invoiceTemplateRows2 = await db.select().from(documentTemplates)
         .where(eq(documentTemplates.type, 'invoice')).limit(1);
       const invoiceTemplate2 = invoiceTemplateRows2[0] || null;
-      
+
+      // Photos for the PDF: prefer images persisted on the invoice's photo sections
+      // (these are the ones the sender explicitly attached at send time), then fall
+      // back to the job's after-/before-photos so the PDF still shows something when
+      // an older invoice has no photo section yet.
+      const invoicePhotoSections = await storage.getInvoiceSectionsByInvoice(invoice.id);
+      const sectionPhotos: string[] = invoicePhotoSections
+        .flatMap(s => (s.images || []) as string[]);
+      const fallbackJobPhotos: string[] = [
+        ...((job?.afterPhotos as string[] | null) || []),
+        ...((job?.beforePhotos as string[] | null) || []),
+      ];
+      const pdfPhotos: string[] = Array.from(new Set(
+        (sectionPhotos.length > 0 ? sectionPhotos : fallbackJobPhotos).filter(isSupportedPhotoUrl)
+      ));
+
       // Generate PDF using the shared helper (same code as email attachment)
-      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2);
+      const pdfBuffer = await generateInvoicePDFBuffer(invoice, job, customer, invoiceTemplate2, pdfPhotos);
 
       res.setHeader('Content-Type', 'application/pdf');
       // Inline so the PDF renders in-browser when customers click the email link
