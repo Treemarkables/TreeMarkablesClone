@@ -1006,6 +1006,51 @@ async function renderProposalHTMLSummary(proposalId: string): Promise<string> {
 // Accepts either a DB invoice record (.items) or frontend invoice data
 // (.lineItems) so it works whether or not the invoice has been saved to the DB.
 // ---------------------------------------------------------------------------
+// Photo URLs in this codebase come in two flavours:
+//   • `/objects/photos/{name}` — uploaded via PhotoStorageService, lives in GCS
+//   • `/photos/{name}`         — uploaded via /api/jobs/:id/photos/batch, lives
+//                                on the local uploads/ disk
+// Anything that needs the actual bytes (PDF embedding, inline-CID email images)
+// has to be able to load both. This helper returns the buffer + content-type for
+// either format, or null if the path doesn't match or the file is missing.
+async function loadPhotoBytesForAttachment(
+  photoUrl: string,
+  storage?: PhotoStorageService,
+): Promise<{ buffer: Buffer; contentType: string } | null> {
+  if (!photoUrl || typeof photoUrl !== 'string') return null;
+  try {
+    if (photoUrl.startsWith('/objects/photos/')) {
+      const svc = storage || new PhotoStorageService();
+      const data = await svc.downloadPhotoBuffer(photoUrl);
+      if (data?.buffer) return { buffer: data.buffer, contentType: data.contentType || 'image/jpeg' };
+      return null;
+    }
+    if (photoUrl.startsWith('/photos/')) {
+      const fileName = photoUrl.slice('/photos/'.length);
+      // Strip any directory traversal — express.static blocks it but we read raw
+      if (fileName.includes('..') || fileName.includes('/')) return null;
+      const filePath = path.join(photosDir, fileName);
+      if (!fs.existsSync(filePath)) return null;
+      const buffer = fs.readFileSync(filePath);
+      const ext = path.extname(fileName).toLowerCase();
+      const contentType = ext === '.png' ? 'image/png'
+        : ext === '.webp' ? 'image/webp'
+        : ext === '.heic' || ext === '.heif' ? 'image/heic'
+        : 'image/jpeg';
+      return { buffer, contentType };
+    }
+    return null;
+  } catch (err) {
+    console.warn(`⚠️ Could not load photo bytes for ${photoUrl}:`, err);
+    return null;
+  }
+}
+
+// Returns true if a photo URL is one we know how to load (either GCS or local).
+function isSupportedPhotoUrl(p: unknown): p is string {
+  return typeof p === 'string' && (p.startsWith('/objects/photos/') || p.startsWith('/photos/'));
+}
+
 async function generateInvoicePDFBuffer(
   invoiceData: any,
   job?: any,
@@ -1027,11 +1072,12 @@ async function generateInvoicePDFBuffer(
   if (photos.length > 0) {
     const photoStorage = new PhotoStorageService();
     for (const photoUrl of photos) {
-      if (!photoUrl || !photoUrl.startsWith('/objects/photos/')) continue;
+      if (!isSupportedPhotoUrl(photoUrl)) continue;
       try {
-        const photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
-        if (!photoData || !photoData.buffer) continue;
-        // Re-encode to JPEG (also fixes EXIF orientation) so PDFKit can embed it.
+        const photoData = await loadPhotoBytesForAttachment(photoUrl, photoStorage);
+        if (!photoData?.buffer) continue;
+        // Re-encode to JPEG (also fixes EXIF orientation, handles HEIC/webp) so
+        // PDFKit can embed it.
         const jpegBuffer = await sharp(photoData.buffer)
           .rotate()
           .resize({ width: 1200, height: 1200, fit: 'inside', withoutEnlargement: true })
@@ -8074,7 +8120,7 @@ Draft the reply now.`;
       // future re-send of the same invoice. Without this, the photos only ever
       // exist as transient CID attachments on the outgoing email.
       const photosToPersist: string[] = Array.isArray(selectedPhotos)
-        ? selectedPhotos.filter((p: any) => typeof p === 'string' && p.startsWith('/objects/photos/'))
+        ? selectedPhotos.filter(isSupportedPhotoUrl)
         : [];
       if (invoice && photosToPersist.length > 0) {
         try {
@@ -8172,13 +8218,15 @@ Draft the reply now.`;
         // replacing the logo with text is no longer required.
         const logoBlockHtml = `<img src="cid:treemarkables-logo" alt="Treemarkables" style="height: 70px; width: auto;" />`;
 
-        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF attachment
-        // is stripped by their spam filters regardless of inline-image presence. We replace the
-        // attachment with a prominent download button that fetches the PDF from the public endpoint.
+        // For Microsoft-hosted recipients (Hotmail / Outlook / Live / MSN), the PDF
+        // attachment is silently stripped by their spam filters. Instead of attaching
+        // the PDF, we surface a single banner that links to the online invoice page
+        // — that page renders the photos in-browser and exposes its own "Download PDF"
+        // button, so one link is enough.
         const pdfDownloadBanner = (recipientIsMicrosoft && invoiceDetails?.id)
           ? `<div style="margin: 0 0 30px 0; padding: 18px 20px; background: #fff7ed; border: 1px solid #f97316; border-radius: 8px; text-align: center;">
-               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">Your invoice PDF is ready to download</div>
-               <a href="https://app.treemarkables.co.nz/api/invoices/${invoiceDetails.id}/pdf" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">Download Invoice PDF</a>
+               <div style="font-size: 14px; color: #7c2d12; margin-bottom: 12px; font-weight: 600;">View your invoice online to see photos and download the PDF</div>
+               <a href="https://app.treemarkables.co.nz/invoice/${invoiceDetails.id}" style="display: inline-block; padding: 12px 24px; background: #f97316; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 700; font-size: 14px;">View invoice online</a>
              </div>`
           : '';
 
@@ -8375,7 +8423,7 @@ Draft the reply now.`;
             .where(eq(documentTemplates.type, 'invoice')).limit(1);
           const invoiceTemplate = invoiceTemplateRows[0] || null;
           const pdfPhotos = Array.isArray(selectedPhotos)
-            ? selectedPhotos.filter((p: any) => typeof p === 'string' && p.startsWith('/objects/photos/'))
+            ? selectedPhotos.filter(isSupportedPhotoUrl)
             : [];
           const pdfBuffer = await generateInvoicePDFBuffer(invoiceForPdf, job, customer, invoiceTemplate, pdfPhotos);
           emailAttachments.push({
@@ -8436,31 +8484,10 @@ Draft the reply now.`;
       if (selectedPhotos && selectedPhotos.length > 0) {
         if (recipientIsMicrosoft) {
           // Skip CID embedding for Microsoft recipients so the PDF is not stripped.
-          // Build a text-only section that tells the customer how to view the photos.
-          const photoCount = selectedPhotos.filter((p: string) => p.startsWith('/objects/photos/')).length;
-          const invoiceViewId = invoice?.id || invoiceId || (validatedInvoiceData as any)?.id;
-          const protocol = req.protocol;
-          const host = req.get('host') || 'treemarkables.co.nz';
-          const invoiceViewUrl = invoiceViewId
-            ? `${protocol}://${host}/invoice/${invoiceViewId}`
-            : `${protocol}://${host}`;
-
-          if (photoCount > 0) {
-            photoGalleryHtml = `
-              <div style="margin-top: 20px; padding: 15px; background-color: #f9f9f9;
-                          border-radius: 8px; font-family: Arial, sans-serif;">
-                <p style="margin: 0 0 8px 0; font-weight: bold; color: #333;">
-                  Job Photos (${photoCount})
-                </p>
-                <p style="margin: 0; color: #555; font-size: 13px;">
-                  ${photoCount} photo${photoCount !== 1 ? 's' : ''} ${photoCount !== 1 ? 'were' : 'was'} taken at this job.
-                  <a href="${invoiceViewUrl}" style="color: #f97316; font-weight: 600;">View your invoice online</a>
-                  to see the photos.
-                </p>
-              </div>
-            `;
-          }
-          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — PDF deliverability mode`);
+          // No fallback text needed — the pdfDownloadBanner above already links the
+          // customer to the online invoice page where the photos render in-browser.
+          const photoCount = selectedPhotos.filter(isSupportedPhotoUrl).length;
+          console.log(`📸 Skipped ${photoCount} photo CID attachment(s) for Microsoft-hosted recipient ${to} — using single online-view banner`);
         } else {
           const photoStorage = new PhotoStorageService();
           const photoHtmlParts: string[] = [];
@@ -8469,24 +8496,32 @@ Draft the reply now.`;
 
           for (let i = 0; i < selectedPhotos.length; i++) {
             const photoUrl = selectedPhotos[i];
-            if (!photoUrl.startsWith('/objects/photos/')) continue;
+            if (!isSupportedPhotoUrl(photoUrl)) continue;
 
             const fileName = path.basename(photoUrl);
-            const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
-            const thumbPath = `/objects/photos/${thumbFileName}`;
             const cid = `job-photo-${i}`;
 
-            // Try thumbnail first (small, fast); fall back to original if thumbnail missing
-            let photoData = await photoStorage.downloadPhotoBuffer(thumbPath);
+            // For GCS-backed photos, try the thumbnail first (small, fast); fall
+            // back to the original if missing. For local /photos/ paths, just
+            // load the file directly.
+            let photoData: { buffer: Buffer; contentType: string } | null = null;
+            if (photoUrl.startsWith('/objects/photos/')) {
+              const thumbFileName = `thumb_${fileName.replace(/\.(jpg|jpeg|png|heic|heif)$/i, '.webp')}`;
+              const thumbPath = `/objects/photos/${thumbFileName}`;
+              const thumb = await photoStorage.downloadPhotoBuffer(thumbPath);
+              if (thumb?.buffer) {
+                photoData = { buffer: thumb.buffer, contentType: thumb.contentType || 'image/webp' };
+              }
+            }
             if (!photoData) {
-              photoData = await photoStorage.downloadPhotoBuffer(photoUrl);
+              photoData = await loadPhotoBytesForAttachment(photoUrl, photoStorage);
             }
 
             if (photoData && photoData.buffer) {
               // Attach as inline CID image — email client renders it directly in the body
               emailAttachments.push({
                 content: photoData.buffer.toString('base64'),
-                filename: thumbFileName,
+                filename: fileName,
                 type: photoData.contentType || 'image/jpeg',
                 content_id: cid
               });
@@ -10003,8 +10038,7 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         ...((job?.beforePhotos as string[] | null) || []),
       ];
       const pdfPhotos: string[] = Array.from(new Set(
-        (sectionPhotos.length > 0 ? sectionPhotos : fallbackJobPhotos)
-          .filter((p): p is string => typeof p === 'string' && p.startsWith('/objects/photos/'))
+        (sectionPhotos.length > 0 ? sectionPhotos : fallbackJobPhotos).filter(isSupportedPhotoUrl)
       ));
 
       // Generate PDF using the shared helper (same code as email attachment)
