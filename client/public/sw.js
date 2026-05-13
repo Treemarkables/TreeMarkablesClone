@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v14-ios-icons';
-const STATIC_CACHE = 'treemarkables-static-v14-ios-icons';
-const API_CACHE = 'treemarkables-api-v14-ios-icons';
+const CACHE_NAME = 'treemarkables-v15-bell-prefs';
+const STATIC_CACHE = 'treemarkables-static-v15-bell-prefs';
+const API_CACHE = 'treemarkables-api-v15-bell-prefs';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,14 +10,14 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v13] Installing - forcing immediate activation');
+  console.log('[SW v15] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v13] Installed - skipping waiting');
+        console.log('[SW v15] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
@@ -25,20 +25,20 @@ self.addEventListener('install', function(event) {
 
 // Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v13] Activating - deleting ALL old caches');
+  console.log('[SW v15] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v13] Found caches:', cacheNames);
+      console.log('[SW v15] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v14-ios-icons')) {
-            console.log('[SW v13] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v15-bell-prefs')) {
+            console.log('[SW v15] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v13] Taking control of all clients');
+      console.log('[SW v15] Taking control of all clients');
       return self.clients.claim();
     })
   );
