@@ -144,7 +144,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               <Mail className="w-4 h-4 mr-2" />
               Email
             </Button>
-            <Button variant="outline" size="sm" data-testid="button-download-invoice">
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="button-download-invoice"
+              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank', 'noopener')}
+            >
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
