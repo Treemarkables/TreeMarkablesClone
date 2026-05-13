@@ -9997,18 +9997,23 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       
       const invoice = result[0];
       
-      // Fetch related customer and job data in parallel for faster loading
-      const [customerData, jobData] = await Promise.all([
+      // Fetch related customer, job, and sections data in parallel for faster loading
+      const [customerData, jobData, sections] = await Promise.all([
         invoice.customerId ? db.select().from(customers).where(eq(customers.id, invoice.customerId)).limit(1) : Promise.resolve([]),
-        invoice.jobId ? db.select().from(jobs).where(eq(jobs.id, invoice.jobId)).limit(1) : Promise.resolve([])
+        invoice.jobId ? db.select().from(jobs).where(eq(jobs.id, invoice.jobId)).limit(1) : Promise.resolve([]),
+        storage.getInvoiceSectionsByInvoice(invoice.id),
       ]);
-      
-      res.json({ 
-        success: true, 
+
+      res.json({
+        success: true,
         data: {
           ...invoice,
           customer: customerData[0] || null,
-          job: jobData[0] || null
+          job: jobData[0] || null,
+          sections: sections.map(s => ({
+            ...s,
+            images: Array.isArray(s.images) ? s.images : [],
+          })),
         }
       });
     } catch (error) {
