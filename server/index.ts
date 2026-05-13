@@ -128,7 +128,9 @@ app.use(
         ? 1000 * 60 * 60 * 24 * 90
         : 1000 * 60 * 60 * 24 * 30,
       sameSite: 'none',
-      domain: isDevelopment ? undefined : '.treemarkables.co.nz',
+      // Host-only cookie: omit domain so it scopes to app.treemarkables.co.nz
+      // exactly. Domain-scoped cookies (.treemarkables.co.nz) caused PWA users
+      // to lose sessions on Chrome's installed-PWA storage partition.
     },
   })
 );

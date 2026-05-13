@@ -1696,14 +1696,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Clear the session cookie — attributes must match exactly how the
       // cookie was set in server/index.ts, otherwise the browser ignores the
-      // clear and the stale SID lingers into the next login.
-      const isDevelopment = process.env.NODE_ENV === 'development';
+      // clear and the stale SID lingers into the next login. Host-only (no
+      // domain attribute) — see comment in server/index.ts session config.
       res.clearCookie('treemarkables.sid', {
         path: '/',
         httpOnly: true,
         secure: true,
         sameSite: 'none',
-        domain: isDevelopment ? undefined : '.treemarkables.co.nz',
       });
       
       res.json({

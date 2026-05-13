@@ -153,20 +153,35 @@ async function putServerPrefs(bellPreferences: BellPreferences): Promise<BellPre
     } catch {
       // ignore
     }
-    // For 401s, also probe /api/auth/me with the same credentials. If that
-    // also 401s, the session is broken globally (cookie isn't being sent or
-    // doesn't exist). If it returns 200, the PUT-specific path is at fault.
-    let authNote = "";
+    // For 401s, collect everything we can see from the client: auth probe,
+    // active SW version (read from cache names), and whether any cookies are
+    // visible to JS at all. This pin-points where in the chain the session
+    // is being lost in the PWA.
+    let extra = "";
     if (res.status === 401) {
       try {
         const auth = await fetch("/api/auth/me", { credentials: "include" });
-        const authBody = await auth.text();
-        authNote = ` | /api/auth/me: ${auth.status} ${authBody.slice(0, 100)}`;
-      } catch (e) {
-        authNote = ` | /api/auth/me threw: ${e instanceof Error ? e.message : String(e)}`;
+        extra += ` | auth: ${auth.status}`;
+      } catch {
+        extra += ` | auth: threw`;
       }
+      try {
+        const reg =
+          "serviceWorker" in navigator
+            ? await navigator.serviceWorker.getRegistration()
+            : null;
+        const state = reg?.active?.state ?? "none";
+        const cacheNames = "caches" in window ? await caches.keys() : [];
+        const versionTag =
+          cacheNames.find((c) => c.includes("treemarkables")) ?? "?";
+        extra += ` | sw: ${state} cache=${versionTag}`;
+      } catch {
+        extra += ` | sw: probe-failed`;
+      }
+      const cookieCount = document.cookie ? document.cookie.split(";").length : 0;
+      extra += ` | js-cookies: ${cookieCount}`;
     }
-    throw new Error(`PUT ${res.status} ${res.statusText}${bodySnippet ? ` — ${bodySnippet}` : ""}${authNote}`);
+    throw new Error(`PUT ${res.status} ${res.statusText}${bodySnippet ? ` — ${bodySnippet}` : ""}${extra}`);
   }
   const json = await res.json();
   return sanitiseBellPrefs(json?.data?.bellPreferences);
