@@ -1,6 +1,6 @@
-const CACHE_NAME = 'treemarkables-v15-bell-prefs';
-const STATIC_CACHE = 'treemarkables-static-v15-bell-prefs';
-const API_CACHE = 'treemarkables-api-v15-bell-prefs';
+const CACHE_NAME = 'treemarkables-v16-mutation-bypass';
+const STATIC_CACHE = 'treemarkables-static-v16-mutation-bypass';
+const API_CACHE = 'treemarkables-api-v16-mutation-bypass';
 
 // ONLY cache static assets, NEVER cache HTML pages
 const urlsToCache = [
@@ -10,14 +10,14 @@ const urlsToCache = [
 
 // Install event - cache critical assets
 self.addEventListener('install', function(event) {
-  console.log('[SW v15] Installing - forcing immediate activation');
+  console.log('[SW v16] Installing - forcing immediate activation');
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then(function(cache) {
         return cache.addAll(urlsToCache);
       })
       .then(() => {
-        console.log('[SW v15] Installed - skipping waiting');
+        console.log('[SW v16] Installed - skipping waiting');
         return self.skipWaiting();
       })
   );
@@ -25,20 +25,20 @@ self.addEventListener('install', function(event) {
 
 // Activate event - clean up ALL old caches
 self.addEventListener('activate', function(event) {
-  console.log('[SW v15] Activating - deleting ALL old caches');
+  console.log('[SW v16] Activating - deleting ALL old caches');
   event.waitUntil(
     caches.keys().then(function(cacheNames) {
-      console.log('[SW v15] Found caches:', cacheNames);
+      console.log('[SW v16] Found caches:', cacheNames);
       return Promise.all(
         cacheNames.map(function(cacheName) {
-          if (!cacheName.includes('v15-bell-prefs')) {
-            console.log('[SW v15] DELETING old cache:', cacheName);
+          if (!cacheName.includes('v16-mutation-bypass')) {
+            console.log('[SW v16] DELETING old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
       );
     }).then(() => {
-      console.log('[SW v15] Taking control of all clients');
+      console.log('[SW v16] Taking control of all clients');
       return self.clients.claim();
     })
   );
@@ -47,6 +47,16 @@ self.addEventListener('activate', function(event) {
 // Fetch event - network first for API, cache first for assets
 self.addEventListener('fetch', function(event) {
   const url = new URL(event.request.url);
+
+  // BYPASS Service Worker entirely for any non-GET request. Mutations must go
+  // straight to the network with the browser's normal cookie/credentials
+  // handling — PWA users were hitting 401s on PUT because the SW's
+  // fetch(event.request) round-trip was dropping the session cookie in some
+  // Chromium contexts. Leaving event.respondWith uncalled lets the browser
+  // handle the request natively, with cookies attached.
+  if (event.request.method !== 'GET') {
+    return;
+  }
 
   // BYPASS Service Worker entirely for critical Dispatch Board endpoints
   if (url.pathname === '/api/jobs' ||
@@ -59,25 +69,16 @@ self.addEventListener('fetch', function(event) {
 
   // API requests - network first, fallback to cache
   if (url.pathname.startsWith('/api/')) {
-    // CRITICAL: NEVER cache or return cached responses for POST/PUT/DELETE (mutations)
-    if (event.request.method !== 'GET') {
-      event.respondWith(
-        fetch(event.request).catch(function(error) {
-          throw error;
-        })
-      );
-      return;
-    }
-
     // NEVER cache diary endpoints - always fetch fresh
     if (url.pathname.includes('/diary')) {
-      event.respondWith(fetch(event.request));
+      event.respondWith(fetch(event.request, { credentials: 'include' }));
       return;
     }
 
-    // GET requests - network first, cache fallback
+    // GET requests - network first, cache fallback. Explicit credentials so
+    // the SW-mediated fetch behaves the same as the original page fetch.
     event.respondWith(
-      fetch(event.request)
+      fetch(event.request, { credentials: 'include' })
         .then(function(response) {
           if (response.status === 200) {
             const responseClone = response.clone();
