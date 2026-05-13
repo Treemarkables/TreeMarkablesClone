@@ -109,23 +109,44 @@ function legacyToBellPrefs(legacy: LegacyNotificationPrefs): BellPreferences {
   return out;
 }
 
+// Sanitise raw bellPreferences into a valid BellPreferences map: drop any
+// keys that aren't in NOTIFICATION_TYPES and any values that aren't `false`.
+// Earlier versions of the settings UI wrote response-envelope garbage into
+// this column (nested `data` + `success`), so we defensively strip it on
+// every read — the next PUT then overwrites the row with the clean shape.
+const VALID_TYPES: ReadonlySet<string> = new Set(NOTIFICATION_TYPES);
+
+function sanitiseBellPrefs(raw: unknown): BellPreferences {
+  if (!raw || typeof raw !== "object") return {};
+  const out: BellPreferences = {};
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (VALID_TYPES.has(key) && value === false) {
+      out[key as NotificationType] = false;
+    }
+  }
+  return out;
+}
+
 async function fetchServerPrefs(): Promise<BellPreferences> {
   const res = await fetch("/api/notifications/preferences", { credentials: "include" });
   if (!res.ok) throw new Error(`Failed to load notification preferences (${res.status})`);
   const json = await res.json();
-  return (json?.data?.bellPreferences as BellPreferences | null) ?? {};
+  return sanitiseBellPrefs(json?.data?.bellPreferences);
 }
 
 async function putServerPrefs(bellPreferences: BellPreferences): Promise<BellPreferences> {
+  // Pre-sanitise outgoing payload too — never PUT keys/values outside the
+  // known schema, even if the in-memory state somehow has them.
+  const clean = sanitiseBellPrefs(bellPreferences);
   const res = await fetch("/api/notifications/preferences", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ bellPreferences }),
+    body: JSON.stringify({ bellPreferences: clean }),
   });
   if (!res.ok) throw new Error(`Failed to update notification preferences (${res.status})`);
   const json = await res.json();
-  return (json?.data?.bellPreferences as BellPreferences | null) ?? {};
+  return sanitiseBellPrefs(json?.data?.bellPreferences);
 }
 
 const QUERY_KEY = ["/api/notifications/preferences"] as const;
