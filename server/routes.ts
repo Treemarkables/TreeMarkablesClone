@@ -12699,24 +12699,29 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
 
-      // Generate photo URLs - images are pre-compressed on client side
+      // Upload to GCS via PhotoStorageService so files survive DO App Platform
+      // deploys (the local uploads/ disk is ephemeral and gets wiped on every
+      // autodeploy). Photos uploaded here are served at /objects/photos/{name}
+      // by the existing /objects/photos/:filename route.
+      const photoStorage = new PhotoStorageService();
       const photoUrls: string[] = [];
-      const timestamp = Date.now();
-      
+
       for (let i = 0; i < req.files.length; i++) {
         const file = req.files[i] as Express.Multer.File;
-        const fileExtension = path.extname(path.basename(file.originalname)).toLowerCase();
-        
-        // Client-side compression already handles HEIC conversion and resize
-        // Just save the file directly for faster uploads
-        const newFileName = `${jobId}_${type}_${timestamp}_${i}${fileExtension}`;
-        const newPath = path.join(photosDir, newFileName);
-        
-        // Write file from memory buffer to disk
-        fs.writeFileSync(newPath, file.buffer);
-        
-        // Store relative URL for database
-        photoUrls.push(`/photos/${newFileName}`);
+        try {
+          const { url } = await photoStorage.uploadPhoto(file.buffer, file.originalname, file.mimetype);
+          photoUrls.push(url);
+        } catch (uploadErr) {
+          console.error(`Error uploading photo ${i + 1}/${req.files.length} to GCS:`, uploadErr);
+          // Keep going so a single bad file doesn't fail the whole batch
+        }
+      }
+
+      if (photoUrls.length === 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to upload any photos to storage',
+        });
       }
 
       // Update job with new photos
@@ -12796,25 +12801,40 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
         });
       }
 
-      // Security: Only allow deletion of files with expected naming pattern and extension
-      const fileName = path.basename(photoUrl);
-      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-      const fileExtension = path.extname(fileName).toLowerCase();
-      
-      if (!allowedExtensions.includes(fileExtension)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid file type' 
+      // Photo URLs can be either GCS (`/objects/photos/{uuid}.{ext}`) from the
+      // new batch endpoint or legacy local-disk (`/photos/{jobId}_{type}_..`)
+      // from before the GCS migration. Accept either prefix.
+      const isGcsPath = photoUrl.startsWith('/objects/photos/');
+      const isLegacyLocalPath = photoUrl.startsWith('/photos/');
+      if (!isGcsPath && !isLegacyLocalPath) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid photo reference',
         });
       }
 
-      // Ensure the filename follows expected pattern: jobId_type_timestamp_index.ext
-      const expectedPattern = new RegExp(`^${jobId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_${type}_\\d+_\\d+\\${fileExtension}$`);
-      if (!expectedPattern.test(fileName)) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Invalid photo reference' 
+      const fileName = path.basename(photoUrl);
+      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif'];
+      const fileExtension = path.extname(fileName).toLowerCase();
+      if (!allowedExtensions.includes(fileExtension)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid file type',
         });
+      }
+
+      // For legacy local-disk paths, the filename must match the original
+      // pattern (`jobId_type_timestamp_index.ext`) to prevent arbitrary deletes
+      // via crafted photoUrl values. GCS paths use uuids and are validated by
+      // the storage service itself.
+      if (isLegacyLocalPath) {
+        const legacyPattern = new RegExp(`^${jobId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_${type}_\\d+_\\d+\\${fileExtension}$`);
+        if (!legacyPattern.test(fileName)) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid photo reference',
+          });
+        }
       }
 
       const job = await storage.getJob(jobId);
@@ -12825,19 +12845,26 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       // Remove photo URL from database
       const currentPhotos = type === 'before' ? job.beforePhotos || [] : job.afterPhotos || [];
       const updatedPhotos = currentPhotos.filter(url => url !== photoUrl);
-      
-      const updateData = type === 'before' 
+
+      const updateData = type === 'before'
         ? { beforePhotos: updatedPhotos }
         : { afterPhotos: updatedPhotos };
 
       await storage.updateJob(jobId, updateData);
 
-      // Delete physical file
+      // Delete physical bytes from whichever backing store the URL points at.
       try {
-        const fileName = path.basename(photoUrl);
-        const filePath = path.join(photosDir, fileName);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
+        if (isGcsPath) {
+          const photoStorage = new PhotoStorageService();
+          const { file, exists } = await photoStorage.getPhoto(photoUrl);
+          if (exists && file) {
+            await file.delete();
+          }
+        } else {
+          const filePath = path.join(photosDir, fileName);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+          }
         }
       } catch (fileError) {
         console.warn('Could not delete physical file:', fileError);
