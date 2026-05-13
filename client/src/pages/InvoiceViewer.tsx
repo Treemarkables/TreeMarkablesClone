@@ -144,7 +144,12 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
               <Mail className="w-4 h-4 mr-2" />
               Email
             </Button>
-            <Button variant="outline" size="sm" data-testid="button-download-invoice">
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="button-download-invoice"
+              onClick={() => window.open(`/api/invoices/${invoice.id}/pdf`, '_blank', 'noopener')}
+            >
               <Download className="w-4 h-4 mr-2" />
               Download PDF
             </Button>
@@ -289,6 +294,49 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
                 </div>
               </div>
             )}
+
+            {/* Sections (photos + narrative) — populated by the InvoiceBuilder's
+                "Sections & Photos" editor and by sender-selected Smart Attachments
+                on send. */}
+            {Array.isArray(invoice.sections) && invoice.sections
+              .filter((s: any) => s && s.isVisible !== false && (
+                (s.content && s.content.trim().length > 0) ||
+                (Array.isArray(s.images) && s.images.length > 0)
+              ))
+              .map((section: any) => (
+                <div key={section.id} className="mb-3">
+                  {section.title && (
+                    <h3 className="text-base font-semibold text-gray-900 mb-2">
+                      {section.title}
+                    </h3>
+                  )}
+                  {section.content && (
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap mb-2">
+                      {section.content}
+                    </p>
+                  )}
+                  {Array.isArray(section.images) && section.images.length > 0 && (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {section.images.map((url: string, i: number) => (
+                        <a
+                          key={url + i}
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="relative aspect-square rounded-md overflow-hidden border bg-gray-100 block"
+                        >
+                          <img
+                            src={url}
+                            alt=""
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
 
             {/* Totals */}
             <div className="flex justify-end mb-3">
