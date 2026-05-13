@@ -408,6 +408,58 @@ async function getCompanyLogoFilePath(): Promise<string> {
   return path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
 }
 
+// Load the company logo's bytes regardless of which backing store it lives in:
+//   • /objects/photos/<uuid>.<ext> — uploaded since the GCS migration
+//   • /logos/<filename>            — legacy local-disk uploads (may be wiped)
+//   • /treemarkables-logo.png      — bundled fallback in client/public/
+// Used for the email's inline CID attachment and the PDF generator's image
+// embed, both of which need raw bytes (not a URL).
+async function getCompanyLogoBytes(): Promise<{ buffer: Buffer; contentType: string; ext: string } | null> {
+  const url = await getCompanyLogoUrl();
+  try {
+    if (url.startsWith('/objects/photos/')) {
+      const svc = new PhotoStorageService();
+      const data = await svc.downloadPhotoBuffer(url);
+      if (data?.buffer) {
+        const contentType = data.contentType || 'image/png';
+        const ext = contentType === 'image/jpeg' ? '.jpg'
+          : contentType === 'image/webp' ? '.webp'
+          : contentType === 'image/svg+xml' ? '.svg'
+          : '.png';
+        return { buffer: data.buffer, contentType, ext };
+      }
+    } else {
+      // Legacy /logos/<name> and bundled /treemarkables-logo.png both live on
+      // the local filesystem under client/public/ (or, for legacy uploads,
+      // uploads/logos/). Try both before falling back to the default.
+      const candidates = [
+        path.join(__dirname, '..', 'uploads', url.startsWith('/') ? url.slice(1) : url),
+        path.join(__dirname, '..', 'client', 'public', url.startsWith('/') ? url.slice(1) : url),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          const buffer = fs.readFileSync(candidate);
+          const lower = candidate.toLowerCase();
+          const ext = path.extname(lower);
+          const contentType = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
+            : ext === '.webp' ? 'image/webp'
+            : ext === '.svg' ? 'image/svg+xml'
+            : 'image/png';
+          return { buffer, contentType, ext: ext || '.png' };
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('Could not load company logo from primary source, falling back to default:', err);
+  }
+  // Final fallback — bundled default
+  const fallbackPath = path.join(__dirname, '..', 'client', 'public', 'treemarkables-logo.png');
+  if (fs.existsSync(fallbackPath)) {
+    return { buffer: fs.readFileSync(fallbackPath), contentType: 'image/png', ext: '.png' };
+  }
+  return null;
+}
+
 // Initialize OpenAI client for call transcription
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -1061,9 +1113,11 @@ async function generateInvoicePDFBuffer(
   const PDFDocument = (await import('pdfkit')).default;
   // Import shared rendering contract (resolves camelCase DB fields + defaults)
   const { resolveCompanyInfo, resolveBlockConfig } = await import('../shared/documentBlockDefaults');
-  // Resolve the default company logo filesystem path up-front (inside the Promise
-  // executor we can't await) so the PDF header renders without extra async calls.
-  const defaultLogoPath = await getCompanyLogoFilePath();
+  // Pre-fetch the logo bytes up-front (the PDFKit Promise executor below is
+  // synchronous, so we can't await inside it). getCompanyLogoBytes handles
+  // GCS-backed URLs, legacy /logos/ local-disk paths, and the bundled
+  // /treemarkables-logo.png fallback in one place.
+  const logoBytes = await getCompanyLogoBytes();
 
   // Pre-fetch + re-encode photo buffers to JPEG (PDFKit only accepts JPEG/PNG).
   // Done up-front because the PDFKit Promise executor below is synchronous.
@@ -1154,15 +1208,13 @@ async function generateInvoicePDFBuffer(
           let logoX = 40;
           if (logoAlign === 'center') logoX = 297 - 60;
           else if (logoAlign === 'right') logoX = 435;
-          let logoFilePath = co.logoUrl
-            ? resolveLogoFsPath(co.logoUrl)
-            : defaultLogoPath;
-          // If the template's logoUrl points at a missing file (e.g. an old upload that
-          // was never migrated), fall back to the default logo so the header still renders.
-          if (!fs.existsSync(logoFilePath)) logoFilePath = defaultLogoPath;
-          try {
-            doc.image(logoFilePath, logoX, 35, { width: 120, height: 50, fit: [120, 50] });
-          } catch { /* logo optional */ }
+          if (logoBytes?.buffer) {
+            try {
+              // PDFKit's .image() accepts a Buffer directly, which lets us embed
+              // logos that live in GCS without needing them on local disk.
+              doc.image(logoBytes.buffer, logoX, 35, { width: 120, height: 50, fit: [120, 50] });
+            } catch { /* logo optional */ }
+          }
           if (showCoName) {
             doc.fontSize(9).font('Helvetica').fillColor('#374151')
               .text(co.name, 40, 42, { align: 'right', width: 515 });
@@ -8469,19 +8521,12 @@ Draft the reply now.`;
       // banner, so the inline logo no longer needs to be suppressed for deliverability.
       if (validatedInvoiceData || invoiceId || invoice) {
         try {
-          const logoPath = await getCompanyLogoFilePath();
-          if (fs.existsSync(logoPath)) {
-            const logoContent = fs.readFileSync(logoPath);
-            const logoBase64 = logoContent.toString('base64');
-            const ext = path.extname(logoPath).toLowerCase();
-            const mime = ext === '.jpg' || ext === '.jpeg' ? 'image/jpeg'
-              : ext === '.webp' ? 'image/webp'
-              : ext === '.svg' ? 'image/svg+xml'
-              : 'image/png';
+          const logo = await getCompanyLogoBytes();
+          if (logo) {
             emailAttachments.push({
-              content: logoBase64,
-              filename: `company-logo${ext || '.png'}`,
-              type: mime,
+              content: logo.buffer.toString('base64'),
+              filename: `company-logo${logo.ext}`,
+              type: logo.contentType,
               disposition: 'inline',
               content_id: 'treemarkables-logo'
             });
@@ -14779,21 +14824,16 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       if (!req.file) {
         return res.status(400).json({ success: false, message: 'No file uploaded' });
       }
-      const ext = req.file.mimetype === 'image/png' ? '.png'
-        : req.file.mimetype === 'image/jpeg' ? '.jpg'
-        : req.file.mimetype === 'image/webp' ? '.webp'
-        : req.file.mimetype === 'image/svg+xml' ? '.svg'
-        : '.png';
-      const filename = `logo-${Date.now()}${ext}`;
-      // Write to the persistent uploads/ dir (mirrors the photos pattern). The
-      // previous path pointed at client/public/logos/ which is Vite's source
-      // static dir — fine in dev where Vite middleware serves from it, but in
-      // production Express serves from dist/public/, so writes after build
-      // were unreachable and the new logo never rendered.
-      const dest = path.join(__dirname, '..', 'uploads', 'logos', filename);
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      fs.writeFileSync(dest, req.file.buffer);
-      const url = `/logos/${filename}`;
+      // Upload through PhotoStorageService → GCS so the logo survives DO App
+      // Platform deploys (the local uploads/ disk is ephemeral). We reuse the
+      // photo bucket since GCS doesn't care about logical grouping and the
+      // serving route at /objects/photos/:filename is already public.
+      const photoStorage = new PhotoStorageService();
+      const { url } = await photoStorage.uploadPhoto(
+        req.file.buffer,
+        req.file.originalname || `logo.${(req.file.mimetype.split('/')[1] || 'png').replace('svg+xml', 'svg')}`,
+        req.file.mimetype,
+      );
 
       const defaults = await Promise.all([
         storage.getDefaultDocumentTemplate('quote'),

@@ -165,7 +165,20 @@ export default function InvoiceViewer({}: InvoiceViewerProps) {
             {/* Company Header */}
             <div className="text-center mb-3">
               <div className="flex justify-center mb-2">
-                <img src={logoUrl} alt="Treemarkables" className="h-20 object-contain" />
+                <img
+                  src={logoUrl}
+                  alt="Treemarkables"
+                  className="h-20 object-contain"
+                  onError={(e) => {
+                    // If the company logo URL is dead (e.g. an older upload that
+                    // got wiped before logos moved to GCS), gracefully fall back
+                    // to the bundled default so we never render a broken image.
+                    const img = e.currentTarget;
+                    if (img.src.indexOf('/treemarkables-logo.png') === -1) {
+                      img.src = '/treemarkables-logo.png';
+                    }
+                  }}
+                />
               </div>
               <p className="text-sm text-gray-600">Professional Tree Care Services</p>
               <p className="text-xs text-gray-500">Gisborne, New Zealand | Phone: 0272166882 | Email: quotes@treemarkables.nz</p>
