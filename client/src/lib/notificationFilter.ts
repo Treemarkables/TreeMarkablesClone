@@ -144,7 +144,17 @@ async function putServerPrefs(bellPreferences: BellPreferences): Promise<BellPre
     credentials: "include",
     body: JSON.stringify({ bellPreferences: clean }),
   });
-  if (!res.ok) throw new Error(`Failed to update notification preferences (${res.status})`);
+  if (!res.ok) {
+    // Capture status + short body snippet so the UI can surface the real
+    // reason a save failed, since DevTools is hard to attach in a PWA.
+    let bodySnippet = "";
+    try {
+      bodySnippet = (await res.text()).slice(0, 200);
+    } catch {
+      // ignore
+    }
+    throw new Error(`PUT ${res.status} ${res.statusText}${bodySnippet ? ` — ${bodySnippet}` : ""}`);
+  }
   const json = await res.json();
   return sanitiseBellPrefs(json?.data?.bellPreferences);
 }
@@ -217,6 +227,7 @@ export function useBellPreferences() {
     prefs,
     isLoading: query.isLoading,
     isError: query.isError,
+    saveError: mutation.error as Error | null,
     setPref: (type: NotificationType, visible: boolean) => {
       // Read latest from the cache, not the render-time closure, so two
       // toggles fired in the same frame don't each start from the same stale

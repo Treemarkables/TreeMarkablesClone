@@ -255,7 +255,20 @@ interface DeviceBrowserPrefs {
 
 export default function NotificationPreferences() {
   const { toast } = useToast();
-  const { prefs: bellPrefs, isLoading, setPref } = useBellPreferences();
+  const { prefs: bellPrefs, isLoading, setPref, saveError } = useBellPreferences();
+
+  // Surface bell-pref save failures so PWA users (where DevTools is hard to
+  // reach) can see why a toggle bounced back. The message includes the HTTP
+  // status the server responded with.
+  useEffect(() => {
+    if (saveError) {
+      toast({
+        title: "Couldn't save toggle",
+        description: saveError.message,
+        variant: "destructive",
+      });
+    }
+  }, [saveError, toast]);
 
   // Browser permission/visibility is per-device (OS permission state), so it
   // stays in localStorage rather than on the server.
