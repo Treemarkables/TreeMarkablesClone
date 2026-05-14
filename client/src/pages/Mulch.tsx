@@ -449,7 +449,7 @@ export default function Mulch() {
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
             <span className="text-muted-foreground">
-              {PRODUCT.name} (${PRODUCT.price}/m³)
+              {PRODUCT.name} (${PRODUCT.price}/m³ ex GST)
             </span>
             <span className="font-semibold">{formatPrice(mulchCost)}</span>
           </div>

@@ -117,7 +117,7 @@ export default function MulchThanks() {
             </div>
             <div className="flex justify-between py-2.5 border-b text-sm">
               <span className="text-muted-foreground">
-                {summary.productName} (${summary.pricePerM3}/m³)
+                {summary.productName} (${summary.pricePerM3}/m³ ex GST)
               </span>
               <span className="font-semibold">
                 {formatPrice(summary.qty * summary.pricePerM3)}
@@ -130,6 +130,12 @@ export default function MulchThanks() {
                 style={{ background: NEON }}
               >
                 FREE
+              </span>
+            </div>
+            <div className="flex justify-between py-2.5 border-b text-sm">
+              <span className="text-muted-foreground">GST (15%)</span>
+              <span className="font-semibold">
+                {formatPrice(summary.qty * summary.pricePerM3 * 0.15)}
               </span>
             </div>
             <div className="flex justify-between py-2.5 border-b text-sm">
@@ -197,13 +203,9 @@ export default function MulchThanks() {
 
       {/* Upsell */}
       <section className="px-4 py-10 border-b">
-        <h2 className="text-2xl font-extrabold text-center mb-2 tracking-tight">
-          While we're at it…
+        <h2 className="text-2xl font-extrabold text-center mb-7 tracking-tight">
+          We also offer these services
         </h2>
-        <p className="text-center text-sm text-muted-foreground mb-7 max-w-xl mx-auto">
-          We can knock these out on the same visit. Just mention it when we
-          call.
-        </p>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-3xl mx-auto">
           {upsells.map((u) => (
             <Link
