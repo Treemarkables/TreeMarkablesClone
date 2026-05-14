@@ -4666,6 +4666,57 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         // Don't fail job creation if promo image fails
       }
 
+      // Mulch order: fire-and-forget customer confirmation email. We parse the
+      // structured fields back out of the description string the website form
+      // builds, so the email can show a real summary without touching the
+      // jobs schema. Failures are logged but don't block the response.
+      if (job.status === 'mulch' && job.jobContactEmail) {
+        (async () => {
+          try {
+            const desc = job.description || '';
+            const pick = (label: string) => {
+              const m = desc.match(new RegExp(`^${label}:\\s*(.+)$`, 'm'));
+              return m ? m[1].trim() : '';
+            };
+            const qtyMatch = desc.match(/Quantity:\s*(\d+)\s*m³\s*—\s*(.+?)\s*@\s*\$(\d+(?:\.\d+)?)\/m³/);
+            const quantityM3 = qtyMatch ? parseInt(qtyMatch[1], 10) : 0;
+            const productName = qtyMatch ? qtyMatch[2].trim() : 'Aged Mulch';
+            const pricePerM3 = qtyMatch ? parseFloat(qtyMatch[3]) : 35;
+            const parseMoney = (s: string) => parseFloat(s.replace(/[^0-9.]/g, '')) || 0;
+            const subtotal = parseMoney(pick('Subtotal'));
+            const gst = parseMoney(pick('GST \\(15%\\)'));
+            const total = parseMoney(pick('Total \\(incl\\. GST\\)')) || parseFloat(job.totalAmount || '0');
+            const coverageMatch = desc.match(/~(\d+)\s*m².*?(\d+)\s*mm/);
+            const coverageM2 = coverageMatch ? parseInt(coverageMatch[1], 10) : 0;
+            const coverageDepthMm = coverageMatch ? parseInt(coverageMatch[2], 10) : 80;
+            const accessNotes = pick('Access notes') || undefined;
+
+            const customerName =
+              [job.jobContactFirstName, job.jobContactLastName].filter(Boolean).join(' ').trim() ||
+              'there';
+
+            await emailService.sendMulchOrderConfirmation({
+              customerEmail: job.jobContactEmail!,
+              customerName,
+              jobNumber: job.jobNumber,
+              quantityM3,
+              productName,
+              pricePerM3,
+              subtotal: subtotal || quantityM3 * pricePerM3,
+              gst: gst || quantityM3 * pricePerM3 * 0.15,
+              total: total || quantityM3 * pricePerM3 * 1.15,
+              coverageM2,
+              coverageDepthMm,
+              address: job.address,
+              accessNotes,
+            });
+            console.log(`✅ Sent mulch order confirmation to ${job.jobContactEmail} for job #${job.jobNumber}`);
+          } catch (err) {
+            console.error(`❌ Failed to send mulch order confirmation for job #${job.jobNumber}:`, err);
+          }
+        })();
+      }
+
       broadcast(['/api/jobs']);
       res.json({ success: true, data: job });
     } catch (error) {
