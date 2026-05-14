@@ -12,6 +12,7 @@ import {
   CloudRain,
   Sparkles,
   Play,
+  Calculator,
   Plus,
   Minus,
   ArrowRight,
@@ -20,6 +21,8 @@ import {
 const AGED_PRICE = 35;
 const MIN_QTY = 4;
 const GST_RATE = 0.15;
+const COVERAGE_M2_PER_M3 = 20;
+const COVERAGE_DEPTH_MM = 50;
 
 const NEON = "#39FF14";
 
@@ -251,6 +254,23 @@ export default function Mulch() {
                   </button>
                 );
               })}
+            </div>
+
+            <div
+              className="mt-4 rounded-lg p-3.5 flex gap-3 items-start border-l-[3px]"
+              style={{ background: "#f5fff0", borderLeftColor: NEON }}
+            >
+              <Calculator className="w-5 h-5 mt-0.5 flex-shrink-0 text-black" />
+              <div className="text-sm leading-snug">
+                <div className="font-bold text-black">
+                  Covers about {qty * COVERAGE_M2_PER_M3} m²
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  Based on a {COVERAGE_DEPTH_MM} mm layer — 1 m³ covers around{" "}
+                  {COVERAGE_M2_PER_M3} m². Spread it thicker for weed
+                  suppression and you'll cover a bit less.
+                </div>
+              </div>
             </div>
           </div>
 
