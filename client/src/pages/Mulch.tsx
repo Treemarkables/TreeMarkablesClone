@@ -18,7 +18,6 @@ import {
   ArrowRight,
 } from "lucide-react";
 
-const STANDARD_PRICE = 35;
 const AGED_PRICE = 55;
 const DELIVERY_FLAT = 80;
 const FREE_DELIVERY_THRESHOLD = 9;
@@ -26,27 +25,10 @@ const GST_RATE = 0.15;
 
 const NEON = "#39FF14";
 
-type MulchType = {
-  key: "standard" | "aged";
-  name: string;
-  price: number;
-  desc: string;
+const PRODUCT = {
+  name: "Aged Mulch",
+  price: AGED_PRICE,
 };
-
-const mulchTypes: MulchType[] = [
-  {
-    key: "standard",
-    name: "Standard Arborist",
-    price: STANDARD_PRICE,
-    desc: "Mixed fresh chippings. Great for garden beds.",
-  },
-  {
-    key: "aged",
-    name: "Aged / Composted",
-    price: AGED_PRICE,
-    desc: "6+ months aged. Darker, richer.",
-  },
-];
 
 const benefits = [
   {
@@ -83,42 +65,11 @@ const benefits = [
 
 const presetQuantities = [3, 6, 9, 12];
 
-const freshPoints = [
-  "Straight from our chippers — mix of wood, bark and leaf",
-  "Packed with nutrients and beneficial soil microbes",
-  "Breaks down faster than commercial bark mulch",
-  "Best value — the workhorse of the garden",
-  "Keep away from young veggie seedlings (can temporarily tie up nitrogen)",
-];
-
-const agedPoints = [
-  "Already broken down — darker, richer, more soil-like",
-  "Safe to use right against young plants and veggies",
-  "Nutrients are immediately plant-available",
-  "More refined look for show gardens",
-  "Won't draw nitrogen from your soil",
-];
-
 const clampQty = (n: number) => Math.max(1, Math.min(50, n));
 const formatPrice = (n: number) => `$${n.toFixed(2)}`;
 
-function NeonCheckBullet({ children }: { children: React.ReactNode }) {
-  return (
-    <li className="flex gap-2 text-xs text-muted-foreground leading-relaxed">
-      <span
-        className="flex-shrink-0 w-3.5 h-3.5 rounded-full flex items-center justify-center mt-0.5"
-        style={{ background: NEON }}
-      >
-        <Check className="w-2.5 h-2.5 text-black" strokeWidth={4} />
-      </span>
-      <span>{children}</span>
-    </li>
-  );
-}
-
 export default function Mulch() {
   const [qty, setQty] = useState(6);
-  const [selectedType, setSelectedType] = useState<MulchType>(mulchTypes[0]);
   const [address, setAddress] = useState("");
   const [suburb, setSuburb] = useState("");
   const [postcode, setPostcode] = useState("");
@@ -127,7 +78,7 @@ export default function Mulch() {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
 
-  const mulchCost = qty * selectedType.price;
+  const mulchCost = qty * PRODUCT.price;
   const delivery = qty >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FLAT;
   const subtotal = mulchCost + delivery;
   const gst = subtotal * GST_RATE;
@@ -154,7 +105,7 @@ export default function Mulch() {
           Delivered
         </h1>
         <p className="text-muted-foreground mt-2 text-sm md:text-base">
-          Fresh arborist mulch from our chippers, delivered across Gisborne.
+          Quality arborist mulch, delivered across Gisborne.
         </p>
       </section>
 
@@ -228,67 +179,6 @@ export default function Mulch() {
         <p className="text-center text-sm text-muted-foreground mt-4">
           See exactly how your mulch gets from our chippers to your driveway.
         </p>
-      </section>
-
-      {/* Compare */}
-      <section className="px-4 py-10 border-b bg-muted/30">
-        <h2 className="text-2xl font-extrabold text-center mb-2 tracking-tight">
-          Fresh vs{" "}
-          <span
-            className="px-1.5 rounded text-black"
-            style={{ background: NEON }}
-          >
-            Aged
-          </span>{" "}
-          — Which Should You Get?
-        </h2>
-        <p className="text-center text-sm text-muted-foreground mb-7">
-          Both are great. They're just built for different jobs.
-        </p>
-        <div className="flex flex-col gap-4 max-w-xl mx-auto">
-          <div className="relative bg-card border-2 border-black rounded-xl p-5">
-            <div
-              className="absolute -top-2.5 left-4 text-black text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wider"
-              style={{ background: NEON }}
-            >
-              FRESH ARBORIST
-            </div>
-            <div className="text-lg font-extrabold">Standard Mulch</div>
-            <div className="font-bold text-sm mb-3">$35 / m³</div>
-            <div
-              className="p-3 rounded text-xs leading-snug mb-3 border-l-[3px]"
-              style={{ background: "#f5fff0", borderLeftColor: NEON }}
-            >
-              <strong>Best for:</strong> Established trees, shrubs, ornamental
-              beds, pathways, fruit trees.
-            </div>
-            <ul className="space-y-0">
-              {freshPoints.map((p) => (
-                <NeonCheckBullet key={p}>{p}</NeonCheckBullet>
-              ))}
-            </ul>
-          </div>
-
-          <div className="relative bg-card border border-border rounded-xl p-5">
-            <div className="absolute -top-2.5 left-4 bg-black text-white text-[10px] font-extrabold px-2 py-0.5 rounded tracking-wider">
-              6+ MONTHS AGED
-            </div>
-            <div className="text-lg font-extrabold">Aged / Composted</div>
-            <div className="font-bold text-sm mb-3">$55 / m³</div>
-            <div
-              className="p-3 rounded text-xs leading-snug mb-3 border-l-[3px]"
-              style={{ background: "#f5fff0", borderLeftColor: NEON }}
-            >
-              <strong>Best for:</strong> Vegetable gardens, raised beds, new
-              plantings, premium landscaped beds.
-            </div>
-            <ul className="space-y-0">
-              {agedPoints.map((p) => (
-                <NeonCheckBullet key={p}>{p}</NeonCheckBullet>
-              ))}
-            </ul>
-          </div>
-        </div>
       </section>
 
       {/* Form */}
@@ -368,7 +258,7 @@ export default function Mulch() {
             </div>
           </div>
 
-          {/* Step 2 — type */}
+          {/* Step 2 — address */}
           <div className="mb-9">
             <div className="flex items-center mb-3.5">
               <span
@@ -376,54 +266,6 @@ export default function Mulch() {
                 style={{ background: NEON }}
               >
                 2
-              </span>
-              <span className="font-bold text-base">Choose mulch type</span>
-            </div>
-            <div className="space-y-2">
-              {mulchTypes.map((t) => {
-                const isSelected = selectedType.key === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setSelectedType(t)}
-                    className={`w-full text-left rounded-lg p-3.5 transition-colors ${
-                      isSelected
-                        ? "border-2 border-black"
-                        : "border border-border"
-                    }`}
-                    style={
-                      isSelected
-                        ? { background: "#f5fff0" }
-                        : { background: "white" }
-                    }
-                  >
-                    <div className="flex justify-between items-center mb-1">
-                      <div className="font-bold text-sm">{t.name}</div>
-                      <div
-                        className="text-black font-extrabold text-xs px-2 py-0.5 rounded"
-                        style={{ background: NEON }}
-                      >
-                        ${t.price}/m³
-                      </div>
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {t.desc}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Step 3 — address */}
-          <div className="mb-9">
-            <div className="flex items-center mb-3.5">
-              <span
-                className="inline-flex w-6 h-6 text-black rounded-full items-center justify-center font-extrabold text-xs mr-2"
-                style={{ background: NEON }}
-              >
-                3
               </span>
               <span className="font-bold text-base">Delivery address</span>
             </div>
@@ -451,14 +293,14 @@ export default function Mulch() {
             </div>
           </div>
 
-          {/* Step 4 — contact */}
+          {/* Step 3 — contact */}
           <div>
             <div className="flex items-center mb-3.5">
               <span
                 className="inline-flex w-6 h-6 text-black rounded-full items-center justify-center font-extrabold text-xs mr-2"
                 style={{ background: NEON }}
               >
-                4
+                3
               </span>
               <span className="font-bold text-base">Your details</span>
             </div>
@@ -491,16 +333,12 @@ export default function Mulch() {
             Order Summary
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
-            <span className="text-muted-foreground">Mulch type</span>
-            <span className="font-semibold">{selectedType.name}</span>
-          </div>
-          <div className="flex justify-between py-2.5 border-b text-sm">
             <span className="text-muted-foreground">Quantity</span>
             <span className="font-semibold">{qty} m³</span>
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
             <span className="text-muted-foreground">
-              Mulch (${selectedType.price}/m³)
+              {PRODUCT.name} (${PRODUCT.price}/m³)
             </span>
             <span className="font-semibold">{formatPrice(mulchCost)}</span>
           </div>
