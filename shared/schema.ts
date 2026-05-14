@@ -151,7 +151,7 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 // ========================================
 
 // Job Status Enum
-export const JobStatus = z.enum(['lead', 'quote', 'scheduled', 'work_order', 'completed', 'unsuccessful']);
+export const JobStatus = z.enum(['lead', 'quote', 'mulch', 'scheduled', 'work_order', 'completed', 'unsuccessful']);
 export type JobStatusType = z.infer<typeof JobStatus>;
 
 export const LeadSourceType = z.enum(['phone', 'website', 'referral', 'friend', 'saw_working', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'council', 'other']);
@@ -377,7 +377,7 @@ export const jobs = pgTable("jobs", {
   scheduledEndTime: text("scheduled_end_time"), // e.g., "10:00"
   completedDate: timestamp("completed_date"),
   workOrderAt: timestamp("work_order_at"), // Timestamp set when the job first transitions to status 'work_order' (i.e. quote accepted). Used by the Dispatch Board to FIFO-sort work orders by acceptance time; stable across subsequent edits.
-  status: text("status").notNull().default('quote'), // lead, quote, scheduled, work_order, completed, unsuccessful
+  status: text("status").notNull().default('quote'), // lead, quote, mulch, scheduled, work_order, completed, unsuccessful
   priority: text("priority"), // low, medium, high, urgent
   assignedTeam: text("assigned_team").array(),
   assignedTo: text("assigned_to").array(), // Employee IDs for calendar display
