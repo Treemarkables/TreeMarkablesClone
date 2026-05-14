@@ -1403,6 +1403,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return "bg-orange-600";
       case "quote":
         return "bg-orange-600";
+      case "mulch":
+        return "bg-lime-500";
       case "lead":
         return "bg-yellow-500";
       default:
@@ -1436,6 +1438,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         return "#3b82f6"; // blue-500 (same as work order)
       case "quote":
         return "#f97316"; // orange-500
+      case "mulch":
+        return "#84cc16"; // lime-500
       case "lead":
         return "#ca8a04"; // yellow-600
       default:

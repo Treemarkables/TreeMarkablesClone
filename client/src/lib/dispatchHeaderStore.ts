@@ -80,6 +80,7 @@ export const DISPATCH_STATUS_FILTERS = [
   { value: "lead",       label: "Lead" },
   { value: "queue",      label: "Queue" },
   { value: "quote",      label: "Quote" },
+  { value: "mulch",      label: "Mulch" },
   { value: "work_order", label: "W/O" },
   { value: "scheduled",  label: "Scheduled" },
 ] as const;
