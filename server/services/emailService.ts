@@ -351,6 +351,136 @@ class EmailService {
     });
   }
 
+  async sendMulchOrderConfirmation(params: {
+    customerEmail: string;
+    customerName: string;
+    jobNumber: string;
+    quantityM3: number;
+    productName: string;
+    pricePerM3: number;
+    subtotal: number;
+    gst: number;
+    total: number;
+    coverageM2: number;
+    coverageDepthMm: number;
+    address: string;
+    accessNotes?: string;
+  }): Promise<EmailResult> {
+    const {
+      customerEmail,
+      customerName,
+      jobNumber,
+      quantityM3,
+      productName,
+      pricePerM3,
+      subtotal,
+      gst,
+      total,
+      coverageM2,
+      coverageDepthMm,
+      address,
+      accessNotes,
+    } = params;
+
+    const firstName = customerName.split(/\s+/)[0] || customerName;
+    const subject = `Mulch order received — Treemarkables (#${jobNumber})`;
+    const NEON = '#39FF14';
+    const fmt = (n: number) => `$${n.toFixed(2)}`;
+
+    const text = [
+      `Hi ${firstName},`,
+      ``,
+      `Thanks for your mulch order. We've got it and we'll give you a call within one working day to confirm delivery timing.`,
+      ``,
+      `Your order (#${jobNumber}):`,
+      `- Quantity: ${quantityM3} m³`,
+      `- ${productName} ($${pricePerM3}/m³ ex GST): ${fmt(subtotal)}`,
+      `- Delivery: FREE`,
+      `- GST (15%): ${fmt(gst)}`,
+      `- Total (incl. GST): ${fmt(total)}`,
+      `- Coverage estimate: ~${coverageM2} m² at ${coverageDepthMm} mm depth`,
+      `- Delivery address: ${address}`,
+      accessNotes ? `- Access notes: ${accessNotes}` : null,
+      ``,
+      `What happens next:`,
+      `1. We'll call you within one working day to confirm timing and tip location.`,
+      `2. Mulch is delivered straight off the truck, tipped where you want it.`,
+      `3. Invoice arrives by email after delivery — no payment up front.`,
+      ``,
+      `Need to change something? Call us on 027 216 6882 or reply to this email.`,
+      ``,
+      `Thanks,`,
+      `Treemarkables`,
+    ]
+      .filter((line) => line !== null)
+      .join('\n');
+
+    const escape = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${escape(subject)}</title>
+</head>
+<body style="margin:0;padding:24px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f5;color:#111;">
+  <div style="max-width:560px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.04);">
+    <div style="background:#fafafa;border-bottom:1px solid #eee;padding:28px 24px;text-align:center;">
+      <div style="display:inline-block;width:56px;height:56px;background:${NEON};border-radius:50%;line-height:56px;font-size:28px;font-weight:800;color:#000;">✓</div>
+      <h1 style="margin:14px 0 6px;font-size:22px;font-weight:800;letter-spacing:-0.3px;">Thanks, ${escape(firstName)}!</h1>
+      <p style="margin:0;color:#555;font-size:14px;line-height:1.5;">We've got your mulch order. We'll call you within one working day to confirm delivery timing.</p>
+    </div>
+
+    <div style="padding:24px;">
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:800;color:#555;margin-bottom:14px;">Your order</div>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666;">Reference</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:600;">#${escape(jobNumber)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666;">Quantity</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:600;">${quantityM3} m³</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666;">${escape(productName)} ($${pricePerM3}/m³ ex GST)</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:600;">${fmt(subtotal)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666;">Delivery</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;"><span style="background:${NEON};color:#000;font-weight:800;font-size:11px;padding:2px 8px;border-radius:4px;">FREE</span></td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666;">GST (15%)</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:600;">${fmt(gst)}</td></tr>
+        <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666;">Coverage estimate</td><td style="padding:8px 0;border-bottom:1px solid #eee;text-align:right;font-weight:600;">~${coverageM2} m² at ${coverageDepthMm} mm</td></tr>
+        <tr><td style="padding:14px 0 4px;border-top:2px solid #000;font-size:18px;font-weight:800;">Total</td><td style="padding:14px 0 4px;border-top:2px solid #000;text-align:right;font-size:18px;font-weight:800;">${fmt(total)}</td></tr>
+      </table>
+      <div style="text-align:right;font-size:11px;color:#999;margin-top:2px;">Incl. GST — invoice on delivery</div>
+
+      <div style="margin-top:24px;padding-top:18px;border-top:1px solid #eee;font-size:13px;color:#555;line-height:1.55;">
+        <strong style="color:#111;">Delivery address:</strong> ${escape(address)}${accessNotes ? `<br><strong style="color:#111;">Access notes:</strong> ${escape(accessNotes)}` : ''}
+      </div>
+    </div>
+
+    <div style="background:#fafafa;border-top:1px solid #eee;padding:20px 24px;font-size:13px;color:#555;line-height:1.55;">
+      <div style="font-weight:800;color:#111;margin-bottom:8px;">What happens next</div>
+      <ol style="margin:0;padding-left:20px;">
+        <li style="margin-bottom:6px;">We'll call you within one working day to confirm timing and tip location.</li>
+        <li style="margin-bottom:6px;">Mulch is delivered straight off the truck, tipped where you want it.</li>
+        <li>Invoice arrives by email after delivery — no payment up front.</li>
+      </ol>
+      <div style="margin-top:16px;">Need to change something? Call us on <a href="tel:0272166882" style="color:#111;font-weight:600;">027 216 6882</a> or reply to this email.</div>
+    </div>
+
+    <div style="text-align:center;padding:18px 24px;font-size:11px;color:#999;">
+      Treemarkables — Gisborne, NZ
+    </div>
+  </div>
+</body>
+</html>`;
+
+    return this.sendEmail({
+      to: customerEmail,
+      subject,
+      text,
+      html,
+      jobNumber,
+    });
+  }
+
   isReady(): boolean {
     return this.isConfigured;
   }
