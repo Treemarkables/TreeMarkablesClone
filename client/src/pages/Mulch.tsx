@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import Header from "@/components/Header";
 import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
 import {
   Droplet,
   Sprout,
@@ -16,6 +18,7 @@ import {
   Plus,
   Minus,
   ArrowRight,
+  Loader2,
 } from "lucide-react";
 
 const AGED_PRICE = 35;
@@ -70,6 +73,8 @@ const clampQty = (n: number) => Math.max(MIN_QTY, Math.min(50, n));
 const formatPrice = (n: number) => `$${n.toFixed(2)}`;
 
 export default function Mulch() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const [qty, setQty] = useState(6);
   const [address, setAddress] = useState("");
   const [suburb, setSuburb] = useState("");
@@ -78,16 +83,110 @@ export default function Mulch() {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const mulchCost = qty * PRODUCT.price;
   const gst = mulchCost * GST_RATE;
   const total = mulchCost + gst;
+  const coverage = Math.round(qty * COVERAGE_M2_PER_M3);
+
+  const handleSubmit = async () => {
+    const trimmedName = name.trim();
+    const trimmedPhone = phone.trim();
+    const trimmedEmail = email.trim();
+    const trimmedAddress = address.trim();
+
+    if (!trimmedName || !trimmedAddress || (!trimmedPhone && !trimmedEmail)) {
+      toast({
+        variant: "destructive",
+        title: "Missing details",
+        description:
+          "Please fill in your name, a street address, and either a phone or email so we can confirm your delivery.",
+      });
+      return;
+    }
+
+    const suburbTrim = suburb.trim();
+    const postcodeTrim = postcode.trim();
+    const fullAddress = [trimmedAddress, suburbTrim, postcodeTrim]
+      .filter(Boolean)
+      .join(", ");
+
+    const description = [
+      `Mulch order via website`,
+      ``,
+      `Quantity: ${qty} m³ — ${PRODUCT.name} @ $${PRODUCT.price}/m³`,
+      `Subtotal: ${formatPrice(mulchCost)}`,
+      `GST (15%): ${formatPrice(gst)}`,
+      `Total (incl. GST): ${formatPrice(total)}`,
+      `Delivery: FREE`,
+      `Coverage estimate: ~${coverage} m² at ${COVERAGE_DEPTH_MM} mm depth`,
+      accessNotes.trim() ? `` : null,
+      accessNotes.trim() ? `Access notes: ${accessNotes.trim()}` : null,
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
+
+    setSubmitting(true);
+    try {
+      const res = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          status: "mulch",
+          leadSource: "website",
+          title: `Mulch order: ${qty} m³ ${PRODUCT.name}`,
+          description,
+          address: fullAddress || trimmedAddress,
+          totalAmount: total.toFixed(2),
+          isNewCustomer: true,
+          newCustomerName: trimmedName,
+          newCustomerEmail: trimmedEmail || undefined,
+          newCustomerPhone: trimmedPhone || undefined,
+          newCustomerAddress: fullAddress || trimmedAddress,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || `Submit failed (${res.status})`);
+      }
+
+      sessionStorage.setItem(
+        "mulchOrderSummary",
+        JSON.stringify({
+          qty,
+          productName: PRODUCT.name,
+          pricePerM3: PRODUCT.price,
+          total,
+          coverage,
+          customerName: trimmedName,
+          jobNumber: data.data?.jobNumber,
+        }),
+      );
+
+      setLocation("/mulch/thanks");
+    } catch (err) {
+      console.error("Mulch order submit failed:", err);
+      toast({
+        variant: "destructive",
+        title: "Couldn't book your delivery",
+        description:
+          err instanceof Error
+            ? err.message
+            : "Something went wrong. Please try again or call us.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background pt-20">
       <SEO
         title="Order Mulch — Treemarkables"
-        description="Fresh arborist mulch delivered across Gisborne. Order standard or aged mulch by the cubic metre, with free delivery on 9 m³ or more."
+        description="Aged arborist mulch delivered across Gisborne. $35/m³ + GST with free delivery, minimum 4 m³."
       />
       <Header />
 
@@ -183,10 +282,6 @@ export default function Mulch() {
       {/* Form */}
       <section className="px-4 py-8 border-b">
         <div className="max-w-xl mx-auto">
-          <div className="bg-yellow-50 border border-dashed border-yellow-600 text-yellow-800 text-[10px] uppercase tracking-widest p-2 rounded text-center mb-6 font-semibold">
-            — Interactive Wireframe —
-          </div>
-
           {/* Step 1 — quantity */}
           <div className="mb-9">
             <div className="flex items-center mb-3.5">
@@ -381,11 +476,21 @@ export default function Mulch() {
 
           <Button
             type="button"
-            disabled
-            className="w-full bg-black text-white font-extrabold tracking-wide h-12 text-sm"
+            disabled={submitting}
+            onClick={handleSubmit}
+            className="w-full bg-black text-white font-extrabold tracking-wide h-12 text-sm hover:bg-black/85"
           >
-            Book Delivery
-            <ArrowRight className="w-4 h-4 ml-1" />
+            {submitting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Booking...
+              </>
+            ) : (
+              <>
+                Book Delivery
+                <ArrowRight className="w-4 h-4 ml-1" />
+              </>
+            )}
           </Button>
           <div className="text-center text-xs text-muted-foreground mt-2">
             No payment now — invoice on delivery
