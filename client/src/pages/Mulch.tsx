@@ -12,15 +12,13 @@ import {
   CloudRain,
   Sparkles,
   Play,
-  Check,
   Plus,
   Minus,
   ArrowRight,
 } from "lucide-react";
 
-const AGED_PRICE = 55;
-const DELIVERY_FLAT = 80;
-const FREE_DELIVERY_THRESHOLD = 9;
+const AGED_PRICE = 35;
+const MIN_QTY = 4;
 const GST_RATE = 0.15;
 
 const NEON = "#39FF14";
@@ -63,9 +61,9 @@ const benefits = [
   },
 ];
 
-const presetQuantities = [3, 6, 9, 12];
+const presetQuantities = [4, 6, 9, 12];
 
-const clampQty = (n: number) => Math.max(1, Math.min(50, n));
+const clampQty = (n: number) => Math.max(MIN_QTY, Math.min(50, n));
 const formatPrice = (n: number) => `$${n.toFixed(2)}`;
 
 export default function Mulch() {
@@ -79,10 +77,8 @@ export default function Mulch() {
   const [email, setEmail] = useState("");
 
   const mulchCost = qty * PRODUCT.price;
-  const delivery = qty >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FLAT;
-  const subtotal = mulchCost + delivery;
-  const gst = subtotal * GST_RATE;
-  const total = subtotal + gst;
+  const gst = mulchCost * GST_RATE;
+  const total = mulchCost + gst;
 
   return (
     <div className="min-h-screen bg-background pt-20">
@@ -212,11 +208,11 @@ export default function Mulch() {
               </Button>
               <Input
                 type="number"
-                min={1}
+                min={MIN_QTY}
                 max={50}
                 value={qty}
                 onChange={(e) =>
-                  setQty(clampQty(parseInt(e.target.value) || 1))
+                  setQty(clampQty(parseInt(e.target.value) || MIN_QTY))
                 }
                 className="flex-1 h-11 border-2 border-black text-center text-xl font-bold"
               />
@@ -344,16 +340,12 @@ export default function Mulch() {
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
             <span className="text-muted-foreground">Delivery</span>
-            {delivery === 0 ? (
-              <span
-                className="font-extrabold text-[11px] text-black px-2 py-0.5 rounded"
-                style={{ background: NEON }}
-              >
-                FREE
-              </span>
-            ) : (
-              <span className="font-semibold">{formatPrice(delivery)}</span>
-            )}
+            <span
+              className="font-extrabold text-[11px] text-black px-2 py-0.5 rounded"
+              style={{ background: NEON }}
+            >
+              FREE
+            </span>
           </div>
           <div className="flex justify-between py-2.5 border-b text-sm">
             <span className="text-muted-foreground">GST (15%)</span>
@@ -377,24 +369,6 @@ export default function Mulch() {
           </Button>
           <div className="text-center text-xs text-muted-foreground mt-2">
             No payment now — invoice on delivery
-          </div>
-
-          <div className="mt-6 pt-5 border-t text-xs text-muted-foreground space-y-2">
-            {[
-              "Free delivery on orders of 9 m³ or more",
-              "Tipped where you want (driveway, lawn, paddock)",
-              "Usually delivered within 3–5 working days",
-            ].map((t) => (
-              <div key={t} className="flex gap-2 items-start">
-                <span
-                  className="flex-shrink-0 w-4 h-4 rounded-full flex items-center justify-center mt-0.5"
-                  style={{ background: NEON }}
-                >
-                  <Check className="w-3 h-3 text-black" strokeWidth={4} />
-                </span>
-                <span>{t}</span>
-              </div>
-            ))}
           </div>
         </div>
       </section>
