@@ -5,6 +5,7 @@ import Footer from "@/components/Footer";
 import SEO from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { AddressAutocomplete } from "@/components/AddressAutocomplete";
 import { useToast } from "@/hooks/use-toast";
 import {
   Droplet,
@@ -77,8 +78,6 @@ export default function Mulch() {
   const { toast } = useToast();
   const [qty, setQty] = useState(6);
   const [address, setAddress] = useState("");
-  const [suburb, setSuburb] = useState("");
-  const [postcode, setPostcode] = useState("");
   const [accessNotes, setAccessNotes] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -106,11 +105,7 @@ export default function Mulch() {
       return;
     }
 
-    const suburbTrim = suburb.trim();
-    const postcodeTrim = postcode.trim();
-    const fullAddress = [trimmedAddress, suburbTrim, postcodeTrim]
-      .filter(Boolean)
-      .join(", ");
+    const fullAddress = trimmedAddress;
 
     const description = [
       `Mulch order via website`,
@@ -412,20 +407,10 @@ export default function Mulch() {
               <span className="font-bold text-base">Delivery address</span>
             </div>
             <div className="space-y-2">
-              <Input
-                placeholder="Street address"
+              <AddressAutocomplete
                 value={address}
-                onChange={(e) => setAddress(e.target.value)}
-              />
-              <Input
-                placeholder="Suburb"
-                value={suburb}
-                onChange={(e) => setSuburb(e.target.value)}
-              />
-              <Input
-                placeholder="Postcode"
-                value={postcode}
-                onChange={(e) => setPostcode(e.target.value)}
+                onChange={setAddress}
+                placeholder="Start typing your address..."
               />
               <Input
                 placeholder="Access notes (gate width, tip location)"
