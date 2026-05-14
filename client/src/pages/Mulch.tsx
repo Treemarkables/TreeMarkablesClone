@@ -274,7 +274,7 @@ export default function Mulch() {
             </div>
           </div>
 
-          {/* Step 2 — address */}
+          {/* Step 2 — contact */}
           <div className="mb-9">
             <div className="flex items-center mb-3.5">
               <span
@@ -282,6 +282,37 @@ export default function Mulch() {
                 style={{ background: NEON }}
               >
                 2
+              </span>
+              <span className="font-bold text-base">Your details</span>
+            </div>
+            <div className="space-y-2">
+              <Input
+                placeholder="Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <Input
+                placeholder="Phone"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              <Input
+                placeholder="Email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Step 3 — address */}
+          <div>
+            <div className="flex items-center mb-3.5">
+              <span
+                className="inline-flex w-6 h-6 text-black rounded-full items-center justify-center font-extrabold text-xs mr-2"
+                style={{ background: NEON }}
+              >
+                3
               </span>
               <span className="font-bold text-base">Delivery address</span>
             </div>
@@ -305,37 +336,6 @@ export default function Mulch() {
                 placeholder="Access notes (gate width, tip location)"
                 value={accessNotes}
                 onChange={(e) => setAccessNotes(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {/* Step 3 — contact */}
-          <div>
-            <div className="flex items-center mb-3.5">
-              <span
-                className="inline-flex w-6 h-6 text-black rounded-full items-center justify-center font-extrabold text-xs mr-2"
-                style={{ background: NEON }}
-              >
-                3
-              </span>
-              <span className="font-bold text-base">Your details</span>
-            </div>
-            <div className="space-y-2">
-              <Input
-                placeholder="Name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-              />
-              <Input
-                placeholder="Phone"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-              />
-              <Input
-                placeholder="Email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
           </div>
