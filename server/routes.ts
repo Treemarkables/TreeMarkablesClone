@@ -2092,100 +2092,108 @@ Sitemap: https://app.treemarkables.co.nz/sitemap.xml`);
   });
 
   // Google Places reviews endpoint (replaces Google Business Profile)
+  // Cached for 6h — Places Details (Enterprise+Atmosphere) is ~$25/1000 calls,
+  // and reviews change slowly. One bad April we paid $144 uncached.
+  const googleReviewsCache: { data: any[] | null; fetchedAt: number; inflight: Promise<any[]> | null } = {
+    data: null,
+    fetchedAt: 0,
+    inflight: null,
+  };
+  const GOOGLE_REVIEWS_TTL_MS = 6 * 60 * 60 * 1000;
+
+  async function fetchGoogleReviewsFromApi(apiKey: string, placeId: string): Promise<any[]> {
+    const v1Url = `https://places.googleapis.com/v1/places/${placeId}`;
+    const v1Response = await fetch(v1Url, {
+      headers: {
+        'X-Goog-Api-Key': apiKey,
+        'X-Goog-FieldMask': 'reviews.text,reviews.rating,reviews.authorAttribution.displayName,reviews.publishTime',
+      },
+    });
+
+    if (!v1Response.ok) {
+      throw new Error(`Places v1 returned ${v1Response.status}`);
+    }
+
+    const v1Data = await v1Response.json();
+    if (!v1Data.reviews?.length) return [];
+
+    return v1Data.reviews.map((review: any, index: number) => ({
+      id: `google-v1-${index}`,
+      name: review.authorAttribution?.displayName || 'Google User',
+      location: 'Google Reviews',
+      rating: review.rating || 5,
+      comment: review.text?.text || '',
+      service: 'Tree Services',
+      source: 'google',
+      date: review.publishTime,
+    }));
+  }
+
   app.get('/api/reviews/google', async (req: Request, res: Response) => {
     try {
       const apiKey = process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_MY_BUSINESS_API_KEY;
       const placeId = process.env.GOOGLE_PLACE_ID;
-      
+
       if (!apiKey) {
-        return res.status(200).json({ 
-          success: true, 
+        return res.status(200).json({
+          success: true,
           reviews: [],
-          message: 'Google Places API key not configured. Please set GOOGLE_PLACES_API_KEY.' 
+          message: 'Google Places API key not configured. Please set GOOGLE_PLACES_API_KEY.',
         });
       }
 
       if (!placeId) {
-        return res.status(200).json({ 
-          success: true, 
+        return res.status(200).json({
+          success: true,
           reviews: [],
-          message: 'Google Place ID not configured. Use /api/reviews/google/discover to find your Place ID.'
+          message: 'Google Place ID not configured. Use /api/reviews/google/discover to find your Place ID.',
         });
       }
 
-      let reviews: any[] = [];
+      const now = Date.now();
+      const cacheAge = now - googleReviewsCache.fetchedAt;
+      const cacheFresh = googleReviewsCache.data !== null && cacheAge < GOOGLE_REVIEWS_TTL_MS;
 
-      // Try new Google Places API v1 first
-      try {
-        const v1Url = `https://places.googleapis.com/v1/places/${placeId}`;
-        
-        const v1Response = await fetch(v1Url, {
-          headers: {
-            'X-Goog-Api-Key': apiKey,
-            'X-Goog-FieldMask': 'id,displayName,rating,userRatingCount,reviews.text,reviews.rating,reviews.authorAttribution.displayName,reviews.publishTime'
-          }
+      if (cacheFresh) {
+        return res.json({
+          success: true,
+          reviews: googleReviewsCache.data,
+          cached: true,
+          ageMs: cacheAge,
         });
-
-        if (v1Response.ok) {
-          const v1Data = await v1Response.json();
-          
-          if (v1Data.reviews && v1Data.reviews.length > 0) {
-            reviews = v1Data.reviews.map((review: any, index: number) => ({
-              id: `google-v1-${index}`,
-              name: review.authorAttribution?.displayName || 'Google User',
-              location: 'Google Reviews',
-              rating: review.rating || 5,
-              comment: review.text?.text || '',
-              service: 'Tree Services',
-              source: 'google',
-              date: review.publishTime
-            }));
-          }
-        }
-      } catch (v1Error) {
-        console.log('Google Places v1 API not available, trying legacy API');
       }
 
-      // Fallback to legacy Google Places API if v1 failed or returned no reviews
-      if (reviews.length === 0) {
-        try {
-          const legacyUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,rating,user_ratings_total,reviews&key=${apiKey}`;
-          
-          const legacyResponse = await fetch(legacyUrl);
-          
-          if (legacyResponse.ok) {
-            const legacyData = await legacyResponse.json();
-            
-            if (legacyData.result?.reviews && legacyData.result.reviews.length > 0) {
-              reviews = legacyData.result.reviews.map((review: any, index: number) => ({
-                id: `google-legacy-${index}`,
-                name: review.author_name || 'Google User',
-                location: 'Google Reviews',
-                rating: review.rating || 5,
-                comment: review.text || '',
-                service: 'Tree Services',
-                source: 'google',
-                date: new Date(review.time * 1000).toISOString()
-              }));
-            }
-          }
-        } catch (legacyError) {
-          console.log('Google Places legacy API also failed');
-        }
+      // Coalesce concurrent misses so a stampede of page loads is still one upstream call.
+      if (!googleReviewsCache.inflight) {
+        googleReviewsCache.inflight = fetchGoogleReviewsFromApi(apiKey, placeId)
+          .then((reviews) => {
+            googleReviewsCache.data = reviews;
+            googleReviewsCache.fetchedAt = Date.now();
+            return reviews;
+          })
+          .catch((err) => {
+            console.error('Google Places reviews fetch failed:', err);
+            // Serve stale on error if we have any, otherwise empty.
+            return googleReviewsCache.data ?? [];
+          })
+          .finally(() => {
+            googleReviewsCache.inflight = null;
+          });
       }
 
-      res.json({ 
-        success: true, 
+      const reviews = await googleReviewsCache.inflight;
+      res.json({
+        success: true,
         reviews,
-        message: reviews.length > 0 ? `Retrieved ${reviews.length} Google reviews` : 'No reviews found or API temporarily unavailable'
+        cached: false,
+        message: reviews.length > 0 ? `Retrieved ${reviews.length} Google reviews` : 'No reviews found',
       });
-
     } catch (error) {
       console.error('Google Places reviews error:', error);
-      res.status(200).json({ 
-        success: true, 
-        reviews: [],
-        message: 'Unable to fetch Google reviews at this time' 
+      res.status(200).json({
+        success: true,
+        reviews: googleReviewsCache.data ?? [],
+        message: 'Unable to fetch Google reviews at this time',
       });
     }
   });
@@ -24925,18 +24933,8 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  // Reviews API - Google and Facebook Reviews
-  const { fetchGoogleReviews, fetchFacebookReviews } = await import("./services/reviewsService");
-
-  app.get("/api/reviews/google", async (req, res) => {
-    try {
-      const reviews = await fetchGoogleReviews();
-      res.json({ success: true, reviews });
-    } catch (error) {
-      console.error('Error fetching Google reviews:', error);
-      res.json({ success: false, reviews: [], message: error instanceof Error ? error.message : 'Failed to fetch Google reviews' });
-    }
-  });
+  // Reviews API - Facebook only here; Google is registered earlier in this file (cached).
+  const { fetchFacebookReviews } = await import("./services/reviewsService");
 
   app.get("/api/reviews/facebook", async (req, res) => {
     try {
