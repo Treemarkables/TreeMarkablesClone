@@ -2072,11 +2072,11 @@ export function ProposalBuilderV2({
           )}
 
           {/* ── Document Canvas (editor + inline customer preview) ── */}
-          <div className="flex-1 overflow-y-auto bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 px-2 py-4 sm:px-6 sm:py-6">
             <div className="max-w-4xl mx-auto bg-white shadow-sm rounded-sm">
 
               {/* Document Header — logoSize is clamped to headerHeight (see useEffect + resize handler), which is what keeps the logo inside the header. */}
-              <div className="flex items-center justify-between px-6 sm:px-10 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0 }}>
+              <div className="flex items-center justify-between gap-3 pl-6 pr-8 sm:pl-10 sm:pr-12 border-b border-gray-200" style={{ height: headerHeight, flexShrink: 0 }}>
                 {/* Logo container — click to select, then drag any corner to resize. */}
                 <div className="flex items-center" style={{ flexShrink: 0, minWidth: 0 }}>
                   <div
@@ -2093,6 +2093,11 @@ export function ProposalBuilderV2({
                         style={{ height: Math.min(logoSize, headerHeight), maxWidth: 600, display: "block" }}
                         className="w-auto object-contain select-none"
                         draggable={false}
+                        onError={(e) => {
+                          const img = e.currentTarget;
+                          if (img.src.endsWith("/treemarkables-logo.png")) return;
+                          img.src = "/treemarkables-logo.png";
+                        }}
                       />
                     ) : (
                       // Reserve the same space the logo will take so the header
@@ -2161,7 +2166,7 @@ export function ProposalBuilderV2({
                     )}
                   </div>
                 </div>
-                <div className="text-right text-xs sm:text-sm text-gray-600 space-y-0.5">
+                <div className="text-right text-xs sm:text-sm text-gray-600 space-y-0.5 min-w-0 [overflow-wrap:anywhere]">
                   {companyAddress && <p>{companyAddress}</p>}
                   {companyPhone && <p>{companyPhone}</p>}
                   {companyEmail && <p>{companyEmail}</p>}
