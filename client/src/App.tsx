@@ -767,6 +767,12 @@ function Router() {
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [setLocation]);
   
+  // Detect Capacitor (iOS Inflow app) once — used to keep marketing/customer pages
+  // out of the native app shell. The iOS WebView loads the same URL as the website,
+  // but the staff app shouldn't expose Treemarkables marketing content (tree services,
+  // mulch ordering, blog, etc.) inside an Inflow-branded shell.
+  const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
+
   // On native Capacitor app, skip public website and go straight to login
   // Authenticated users hitting '/' go straight to the dispatch board (handles PWA launches,
   // back-button presses, iframe restarts, and any other navigation that lands on the root URL)
@@ -783,13 +789,38 @@ function Router() {
     if (isAuthenticated) {
       return <Redirect to="/dispatch" />;
     }
-    const isNative = typeof (window as any).Capacitor !== 'undefined' && (window as any).Capacitor.isNativePlatform?.();
     if (isNative) {
       return <Redirect to="/login" />;
     }
     return <Home />;
   }
-  
+
+  // Native-app guard: if the iOS Capacitor user somehow lands on a marketing/public route
+  // (deep link, stale URL, accidental nav), bounce them back into the staff app shell.
+  // Customer-facing transactional routes (/quote/:id, /invoice/:id, /proposal/:id, /review/:token,
+  // /customer-portal) are intentionally NOT blocked — staff may legitimately want to preview
+  // what a customer sees, and these are token-authenticated rather than public marketing pages.
+  if (isNative) {
+    const MARKETING_ROUTE_PREFIXES = [
+      '/home',
+      '/tree-removal',
+      '/tree-pruning',
+      '/stump-grinding',
+      '/hedge-trimming',
+      '/mulch',
+      '/blog',
+      '/summer-offer',
+      '/contact',
+      '/privacy-policy',
+    ];
+    const isMarketingRoute = MARKETING_ROUTE_PREFIXES.some(
+      prefix => location === prefix || location.startsWith(prefix + '/')
+    );
+    if (isMarketingRoute) {
+      return <Redirect to={isAuthenticated ? '/dispatch' : '/login'} />;
+    }
+  }
+
   return (
     <Switch>
       <Route path="/login" component={Login}/>

@@ -17,7 +17,7 @@ IOS_NATIVE_DIR="$ROOT_DIR/ios-native"
 IOS_APP_DIR="$ROOT_DIR/ios/App/App"
 PODFILE="$ROOT_DIR/ios/App/Podfile"
 
-echo "=== Treemarkables iOS Setup ==="
+echo "=== Inflow iOS Setup ==="
 echo "Root: $ROOT_DIR"
 echo ""
 
@@ -43,21 +43,18 @@ cp "$IOS_NATIVE_DIR/TwilioVoicePlugin.swift" "$IOS_APP_DIR/"
 cp "$IOS_NATIVE_DIR/TwilioVoicePlugin.m"     "$IOS_APP_DIR/"
 echo "    ✓ Plugin files copied to ios/App/App/"
 
-# --- Step 4: Apply entitlements (VoIP push) ---
+# --- Step 4: Apply entitlements (aps-environment only) ---
+# Note: com.apple.developer.pushkit.unrestricted-voip is NOT needed for CallKit-based
+# VoIP apps. It's a restricted entitlement for non-call PushKit abuse cases and breaks
+# automatic provisioning. Standard VoIP push (Background Mode: Voice over IP + PushKit
+# registration in TwilioVoicePlugin) works without it.
 echo "[4/7] Applying entitlements..."
 ENTITLEMENTS_DST="$IOS_APP_DIR/App.entitlements"
-if [ -f "$ENTITLEMENTS_DST" ]; then
-    /usr/libexec/PlistBuddy -c \
-        "Print :com.apple.developer.pushkit.unrestricted-voip" \
-        "$ENTITLEMENTS_DST" 2>/dev/null || \
-    /usr/libexec/PlistBuddy -c \
-        "Add :com.apple.developer.pushkit.unrestricted-voip bool true" \
-        "$ENTITLEMENTS_DST"
-else
+if [ ! -f "$ENTITLEMENTS_DST" ]; then
     cp "$IOS_NATIVE_DIR/App.entitlements" "$ENTITLEMENTS_DST"
     echo "    App.entitlements created"
 fi
-echo "    ✓ VoIP push entitlement applied"
+echo "    ✓ Entitlements applied (aps-environment)"
 
 # --- Step 5: Patch Info.plist ---
 echo "[5/7] Patching Info.plist with background modes..."
@@ -80,7 +77,7 @@ add_bg_mode "remote-notification"
 /usr/libexec/PlistBuddy -c \
     "Print :NSMicrophoneUsageDescription" "$INFO_PLIST" 2>/dev/null || \
 /usr/libexec/PlistBuddy -c \
-    "Add :NSMicrophoneUsageDescription string 'Treemarkables needs microphone access for voice calls with customers.'" \
+    "Add :NSMicrophoneUsageDescription string 'Inflow needs microphone access for voice calls with customers.'" \
     "$INFO_PLIST"
 echo "    ✓ Info.plist patched"
 
@@ -124,7 +121,7 @@ if [ ! -f "$PODFILE" ]; then
 fi
 
 echo "Next steps in Xcode:"
-echo "  • Signing & Capabilities → set Team + Bundle ID: com.treemarkables.app"
+echo "  • Signing & Capabilities → set Team + Bundle ID: co.nz.inflowapp"
 echo "  • Add capability: Push Notifications"
 echo "  • Add capability: Background Modes"
 echo "      ✓ Voice over IP"
@@ -132,7 +129,7 @@ echo "      ✓ Audio, AirPlay, and Picture in Picture"
 echo "      ✓ Remote notifications"
 echo "  • Connect iPhone → press Run (⌘R)"
 echo ""
-echo "Required Replit Secrets (already set):"
+echo "Required env vars (set on Digital Ocean App Platform):"
 echo "  TWILIO_API_KEY     — SK... from Twilio Console → API Keys"
 echo "  TWILIO_API_SECRET  — shown once when key was created"
 echo ""

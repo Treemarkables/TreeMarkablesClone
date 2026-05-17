@@ -42,6 +42,25 @@ window.addEventListener('unhandledrejection', (event) => {
   }
 });
 
+// Reload on foreground if backgrounded for >5 minutes.
+// In Capacitor (iOS WKWebView) and PWAs, users can sit on a stale JS bundle indefinitely
+// — the page only refetches HTML on a full reload, not on background→foreground transitions.
+// This means a deploy can ship to web but iOS users stay on the old code until they force-quit.
+// Threshold is intentionally generous (5 min) so quick app-switches don't trash in-progress state.
+const STALE_RELOAD_THRESHOLD_MS = 5 * 60 * 1000;
+let lastVisibleAt = Date.now();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    lastVisibleAt = Date.now();
+  } else if (document.visibilityState === 'visible') {
+    const elapsed = Date.now() - lastVisibleAt;
+    if (elapsed > STALE_RELOAD_THRESHOLD_MS) {
+      console.warn(`↻ App backgrounded for ${Math.round(elapsed / 1000)}s — reloading to get fresh code`);
+      window.location.reload();
+    }
+  }
+});
+
 // Keep cache cleanup to remove any old service worker / cache that was left behind
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations().then(registrations => {
