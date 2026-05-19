@@ -26,8 +26,12 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Inflow uses the camera so you can take photos of customer messages, job sites, and quotes to attach to leads.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Inflow needs microphone access for voice calls with customers.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Inflow needs photo library access so you can attach screenshots of customer messages and job-site photos to leads.</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>voip</string>
