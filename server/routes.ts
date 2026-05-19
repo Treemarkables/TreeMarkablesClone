@@ -25392,8 +25392,8 @@ Transcription: ${transcriptText}`;
         }
       }
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         message: `Test notification sent to ${successCount} device(s)`,
         devicesNotified: successCount
       });
@@ -25401,6 +25401,32 @@ Transcription: ${transcriptText}`;
       console.error('Error sending test notification:', error);
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to send test notification' });
     }
+  });
+
+  app.get("/api/notifications/admin/list-fcm-tokens", async (req, res) => {
+    const secret = req.headers['x-webhook-secret'];
+    if (!secret || secret !== process.env.HERO_WEBHOOK_SECRET) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+    const employeeId = req.query.employeeId as string | undefined;
+    if (!employeeId) {
+      return res.status(400).json({ success: false, message: 'employeeId query param required' });
+    }
+    const tokens = await storage.getFcmTokensByEmployee(employeeId);
+    res.json({
+      success: true,
+      total: tokens.length,
+      activeCount: tokens.filter(t => t.isActive).length,
+      tokens: tokens.map(t => ({
+        id: t.id,
+        tokenPrefix: t.token.slice(0, 20),
+        tokenSuffix: t.token.slice(-10),
+        deviceInfo: t.deviceInfo,
+        isActive: t.isActive,
+        createdAt: t.createdAt,
+        lastUsedAt: t.lastUsedAt,
+      })),
+    });
   });
 
   // Get all call records

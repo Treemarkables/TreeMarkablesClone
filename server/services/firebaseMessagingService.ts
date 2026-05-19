@@ -70,7 +70,13 @@ class FirebaseMessagingService {
         err.code === 'messaging/registration-token-not-registered' ||
         err.code === 'messaging/invalid-registration-token'
       ) {
-        console.log('❌ FCM token no longer valid (stale/deregistered):', token.substring(0, 20) + '...');
+        console.log('❌ FCM token no longer valid (stale/deregistered) — deactivating:', token.substring(0, 20) + '...');
+        try {
+          const { storage } = await import('../storage.js');
+          await storage.deleteFcmTokenByToken(token);
+        } catch (cleanupErr) {
+          console.error('❌ Failed to deactivate stale FCM token:', cleanupErr);
+        }
         return false;
       }
 
