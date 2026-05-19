@@ -1,7 +1,7 @@
 import { gmailReplyService } from './gmailReplyService';
 import { broadcast } from '../sseManager';
 
-const POLLING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (reduced from 3 to avoid Gmail IMAP throttling)
+const POLLING_INTERVAL_MS = 60 * 1000; // 1 minute — matches SMS poller cadence. Gmail IMAP tolerates this fine.
 let pollingIntervalId: NodeJS.Timeout | null = null;
 let isPolling = false;
 
