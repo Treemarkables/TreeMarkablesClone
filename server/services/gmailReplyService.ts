@@ -555,6 +555,20 @@ class GmailReplyService {
               actionUrl: `/dispatch?job=${job.id}`
             });
             console.log(`🔔 Created notification for email reply from ${customer.name} on job #${job.jobNumber}`);
+
+            const { pushToAdminsWithCustomerMessages } = await import('./notificationHelper.js');
+            const pushCount = await pushToAdminsWithCustomerMessages({
+              title: `Email Reply — ${customer.name}`,
+              body: emailPreview || `Re: ${email.subject}`,
+              clickAction: `/dispatch?job=${job.id}&tab=diary`,
+              data: {
+                type: 'email_reply',
+                jobId: job.id,
+                customerId: job.customerId || '',
+                jobNumber: String(job.jobNumber),
+              },
+            });
+            console.log(`📲 Pushed email-reply notification to ${pushCount} admin(s) for job #${job.jobNumber}`);
           } else {
             console.log(`🔔 Skipping duplicate email_reply notification for job #${job.jobNumber}`);
           }

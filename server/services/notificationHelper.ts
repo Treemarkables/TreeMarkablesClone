@@ -309,7 +309,7 @@ export async function notifyCustomerSmsReply(customerName: string, messageBody: 
 /**
  * Send a push notification to all admin employees who have customerMessages enabled
  */
-async function pushToAdminsWithCustomerMessages(options: NotificationOptions) {
+export async function pushToAdminsWithCustomerMessages(options: NotificationOptions) {
   try {
     const employees = await storage.getAllEmployees();
     const admins = employees.filter(emp => emp.role === 'admin');
