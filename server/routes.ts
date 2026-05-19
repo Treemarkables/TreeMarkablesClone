@@ -25413,8 +25413,18 @@ Transcription: ${transcriptText}`;
       return res.status(400).json({ success: false, message: 'employeeId query param required' });
     }
     const tokens = await storage.getFcmTokensByEmployee(employeeId);
+    const employee = await storage.getEmployee(employeeId);
+    const prefs = await storage.getNotificationPreferences(employeeId);
     res.json({
       success: true,
+      employee: employee ? {
+        id: employee.id,
+        name: employee.name,
+        role: employee.role,
+      } : null,
+      preferences: prefs ?? null,
+      pushToAdminsWithCustomerMessagesEligible:
+        employee?.role === 'admin' && prefs?.customerMessages !== false,
       total: tokens.length,
       activeCount: tokens.filter(t => t.isActive).length,
       tokens: tokens.map(t => ({
