@@ -75,8 +75,8 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("No active call invite")
             return
         }
-        let connectOptions = ConnectOptions(callInvite: callInvite) { _ in }
-        self.activeCall = TwilioVoiceSDK.connect(options: connectOptions, delegate: self)
+        let acceptOptions = AcceptOptions(callInvite: callInvite) { _ in }
+        self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
         self.callInvite = nil
         call.resolve()
     }
@@ -223,7 +223,7 @@ extension TwilioVoicePlugin: NotificationDelegate {
 
     public func cancelledCallInviteReceived(
         cancelledCallInvite: CancelledCallInvite,
-        error: Error?
+        error: Error
     ) {
         guard let uuid = self.callUUID else { return }
         callKitProvider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
@@ -246,8 +246,8 @@ extension TwilioVoicePlugin: CXProviderDelegate {
             action.fail()
             return
         }
-        let connectOptions = ConnectOptions(callInvite: callInvite) { _ in }
-        self.activeCall = TwilioVoiceSDK.connect(options: connectOptions, delegate: self)
+        let acceptOptions = AcceptOptions(callInvite: callInvite) { _ in }
+        self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
         self.callInvite = nil
         action.fulfill()
         notifyListeners("callAnswered", data: [:])
@@ -269,11 +269,11 @@ extension TwilioVoicePlugin: CXProviderDelegate {
     }
 
     public func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        activeCall?.activate(audioSession: audioSession)
+        (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = true
     }
 
     public func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
-        activeCall?.deactivate(audioSession: audioSession)
+        (TwilioVoiceSDK.audioDevice as? DefaultAudioDevice)?.isEnabled = false
     }
 }
 
