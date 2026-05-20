@@ -9269,22 +9269,29 @@ ${phoneTarget}
       if (!privateDir) {
         return res.status(503).send('Object storage not configured');
       }
-      const objectPath = `${privateDir}/voicemail/greeting.mp3`.replace(/^\//, '');
-      const parts = objectPath.split('/');
+      const bucketBase = privateDir.replace(/^\//, '');
+      const parts = bucketBase.split('/');
       const bucketName = parts[0];
-      const objectName = parts.slice(1).join('/');
-      const file = objectStorageClient.bucket(bucketName).file(objectName);
-      const [exists] = await file.exists();
-      if (!exists) {
-        return res.status(404).send('Voicemail greeting not uploaded. Place it at voicemail/greeting.mp3 in the private GCS bucket.');
+      const prefix = parts.slice(1).join('/');
+      // Accept either an mp3 or a wav greeting (macOS afconvert produces wav;
+      // ffmpeg produces mp3). Whichever the user uploaded.
+      const candidates: Array<{ name: string; type: string }> = [
+        { name: `${prefix}/voicemail/greeting.mp3`, type: 'audio/mpeg' },
+        { name: `${prefix}/voicemail/greeting.wav`, type: 'audio/wav' },
+      ];
+      for (const candidate of candidates) {
+        const file = objectStorageClient.bucket(bucketName).file(candidate.name);
+        const [exists] = await file.exists();
+        if (!exists) continue;
+        const [metadata] = await file.getMetadata();
+        res.set('Content-Type', (metadata.contentType as string) || candidate.type);
+        res.set('Cache-Control', 'public, max-age=300');
+        return file.createReadStream().on('error', (err) => {
+          console.error('Error streaming voicemail greeting:', err);
+          if (!res.headersSent) res.status(500).send('Stream error');
+        }).pipe(res);
       }
-      const [metadata] = await file.getMetadata();
-      res.set('Content-Type', (metadata.contentType as string) || 'audio/mpeg');
-      res.set('Cache-Control', 'public, max-age=300');
-      file.createReadStream().on('error', (err) => {
-        console.error('Error streaming voicemail greeting:', err);
-        if (!res.headersSent) res.status(500).send('Stream error');
-      }).pipe(res);
+      return res.status(404).send('Voicemail greeting not uploaded. Place greeting.mp3 or greeting.wav in voicemail/ under the private GCS bucket.');
     } catch (err) {
       console.error('Error serving voicemail greeting:', err);
       if (!res.headersSent) res.status(500).send('Internal error');
