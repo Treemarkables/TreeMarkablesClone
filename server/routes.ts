@@ -9326,27 +9326,29 @@ ${phoneTarget}
 </Response>`);
   });
 
-  // Public endpoint: streams the voicemail greeting audio from the private
-  // GCS bucket so Twilio (which needs a publicly reachable URL) can fetch it
-  // without exposing the rest of the bucket. Upload your audio to
-  //   gs://${PRIVATE_OBJECT_DIR sans leading slash}/voicemail/greeting.mp3
-  // and set TWILIO_VOICEMAIL_GREETING_URL on DO to:
-  //   https://app.treemarkables.co.nz/api/public/voicemail-greeting
-  app.get('/api/public/voicemail-greeting', async (_req: Request, res: Response) => {
+  // Streams a public audio file out of the private GCS bucket. Twilio's <Play>
+  // needs a publicly-reachable URL, but we don't want to expose the whole
+  // bucket (private customer photos live there). Accepts mp3 or wav (macOS
+  // afconvert produces wav, ffmpeg produces mp3 — whichever was uploaded).
+  //   folder=voicemail  baseName=greeting   → voicemail/greeting.{mp3,wav}
+  //   folder=recording-disclosure baseName=disclosure → .../disclosure.{mp3,wav}
+  const serveBucketAudio = async (
+    res: Response,
+    folder: string,
+    baseName: string,
+    notFoundMsg: string,
+  ) => {
     try {
       const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
       if (!privateDir) {
         return res.status(503).send('Object storage not configured');
       }
-      const bucketBase = privateDir.replace(/^\//, '');
-      const parts = bucketBase.split('/');
+      const parts = privateDir.replace(/^\//, '').split('/');
       const bucketName = parts[0];
       const prefix = parts.slice(1).join('/');
-      // Accept either an mp3 or a wav greeting (macOS afconvert produces wav;
-      // ffmpeg produces mp3). Whichever the user uploaded.
       const candidates: Array<{ name: string; type: string }> = [
-        { name: `${prefix}/voicemail/greeting.mp3`, type: 'audio/mpeg' },
-        { name: `${prefix}/voicemail/greeting.wav`, type: 'audio/wav' },
+        { name: `${prefix}/${folder}/${baseName}.mp3`, type: 'audio/mpeg' },
+        { name: `${prefix}/${folder}/${baseName}.wav`, type: 'audio/wav' },
       ];
       for (const candidate of candidates) {
         const file = objectStorageClient.bucket(bucketName).file(candidate.name);
@@ -9356,15 +9358,37 @@ ${phoneTarget}
         res.set('Content-Type', (metadata.contentType as string) || candidate.type);
         res.set('Cache-Control', 'public, max-age=300');
         return file.createReadStream().on('error', (err) => {
-          console.error('Error streaming voicemail greeting:', err);
+          console.error(`Error streaming ${folder}/${baseName}:`, err);
           if (!res.headersSent) res.status(500).send('Stream error');
         }).pipe(res);
       }
-      return res.status(404).send('Voicemail greeting not uploaded. Place greeting.mp3 or greeting.wav in voicemail/ under the private GCS bucket.');
+      return res.status(404).send(notFoundMsg);
     } catch (err) {
-      console.error('Error serving voicemail greeting:', err);
+      console.error(`Error serving ${folder}/${baseName}:`, err);
       if (!res.headersSent) res.status(500).send('Internal error');
     }
+  };
+
+  // Voicemail greeting — upload to voicemail/greeting.{mp3,wav}; point
+  // TWILIO_VOICEMAIL_GREETING_URL at this.
+  app.get('/api/public/voicemail-greeting', async (_req: Request, res: Response) => {
+    await serveBucketAudio(
+      res,
+      'voicemail',
+      'greeting',
+      'Voicemail greeting not uploaded. Place greeting.mp3 or greeting.wav in voicemail/ under the private GCS bucket.',
+    );
+  });
+
+  // Recorded-call disclosure — upload to recording-disclosure/disclosure.{mp3,wav};
+  // point TWILIO_RECORDING_DISCLOSURE_URL at this.
+  app.get('/api/public/recording-disclosure', async (_req: Request, res: Response) => {
+    await serveBucketAudio(
+      res,
+      'recording-disclosure',
+      'disclosure',
+      'Recording disclosure not uploaded. Place disclosure.mp3 or disclosure.wav in recording-disclosure/ under the private GCS bucket.',
+    );
   });
 
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
