@@ -16993,23 +16993,44 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       });
       const jobData = JSON.parse(extraction.choices[0].message.content || '{}');
 
-      // Find or create the customer (deduped by phone). Match on the last 8
-      // digits to ignore country-code variations like "021" vs "+6421".
+      // Find or create the customer. Match on the last 8 phone digits to
+      // ignore country-code variations (021... vs +6421...). BUT only reuse a
+      // phone match when the spoken name also reasonably matches — otherwise
+      // it's a different person calling from a number we've seen before
+      // (shared/borrowed phone, recycled number), and silently attaching their
+      // job to the wrong customer is worse than creating a new record.
       const normForCompare = (p: string | null | undefined) =>
         String(p || '').replace(/\D/g, '').slice(-8);
+      const normName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
       const callerKey = normForCompare(callerPhone);
+      const extractedName = String(jobData.customerName || '').trim();
       let customer: any = null;
       if (callerKey) {
         const allCustomers = await storage.getAllCustomers();
-        customer = allCustomers.find(
+        const phoneMatches = allCustomers.filter(
           (c: any) =>
             (c.phone && normForCompare(c.phone) === callerKey) ||
             (c.mobile && normForCompare(c.mobile) === callerKey),
         );
+        if (phoneMatches.length > 0) {
+          if (extractedName) {
+            const en = normName(extractedName);
+            customer = phoneMatches.find((c: any) => {
+              const cn = normName(c.name || '');
+              return cn && (cn === en || cn.includes(en) || en.includes(cn));
+            }) || null;
+            if (!customer) {
+              console.log(`ℹ️ Phone ${callerPhone} matched ${phoneMatches.length} customer(s) but spoken name "${extractedName}" differs — creating new customer`);
+            }
+          } else {
+            // No spoken name to compare — best guess is the phone match.
+            customer = phoneMatches[0];
+          }
+        }
       }
       if (!customer) {
         customer = await storage.createCustomer({
-          name: jobData.customerName || `Caller ${callerPhone}`,
+          name: extractedName || `Caller ${callerPhone}`,
           phone: callerPhone,
           address: jobData.address || undefined,
           source: 'phone_call',
