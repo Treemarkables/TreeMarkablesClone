@@ -178,6 +178,25 @@ async function processSMSReplies() {
         console.log(`📱 ✅ Stored SMS reply as diary entry and notification in job #${matchedJob.jobNumber}`);
         broadcast(['/api/jobs', '/api/conversations', '/api/notifications/summary']);
 
+        try {
+          const { pushToAdminsWithCustomerMessages } = await import('./notificationHelper.js');
+          const smsPreview = reply.MessageText.substring(0, 120) + (reply.MessageText.length > 120 ? '…' : '');
+          const pushCount = await pushToAdminsWithCustomerMessages({
+            title: `SMS Reply — ${customerName}`,
+            body: smsPreview,
+            clickAction: `/dispatch?job=${matchedJob.id}&tab=diary`,
+            data: {
+              type: 'sms_reply',
+              jobId: matchedJob.id,
+              customerId: matchedJob.customerId || '',
+              jobNumber: String(matchedJob.jobNumber),
+            },
+          });
+          console.log(`📲 Pushed SMS-reply notification to ${pushCount} admin(s) for job #${matchedJob.jobNumber}`);
+        } catch (pushErr) {
+          console.error('📱 Error sending SMS-reply push notification:', pushErr);
+        }
+
         // Also add SMS reply to conversations if there's an active conversation with this phone
         try {
           // Find conversation by phone number (check participantContact field)
