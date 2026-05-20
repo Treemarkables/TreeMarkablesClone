@@ -29,8 +29,11 @@
 //       return true
 //     }
 //
-// STEP D — Fill in webhookSecret in NativeTokenRegistration below:
-//   Copy the value of HERO_WEBHOOK_SECRET from Replit Secrets and paste it in.
+// NOTE — Token registration is handled entirely by the web layer. The FCM token
+//   is bridged into the WebView (see bridgeTokenToWebView) and the web app POSTs
+//   it to /api/notifications/register-token using the logged-in employee's
+//   session cookie. This is per-user, so each staff device registers against
+//   whoever is actually signed in — no hardcoded owner ID.
 //
 // ───────────────────────────────────────────────────────────────────────────
 
@@ -40,56 +43,6 @@ import FirebaseCore
 import FirebaseMessaging
 import UserNotifications
 
-// ── Native token registration ──────────────────────────────────────────────
-// Registers the FCM token directly with the Replit server via a webhook-secret
-// authenticated endpoint — works even when the WebView is loading local assets
-// (no active session required).
-private enum NativeTokenRegistration {
-    static let serverURL = "https://app.treemarkables.co.nz"
-
-    // ⚠️  FILL THIS IN — paste the value of HERO_WEBHOOK_SECRET from Replit Secrets.
-    static let webhookSecret = "TreemarkablesHero2026SecureWebhook"
-
-    // Owner's employee UUID (correct for the Inflow production database).
-    static let ownerEmployeeId = "7e093425-0023-4069-ae7a-8127656116a8"
-
-    static func registerToken(_ token: String) {
-        guard webhookSecret != "REPLACE_WITH_HERO_WEBHOOK_SECRET" else {
-            print("⚠️ NativeTokenRegistration: webhookSecret not set — skipping direct registration")
-            return
-        }
-        guard let url = URL(string: "\(serverURL)/api/notifications/register-native-fcm-token") else { return }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(webhookSecret, forHTTPHeaderField: "x-webhook-secret")
-        request.timeoutInterval = 15
-
-        let body: [String: String] = [
-            "token": token,
-            "employeeId": ownerEmployeeId,
-            "deviceInfo": "iOS Native (\(UIDevice.current.systemVersion))"
-        ]
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-
-        URLSession.shared.dataTask(with: request) { data, response, error in
-            if let error = error {
-                print("⚠️ Native FCM registration error: \(error.localizedDescription)")
-                return
-            }
-            if let http = response as? HTTPURLResponse {
-                let responseBody = data.flatMap { String(data: $0, encoding: .utf8) } ?? ""
-                if http.statusCode == 200 {
-                    print("✅ Native FCM token registered with server")
-                } else {
-                    print("⚠️ Native FCM registration failed HTTP \(http.statusCode): \(responseBody)")
-                }
-            }
-        }.resume()
-    }
-}
-// ──────────────────────────────────────────────────────────────────────────
 
 enum FirebaseSetup {
 
@@ -177,13 +130,17 @@ extension NotificationHandler: MessagingDelegate {
         // Store for retrieval after WebView loads
         UserDefaults.standard.set(token, forKey: "pendingFcmToken")
 
-        // 1. Register directly with the server via native HTTP (primary, most reliable)
-        NativeTokenRegistration.registerToken(token)
-
-        // 2. Bridge to WebView for the session-based path (backup — works when server.url is set)
+        // Register via the WebView/session path ONLY. The web app POSTs the
+        // token to /api/notifications/register-token with the logged-in
+        // employee's session cookie, so the token attaches to whoever is
+        // actually signed in on this device — essential for multi-staff use.
+        //
+        // The old NativeTokenRegistration path that POSTed with a hardcoded
+        // ownerEmployeeId has been removed: it caused every device to register
+        // as the owner, so staff couldn't receive their own notifications.
         bridgeTokenToWebView(token)
 
-        // 3. Post to NotificationCenter for any internal listeners
+        // Post to NotificationCenter for any internal listeners
         NotificationCenter.default.post(
             name: Notification.Name("FCMTokenReceived"),
             object: nil,

@@ -25662,9 +25662,18 @@ Transcription: ${transcriptText}`;
       // Check if token already exists
       const existingToken = await storage.getFcmTokenByToken(token);
       if (existingToken) {
-        // Update last used timestamp
-        await storage.markFcmTokenAsUsed(token);
-        return res.json({ success: true, message: 'Token already registered' });
+        if (existingToken.employeeId !== employeeId) {
+          // The token is registered to a different employee than the one now
+          // signed in on this device. Reassign it. This also self-heals tokens
+          // that were mis-registered to the hardcoded owner by the old native
+          // registration path — once the real user signs in, the token moves
+          // to them.
+          await storage.updateFcmToken(existingToken.id, { employeeId, isActive: true });
+          console.log(`🔄 Reassigned FCM token from ${existingToken.employeeId} to ${employeeId}`);
+        } else {
+          await storage.markFcmTokenAsUsed(token);
+        }
+        return res.json({ success: true, message: 'Token registered' });
       }
 
       // Create new token
