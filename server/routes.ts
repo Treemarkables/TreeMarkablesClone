@@ -9168,11 +9168,13 @@ Draft the reply now.`;
       }
       const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
+      const pushCredentialSid = process.env.TWILIO_PUSH_CREDENTIAL_SID;
       const { AccessToken } = twilio.jwt;
       const { VoiceGrant } = AccessToken;
       const voiceGrant = new VoiceGrant({
         incomingAllow: true,
         ...(twimlAppSid ? { outgoingApplicationSid: twimlAppSid } : {}),
+        ...(pushCredentialSid ? { pushCredentialSid } : {}),
       });
       const accessToken = new AccessToken(accountSid, apiKey, apiSecret, {
         identity: clientIdentity,
@@ -9182,8 +9184,11 @@ Draft the reply now.`;
       if (!twimlAppSid) {
         console.warn('⚠️  TWILIO_TWIML_APP_SID not set — outgoing calls from the iOS app will not work. Create a TwiML App in the Twilio Console and set this secret.');
       }
-      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (outgoing: ${twimlAppSid ? 'enabled' : 'disabled'})`);
-      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, outgoingEnabled: !!twimlAppSid });
+      if (!pushCredentialSid) {
+        console.warn('⚠️  TWILIO_PUSH_CREDENTIAL_SID not set — incoming VoIP push notifications to the iOS app will not work. Create a Push Credential at Twilio Console → Voice → Push Credentials and set this secret.');
+      }
+      console.log(`🔑 Twilio access token issued for identity: ${clientIdentity} (outgoing: ${twimlAppSid ? 'enabled' : 'disabled'}, push: ${pushCredentialSid ? 'enabled' : 'disabled'})`);
+      return res.json({ success: true, token: accessToken.toJwt(), identity: clientIdentity, outgoingEnabled: !!twimlAppSid, pushEnabled: !!pushCredentialSid });
     } catch (error: any) {
       console.error('❌ Error generating Twilio token:', error);
       return res.status(500).json({ success: false, message: 'Failed to generate token' });
