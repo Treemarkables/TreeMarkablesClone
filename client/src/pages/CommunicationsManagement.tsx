@@ -47,6 +47,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Call, Customer, PendingOutboundMessage } from "@shared/schema";
+import { TwilioStatusCard } from "@/components/TwilioStatusCard";
 
 export default function CommunicationsManagement() {
   const searchParams = new URLSearchParams(window.location.search);
@@ -551,6 +552,7 @@ export default function CommunicationsManagement() {
 
         {/* Calls Tab */}
         <TabsContent value="calls" className="space-y-6">
+          <TwilioStatusCard />
           <Card>
             <CardHeader>
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">

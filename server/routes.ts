@@ -60,6 +60,7 @@ import {
 import multer from "multer";
 import Papa from "papaparse";
 import twilio from "twilio";
+import { getTwilioClient } from "./services/twilioClient";
 import jwt from "jsonwebtoken";
 import path from "path";
 import bcrypt from "bcrypt";
@@ -9592,6 +9593,141 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       res.type('text/xml');
       res.send('<?xml version="1.0" encoding="UTF-8"?><Response></Response>');
     }
+  });
+
+  // Diagnostic: verify Twilio is wired up end-to-end.
+  // Accepts either HERO_WEBHOOK_SECRET (for curl) or an authenticated admin session
+  // (so the Communications page can render it without exposing the secret to the browser).
+  //   curl -H "x-webhook-secret: $HERO_WEBHOOK_SECRET" \
+  //     https://app.treemarkables.co.nz/api/twilio/admin/diagnostic
+  app.get('/api/twilio/admin/diagnostic', async (req: Request, res: Response) => {
+    const secret = req.headers['x-webhook-secret'];
+    const secretOk = !!secret && secret === process.env.HERO_WEBHOOK_SECRET;
+
+    let sessionOk = false;
+    if (!secretOk && req.session.employeeId) {
+      try {
+        const emp = await storage.getEmployee(req.session.employeeId);
+        sessionOk = !!emp && emp.role === 'admin';
+      } catch {
+        sessionOk = false;
+      }
+    }
+
+    if (!secretOk && !sessionOk) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    const mask = (v?: string) => {
+      if (!v) return null;
+      if (v.length <= 8) return '••••';
+      return `${v.slice(0, 4)}…${v.slice(-4)}`;
+    };
+
+    const env = {
+      TWILIO_ACCOUNT_SID: { set: !!process.env.TWILIO_ACCOUNT_SID, masked: mask(process.env.TWILIO_ACCOUNT_SID) },
+      TWILIO_AUTH_TOKEN: { set: !!process.env.TWILIO_AUTH_TOKEN, masked: mask(process.env.TWILIO_AUTH_TOKEN) },
+      TWILIO_API_KEY: { set: !!process.env.TWILIO_API_KEY, masked: mask(process.env.TWILIO_API_KEY) },
+      TWILIO_API_SECRET: { set: !!process.env.TWILIO_API_SECRET, masked: mask(process.env.TWILIO_API_SECRET) },
+      TWILIO_PHONE_NUMBER: { set: !!process.env.TWILIO_PHONE_NUMBER, value: process.env.TWILIO_PHONE_NUMBER || null },
+      TWILIO_TWIML_APP_SID: { set: !!process.env.TWILIO_TWIML_APP_SID, masked: mask(process.env.TWILIO_TWIML_APP_SID) },
+      TWILIO_CLIENT_IDENTITY: { set: !!process.env.TWILIO_CLIENT_IDENTITY, value: process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner (default)' },
+      OWNER_PHONE_NUMBER: { set: !!process.env.OWNER_PHONE_NUMBER, value: process.env.OWNER_PHONE_NUMBER || null },
+      OPENAI_API_KEY: { set: !!process.env.OPENAI_API_KEY, masked: mask(process.env.OPENAI_API_KEY) },
+      PRIVATE_OBJECT_DIR: { set: !!process.env.PRIVATE_OBJECT_DIR, value: (process.env.PRIVATE_OBJECT_DIR || '').trim() || null },
+    };
+
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+    const host = req.headers['x-forwarded-host'] || req.headers.host;
+    const observedBaseUrl = `${protocol}://${host}`;
+    const expectedBaseUrl = 'https://app.treemarkables.co.nz';
+
+    const expectedWebhooks = {
+      answer: `${expectedBaseUrl}/api/webhooks/twilio-answer`,
+      statusCallback: `${expectedBaseUrl}/api/webhooks/twilio-voice`,
+      sms: `${expectedBaseUrl}/api/webhooks/sms`,
+    };
+
+    let twilioAccount: any = null;
+    let twilioPhoneNumber: any = null;
+    let twilioFetchError: string | null = null;
+    try {
+      if (process.env.TWILIO_ACCOUNT_SID && (process.env.TWILIO_AUTH_TOKEN || (process.env.TWILIO_API_KEY && process.env.TWILIO_API_SECRET))) {
+        const client = await getTwilioClient();
+        const acct = await client.api.accounts(process.env.TWILIO_ACCOUNT_SID!).fetch();
+        twilioAccount = { friendlyName: acct.friendlyName, status: acct.status, type: acct.type };
+
+        if (process.env.TWILIO_PHONE_NUMBER) {
+          const list = await client.incomingPhoneNumbers.list({ phoneNumber: process.env.TWILIO_PHONE_NUMBER, limit: 1 });
+          const num = list[0];
+          if (num) {
+            twilioPhoneNumber = {
+              sid: num.sid,
+              friendlyName: num.friendlyName,
+              voiceUrl: num.voiceUrl,
+              voiceMethod: num.voiceMethod,
+              smsUrl: num.smsUrl,
+              smsMethod: num.smsMethod,
+              statusCallback: num.statusCallback,
+              voiceUrlMatchesExpected: num.voiceUrl === expectedWebhooks.answer,
+              smsUrlMatchesExpected: num.smsUrl === expectedWebhooks.sms,
+            };
+          } else {
+            twilioFetchError = `No matching incoming number found in Twilio account for ${process.env.TWILIO_PHONE_NUMBER}`;
+          }
+        }
+      } else {
+        twilioFetchError = 'Twilio credentials not set — cannot query Twilio API';
+      }
+    } catch (err: any) {
+      twilioFetchError = err?.message || String(err);
+    }
+
+    let recentCalls: any[] = [];
+    try {
+      const calls = await storage.getCallRecords({ limit: 5 });
+      recentCalls = calls.map((c: any) => ({
+        id: c.id,
+        phoneNumber: c.phoneNumber,
+        direction: c.direction,
+        status: c.status,
+        duration: c.duration,
+        hasRecording: !!c.recordingUrl,
+        hasTranscript: !!c.transcriptText,
+        createdAt: c.createdAt,
+      }));
+    } catch (err: any) {
+      // non-fatal
+    }
+
+    const recommendations: string[] = [];
+    if (!env.TWILIO_ACCOUNT_SID.set) recommendations.push('Set TWILIO_ACCOUNT_SID in DO env vars');
+    if (!env.TWILIO_AUTH_TOKEN.set) recommendations.push('Set TWILIO_AUTH_TOKEN in DO env vars (needed for signature validation + recording download)');
+    if (!env.TWILIO_PHONE_NUMBER.set) recommendations.push('Set TWILIO_PHONE_NUMBER in DO env vars');
+    if (!env.OWNER_PHONE_NUMBER.set) recommendations.push('Set OWNER_PHONE_NUMBER (your personal mobile in E.164, e.g. +6421XXXXXXX)');
+    if (!env.OPENAI_API_KEY.set) recommendations.push('Set OPENAI_API_KEY (used for Whisper transcription + GPT extraction)');
+    if (!env.PRIVATE_OBJECT_DIR.set) recommendations.push('Set PRIVATE_OBJECT_DIR so recordings persist to GCS Object Storage');
+    if (!env.TWILIO_API_KEY.set || !env.TWILIO_API_SECRET.set) recommendations.push('Set TWILIO_API_KEY + TWILIO_API_SECRET so the iOS app can register for incoming calls via the Voice SDK');
+    if (!env.TWILIO_TWIML_APP_SID.set) recommendations.push('Set TWILIO_TWIML_APP_SID to enable outgoing calls from the iOS app');
+    if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
+      recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
+    }
+    if (observedBaseUrl !== expectedBaseUrl) {
+      recommendations.push(`Request baseUrl is ${observedBaseUrl} but expected ${expectedBaseUrl}. Signature validation will fail unless Twilio webhooks point at the expected host.`);
+    }
+
+    res.json({
+      success: true,
+      observedBaseUrl,
+      expectedBaseUrl,
+      expectedWebhooks,
+      env,
+      twilioAccount,
+      twilioPhoneNumber,
+      twilioFetchError,
+      recentCalls,
+      recommendations,
+    });
   });
 
   // ========================================

@@ -56,20 +56,47 @@ Under **Voice Configuration**:
 
 **A CALL COMES IN:**
 - Set to: `Webhook`
-- URL: `https://treemarkables.replit.app/api/webhooks/twilio-answer`
+- URL: `https://app.treemarkables.co.nz/api/webhooks/twilio-answer`
 - Method: `HTTP POST`
 
 **STATUS CALLBACK URL:** *(optional but recommended)*
-- URL: `https://treemarkables.replit.app/api/webhooks/twilio-voice`
+- URL: `https://app.treemarkables.co.nz/api/webhooks/twilio-voice`
 - Method: `HTTP POST`
 
 Click **Save**.
 
-## Step 3: Add the OWNER_PHONE_NUMBER Secret
+## Step 3: Add the OWNER_PHONE_NUMBER env var
 
-In the Replit Secrets panel, add:
+In the Digital Ocean App Platform dashboard → app `plankton-app` → Settings → App-Level Environment Variables, add:
 - Key: `OWNER_PHONE_NUMBER`
 - Value: your personal mobile in E.164 format, e.g. `+6421XXXXXXX`
+
+Make sure the following are also set (full list — most should already be there):
+- `TWILIO_ACCOUNT_SID`
+- `TWILIO_AUTH_TOKEN` (needed for signature validation + recording download)
+- `TWILIO_PHONE_NUMBER`
+- `TWILIO_API_KEY` + `TWILIO_API_SECRET` (needed for the iOS Voice SDK)
+- `TWILIO_TWIML_APP_SID` (needed for outgoing calls from the iOS app)
+- `OPENAI_API_KEY` (Whisper + GPT extraction)
+- `PRIVATE_OBJECT_DIR` (GCS bucket path for permanent recording storage)
+
+## Step 3a: Verify the wiring
+
+Once env vars are set and the DO deploy is live, run the diagnostic from your laptop:
+
+```bash
+curl -H "x-webhook-secret: $HERO_WEBHOOK_SECRET" \
+  https://app.treemarkables.co.nz/api/twilio/admin/diagnostic | jq
+```
+
+This reports:
+- Which Twilio env vars are set
+- Whether the Twilio account is reachable and active
+- The voice webhook URL Twilio currently has for your phone number (vs the expected URL)
+- The last 5 calls recorded in the DB
+- A `recommendations` array listing anything missing
+
+Iterate on env vars / Twilio console settings until `recommendations` is empty.
 
 ## How Each Call Works
 
@@ -165,7 +192,7 @@ Watch server logs for:
 | GPT extraction | ~$0.02/call |
 | GPT quote extraction | ~$0.02/call (when pricing discussed) |
 
-**Example:** 50 calls × 5 min avg = ~$5–8 NZD/month total. Recordings stored permanently at no ongoing cost via Replit Object Storage.
+**Example:** 50 calls × 5 min avg = ~$5–8 NZD/month total. Recordings stored permanently in GCS bucket `treemarkables-photos/.private/recordings/`.
 
 ## Troubleshooting
 
@@ -177,10 +204,10 @@ Watch server logs for:
 **Recording not appearing in job diary**
 - Check server logs for `❌ Failed to download recording`
 - Verify `TWILIO_ACCOUNT_SID` and `TWILIO_AUTH_TOKEN` secrets are set
-- Make sure `PRIVATE_OBJECT_DIR` environment variable is set (auto-configured by Replit Object Storage)
+- Make sure `PRIVATE_OBJECT_DIR` env var is set (e.g. `/treemarkables-photos/.private`) — without a trailing space
 
 **Webhook signature rejected (403)**
-- Must use the published app URL in Twilio (`treemarkables.replit.app`), not the dev preview URL
+- The webhook URL configured in Twilio must exactly match the host the request hits — `app.treemarkables.co.nz`. Run the diagnostic (Step 3a) — it compares Twilio's stored URL against the expected one.
 
 **Customer not created / job not created**
 - Check logs for "Insufficient data to create job"
