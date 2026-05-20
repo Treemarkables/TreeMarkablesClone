@@ -9251,7 +9251,19 @@ ${phoneTarget}
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
-    console.log(`📞 Twilio no-answer — switching to voicemail`);
+    // Twilio's <Dial action> fires when the Dial verb finishes for ANY reason —
+    // including a successfully connected call where one side hung up. We only
+    // want to fall through to voicemail when the dial actually failed to
+    // connect, not after a normal completed conversation. DialCallStatus is
+    // one of: completed, answered, busy, no-answer, failed, canceled.
+    const dialStatus = String(req.body?.DialCallStatus || '').toLowerCase();
+    if (dialStatus === 'completed' || dialStatus === 'answered') {
+      console.log(`📞 Dial completed (status=${dialStatus}) — call ended naturally, skipping voicemail`);
+      res.type('text/xml');
+      return res.send('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
+    }
+
+    console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}) — switching to voicemail`);
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
