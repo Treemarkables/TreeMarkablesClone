@@ -25543,12 +25543,6 @@ Transcription: ${transcriptText}`;
     }
   });
 
-  app.post("/api/_debug/client-log", (req: Request, res: Response) => {
-    const { stage, source, ...rest } = req.body || {};
-    console.log(`🐛 [client-debug:${source || 'unknown'}] stage=${stage}`, rest);
-    res.json({ ok: true });
-  });
-
   app.get("/api/notifications/admin/list-fcm-tokens", async (req, res) => {
     const secret = req.headers['x-webhook-secret'];
     if (!secret || secret !== process.env.HERO_WEBHOOK_SECRET) {
