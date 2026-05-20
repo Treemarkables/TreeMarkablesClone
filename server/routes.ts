@@ -16923,11 +16923,14 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
         });
       }
 
-      // Build the job.
+      // Build the job. job_number is NOT NULL and createJob does not
+      // auto-assign it — fetch the next sequential number explicitly.
       const nameParts = String(jobData.customerName || customer.name || '').trim().split(/\s+/);
       const jobContactFirstName = nameParts[0] || undefined;
       const jobContactLastName = nameParts.slice(1).join(' ') || undefined;
+      const jobNumber = await storage.getNextJobNumber();
       const job = await storage.createJob({
+        jobNumber,
         customerId: customer.id,
         status: 'lead',
         address: jobData.address || customer.address || 'TBD',
