@@ -9286,10 +9286,27 @@ ${phoneTarget}
     const recordingCallbackUrl =
       `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}&amp;source=voicemail`;
 
+    // Voicemail greeting is configurable via the TWILIO_VOICEMAIL_GREETING env
+    // var so it can be edited from the DO dashboard without a code deploy.
+    // Falls back to a sensible default if unset.
+    const defaultGreeting =
+      "Hi, you have reached Treemarkables. We are unable to take your call right now. " +
+      "Please leave your name, address, and details of the work you need done, and we will call you back as soon as possible.";
+    const greeting = process.env.TWILIO_VOICEMAIL_GREETING || defaultGreeting;
+    // XML-escape user-supplied greeting so quotes/ampersands don't break the TwiML.
+    const escapeXml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    const safeGreeting = escapeXml(greeting);
+
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">Hi, you have reached Treemarkables. We are unable to take your call right now. Please leave your name, address, and details of the work you need done, and we will call you back as soon as possible.</Say>
+  <Say voice="alice">${safeGreeting}</Say>
   <Record
     maxLength="300"
     transcribe="false"
@@ -9497,14 +9514,52 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                   await storage.updateCall(call.id, { customerId: customer.id });
                   console.log(`🔗 Call record linked to customer: ${customer.id}`);
                 }
-                
-                // Auto-job-creation is intentionally disabled — users requested
-                // manual control. Transcription + extraction + customer dedupe
-                // already happened above, and the transcript is stored on the
-                // call. Staff convert a specific call to a job by clicking the
-                // "Create Job" button in the Communications Management UI,
-                // which hits /api/calls/:callId/create-job.
-                console.log(`ℹ️ Auto-job-creation disabled — call ${call.id} available for manual conversion`);
+
+                // If the customer already has an active job, append this call
+                // to that job's diary automatically. The user wants new-job
+                // creation to stay manual, but existing-customer follow-up
+                // calls should land on the right job card without intervention.
+                if (customer) {
+                  try {
+                    const ARCHIVED_STATUSES = new Set([
+                      'completed', 'archived', 'unsuccessful', 'cancelled', 'canceled', 'lost',
+                    ]);
+                    const customerJobs = await storage.getJobsByCustomer(customer.id);
+                    const activeJobs = customerJobs.filter(
+                      (j: any) => !ARCHIVED_STATUSES.has(String(j.status || '').toLowerCase()),
+                    );
+                    if (activeJobs.length > 0) {
+                      const mostRecentActive = activeJobs.reduce((latest: any, current: any) => {
+                        const latestTime = new Date(latest.lastActivityAt || latest.createdAt || 0).getTime();
+                        const currentTime = new Date(current.lastActivityAt || current.createdAt || 0).getTime();
+                        return currentTime > latestTime ? current : latest;
+                      });
+                      await storage.updateCall(call.id, { jobId: mostRecentActive.id });
+                      await storage.createJobDiaryEntry({
+                        jobId: mostRecentActive.id,
+                        entryType: 'call',
+                        title: `📞 Inbound call from ${customer.name}`,
+                        description: `Call from ${customer.name} (${callerPhone})\n\nTranscript:\n${transcript}`,
+                        authorName: 'System',
+                        authorRole: 'system',
+                        tags: ['call', 'auto-linked'],
+                        metadata: {
+                          recordingUrl: servingUrl,
+                          transcription: transcript,
+                          callSid: CallSid,
+                        },
+                      });
+                      await storage.updateJob(mostRecentActive.id, { lastActivityAt: new Date() });
+                      console.log(`📎 Call auto-linked to existing active job #${mostRecentActive.jobNumber}`);
+                    } else {
+                      console.log(`ℹ️ Customer has no active jobs — call available for manual conversion`);
+                    }
+                  } catch (linkErr) {
+                    console.error('❌ Error auto-linking call to active job:', linkErr);
+                  }
+                } else {
+                  console.log(`ℹ️ No customer match — call available for manual conversion`);
+                }
                 
               } catch (error) {
                 console.error('❌ Error processing call recording:', error);
