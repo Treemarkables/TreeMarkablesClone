@@ -9257,6 +9257,40 @@ ${phoneTarget}
 </Response>`);
   });
 
+  // Public endpoint: streams the voicemail greeting audio from the private
+  // GCS bucket so Twilio (which needs a publicly reachable URL) can fetch it
+  // without exposing the rest of the bucket. Upload your audio to
+  //   gs://${PRIVATE_OBJECT_DIR sans leading slash}/voicemail/greeting.mp3
+  // and set TWILIO_VOICEMAIL_GREETING_URL on DO to:
+  //   https://app.treemarkables.co.nz/api/public/voicemail-greeting
+  app.get('/api/public/voicemail-greeting', async (_req: Request, res: Response) => {
+    try {
+      const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
+      if (!privateDir) {
+        return res.status(503).send('Object storage not configured');
+      }
+      const objectPath = `${privateDir}/voicemail/greeting.mp3`.replace(/^\//, '');
+      const parts = objectPath.split('/');
+      const bucketName = parts[0];
+      const objectName = parts.slice(1).join('/');
+      const file = objectStorageClient.bucket(bucketName).file(objectName);
+      const [exists] = await file.exists();
+      if (!exists) {
+        return res.status(404).send('Voicemail greeting not uploaded. Place it at voicemail/greeting.mp3 in the private GCS bucket.');
+      }
+      const [metadata] = await file.getMetadata();
+      res.set('Content-Type', (metadata.contentType as string) || 'audio/mpeg');
+      res.set('Cache-Control', 'public, max-age=300');
+      file.createReadStream().on('error', (err) => {
+        console.error('Error streaming voicemail greeting:', err);
+        if (!res.headersSent) res.status(500).send('Stream error');
+      }).pipe(res);
+    } catch (err) {
+      console.error('Error serving voicemail greeting:', err);
+      if (!res.headersSent) res.status(500).send('Internal error');
+    }
+  });
+
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
   app.post('/api/webhooks/twilio-no-answer', (req: Request, res: Response) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
