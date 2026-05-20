@@ -9712,9 +9712,8 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
       recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
     }
-    if (observedBaseUrl !== expectedBaseUrl) {
-      recommendations.push(`Request baseUrl is ${observedBaseUrl} but expected ${expectedBaseUrl}. Signature validation will fail unless Twilio webhooks point at the expected host.`);
-    }
+    // observedBaseUrl is just where the diagnostic was viewed from — it doesn't
+    // affect whether Twilio webhooks work. Only the Twilio-side voiceUrl matters.
 
     res.json({
       success: true,
