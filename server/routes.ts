@@ -9286,14 +9286,10 @@ ${phoneTarget}
     const recordingCallbackUrl =
       `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}&amp;source=voicemail`;
 
-    // Voicemail greeting is configurable via the TWILIO_VOICEMAIL_GREETING env
-    // var so it can be edited from the DO dashboard without a code deploy.
-    // Falls back to a sensible default if unset.
-    const defaultGreeting =
-      "Hi, you have reached Treemarkables. We are unable to take your call right now. " +
-      "Please leave your name, address, and details of the work you need done, and we will call you back as soon as possible.";
-    const greeting = process.env.TWILIO_VOICEMAIL_GREETING || defaultGreeting;
-    // XML-escape user-supplied greeting so quotes/ampersands don't break the TwiML.
+    // Voicemail greeting prefers a pre-recorded audio file (TwiML <Play>) if
+    // TWILIO_VOICEMAIL_GREETING_URL is set — that gives the user control of
+    // tone of voice and branding. Falls back to TTS via <Say> reading
+    // TWILIO_VOICEMAIL_GREETING, or finally to a hardcoded default.
     const escapeXml = (s: string) =>
       s
         .replace(/&/g, '&amp;')
@@ -9301,12 +9297,24 @@ ${phoneTarget}
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&apos;');
-    const safeGreeting = escapeXml(greeting);
+
+    const greetingAudioUrl = (process.env.TWILIO_VOICEMAIL_GREETING_URL || '').trim();
+    let greetingTwiml: string;
+    if (greetingAudioUrl) {
+      // Audio URL must be publicly reachable by Twilio's servers.
+      greetingTwiml = `<Play>${escapeXml(greetingAudioUrl)}</Play>`;
+    } else {
+      const defaultGreeting =
+        "Hi, you have reached Treemarkables. We are unable to take your call right now. " +
+        "Please leave your name, address, and details of the work you need done, and we will call you back as soon as possible.";
+      const greeting = process.env.TWILIO_VOICEMAIL_GREETING || defaultGreeting;
+      greetingTwiml = `<Say voice="alice">${escapeXml(greeting)}</Say>`;
+    }
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="alice">${safeGreeting}</Say>
+  ${greetingTwiml}
   <Record
     maxLength="300"
     transcribe="false"
