@@ -122,6 +122,26 @@ export default function CommunicationsManagement() {
     },
   });
 
+  const createJobFromCallMutation = useMutation({
+    mutationFn: async (callId: string) => {
+      const res = await apiRequest('POST', `/api/calls/${callId}/create-job`, {});
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to create job');
+      return json;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
+      const jobId = data?.data?.job?.id;
+      const jobNumber = data?.data?.job?.jobNumber;
+      if (jobId) {
+        navigate(`/dispatch?job=${jobId}`);
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't create job", description: err.message, variant: "destructive" });
+    },
+  });
+
   const { data: callsResponse, isLoading: isLoadingCalls } = useQuery<{
     success: boolean;
     data: Call[];
@@ -703,6 +723,20 @@ export default function CommunicationsManagement() {
                                   data-testid={`button-transcript-${call.id}`}
                                 >
                                   {isTranscriptOpen ? "Hide" : "Transcript"}
+                                </Button>
+                              )}
+                              {call.transcriptText && !call.jobId && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => createJobFromCallMutation.mutate(call.id)}
+                                  disabled={createJobFromCallMutation.isPending}
+                                  data-testid={`button-create-job-${call.id}`}
+                                >
+                                  {createJobFromCallMutation.isPending &&
+                                  createJobFromCallMutation.variables === call.id ? (
+                                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                                  ) : null}
+                                  Create Job
                                 </Button>
                               )}
                               {call.customerId && (

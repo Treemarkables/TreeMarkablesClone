@@ -9277,6 +9277,15 @@ ${phoneTarget}
 
     console.log(`📞 Twilio no-answer (DialCallStatus=${dialStatus || 'unknown'}) — switching to voicemail`);
 
+    // Voicemail recording's status callback also needs callerFrom in the URL
+    // (same reason as the answer webhook — recording callbacks don't include
+    // From / ForwardedFrom natively). The action callback DOES include From
+    // and To from the original call, so we can capture them here.
+    const inboundFrom = String(req.body?.ForwardedFrom || req.body?.From || '');
+    const inboundTo = String(req.body?.To || '');
+    const recordingCallbackUrl =
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}&amp;source=voicemail`;
+
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
@@ -9284,7 +9293,7 @@ ${phoneTarget}
   <Record
     maxLength="300"
     transcribe="false"
-    recordingStatusCallback="${baseUrl}/api/webhooks/twilio-voice"
+    recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
   />
 </Response>`);
@@ -9489,126 +9498,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
                   console.log(`🔗 Call record linked to customer: ${customer.id}`);
                 }
                 
-                // Create job if we have enough data
-                if (customer && (jobData.serviceType || jobData.address)) {
-                  // Split customerName into first/last for job contact fields
-                  const nameParts = (jobData.customerName || customer.name || '').trim().split(/\s+/);
-                  const jobContactFirstName = nameParts[0] || '';
-                  const jobContactLastName = nameParts.slice(1).join(' ') || '';
-
-                  const job = await storage.createJob({
-                    customerId: customer.id,
-                    status: 'lead',
-                    address: jobData.address || customer.address || 'TBD',
-                    serviceType: jobData.serviceType || 'other',
-                    priority: jobData.urgency === 'emergency' ? 'urgent' : 'normal',
-                    estimatedAmount: jobData.estimatedPrice ? String(jobData.estimatedPrice) : undefined,
-                    notes: jobData.notes || '',
-                    jobContactPhone: callerPhone,
-                    jobContactFirstName: jobContactFirstName || undefined,
-                    jobContactLastName: jobContactLastName || undefined
-                  });
-                  
-                  // Log to job diary with recording metadata so the audio player renders
-                  await storage.createJobDiaryEntry({
-                    jobId: job.id,
-                    entryType: 'call',
-                    title: '📞 Job Created from Phone Call',
-                    description: `Call received from ${customer.name} (${callerPhone})\n\nTranscript:\n${transcript}\n\nAuto-extracted:\n${JSON.stringify(jobData, null, 2)}`,
-                    authorName: 'System',
-                    authorRole: 'system',
-                    tags: ['call', 'auto-created', 'ai-extracted'],
-                    metadata: {
-                      recordingUrl: servingUrl,
-                      transcription: transcript
-                    }
-                  });
-                  
-                  console.log(`✅ Job #${job.jobNumber} auto-created from call`);
-                  
-                  // Auto-generate quote if pricing was discussed
-                  if (jobData.estimatedPrice || transcript.toLowerCase().includes('price') || transcript.toLowerCase().includes('cost') || transcript.toLowerCase().includes('quote')) {
-                    console.log('💰 Pricing discussion detected - generating quote draft...');
-                    
-                    // Extract detailed quote information with GPT-4o
-                    const quoteExtraction = await openai.chat.completions.create({
-                      model: 'gpt-4o',
-                      messages: [
-                        {
-                          role: 'system',
-                          content: `You are a quote generation assistant for a tree removal service company in New Zealand.
-Extract detailed quote information from this call transcript and return it as JSON:
-
-{
-  "jobDescription": "detailed description of work",
-  "treeTypes": "types of trees mentioned or null",
-  "estimatedPrice": "price in NZD (number only, no $ sign) or null",
-  "notes": "any additional details for the quote",
-  "items": [
-    {"description": "service item", "quantity": 1, "unitPrice": price}
-  ]
-}
-
-If price components are mentioned (e.g., tree removal $1000, stump grinding $500), break them into items. Otherwise create a single item.`
-                        },
-                        {
-                          role: 'user',
-                          content: transcript
-                        }
-                      ],
-                      response_format: { type: 'json_object' }
-                    });
-                    
-                    const quoteInfo = JSON.parse(quoteExtraction.choices[0].message.content || '{}');
-                    console.log('📋 Quote data extracted:', quoteInfo);
-                    
-                    // Create proposal/quote for the job
-                    try {
-                      const proposalSections = quoteInfo.items && quoteInfo.items.length > 0
-                        ? quoteInfo.items.map((item: any) => ({
-                            name: item.description || 'Service',
-                            items: [{
-                              description: item.description || 'Service',
-                              quantity: item.quantity || 1,
-                              rate: String(item.unitPrice || quoteInfo.estimatedPrice || 0)
-                            }]
-                          }))
-                        : [{
-                            name: 'Tree Services',
-                            items: [{
-                              description: quoteInfo.jobDescription || jobData.notes || 'Tree removal service',
-                              quantity: 1,
-                              rate: String(quoteInfo.estimatedPrice || jobData.estimatedPrice || 0)
-                            }]
-                          }];
-                      
-                      const proposal = await storage.createProposal({
-                        jobId: job.id,
-                        title: `Quote from Call - ${new Date().toLocaleDateString()}`,
-                        sections: proposalSections,
-                        status: 'draft',
-                        notes: quoteInfo.notes || `Auto-generated from phone call.\n\nCall transcript:\n${transcript.substring(0, 500)}...`
-                      });
-                      
-                      // Log quote creation to job diary
-                      await storage.createJobDiaryEntry({
-                        jobId: job.id,
-                        entryType: 'quote',
-                        title: '📋 Quote Auto-Generated from Call',
-                        description: `A quote draft was automatically created based on the pricing discussion in the phone call.\n\nExtracted details:\n${JSON.stringify(quoteInfo, null, 2)}`,
-                        authorName: 'System',
-                        authorRole: 'system',
-                        tags: ['quote', 'auto-generated', 'call-pricing']
-                      });
-                      
-                      console.log(`✅ Quote auto-generated for job #${job.jobNumber}`);
-                    } catch (quoteError) {
-                      console.error('❌ Error creating auto-quote:', quoteError);
-                    }
-                  }
-                } else {
-                  console.log(`⚠️ Insufficient data to create job. Customer: ${!!customer}, ServiceType: ${jobData.serviceType}, Address: ${jobData.address}`);
-                }
+                // Auto-job-creation is intentionally disabled — users requested
+                // manual control. Transcription + extraction + customer dedupe
+                // already happened above, and the transcript is stored on the
+                // call. Staff convert a specific call to a job by clicking the
+                // "Create Job" button in the Communications Management UI,
+                // which hits /api/calls/:callId/create-job.
+                console.log(`ℹ️ Auto-job-creation disabled — call ${call.id} available for manual conversion`);
                 
               } catch (error) {
                 console.error('❌ Error processing call recording:', error);
@@ -16845,9 +16741,126 @@ If price components are mentioned (e.g., tree removal $1000, stump grinding $500
       });
     } catch (error) {
       console.error('Error creating job from call:', error);
-      res.status(500).json({ 
-        success: false, 
-        message: error instanceof Error ? error.message : 'Error creating job from call' 
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error creating job from call'
+      });
+    }
+  });
+
+  // POST /api/calls/:callId/create-job — manual conversion of a recorded call
+  // into a job/lead, triggered from the "Create Job" button next to the
+  // transcript in Communications Management. Re-runs GPT extraction on the
+  // stored transcript to populate the job, since auto-creation is disabled.
+  app.post('/api/calls/:callId/create-job', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const { callId } = req.params;
+      const call = await storage.getCall(callId);
+      if (!call) {
+        return res.status(404).json({ success: false, message: 'Call not found' });
+      }
+      const transcript = call.transcriptText || '';
+      if (!transcript) {
+        return res.status(400).json({ success: false, message: 'Call has no transcript yet — wait for transcription to finish' });
+      }
+      const callerPhone = call.phoneNumber || 'unknown';
+
+      // Re-extract structured data from the transcript (same prompt as the
+      // recording handler used to use). Cheap GPT call, gives us a fresh
+      // extraction each time the staff member clicks the button.
+      const extraction = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: `You are a data extraction assistant for a tree removal service company in New Zealand.
+Extract structured job information from customer call transcripts.
+
+Extract:
+- customerName: Full name if mentioned
+- customerPhone: Use "${callerPhone}"
+- serviceType: One of [tree-removal, tree-pruning, stump-grinding, hedge-trimming, emergency, other]
+- address: Full address if mentioned
+- urgency: One of [emergency, urgent, normal, low]
+- estimatedPrice: Number only if quoted (no $ sign)
+- notes: Key details about the job
+
+Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
+          },
+          { role: 'user', content: transcript },
+        ],
+        response_format: { type: 'json_object' },
+      });
+      const jobData = JSON.parse(extraction.choices[0].message.content || '{}');
+
+      // Find or create the customer (deduped by phone). Match on the last 8
+      // digits to ignore country-code variations like "021" vs "+6421".
+      const normForCompare = (p: string | null | undefined) =>
+        String(p || '').replace(/\D/g, '').slice(-8);
+      const callerKey = normForCompare(callerPhone);
+      let customer: any = null;
+      if (callerKey) {
+        const allCustomers = await storage.getAllCustomers();
+        customer = allCustomers.find(
+          (c: any) =>
+            (c.phone && normForCompare(c.phone) === callerKey) ||
+            (c.mobile && normForCompare(c.mobile) === callerKey),
+        );
+      }
+      if (!customer) {
+        customer = await storage.createCustomer({
+          name: jobData.customerName || `Caller ${callerPhone}`,
+          phone: callerPhone,
+          address: jobData.address || undefined,
+          source: 'phone_call',
+        });
+      }
+
+      // Build the job.
+      const nameParts = String(jobData.customerName || customer.name || '').trim().split(/\s+/);
+      const jobContactFirstName = nameParts[0] || undefined;
+      const jobContactLastName = nameParts.slice(1).join(' ') || undefined;
+      const job = await storage.createJob({
+        customerId: customer.id,
+        status: 'lead',
+        address: jobData.address || customer.address || 'TBD',
+        serviceType: jobData.serviceType || 'other',
+        priority: jobData.urgency === 'emergency' ? 'urgent' : 'normal',
+        estimatedAmount: jobData.estimatedPrice ? String(jobData.estimatedPrice) : undefined,
+        notes: jobData.notes || '',
+        jobContactPhone: callerPhone,
+        jobContactFirstName,
+        jobContactLastName,
+      });
+
+      // Link the call to the new job, then drop a diary entry with the
+      // recording + transcript so the audio is playable from the job card.
+      await storage.updateCall(call.id, { jobId: job.id, customerId: customer.id });
+      await storage.createJobDiaryEntry({
+        jobId: job.id,
+        entryType: 'call',
+        title: '📞 Job Created from Phone Call',
+        description: `Call from ${customer.name} (${callerPhone})\n\nTranscript:\n${transcript}`,
+        authorName: 'Manual conversion',
+        authorRole: 'system',
+        tags: ['call', 'manual-conversion'],
+        metadata: {
+          recordingUrl: call.recordingUrl,
+          transcription: transcript,
+          extractedJobData: jobData,
+        },
+      });
+
+      console.log(`✅ Job #${job.jobNumber} manually created from call ${call.id}`);
+      res.json({ success: true, data: { job, customer, extracted: jobData } });
+    } catch (error) {
+      console.error('Error creating job from call:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to create job',
       });
     }
   });
