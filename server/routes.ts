@@ -9510,7 +9510,7 @@ ${phoneTarget}
                 
                 // Extract job data with GPT-4
                 const extraction = await openai.chat.completions.create({
-                  model: 'gpt-4',
+                  model: 'gpt-4o',
                   messages: [
                     {
                       role: 'system',
@@ -16876,7 +16876,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       // recording handler used to use). Cheap GPT call, gives us a fresh
       // extraction each time the staff member clicks the button.
       const extraction = await openai.chat.completions.create({
-        model: 'gpt-4',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
