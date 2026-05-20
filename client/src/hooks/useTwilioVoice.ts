@@ -17,6 +17,29 @@ export interface TwilioVoicePluginInterface {
 
 const TwilioVoice = registerPlugin<TwilioVoicePluginInterface>("TwilioVoice");
 
+// Temporary debug instrumentation — fire-and-forget POSTs to server so we can
+// trace the hook's lifecycle from DO runtime logs. Drop this once Twilio Voice
+// registration is confirmed working in TestFlight builds.
+function debugPing(stage: string, extra: Record<string, unknown> = {}) {
+  try {
+    fetch("/api/_debug/client-log", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: "useTwilioVoice",
+        stage,
+        ua: typeof navigator !== "undefined" ? navigator.userAgent : null,
+        hasCapacitor: typeof window !== "undefined" && typeof (window as any).Capacitor !== "undefined",
+        ...extra,
+      }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
+}
+
 export interface CallEvent {
   from?: string;
   to?: string;
@@ -46,22 +69,36 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
   optionsRef.current = options;
 
   const fetchTokenAndRegister = useCallback(async () => {
-    if (!isNative) return;
+    debugPing("fetchTokenAndRegister:start", { isNative });
+    if (!isNative) {
+      debugPing("fetchTokenAndRegister:skipped-not-native");
+      return;
+    }
     try {
       const res = await fetch("/api/twilio/token", {
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) throw new Error(`Token fetch failed: ${res.status}`);
+      if (!res.ok) {
+        debugPing("fetchTokenAndRegister:token-fetch-failed", { status: res.status });
+        throw new Error(`Token fetch failed: ${res.status}`);
+      }
       const { token } = await res.json();
+      debugPing("fetchTokenAndRegister:calling-register", { tokenLen: typeof token === "string" ? token.length : 0 });
       await TwilioVoice.register({ token });
+      debugPing("fetchTokenAndRegister:register-resolved");
     } catch (err) {
+      debugPing("fetchTokenAndRegister:catch", { error: err instanceof Error ? err.message : String(err) });
       console.error("[TwilioVoice] Registration failed:", err);
     }
   }, [isNative]);
 
   useEffect(() => {
-    if (!isNative) return;
+    debugPing("effect:mount", { isNative });
+    if (!isNative) {
+      debugPing("effect:skipped-not-native");
+      return;
+    }
 
     const eventMap: Array<[string, keyof TwilioVoiceOptions]> = [
       ["incomingCall", "onIncomingCall"],
@@ -77,6 +114,7 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
 
     const setup = async () => {
       try {
+        debugPing("setup:adding-listeners");
         for (const [event, handlerKey] of eventMap) {
           const handle = await TwilioVoice.addListener(event, (data) => {
             const handler = optionsRef.current[handlerKey] as
@@ -86,8 +124,10 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
           });
           listenersRef.current.push(handle);
         }
+        debugPing("setup:listeners-added");
         await fetchTokenAndRegister();
       } catch (err) {
+        debugPing("setup:catch", { error: err instanceof Error ? err.message : String(err) });
         console.warn("[TwilioVoice] Native plugin not available:", err);
       }
     };
