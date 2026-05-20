@@ -9281,12 +9281,39 @@ Draft the reply now.`;
     const clientTarget = hasClient ? `    <Client>${clientIdentity}</Client>` : '';
     const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}`);
+    // Recorded-call disclosure played to the CALLER before we ring through
+    // (NZ Privacy Act / best practice — inform the other party that the call
+    // is recorded). Prefers a pre-recorded audio file via
+    // TWILIO_RECORDING_DISCLOSURE_URL, falls back to TTS reading
+    // TWILIO_RECORDING_DISCLOSURE, then to a default. Set
+    // TWILIO_RECORDING_DISCLOSURE to "off" to disable entirely.
+    const escapeXml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    const disclosureUrl = (process.env.TWILIO_RECORDING_DISCLOSURE_URL || '').trim();
+    const disclosureTextRaw = (process.env.TWILIO_RECORDING_DISCLOSURE || '').trim();
+    let disclosureTwiml = '';
+    if (disclosureTextRaw.toLowerCase() === 'off') {
+      disclosureTwiml = '';
+    } else if (disclosureUrl) {
+      disclosureTwiml = `  <Play>${escapeXml(disclosureUrl)}</Play>\n`;
+    } else {
+      const disclosureText =
+        disclosureTextRaw ||
+        'This call may be recorded for quality and training purposes.';
+      disclosureTwiml = `  <Say voice="alice">${escapeXml(disclosureText)}</Say>\n`;
+    }
+
+    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial
+${disclosureTwiml}  <Dial
     record="record-from-answer"
     recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
