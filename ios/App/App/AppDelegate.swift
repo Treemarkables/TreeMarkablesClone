@@ -1,5 +1,6 @@
 import UIKit
 import Capacitor
+import UserNotifications
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -26,7 +27,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+        // Server pushes hardcode aps.badge=1 and nothing ever decrements it, so the
+        // home-screen badge sticks after the user opens the app. Clear it (and any
+        // lingering delivered notifications) every time we come to the foreground.
+        let center = UNUserNotificationCenter.current()
+        if #available(iOS 16.0, *) {
+            center.setBadgeCount(0)
+        } else {
+            application.applicationIconBadgeNumber = 0
+        }
+        center.removeAllDeliveredNotifications()
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
