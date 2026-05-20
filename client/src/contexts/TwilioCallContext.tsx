@@ -20,6 +20,7 @@ export type CallState =
 interface CallInfo {
   from?: string;
   callSid?: string;
+  callerName?: string;
 }
 
 interface TwilioCallContextValue {
@@ -56,7 +57,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   }, [queryClient]);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
-    setCallInfo({ from: data.from, callSid: data.callSid });
+    setCallInfo({ from: data.from, callSid: data.callSid, callerName: data.callerName });
     setCallState("incoming");
   }, []);
 
@@ -201,8 +202,11 @@ function IncomingCallOverlay({
           </p>
         )}
         <p className="text-2xl font-semibold">
-          {callInfo?.from ?? "Unknown Caller"}
+          {callInfo?.callerName || callInfo?.from || "Unknown Caller"}
         </p>
+        {callInfo?.callerName && callInfo?.from && (
+          <p className="text-white/60 text-sm mt-1">{callInfo.from}</p>
+        )}
         <p className="text-white/50 text-sm mt-1">Treemarkables</p>
       </div>
 

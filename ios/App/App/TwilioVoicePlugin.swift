@@ -141,7 +141,13 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         let callerNumber = callInvite.from ?? "Unknown"
         update.remoteHandle = CXHandle(type: .phoneNumber, value: callerNumber)
         update.hasVideo = false
-        update.localizedCallerName = "Inflow Customer"
+        // The server looks up the caller against the customer database and, if
+        // it finds a match, passes their name as the "callerName" custom
+        // parameter on the <Client> dial. Show that on the CallKit screen so
+        // the user sees who's calling before answering. Falls back to a generic
+        // label for unknown numbers.
+        let knownName = callInvite.customParameters?["callerName"]
+        update.localizedCallerName = (knownName?.isEmpty == false) ? knownName! : "Inflow Customer"
 
         callKitProvider?.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error = error {
@@ -153,6 +159,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             "from": callerNumber,
             "to": callInvite.to ?? "",
             "callSid": callInvite.callSid,
+            "callerName": knownName ?? "",
         ])
     }
 }

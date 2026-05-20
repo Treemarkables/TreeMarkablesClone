@@ -9240,7 +9240,7 @@ Draft the reply now.`;
   // TwiML: answer the call → ring the iOS Capacitor app (Twilio Client) AND owner's phone simultaneously.
   // First to answer wins. Records the entire conversation.
   // iOS app receives the call via PushKit/CallKit even when backgrounded.
-  app.post('/api/webhooks/twilio-answer', (req: Request, res: Response) => {
+  app.post('/api/webhooks/twilio-answer', async (req: Request, res: Response) => {
     // Validate Twilio signature to prevent spoofed requests
     if (!validateTwilioSignature(req)) {
       console.error('❌ Invalid Twilio signature for answer webhook');
@@ -9277,8 +9277,44 @@ Draft the reply now.`;
     const recordingCallbackUrl =
       `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}`;
 
-    // Build the list of Dial targets
-    const clientTarget = hasClient ? `    <Client>${clientIdentity}</Client>` : '';
+    // Shared XML-attribute escaper (used for caller name + disclosure below).
+    const escapeXml = (s: string) =>
+      s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+
+    // Caller ID enrichment: look up the inbound number against our customers
+    // so CallKit can show the customer's name instead of a raw number. The
+    // name is passed to the iOS Voice SDK as a <Parameter> on <Client>, which
+    // the app reads from callInvite.customParameters["callerName"].
+    let callerName = '';
+    if (inboundFrom) {
+      try {
+        const key = inboundFrom.replace(/\D/g, '').slice(-8);
+        if (key) {
+          const allCustomers = await storage.getAllCustomers();
+          const match = allCustomers.find(
+            (c: any) =>
+              (c.phone && c.phone.replace(/\D/g, '').slice(-8) === key) ||
+              (c.mobile && c.mobile.replace(/\D/g, '').slice(-8) === key),
+          );
+          if (match?.name) callerName = String(match.name);
+        }
+      } catch (lookupErr) {
+        console.error('Caller-name lookup failed:', lookupErr);
+      }
+    }
+
+    // Build the list of Dial targets. When we have a caller name, the <Client>
+    // must use the <Identity> noun form so we can attach a <Parameter>.
+    const clientTarget = hasClient
+      ? callerName
+        ? `    <Client>\n      <Identity>${clientIdentity}</Identity>\n      <Parameter name="callerName" value="${escapeXml(callerName)}"/>\n    </Client>`
+        : `    <Client>${clientIdentity}</Client>`
+      : '';
     const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
     // Recorded-call disclosure played to the CALLER before we ring through
@@ -9287,13 +9323,6 @@ Draft the reply now.`;
     // TWILIO_RECORDING_DISCLOSURE_URL, falls back to TTS reading
     // TWILIO_RECORDING_DISCLOSURE, then to a default. Set
     // TWILIO_RECORDING_DISCLOSURE to "off" to disable entirely.
-    const escapeXml = (s: string) =>
-      s
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;');
     const disclosureUrl = (process.env.TWILIO_RECORDING_DISCLOSURE_URL || '').trim();
     const disclosureTextRaw = (process.env.TWILIO_RECORDING_DISCLOSURE || '').trim();
     let disclosureTwiml = '';
@@ -9308,7 +9337,7 @@ Draft the reply now.`;
       disclosureTwiml = `  <Say voice="alice">${escapeXml(disclosureText)}</Say>\n`;
     }
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
+    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>

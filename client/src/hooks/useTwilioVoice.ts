@@ -21,6 +21,7 @@ export interface CallEvent {
   from?: string;
   to?: string;
   callSid?: string;
+  callerName?: string;
   sid?: string;
   error?: string;
   deviceToken?: string;
