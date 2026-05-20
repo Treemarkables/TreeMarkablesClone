@@ -9223,18 +9223,27 @@ Draft the reply now.`;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
 
+    // Twilio's recording-status callback (fired when the call's recording
+    // completes) does NOT include From / ForwardedFrom / To — only the initial
+    // call webhook does. We need the caller's number to attribute the recording
+    // to the right call record in our DB, so capture it here and pass it
+    // through as a query param on the recordingStatusCallback URL.
+    const inboundFrom = String(req.body?.ForwardedFrom || req.body?.From || '');
+    const inboundTo = String(req.body?.To || '');
+    const recordingCallbackUrl = `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&calledTo=${encodeURIComponent(inboundTo)}`;
+
     // Build the list of Dial targets
     const clientTarget = hasClient ? `    <Client>${clientIdentity}</Client>` : '';
     const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}`);
+    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}`);
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial
     record="record-from-answer"
-    recordingStatusCallback="${baseUrl}/api/webhooks/twilio-voice"
+    recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
     timeout="20"
     action="${baseUrl}/api/webhooks/twilio-no-answer"
@@ -9309,11 +9318,15 @@ ${phoneTarget}
           return phone;
         };
 
-        // Use ForwardedFrom when the call was forwarded (gives real customer number).
-        // Fall back to From if ForwardedFrom is absent (direct call to Twilio number).
-        const rawCallerPhone = ForwardedFrom || From;
-        const callerPhone = normalizePhone(rawCallerPhone);
-        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone})`);
+        // Twilio's recording-status callback doesn't include From / ForwardedFrom —
+        // those parameters are only present on the original call webhook. We
+        // captured them on the answer webhook and passed them through as a
+        // ?callerFrom=... query param on the recordingStatusCallback URL.
+        const callerFromQuery = String(req.query.callerFrom || '');
+        const rawCallerPhone = callerFromQuery || ForwardedFrom || From || '';
+        const callerPhone = normalizePhone(rawCallerPhone) || 'unknown';
+        const callerSource = callerFromQuery ? 'query' : ForwardedFrom ? 'ForwardedFrom' : From ? 'From' : 'none';
+        console.log(`📞 Caller identified as: ${callerPhone} (raw: ${rawCallerPhone}, source: ${callerSource})`);
         
         // Download recording from Twilio and store in Object Storage (persistent across restarts)
         const recordingFilename = `twilio-${CallSid}-${Date.now()}.mp3`;
