@@ -43,20 +43,28 @@ class FirebaseMessagingService {
     if (!this.init()) return false;
 
     try {
+      const dataPayload: Record<string, string> = { ...(notification.data || {}) };
+      if (notification.clickAction) {
+        dataPayload.clickAction = notification.clickAction;
+      }
+
       const message: admin.messaging.Message = {
         token,
         notification: {
           title: notification.title,
           body: notification.body,
         },
-        data: notification.data || {},
+        data: dataPayload,
         apns: {
           headers: { 'apns-priority': '10' },
           payload: { aps: { sound: 'default', badge: 1 } },
         },
         android: {
           priority: 'high',
-          notification: { sound: 'default' },
+          notification: {
+            sound: 'default',
+            ...(notification.clickAction ? { clickAction: notification.clickAction } : {}),
+          },
         },
       };
 

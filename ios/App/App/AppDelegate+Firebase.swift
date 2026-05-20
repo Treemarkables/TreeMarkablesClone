@@ -228,6 +228,57 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let userInfo = response.notification.request.content.userInfo
+        if let clickAction = userInfo["clickAction"] as? String, !clickAction.isEmpty {
+            print("📲 Push tap — navigating WebView to: \(clickAction)")
+            navigateWebView(to: clickAction)
+        } else {
+            print("📲 Push tap — no clickAction in payload")
+        }
         completionHandler()
+    }
+
+    private func navigateWebView(to path: String, attempt: Int = 0) {
+        guard attempt < 10 else {
+            print("⚠️ Navigation: WebView not found after 10 attempts")
+            return
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + (attempt == 0 ? 0 : 0.5)) {
+            guard let webView = self.findCapacitorWebView() else {
+                self.navigateWebView(to: path, attempt: attempt + 1)
+                return
+            }
+
+            // Single-quote-escape the path for safe interpolation, then dispatch a
+            // CustomEvent so the web app's SPA router can handle the navigation
+            // without a full reload. Fall back to window.location.assign if no
+            // listener picks it up within 100ms.
+            let escaped = path.replacingOccurrences(of: "\\", with: "\\\\")
+                              .replacingOccurrences(of: "'", with: "\\'")
+            let js = """
+            (function() {
+              var path = '\(escaped)';
+              var handled = false;
+              var ack = function() { handled = true; };
+              window.addEventListener('nativeNotificationTapAck', ack, { once: true });
+              window.dispatchEvent(new CustomEvent('nativeNotificationTap', { detail: path }));
+              setTimeout(function() {
+                window.removeEventListener('nativeNotificationTapAck', ack);
+                if (!handled) {
+                  try { window.location.assign(path); } catch(e) {}
+                }
+              }, 100);
+            })();
+            """
+
+            webView.evaluateJavaScript(js) { _, error in
+                if let error = error {
+                    print("⚠️ Navigation JS error: \(error)")
+                } else {
+                    print("✅ Sent navigation request to WebView: \(path)")
+                }
+            }
+        }
     }
 }

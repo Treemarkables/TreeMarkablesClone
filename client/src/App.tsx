@@ -766,6 +766,27 @@ function Router() {
     navigator.serviceWorker.addEventListener('message', handleSWMessage);
     return () => navigator.serviceWorker.removeEventListener('message', handleSWMessage);
   }, [setLocation]);
+
+  // Handle push notification taps from the iOS Capacitor native shell.
+  // AppDelegate+Firebase.swift injects a `nativeNotificationTap` CustomEvent
+  // and waits 100ms for `nativeNotificationTapAck` — if we don't ack it falls
+  // back to window.location.assign (full reload). Acking gives us SPA-smooth
+  // routing instead.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const url = (event as CustomEvent<string>).detail;
+      if (typeof url !== 'string' || !url) return;
+      window.dispatchEvent(new Event('nativeNotificationTapAck'));
+      setLocation(url);
+      if (url.startsWith('/dispatch')) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('notification-navigation', { detail: { url } }));
+        }, 150);
+      }
+    };
+    window.addEventListener('nativeNotificationTap', handler);
+    return () => window.removeEventListener('nativeNotificationTap', handler);
+  }, [setLocation]);
   
   // Detect Capacitor (iOS Inflow app) once — used to keep marketing/customer pages
   // out of the native app shell. The iOS WebView loads the same URL as the website,
