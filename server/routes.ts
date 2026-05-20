@@ -3926,6 +3926,48 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
+  // Bulk-delete call records. Session-auth'd. Body: { ids: string[] }.
+  app.post('/api/calls/bulk-delete', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const ids = Array.isArray(req.body?.ids) ? req.body.ids.filter((x: any) => typeof x === 'string') : [];
+      if (ids.length === 0) {
+        return res.status(400).json({ success: false, message: 'No call ids provided' });
+      }
+      let deleted = 0;
+      const failed: string[] = [];
+      for (const id of ids) {
+        try {
+          const ok = await storage.deleteCallRecord(id);
+          if (ok) deleted++; else failed.push(id);
+        } catch (e) {
+          failed.push(id);
+        }
+      }
+      console.log(`🗑️ Bulk-deleted ${deleted}/${ids.length} call records`);
+      res.json({ success: true, deleted, failed });
+    } catch (error) {
+      console.error('Error bulk-deleting calls:', error);
+      res.status(500).json({ success: false, message: 'Error deleting calls' });
+    }
+  });
+
+  app.delete('/api/calls/:id', async (req: Request, res: Response) => {
+    try {
+      if (!req.session.employeeId) {
+        return res.status(401).json({ success: false, message: 'Not authenticated' });
+      }
+      const ok = await storage.deleteCallRecord(req.params.id);
+      if (!ok) return res.status(404).json({ success: false, message: 'Call not found' });
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting call:', error);
+      res.status(500).json({ success: false, message: 'Error deleting call' });
+    }
+  });
+
   // ========================================
   // COMMUNICATION PREFERENCES API ROUTES
   // ========================================

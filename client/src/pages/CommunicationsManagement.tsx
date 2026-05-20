@@ -9,6 +9,17 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,6 +54,7 @@ import {
   X,
   Pencil,
   AlertCircle,
+  Trash2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -59,6 +71,8 @@ export default function CommunicationsManagement() {
   const [callDirectionFilter, setCallDirectionFilter] = useState<string>("all");
   const [playingCallId, setPlayingCallId] = useState<string | null>(null);
   const [expandedTranscript, setExpandedTranscript] = useState<string | null>(null);
+  const [selectedCallIds, setSelectedCallIds] = useState<Set<string>>(new Set());
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>("");
   const [, navigate] = useLocation();
@@ -119,6 +133,23 @@ export default function CommunicationsManagement() {
     },
     onError: (err: Error) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const bulkDeleteCallsMutation = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const res = await apiRequest('POST', '/api/calls/bulk-delete', { ids });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.message || 'Failed to delete calls');
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/calls"] });
+      setSelectedCallIds(new Set());
+      setShowDeleteDialog(false);
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't delete calls", description: err.message, variant: "destructive" });
     },
   });
 
@@ -630,16 +661,56 @@ export default function CommunicationsManagement() {
                 </div>
               ) : (
                 <div className="space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b">
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={filteredCalls.length > 0 && selectedCallIds.size === filteredCalls.length}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedCallIds(new Set(filteredCalls.map((c) => c.id)));
+                          } else {
+                            setSelectedCallIds(new Set());
+                          }
+                        }}
+                        data-testid="checkbox-select-all-calls"
+                      />
+                      Select all
+                    </label>
+                    {selectedCallIds.size > 0 && (
+                      <Button
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                        data-testid="button-delete-selected-calls"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete {selectedCallIds.size}
+                      </Button>
+                    )}
+                  </div>
                   {filteredCalls.map((call) => {
                     const customerName = getCustomerName(call.customerId);
                     const isPlaying = playingCallId === call.id;
                     const isTranscriptOpen = expandedTranscript === call.id;
+                    const isSelected = selectedCallIds.has(call.id);
                     return (
                       <div
                         key={call.id}
                         className="flex flex-col gap-3 p-4 border rounded-lg"
                       >
                         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={(checked) => {
+                              setSelectedCallIds((prev) => {
+                                const next = new Set(prev);
+                                if (checked) next.add(call.id);
+                                else next.delete(call.id);
+                                return next;
+                              });
+                            }}
+                            data-testid={`checkbox-call-${call.id}`}
+                          />
                           <div className="flex-shrink-0">
                             {call.direction === "inbound" ? (
                               <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
@@ -777,6 +848,35 @@ export default function CommunicationsManagement() {
               )}
             </CardContent>
           </Card>
+
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  Delete {selectedCallIds.size} call{selectedCallIds.size === 1 ? '' : 's'}?
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  This permanently removes the selected call records and their
+                  recordings/transcripts from Inflow. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={bulkDeleteCallsMutation.isPending}>
+                  Cancel
+                </AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => bulkDeleteCallsMutation.mutate(Array.from(selectedCallIds))}
+                  disabled={bulkDeleteCallsMutation.isPending}
+                  data-testid="button-confirm-delete-calls"
+                >
+                  {bulkDeleteCallsMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-1 animate-spin" />
+                  ) : null}
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
 
         {/* Templates Tab */}
