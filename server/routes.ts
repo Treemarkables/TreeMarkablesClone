@@ -9230,7 +9230,10 @@ Draft the reply now.`;
     // through as a query param on the recordingStatusCallback URL.
     const inboundFrom = String(req.body?.ForwardedFrom || req.body?.From || '');
     const inboundTo = String(req.body?.To || '');
-    const recordingCallbackUrl = `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&calledTo=${encodeURIComponent(inboundTo)}`;
+    // The URL is embedded in an XML attribute, so any `&` between query params
+    // must be escaped as `&amp;` or Twilio fails to parse the TwiML.
+    const recordingCallbackUrl =
+      `${baseUrl}/api/webhooks/twilio-voice?callerFrom=${encodeURIComponent(inboundFrom)}&amp;calledTo=${encodeURIComponent(inboundTo)}`;
 
     // Build the list of Dial targets
     const clientTarget = hasClient ? `    <Client>${clientIdentity}</Client>` : '';
