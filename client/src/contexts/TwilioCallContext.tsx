@@ -107,6 +107,30 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     onCallDisconnected: handleCallDisconnected,
     onCallCancelled: handleCallCancelled,
     onCallFailed: handleCallFailed,
+    onRegistered: (data) => {
+      fetch("/api/_debug/client-log", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "TwilioCallContext",
+          stage: "onRegistered",
+          deviceTokenPrefix: typeof data.deviceToken === "string" ? data.deviceToken.slice(0, 12) : null,
+        }),
+      }).catch(() => {});
+    },
+    onRegistrationError: (data) => {
+      fetch("/api/_debug/client-log", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: "TwilioCallContext",
+          stage: "onRegistrationError",
+          message: data.message,
+        }),
+      }).catch(() => {});
+    },
   });
 
   const handleAnswer = useCallback(() => {
