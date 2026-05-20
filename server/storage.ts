@@ -192,7 +192,8 @@ export interface IStorage {
   getCallsByJobId(jobId: string): Promise<Call[]>;
   getCallsByLead(leadId: string): Promise<Call[]>;
   getAllCalls(limit?: number): Promise<Call[]>;
-  
+  deleteCall(id: string): Promise<boolean>;
+
   // API Key Management
   createApiKey(apiKey: InsertApiKey): Promise<ApiKey>;
   getApiKeyByHash(keyHash: string): Promise<ApiKey | undefined>;
@@ -2477,6 +2478,13 @@ class DatabaseStorage implements IStorage {
   
   async getAllCalls(limit: number = 100): Promise<Call[]> {
     return await db.select().from(schema.calls).limit(limit);
+  }
+
+  async deleteCall(id: string): Promise<boolean> {
+    const deleted = await db.delete(schema.calls)
+      .where(eq(schema.calls.id, id))
+      .returning();
+    return deleted.length > 0;
   }
 
   // API Keys

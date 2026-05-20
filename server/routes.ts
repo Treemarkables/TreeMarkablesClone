@@ -3940,7 +3940,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const failed: string[] = [];
       for (const id of ids) {
         try {
-          const ok = await storage.deleteCallRecord(id);
+          const ok = await storage.deleteCall(id);
           if (ok) deleted++; else failed.push(id);
         } catch (e) {
           failed.push(id);
@@ -3959,7 +3959,7 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!req.session.employeeId) {
         return res.status(401).json({ success: false, message: 'Not authenticated' });
       }
-      const ok = await storage.deleteCallRecord(req.params.id);
+      const ok = await storage.deleteCall(req.params.id);
       if (!ok) return res.status(404).json({ success: false, message: 'Call not found' });
       res.json({ success: true });
     } catch (error) {
