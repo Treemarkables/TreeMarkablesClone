@@ -9337,12 +9337,28 @@ Draft the reply now.`;
       disclosureTwiml = `  <Say voice="alice">${escapeXml(disclosureText)}</Say>\n`;
     }
 
-    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
+    // Brief "we're connecting you" cue played to the CALLER *before* the
+    // recorded-call disclosure. Without it, the disclosure (especially when
+    // it's the owner's own recorded voice) sounds like a voicemail greeting,
+    // so callers hang up before the app rings. This line frames it as "a
+    // person is about to pick up". Configurable via TWILIO_CONNECTING_PROMPT;
+    // set to "off" to disable.
+    const connectingPromptRaw = (process.env.TWILIO_CONNECTING_PROMPT || '').trim();
+    let connectingTwiml = '';
+    if (connectingPromptRaw.toLowerCase() === 'off') {
+      connectingTwiml = '';
+    } else {
+      const connectingText =
+        connectingPromptRaw || 'Please hold while we connect your call.';
+      connectingTwiml = `  <Say voice="alice">${escapeXml(connectingText)}</Say>\n`;
+    }
+
+    console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);
 
     res.type('text/xml');
     res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-${disclosureTwiml}  <Dial
+${connectingTwiml}${disclosureTwiml}  <Dial
     record="record-from-answer"
     recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
