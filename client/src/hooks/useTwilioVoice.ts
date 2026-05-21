@@ -8,6 +8,7 @@ export interface TwilioVoicePluginInterface {
   reject(): Promise<void>;
   hangup(): Promise<void>;
   mute(options: { muted: boolean }): Promise<void>;
+  setSpeaker(options: { on: boolean }): Promise<void>;
   addListener(
     event: string,
     handler: (data: Record<string, string>) => void,
@@ -124,12 +125,21 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
     [isNative],
   );
 
+  const setSpeaker = useCallback(
+    async (on: boolean) => {
+      if (!isNative) return;
+      await TwilioVoice.setSpeaker({ on });
+    },
+    [isNative],
+  );
+
   return {
     isNative,
     answer,
     reject,
     hangup,
     mute,
+    setSpeaker,
     refetchToken: fetchTokenAndRegister,
   };
 }

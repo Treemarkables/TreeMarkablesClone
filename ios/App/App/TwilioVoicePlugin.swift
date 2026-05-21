@@ -19,6 +19,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "reject", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "hangup", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "mute", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setSpeaker", returnType: CAPPluginReturnPromise),
     ]
 
     // MARK: - Stored Properties (strongly retained)
@@ -100,6 +101,31 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func mute(_ call: CAPPluginCall) {
         let isMuted = call.getBool("muted") ?? true
         self.activeCall?.isMuted = isMuted
+        call.resolve()
+    }
+
+    @objc func setSpeaker(_ call: CAPPluginCall) {
+        let on = call.getBool("on") ?? false
+        let applyRoute = {
+            do {
+                try AVAudioSession.sharedInstance()
+                    .overrideOutputAudioPort(on ? .speaker : .none)
+            } catch {
+                NSLog("[TwilioVoice] Failed to set speaker route: \(error.localizedDescription)")
+            }
+        }
+        // Twilio's DefaultAudioDevice owns the AVAudioSession, so a bare
+        // overrideOutputAudioPort gets reverted on the next audio-unit cycle.
+        // Routing changes must run inside the device's configuration block.
+        if let audioDevice = TwilioVoiceSDK.audioDevice as? DefaultAudioDevice {
+            audioDevice.block = {
+                DefaultAudioDevice.DefaultAVAudioSessionConfigurationBlock()
+                applyRoute()
+            }
+            audioDevice.block()
+        } else {
+            applyRoute()
+        }
         call.resolve()
     }
 

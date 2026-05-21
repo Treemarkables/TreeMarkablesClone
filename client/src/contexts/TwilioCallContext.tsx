@@ -8,7 +8,7 @@ import {
 import { Capacitor } from "@capacitor/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTwilioVoice, CallEvent } from "@/hooks/useTwilioVoice";
-import { Phone, PhoneOff, PhoneMissed } from "lucide-react";
+import { Phone, PhoneOff, PhoneMissed, Mic, MicOff, Volume2 } from "lucide-react";
 
 export type CallState =
   | "idle"
@@ -27,10 +27,12 @@ interface TwilioCallContextValue {
   callState: CallState;
   callInfo: CallInfo | null;
   isMuted: boolean;
+  isSpeaker: boolean;
   answer: () => void;
   reject: () => void;
   hangup: () => void;
   toggleMute: () => void;
+  toggleSpeaker: () => void;
   isNative: boolean;
 }
 
@@ -38,10 +40,12 @@ const TwilioCallContext = createContext<TwilioCallContextValue>({
   callState: "idle",
   callInfo: null,
   isMuted: false,
+  isSpeaker: false,
   answer: () => {},
   reject: () => {},
   hangup: () => {},
   toggleMute: () => {},
+  toggleSpeaker: () => {},
   isNative: false,
 });
 
@@ -49,6 +53,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   const [callState, setCallState] = useState<CallState>("idle");
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(false);
   const queryClient = useQueryClient();
 
   // Invalidate /api/calls after a call ends so Communications page refreshes.
@@ -76,6 +81,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
       setCallState("idle");
       setCallInfo(null);
       setIsMuted(false);
+      setIsSpeaker(false);
     }, 2000);
   }, [refreshCallHistory]);
 
@@ -86,6 +92,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
       setCallState("idle");
       setCallInfo(null);
       setIsMuted(false);
+      setIsSpeaker(false);
     }, 2000);
   }, [refreshCallHistory]);
 
@@ -100,7 +107,7 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setCallInfo(null);
   }, []);
 
-  const { isNative, answer, reject, hangup, mute } = useTwilioVoice({
+  const { isNative, answer, reject, hangup, mute, setSpeaker } = useTwilioVoice({
     onIncomingCall: handleIncomingCall,
     onCallAnswered: handleCallAnswered,
     onCallConnected: handleCallConnected,
@@ -132,16 +139,24 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
     setIsMuted(newMuted);
   }, [isMuted, mute]);
 
+  const toggleSpeaker = useCallback(() => {
+    const newSpeaker = !isSpeaker;
+    setSpeaker(newSpeaker);
+    setIsSpeaker(newSpeaker);
+  }, [isSpeaker, setSpeaker]);
+
   return (
     <TwilioCallContext.Provider
       value={{
         callState,
         callInfo,
         isMuted,
+        isSpeaker,
         answer: handleAnswer,
         reject: handleReject,
         hangup: handleHangup,
         toggleMute,
+        toggleSpeaker,
         isNative,
       }}
     >
@@ -151,10 +166,12 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
           callState={callState}
           callInfo={callInfo}
           isMuted={isMuted}
+          isSpeaker={isSpeaker}
           onAnswer={handleAnswer}
           onReject={handleReject}
           onHangup={handleHangup}
           onToggleMute={toggleMute}
+          onToggleSpeaker={toggleSpeaker}
         />
       )}
     </TwilioCallContext.Provider>
@@ -165,18 +182,22 @@ function IncomingCallOverlay({
   callState,
   callInfo,
   isMuted,
+  isSpeaker,
   onAnswer,
   onReject,
   onHangup,
   onToggleMute,
+  onToggleSpeaker,
 }: {
   callState: CallState;
   callInfo: CallInfo | null;
   isMuted: boolean;
+  isSpeaker: boolean;
   onAnswer: () => void;
   onReject: () => void;
   onHangup: () => void;
   onToggleMute: () => void;
+  onToggleSpeaker: () => void;
 }) {
   if (callState === "idle" || callState === "ended") return null;
 
@@ -234,17 +255,30 @@ function IncomingCallOverlay({
       )}
 
       {(callState === "connecting" || callState === "active") && (
-        <div className="flex gap-8">
+        <div className="flex gap-8 items-start">
           <div className="flex flex-col items-center gap-2">
             <button
               onClick={onToggleMute}
               className={`w-14 h-14 rounded-full flex items-center justify-center active:opacity-70 ${isMuted ? "bg-white/30" : "bg-white/10"}`}
             >
-              <Phone className="w-6 h-6 text-white" />
+              {isMuted ? (
+                <MicOff className="w-6 h-6 text-white" />
+              ) : (
+                <Mic className="w-6 h-6 text-white" />
+              )}
             </button>
             <span className="text-white/70 text-sm">
               {isMuted ? "Unmute" : "Mute"}
             </span>
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={onToggleSpeaker}
+              className={`w-14 h-14 rounded-full flex items-center justify-center active:opacity-70 ${isSpeaker ? "bg-white/30" : "bg-white/10"}`}
+            >
+              <Volume2 className="w-6 h-6 text-white" />
+            </button>
+            <span className="text-white/70 text-sm">Speaker</span>
           </div>
           <div className="flex flex-col items-center gap-2">
             <button
