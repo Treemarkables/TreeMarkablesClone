@@ -14,6 +14,7 @@ import {
   Bot,
   ChevronRight,
   AlertTriangle,
+  Phone,
 } from "lucide-react";
 import {
   Sidebar,
@@ -73,7 +74,7 @@ function SidebarNavContent({
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
   const safetyActive = ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
-  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/communications", "/equipment"].includes(location);
+  const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/equipment"].includes(location);
 
   const [vehicleOpen, setVehicleOpen] = useState(vehicleActive);
   const [safetyOpen, setSafetyOpen] = useState(safetyActive);
@@ -187,6 +188,20 @@ function SidebarNavContent({
                   )}
                 </SidebarMenuItem>
               ))}
+
+              {/* Calls — recorded call log */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/calls"}>
+                    <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
+                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
+                        <Phone className="h-4 w-4" />
+                      </span>
+                      <span>Calls</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
 
               {/* Staff Schedule */}
               <SidebarMenuItem>
@@ -392,11 +407,6 @@ function SidebarNavContent({
                         <SidebarMenuSubItem>
                           <SidebarMenuSubButton asChild isActive={location === "/inbox"}>
                             <Link href="/inbox" onClick={handleLinkClick} data-testid="link-inbox"><span>Inbox</span></Link>
-                          </SidebarMenuSubButton>
-                        </SidebarMenuSubItem>
-                        <SidebarMenuSubItem>
-                          <SidebarMenuSubButton asChild isActive={location === "/communications"}>
-                            <Link href="/communications" onClick={handleLinkClick} data-testid="link-call-log"><span>Call Log</span></Link>
                           </SidebarMenuSubButton>
                         </SidebarMenuSubItem>
                         <SidebarMenuSubItem>

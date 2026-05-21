@@ -36,6 +36,7 @@ import MarketingPlanner from "@/pages/MarketingPlanner";
 import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
+import Calls from "@/pages/Calls";
 import Dispatch from "@/pages/Dispatch";
 import { WorkflowAutomation } from "@/components/WorkflowAutomation";
 import History from "@/pages/History";
@@ -977,6 +978,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <CommunicationsManagement />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/calls">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Calls />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
