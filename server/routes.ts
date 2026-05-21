@@ -17038,41 +17038,51 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
       });
       const jobData = JSON.parse(extraction.choices[0].message.content || '{}');
 
-      // Find or create the customer. Match on the last 8 phone digits to
-      // ignore country-code variations (021... vs +6421...). BUT only reuse a
-      // phone match when the spoken name also reasonably matches — otherwise
-      // it's a different person calling from a number we've seen before
-      // (shared/borrowed phone, recycled number), and silently attaching their
-      // job to the wrong customer is worse than creating a new record.
+      // Resolve the customer this job belongs to. Priority:
+      //   1. The customer the call is already linked to (authoritative).
+      //   2. A customer whose phone/mobile matches the caller's number.
+      //   3. A brand-new customer built from the transcript (unknown caller).
+      // Match on the last 8 phone digits to ignore country-code variations
+      // (021... vs +6421...). A manual "Create Job" click is the staff member
+      // explicitly confirming this caller is whoever the call log attributed
+      // the number to, so a phone match WINS over the transcript-spoken name
+      // (which is often a different person merely mentioned on the call). The
+      // spoken name only disambiguates when one number maps to several
+      // customers.
       const normForCompare = (p: string | null | undefined) =>
         String(p || '').replace(/\D/g, '').slice(-8);
       const normName = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
       const callerKey = normForCompare(callerPhone);
       const extractedName = String(jobData.customerName || '').trim();
       let customer: any = null;
-      if (callerKey) {
+
+      if (call.customerId) {
+        customer = await storage.getCustomer(call.customerId) || null;
+      }
+
+      if (!customer && callerKey) {
         const allCustomers = await storage.getAllCustomers();
         const phoneMatches = allCustomers.filter(
           (c: any) =>
             (c.phone && normForCompare(c.phone) === callerKey) ||
             (c.mobile && normForCompare(c.mobile) === callerKey),
         );
-        if (phoneMatches.length > 0) {
-          if (extractedName) {
-            const en = normName(extractedName);
-            customer = phoneMatches.find((c: any) => {
-              const cn = normName(c.name || '');
-              return cn && (cn === en || cn.includes(en) || en.includes(cn));
-            }) || null;
-            if (!customer) {
-              console.log(`ℹ️ Phone ${callerPhone} matched ${phoneMatches.length} customer(s) but spoken name "${extractedName}" differs — creating new customer`);
-            }
-          } else {
-            // No spoken name to compare — best guess is the phone match.
-            customer = phoneMatches[0];
-          }
+        if (phoneMatches.length === 1) {
+          customer = phoneMatches[0];
+        } else if (phoneMatches.length > 1) {
+          // Same number on multiple records — use the spoken name to pick the
+          // right one, falling back to the first match.
+          const en = normName(extractedName);
+          customer =
+            (en &&
+              phoneMatches.find((c: any) => {
+                const cn = normName(c.name || '');
+                return cn && (cn === en || cn.includes(en) || en.includes(cn));
+              })) ||
+            phoneMatches[0];
         }
       }
+
       if (!customer) {
         customer = await storage.createCustomer({
           name: extractedName || `Caller ${callerPhone}`,
@@ -17084,7 +17094,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
 
       // Build the job. job_number is NOT NULL and createJob does not
       // auto-assign it — fetch the next sequential number explicitly.
-      const nameParts = String(jobData.customerName || customer.name || '').trim().split(/\s+/);
+      // Prefer the resolved customer's name for the job contact; only fall back
+      // to the transcript-spoken name (which is what a brand-new customer was
+      // created from anyway).
+      const nameParts = String(customer.name || jobData.customerName || '').trim().split(/\s+/);
       const jobContactFirstName = nameParts[0] || undefined;
       const jobContactLastName = nameParts.slice(1).join(' ') || undefined;
       const jobNumber = await storage.getNextJobNumber();
