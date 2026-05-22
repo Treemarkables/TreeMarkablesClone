@@ -8,7 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X } from "lucide-react";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface JobVideosProps {
@@ -24,6 +29,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
   const [search, setSearch] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [open, setOpen] = useState(false);
 
   const videosKey = ["/api/jobs", jobId, "videos"];
 
@@ -151,11 +157,22 @@ export function JobVideos({ jobId }: JobVideosProps) {
 
   return (
     <Card className="bg-card border border-border">
-      <CardContent className="p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <VideoIcon className="w-4 h-4 text-muted-foreground" />
-          <h3 className="text-sm font-semibold">Job Videos</h3>
-        </div>
+      <CardContent className="p-4">
+        <Collapsible open={open} onOpenChange={setOpen}>
+          <CollapsibleTrigger
+            className="group flex items-center gap-2 w-full"
+            data-testid="toggle-job-videos"
+          >
+            <VideoIcon className="w-4 h-4 text-muted-foreground" />
+            <h3 className="text-sm font-semibold">Job Videos</h3>
+            {videos.length > 0 && (
+              <span className="text-xs text-muted-foreground">
+                ({videos.length})
+              </span>
+            )}
+            <ChevronDown className="w-4 h-4 text-muted-foreground ml-auto transition-transform group-data-[state=open]:rotate-180" />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-4 pt-3">
 
         {/* Upload control */}
         <div className="space-y-3">
@@ -328,6 +345,8 @@ export function JobVideos({ jobId }: JobVideosProps) {
             ))}
           </div>
         )}
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );
