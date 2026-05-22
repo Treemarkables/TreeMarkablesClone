@@ -5607,7 +5607,56 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         }
         // Force-null any fields in _clearFields — Zod may have stripped null→undefined,
         // which causes Drizzle to skip the field entirely in the UPDATE statement.
-        for (const field of explicitClears) {
+        //
+        // SAFETY: the client occasionally puts the wrong field name into
+        // _clearFields (RHF dirty-state can leak across form.reset and
+        // cross-device-sync setValue calls — see RC2/RC7 comments in
+        // GlobalJobCard.tsx). Without an allowlist a single bad PUT could
+        // null a customerId / totalAmount / proposalTitle and the only
+        // forensic trace would be the resulting empty row.
+        // Only fields the UI legitimately allows a user to empty are
+        // honoured; anything else is dropped and logged for audit.
+        const CLEARABLE_FIELDS_ALLOWLIST = new Set<string>([
+          'description', 'internalNotes', 'notes', 'address',
+          'leadSource', 'priority', 'quotingMethod', 'categoryId',
+          'proposalTitle',
+          'jobContactFirstName', 'jobContactLastName',
+          'jobContactEmail', 'jobContactPhone', 'jobContactMobile',
+          'tenantContactFirstName', 'tenantContactLastName',
+          'tenantContactEmail', 'tenantContactPhone', 'tenantContactMobile',
+          'billingNameOverride', 'billingAddress',
+          'billingContactEmail', 'billingContactPhone', 'billingContactMobile',
+          'invoiceDescription',
+          'jobContactFirstNameForInvoice', 'jobContactLastNameForInvoice',
+          'purchaseOrderNumber',
+          'unsuccessfulReason', 'unsuccessfulNotes',
+          'scheduledDate', 'scheduledTime', 'scheduledEndDate',
+          'estimatedDuration', 'estimatedManHours',
+        ]);
+        const rejectedClears = explicitClears.filter(f => !CLEARABLE_FIELDS_ALLOWLIST.has(f));
+        if (rejectedClears.length > 0) {
+          console.warn(
+            `🛑 BLOCKED _clearFields for non-allowlisted field(s) on job ${req.params.id}:`,
+            rejectedClears,
+            'request body keys:', Object.keys(req.body),
+            'caller UA:', req.headers['user-agent'],
+            'session:', req.session?.employeeId ?? 'anon'
+          );
+        }
+        const safeClears = explicitClears.filter(f => CLEARABLE_FIELDS_ALLOWLIST.has(f));
+        // Forensic snapshot: high-value text fields are the ones whose loss
+        // is hardest to recover from. Log the prior value so an admin can
+        // restore manually if a wipe slips through despite the allowlist.
+        const HIGH_VALUE_FORENSIC = new Set(['description', 'internalNotes', 'proposalTitle']);
+        for (const field of safeClears) {
+          if (HIGH_VALUE_FORENSIC.has(field)) {
+            const oldVal = (oldJob as any)?.[field];
+            if (oldVal !== null && oldVal !== undefined && oldVal !== '') {
+              console.warn(
+                `🛑 FIELD_CLEAR_AUDIT job=${req.params.id} field=${field} ts=${new Date().toISOString()} oldValue=${JSON.stringify(String(oldVal).slice(0, 2000))}`
+              );
+            }
+          }
           (validation.data as any)[field] = null;
         }
       }
@@ -21736,8 +21785,38 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Delete proposal
-  app.delete('/api/proposals/:id', async (req: Request, res: Response) => {
+  app.delete('/api/proposals/:id', requireAdmin, async (req: Request, res: Response) => {
     try {
+      // Forensic snapshot. There is no soft-delete on proposals and the
+      // delete cascades to proposal_sections + proposal_line_items, so once
+      // the row is gone this log is the only trace. Logged at warn level so
+      // it surfaces in the DO production log retention.
+      const snapshot = await storage.getProposal(req.params.id).catch(() => null);
+      if (snapshot) {
+        let sectionCount = 0;
+        try {
+          const sections = await storage.getProposalSectionsByProposal(req.params.id);
+          sectionCount = sections?.length ?? 0;
+        } catch { /* best-effort, snapshot is still useful */ }
+        console.warn(
+          `🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} session=${req.session?.employeeId ?? 'anon'} ua=${req.headers['user-agent'] ?? 'n/a'} snapshot=${JSON.stringify({
+            jobId: snapshot.jobId,
+            customerId: snapshot.customerId,
+            proposalNumber: snapshot.proposalNumber,
+            status: snapshot.status,
+            title: snapshot.title,
+            totalAmount: snapshot.totalAmount,
+            sentDate: snapshot.sentDate,
+            viewedDate: snapshot.viewedDate,
+            responseDate: snapshot.responseDate,
+            createdAt: snapshot.createdAt,
+            updatedAt: snapshot.updatedAt,
+            sectionCount,
+          })}`
+        );
+      } else {
+        console.warn(`🛑 PROPOSAL_DELETE_AUDIT id=${req.params.id} ts=${new Date().toISOString()} (no snapshot — proposal already missing) session=${req.session?.employeeId ?? 'anon'}`);
+      }
       await storage.deleteProposal(req.params.id);
       res.json({
         success: true,
