@@ -24,6 +24,7 @@ import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Tasks from "@/pages/Tasks";
+import Videos from "@/pages/Videos";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
 import ConversationDetail from "@/pages/ConversationDetail";
@@ -891,6 +892,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Tasks />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/videos">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Videos />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

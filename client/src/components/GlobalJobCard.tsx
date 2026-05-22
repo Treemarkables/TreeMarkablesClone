@@ -92,6 +92,7 @@ import { AddressAutocomplete } from "./AddressAutocomplete";
 import { ProposalBuilderV2 } from "./ProposalBuilderV2";
 import { InvoiceBuilder } from "./InvoiceBuilder";
 import { JobDiarySection } from "./JobDiarySection";
+import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
 import { JobQuotingPanel } from "./JobQuotingPanel";
 import { StaffTimeManager } from "./StaffTimeManager";
@@ -9744,6 +9745,10 @@ The Treemarkables Team`;
                   {sidebarTab === "diary" && (
                     <div className="md:hidden -m-3 sm:-m-4">
                       {editingJob ? (
+                        <>
+                        <div className="p-3">
+                          <JobVideos jobId={editingJob.id} />
+                        </div>
                         <JobDiarySection
                           jobId={editingJob.id}
                           onQuoteClick={() => setIsQuoteModalOpen(true)}
@@ -9757,6 +9762,7 @@ The Treemarkables Team`;
                             setIsProposalBuilderOpen(true);
                           }}
                         />
+                        </>
                       ) : (
                         <div className="p-4">
                           <div className="text-center py-8 text-gray-500">
@@ -9777,6 +9783,9 @@ The Treemarkables Team`;
                     is the only diary view now. */}
                 {editingJob && (
                   <div className="hidden sm:block sm:flex-1 bg-white overflow-y-auto overflow-x-hidden rounded-r-lg min-w-0">
+                    <div className="p-3">
+                      <JobVideos jobId={editingJob.id} />
+                    </div>
                     <JobDiarySection
                       jobId={editingJob.id}
                       onQuoteClick={(quoteNumber) => {

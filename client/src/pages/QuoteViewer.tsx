@@ -83,6 +83,18 @@ export default function QuoteViewer({}: QuoteViewerProps) {
     enabled: !!actualQuoteResponse?.data?.jobId,
   });
 
+  // Fetch customer-visible videos (Loom-replacement walkthroughs) for this job.
+  const jobIdForVideos = (actualQuoteResponse as { data?: { jobId?: string } } | undefined)?.data?.jobId;
+  const { data: videosResponse } = useQuery({
+    queryKey: ["/api/jobs", jobIdForVideos, "videos", "public"],
+    queryFn: async () => {
+      const r = await fetch(`/api/jobs/${jobIdForVideos}/videos/public`);
+      if (!r.ok) return { success: false, data: [] };
+      return r.json();
+    },
+    enabled: !!jobIdForVideos,
+  });
+
   // Accept quote mutation
   const acceptQuoteMutation = useMutation({
     mutationFn: async () => {
@@ -151,6 +163,15 @@ export default function QuoteViewer({}: QuoteViewerProps) {
   const quote = actualQuoteResponse.data;
   const customer = customerResponse?.data;
   const job = jobResponse?.data;
+  type VideoItem = {
+    id: string;
+    url: string;
+    title?: string | null;
+    description?: string | null;
+    thumbnailUrl?: string | null;
+  };
+  const videos: VideoItem[] =
+    (videosResponse as { data?: VideoItem[] } | undefined)?.data || [];
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-NZ", {
@@ -434,6 +455,40 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">
                       {job.description}
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Video Walkthrough (Loom replacement) */}
+              {videos.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="text-base font-semibold text-gray-900 mb-3">
+                    Video Walkthrough
+                  </h3>
+                  <div className="space-y-4">
+                    {videos.map((v: any) => (
+                      <div key={v.id} className="bg-gray-50 rounded-lg p-3">
+                        {v.title && (
+                          <p className="text-sm font-medium text-gray-800 mb-2">
+                            {v.title}
+                          </p>
+                        )}
+                        <video
+                          src={v.url}
+                          poster={v.thumbnailUrl || undefined}
+                          controls
+                          preload="metadata"
+                          playsInline
+                          className="w-full rounded-lg bg-black"
+                          data-testid={`video-${v.id}`}
+                        />
+                        {v.description && (
+                          <p className="text-xs text-gray-600 mt-2 whitespace-pre-wrap">
+                            {v.description}
+                          </p>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

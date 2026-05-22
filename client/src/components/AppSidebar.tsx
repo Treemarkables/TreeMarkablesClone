@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Calendar,
   CheckSquare,
+  Video,
   BarChart3,
   Users,
   Settings,
@@ -145,6 +146,18 @@ function SidebarNavContent({
                       <CheckSquare className="h-4 w-4" />
                     </span>
                     <span>Tasks</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Videos — walkthrough + how-to video library */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/videos"}>
+                  <Link href="/videos" onClick={handleLinkClick} data-testid="link-videos">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black text-[#39FF14]">
+                      <Video className="h-4 w-4" />
+                    </span>
+                    <span>Videos</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
