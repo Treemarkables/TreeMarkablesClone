@@ -628,6 +628,273 @@ The Treemarkables Team';
           ('C', 'review-request',      'Request review from client',     'Star',           1, true)
         ON CONFLICT (item_id) DO NOTHING;
       `);
+
+      // --- Safety module (Tier 1) tables — idempotent create + seed ---
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS toolbox_talk_topics (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          key TEXT UNIQUE,
+          title TEXT NOT NULL,
+          category TEXT,
+          talking_points TEXT,
+          is_built_in BOOLEAN NOT NULL DEFAULT false,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS toolbox_talks (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          talk_number TEXT NOT NULL UNIQUE,
+          topic_id VARCHAR,
+          title TEXT NOT NULL,
+          job_id VARCHAR,
+          location TEXT,
+          presenter_name TEXT,
+          presenter_id VARCHAR,
+          conducted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          notes TEXT,
+          status TEXT NOT NULL DEFAULT 'draft',
+          created_by VARCHAR,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS toolbox_talk_attendees (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          talk_id VARCHAR NOT NULL REFERENCES toolbox_talks(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          employee_id VARCHAR,
+          signature_data_url TEXT,
+          signed_at TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS toolbox_talk_attendees_talk_idx ON toolbox_talk_attendees (talk_id);
+
+        CREATE TABLE IF NOT EXISTS prestart_checklist_templates (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          key TEXT UNIQUE,
+          equipment_type TEXT NOT NULL,
+          name TEXT NOT NULL,
+          items JSONB NOT NULL DEFAULT '[]'::jsonb,
+          is_built_in BOOLEAN NOT NULL DEFAULT false,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS prestart_checklists (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          check_number TEXT NOT NULL UNIQUE,
+          template_id VARCHAR,
+          equipment_type TEXT NOT NULL,
+          equipment_name TEXT,
+          job_id VARCHAR,
+          operator_name TEXT,
+          operator_id VARCHAR,
+          results JSONB NOT NULL DEFAULT '[]'::jsonb,
+          passed BOOLEAN NOT NULL DEFAULT true,
+          faults_noted TEXT,
+          signature_data_url TEXT,
+          conducted_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_by VARCHAR,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS safety_assets (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          asset_tag TEXT,
+          name TEXT NOT NULL,
+          category TEXT NOT NULL,
+          serial_number TEXT,
+          manufacturer TEXT,
+          in_service_date TIMESTAMP,
+          inspection_frequency_days INTEGER NOT NULL DEFAULT 180,
+          last_inspected_at TIMESTAMP,
+          next_inspection_due TIMESTAMP,
+          status TEXT NOT NULL DEFAULT 'in_service',
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS asset_inspections (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          asset_id VARCHAR NOT NULL REFERENCES safety_assets(id) ON DELETE CASCADE,
+          inspector_name TEXT,
+          inspector_id VARCHAR,
+          result TEXT NOT NULL DEFAULT 'pass',
+          notes TEXT,
+          inspected_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          next_inspection_due TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS asset_inspections_asset_idx ON asset_inspections (asset_id);
+
+        CREATE TABLE IF NOT EXISTS competency_types (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          key TEXT UNIQUE,
+          name TEXT NOT NULL,
+          category TEXT,
+          requires_expiry BOOLEAN NOT NULL DEFAULT true,
+          is_built_in BOOLEAN NOT NULL DEFAULT false,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS employee_competencies (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          employee_id VARCHAR NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+          competency_type_id VARCHAR,
+          competency_name TEXT NOT NULL,
+          issuer TEXT,
+          reference_number TEXT,
+          issue_date TIMESTAMP,
+          expiry_date TIMESTAMP,
+          cert_file_path TEXT,
+          notes TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS employee_competencies_emp_idx ON employee_competencies (employee_id);
+
+        CREATE TABLE IF NOT EXISTS swms_templates (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          key TEXT UNIQUE,
+          name TEXT NOT NULL,
+          category TEXT,
+          activity_description TEXT,
+          default_ppe TEXT[] DEFAULT '{}',
+          steps JSONB NOT NULL DEFAULT '[]'::jsonb,
+          is_built_in BOOLEAN NOT NULL DEFAULT false,
+          is_active BOOLEAN NOT NULL DEFAULT true,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS swms_documents (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          swms_number TEXT NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          job_id VARCHAR,
+          activity_description TEXT,
+          location TEXT,
+          ppe_required TEXT[] DEFAULT '{}',
+          high_risk_work TEXT[] DEFAULT '{}',
+          status TEXT NOT NULL DEFAULT 'draft',
+          prepared_by TEXT,
+          prepared_by_id VARCHAR,
+          created_by VARCHAR,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE IF NOT EXISTS swms_steps (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          swms_id VARCHAR NOT NULL REFERENCES swms_documents(id) ON DELETE CASCADE,
+          step_number INTEGER NOT NULL,
+          task_step TEXT NOT NULL,
+          hazards TEXT[] DEFAULT '{}',
+          controls TEXT[] DEFAULT '{}',
+          risk_rating INTEGER,
+          responsible_person TEXT,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS swms_steps_swms_idx ON swms_steps (swms_id);
+        CREATE TABLE IF NOT EXISTS swms_signatures (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          swms_id VARCHAR NOT NULL REFERENCES swms_documents(id) ON DELETE CASCADE,
+          worker_name TEXT NOT NULL,
+          worker_id VARCHAR,
+          signature_data_url TEXT NOT NULL,
+          signed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS swms_signatures_swms_idx ON swms_signatures (swms_id);
+
+        CREATE TABLE IF NOT EXISTS notifiable_events (
+          id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
+          event_number TEXT NOT NULL UNIQUE,
+          event_type TEXT NOT NULL,
+          classification JSONB DEFAULT '{}'::jsonb,
+          occurred_at TIMESTAMP NOT NULL,
+          location TEXT,
+          job_id VARCHAR,
+          description TEXT NOT NULL,
+          immediate_actions TEXT,
+          people_involved JSONB DEFAULT '[]'::jsonb,
+          worksafe_notifiable BOOLEAN NOT NULL DEFAULT true,
+          worksafe_notified BOOLEAN NOT NULL DEFAULT false,
+          worksafe_notified_at TIMESTAMP,
+          notification_method TEXT,
+          worksafe_reference TEXT,
+          scene_preserved BOOLEAN NOT NULL DEFAULT false,
+          notify_due_by TIMESTAMP,
+          retention_until TIMESTAMP,
+          investigation_findings TEXT,
+          root_cause TEXT,
+          corrective_actions JSONB DEFAULT '[]'::jsonb,
+          status TEXT NOT NULL DEFAULT 'open',
+          created_by VARCHAR,
+          created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Seed built-in arborist template libraries (idempotent on key)
+      await pool.query(`
+        INSERT INTO toolbox_talk_topics (key, title, category, talking_points, is_built_in, sort_order) VALUES
+          ('chainsaw-safe-use', 'Chainsaw kickback & safe use', 'Equipment', E'Inspect chain brake, throttle interlock and chain catcher\nKeep chain sharp and correctly tensioned\nStand to the side of the cut, never straddle the bar\nWatch the kickback zone (upper tip of the bar)\nMaintain firm two-handed grip and stable footing', true, 0),
+          ('chipper-feed-safety', 'Wood chipper feed safety', 'Equipment', E'Test the feed-stop bar and emergency stop before use\nFeed butt-end first and let go - never push material in\nKeep clear of the no-go feed zone\nNo loose clothing, drawstrings or frayed gloves\nNever reach into the feed chute', true, 1),
+          ('powerline-awareness', 'Powerline awareness (NZECP 34)', 'Environmental', E'Treat all lines as live\nKeep 4m from lines up to 110kV (6m above)\nConfirm voltage and any network operator permit\nNo metal tools, ropes or limbs inside the safe zone\nStop work and call the lines company if unsure', true, 2),
+          ('drop-zones', 'Drop zones & exclusion zones', 'Tree Work', E'Mark the drop zone and exclusion zone before cutting\nKeep a two tree-length clearance for felling\nUse a spotter for public and traffic\nConfirm everyone is clear before each cut\nAgree clear verbal and whistle signals', true, 3),
+          ('working-at-height', 'Working at height & aerial rescue', 'Tree Work', E'No lone climbing above 3m - a trained ground person must be present\nConfirm anchor points and continuous attachment\nHave an aerial rescue plan briefed before climbing\nInspect harness, ropes and connectors pre-use\nMonitor wind and weather cut-off thresholds', true, 4),
+          ('manual-handling', 'Manual handling', 'General', E'Assess the load before lifting\nBend the knees, keep the back straight\nTeam-lift heavy logs and gear\nUse mechanical aids where possible\nClear the path and watch footing', true, 5),
+          ('wasps-bees', 'Wasps, bees & wildlife', 'Environmental', E'Scan the tree for nests before starting\nKnow who carries allergies and where the kit is\nHave a retreat plan if disturbed\nWatch for protected species and nesting birds', true, 6),
+          ('fatigue-heat', 'Fatigue & heat management', 'General', E'Hydrate regularly and take breaks in shade\nWatch for signs of heat stress and fatigue\nRotate demanding tasks\nApply sunscreen and cover up for UV', true, 7),
+          ('public-safety', 'Public & pedestrian safety', 'General', E'Set up signage and barriers for the public\nUse a spotter on footpaths and driveways\nPause work when people approach the zone\nKeep the site tidy and trip-free', true, 8),
+          ('vehicle-reversing', 'Vehicle movements & reversing', 'Equipment', E'Use a spotter when reversing the truck or chipper\nWalk around the vehicle before moving\nAgree reversing signals\nCheck load restraint before driving', true, 9),
+          ('lone-work-comms', 'Lone work & site communications', 'General', E'Confirm comms (phone or radio) work on site\nAgree check-in times\nKnow the site address for emergency services\nBrief the emergency and first-aid plan', true, 10)
+        ON CONFLICT (key) DO NOTHING;
+
+        INSERT INTO prestart_checklist_templates (key, equipment_type, name, items, is_built_in, sort_order) VALUES
+          ('chainsaw', 'chainsaw', 'Chainsaw daily pre-start', '[{"id":"chain-brake","label":"Chain brake & throttle interlock work"},{"id":"chain","label":"Chain sharp & correctly tensioned"},{"id":"bar","label":"Bar & sprocket condition"},{"id":"catcher","label":"Chain catcher fitted"},{"id":"anti-vibe","label":"Anti-vibration mounts intact"},{"id":"fuel","label":"Fuel & bar oil topped up, no leaks"},{"id":"muffler","label":"Muffler & guards secure"},{"id":"ppe","label":"Operator PPE (chaps, helmet, hearing, eye)"}]', true, 0),
+          ('chipper', 'chipper', 'Wood chipper pre-start', '[{"id":"guards","label":"Guards & covers secure"},{"id":"estop","label":"Emergency stop / feed-stop bar works"},{"id":"rollers","label":"Feed rollers & reverse function"},{"id":"blades","label":"Blades / knives sharp & secure"},{"id":"hydraulics","label":"Hydraulic hoses - no leaks"},{"id":"tow","label":"Tow hitch & lights (if towable)"},{"id":"nogo","label":"No-go feed zone marked"},{"id":"ppe","label":"Operator PPE"}]', true, 1),
+          ('stump_grinder', 'stump_grinder', 'Stump grinder pre-start', '[{"id":"guards","label":"Guards & debris shielding fitted"},{"id":"teeth","label":"Cutter teeth condition & tightness"},{"id":"belts","label":"Hydraulic & belt condition"},{"id":"services","label":"Underground services checked (beforeUdig)"},{"id":"wheels","label":"Wheels / tracks & brakes"},{"id":"controls","label":"Controls & emergency stop"},{"id":"exclusion","label":"Exclusion zone set"},{"id":"ppe","label":"Operator PPE"}]', true, 2),
+          ('ewp', 'ewp', 'EWP / MEWP daily pre-use', '[{"id":"function","label":"Function & emergency lowering test"},{"id":"controls","label":"Upper & lower controls operate"},{"id":"outriggers","label":"Tyres / outriggers / levelling"},{"id":"anchor","label":"Guardrails & harness anchor point"},{"id":"cof","label":"Current engineer certificate (CoF) in date"},{"id":"ground","label":"Ground conditions & slope assessed"},{"id":"overhead","label":"Overhead hazards checked"},{"id":"licence","label":"Operator licence current"}]', true, 3),
+          ('rigging', 'rigging', 'Rigging & winch check', '[{"id":"ropes","label":"Ropes & slings free of damage"},{"id":"swl","label":"SWL within limits (no overloading)"},{"id":"wire","label":"No knots in wire rope"},{"id":"blocks","label":"Blocks, pulleys & karabiners locked"},{"id":"lowering","label":"Lowering device condition"},{"id":"anchors","label":"Anchor points sound"},{"id":"signals","label":"Whistle / comms signals agreed"}]', true, 4),
+          ('vehicle', 'vehicle', 'Vehicle / trailer pre-trip', '[{"id":"wof","label":"WOF / COF in date"},{"id":"tyres","label":"Tyres, lights & indicators"},{"id":"brakes","label":"Brakes & handbrake"},{"id":"load","label":"Load restrained & within limits"},{"id":"coupling","label":"Trailer coupling & safety chains"},{"id":"mirrors","label":"Mirrors & windscreen"},{"id":"fluids","label":"Fluids & no leaks"},{"id":"firstaid","label":"First aid kit & fire extinguisher present"}]', true, 5)
+        ON CONFLICT (key) DO NOTHING;
+
+        INSERT INTO competency_types (key, name, category, requires_expiry, is_built_in, sort_order) VALUES
+          ('nzc-arb-l3', 'NZ Certificate in Arboriculture L3', 'arboriculture', false, true, 0),
+          ('nzc-arb-l4', 'NZ Certificate in Arboriculture L4', 'arboriculture', false, true, 1),
+          ('chainsaw-ticket', 'Chainsaw use & maintenance (US 6917/23411)', 'chainsaw', false, true, 2),
+          ('tree-felling', 'Tree felling (US 17257/17258)', 'chainsaw', false, true, 3),
+          ('climbing-rigging', 'Climbing & dismantling / rigging', 'arboriculture', false, true, 4),
+          ('aerial-rescue', 'Aerial rescue', 'arboriculture', true, true, 5),
+          ('ewp-licence', 'EWP / MEWP operator licence', 'ewp', true, true, 6),
+          ('first-aid', 'First aid certificate', 'first_aid', true, true, 7),
+          ('growsafe', 'Growsafe (agrichemical)', 'agrichemical', true, true, 8),
+          ('stms', 'STMS / TTM qualification', 'traffic', true, true, 9),
+          ('class2-licence', 'Class 2 driver licence', 'driver', true, true, 10),
+          ('wtr-endorsement', 'Wheels/Tracks/Rollers (WTR) endorsement', 'driver', true, true, 11)
+        ON CONFLICT (key) DO NOTHING;
+
+        INSERT INTO swms_templates (key, name, category, activity_description, default_ppe, steps, is_built_in, sort_order) VALUES
+          ('felling', 'Tree felling (manual)', 'Tree Work', 'Manual felling of standing trees with a chainsaw', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Chainsaw chaps","Safety boots","Gloves"}',
+            '[{"stepNumber":1,"taskStep":"Site & tree assessment","hazards":["Deadwood / defects","Overhead lines","Public / property"],"controls":["Inspect tree & surrounds","Confirm NZECP 34 distances","Set exclusion zone (2 tree lengths)"],"riskRating":3},{"stepNumber":2,"taskStep":"Plan felling direction & escape","hazards":["Tree lean / wind","Struck-by falling tree"],"controls":["Assess lean & wind","Clear two escape routes at 45 degrees","Brief crew & agree signals"],"riskRating":3},{"stepNumber":3,"taskStep":"Make cuts & fell","hazards":["Chainsaw injury","Kickback","Barber chair"],"controls":["Scarf & back cut leaving a hinge","Use wedges as required","No one in the drop zone"],"riskRating":4},{"stepNumber":4,"taskStep":"Process & clear","hazards":["Manual handling","Chipper feed"],"controls":["Limb from the uphill side","Follow chipper SWMS"],"riskRating":2}]', true, 0),
+          ('climbing-dismantle', 'Climbing & dismantling', 'Tree Work', 'Sectional dismantling of a tree by a climbing arborist', '{"Helmet","Eye protection","Hearing protection","Climbing harness","Chainsaw chaps","Safety boots","Gloves"}',
+            '[{"stepNumber":1,"taskStep":"Pre-climb inspection","hazards":["Tree defects","Anchor failure"],"controls":["Assess tree integrity","Select sound anchor points","Inspect harness, ropes & connectors"],"riskRating":3},{"stepNumber":2,"taskStep":"Access & position","hazards":["Fall from height"],"controls":["Continuous attachment","Trained ground person present","Aerial rescue plan briefed"],"riskRating":4},{"stepNumber":3,"taskStep":"Rig & lower sections","hazards":["Struck-by","Rigging overload"],"controls":["Within rigging SWL","Clear drop zone","Agreed signals with grounds crew"],"riskRating":4}]', true, 1),
+          ('chipping', 'Wood chipping', 'Equipment', 'Chipping brash and limbs through a wood chipper', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Safety boots","Close-fitting gloves"}',
+            '[{"stepNumber":1,"taskStep":"Set up & checks","hazards":["Entanglement","Machine fault"],"controls":["Complete chipper pre-start","Test feed-stop bar & E-stop","Mark no-go feed zone"],"riskRating":3},{"stepNumber":2,"taskStep":"Feed material","hazards":["Drawn in / entanglement","Ejected debris"],"controls":["Feed butt-end first and release","No loose clothing","Stand to the side of the chute"],"riskRating":4}]', true, 2),
+          ('stump-grinding', 'Stump grinding', 'Equipment', 'Grinding tree stumps below ground level', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Safety boots","Gloves"}',
+            '[{"stepNumber":1,"taskStep":"Locate services & set up","hazards":["Underground services strike"],"controls":["beforeUdig check","Confirm clearances","Set exclusion zone & shielding"],"riskRating":3},{"stepNumber":2,"taskStep":"Grind stump","hazards":["Ejected debris","Struck-by"],"controls":["Keep bystanders clear","Use debris shielding","Operator PPE"],"riskRating":3}]', true, 3),
+          ('roadside', 'Roadside tree work (TTM)', 'Traffic', 'Tree work on or near a road requiring traffic management', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Safety boots","Gloves"}',
+            '[{"stepNumber":1,"taskStep":"Traffic management setup","hazards":["Vehicle strike","Public"],"controls":["TMP per NZGTTM","Qualified STMS on site","Cones, signs & speed control in place"],"riskRating":4},{"stepNumber":2,"taskStep":"Carry out tree work","hazards":["Struck-by","Falling material on road"],"controls":["Spotter for traffic","Drop zone clear of carriageway","Follow felling / climbing SWMS"],"riskRating":4}]', true, 4),
+          ('powerline', 'Powerline-adjacent tree work', 'Environmental', 'Tree work near overhead electrical conductors', '{"Helmet","Eye protection","Hearing protection","Hi-vis","Insulated where required","Safety boots","Gloves"}',
+            '[{"stepNumber":1,"taskStep":"Confirm voltage & permits","hazards":["Electrocution"],"controls":["Treat all lines as live","Confirm voltage & NZECP 34 distance","Obtain network operator permit if inside zone"],"riskRating":5},{"stepNumber":2,"taskStep":"Work to safe distances","hazards":["Contact with conductor","Conductive limbs/tools"],"controls":["Maintain minimum approach distance","No metal tools or wet ropes in the zone","Stop work if distances cannot be kept"],"riskRating":5}]', true, 5)
+        ON CONFLICT (key) DO NOTHING;
+      `);
       log("✅ Background schema migrations complete", "startup");
 
       try {

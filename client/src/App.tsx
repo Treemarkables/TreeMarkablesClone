@@ -75,6 +75,13 @@ import PublicReview from "@/pages/PublicReview";
 import MulchDrops from "@/pages/MulchDrops";
 import NearMissReport from "@/pages/NearMissReport";
 import NearMissHistory from "@/pages/NearMissHistory";
+import SafetyHub from "@/pages/SafetyHub";
+import ToolboxTalks from "@/pages/ToolboxTalks";
+import PrestartChecklists from "@/pages/PrestartChecklists";
+import EquipmentInspectionRegister from "@/pages/EquipmentInspectionRegister";
+import CompetencyRegister from "@/pages/CompetencyRegister";
+import SWMSBuilder from "@/pages/SWMSBuilder";
+import NotifiableEvents from "@/pages/NotifiableEvents";
 import EquipmentRegister from "@/pages/EquipmentRegister";
 import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
 import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
@@ -1097,6 +1104,55 @@ function Router() {
         <AuthenticatedRoute>
           <SidebarLayout>
             <NearMissHistory />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <SafetyHub />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety/toolbox-talks">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <ToolboxTalks />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety/prestart-checklists">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <PrestartChecklists />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety/equipment-register">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <EquipmentInspectionRegister />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety/competency-register">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <CompetencyRegister />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety/swms">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <SWMSBuilder />
+          </SidebarLayout>
+        </AuthenticatedRoute>
+      </Route>
+      <Route path="/safety/notifiable-events">
+        <AuthenticatedRoute>
+          <SidebarLayout>
+            <NotifiableEvents />
           </SidebarLayout>
         </AuthenticatedRoute>
       </Route>

@@ -4204,5 +4204,275 @@ export const insertJobQuotingProcessCompletionSchema = createInsertSchema(jobQuo
 export type JobQuotingProcessCompletion = typeof jobQuotingProcessCompletions.$inferSelect;
 export type InsertJobQuotingProcessCompletion = z.infer<typeof insertJobQuotingProcessCompletionSchema>;
 
+// ==========================================================================
+// SAFETY MODULE — TIER 1
+// Toolbox Talks, Pre-start Checklists, PPE/Equipment Inspection Register,
+// Training/Competency register, SWMS, Notifiable Events.
+// Tables are created idempotently at startup (server/index.ts migration block)
+// so no db:push is required. These Drizzle definitions provide types for the
+// routes + frontend.
+// ==========================================================================
+
+// --- Toolbox Talks ---
+export const toolboxTalkTopics = pgTable("toolbox_talk_topics", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").unique(), // stable slug for built-in seeds
+  title: text("title").notNull(),
+  category: text("category"), // e.g. "Tree Work", "Equipment", "Environmental"
+  talkingPoints: text("talking_points"), // newline-separated discussion points
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const toolboxTalks = pgTable("toolbox_talks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  talkNumber: text("talk_number").notNull().unique(), // TB-YYYY-####
+  topicId: varchar("topic_id").references(() => toolboxTalkTopics.id),
+  title: text("title").notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
+  location: text("location"),
+  presenterName: text("presenter_name"),
+  presenterId: varchar("presenter_id").references(() => employees.id),
+  conductedAt: timestamp("conducted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  notes: text("notes"), // discussion notes / actions raised
+  status: text("status").notNull().default("draft"), // draft, completed
+  createdBy: varchar("created_by").references(() => employees.id),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const toolboxTalkAttendees = pgTable("toolbox_talk_attendees", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  talkId: varchar("talk_id").references(() => toolboxTalks.id, { onDelete: "cascade" }).notNull(),
+  name: text("name").notNull(),
+  employeeId: varchar("employee_id").references(() => employees.id),
+  signatureDataUrl: text("signature_data_url"), // base64 signature image
+  signedAt: timestamp("signed_at"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertToolboxTalkTopicSchema = createInsertSchema(toolboxTalkTopics).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertToolboxTalkSchema = createInsertSchema(toolboxTalks).omit({ id: true, talkNumber: true, createdAt: true, updatedAt: true });
+export const insertToolboxTalkAttendeeSchema = createInsertSchema(toolboxTalkAttendees).omit({ id: true, createdAt: true });
+export type ToolboxTalkTopic = typeof toolboxTalkTopics.$inferSelect;
+export type ToolboxTalk = typeof toolboxTalks.$inferSelect;
+export type ToolboxTalkAttendee = typeof toolboxTalkAttendees.$inferSelect;
+export type InsertToolboxTalk = z.infer<typeof insertToolboxTalkSchema>;
+export type InsertToolboxTalkAttendee = z.infer<typeof insertToolboxTalkAttendeeSchema>;
+
+// --- Pre-start Equipment Checklists ---
+export const prestartChecklistTemplates = pgTable("prestart_checklist_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").unique(), // stable slug for built-in seeds
+  equipmentType: text("equipment_type").notNull(), // chainsaw, chipper, stump_grinder, ewp, rigging, vehicle
+  name: text("name").notNull(),
+  items: jsonb("items").notNull().default([]), // [{ id, label }]
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const prestartChecklists = pgTable("prestart_checklists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  checkNumber: text("check_number").notNull().unique(), // PS-YYYY-####
+  templateId: varchar("template_id").references(() => prestartChecklistTemplates.id),
+  equipmentType: text("equipment_type").notNull(),
+  equipmentName: text("equipment_name"),
+  jobId: varchar("job_id").references(() => jobs.id),
+  operatorName: text("operator_name"),
+  operatorId: varchar("operator_id").references(() => employees.id),
+  results: jsonb("results").notNull().default([]), // [{ itemId, label, status: pass|fail|na, note }]
+  passed: boolean("passed").notNull().default(true),
+  faultsNoted: text("faults_noted"),
+  signatureDataUrl: text("signature_data_url"),
+  conductedAt: timestamp("conducted_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdBy: varchar("created_by").references(() => employees.id),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertPrestartTemplateSchema = createInsertSchema(prestartChecklistTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertPrestartChecklistSchema = createInsertSchema(prestartChecklists).omit({ id: true, checkNumber: true, createdAt: true, updatedAt: true });
+export type PrestartChecklistTemplate = typeof prestartChecklistTemplates.$inferSelect;
+export type PrestartChecklist = typeof prestartChecklists.$inferSelect;
+export type InsertPrestartChecklist = z.infer<typeof insertPrestartChecklistSchema>;
+
+// --- PPE / Equipment Inspection Register ---
+export const safetyAssets = pgTable("safety_assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assetTag: text("asset_tag"), // user-facing label / QR value
+  name: text("name").notNull(),
+  category: text("category").notNull(), // harness, rope, connector, helmet, chainsaw, chipper, stump_grinder, ewp, rigging, vehicle, first_aid_kit, other
+  serialNumber: text("serial_number"),
+  manufacturer: text("manufacturer"),
+  inServiceDate: timestamp("in_service_date"),
+  inspectionFrequencyDays: integer("inspection_frequency_days").notNull().default(180),
+  lastInspectedAt: timestamp("last_inspected_at"),
+  nextInspectionDue: timestamp("next_inspection_due"),
+  status: text("status").notNull().default("in_service"), // in_service, monitor, removed
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const assetInspections = pgTable("asset_inspections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  assetId: varchar("asset_id").references(() => safetyAssets.id, { onDelete: "cascade" }).notNull(),
+  inspectorName: text("inspector_name"),
+  inspectorId: varchar("inspector_id").references(() => employees.id),
+  result: text("result").notNull().default("pass"), // pass, monitor, fail
+  notes: text("notes"),
+  inspectedAt: timestamp("inspected_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  nextInspectionDue: timestamp("next_inspection_due"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertSafetyAssetSchema = createInsertSchema(safetyAssets).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertAssetInspectionSchema = createInsertSchema(assetInspections).omit({ id: true, createdAt: true });
+export type SafetyAsset = typeof safetyAssets.$inferSelect;
+export type AssetInspection = typeof assetInspections.$inferSelect;
+export type InsertSafetyAsset = z.infer<typeof insertSafetyAssetSchema>;
+export type InsertAssetInspection = z.infer<typeof insertAssetInspectionSchema>;
+
+// --- Training / Competency / Ticket Register ---
+export const competencyTypes = pgTable("competency_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").unique(),
+  name: text("name").notNull(),
+  category: text("category"), // arboriculture, chainsaw, ewp, first_aid, agrichemical, traffic, driver, other
+  requiresExpiry: boolean("requires_expiry").notNull().default(true),
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const employeeCompetencies = pgTable("employee_competencies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employeeId: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  competencyTypeId: varchar("competency_type_id").references(() => competencyTypes.id),
+  competencyName: text("competency_name").notNull(),
+  issuer: text("issuer"),
+  referenceNumber: text("reference_number"),
+  issueDate: timestamp("issue_date"),
+  expiryDate: timestamp("expiry_date"),
+  certFilePath: text("cert_file_path"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertCompetencyTypeSchema = createInsertSchema(competencyTypes).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertEmployeeCompetencySchema = createInsertSchema(employeeCompetencies).omit({ id: true, createdAt: true, updatedAt: true });
+export type CompetencyType = typeof competencyTypes.$inferSelect;
+export type EmployeeCompetency = typeof employeeCompetencies.$inferSelect;
+export type InsertEmployeeCompetency = z.infer<typeof insertEmployeeCompetencySchema>;
+
+// --- SWMS (Safe Work Method Statements) ---
+export const swmsTemplates = pgTable("swms_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").unique(),
+  name: text("name").notNull(),
+  category: text("category"),
+  activityDescription: text("activity_description"),
+  defaultPpe: text("default_ppe").array().default([]),
+  steps: jsonb("steps").notNull().default([]), // [{ stepNumber, taskStep, hazards: [], controls: [], riskRating }]
+  isBuiltIn: boolean("is_built_in").notNull().default(false),
+  isActive: boolean("is_active").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const swmsDocuments = pgTable("swms_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  swmsNumber: text("swms_number").notNull().unique(), // SW-YYYY-####
+  title: text("title").notNull(),
+  jobId: varchar("job_id").references(() => jobs.id),
+  activityDescription: text("activity_description"),
+  location: text("location"),
+  ppeRequired: text("ppe_required").array().default([]),
+  highRiskWork: text("high_risk_work").array().default([]),
+  status: text("status").notNull().default("draft"), // draft, active, archived
+  preparedBy: text("prepared_by"),
+  preparedById: varchar("prepared_by_id").references(() => employees.id),
+  createdBy: varchar("created_by").references(() => employees.id),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const swmsSteps = pgTable("swms_steps", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  swmsId: varchar("swms_id").references(() => swmsDocuments.id, { onDelete: "cascade" }).notNull(),
+  stepNumber: integer("step_number").notNull(),
+  taskStep: text("task_step").notNull(),
+  hazards: text("hazards").array().default([]),
+  controls: text("controls").array().default([]),
+  riskRating: integer("risk_rating"),
+  responsiblePerson: text("responsible_person"),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const swmsSignatures = pgTable("swms_signatures", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  swmsId: varchar("swms_id").references(() => swmsDocuments.id, { onDelete: "cascade" }).notNull(),
+  workerName: text("worker_name").notNull(),
+  workerId: varchar("worker_id").references(() => employees.id),
+  signatureDataUrl: text("signature_data_url").notNull(),
+  signedAt: timestamp("signed_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertSwmsTemplateSchema = createInsertSchema(swmsTemplates).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertSwmsDocumentSchema = createInsertSchema(swmsDocuments).omit({ id: true, swmsNumber: true, createdAt: true, updatedAt: true });
+export const insertSwmsStepSchema = createInsertSchema(swmsSteps).omit({ id: true, createdAt: true });
+export const insertSwmsSignatureSchema = createInsertSchema(swmsSignatures).omit({ id: true, createdAt: true });
+export type SwmsTemplate = typeof swmsTemplates.$inferSelect;
+export type SwmsDocument = typeof swmsDocuments.$inferSelect;
+export type SwmsStep = typeof swmsSteps.$inferSelect;
+export type SwmsSignature = typeof swmsSignatures.$inferSelect;
+export type InsertSwmsDocument = z.infer<typeof insertSwmsDocumentSchema>;
+export type InsertSwmsStep = z.infer<typeof insertSwmsStepSchema>;
+export type InsertSwmsSignature = z.infer<typeof insertSwmsSignatureSchema>;
+
+// --- Notifiable Events (WorkSafe NZ) ---
+export const notifiableEvents = pgTable("notifiable_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  eventNumber: text("event_number").notNull().unique(), // NE-YYYY-####
+  eventType: text("event_type").notNull(), // death, notifiable_injury, notifiable_illness, notifiable_incident
+  classification: jsonb("classification").default({}), // wizard answers used to classify
+  occurredAt: timestamp("occurred_at").notNull(),
+  location: text("location"),
+  jobId: varchar("job_id").references(() => jobs.id),
+  description: text("description").notNull(),
+  immediateActions: text("immediate_actions"),
+  peopleInvolved: jsonb("people_involved").default([]), // [{ name, employeeId?, role }]
+  worksafeNotifiable: boolean("worksafe_notifiable").notNull().default(true),
+  worksafeNotified: boolean("worksafe_notified").notNull().default(false),
+  worksafeNotifiedAt: timestamp("worksafe_notified_at"),
+  notificationMethod: text("notification_method"), // online, phone
+  worksafeReference: text("worksafe_reference"),
+  scenePreserved: boolean("scene_preserved").notNull().default(false),
+  notifyDueBy: timestamp("notify_due_by"), // occurredAt + 48h
+  retentionUntil: timestamp("retention_until"), // occurredAt + 5y
+  investigationFindings: text("investigation_findings"),
+  rootCause: text("root_cause"),
+  correctiveActions: jsonb("corrective_actions").default([]), // [{ title, owner, dueDate, status }]
+  status: text("status").notNull().default("open"), // open, notified, investigating, closed
+  createdBy: varchar("created_by").references(() => employees.id),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertNotifiableEventSchema = createInsertSchema(notifiableEvents).omit({ id: true, eventNumber: true, createdAt: true, updatedAt: true });
+export type NotifiableEvent = typeof notifiableEvents.$inferSelect;
+export type InsertNotifiableEvent = z.infer<typeof insertNotifiableEventSchema>;
+
 // Export time tracking tables from timeTracking.ts
 export * from './timeTracking';

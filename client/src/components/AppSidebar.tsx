@@ -72,7 +72,7 @@ function SidebarNavContent({
   logout: () => void;
 }) {
   const vehicleActive = location === "/vehicle-inspection" || location === "/vehicle-inspection-history";
-  const safetyActive = ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
+  const safetyActive = location === "/safety" || location.startsWith("/safety/") || ["/jha-assessment", "/jha-history", "/near-miss-report", "/near-miss-history"].includes(location);
   const financeActive = ["/metrics", "/profitability-calculator"].includes(location);
   const opsActive = ["/calendar", "/workflows", "/opportunities", "/follow-up-queue", "/reputation", "/reviews", "/marketing", "/inbox", "/equipment"].includes(location);
 
@@ -266,6 +266,55 @@ function SidebarNavContent({
                   </CollapsibleTrigger>
                   <CollapsibleContent>
                     <SidebarMenuSub>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety"}>
+                          <Link href="/safety" onClick={handleLinkClick} data-testid="link-safety-hub">
+                            <span>Safety Hub</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety/toolbox-talks"}>
+                          <Link href="/safety/toolbox-talks" onClick={handleLinkClick} data-testid="link-toolbox-talks">
+                            <span>Toolbox Talks</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety/swms"}>
+                          <Link href="/safety/swms" onClick={handleLinkClick} data-testid="link-swms">
+                            <span>SWMS</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety/prestart-checklists"}>
+                          <Link href="/safety/prestart-checklists" onClick={handleLinkClick} data-testid="link-prestart-checklists">
+                            <span>Pre-start Checklists</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety/equipment-register"}>
+                          <Link href="/safety/equipment-register" onClick={handleLinkClick} data-testid="link-equipment-register">
+                            <span>Inspection Register</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety/competency-register"}>
+                          <Link href="/safety/competency-register" onClick={handleLinkClick} data-testid="link-competency-register">
+                            <span>Training &amp; Competency</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
+                      <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={location === "/safety/notifiable-events"}>
+                          <Link href="/safety/notifiable-events" onClick={handleLinkClick} data-testid="link-notifiable-events">
+                            <span>Notifiable Events</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                      </SidebarMenuSubItem>
                       <SidebarMenuSubItem>
                         <SidebarMenuSubButton asChild isActive={location === "/jha-assessment"}>
                           <Link href="/jha-assessment" onClick={handleLinkClick} data-testid="link-jha-assessment">

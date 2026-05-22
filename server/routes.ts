@@ -27483,6 +27483,466 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
 
   // ── Near Miss Reports ─────────────────────────────────────────────────────
 
+  // ======================================================================
+  // SAFETY MODULE — TIER 1 ROUTES
+  // Toolbox Talks, Pre-start Checklists, PPE/Equipment Inspection Register,
+  // Training/Competency register, SWMS, Notifiable Events.
+  // ======================================================================
+
+  // Generic prefixed sequential number generator (e.g. TB-2026-0001)
+  async function generateSafetyNumber(prefix: string, column: any, table: any): Promise<string> {
+    const year = new Date().getFullYear();
+    const full = `${prefix}-${year}-`;
+    const rows = await db.select({ n: column }).from(table).where(sql`${column} LIKE ${full + '%'}`).orderBy(desc(column));
+    let seq = 1;
+    if (rows.length > 0 && rows[0].n) {
+      const parts = String(rows[0].n).split('-');
+      const last = parseInt(parts[parts.length - 1], 10);
+      if (!isNaN(last)) seq = last + 1;
+    }
+    return `${full}${String(seq).padStart(4, '0')}`;
+  }
+
+  const ssErr = (res: Response, error: unknown, fallback: string) => {
+    if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
+    return res.status(500).json({ success: false, message: error instanceof Error ? error.message : fallback });
+  };
+
+  // ---------------- Toolbox Talks ----------------
+  const toolboxTalkInsert = schema.insertToolboxTalkSchema.extend({ conductedAt: z.coerce.date().optional() });
+  const toolboxTalkUpdate = toolboxTalkInsert.partial();
+
+  app.get('/api/toolbox-talk-topics', async (_req: Request, res: Response) => {
+    try {
+      const topics = await db.select().from(schema.toolboxTalkTopics)
+        .where(eq(schema.toolboxTalkTopics.isActive, true))
+        .orderBy(schema.toolboxTalkTopics.sortOrder, schema.toolboxTalkTopics.title);
+      res.json({ success: true, data: topics });
+    } catch (e) { ssErr(res, e, 'Failed to fetch topics'); }
+  });
+
+  app.get('/api/toolbox-talks', async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      const conditions = [];
+      if (status) conditions.push(eq(schema.toolboxTalks.status, status as string));
+      const talks = await db.select().from(schema.toolboxTalks)
+        .where(conditions.length ? and(...conditions) : undefined)
+        .orderBy(desc(schema.toolboxTalks.conductedAt));
+      res.json({ success: true, data: talks });
+    } catch (e) { ssErr(res, e, 'Failed to fetch toolbox talks'); }
+  });
+
+  app.get('/api/toolbox-talks/:id', async (req: Request, res: Response) => {
+    try {
+      const [talk] = await db.select().from(schema.toolboxTalks).where(eq(schema.toolboxTalks.id, req.params.id));
+      if (!talk) return res.status(404).json({ success: false, message: 'Toolbox talk not found' });
+      const attendees = await db.select().from(schema.toolboxTalkAttendees)
+        .where(eq(schema.toolboxTalkAttendees.talkId, req.params.id)).orderBy(schema.toolboxTalkAttendees.createdAt);
+      res.json({ success: true, data: { ...talk, attendees } });
+    } catch (e) { ssErr(res, e, 'Failed to fetch toolbox talk'); }
+  });
+
+  app.post('/api/toolbox-talks', async (req: Request, res: Response) => {
+    try {
+      const talkNumber = await generateSafetyNumber('TB', schema.toolboxTalks.talkNumber, schema.toolboxTalks);
+      const parsed = toolboxTalkInsert.parse({ ...req.body, createdBy: req.session.employeeId || null });
+      const [talk] = await db.insert(schema.toolboxTalks).values({ ...parsed, talkNumber }).returning();
+      res.json({ success: true, data: talk });
+    } catch (e) { ssErr(res, e, 'Failed to create toolbox talk'); }
+  });
+
+  app.put('/api/toolbox-talks/:id', async (req: Request, res: Response) => {
+    try {
+      const { talkNumber: _t, ...rest } = req.body;
+      const parsed = toolboxTalkUpdate.parse({ ...rest, updatedAt: new Date() });
+      const [updated] = await db.update(schema.toolboxTalks).set(parsed).where(eq(schema.toolboxTalks.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'Toolbox talk not found' });
+      res.json({ success: true, data: updated });
+    } catch (e) { ssErr(res, e, 'Failed to update toolbox talk'); }
+  });
+
+  app.delete('/api/toolbox-talks/:id', async (req: Request, res: Response) => {
+    try {
+      await db.delete(schema.toolboxTalks).where(eq(schema.toolboxTalks.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to delete toolbox talk'); }
+  });
+
+  app.post('/api/toolbox-talks/:id/attendees', async (req: Request, res: Response) => {
+    try {
+      const [talk] = await db.select().from(schema.toolboxTalks).where(eq(schema.toolboxTalks.id, req.params.id));
+      if (!talk) return res.status(404).json({ success: false, message: 'Toolbox talk not found' });
+      const parsed = schema.insertToolboxTalkAttendeeSchema.extend({ signedAt: z.coerce.date().nullable().optional() })
+        .parse({ ...req.body, talkId: req.params.id, signedAt: req.body.signatureDataUrl ? new Date() : null });
+      const [attendee] = await db.insert(schema.toolboxTalkAttendees).values(parsed).returning();
+      res.json({ success: true, data: attendee });
+    } catch (e) { ssErr(res, e, 'Failed to add attendee'); }
+  });
+
+  app.delete('/api/toolbox-talk-attendees/:id', async (req: Request, res: Response) => {
+    try {
+      await db.delete(schema.toolboxTalkAttendees).where(eq(schema.toolboxTalkAttendees.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to remove attendee'); }
+  });
+
+  // ---------------- Pre-start Checklists ----------------
+  const prestartInsert = schema.insertPrestartChecklistSchema.extend({ conductedAt: z.coerce.date().optional() });
+  const prestartUpdate = prestartInsert.partial();
+
+  app.get('/api/prestart-templates', async (req: Request, res: Response) => {
+    try {
+      const { equipmentType } = req.query;
+      const conditions = [eq(schema.prestartChecklistTemplates.isActive, true)];
+      if (equipmentType) conditions.push(eq(schema.prestartChecklistTemplates.equipmentType, equipmentType as string));
+      const templates = await db.select().from(schema.prestartChecklistTemplates)
+        .where(and(...conditions)).orderBy(schema.prestartChecklistTemplates.sortOrder);
+      res.json({ success: true, data: templates });
+    } catch (e) { ssErr(res, e, 'Failed to fetch templates'); }
+  });
+
+  app.get('/api/prestart-checklists', async (req: Request, res: Response) => {
+    try {
+      const { equipmentType } = req.query;
+      const conditions = [];
+      if (equipmentType) conditions.push(eq(schema.prestartChecklists.equipmentType, equipmentType as string));
+      const rows = await db.select().from(schema.prestartChecklists)
+        .where(conditions.length ? and(...conditions) : undefined)
+        .orderBy(desc(schema.prestartChecklists.conductedAt));
+      res.json({ success: true, data: rows });
+    } catch (e) { ssErr(res, e, 'Failed to fetch checklists'); }
+  });
+
+  app.get('/api/prestart-checklists/:id', async (req: Request, res: Response) => {
+    try {
+      const [row] = await db.select().from(schema.prestartChecklists).where(eq(schema.prestartChecklists.id, req.params.id));
+      if (!row) return res.status(404).json({ success: false, message: 'Checklist not found' });
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to fetch checklist'); }
+  });
+
+  app.post('/api/prestart-checklists', async (req: Request, res: Response) => {
+    try {
+      const checkNumber = await generateSafetyNumber('PS', schema.prestartChecklists.checkNumber, schema.prestartChecklists);
+      const parsed = prestartInsert.parse({ ...req.body, createdBy: req.session.employeeId || null });
+      const [row] = await db.insert(schema.prestartChecklists).values({ ...parsed, checkNumber }).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create checklist'); }
+  });
+
+  app.put('/api/prestart-checklists/:id', async (req: Request, res: Response) => {
+    try {
+      const { checkNumber: _c, ...rest } = req.body;
+      const parsed = prestartUpdate.parse({ ...rest, updatedAt: new Date() });
+      const [updated] = await db.update(schema.prestartChecklists).set(parsed).where(eq(schema.prestartChecklists.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'Checklist not found' });
+      res.json({ success: true, data: updated });
+    } catch (e) { ssErr(res, e, 'Failed to update checklist'); }
+  });
+
+  app.delete('/api/prestart-checklists/:id', async (req: Request, res: Response) => {
+    try {
+      await db.delete(schema.prestartChecklists).where(eq(schema.prestartChecklists.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to delete checklist'); }
+  });
+
+  // ---------------- PPE / Equipment Inspection Register ----------------
+  const assetDateFields = { inServiceDate: z.coerce.date().nullable().optional(), lastInspectedAt: z.coerce.date().nullable().optional(), nextInspectionDue: z.coerce.date().nullable().optional() };
+  const safetyAssetInsert = schema.insertSafetyAssetSchema.extend(assetDateFields);
+  const safetyAssetUpdate = safetyAssetInsert.partial();
+
+  app.get('/api/safety-assets', async (req: Request, res: Response) => {
+    try {
+      const { status, category, dueSoon } = req.query;
+      const conditions = [];
+      if (status) conditions.push(eq(schema.safetyAssets.status, status as string));
+      if (category) conditions.push(eq(schema.safetyAssets.category, category as string));
+      if (dueSoon === 'true') {
+        const horizon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+        conditions.push(lte(schema.safetyAssets.nextInspectionDue, horizon));
+      }
+      const rows = await db.select().from(schema.safetyAssets)
+        .where(conditions.length ? and(...conditions) : undefined)
+        .orderBy(schema.safetyAssets.nextInspectionDue);
+      res.json({ success: true, data: rows });
+    } catch (e) { ssErr(res, e, 'Failed to fetch assets'); }
+  });
+
+  app.get('/api/safety-assets/:id', async (req: Request, res: Response) => {
+    try {
+      const [asset] = await db.select().from(schema.safetyAssets).where(eq(schema.safetyAssets.id, req.params.id));
+      if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+      const inspections = await db.select().from(schema.assetInspections)
+        .where(eq(schema.assetInspections.assetId, req.params.id)).orderBy(desc(schema.assetInspections.inspectedAt));
+      res.json({ success: true, data: { ...asset, inspections } });
+    } catch (e) { ssErr(res, e, 'Failed to fetch asset'); }
+  });
+
+  app.post('/api/safety-assets', async (req: Request, res: Response) => {
+    try {
+      const parsed = safetyAssetInsert.parse(req.body);
+      const [asset] = await db.insert(schema.safetyAssets).values(parsed).returning();
+      res.json({ success: true, data: asset });
+    } catch (e) { ssErr(res, e, 'Failed to create asset'); }
+  });
+
+  app.put('/api/safety-assets/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = safetyAssetUpdate.parse({ ...req.body, updatedAt: new Date() });
+      const [updated] = await db.update(schema.safetyAssets).set(parsed).where(eq(schema.safetyAssets.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'Asset not found' });
+      res.json({ success: true, data: updated });
+    } catch (e) { ssErr(res, e, 'Failed to update asset'); }
+  });
+
+  app.delete('/api/safety-assets/:id', async (req: Request, res: Response) => {
+    try {
+      await db.delete(schema.safetyAssets).where(eq(schema.safetyAssets.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to delete asset'); }
+  });
+
+  app.post('/api/safety-assets/:id/inspections', async (req: Request, res: Response) => {
+    try {
+      const [asset] = await db.select().from(schema.safetyAssets).where(eq(schema.safetyAssets.id, req.params.id));
+      if (!asset) return res.status(404).json({ success: false, message: 'Asset not found' });
+      const inspectedAt = req.body.inspectedAt ? new Date(req.body.inspectedAt) : new Date();
+      const freq = asset.inspectionFrequencyDays ?? 180;
+      const nextDue = new Date(inspectedAt.getTime() + freq * 24 * 60 * 60 * 1000);
+      const parsed = schema.insertAssetInspectionSchema.extend({ inspectedAt: z.coerce.date().optional(), nextInspectionDue: z.coerce.date().nullable().optional() })
+        .parse({ ...req.body, assetId: req.params.id, inspectorId: req.body.inspectorId ?? req.session.employeeId ?? null, inspectedAt, nextInspectionDue: nextDue });
+      const [inspection] = await db.insert(schema.assetInspections).values(parsed).returning();
+      const newStatus = parsed.result === 'fail' ? 'removed' : parsed.result === 'monitor' ? 'monitor' : 'in_service';
+      await db.update(schema.safetyAssets)
+        .set({ lastInspectedAt: inspectedAt, nextInspectionDue: nextDue, status: newStatus, updatedAt: new Date() })
+        .where(eq(schema.safetyAssets.id, req.params.id));
+      res.json({ success: true, data: inspection });
+    } catch (e) { ssErr(res, e, 'Failed to record inspection'); }
+  });
+
+  // ---------------- Training / Competency Register ----------------
+  const competencyInsert = schema.insertEmployeeCompetencySchema.extend({ issueDate: z.coerce.date().nullable().optional(), expiryDate: z.coerce.date().nullable().optional() });
+  const competencyUpdate = competencyInsert.partial();
+  const competencyStatus = (expiry: Date | null): string => {
+    if (!expiry) return 'valid';
+    const now = Date.now();
+    const exp = new Date(expiry).getTime();
+    if (exp < now) return 'expired';
+    if (exp < now + 30 * 24 * 60 * 60 * 1000) return 'expiring';
+    return 'valid';
+  };
+
+  app.get('/api/competency-types', async (_req: Request, res: Response) => {
+    try {
+      const types = await db.select().from(schema.competencyTypes)
+        .where(eq(schema.competencyTypes.isActive, true)).orderBy(schema.competencyTypes.sortOrder, schema.competencyTypes.name);
+      res.json({ success: true, data: types });
+    } catch (e) { ssErr(res, e, 'Failed to fetch competency types'); }
+  });
+
+  app.get('/api/employee-competencies', async (req: Request, res: Response) => {
+    try {
+      const { employeeId, expiringOnly } = req.query;
+      const conditions = [];
+      if (employeeId) conditions.push(eq(schema.employeeCompetencies.employeeId, employeeId as string));
+      const rows = await db.select().from(schema.employeeCompetencies)
+        .where(conditions.length ? and(...conditions) : undefined)
+        .orderBy(schema.employeeCompetencies.expiryDate);
+      let data = rows.map(r => ({ ...r, computedStatus: competencyStatus(r.expiryDate) }));
+      if (expiringOnly === 'true') data = data.filter(r => r.computedStatus !== 'valid');
+      res.json({ success: true, data });
+    } catch (e) { ssErr(res, e, 'Failed to fetch competencies'); }
+  });
+
+  app.post('/api/employee-competencies', async (req: Request, res: Response) => {
+    try {
+      const parsed = competencyInsert.parse(req.body);
+      const [row] = await db.insert(schema.employeeCompetencies).values(parsed).returning();
+      res.json({ success: true, data: { ...row, computedStatus: competencyStatus(row.expiryDate) } });
+    } catch (e) { ssErr(res, e, 'Failed to create competency'); }
+  });
+
+  app.put('/api/employee-competencies/:id', async (req: Request, res: Response) => {
+    try {
+      const parsed = competencyUpdate.parse({ ...req.body, updatedAt: new Date() });
+      const [updated] = await db.update(schema.employeeCompetencies).set(parsed).where(eq(schema.employeeCompetencies.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'Competency not found' });
+      res.json({ success: true, data: { ...updated, computedStatus: competencyStatus(updated.expiryDate) } });
+    } catch (e) { ssErr(res, e, 'Failed to update competency'); }
+  });
+
+  app.delete('/api/employee-competencies/:id', async (req: Request, res: Response) => {
+    try {
+      await db.delete(schema.employeeCompetencies).where(eq(schema.employeeCompetencies.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to delete competency'); }
+  });
+
+  // ---------------- SWMS ----------------
+  const swmsInsert = schema.insertSwmsDocumentSchema;
+  const swmsUpdate = swmsInsert.partial();
+
+  app.get('/api/swms-templates', async (_req: Request, res: Response) => {
+    try {
+      const templates = await db.select().from(schema.swmsTemplates)
+        .where(eq(schema.swmsTemplates.isActive, true)).orderBy(schema.swmsTemplates.sortOrder, schema.swmsTemplates.name);
+      res.json({ success: true, data: templates });
+    } catch (e) { ssErr(res, e, 'Failed to fetch SWMS templates'); }
+  });
+
+  app.get('/api/swms', async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      const conditions = [];
+      if (status) conditions.push(eq(schema.swmsDocuments.status, status as string));
+      const rows = await db.select().from(schema.swmsDocuments)
+        .where(conditions.length ? and(...conditions) : undefined).orderBy(desc(schema.swmsDocuments.createdAt));
+      res.json({ success: true, data: rows });
+    } catch (e) { ssErr(res, e, 'Failed to fetch SWMS'); }
+  });
+
+  app.get('/api/swms/:id', async (req: Request, res: Response) => {
+    try {
+      const [doc] = await db.select().from(schema.swmsDocuments).where(eq(schema.swmsDocuments.id, req.params.id));
+      if (!doc) return res.status(404).json({ success: false, message: 'SWMS not found' });
+      const [steps, signatures] = await Promise.all([
+        db.select().from(schema.swmsSteps).where(eq(schema.swmsSteps.swmsId, req.params.id)).orderBy(schema.swmsSteps.stepNumber),
+        db.select().from(schema.swmsSignatures).where(eq(schema.swmsSignatures.swmsId, req.params.id)).orderBy(schema.swmsSignatures.signedAt),
+      ]);
+      res.json({ success: true, data: { ...doc, steps, signatures } });
+    } catch (e) { ssErr(res, e, 'Failed to fetch SWMS'); }
+  });
+
+  app.post('/api/swms', async (req: Request, res: Response) => {
+    try {
+      const swmsNumber = await generateSafetyNumber('SW', schema.swmsDocuments.swmsNumber, schema.swmsDocuments);
+      const { steps, ...docBody } = req.body;
+      const parsed = swmsInsert.parse({ ...docBody, preparedById: req.session.employeeId || null, createdBy: req.session.employeeId || null });
+      const [doc] = await db.insert(schema.swmsDocuments).values({ ...parsed, swmsNumber }).returning();
+      if (Array.isArray(steps) && steps.length) {
+        await db.insert(schema.swmsSteps).values(steps.map((s: any, i: number) => ({
+          swmsId: doc.id, stepNumber: s.stepNumber ?? i + 1, taskStep: s.taskStep ?? '',
+          hazards: s.hazards ?? [], controls: s.controls ?? [], riskRating: s.riskRating ?? null, responsiblePerson: s.responsiblePerson ?? null,
+        })));
+      }
+      res.json({ success: true, data: doc });
+    } catch (e) { ssErr(res, e, 'Failed to create SWMS'); }
+  });
+
+  app.put('/api/swms/:id', async (req: Request, res: Response) => {
+    try {
+      const { swmsNumber: _s, steps, ...rest } = req.body;
+      const parsed = swmsUpdate.parse({ ...rest, updatedAt: new Date() });
+      const [updated] = await db.update(schema.swmsDocuments).set(parsed).where(eq(schema.swmsDocuments.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'SWMS not found' });
+      if (Array.isArray(steps)) {
+        await db.delete(schema.swmsSteps).where(eq(schema.swmsSteps.swmsId, req.params.id));
+        if (steps.length) {
+          await db.insert(schema.swmsSteps).values(steps.map((s: any, i: number) => ({
+            swmsId: req.params.id, stepNumber: s.stepNumber ?? i + 1, taskStep: s.taskStep ?? '',
+            hazards: s.hazards ?? [], controls: s.controls ?? [], riskRating: s.riskRating ?? null, responsiblePerson: s.responsiblePerson ?? null,
+          })));
+        }
+      }
+      res.json({ success: true, data: updated });
+    } catch (e) { ssErr(res, e, 'Failed to update SWMS'); }
+  });
+
+  app.delete('/api/swms/:id', async (req: Request, res: Response) => {
+    try {
+      await db.delete(schema.swmsDocuments).where(eq(schema.swmsDocuments.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to delete SWMS'); }
+  });
+
+  app.post('/api/swms/:id/signatures', async (req: Request, res: Response) => {
+    try {
+      const [doc] = await db.select().from(schema.swmsDocuments).where(eq(schema.swmsDocuments.id, req.params.id));
+      if (!doc) return res.status(404).json({ success: false, message: 'SWMS not found' });
+      const parsed = schema.insertSwmsSignatureSchema.extend({ signedAt: z.coerce.date().optional() })
+        .parse({ ...req.body, swmsId: req.params.id });
+      const [sig] = await db.insert(schema.swmsSignatures).values(parsed).returning();
+      res.json({ success: true, data: sig });
+    } catch (e) { ssErr(res, e, 'Failed to add signature'); }
+  });
+
+  // ---------------- Notifiable Events ----------------
+  const notifiableInsert = schema.insertNotifiableEventSchema.extend({
+    occurredAt: z.coerce.date(),
+    worksafeNotifiedAt: z.coerce.date().nullable().optional(),
+    notifyDueBy: z.coerce.date().nullable().optional(),
+    retentionUntil: z.coerce.date().nullable().optional(),
+  });
+  const notifiableUpdate = notifiableInsert.partial();
+
+  app.get('/api/notifiable-events', async (req: Request, res: Response) => {
+    try {
+      const { status } = req.query;
+      const conditions = [];
+      if (status) conditions.push(eq(schema.notifiableEvents.status, status as string));
+      const rows = await db.select().from(schema.notifiableEvents)
+        .where(conditions.length ? and(...conditions) : undefined).orderBy(desc(schema.notifiableEvents.occurredAt));
+      res.json({ success: true, data: rows });
+    } catch (e) { ssErr(res, e, 'Failed to fetch notifiable events'); }
+  });
+
+  app.get('/api/notifiable-events/:id', async (req: Request, res: Response) => {
+    try {
+      const [row] = await db.select().from(schema.notifiableEvents).where(eq(schema.notifiableEvents.id, req.params.id));
+      if (!row) return res.status(404).json({ success: false, message: 'Event not found' });
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to fetch event'); }
+  });
+
+  app.post('/api/notifiable-events', async (req: Request, res: Response) => {
+    try {
+      const eventNumber = await generateSafetyNumber('NE', schema.notifiableEvents.eventNumber, schema.notifiableEvents);
+      const parsed = notifiableInsert.parse({ ...req.body, createdBy: req.session.employeeId || null });
+      const occurred = parsed.occurredAt;
+      const notifyDueBy = parsed.notifyDueBy ?? new Date(occurred.getTime() + 48 * 60 * 60 * 1000);
+      const retentionUntil = parsed.retentionUntil ?? new Date(new Date(occurred).setFullYear(occurred.getFullYear() + 5));
+      const [row] = await db.insert(schema.notifiableEvents).values({ ...parsed, eventNumber, notifyDueBy, retentionUntil }).returning();
+      res.json({ success: true, data: row });
+    } catch (e) { ssErr(res, e, 'Failed to create event'); }
+  });
+
+  app.put('/api/notifiable-events/:id', async (req: Request, res: Response) => {
+    try {
+      const { eventNumber: _e, ...rest } = req.body;
+      const parsed = notifiableUpdate.parse({ ...rest, updatedAt: new Date() });
+      const [updated] = await db.update(schema.notifiableEvents).set(parsed).where(eq(schema.notifiableEvents.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'Event not found' });
+      res.json({ success: true, data: updated });
+    } catch (e) { ssErr(res, e, 'Failed to update event'); }
+  });
+
+  app.post('/api/notifiable-events/:id/notify', async (req: Request, res: Response) => {
+    try {
+      const [updated] = await db.update(schema.notifiableEvents).set({
+        worksafeNotified: true,
+        worksafeNotifiedAt: req.body.worksafeNotifiedAt ? new Date(req.body.worksafeNotifiedAt) : new Date(),
+        notificationMethod: req.body.notificationMethod ?? 'online',
+        worksafeReference: req.body.worksafeReference ?? null,
+        status: 'notified',
+        updatedAt: new Date(),
+      }).where(eq(schema.notifiableEvents.id, req.params.id)).returning();
+      if (!updated) return res.status(404).json({ success: false, message: 'Event not found' });
+      res.json({ success: true, data: updated });
+    } catch (e) { ssErr(res, e, 'Failed to record notification'); }
+  });
+
+  app.delete('/api/notifiable-events/:id', async (req: Request, res: Response) => {
+    try {
+      const [existing] = await db.select().from(schema.notifiableEvents).where(eq(schema.notifiableEvents.id, req.params.id));
+      if (!existing) return res.status(404).json({ success: false, message: 'Event not found' });
+      if (existing.worksafeNotified) return res.status(400).json({ success: false, message: 'Notified events are retained for 5 years and cannot be deleted' });
+      await db.delete(schema.notifiableEvents).where(eq(schema.notifiableEvents.id, req.params.id));
+      res.json({ success: true });
+    } catch (e) { ssErr(res, e, 'Failed to delete event'); }
+  });
+
   // Helper: generate NM-YYYY-#### report numbers (sequential within year)
   async function generateNearMissReportNumber(): Promise<string> {
     const year = new Date().getFullYear();
