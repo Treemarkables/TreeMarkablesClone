@@ -9295,12 +9295,10 @@ Draft the reply now.`;
       try {
         const key = inboundFrom.replace(/\D/g, '').slice(-8);
         if (key) {
-          const allCustomers = await storage.getAllCustomers();
-          const match = allCustomers.find(
-            (c: any) =>
-              (c.phone && c.phone.replace(/\D/g, '').slice(-8) === key) ||
-              (c.mobile && c.mobile.replace(/\D/g, '').slice(-8) === key),
-          );
+          // Indexed/DB-side lookup rather than loading the entire customer
+          // table on every inbound call — keeps the answer webhook fast so
+          // the caller reaches the greeting sooner (less pre-answer ringback).
+          const match = await storage.findCustomerByPhoneLast8(key);
           if (match?.name) callerName = String(match.name);
         }
       } catch (lookupErr) {

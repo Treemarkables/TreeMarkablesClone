@@ -119,6 +119,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
   findCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  findCustomerByPhoneLast8(last8: string): Promise<Customer | undefined>;
   findCustomerByEmail(email: string): Promise<Customer | undefined>;
   findCustomerByName(name: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
@@ -1119,6 +1120,25 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.customers.normalizedPhone, normalizedInput))
       .limit(1);
 
+    return customer || undefined;
+  }
+
+  async findCustomerByPhoneLast8(last8: string): Promise<Customer | undefined> {
+    // Match on the last 8 digits of either phone field, DB-side, so we don't
+    // haul the whole customer table into memory on every inbound call. The
+    // last-8 heuristic ignores +64 vs 0 country-code differences. Strips
+    // non-digits in SQL with a POSIX class ([^0-9]) to avoid backslash-escape
+    // pitfalls in the query template.
+    const key = (last8 || '').replace(/\D/g, '').slice(-8);
+    if (key.length < 7) return undefined;
+    const [customer] = await db
+      .select()
+      .from(schema.customers)
+      .where(
+        sql`right(regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g'), 8) = ${key}
+            or right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '[^0-9]', '', 'g'), 8) = ${key}`,
+      )
+      .limit(1);
     return customer || undefined;
   }
 
