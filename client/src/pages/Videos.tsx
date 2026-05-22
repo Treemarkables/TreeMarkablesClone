@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Upload, Copy, Video as VideoIcon } from "lucide-react";
+import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Videos() {
@@ -17,6 +17,9 @@ export default function Videos() {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
+  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
 
   const videosKey = ["/api/videos"];
   const { data: response, isLoading } = useQuery({
@@ -71,6 +74,43 @@ export default function Videos() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: videosKey }),
     onError: () => toast({ title: "Could not delete video", variant: "destructive" }),
   });
+
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      const r = await fetch(`/api/videos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
+        credentials: "include",
+      });
+      if (!r.ok) throw new Error("Rename failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      setEditTitle("");
+      queryClient.invalidateQueries({ queryKey: videosKey });
+    },
+    onError: () => toast({ title: "Could not save title", variant: "destructive" }),
+  });
+
+  const startEdit = (v: any) => {
+    setEditingId(v.id);
+    setEditTitle(v.title || "");
+  };
+
+  const saveEdit = (id: string) => {
+    renameMutation.mutate({ id, title: editTitle.trim() });
+  };
+
+  const q = search.trim().toLowerCase();
+  const filteredVideos = q
+    ? videos.filter((v: any) =>
+        [v.title, v.originalName, v.filename, v.description]
+          .filter(Boolean)
+          .some((field: string) => field.toLowerCase().includes(q)),
+      )
+    : videos;
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -130,14 +170,30 @@ export default function Videos() {
         </CardContent>
       </Card>
 
+      {/* Search */}
+      {videos.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+          <Input
+            placeholder="Search videos by title or keyword…"
+            className="pl-10"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            data-testid="input-search-videos"
+          />
+        </div>
+      )}
+
       {/* List */}
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading videos…</p>
       ) : videos.length === 0 ? (
         <p className="text-sm text-muted-foreground">No videos uploaded yet.</p>
+      ) : filteredVideos.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No videos match "{search}".</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {videos.map((v: any) => (
+          {filteredVideos.map((v: any) => (
             <Card
               key={v.id}
               className="bg-card border border-border"
@@ -145,13 +201,59 @@ export default function Videos() {
             >
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium truncate">
-                    {v.title || v.originalName || "Untitled"}
-                  </p>
-                  {v.jobId ? (
-                    <Badge variant="secondary">Linked to job</Badge>
+                  {editingId === v.id ? (
+                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                      <Input
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveEdit(v.id);
+                          if (e.key === "Escape") setEditingId(null);
+                        }}
+                        placeholder="Video title"
+                        className="h-8"
+                        autoFocus
+                        data-testid={`input-edit-title-${v.id}`}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => saveEdit(v.id)}
+                        disabled={renameMutation.isPending}
+                        data-testid={`button-save-title-${v.id}`}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => setEditingId(null)}
+                        data-testid={`button-cancel-title-${v.id}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   ) : (
-                    <Badge variant="outline">Unassigned</Badge>
+                    <button
+                      type="button"
+                      onClick={() => startEdit(v)}
+                      className="flex items-center gap-1.5 min-w-0 text-left group"
+                      data-testid={`button-edit-title-${v.id}`}
+                    >
+                      <span className="text-sm font-medium truncate">
+                        {v.title || v.originalName || "Untitled"}
+                      </span>
+                      <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                    </button>
+                  )}
+                  {v.jobId ? (
+                    <Badge variant="secondary" className="shrink-0">Linked to job</Badge>
+                  ) : (
+                    <Badge variant="outline" className="shrink-0">Unassigned</Badge>
                   )}
                 </div>
                 <video
