@@ -202,7 +202,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={() => copyLink(v.url)}
+                      onClick={() => copyLink(`/watch/${v.id}`)}
                       data-testid={`button-copy-${v.id}`}
                     >
                       <Copy className="w-3.5 h-3.5" />

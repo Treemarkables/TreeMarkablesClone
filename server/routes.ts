@@ -7037,6 +7037,32 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   });
 
+  // Public single-video fetch for the branded /watch/:id share page (no auth —
+  // the id is an unguessable UUID, so the link itself is the access token, like
+  // an unlisted Loom share). Exposes only the fields the watch page renders.
+  app.get('/api/videos/:id/public', async (req: Request, res: Response) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      res.json({
+        success: true,
+        data: {
+          id: video.id,
+          title: video.title,
+          description: video.description,
+          url: video.url,
+          thumbnailUrl: video.thumbnailUrl,
+          createdAt: video.createdAt,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching public video:', error);
+      res.status(500).json({ success: false, message: 'Error fetching video' });
+    }
+  });
+
   // Standalone video upload (Videos library) — no job card required. The job
   // can be linked later via PATCH /api/videos/:id { jobId }.
   app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {

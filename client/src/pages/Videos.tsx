@@ -167,7 +167,7 @@ export default function Videos() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => copyLink(v.url)}
+                    onClick={() => copyLink(`/watch/${v.id}`)}
                     data-testid={`button-library-copy-${v.id}`}
                   >
                     <Copy className="w-3.5 h-3.5 mr-1" /> Copy link
