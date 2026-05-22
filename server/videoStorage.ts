@@ -136,6 +136,8 @@ export class VideoStorageService {
 
       res.status(206).set({
         "Content-Type": contentType,
+        // inline → browsers play the URL in-page instead of downloading it.
+        "Content-Disposition": "inline",
         "Content-Range": `bytes ${start}-${end}/${totalSize}`,
         "Accept-Ranges": "bytes",
         "Content-Length": String(end - start + 1),
@@ -155,6 +157,8 @@ export class VideoStorageService {
     // No range header — stream the whole file but advertise range support.
     res.status(200).set({
       "Content-Type": contentType,
+      // inline → browsers play the URL in-page instead of downloading it.
+      "Content-Disposition": "inline",
       "Content-Length": String(totalSize),
       "Accept-Ranges": "bytes",
       "Cache-Control": "private, max-age=31536000",

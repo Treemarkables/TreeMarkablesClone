@@ -160,7 +160,7 @@ export default function Videos() {
                   controls
                   preload="metadata"
                   playsInline
-                  className="w-full rounded bg-black"
+                  className="w-full max-h-72 rounded bg-black object-contain"
                 />
                 <div className="flex items-center justify-end gap-1">
                   <Button

@@ -479,7 +479,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                           controls
                           preload="metadata"
                           playsInline
-                          className="w-full rounded-lg bg-black"
+                          className="w-full max-h-[480px] rounded-lg bg-black object-contain"
                           data-testid={`video-${v.id}`}
                         />
                         {v.description && (
