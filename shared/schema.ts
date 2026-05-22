@@ -796,6 +796,41 @@ export const photos = pgTable("photos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Job Videos — native replacement for Loom. The video file itself lives in GCS
+// object storage (same bucket as photos); this row only holds metadata + the
+// object path (`url` like `/objects/videos/<file>`). showToCustomer gates
+// whether the video surfaces on the customer-facing quote/proposal view.
+export const videos = pgTable("videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // 'job' = customer-facing on-site walkthrough tied to a job; 'knowledge' =
+  // how-to / training video for the subscriber-facing knowledge page (no job).
+  kind: text("kind").notNull().default("job"),
+  // For 'knowledge' videos: grouping on the knowledge page (e.g. 'Getting started',
+  // 'Invoicing'). Null for job videos.
+  category: text("category"),
+  jobId: varchar("job_id").references(() => jobs.id), // nullable: standalone/knowledge videos have none
+  customerId: varchar("customer_id").references(() => customers.id),
+  proposalSectionId: varchar("proposal_section_id").references(() => proposalSections.id),
+  jobDiaryEntryId: varchar("job_diary_entry_id").references(() => jobDiaryEntries.id),
+  url: text("url").notNull(), // GCS object path served via GET /objects/videos/:filename
+  filename: text("filename").notNull(), // stored object filename
+  originalName: text("original_name"),
+  mimeType: text("mime_type").notNull(),
+  fileSize: integer("file_size").notNull(),
+  durationSeconds: integer("duration_seconds"), // optional, populated by client if available
+  title: text("title"),
+  description: text("description"),
+  uploadedBy: text("uploaded_by"), // staff name/id who uploaded
+  showToCustomer: boolean("show_to_customer").default(true),
+  thumbnailUrl: text("thumbnail_url"), // optional poster frame
+  processingStatus: text("processing_status").default("ready"), // 'uploading', 'ready', 'error'
+  sequenceOrder: integer("sequence_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  jobIdx: index("videos_job_id_idx").on(table.jobId),
+}));
+
 // Activity Log & Communication Tracking
 export const activities = pgTable("activities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2486,6 +2521,17 @@ export const beforeAfterPairSchema = z.object({
   location: z.string().optional(),
   description: z.string().optional(),
 });
+
+// Job video insert schema + types (see `videos` table above).
+export const insertVideoSchema = createInsertSchema(videos).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateVideoSchema = insertVideoSchema.partial();
+export type Video = typeof videos.$inferSelect;
+export type InsertVideo = z.infer<typeof insertVideoSchema>;
+export type UpdateVideo = z.infer<typeof updateVideoSchema>;
 
 export const photoSearchSchema = z.object({
   jobId: z.string().optional(),

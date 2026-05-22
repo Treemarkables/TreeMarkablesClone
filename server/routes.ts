@@ -98,6 +98,7 @@ import { emailService } from "./services/emailService";
 import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
+import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
 import PDFDocument from "pdfkit";
@@ -143,6 +144,19 @@ const imageUpload = multer({
   fileFilter: (req, file, cb) => {
     // Accept all file types - no restrictions
     cb(null, true);
+  }
+});
+
+// Video upload — streams straight to GCS via a custom storage engine (no memory
+// buffering), so long on-site walkthroughs don't OOM the instance. 2 GB ceiling.
+const videoUpload = multer({
+  storage: createVideoUploadEngine(),
+  limits: {
+    fileSize: 2 * 1024 * 1024 * 1024, // 2 GB
+    files: 1,
+  },
+  fileFilter: (req, file, cb) => {
+    cb(null, file.mimetype.startsWith('video/'));
   }
 });
 
@@ -6941,6 +6955,222 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   });
 
+  // ──────────────────────────────────────────────────────────────────────────
+  // Job Videos — native Loom replacement. File stored in GCS, metadata in the
+  // `videos` table. Staff upload + manage; customers watch via the public
+  // streaming route below (matches the photo route's public-by-URL model).
+  // ──────────────────────────────────────────────────────────────────────────
+
+  // Stream a video (public, range-aware so the <video> player can seek).
+  app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
+    try {
+      await videoStorage.streamVideo(`/objects/videos/${req.params.filename}`, req, res);
+    } catch (error) {
+      console.error('Error serving video:', error);
+      if (!res.headersSent) res.status(500).json({ error: 'Error serving video' });
+    }
+  });
+
+  // Upload a video to a job (staff). Streamed straight to GCS by videoUpload.
+  app.post('/api/jobs/:jobId/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+    try {
+      const { jobId } = req.params;
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No video file provided' });
+      }
+      const job = await storage.getJob(jobId);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // videoUpload's storage engine streamed the file to GCS and set these on req.file.
+      const url = req.file.path; // e.g. /objects/videos/<filename>
+      const filename = req.file.filename;
+
+      const showToCustomer = req.body.showToCustomer === undefined
+        ? true
+        : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
+
+      const video = await storage.createVideo({
+        jobId,
+        customerId: job.customerId ?? null,
+        url,
+        filename,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        title: req.body.title || null,
+        description: req.body.description || null,
+        uploadedBy: req.body.uploadedBy || null,
+        showToCustomer,
+        processingStatus: 'ready',
+      });
+
+      res.json({ success: true, data: video });
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error uploading video' });
+      }
+    }
+  });
+
+  // List all videos on a job (staff view).
+  app.get('/api/jobs/:jobId/videos', async (req: Request, res: Response) => {
+    try {
+      const data = await storage.getVideosByJob(req.params.jobId);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Error listing videos:', error);
+      res.status(500).json({ success: false, message: 'Error listing videos' });
+    }
+  });
+
+  // List only customer-visible videos on a job (used by the public quote/proposal view).
+  app.get('/api/jobs/:jobId/videos/public', async (req: Request, res: Response) => {
+    try {
+      const data = await storage.getCustomerVisibleVideosByJob(req.params.jobId);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Error listing public videos:', error);
+      res.status(500).json({ success: false, message: 'Error listing videos' });
+    }
+  });
+
+  // Public single-video fetch for the branded /watch/:id share page (no auth —
+  // the id is an unguessable UUID, so the link itself is the access token, like
+  // an unlisted Loom share). Exposes only the fields the watch page renders.
+  app.get('/api/videos/:id/public', async (req: Request, res: Response) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      res.json({
+        success: true,
+        data: {
+          id: video.id,
+          title: video.title,
+          description: video.description,
+          url: video.url,
+          thumbnailUrl: video.thumbnailUrl,
+          createdAt: video.createdAt,
+        },
+      });
+    } catch (error) {
+      console.error('Error fetching public video:', error);
+      res.status(500).json({ success: false, message: 'Error fetching video' });
+    }
+  });
+
+  // Standalone video upload (Videos library) — no job card required. The job
+  // can be linked later via PATCH /api/videos/:id { jobId }.
+  app.post('/api/videos', videoUpload.single('video'), async (req: Request, res: Response) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ success: false, message: 'No video file provided' });
+      }
+      // videoUpload's storage engine streamed the file to GCS and set these on req.file.
+      const url = req.file.path; // e.g. /objects/videos/<filename>
+      const filename = req.file.filename;
+
+      let jobId: string | null = req.body.jobId || null;
+      let customerId: string | null = null;
+      if (jobId) {
+        const job = await storage.getJob(jobId);
+        if (!job) {
+          jobId = null;
+        } else {
+          customerId = job.customerId ?? null;
+        }
+      }
+
+      const kind = req.body.kind === 'knowledge' ? 'knowledge' : 'job';
+      const showToCustomer = req.body.showToCustomer === undefined
+        ? true
+        : req.body.showToCustomer === 'true' || req.body.showToCustomer === true;
+
+      const video = await storage.createVideo({
+        kind,
+        category: req.body.category || null,
+        jobId,
+        customerId,
+        url,
+        filename,
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        title: req.body.title || null,
+        description: req.body.description || null,
+        uploadedBy: req.body.uploadedBy || null,
+        showToCustomer,
+        processingStatus: 'ready',
+      });
+      res.json({ success: true, data: video });
+    } catch (error) {
+      console.error('Error uploading video:', error);
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Error uploading video' });
+      }
+    }
+  });
+
+  // Videos library list (staff). Optional filters: ?kind=job|knowledge, ?unassigned=true
+  app.get('/api/videos', async (req: Request, res: Response) => {
+    try {
+      const kind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
+      const unassigned = req.query.unassigned === 'true';
+      const data = await storage.getVideos({ kind, unassigned });
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Error listing videos:', error);
+      res.status(500).json({ success: false, message: 'Error listing videos' });
+    }
+  });
+
+  // Update a video's metadata (title, showToCustomer toggle, or link to a job).
+  app.patch('/api/videos/:id', async (req: Request, res: Response) => {
+    try {
+      const updates: schema.UpdateVideo = {};
+      if (req.body.title !== undefined) updates.title = req.body.title;
+      if (req.body.description !== undefined) updates.description = req.body.description;
+      if (req.body.showToCustomer !== undefined) updates.showToCustomer = !!req.body.showToCustomer;
+      if (req.body.sequenceOrder !== undefined) updates.sequenceOrder = Number(req.body.sequenceOrder);
+      if (req.body.kind !== undefined) updates.kind = req.body.kind;
+      if (req.body.category !== undefined) updates.category = req.body.category;
+      // Link (or unlink) to a job — populate customerId from the job when linking.
+      if (req.body.jobId !== undefined) {
+        const jobId: string | null = req.body.jobId || null;
+        updates.jobId = jobId;
+        if (jobId) {
+          const job = await storage.getJob(jobId);
+          if (job) updates.customerId = job.customerId ?? null;
+        }
+      }
+      const video = await storage.updateVideo(req.params.id, updates);
+      res.json({ success: true, data: video });
+    } catch (error) {
+      console.error('Error updating video:', error);
+      res.status(500).json({ success: false, message: 'Error updating video' });
+    }
+  });
+
+  // Delete a video (removes the DB row and best-effort deletes the GCS object).
+  app.delete('/api/videos/:id', async (req: Request, res: Response) => {
+    try {
+      const video = await storage.getVideo(req.params.id);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+      await storage.deleteVideo(req.params.id);
+      await videoStorage.deleteVideoObject(video.url);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting video:', error);
+      res.status(500).json({ success: false, message: 'Error deleting video' });
+    }
+  });
+
   // Regenerate all thumbnails with new quality settings (admin utility only)
   app.post('/api/admin/regenerate-thumbnails', requireAdmin, async (req: Request, res: Response) => {
     try {
@@ -9295,12 +9525,10 @@ Draft the reply now.`;
       try {
         const key = inboundFrom.replace(/\D/g, '').slice(-8);
         if (key) {
-          const allCustomers = await storage.getAllCustomers();
-          const match = allCustomers.find(
-            (c: any) =>
-              (c.phone && c.phone.replace(/\D/g, '').slice(-8) === key) ||
-              (c.mobile && c.mobile.replace(/\D/g, '').slice(-8) === key),
-          );
+          // Indexed/DB-side lookup rather than loading the entire customer
+          // table on every inbound call — keeps the answer webhook fast so
+          // the caller reaches the greeting sooner (less pre-answer ringback).
+          const match = await storage.findCustomerByPhoneLast8(key);
           if (match?.name) callerName = String(match.name);
         }
       } catch (lookupErr) {
@@ -9337,20 +9565,16 @@ Draft the reply now.`;
       disclosureTwiml = `  <Say voice="alice">${escapeXml(disclosureText)}</Say>\n`;
     }
 
-    // Brief "we're connecting you" cue played to the CALLER *before* the
-    // recorded-call disclosure. Without it, the disclosure (especially when
-    // it's the owner's own recorded voice) sounds like a voicemail greeting,
-    // so callers hang up before the app rings. This line frames it as "a
-    // person is about to pick up". Configurable via TWILIO_CONNECTING_PROMPT;
-    // set to "off" to disable.
+    // Optional brief "we're connecting you" cue played to the CALLER *before*
+    // the recorded-call disclosure. OFF by default — the owner's own recorded
+    // greeting/disclosure already frames the call, and the robotic TTS line
+    // ahead of it sounded jarring. To re-enable, set TWILIO_CONNECTING_PROMPT
+    // to the text you want spoken (set it to "off" or leave it unset to keep
+    // it silent).
     const connectingPromptRaw = (process.env.TWILIO_CONNECTING_PROMPT || '').trim();
     let connectingTwiml = '';
-    if (connectingPromptRaw.toLowerCase() === 'off') {
-      connectingTwiml = '';
-    } else {
-      const connectingText =
-        connectingPromptRaw || 'Please hold while we connect your call.';
-      connectingTwiml = `  <Say voice="alice">${escapeXml(connectingText)}</Say>\n`;
+    if (connectingPromptRaw && connectingPromptRaw.toLowerCase() !== 'off') {
+      connectingTwiml = `  <Say voice="alice">${escapeXml(connectingPromptRaw)}</Say>\n`;
     }
 
     console.log(`📞 Twilio answer webhook — client=${hasClient ? clientIdentity : 'off'}, phone=${ownerPhone || 'off'}, callerFrom=${inboundFrom || 'unknown'}, callerName=${callerName || '(unknown)'}, connecting=${connectingTwiml ? 'on' : 'off'}, disclosure=${disclosureTwiml ? 'on' : 'off'}`);

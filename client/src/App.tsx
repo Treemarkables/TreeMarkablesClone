@@ -24,6 +24,7 @@ import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Tasks from "@/pages/Tasks";
+import Videos from "@/pages/Videos";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
 import ConversationDetail from "@/pages/ConversationDetail";
@@ -37,6 +38,7 @@ import NotFound from "@/pages/not-found";
 import { CustomerPortal } from "@/pages/CustomerPortal";
 import CommunicationsManagement from "@/pages/CommunicationsManagement";
 import Calls from "@/pages/Calls";
+import WatchVideo from "@/pages/WatchVideo";
 import Dispatch from "@/pages/Dispatch";
 import { WorkflowAutomation } from "@/components/WorkflowAutomation";
 import History from "@/pages/History";
@@ -901,6 +903,13 @@ function Router() {
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
+      <Route path="/videos">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Videos />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
       <Route path="/profitability-calculator">
         <ProtectedRoute>
           <SidebarLayout>
@@ -915,6 +924,7 @@ function Router() {
       <Route path="/invoice/:invoiceId/view" component={InvoiceView}/>
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
       <Route path="/review/:token" component={PublicReview}/>
+      <Route path="/watch/:videoId" component={WatchVideo}/>
       
       {/* Dashboard pages with sidebar - Admin only */}
       <Route path="/pipeline">

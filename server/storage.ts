@@ -20,6 +20,7 @@ import {
   type Material, type InsertMaterial,
   type Service, type InsertService,
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
+  videos, type Video, type InsertVideo, type UpdateVideo,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
   type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
@@ -75,7 +76,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
-import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray } from "drizzle-orm";
+import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
 
@@ -119,6 +120,7 @@ export interface IStorage {
   createCustomer(customer: InsertCustomer): Promise<Customer>;
   getCustomer(id: string): Promise<Customer | undefined>;
   findCustomerByPhone(phone: string): Promise<Customer | undefined>;
+  findCustomerByPhoneLast8(last8: string): Promise<Customer | undefined>;
   findCustomerByEmail(email: string): Promise<Customer | undefined>;
   findCustomerByName(name: string): Promise<Customer | undefined>;
   updateCustomer(id: string, updates: Partial<InsertCustomer>): Promise<Customer>;
@@ -749,6 +751,15 @@ export interface IStorage {
   getBeforeAfterPairs(jobId: string): Promise<Photo[][]>;
   searchPhotos(filters: PhotoSearch): Promise<Photo[]>;
 
+  // Job Videos (Loom replacement)
+  createVideo(data: InsertVideo): Promise<Video>;
+  getVideo(id: string): Promise<Video | undefined>;
+  updateVideo(id: string, updates: UpdateVideo): Promise<Video>;
+  deleteVideo(id: string): Promise<void>;
+  getVideosByJob(jobId: string): Promise<Video[]>;
+  getCustomerVisibleVideosByJob(jobId: string): Promise<Video[]>;
+  getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]>;
+
   // Customer Portal Management
   authenticateCustomer(email: string, phone?: string): Promise<CustomerAuth | undefined>;
   createCustomerAuth(auth: InsertCustomerAuth): Promise<CustomerAuth>;
@@ -1119,6 +1130,25 @@ class DatabaseStorage implements IStorage {
       .where(eq(schema.customers.normalizedPhone, normalizedInput))
       .limit(1);
 
+    return customer || undefined;
+  }
+
+  async findCustomerByPhoneLast8(last8: string): Promise<Customer | undefined> {
+    // Match on the last 8 digits of either phone field, DB-side, so we don't
+    // haul the whole customer table into memory on every inbound call. The
+    // last-8 heuristic ignores +64 vs 0 country-code differences. Strips
+    // non-digits in SQL with a POSIX class ([^0-9]) to avoid backslash-escape
+    // pitfalls in the query template.
+    const key = (last8 || '').replace(/\D/g, '').slice(-8);
+    if (key.length < 7) return undefined;
+    const [customer] = await db
+      .select()
+      .from(schema.customers)
+      .where(
+        sql`right(regexp_replace(coalesce(${schema.customers.phone}, ''), '[^0-9]', '', 'g'), 8) = ${key}
+            or right(regexp_replace(coalesce(${schema.customers.mobile}, ''), '[^0-9]', '', 'g'), 8) = ${key}`,
+      )
+      .limit(1);
     return customer || undefined;
   }
 
@@ -5444,6 +5474,46 @@ class DatabaseStorage implements IStorage {
   async getPhotosByType(type: string, jobId?: string): Promise<Photo[]> { return []; }
   async getBeforeAfterPairs(jobId: string): Promise<Photo[][]> { return []; }
   async searchPhotos(filters: PhotoSearch): Promise<Photo[]> { return []; }
+
+  // Job Videos (Loom replacement) — real implementations against the videos table.
+  async createVideo(data: InsertVideo): Promise<Video> {
+    const [row] = await db.insert(videos).values(data).returning();
+    return row;
+  }
+  async getVideo(id: string): Promise<Video | undefined> {
+    const [row] = await db.select().from(videos).where(eq(videos.id, id));
+    return row || undefined;
+  }
+  async updateVideo(id: string, updates: UpdateVideo): Promise<Video> {
+    const [row] = await db.update(videos)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(videos.id, id))
+      .returning();
+    return row;
+  }
+  async deleteVideo(id: string): Promise<void> {
+    await db.delete(videos).where(eq(videos.id, id));
+  }
+  async getVideosByJob(jobId: string): Promise<Video[]> {
+    return await db.select().from(videos)
+      .where(eq(videos.jobId, jobId))
+      .orderBy(asc(videos.sequenceOrder), asc(videos.createdAt));
+  }
+  async getCustomerVisibleVideosByJob(jobId: string): Promise<Video[]> {
+    return await db.select().from(videos)
+      .where(and(eq(videos.jobId, jobId), eq(videos.showToCustomer, true)))
+      .orderBy(asc(videos.sequenceOrder), asc(videos.createdAt));
+  }
+  async getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]> {
+    const conditions = [];
+    if (filter?.kind) conditions.push(eq(videos.kind, filter.kind));
+    if (filter?.unassigned) conditions.push(isNull(videos.jobId));
+    const query = db.select().from(videos);
+    const rows = conditions.length
+      ? await query.where(and(...conditions)).orderBy(desc(videos.createdAt))
+      : await query.orderBy(desc(videos.createdAt));
+    return rows;
+  }
 
   async authenticateCustomer(email: string, phone?: string): Promise<CustomerAuth | undefined> { return undefined; }
   async createCustomerAuth(auth: InsertCustomerAuth): Promise<CustomerAuth> { throw new Error("Not implemented"); }
