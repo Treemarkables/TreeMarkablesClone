@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trash2, Upload, Copy, Video as VideoIcon } from "lucide-react";
+import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface JobVideosProps {
@@ -21,6 +21,9 @@ export function JobVideos({ jobId }: JobVideosProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [showToCustomer, setShowToCustomer] = useState(true);
+  const [search, setSearch] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
 
   const videosKey = ["/api/jobs", jobId, "videos"];
 
@@ -83,6 +86,26 @@ export function JobVideos({ jobId }: JobVideosProps) {
       toast({ title: "Could not update video", variant: "destructive" }),
   });
 
+  const renameMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      const r = await fetch(`/api/videos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ title }),
+      });
+      if (!r.ok) throw new Error("Rename failed");
+      return r.json();
+    },
+    onSuccess: () => {
+      setEditingId(null);
+      setEditTitle("");
+      queryClient.invalidateQueries({ queryKey: videosKey });
+    },
+    onError: () =>
+      toast({ title: "Could not save title", variant: "destructive" }),
+  });
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const r = await fetch(`/api/videos/${id}`, {
@@ -107,6 +130,24 @@ export function JobVideos({ jobId }: JobVideosProps) {
       toast({ title: "Could not copy link", variant: "destructive" });
     });
   };
+
+  const startEdit = (v: any) => {
+    setEditingId(v.id);
+    setEditTitle(v.title || "");
+  };
+
+  const saveEdit = (id: string) => {
+    renameMutation.mutate({ id, title: editTitle.trim() });
+  };
+
+  const q = search.trim().toLowerCase();
+  const filteredVideos = q
+    ? videos.filter((v: any) =>
+        [v.title, v.originalName, v.filename, v.description]
+          .filter(Boolean)
+          .some((field: string) => field.toLowerCase().includes(q)),
+      )
+    : videos;
 
   return (
     <Card className="bg-card border border-border">
@@ -160,6 +201,20 @@ export function JobVideos({ jobId }: JobVideosProps) {
           </Button>
         </div>
 
+        {/* Search */}
+        {videos.length > 0 && (
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <Input
+              placeholder="Search videos by title or keyword…"
+              className="pl-10"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              data-testid="input-search-job-videos"
+            />
+          </div>
+        )}
+
         {/* Video list */}
         {isLoading ? (
           <p className="text-xs text-muted-foreground">Loading videos…</p>
@@ -167,15 +222,65 @@ export function JobVideos({ jobId }: JobVideosProps) {
           <p className="text-xs text-muted-foreground">
             No videos yet. Record on site, then upload here to share with the customer.
           </p>
+        ) : filteredVideos.length === 0 ? (
+          <p className="text-xs text-muted-foreground">No videos match "{search}".</p>
         ) : (
           <div className="space-y-3">
-            {videos.map((v: any) => (
+            {filteredVideos.map((v: any) => (
               <div
                 key={v.id}
                 className="rounded-lg border border-border p-2 space-y-2"
                 data-testid={`job-video-${v.id}`}
               >
-                {v.title && <p className="text-xs font-medium">{v.title}</p>}
+                {editingId === v.id ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") saveEdit(v.id);
+                        if (e.key === "Escape") setEditingId(null);
+                      }}
+                      placeholder="Video title"
+                      className="h-8 text-xs"
+                      autoFocus
+                      data-testid={`input-edit-job-title-${v.id}`}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => saveEdit(v.id)}
+                      disabled={renameMutation.isPending}
+                      data-testid={`button-save-job-title-${v.id}`}
+                    >
+                      <Check className="w-3.5 h-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 shrink-0"
+                      onClick={() => setEditingId(null)}
+                      data-testid={`button-cancel-job-title-${v.id}`}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => startEdit(v)}
+                    className="flex items-center gap-1.5 text-left group w-full"
+                    data-testid={`button-edit-job-title-${v.id}`}
+                  >
+                    <span className="text-xs font-medium truncate">
+                      {v.title || "Add title…"}
+                    </span>
+                    <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                  </button>
+                )}
                 <video
                   src={v.url}
                   poster={v.thumbnailUrl || undefined}
