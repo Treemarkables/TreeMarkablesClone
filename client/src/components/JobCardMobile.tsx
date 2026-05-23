@@ -11,7 +11,10 @@
  * we wire it into the real flow.
  */
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   X as XIcon,
   Camera,
@@ -168,9 +171,51 @@ export function JobCardMobile({
     }
   });
 
-  const stubMore = (which: string) => () => {
-    // eslint-disable-next-line no-console
-    console.warn(`[JobCardMobile] More → ${which} not wired up yet`);
+  // ─── More menu handlers ──────────────────────────────────────────────────
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+
+  const markComplete = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, { status: "completed" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't mark complete", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteJob = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds: [jobId] });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't delete job", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const onMarkComplete = () => markComplete.mutate();
+  const onDuplicate = () => {
+    toast({ title: "Duplicate job — coming soon", description: "Hold tight while we wire this up." });
+  };
+  const onOpenFull = () => {
+    onClose();
+    navigate("/dispatch");
+  };
+  const onDelete = () => {
+    if (window.confirm("Delete this job? This can't be undone.")) {
+      deleteJob.mutate();
+    }
   };
 
   return (
@@ -296,20 +341,20 @@ export function JobCardMobile({
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" side="top" className="w-56">
-            <DropdownMenuItem onClick={stubMore("Mark complete")}>
+            <DropdownMenuItem onClick={onMarkComplete} disabled={markComplete.isPending || job?.status === "completed"}>
               <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
-              Mark as complete
+              {job?.status === "completed" ? "Already complete" : "Mark as complete"}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={stubMore("Duplicate job")}>
+            <DropdownMenuItem onClick={onDuplicate}>
               <Copy className="w-4 h-4 mr-2 text-slate-600" />
               Duplicate job
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={stubMore("Open full version")}>
+            <DropdownMenuItem onClick={onOpenFull}>
               <ExternalLink className="w-4 h-4 mr-2 text-slate-600" />
               Open full version
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={stubMore("Delete job")} className="text-red-600 focus:text-red-700">
+            <DropdownMenuItem onClick={onDelete} disabled={deleteJob.isPending} className="text-red-600 focus:text-red-700">
               <Trash2 className="w-4 h-4 mr-2" />
               Delete job
             </DropdownMenuItem>
