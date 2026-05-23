@@ -7246,6 +7246,90 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   });
 
+  // Help articles (subscriber-facing /help page). See INFLOW_HELP_PLAN.md.
+  // GET routes are subscriber-readable (no auth gate here, matching the videos
+  // pattern); POST/PATCH/DELETE are owner-only via requireAdmin.
+
+  // List articles, grouped by category. Subscribers see published only;
+  // admins (via ?includeUnpublished=true) can see drafts for the authoring UI.
+  app.get('/api/help/articles', async (req: Request, res: Response) => {
+    try {
+      const includeUnpublished = req.query.includeUnpublished === 'true';
+      // Gate the unpublished view to admins so drafts don't leak.
+      let publishedOnly = true;
+      if (includeUnpublished) {
+        const employeeId = req.session.employeeId;
+        const employee = employeeId ? await storage.getEmployee(employeeId) : null;
+        if (employee?.role === 'admin') publishedOnly = false;
+      }
+      const articles = await storage.getHelpArticles({ publishedOnly });
+      res.json({ success: true, data: articles });
+    } catch (error) {
+      console.error('Error listing help articles:', error);
+      res.status(500).json({ success: false, message: 'Error listing help articles' });
+    }
+  });
+
+  // Fetch one article by slug + resolve relatedVideoIds to full video objects
+  // so the page can embed them inline without a second round-trip.
+  app.get('/api/help/articles/:slug', async (req: Request, res: Response) => {
+    try {
+      const article = await storage.getHelpArticleBySlug(req.params.slug);
+      if (!article) {
+        return res.status(404).json({ success: false, message: 'Article not found' });
+      }
+      if (!article.published) {
+        // Drafts are admin-only.
+        const employeeId = req.session.employeeId;
+        const employee = employeeId ? await storage.getEmployee(employeeId) : null;
+        if (employee?.role !== 'admin') {
+          return res.status(404).json({ success: false, message: 'Article not found' });
+        }
+      }
+      const relatedIds = article.relatedVideoIds ?? [];
+      const relatedVideos = await Promise.all(relatedIds.map((id) => storage.getVideo(id)));
+      res.json({
+        success: true,
+        data: { ...article, relatedVideos: relatedVideos.filter(Boolean) },
+      });
+    } catch (error) {
+      console.error('Error fetching help article:', error);
+      res.status(500).json({ success: false, message: 'Error fetching help article' });
+    }
+  });
+
+  app.post('/api/help/articles', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.insertHelpArticleSchema.parse(req.body);
+      const article = await storage.createHelpArticle(parsed);
+      res.json({ success: true, data: article });
+    } catch (error) {
+      console.error('Error creating help article:', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error creating help article' });
+    }
+  });
+
+  app.patch('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      const parsed = schema.updateHelpArticleSchema.parse(req.body);
+      const article = await storage.updateHelpArticle(req.params.id, parsed);
+      res.json({ success: true, data: article });
+    } catch (error) {
+      console.error('Error updating help article:', error);
+      res.status(400).json({ success: false, message: error instanceof Error ? error.message : 'Error updating help article' });
+    }
+  });
+
+  app.delete('/api/help/articles/:id', requireAdmin, async (req: Request, res: Response) => {
+    try {
+      await storage.deleteHelpArticle(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Error deleting help article:', error);
+      res.status(500).json({ success: false, message: 'Error deleting help article' });
+    }
+  });
+
   // Regenerate all thumbnails with new quality settings (admin utility only)
   app.post('/api/admin/regenerate-thumbnails', requireAdmin, async (req: Request, res: Response) => {
     try {

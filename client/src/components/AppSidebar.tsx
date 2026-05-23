@@ -16,6 +16,7 @@ import {
   ChevronRight,
   AlertTriangle,
   Phone,
+  BookOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -158,6 +159,18 @@ function SidebarNavContent({
                       <Video className="h-4 w-4" />
                     </span>
                     <span>Videos</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
+              {/* Help — subscriber-facing SOPs + how-to videos */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/help"}>
+                  <Link href="/help" onClick={handleLinkClick} data-testid="link-help">
+                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black text-[#39FF14]">
+                      <BookOpen className="h-4 w-4" />
+                    </span>
+                    <span>Help</span>
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
