@@ -104,7 +104,8 @@ export default function HeaderV2() {
             <a
               href={`tel:${PHONE}`}
               onClick={handlePhoneClick}
-              className="hidden sm:inline-flex items-center gap-2 text-lg font-semibold text-white/80 hover:text-white transition-colors"
+              aria-label="Call 027 216 6882"
+              className="inline-flex items-center justify-center gap-2 h-11 px-3 sm:px-4 rounded-full bg-neon text-black font-semibold text-base shadow-[0_4px_18px_rgba(57,255,20,0.35)] hover:brightness-95 transition-all"
             >
               <Phone className="h-5 w-5" />
               <span className="hidden md:inline">027 216 6882</span>
