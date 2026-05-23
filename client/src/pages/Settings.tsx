@@ -73,6 +73,14 @@ const settingsOptions = [
     path: "/settings/staff"
   },
   {
+    id: "permissions",
+    title: "Roles & Permissions",
+    description: "Define role tiers and customise what each staff member can do",
+    icon: Shield,
+    color: "bg-red-100 text-red-600",
+    path: "/settings/permissions"
+  },
+  {
     id: "materials",
     title: "Materials & Services",
     description: "Manage inventory, equipment and service items",
