@@ -486,6 +486,15 @@ export interface IStorage {
   getEmployeesBySkill(skill: string): Promise<Employee[]>;
   deleteEmployee(id: string): Promise<void>;
 
+  // Role Tier Management
+  createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier>;
+  getRoleTier(id: string): Promise<schema.RoleTier | undefined>;
+  getRoleTierByKey(key: string): Promise<schema.RoleTier | undefined>;
+  getAllRoleTiers(): Promise<schema.RoleTier[]>;
+  updateRoleTier(id: string, updates: schema.UpdateRoleTier): Promise<schema.RoleTier>;
+  deleteRoleTier(id: string): Promise<void>;
+  getDefaultRoleTier(): Promise<schema.RoleTier | undefined>;
+
   // Schedule Management
   createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent>;
   getScheduleEvent(id: string): Promise<ScheduleEvent | undefined>;
@@ -4369,6 +4378,43 @@ class DatabaseStorage implements IStorage {
 
   async deleteEmployee(id: string): Promise<void> {
     await db.delete(schema.employees).where(eq(schema.employees.id, id));
+  }
+
+  // Role Tier Management
+  async createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier> {
+    const [newTier] = await db.insert(schema.roleTiers).values(tier as any).returning();
+    return newTier;
+  }
+
+  async getRoleTier(id: string): Promise<schema.RoleTier | undefined> {
+    const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.id, id));
+    return tier || undefined;
+  }
+
+  async getRoleTierByKey(key: string): Promise<schema.RoleTier | undefined> {
+    const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.key, key));
+    return tier || undefined;
+  }
+
+  async getAllRoleTiers(): Promise<schema.RoleTier[]> {
+    return await db.select().from(schema.roleTiers).orderBy(schema.roleTiers.sortOrder, schema.roleTiers.name);
+  }
+
+  async updateRoleTier(id: string, updates: schema.UpdateRoleTier): Promise<schema.RoleTier> {
+    const [updated] = await db.update(schema.roleTiers)
+      .set({ ...updates, updatedAt: new Date() } as any)
+      .where(eq(schema.roleTiers.id, id))
+      .returning();
+    return updated;
+  }
+
+  async deleteRoleTier(id: string): Promise<void> {
+    await db.delete(schema.roleTiers).where(eq(schema.roleTiers.id, id));
+  }
+
+  async getDefaultRoleTier(): Promise<schema.RoleTier | undefined> {
+    const [tier] = await db.select().from(schema.roleTiers).where(eq(schema.roleTiers.isDefault, true)).limit(1);
+    return tier || undefined;
   }
 
   async createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent> {
