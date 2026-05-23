@@ -2564,10 +2564,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 aria-pressed={onlyUnconfirmed}
                                 title={onlyUnconfirmed ? "Clear filter" : "Show only jobs awaiting confirmation"}
                                 data-testid="badge-unconfirmed-count"
-                                className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-xs transition-colors ${
+                                className={`inline-flex items-center gap-1 rounded-lg border-0 px-2 h-6 text-xs font-medium transition-colors ${
                                   onlyUnconfirmed
-                                    ? "border-amber-500 bg-amber-100 text-amber-800 hover:bg-amber-200"
-                                    : "border-dashed border-amber-400 text-amber-700 hover:bg-amber-50"
+                                    ? "bg-amber-100 text-amber-800 hover:bg-amber-200"
+                                    : "bg-amber-50 text-amber-700 hover:bg-amber-100"
                                 }`}
                               >
                                 <span>{unconfirmedCount} awaiting confirmation</span>
@@ -2655,40 +2655,40 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                 case "lead":
                                   return {
                                     label: "Lead",
-                                    bg: "bg-emerald-100",
+                                    bg: "bg-emerald-50",
                                     text: "text-emerald-700",
                                     dot: true,
                                   };
                                 case "quote":
                                   return {
                                     label: "Quote",
-                                    bg: "bg-orange-100",
-                                    text: "text-orange-700",
+                                    bg: "bg-amber-50",
+                                    text: "text-amber-700",
                                     icon: "≡",
                                   };
                                 case "work_order":
                                   return {
                                     label: "Work Order",
-                                    bg: "bg-blue-100",
+                                    bg: "bg-blue-50",
                                     text: "text-blue-700",
                                     icon: "≡",
                                   };
                                 case "scheduled":
                                   return {
                                     label: "Scheduled",
-                                    bg: "bg-green-100",
-                                    text: "text-green-700",
+                                    bg: "bg-emerald-50",
+                                    text: "text-emerald-700",
                                   };
                                 case "completed":
                                   return {
                                     label: "Completed",
-                                    bg: "bg-green-500",
-                                    text: "text-white",
+                                    bg: "bg-slate-100",
+                                    text: "text-slate-700",
                                   };
                                 case "unsuccessful":
                                   return {
                                     label: "Unsuccessful",
-                                    bg: "bg-red-100",
+                                    bg: "bg-red-50",
                                     text: "text-red-700",
                                   };
                                 default:
@@ -2781,17 +2781,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     {/* Row 1: Customer Name + Job Number + Price */}
                                     <div className="flex items-start justify-between gap-2 mb-1">
                                       <h3
-                                        className="font-bold text-gray-900 text-base truncate flex-1"
+                                        className="text-[15px] font-semibold text-slate-900 truncate flex-1"
                                         data-testid={`desktop-job-customer-${job.id}`}
                                       >
                                         {customerName}
                                       </h3>
                                       <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                                        <span className="text-sm text-gray-400 font-mono">
+                                        <span className="text-sm text-slate-400">
                                           #{job.jobNumber || "0000"}
                                         </span>
                                         {total > 0 && (
-                                          <span className="text-sm font-bold text-green-600">
+                                          <span className="text-sm font-medium text-slate-900">
                                             {formatCurrency(total)}
                                           </span>
                                         )}
@@ -2808,7 +2808,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                       </div>
                                       <div className="flex items-center gap-1 flex-shrink-0">
                                         <Badge
-                                          className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0`}
+                                          className={`${statusBadge.bg} ${statusBadge.text} text-xs font-medium border-0 rounded-lg`}
                                         >
                                           {statusBadge.dot && (
                                             <span className="w-2 h-2 rounded-full mr-1.5 bg-current" />
@@ -2826,7 +2826,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     {/* Row 2b: Queue reason badge (only when in queue) */}
                                     {job.inQueue && (
                                       <div className="mb-1">
-                                        <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                        <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                           {job.queueReason || "Queued"}
                                         </Badge>
                                       </div>
@@ -2836,18 +2836,18 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     {(job.customerConfirmed || job.customerReplyReceivedAt) && (
                                       <div className="mb-1 flex items-center gap-1 flex-wrap">
                                         {job.customerConfirmed ? (
-                                          <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+                                          <Badge className="bg-emerald-50 text-emerald-700 border-0 text-xs rounded-lg">
                                             <Check className="h-3 w-3 mr-1" />
                                             Confirmed
                                           </Badge>
                                         ) : (
-                                          <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                          <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                             <MessageSquare className="h-3 w-3 mr-1" />
                                             Customer replied
                                           </Badge>
                                         )}
                                         {job.confirmationReplySentAt && (
-                                          <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                                          <Badge className="bg-blue-50 text-blue-700 border-0 text-xs rounded-lg">
                                             <Reply className="h-3 w-3 mr-1" />
                                             Reply sent
                                           </Badge>
@@ -2858,7 +2858,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     {/* Row 2d: ETA notification requested badge */}
                                     {job.etaNotificationRequested && (
                                       <div className="mb-1">
-                                        <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                                        <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                           <Bell className="h-3 w-3 mr-1" />
                                           Notify ETA
                                         </Badge>
@@ -2868,7 +2868,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                                     {/* Row 3: Multi-day badge or description */}
                                     {job.scheduledEndDate && (
                                       <div className="flex items-center gap-1 mb-1">
-                                        <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
+                                        <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                           {format(
                                             new Date(job.startTime),
                                             "MMM d",
@@ -3085,10 +3085,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                   onClick={() => setOnlyUnconfirmed(!onlyUnconfirmed)}
                   aria-pressed={onlyUnconfirmed}
                   data-testid="badge-unconfirmed-count-mobile"
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                  className={`inline-flex items-center gap-1.5 rounded-lg border-0 px-3 py-1.5 text-xs font-medium transition-colors ${
                     onlyUnconfirmed
-                      ? "border-amber-500 bg-amber-100 text-amber-800"
-                      : "border-dashed border-amber-400 bg-amber-50 text-amber-700"
+                      ? "bg-amber-100 text-amber-800"
+                      : "bg-amber-50 text-amber-700"
                   }`}
                 >
                   <span>{unconfirmedCount} awaiting confirmation</span>
@@ -3122,40 +3122,40 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                     case "lead":
                       return {
                         label: "Lead",
-                        bg: "bg-emerald-100",
+                        bg: "bg-emerald-50",
                         text: "text-emerald-700",
                         dot: "bg-emerald-500",
                       };
                     case "quote":
                       return {
                         label: "Quote",
-                        bg: "bg-orange-100",
-                        text: "text-orange-700",
+                        bg: "bg-amber-50",
+                        text: "text-amber-700",
                         icon: "≡",
                       };
                     case "work_order":
                       return {
                         label: "Work Order",
-                        bg: "bg-blue-100",
+                        bg: "bg-blue-50",
                         text: "text-blue-700",
                         icon: "≡",
                       };
                     case "scheduled":
                       return {
                         label: "Scheduled",
-                        bg: "bg-green-100",
-                        text: "text-green-700",
+                        bg: "bg-emerald-50",
+                        text: "text-emerald-700",
                       };
                     case "completed":
                       return {
                         label: "Completed",
-                        bg: "bg-green-500",
-                        text: "text-white",
+                        bg: "bg-slate-100",
+                        text: "text-slate-700",
                       };
                     case "unsuccessful":
                       return {
                         label: "Unsuccessful",
-                        bg: "bg-red-100",
+                        bg: "bg-red-50",
                         text: "text-red-700",
                       };
                     default:
@@ -3245,15 +3245,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                       <div className="flex-1 min-w-0">
                         {/* Row 1: Customer Name + Job Number + Price */}
                         <div className="flex items-start justify-between gap-2 mb-1">
-                          <h3 className="font-bold text-gray-900 text-base truncate flex-1">
+                          <h3 className="text-[15px] font-semibold text-slate-900 truncate flex-1">
                             {customerName}
                           </h3>
                           <div className="flex flex-col items-end gap-0.5 flex-shrink-0">
-                            <span className="text-sm text-gray-400 font-mono">
+                            <span className="text-sm text-slate-400">
                               #{job.jobNumber || "0000"}
                             </span>
                             {total > 0 && (
-                              <span className="text-sm font-bold text-green-600">
+                              <span className="text-sm font-medium text-slate-900">
                                 {formatCurrency(total)}
                               </span>
                             )}
@@ -3279,19 +3279,19 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                           </div>
                           <div className="flex items-center gap-1 flex-shrink-0 flex-wrap">
                             {job.customerConfirmed && (
-                              <Badge className="bg-green-100 text-green-700 border-0 text-xs">
+                              <Badge className="bg-emerald-50 text-emerald-700 border-0 text-xs rounded-lg">
                                 <Check className="h-3 w-3 mr-1" />
                                 Confirmed
                               </Badge>
                             )}
                             {!job.customerConfirmed && job.customerReplyReceivedAt && (
-                              <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                              <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                                 <MessageSquare className="h-3 w-3 mr-1" />
                                 Customer replied
                               </Badge>
                             )}
                             {job.confirmationReplySentAt && (
-                              <Badge className="bg-blue-100 text-blue-700 border-0 text-xs">
+                              <Badge className="bg-blue-50 text-blue-700 border-0 text-xs rounded-lg">
                                 <Reply className="h-3 w-3 mr-1" />
                                 Reply sent
                               </Badge>
@@ -3302,7 +3302,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                         {/* Queue reason row — own line so it never blocks the address */}
                         {job.inQueue && job.queueReason && (
                           <div className="mb-1.5">
-                            <Badge className="bg-amber-100 text-amber-700 border-0 text-xs">
+                            <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                               {job.queueReason}
                             </Badge>
                           </div>
@@ -3322,7 +3322,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
                             </Badge>
                           )}
                           {job.scheduledEndDate ? (
-                            <Badge className="bg-orange-100 text-orange-700 border-0 text-xs">
+                            <Badge className="bg-amber-50 text-amber-700 border-0 text-xs rounded-lg">
                               {format(new Date(job.startTime), "MMM d")} –{" "}
                               {format(new Date(job.scheduledEndDate), "MMM d")}
                             </Badge>
