@@ -95,6 +95,7 @@ import { JobDiarySection } from "./JobDiarySection";
 import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
 import { JobQuotingPanel } from "./JobQuotingPanel";
+import { JobCardMobile } from "./JobCardMobile";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -11200,9 +11201,23 @@ The Treemarkables Team`;
     </div>
   );
 
+  // ── Feature-flag gate for the new mobile job-card layout ─────────────────
+  // Opt-in via `?mobileV2=1` on any URL while we shake it out on real jobs.
+  // When the flag is on AND we're on a mobile viewport AND we have a real
+  // job loaded, render JobCardMobile in place of the legacy mobile inline
+  // JSX. Desktop / inline / no-job paths fall through to the existing UI.
+  const useMobileV2 = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("mobileV2") === "1";
+  const showMobileV2 = useMobileV2 && isMobile && !renderInline && isOpen && !!editingJob?.id;
+
   return (
     <>
-      {renderInline ? (
+      {showMobileV2 ? (
+        <JobCardMobile
+          jobId={editingJob!.id}
+          onClose={() => handleDialogClose(false)}
+        />
+      ) : renderInline ? (
         // Inline rendering for split-screen panel (desktop)
         jobCardContent
       ) : (
