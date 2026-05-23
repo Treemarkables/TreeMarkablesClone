@@ -740,7 +740,7 @@ function SidebarLayout({ children }: { children: React.ReactNode | ((activeTab: 
   const isMobile = useIsMobile();
   
   const style = {
-    "--sidebar-width": "12rem",
+    "--sidebar-width": "16rem",
     "--sidebar-width-icon": "3rem",
   };
 

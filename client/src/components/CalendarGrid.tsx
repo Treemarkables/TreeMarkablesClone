@@ -51,14 +51,14 @@ function buildGanttHourLabels(startH: number, endH: number): string[] {
 }
 // Same palette used in Staff Schedule — index-stable colours per crew member
 const GANTT_STAFF_PALETTE = [
-  { dot: '#3b82f6', row: '#eff6ff', avatar: '#1e40af' }, // blue
-  { dot: '#10b981', row: '#f0fdf4', avatar: '#065f46' }, // emerald
-  { dot: '#f97316', row: '#fff7ed', avatar: '#9a3412' }, // orange
-  { dot: '#a855f7', row: '#faf5ff', avatar: '#6b21a8' }, // purple
-  { dot: '#ec4899', row: '#fdf2f8', avatar: '#9d174d' }, // pink
-  { dot: '#eab308', row: '#fefce8', avatar: '#713f12' }, // yellow
-  { dot: '#14b8a6', row: '#f0fdfa', avatar: '#134e4a' }, // teal
-  { dot: '#ef4444', row: '#fef2f2', avatar: '#991b1b' }, // red
+  { dot: '#60a5fa', row: '#eff6ff', avatar: '#1e40af' }, // blue-400 (was blue-500)
+  { dot: '#34d399', row: '#f0fdf4', avatar: '#065f46' }, // emerald-400
+  { dot: '#fb923c', row: '#fff7ed', avatar: '#9a3412' }, // orange-400
+  { dot: '#c084fc', row: '#faf5ff', avatar: '#6b21a8' }, // purple-400
+  { dot: '#f472b6', row: '#fdf2f8', avatar: '#9d174d' }, // pink-400
+  { dot: '#facc15', row: '#fefce8', avatar: '#713f12' }, // yellow-400
+  { dot: '#2dd4bf', row: '#f0fdfa', avatar: '#134e4a' }, // teal-400
+  { dot: '#f87171', row: '#fef2f2', avatar: '#991b1b' }, // red-400
 ];
 const GANTT_COL_W = 148; // px — name column width (matches StaffSchedule)
 const GANTT_ROW_H = 72;  // px — matches StaffSchedule default row height
@@ -1200,8 +1200,8 @@ export function CalendarGrid({
                     style={{ width: GANTT_COL_W, backgroundColor: gPalette.row }}
                   >
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0"
-                      style={{ backgroundColor: gPalette.dot }}
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                      style={{ backgroundColor: gPalette.dot, color: gPalette.avatar }}
                     >
                       {ganttInitials(employee)}
                     </div>

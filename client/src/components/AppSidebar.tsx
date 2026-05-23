@@ -1,22 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-  Calendar,
-  CheckSquare,
-  Video,
-  BarChart3,
-  Users,
   Settings,
-  GitBranch,
-  Briefcase,
-  Shield,
   LogOut,
-  ClipboardCheck,
-  Leaf,
-  Bot,
   ChevronRight,
-  AlertTriangle,
-  Phone,
-  BookOpen,
 } from "lucide-react";
 import {
   Sidebar,
@@ -44,9 +30,24 @@ interface AppSidebarProps {
   onTabChange: (tab: string) => void;
 }
 
+// Shared row classes: tall flat row + blue-pill active state.
+// Note: emoji are multi-colour glyphs — they can't be tinted, so the active row
+// shows a blue background + blue label while the emoji keeps its native colours.
+const ITEM = "rounded-lg h-11 gap-3 text-[15px] data-[active=true]:bg-blue-50 data-[active=true]:text-blue-600 data-[active=true]:hover:bg-blue-50 data-[active=true]:hover:text-blue-600";
+
+// Consistent emoji rendering: fixed width so labels line up, slightly larger
+// than the surrounding text for visual weight.
+function Glyph({ children }: { children: string }) {
+  return (
+    <span className="text-xl leading-none w-6 text-center shrink-0" aria-hidden>
+      {children}
+    </span>
+  );
+}
+
 const dashboardItems = [
-  { title: "All Jobs", url: "/job-dashboard", icon: Briefcase, value: "jobs", isTab: true },
-  { title: "Pipeline", url: "/pipeline", icon: GitBranch, value: "pipeline", isTab: false },
+  { title: "All Jobs", url: "/job-dashboard", emoji: "💼", value: "jobs", isTab: true },
+  { title: "Pipeline", url: "/pipeline", emoji: "⚡", value: "pipeline", isTab: false },
 ];
 
 
@@ -127,13 +128,23 @@ function SidebarNavContent({
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="font-normal text-[16px]">
+              {/* One Dashboard — top-level overview */}
+              {isAdmin && (
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild isActive={location === "/metrics"} className={ITEM}>
+                    <Link href="/metrics" onClick={handleLinkClick} data-testid="link-one-dashboard">
+                      <Glyph>📊</Glyph>
+                      <span>One Dashboard</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              )}
+
               {/* Dispatch Board */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/dispatch"}>
+                <SidebarMenuButton asChild isActive={location === "/dispatch"} className={ITEM}>
                   <Link href="/dispatch" onClick={handleLinkClick} data-testid="link-dispatch">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Calendar className="h-4 w-4" />
-                    </span>
+                    <Glyph>📋</Glyph>
                     <span>Dispatch Board</span>
                   </Link>
                 </SidebarMenuButton>
@@ -141,11 +152,9 @@ function SidebarNavContent({
 
               {/* Tasks — internal Kanban (gear, admin, follow-ups) */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/tasks"}>
+                <SidebarMenuButton asChild isActive={location === "/tasks"} className={ITEM}>
                   <Link href="/tasks" onClick={handleLinkClick} data-testid="link-tasks">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black text-[#39FF14]">
-                      <CheckSquare className="h-4 w-4" />
-                    </span>
+                    <Glyph>✅</Glyph>
                     <span>Tasks</span>
                   </Link>
                 </SidebarMenuButton>
@@ -153,11 +162,9 @@ function SidebarNavContent({
 
               {/* Videos — walkthrough + how-to video library */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/videos"}>
+                <SidebarMenuButton asChild isActive={location === "/videos"} className={ITEM}>
                   <Link href="/videos" onClick={handleLinkClick} data-testid="link-videos">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black text-[#39FF14]">
-                      <Video className="h-4 w-4" />
-                    </span>
+                    <Glyph>🎥</Glyph>
                     <span>Videos</span>
                   </Link>
                 </SidebarMenuButton>
@@ -165,11 +172,9 @@ function SidebarNavContent({
 
               {/* Help — subscriber-facing SOPs + how-to videos */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/help"}>
+                <SidebarMenuButton asChild isActive={location === "/help"} className={ITEM}>
                   <Link href="/help" onClick={handleLinkClick} data-testid="link-help">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-black text-[#39FF14]">
-                      <BookOpen className="h-4 w-4" />
-                    </span>
+                    <Glyph>📖</Glyph>
                     <span>Help</span>
                   </Link>
                 </SidebarMenuButton>
@@ -178,11 +183,9 @@ function SidebarNavContent({
               {/* AI Smart Dispatch - Admin only */}
               {!isCrew && (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/ai-scheduler"}>
+                  <SidebarMenuButton asChild isActive={location === "/ai-scheduler"} className={ITEM}>
                     <Link href="/ai-scheduler" onClick={handleLinkClick} data-testid="link-ai-scheduler">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-orange-100 text-orange-600">
-                        <Bot className="h-4 w-4" />
-                      </span>
+                      <Glyph>🤖</Glyph>
                       <span>AI Smart Dispatch</span>
                     </Link>
                   </SidebarMenuButton>
@@ -196,18 +199,15 @@ function SidebarNavContent({
                       isActive={activeTab === item.value && location === "/job-dashboard"}
                       onClick={() => handleTabClick(item.value)}
                       data-testid={`button-tab-${item.value}`}
+                      className={ITEM}
                     >
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <item.icon className="h-4 w-4" />
-                      </span>
+                      <Glyph>{item.emoji}</Glyph>
                       <span>{item.title}</span>
                     </SidebarMenuButton>
                   ) : (
-                    <SidebarMenuButton asChild isActive={location === item.url}>
+                    <SidebarMenuButton asChild isActive={location === item.url} className={ITEM}>
                       <Link href={item.url} onClick={handleLinkClick} data-testid={`link-${item.value}`}>
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <item.icon className="h-4 w-4" />
-                        </span>
+                        <Glyph>{item.emoji}</Glyph>
                         <span>{item.title}</span>
                       </Link>
                     </SidebarMenuButton>
@@ -218,11 +218,9 @@ function SidebarNavContent({
               {/* Calls — recorded call log */}
               {isAdmin && (
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/calls"}>
+                  <SidebarMenuButton asChild isActive={location === "/calls"} className={ITEM}>
                     <Link href="/calls" onClick={handleLinkClick} data-testid="link-calls">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
-                        <Phone className="h-4 w-4" />
-                      </span>
+                      <Glyph>📞</Glyph>
                       <span>Calls</span>
                     </Link>
                   </SidebarMenuButton>
@@ -231,11 +229,9 @@ function SidebarNavContent({
 
               {/* Staff Schedule */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/staff-schedule"}>
+                <SidebarMenuButton asChild isActive={location === "/staff-schedule"} className={ITEM}>
                   <Link href="/staff-schedule" onClick={handleLinkClick} data-testid="link-staff-schedule">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                      <Users className="h-4 w-4" />
-                    </span>
+                    <Glyph>📅</Glyph>
                     <span>Staff Schedule</span>
                   </Link>
                 </SidebarMenuButton>
@@ -244,11 +240,9 @@ function SidebarNavContent({
               {/* Vehicle Inspection — direct link with collapsible submenu */}
               <Collapsible open={vehicleOpen} onOpenChange={setVehicleOpen} className="group/vehicle-collapsible">
                 <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={vehicleActive}>
+                  <SidebarMenuButton asChild isActive={vehicleActive} className={ITEM}>
                     <Link href="/vehicle-inspection" onClick={handleLinkClick} data-testid="link-vehicle-inspection">
-                      <span className="flex items-center justify-center w-7 h-7 shrink-0 rounded-full bg-blue-100 text-blue-600">
-                        <ClipboardCheck className="h-4 w-4" />
-                      </span>
+                      <Glyph>🚗</Glyph>
                       <span className="truncate">Vehicle Inspection</span>
                     </Link>
                   </SidebarMenuButton>
@@ -282,11 +276,9 @@ function SidebarNavContent({
               <Collapsible open={safetyOpen} onOpenChange={setSafetyOpen} className="group/safety-collapsible">
                 <SidebarMenuItem>
                   <CollapsibleTrigger asChild>
-                    <SidebarMenuButton data-testid="collapsible-safety">
-                      <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                        <Shield className="h-4 w-4" />
-                      </span>
-                      <span className="font-semibold">Safety</span>
+                    <SidebarMenuButton data-testid="collapsible-safety" isActive={safetyActive} className={ITEM}>
+                      <Glyph>🛡️</Glyph>
+                      <span>Safety</span>
                       <ChevronRight className="ml-auto h-4 w-4 transition-transform duration-200 group-data-[state=open]/safety-collapsible:rotate-90" />
                     </SidebarMenuButton>
                   </CollapsibleTrigger>
@@ -376,11 +368,9 @@ function SidebarNavContent({
 
               {/* Mulch Drops */}
               <SidebarMenuItem>
-                <SidebarMenuButton asChild isActive={location === "/mulch-drops"}>
+                <SidebarMenuButton asChild isActive={location === "/mulch-drops"} className={ITEM}>
                   <Link href="/mulch-drops" onClick={handleLinkClick} data-testid="link-mulch-drops">
-                    <span className="flex items-center justify-center w-7 h-7 rounded-full bg-green-100 text-green-700">
-                      <Leaf className="h-4 w-4" />
-                    </span>
+                    <Glyph>🎯</Glyph>
                     <span>Mulch Drops</span>
                   </Link>
                 </SidebarMenuButton>
@@ -397,11 +387,9 @@ function SidebarNavContent({
                 <Collapsible open={financeOpen} onOpenChange={setFinanceOpen} className="group/finance-collapsible">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton data-testid="collapsible-finance">
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <Briefcase className="h-4 w-4" />
-                        </span>
-                        <span className="font-semibold">Finance & Admin</span>
+                      <SidebarMenuButton data-testid="collapsible-finance" isActive={financeActive} className={ITEM}>
+                        <Glyph>💰</Glyph>
+                        <span>Finance & Admin</span>
                         <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/finance-collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -434,11 +422,9 @@ function SidebarNavContent({
                 <Collapsible open={opsOpen} onOpenChange={setOpsOpen} className="group/ops-collapsible">
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton data-testid="collapsible-ops">
-                        <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                          <BarChart3 className="h-4 w-4" />
-                        </span>
-                        <span className="font-semibold">Operations & Analysis</span>
+                      <SidebarMenuButton data-testid="collapsible-ops" isActive={opsActive} className={ITEM}>
+                        <Glyph>📈</Glyph>
+                        <span>Operations & Analysis</span>
                         <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/ops-collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -503,7 +489,7 @@ function SidebarNavContent({
         <SidebarMenu className="font-normal text-[16px]">
           {isAdmin && (
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={location.startsWith("/settings")}>
+              <SidebarMenuButton asChild isActive={location.startsWith("/settings")} className={ITEM}>
                 <button
                   className="w-full justify-start"
                   data-testid="button-tab-settings"
@@ -513,16 +499,14 @@ function SidebarNavContent({
                     close();
                   }}
                 >
-                  <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                    <Settings className="h-4 w-4" />
-                  </span>
+                  <Settings className="h-5 w-5 shrink-0 text-slate-600" />
                   <span>Settings</span>
                 </button>
               </SidebarMenuButton>
             </SidebarMenuItem>
           )}
           <SidebarMenuItem>
-            <SidebarMenuButton asChild>
+            <SidebarMenuButton asChild className={ITEM}>
               <button
                 className="w-full justify-start"
                 data-testid="button-logout"
@@ -531,9 +515,7 @@ function SidebarNavContent({
                   close();
                 }}
               >
-                <span className="flex items-center justify-center w-7 h-7 rounded-full bg-blue-100 text-blue-600">
-                  <LogOut className="h-4 w-4" />
-                </span>
+                <LogOut className="h-5 w-5 shrink-0 text-slate-600" />
                 <span>Log Out</span>
               </button>
             </SidebarMenuButton>
