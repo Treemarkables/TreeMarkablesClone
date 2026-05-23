@@ -9620,25 +9620,31 @@ Draft the reply now.`;
       : '';
     const phoneTarget = ownerPhone ? `    <Number>${ownerPhone}</Number>` : '';
 
-    // Recorded-call disclosure played to the CALLER before we ring through
-    // (NZ Privacy Act / best practice — inform the other party that the call
-    // is recorded). Prefers a pre-recorded audio file via
-    // TWILIO_RECORDING_DISCLOSURE_URL, falls back to TTS reading
-    // TWILIO_RECORDING_DISCLOSURE, then to a default. Set
-    // TWILIO_RECORDING_DISCLOSURE to "off" to disable entirely.
+    // Optional recorded-call disclosure played to the CALLER before we ring
+    // through. OFF by default — playing any audio before the agent picks up
+    // forces Twilio to answer the line, which means the caller hears the
+    // greeting instead of ringing, mistakes it for voicemail, and hangs up.
+    // NZ Privacy Act is one-party consent, so the owner recording their own
+    // calls doesn't legally need to disclose to the caller. To re-enable, set
+    // TWILIO_RECORDING_DISCLOSURE_URL (preferred — a recorded file) or
+    // TWILIO_RECORDING_DISCLOSURE (TTS text). Either env var set to "off"
+    // disables disclosure even if the other is configured.
     const disclosureUrl = (process.env.TWILIO_RECORDING_DISCLOSURE_URL || '').trim();
     const disclosureTextRaw = (process.env.TWILIO_RECORDING_DISCLOSURE || '').trim();
     let disclosureTwiml = '';
-    if (disclosureTextRaw.toLowerCase() === 'off') {
+    const disclosureForcedOff =
+      disclosureTextRaw.toLowerCase() === 'off' ||
+      disclosureUrl.toLowerCase() === 'off';
+    if (disclosureForcedOff) {
       disclosureTwiml = '';
     } else if (disclosureUrl) {
       disclosureTwiml = `  <Play>${escapeXml(disclosureUrl)}</Play>\n`;
-    } else {
-      const disclosureText =
-        disclosureTextRaw ||
-        'This call may be recorded for quality and training purposes.';
-      disclosureTwiml = `  <Say voice="alice">${escapeXml(disclosureText)}</Say>\n`;
+    } else if (disclosureTextRaw) {
+      disclosureTwiml = `  <Say voice="alice">${escapeXml(disclosureTextRaw)}</Say>\n`;
     }
+    // If neither var is set, no leading audio — combined with answerOnBridge
+    // on <Dial> below, the caller hears real phone ringback immediately, like
+    // calling any normal phone, until the agent actually picks up.
 
     // Optional brief "we're connecting you" cue played to the CALLER *before*
     // the recorded-call disclosure. OFF by default — the owner's own recorded
@@ -9659,6 +9665,7 @@ Draft the reply now.`;
 <Response>
 ${connectingTwiml}${disclosureTwiml}  <Dial
     record="record-from-answer"
+    answerOnBridge="true"
     recordingStatusCallback="${recordingCallbackUrl}"
     recordingStatusCallbackEvent="completed"
     timeout="20"
