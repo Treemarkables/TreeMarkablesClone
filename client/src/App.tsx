@@ -22,6 +22,7 @@ import SummerOffer from "@/pages/SummerOffer";
 import Contact from "@/pages/Contact";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import JobDashboard from "@/pages/JobDashboard";
+import JobCardPreview from "@/pages/JobCardPreview";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Tasks from "@/pages/Tasks";
 import Videos from "@/pages/Videos";
@@ -884,6 +885,18 @@ function Router() {
         {() => <Redirect to="/dispatch" />}
       </Route>
       
+      {/* JobCardMobile preview — Phase A scaffold. Throwaway route for QA. */}
+      <Route path="/job-card-preview/:jobId">
+        <ProtectedRoute>
+          <JobCardPreview />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/job-card-preview">
+        <ProtectedRoute>
+          <JobCardPreview />
+        </ProtectedRoute>
+      </Route>
+
       {/* Job Dashboard - All Jobs list page */}
       <Route path="/job-dashboard">
         <ProtectedRoute>
