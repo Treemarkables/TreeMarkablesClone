@@ -19,8 +19,9 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, ChevronDown, Mic, Lock } from "lucide-react";
+import { MapPin, ChevronDown, Mic, MicOff, Lock } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 
 interface JobDetailsPanelProps {
   jobId: string;
@@ -173,15 +174,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       <div className="bg-white border border-slate-200 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[14px] font-bold text-blue-600">Job Description</div>
-          <button
-            type="button"
-            disabled
-            title="Voice transcription — coming soon"
-            className="flex items-center gap-1 text-[14px] font-bold text-purple-600 opacity-60"
-          >
-            <Mic className="w-3.5 h-3.5" />
-            Voice
-          </button>
+          <VoiceButton
+            onTranscript={(text) => {
+              const next = description ? `${description} ${text}` : text;
+              setDescription(next);
+              saveField.mutate({ description: next });
+            }}
+          />
         </div>
         <textarea
           value={description}
@@ -203,15 +202,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             <Lock className="w-3.5 h-3.5" />
             Internal Notes
           </div>
-          <button
-            type="button"
-            disabled
-            title="Voice transcription — coming soon"
-            className="flex items-center gap-1 text-[14px] font-bold text-purple-600 opacity-60"
-          >
-            <Mic className="w-3.5 h-3.5" />
-            Voice
-          </button>
+          <VoiceButton
+            onTranscript={(text) => {
+              const next = internalNotes ? `${internalNotes} ${text}` : text;
+              setInternalNotes(next);
+              saveField.mutate({ internalNotes: next });
+            }}
+          />
         </div>
         <div className="text-[12.5px] font-semibold text-orange-700/70 mb-2.5">
           Staff only — not visible to customers
@@ -471,6 +468,37 @@ function ContactsCard({
         <InputField placeholder="Phone (landline)" value={draft.phone} onChange={(v) => setDraft({ ...draft, phone: v })} onBlur={() => commit("phone")} type="tel" />
       </div>
     </div>
+  );
+}
+
+// ─── Voice transcription button ─────────────────────────────────────────────
+
+function VoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
+  const { isListening, isSupported, toggleListening } = useSpeechToText({
+    onResult: (text) => {
+      const trimmed = text.trim();
+      if (trimmed) onTranscript(trimmed);
+    },
+    continuous: false,
+    language: "en-NZ",
+  });
+
+  // Browser doesn't support Web Speech (e.g. Firefox). Render nothing rather
+  // than a permanently-disabled stub.
+  if (!isSupported) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={toggleListening}
+      className={`flex items-center gap-1 text-[14px] font-bold ${
+        isListening ? "text-red-600 animate-pulse" : "text-purple-600"
+      }`}
+      data-testid="voice-button"
+    >
+      {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+      {isListening ? "Stop" : "Voice"}
+    </button>
   );
 }
 
