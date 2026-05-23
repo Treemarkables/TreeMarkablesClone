@@ -10,6 +10,7 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { ChevronLeft, Upload, Building2, Phone, Mail, MapPin, Hash, CreditCard, Image, AlignLeft, AlignCenter, AlignRight } from "lucide-react";
 import { Link } from "wouter";
+import { HelpLink } from "@/components/HelpLink";
 
 interface Template {
   id: string;
@@ -183,7 +184,10 @@ export default function SettingsCompany() {
           </Button>
         </Link>
         <div>
-          <h1 className="text-xl font-semibold">Company Info</h1>
+          <h1 className="text-xl font-semibold flex items-center gap-2">
+            Company Info
+            <HelpLink slug="set-up-your-business-details" />
+          </h1>
           <p className="text-sm text-muted-foreground">
             These details appear on your invoices, quotes and proposals
           </p>
@@ -197,6 +201,7 @@ export default function SettingsCompany() {
           <Label className="flex items-center gap-2">
             <Image className="w-4 h-4 text-muted-foreground" />
             Company Logo
+            <HelpLink slug="upload-your-logo" />
           </Label>
 
           {/* Header preview — mirrors the document header so users can see
@@ -363,6 +368,7 @@ export default function SettingsCompany() {
           <Label className="flex items-center gap-2">
             <Hash className="w-4 h-4 text-muted-foreground" />
             GST Number
+            <HelpLink slug="configure-pricing-and-gst" />
           </Label>
           <Input
             value={form.gstNumber ?? ""}
