@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'wouter';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -11,8 +11,25 @@ import { Loader2, TreePine } from 'lucide-react';
 
 export default function Login() {
   const [, setLocation] = useLocation();
-  const { login, loginPending } = useAuth();
+  const { login, loginPending, isAuthenticated } = useAuth();
   const [error, setError] = useState('');
+  // True once we've successfully posted a login this mount — used to gate
+  // the auto-redirect so we don't yank the user away if they happen to land
+  // on /login while already authenticated (e.g. via the back button).
+  const justLoggedInRef = useRef(false);
+
+  // Drive the redirect off the reactive auth state instead of calling
+  // setLocation imperatively right after await login(). Previously the
+  // setCurrentUser inside React Query's onSuccess landed in one microtask
+  // and setLocation in the next; if wouter's location update painted first,
+  // AuthenticatedRoute on /dispatch saw isAuthenticated === false and
+  // bounced the user back to /login with no error shown — looking exactly
+  // like "I had to enter my password twice."
+  useEffect(() => {
+    if (justLoggedInRef.current && isAuthenticated) {
+      setLocation('/dispatch');
+    }
+  }, [isAuthenticated, setLocation]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -44,10 +61,17 @@ export default function Login() {
 
     try {
       const result = await login({ email, password });
-      if (result.success) {
-        setLocation('/dispatch');
+      if (result?.success && result?.data) {
+        // The redirect effect above will navigate once isAuthenticated flips.
+        justLoggedInRef.current = true;
+      } else if (result?.success) {
+        // Server said success but didn't send the employee payload — very
+        // unusual, but if it ever happens we'd silently strand the user on
+        // /login without an error. Surface it instead of swallowing it.
+        console.error('[Login] success=true but missing data:', result);
+        setError('Login succeeded but no user data returned. Please try again.');
       } else {
-        setError(result.message || 'Login failed');
+        setError(result?.message || 'Login failed');
       }
     } catch (err: any) {
       setError(err.message || 'Invalid email or password');
