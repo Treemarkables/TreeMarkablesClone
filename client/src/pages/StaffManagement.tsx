@@ -129,6 +129,7 @@ const staffFormSchema = z.object({
   phone: z.string().optional(),
   position: z.string().min(1, "Position is required"),
   role: z.enum(["admin", "crew"]),
+  roleTierId: z.string().nullable().optional(),
   status: z.enum(["active", "inactive", "on_leave"]).default("active"),
   skillLevel: z
     .enum(["beginner", "intermediate", "advanced", "expert"])
@@ -146,6 +147,13 @@ const staffFormSchema = z.object({
   skills: z.array(z.string()).default([]),
 });
 
+interface RoleTierOption {
+  id: string;
+  name: string;
+  description?: string | null;
+  isDefault?: boolean;
+}
+
 type StaffFormData = z.infer<typeof staffFormSchema>;
 
 interface StaffMember {
@@ -156,6 +164,7 @@ interface StaffMember {
   phone?: string;
   position: string;
   role: "admin" | "crew";
+  roleTierId?: string | null;
   status: "active" | "inactive" | "on_leave";
   skillLevel: "beginner" | "intermediate" | "advanced" | "expert";
   hourlyRate?: string;
@@ -193,6 +202,12 @@ function StaffFormDialog({
     (item: any) => item.category === "Labour"
   );
 
+  const { data: tiersData } = useQuery<{ success: boolean; data: RoleTierOption[] }>({
+    queryKey: ["/api/role-tiers"],
+    enabled: isOpen,
+  });
+  const tiers = tiersData?.data ?? [];
+
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffFormSchema),
     defaultValues: {
@@ -202,6 +217,7 @@ function StaffFormDialog({
       phone: "",
       position: "",
       role: "crew",
+      roleTierId: null,
       status: "active",
       skillLevel: "beginner",
       hourlyRate: "",
@@ -229,6 +245,7 @@ function StaffFormDialog({
           phone: staff.phone || "",
           position: staff.position,
           role: staff.role,
+          roleTierId: staff.roleTierId ?? null,
           status: staff.status,
           skillLevel: staff.skillLevel,
           hourlyRate: staff.hourlyRate || "",
@@ -251,6 +268,7 @@ function StaffFormDialog({
           phone: "",
           position: "",
           role: "crew",
+          roleTierId: null,
           status: "active",
           skillLevel: "beginner",
           hourlyRate: "",
@@ -395,6 +413,46 @@ function StaffFormDialog({
                 )}
               />
             </div>
+
+            {/* Permission tier - controls what this staff member can access in the app */}
+            <FormField
+              control={form.control}
+              name="roleTierId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Permission tier</FormLabel>
+                  <Select
+                    onValueChange={(v) => field.onChange(v === "__none__" ? null : v)}
+                    value={field.value ?? "__none__"}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-role-tier">
+                        <SelectValue placeholder="Use default tier" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        Use default tier
+                        {tiers.find((t) => t.isDefault) ? ` (${tiers.find((t) => t.isDefault)!.name})` : ""}
+                      </SelectItem>
+                      {tiers.map((t) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Controls which features this staff member can access. Manage tiers in{" "}
+                    <Link href="/settings/permissions" className="underline">
+                      Roles &amp; Permissions
+                    </Link>
+                    .
+                  </p>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             {/* Role and Position */}
             <div className="grid grid-cols-3 gap-4">

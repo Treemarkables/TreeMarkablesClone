@@ -66,6 +66,17 @@ import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
+import {
+  ensureRoleTiersSeeded,
+  getEmployeePermissions,
+  requirePermission,
+  validatePermissionKeys,
+} from "./permissions";
+import {
+  PERMISSION_CATEGORIES,
+  ALL_PERMISSION_KEYS,
+} from "@shared/permissions";
+import { permissionOverridesSchema } from "@shared/schema";
 import archiver from "archiver";
 import heicConvert from "heic-convert";
 import sharp from "sharp";
@@ -1532,6 +1543,12 @@ function isMicrosoftEmailDomain(email: string): boolean {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Kick off role-tier seeding in the background — first call to a permission-protected
+  // route will await this, but boot stays fast for routes that don't need it.
+  ensureRoleTiersSeeded().catch((err) => {
+    console.error('[startup] Role tier seed failed (will retry on first permission check):', err);
+  });
+
   // TEMP DEBUG: Verify fresh code is running
   app.get('/api/test-fresh-code', (req: Request, res: Response) => {
     console.log('🟢 FRESH CODE TEST ENDPOINT HIT - Version 2025-11-25-002');
@@ -1737,6 +1754,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      await ensureRoleTiersSeeded().catch(() => {});
+      const permsSet = await getEmployeePermissions(employee);
+      const tier = employee.roleTierId ? await storage.getRoleTier(employee.roleTierId) : null;
+
       res.json({
         success: true,
         data: {
@@ -1746,7 +1767,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           email: employee.email,
           role: employee.role,
           phone: employee.phone,
-          status: employee.status
+          status: employee.status,
+          roleTierId: employee.roleTierId ?? null,
+          roleTier: tier
+            ? { id: tier.id, key: tier.key, name: tier.name, description: tier.description }
+            : null,
+          permissions: Array.from(permsSet),
         }
       });
     } catch (error) {
@@ -14113,6 +14139,180 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           message: 'Error updating password'
         });
       }
+    }
+  });
+
+  // ========================================
+  // ROLE TIERS & PERMISSIONS
+  // ========================================
+
+  // Catalog of all permission keys, grouped by category — used by the admin UI
+  app.get('/api/permissions/catalog', async (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        categories: PERMISSION_CATEGORIES,
+        allKeys: ALL_PERMISSION_KEYS,
+      },
+    });
+  });
+
+  app.get('/api/role-tiers', async (_req: Request, res: Response) => {
+    try {
+      await ensureRoleTiersSeeded();
+      const tiers = await storage.getAllRoleTiers();
+      res.json({ success: true, data: tiers });
+    } catch (error) {
+      console.error('Error fetching role tiers:', error);
+      res.status(500).json({ success: false, message: 'Error fetching role tiers' });
+    }
+  });
+
+  app.post('/api/role-tiers', requirePermission('staff.manage_permissions'), async (req: Request, res: Response) => {
+    try {
+      const body = req.body ?? {};
+      const permissions = Array.isArray(body.permissions) ? body.permissions : [];
+      const check = validatePermissionKeys(permissions);
+      if (!check.ok) {
+        return res.status(400).json({ success: false, message: `Unknown permission keys: ${check.bad.join(', ')}` });
+      }
+      const tier = await storage.createRoleTier({
+        key: body.key ?? null,
+        name: String(body.name ?? '').trim(),
+        description: body.description ?? null,
+        permissions,
+        isSystem: false,
+        isDefault: !!body.isDefault,
+        sortOrder: typeof body.sortOrder === 'number' ? body.sortOrder : 100,
+      } as any);
+
+      if (body.isDefault) {
+        const all = await storage.getAllRoleTiers();
+        await Promise.all(
+          all.filter((t) => t.id !== tier.id && t.isDefault).map((t) =>
+            storage.updateRoleTier(t.id, { isDefault: false } as any),
+          ),
+        );
+      }
+
+      res.json({ success: true, data: tier });
+    } catch (error) {
+      console.error('Error creating role tier:', error);
+      res.status(500).json({ success: false, message: 'Error creating role tier' });
+    }
+  });
+
+  app.put('/api/role-tiers/:id', requirePermission('staff.manage_permissions'), async (req: Request, res: Response) => {
+    try {
+      const tier = await storage.getRoleTier(req.params.id);
+      if (!tier) {
+        return res.status(404).json({ success: false, message: 'Tier not found' });
+      }
+      const body = req.body ?? {};
+      const updates: any = {};
+      if (typeof body.name === 'string') updates.name = body.name.trim();
+      if ('description' in body) updates.description = body.description ?? null;
+      if (Array.isArray(body.permissions)) {
+        const check = validatePermissionKeys(body.permissions);
+        if (!check.ok) {
+          return res.status(400).json({ success: false, message: `Unknown permission keys: ${check.bad.join(', ')}` });
+        }
+        updates.permissions = body.permissions;
+      }
+      if (typeof body.sortOrder === 'number') updates.sortOrder = body.sortOrder;
+      if (typeof body.isDefault === 'boolean') updates.isDefault = body.isDefault;
+
+      const updated = await storage.updateRoleTier(req.params.id, updates);
+
+      if (body.isDefault === true) {
+        const all = await storage.getAllRoleTiers();
+        await Promise.all(
+          all.filter((t) => t.id !== updated.id && t.isDefault).map((t) =>
+            storage.updateRoleTier(t.id, { isDefault: false } as any),
+          ),
+        );
+      }
+
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating role tier:', error);
+      res.status(500).json({ success: false, message: 'Error updating role tier' });
+    }
+  });
+
+  app.delete('/api/role-tiers/:id', requirePermission('staff.manage_permissions'), async (req: Request, res: Response) => {
+    try {
+      const tier = await storage.getRoleTier(req.params.id);
+      if (!tier) {
+        return res.status(404).json({ success: false, message: 'Tier not found' });
+      }
+      if (tier.isSystem) {
+        return res.status(400).json({ success: false, message: 'System tiers cannot be deleted (you can rename or edit them).' });
+      }
+      // Detach any employees still on this tier
+      const all = await storage.getAllEmployees();
+      const affected = all.filter((e) => e.roleTierId === tier.id);
+      const fallback = await storage.getDefaultRoleTier();
+      await Promise.all(affected.map((e) =>
+        storage.updateEmployee(e.id, { roleTierId: fallback?.id ?? null } as any),
+      ));
+      await storage.deleteRoleTier(tier.id);
+      res.json({ success: true, reassigned: affected.length });
+    } catch (error) {
+      console.error('Error deleting role tier:', error);
+      res.status(500).json({ success: false, message: 'Error deleting role tier' });
+    }
+  });
+
+  // Assign a tier to an employee
+  app.patch('/api/employees/:id/role-tier', requirePermission('staff.manage_permissions'), async (req: Request, res: Response) => {
+    try {
+      const { roleTierId } = req.body ?? {};
+      if (roleTierId !== null && typeof roleTierId !== 'string') {
+        return res.status(400).json({ success: false, message: 'roleTierId must be a string or null' });
+      }
+      if (roleTierId) {
+        const tier = await storage.getRoleTier(roleTierId);
+        if (!tier) return res.status(404).json({ success: false, message: 'Tier not found' });
+      }
+      const updated = await storage.updateEmployee(req.params.id, { roleTierId } as any);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error setting employee tier:', error);
+      res.status(500).json({ success: false, message: 'Error setting employee tier' });
+    }
+  });
+
+  // Per-staff permission overrides — grant/deny on top of the tier
+  app.patch('/api/employees/:id/permissions', requirePermission('staff.manage_permissions'), async (req: Request, res: Response) => {
+    try {
+      const parsed = permissionOverridesSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        return res.status(400).json({ success: false, message: 'Invalid overrides payload' });
+      }
+      const overrides = parsed.data;
+      const check = validatePermissionKeys([...(overrides.grant ?? []), ...(overrides.deny ?? [])]);
+      if (!check.ok) {
+        return res.status(400).json({ success: false, message: `Unknown permission keys: ${check.bad.join(', ')}` });
+      }
+      const updated = await storage.updateEmployee(req.params.id, { permissionOverrides: overrides } as any);
+      res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error('Error updating employee permission overrides:', error);
+      res.status(500).json({ success: false, message: 'Error updating overrides' });
+    }
+  });
+
+  // Compute the effective permissions for a single employee (used by the UI matrix)
+  app.get('/api/employees/:id/effective-permissions', requirePermission('staff.view'), async (req: Request, res: Response) => {
+    try {
+      const emp = await storage.getEmployee(req.params.id);
+      if (!emp) return res.status(404).json({ success: false, message: 'Employee not found' });
+      const perms = await getEmployeePermissions(emp);
+      res.json({ success: true, data: { permissions: Array.from(perms) } });
+    } catch (error) {
+      console.error('Error computing effective permissions:', error);
+      res.status(500).json({ success: false, message: 'Error computing permissions' });
     }
   });
 

@@ -1476,6 +1476,39 @@ export type BookingReminderOffset = z.infer<typeof bookingReminderOffsetSchema>;
 export const StaffRole = z.enum(['admin', 'crew']);
 export type StaffRoleType = z.infer<typeof StaffRole>;
 
+// Role Tiers (named permission presets that can be assigned to staff)
+export const roleTiers = pgTable("role_tiers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  // Stable identifier for system-seeded tiers ('owner', 'manager', etc.); null for user-created tiers
+  key: text("key"),
+  name: text("name").notNull(),
+  description: text("description"),
+  // Array of permission keys; ['*'] means "all permissions"
+  permissions: jsonb("permissions").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+  // System tiers are seeded by the app and can't be deleted (but can be renamed/edited)
+  isSystem: boolean("is_system").notNull().default(false),
+  // Exactly one tier should be the default — assigned to new staff if no tier picked
+  isDefault: boolean("is_default").notNull().default(false),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const insertRoleTierSchema = createInsertSchema(roleTiers).extend({
+  permissions: z.array(z.string()).default([]),
+});
+export const updateRoleTierSchema = insertRoleTierSchema.partial();
+export type RoleTier = typeof roleTiers.$inferSelect;
+export type InsertRoleTier = z.infer<typeof insertRoleTierSchema>;
+export type UpdateRoleTier = z.infer<typeof updateRoleTierSchema>;
+
+// Per-staff overrides on top of tier permissions: { grant: [...], deny: [...] }
+export const permissionOverridesSchema = z.object({
+  grant: z.array(z.string()).default([]),
+  deny: z.array(z.string()).default([]),
+});
+export type PermissionOverridesShape = z.infer<typeof permissionOverridesSchema>;
+
 // Employee/Team Member Schema
 export const employees = pgTable("employees", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -1485,7 +1518,11 @@ export const employees = pgTable("employees", {
   phone: text("phone"),
   password: text("password"), // Passwords should be hashed with bcrypt before storing
   position: text("position").notNull(), // arborist, ground_crew, foreman, driver
-  role: text("role").notNull().default("crew"), // admin, crew
+  role: text("role").notNull().default("crew"), // admin, crew — legacy field, kept for backwards compat
+  // Assigned role tier; permissions come from this tier's `permissions` set
+  roleTierId: varchar("role_tier_id").references(() => roleTiers.id, { onDelete: 'set null' }),
+  // Per-staff overrides applied on top of the tier: { grant: [...], deny: [...] }
+  permissionOverrides: jsonb("permission_overrides").$type<PermissionOverridesShape>().default(sql`'{"grant":[],"deny":[]}'::jsonb`),
   status: text("status").notNull().default("active"), // active, inactive, on_leave
   skillLevel: text("skill_level").notNull().default("beginner"), // beginner, intermediate, expert
   certifications: text("certifications").array().default([]), // ISA, CTSP, etc.
@@ -1509,6 +1546,8 @@ export const insertEmployeeSchema = createInsertSchema(employees).extend({
   email: z.string().optional().transform(val => val ? val.toLowerCase() : val),
   password: z.string().min(8).optional(),
   hireDate: z.string().optional().or(z.date().optional()),
+  roleTierId: z.string().nullable().optional(),
+  permissionOverrides: permissionOverridesSchema.optional(),
 });
 
 export const updateEmployeeSchema = insertEmployeeSchema.partial();

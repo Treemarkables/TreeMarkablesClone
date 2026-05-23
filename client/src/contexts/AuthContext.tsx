@@ -1,16 +1,25 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { Employee } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
 
+// Authenticated user payload returned by /api/auth/me — includes resolved permissions
+export interface AuthUser extends Employee {
+  permissions?: string[];
+  roleTier?: { id: string; key: string | null; name: string; description: string | null } | null;
+}
+
 interface AuthContextType {
-  currentUser: Employee | null;
+  currentUser: AuthUser | null;
   userRole: 'admin' | 'crew' | null;
   isAdmin: boolean;
   isCrew: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
+  permissions: string[];
+  hasPermission: (key: string) => boolean;
+  hasAnyPermission: (...keys: string[]) => boolean;
   login: (credentials: { employeeId?: string; email?: string; password?: string }) => Promise<any>;
   loginPending: boolean;
   logout: () => void;
@@ -24,10 +33,10 @@ const DEV_ADMIN_ID = 'admin-test-001';
 
 const STORAGE_KEY = 'treemarkables_user';
 
-function loadStoredUser(): Employee | null {
+function loadStoredUser(): AuthUser | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Employee) : null;
+    return raw ? (JSON.parse(raw) as AuthUser) : null;
   } catch {
     return null;
   }
@@ -35,14 +44,14 @@ function loadStoredUser(): Employee | null {
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const storedUser = loadStoredUser();
-  const [currentUser, setCurrentUserState] = useState<Employee | null>(storedUser);
+  const [currentUser, setCurrentUserState] = useState<AuthUser | null>(storedUser);
   // If we already have a cached user, skip the loading gate so the app shows immediately
   const [initialAuthCheckComplete, setInitialAuthCheckComplete] = useState(!!storedUser);
   const [devAutoLoginAttempted, setDevAutoLoginAttempted] = useState(false);
   const [, setLocation] = useLocation();
   const consecutive401sRef = useRef<number>(0);
 
-  const setCurrentUser = (user: Employee | null) => {
+  const setCurrentUser = (user: AuthUser | null) => {
     setCurrentUserState(user);
     if (user) {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); } catch {}
@@ -51,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const { data: meResponse, isError: authQueryError } = useQuery<{ success: boolean; data: Employee | null }>({
+  const { data: meResponse, isError: authQueryError } = useQuery<{ success: boolean; data: AuthUser | null }>({
     queryKey: ['/api/auth/me'],
     queryFn: async () => {
       // Custom query function that handles 401 gracefully
@@ -222,10 +231,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const isAuthenticated = !!currentUser;
   const userRole = currentUser?.role as 'admin' | 'crew' | null;
-  
+
   const isAdmin = userRole === 'admin';
   const isCrew = userRole === 'crew';
-  
+
+  const permissions = useMemo(() => currentUser?.permissions ?? [], [currentUser]);
+  const permSet = useMemo(() => new Set(permissions), [permissions]);
+
+  const hasPermission = useCallback(
+    (key: string) => {
+      // Admins implicitly have everything, even if /api/auth/me hasn't returned yet
+      if (isAdmin) return true;
+      return permSet.has(key);
+    },
+    [isAdmin, permSet],
+  );
+
+  const hasAnyPermission = useCallback(
+    (...keys: string[]) => {
+      if (isAdmin) return true;
+      return keys.some((k) => permSet.has(k));
+    },
+    [isAdmin, permSet],
+  );
+
   return (
     <AuthContext.Provider
       value={{
@@ -235,6 +264,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isCrew,
         isAuthenticated,
         isLoading: !initialAuthCheckComplete,
+        permissions,
+        hasPermission,
+        hasAnyPermission,
         login,
         loginPending: loginMutation.isPending,
         logout,
