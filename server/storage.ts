@@ -21,6 +21,7 @@ import {
   type Service, type InsertService,
   type Photo, type InsertPhoto, type UpdatePhoto, type PhotoSearch,
   videos, type Video, type InsertVideo, type UpdateVideo,
+  helpArticles, type HelpArticle, type InsertHelpArticle, type UpdateHelpArticle,
   type Invoice, type InsertInvoice, type InvoiceSection, type InsertInvoiceSection, type UpdateInvoiceSection,
   type ServiceRequest, type InsertServiceRequest,
   type CustomerAuth, type InsertCustomerAuth,
@@ -768,6 +769,14 @@ export interface IStorage {
   getVideosByJob(jobId: string): Promise<Video[]>;
   getCustomerVisibleVideosByJob(jobId: string): Promise<Video[]>;
   getVideos(filter?: { kind?: string; unassigned?: boolean }): Promise<Video[]>;
+
+  // Help articles (subscriber-facing /help page)
+  createHelpArticle(data: InsertHelpArticle): Promise<HelpArticle>;
+  getHelpArticle(id: string): Promise<HelpArticle | undefined>;
+  getHelpArticleBySlug(slug: string): Promise<HelpArticle | undefined>;
+  updateHelpArticle(id: string, updates: UpdateHelpArticle): Promise<HelpArticle>;
+  deleteHelpArticle(id: string): Promise<void>;
+  getHelpArticles(filter?: { publishedOnly?: boolean }): Promise<HelpArticle[]>;
 
   // Customer Portal Management
   authenticateCustomer(email: string, phone?: string): Promise<CustomerAuth | undefined>;
@@ -5559,6 +5568,46 @@ class DatabaseStorage implements IStorage {
       ? await query.where(and(...conditions)).orderBy(desc(videos.createdAt))
       : await query.orderBy(desc(videos.createdAt));
     return rows;
+  }
+
+  // Help articles — subscriber-facing /help page. Sort: 'Getting started'
+  // sequenced (asc sequenceOrder), then other categories alpha by title.
+  async createHelpArticle(data: InsertHelpArticle): Promise<HelpArticle> {
+    const [row] = await db.insert(helpArticles).values(data).returning();
+    return row;
+  }
+  async getHelpArticle(id: string): Promise<HelpArticle | undefined> {
+    const [row] = await db.select().from(helpArticles).where(eq(helpArticles.id, id));
+    return row || undefined;
+  }
+  async getHelpArticleBySlug(slug: string): Promise<HelpArticle | undefined> {
+    const [row] = await db.select().from(helpArticles).where(eq(helpArticles.slug, slug));
+    return row || undefined;
+  }
+  async updateHelpArticle(id: string, updates: UpdateHelpArticle): Promise<HelpArticle> {
+    const [row] = await db.update(helpArticles)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(helpArticles.id, id))
+      .returning();
+    return row;
+  }
+  async deleteHelpArticle(id: string): Promise<void> {
+    await db.delete(helpArticles).where(eq(helpArticles.id, id));
+  }
+  async getHelpArticles(filter?: { publishedOnly?: boolean }): Promise<HelpArticle[]> {
+    const query = db.select().from(helpArticles);
+    const rows = filter?.publishedOnly
+      ? await query.where(eq(helpArticles.published, true))
+      : await query;
+    // Sort in JS so we can apply per-category ordering (sequenceOrder for
+    // 'Getting started', alpha title elsewhere) without a complex SQL CASE.
+    return rows.sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category);
+      if (a.category === 'Getting started') {
+        return (a.sequenceOrder ?? 0) - (b.sequenceOrder ?? 0);
+      }
+      return a.title.localeCompare(b.title);
+    });
   }
 
   async authenticateCustomer(email: string, phone?: string): Promise<CustomerAuth | undefined> { return undefined; }

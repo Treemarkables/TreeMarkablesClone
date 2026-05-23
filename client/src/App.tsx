@@ -25,6 +25,8 @@ import JobDashboard from "@/pages/JobDashboard";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Tasks from "@/pages/Tasks";
 import Videos from "@/pages/Videos";
+import Help from "@/pages/Help";
+import HelpAdmin from "@/pages/admin/HelpAdmin";
 import Pipeline from "@/pages/Pipeline";
 import Opportunities from "@/pages/Opportunities";
 import ConversationDetail from "@/pages/ConversationDetail";
@@ -908,6 +910,20 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Videos />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/help">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Help />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/admin/help">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <HelpAdmin />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>

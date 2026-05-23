@@ -831,6 +831,26 @@ export const videos = pgTable("videos", {
   jobIdx: index("videos_job_id_idx").on(table.jobId),
 }));
 
+// Help/SOP articles for the subscriber-facing /help page. Written content sits
+// alongside knowledge videos (see videos table, kind='knowledge') — articles
+// reference video IDs via relatedVideoIds for inline embeds. v1 is a global
+// library (one set of articles for all subscribers); per-tenant SOPs deferred.
+export const helpArticles = pgTable("help_articles", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  slug: text("slug").notNull().unique(), // URL-safe identifier, e.g. "set-up-your-business-details"
+  title: text("title").notNull(),
+  category: text("category").notNull(), // matches videos.category vocab: 'Getting started', 'Jobs', etc.
+  bodyHtml: text("body_html").notNull(), // TipTap HTML output; sanitized with DOMPurify on render
+  sequenceOrder: integer("sequence_order").default(0), // only meaningful within 'Getting started' for v1
+  relatedVideoIds: text("related_video_ids").array(), // optional FK-by-convention to videos.id
+  published: boolean("published").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  categoryIdx: index("help_articles_category_idx").on(table.category),
+  publishedIdx: index("help_articles_published_idx").on(table.published),
+}));
+
 // Activity Log & Communication Tracking
 export const activities = pgTable("activities", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -2571,6 +2591,17 @@ export const updateVideoSchema = insertVideoSchema.partial();
 export type Video = typeof videos.$inferSelect;
 export type InsertVideo = z.infer<typeof insertVideoSchema>;
 export type UpdateVideo = z.infer<typeof updateVideoSchema>;
+
+// Help article insert schema + types (see `helpArticles` table above).
+export const insertHelpArticleSchema = createInsertSchema(helpArticles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export const updateHelpArticleSchema = insertHelpArticleSchema.partial();
+export type HelpArticle = typeof helpArticles.$inferSelect;
+export type InsertHelpArticle = z.infer<typeof insertHelpArticleSchema>;
+export type UpdateHelpArticle = z.infer<typeof updateHelpArticleSchema>;
 
 export const photoSearchSchema = z.object({
   jobId: z.string().optional(),
