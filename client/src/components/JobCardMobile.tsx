@@ -19,13 +19,27 @@ import {
   MessageSquare,
   Mail,
   MoreHorizontal,
+  CheckCircle,
+  Copy,
+  Trash2,
+  ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
+import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
+import { SMSComposerModal } from "@/components/SMSComposerModal";
+import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardMobileTab =
   | "details"
@@ -123,11 +137,40 @@ export function JobCardMobile({
     return typeof v === "string" ? parseFloat(v) : (v as number | undefined);
   }, [job]);
 
-  // Action-bar no-op fallback — shows a toast-less alert so devs notice it's
-  // not wired up yet, but doesn't crash. Real handlers come in Phase B+.
-  const noop = (which: string) => () => {
+  // Modal state for the three composer modals reused from GlobalJobCard.
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showSmsModal, setShowSmsModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+
+  // Pick the best phone for native dialer: job-level mobile → customer mobile →
+  // job-level phone → customer phone. Strips spaces so tel: parses cleanly.
+  const phoneForCall = useMemo(() => {
+    const candidates = [
+      (job?.jobContactMobile as string | undefined),
+      (customer?.mobile as string | undefined),
+      (job?.jobContactPhone as string | undefined),
+      (customer?.phone as string | undefined),
+    ];
+    const picked = candidates.find((p) => p && String(p).trim().length > 0);
+    return picked ? String(picked).replace(/\s+/g, "") : null;
+  }, [job, customer]);
+
+  // Resolve handler precedence: parent-provided prop wins, else our default.
+  const handlePhoto = onPhoto ?? (() => setShowPhotoModal(true));
+  const handleSms = onSms ?? (() => setShowSmsModal(true));
+  const handleEmail = onEmail ?? (() => setShowEmailModal(true));
+  const handleCall = onCall ?? (() => {
+    if (phoneForCall) {
+      window.location.href = `tel:${phoneForCall}`;
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn("[JobCardMobile] Call — no phone number on this job or customer");
+    }
+  });
+
+  const stubMore = (which: string) => () => {
     // eslint-disable-next-line no-console
-    console.warn(`[JobCardMobile] ${which} not wired up in Phase A`);
+    console.warn(`[JobCardMobile] More → ${which} not wired up yet`);
   };
 
   return (
@@ -232,12 +275,72 @@ export function JobCardMobile({
           paddingBottom: "max(22px, env(safe-area-inset-bottom))",
         }}
       >
-        <ActionBtn label="Photo" color="bg-emerald-500" onClick={onPhoto ?? noop("Photo")} icon={Camera} />
-        <ActionBtn label="Call" color="bg-green-600" onClick={onCall ?? noop("Call")} icon={Phone} />
-        <ActionBtn label="SMS" color="bg-blue-600" onClick={onSms ?? noop("SMS")} icon={MessageSquare} />
-        <ActionBtn label="Email" color="bg-red-500" onClick={onEmail ?? noop("Email")} icon={Mail} />
-        <ActionBtn label="More" color="bg-slate-700" onClick={onMore ?? noop("More")} icon={MoreHorizontal} />
+        <ActionBtn label="Photo" color="bg-emerald-500" onClick={handlePhoto} icon={Camera} />
+        <ActionBtn label="Call" color="bg-green-600" onClick={handleCall} icon={Phone} />
+        <ActionBtn label="SMS" color="bg-blue-600" onClick={handleSms} icon={MessageSquare} />
+        <ActionBtn label="Email" color="bg-red-500" onClick={handleEmail} icon={Mail} />
+
+        {/* More — opens a dropdown with secondary actions. */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex flex-col items-center gap-1 py-1 px-2 min-w-[52px]"
+              data-testid="job-card-mobile-action-more"
+              onClick={() => onMore?.() /* parent can intercept; Radix still opens the menu */}
+            >
+              <div className="w-12 h-12 rounded-full bg-slate-700 grid place-items-center text-white shadow-md">
+                <MoreHorizontal className="w-5 h-5" />
+              </div>
+              <div className="text-[12px] font-semibold text-slate-800">More</div>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" className="w-56">
+            <DropdownMenuItem onClick={stubMore("Mark complete")}>
+              <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
+              Mark as complete
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={stubMore("Duplicate job")}>
+              <Copy className="w-4 h-4 mr-2 text-slate-600" />
+              Duplicate job
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={stubMore("Open full version")}>
+              <ExternalLink className="w-4 h-4 mr-2 text-slate-600" />
+              Open full version
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={stubMore("Delete job")} className="text-red-600 focus:text-red-700">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete job
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      {/* ── Composer modals (reused from GlobalJobCard) ── */}
+      {showPhotoModal && (
+        <PhotoCaptureModal
+          isOpen={showPhotoModal}
+          onClose={() => setShowPhotoModal(false)}
+          jobId={jobId}
+        />
+      )}
+      {showSmsModal && (
+        <SMSComposerModal
+          isOpen={showSmsModal}
+          onClose={() => setShowSmsModal(false)}
+          job={job}
+          customer={customer}
+        />
+      )}
+      {showEmailModal && (
+        <EmailComposerModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          job={job}
+          customer={customer}
+        />
+      )}
     </div>
   );
 }
