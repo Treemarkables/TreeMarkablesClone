@@ -6,6 +6,7 @@ import {
   GripVertical, Mic, AlignLeft, Image as ImageIcon, List, ChevronDown, MoreHorizontal, Eye, ArrowLeft, Save,
 } from "lucide-react";
 import { ProposalTemplate } from "@/components/ProposalTemplate";
+import { BlockRenderedProposal } from "@/components/BlockRenderedProposal";
 import { ProposalReviewsWidget } from "@/components/ProposalReviewsWidget";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -20,7 +21,8 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import type { LineItem, LineItemChoice, UploadedPhoto, PricingType } from "@/types/proposal";
-import type { DocumentTemplate, Customer, Proposal } from "@shared/schema";
+import type { DocumentTemplate, Customer, Proposal, DocumentBlock } from "@shared/schema";
+import { DEFAULT_PROPOSAL_BLOCKS } from "@shared/schema";
 
 // Minimal typed interfaces for browser SpeechRecognition (not in TypeScript lib by default)
 interface SpeechRecognitionAlternative { readonly transcript: string; }
@@ -1256,6 +1258,10 @@ export function ProposalBuilderV2({
   const [previewMode, setPreviewMode] = useState(false);
   const [previewSelectedChoices, setPreviewSelectedChoices] = useState<Record<string, string>>({});
   const [previewSelectedOptional, setPreviewSelectedOptional] = useState<Record<string, boolean>>({});
+  // Which renderer to show in the in-modal "Customer preview" panel.
+  // Block = the new shared renderer (what the customer actually sees at /proposal/:id).
+  // Legacy = ProposalTemplate (kept as a side-by-side comparison while we migrate).
+  const [previewRenderer, setPreviewRenderer] = useState<'block' | 'legacy'>('block');
   const [previewServerData, setPreviewServerData] = useState<{ sections: Array<{
     id: string; title: string; description: string;
     photos: UploadedPhoto[]; lineItems: LineItem[];
@@ -1611,8 +1617,22 @@ export function ProposalBuilderV2({
         sortOrder: b.sortOrder,
         sectionType: b.sectionType ?? "fixed",
       })),
+      // Seed blockConfig on FIRST save so the customer viewer renders via
+      // the block engine (BlockRenderedProposal) instead of falling back to
+      // the legacy ProposalTemplate. On subsequent edits we leave blockConfig
+      // alone so any per-proposal layout customisation isn't clobbered.
+      ...(!draftId
+        ? {
+            blockConfig: (() => {
+              const tplBlocks = (template as { blockConfig?: unknown } | null)?.blockConfig;
+              return Array.isArray(tplBlocks) && tplBlocks.length > 0
+                ? (tplBlocks as DocumentBlock[])
+                : DEFAULT_PROPOSAL_BLOCKS;
+            })(),
+          }
+        : {}),
     };
-  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil, isQuote, draftId]);
+  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil, isQuote, draftId, template]);
 
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReturnType<typeof buildPayload>) => {
@@ -2288,69 +2308,117 @@ export function ProposalBuilderV2({
             </div>
 
             {/* ── Inline Customer Preview (scroll-down) ── */}
-            {template && (
-              <div className="max-w-4xl mx-auto mt-6">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <h3 className="text-sm font-semibold text-gray-700">Customer preview</h3>
-                  <span className="text-[10px] text-gray-500">how the customer will see this proposal</span>
+            {template && (() => {
+              const previewProposal = {
+                id: draftId || "",
+                customerId: (customer as { id?: string } | null)?.id || customerId || "",
+                jobId: (job as { id?: string } | null)?.id || jobId || null,
+                title: proposalTitle,
+                subtotal: subtotalAfterDiscount.toString(),
+                gstAmount: gst.toString(),
+                totalAmount: grandTotal.toString(),
+                taxRate: taxRate.toString(),
+                discountAmount: discountAmount.toString(),
+                discountType,
+                validUntil: validUntil || null,
+                expiryDate: validUntil || null,
+                status: "draft",
+                deliveryMethod: "email",
+                createdBy: "system",
+                proposalNumber: draftId ? draftId.slice(-6).toUpperCase() : "",
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                sentAt: null,
+                viewedAt: null,
+                acceptedAt: null,
+                declinedAt: null,
+                acceptedByName: null,
+                acceptedBySignature: null,
+                notes: null,
+                internalNotes: null,
+                presentationMethod: null,
+              };
+              const legacySections = blocks.map((b) => ({
+                id: b.id,
+                title: b.title,
+                description: b.description,
+                photos: b.photos,
+                lineItems: b.lineItems,
+                sortOrder: b.sortOrder,
+                sectionType: b.sectionType ?? "fixed",
+              }));
+              const blockSections = blocks.map((b) => ({
+                id: b.id,
+                sectionType: b.sectionType ?? "fixed",
+                title: b.title,
+                content: b.description ?? null,
+                images: Array.isArray(b.photos) ? b.photos.map((p) => p.url).filter(Boolean) as string[] : null,
+                lineItems: b.lineItems ?? [],
+              }));
+              const blocksForRenderer =
+                Array.isArray((template as { blockConfig?: unknown }).blockConfig) && ((template as { blockConfig?: unknown[] }).blockConfig as unknown[]).length > 0
+                  ? ((template as { blockConfig?: unknown }).blockConfig as DocumentBlock[])
+                  : DEFAULT_PROPOSAL_BLOCKS;
+              return (
+                <div className="max-w-4xl mx-auto mt-6">
+                  <div className="flex items-center justify-between mb-2 px-1">
+                    <h3 className="text-sm font-semibold text-gray-700">Customer preview</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center bg-gray-100 rounded-md p-0.5" data-testid="modal-preview-renderer-toggle">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewRenderer('block')}
+                          className={`h-6 px-2.5 text-[11px] font-semibold rounded ${previewRenderer === 'block' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                        >
+                          Block engine
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPreviewRenderer('legacy')}
+                          className={`h-6 px-2.5 text-[11px] font-semibold rounded ${previewRenderer === 'legacy' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
+                        >
+                          Legacy
+                        </button>
+                      </div>
+                      <span className="text-[10px] text-gray-500">
+                        {previewRenderer === 'block' ? 'matches what the customer receives' : 'old renderer (comparison only)'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="border rounded-lg bg-white overflow-hidden">
+                    {previewRenderer === 'block' ? (
+                      <BlockRenderedProposal
+                        template={template as DocumentTemplate}
+                        proposal={{ ...previewProposal, sections: blockSections } as unknown as Parameters<typeof BlockRenderedProposal>[0]['proposal']}
+                        customer={customer as { name?: string; email?: string | null; address?: string | null } | undefined}
+                        job={job as { jobNumber?: number; address?: string | null } | undefined}
+                        blocks={blocksForRenderer}
+                        selectedChoices={previewSelectedChoices}
+                        selectedOptionalItems={previewSelectedOptional}
+                      />
+                    ) : (
+                      <ProposalTemplate
+                        template={template as DocumentTemplate}
+                        proposal={previewProposal as Proposal}
+                        customer={customer as Customer | undefined}
+                        job={job}
+                        sections={legacySections}
+                        showActions={false}
+                        allowChoiceSelection={true}
+                        selectedChoices={previewSelectedChoices}
+                        onChoiceSelect={(lineItemId, choiceId) =>
+                          setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
+                        }
+                        selectedOptionalItems={previewSelectedOptional}
+                        onOptionalToggle={(lineItemId, selected) =>
+                          setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
+                        }
+                      />
+                    )}
+                  </div>
                 </div>
-                <div className="border rounded-lg bg-white overflow-hidden">
-                  <ProposalTemplate
-                    template={template as DocumentTemplate}
-                    proposal={({
-                      id: draftId || "",
-                      customerId: (customer as { id?: string } | null)?.id || customerId || "",
-                      jobId: (job as { id?: string } | null)?.id || jobId || null,
-                      title: proposalTitle,
-                      subtotal: subtotalAfterDiscount.toString(),
-                      gstAmount: gst.toString(),
-                      totalAmount: grandTotal.toString(),
-                      taxRate: taxRate.toString(),
-                      discountAmount: discountAmount.toString(),
-                      discountType,
-                      validUntil: validUntil || null,
-                      expiryDate: validUntil || null,
-                      status: "draft",
-                      deliveryMethod: "email",
-                      createdBy: "system",
-                      proposalNumber: draftId ? draftId.slice(-6).toUpperCase() : "",
-                      createdAt: new Date().toISOString(),
-                      updatedAt: new Date().toISOString(),
-                      sentAt: null,
-                      viewedAt: null,
-                      acceptedAt: null,
-                      declinedAt: null,
-                      acceptedByName: null,
-                      acceptedBySignature: null,
-                      notes: null,
-                      internalNotes: null,
-                      presentationMethod: null,
-                    }) as Proposal}
-                    customer={customer as Customer | undefined}
-                    job={job}
-                    sections={blocks.map((b) => ({
-                      id: b.id,
-                      title: b.title,
-                      description: b.description,
-                      photos: b.photos,
-                      lineItems: b.lineItems,
-                      sortOrder: b.sortOrder,
-                      sectionType: b.sectionType ?? "fixed",
-                    }))}
-                    showActions={false}
-                    allowChoiceSelection={true}
-                    selectedChoices={previewSelectedChoices}
-                    onChoiceSelect={(lineItemId, choiceId) =>
-                      setPreviewSelectedChoices((prev) => ({ ...prev, [lineItemId]: choiceId }))
-                    }
-                    selectedOptionalItems={previewSelectedOptional}
-                    onOptionalToggle={(lineItemId, selected) =>
-                      setPreviewSelectedOptional((prev) => ({ ...prev, [lineItemId]: selected }))
-                    }
-                  />
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         </DialogContent>
       </Dialog>
