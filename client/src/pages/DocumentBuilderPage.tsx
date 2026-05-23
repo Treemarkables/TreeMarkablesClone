@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient, apiRequest } from '@/lib/queryClient';
 import {
@@ -30,6 +30,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Smartphone, Monitor, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Link } from 'wouter';
 import {
@@ -66,7 +68,7 @@ import { renderDocumentBlock, buildSampleContext } from '@/components/DocumentBl
 export type DocumentKind = 'invoice' | 'proposal';
 
 const INVOICE_ONLY_BLOCKS: DocumentBlockType[] = ['invoiceMeta', 'payment'];
-const PROPOSAL_ONLY_BLOCKS: DocumentBlockType[] = ['proposalMeta', 'lineItemsWithChoices', 'photoGallery', 'acceptance'];
+const PROPOSAL_ONLY_BLOCKS: DocumentBlockType[] = ['proposalMeta', 'lineItemsWithChoices', 'photoGallery', 'acceptance', 'googleReview'];
 
 const KIND_META: Record<DocumentKind, { title: string; defaultBlocks: DocumentBlock[] }> = {
   invoice: { title: 'Invoice Block Builder', defaultBlocks: DEFAULT_INVOICE_BLOCKS },
@@ -197,6 +199,13 @@ const PALETTE_ITEMS: PaletteItem[] = [
     icon: FileText,
     defaultConfig: { label: 'Accept This Proposal', buttonText: 'Accept & Sign', requireSignature: true, signaturePromptText: 'By signing below you agree to the above scope and pricing.', showAcceptedStamp: true },
   },
+  {
+    type: 'googleReview',
+    label: 'Customer Reviews',
+    description: 'Featured Google reviews carousel',
+    icon: StickyNote,
+    defaultConfig: { label: 'What our customers say', showLabel: true },
+  },
 ];
 
 const BLOCK_LABELS: Record<DocumentBlockType, string> = {
@@ -215,6 +224,7 @@ const BLOCK_LABELS: Record<DocumentBlockType, string> = {
   lineItemsWithChoices: 'Line Items (with choices)',
   photoGallery: 'Photo Gallery',
   acceptance: 'Accept & Sign',
+  googleReview: 'Customer Reviews',
 };
 
 const BLOCK_ICONS: Record<DocumentBlockType, React.ElementType> = {
@@ -233,6 +243,7 @@ const BLOCK_ICONS: Record<DocumentBlockType, React.ElementType> = {
   lineItemsWithChoices: Table,
   photoGallery: Image,
   acceptance: FileText,
+  googleReview: StickyNote,
 };
 
 // ─── Inspector Panel ───────────────────────────────────────────────────────────
@@ -558,9 +569,99 @@ function InspectorPanel({
         </div>
       );
 
+    case 'googleReview':
+      return (
+        <div className="space-y-2">
+          <TextInput label="Section heading" field="label" placeholder="What our customers say" />
+          <Toggle label="Show heading" field="showLabel" />
+          <p className="text-xs text-gray-500 italic pt-1">
+            Reviews are pulled from your featured reviews. The block hides automatically when none are featured.
+          </p>
+        </div>
+      );
+
     default:
       return <div className="text-sm text-gray-500 italic">No settings for this block.</div>;
   }
+}
+
+// ─── Inline "+ Add block" between canvas blocks ──────────────────────────────
+
+function InlineAddZone({
+  palette,
+  onPick,
+}: {
+  palette: PaletteItem[];
+  onPick: (item: PaletteItem) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const filtered = palette.filter(
+    (p) =>
+      !q ||
+      p.label.toLowerCase().includes(q.toLowerCase()) ||
+      p.description.toLowerCase().includes(q.toLowerCase()),
+  );
+  return (
+    <div className="relative group/zone h-4 -my-1 flex items-center justify-center">
+      <div className="absolute inset-x-6 h-px bg-gray-200 opacity-0 group-hover/zone:opacity-100 transition-opacity" />
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className="relative z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-gray-300 bg-white text-[11px] text-gray-500 opacity-0 group-hover/zone:opacity-100 hover:border-orange-400 hover:text-orange-600 transition-opacity"
+            data-testid="inline-add-block"
+          >
+            <Plus className="w-3 h-3" />
+            Add block
+          </button>
+        </PopoverTrigger>
+        <PopoverContent
+          align="center"
+          side="bottom"
+          className="w-64 p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 px-1.5 py-1 mb-1 border border-gray-200 rounded">
+            <Search className="w-3 h-3 text-gray-400" />
+            <input
+              autoFocus
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search blocks…"
+              className="flex-1 text-xs outline-none bg-transparent"
+            />
+          </div>
+          <div className="max-h-72 overflow-y-auto">
+            {filtered.length === 0 ? (
+              <div className="text-xs text-gray-400 italic px-2 py-3 text-center">No blocks match.</div>
+            ) : (
+              filtered.map((p) => {
+                const Icon = p.icon;
+                return (
+                  <button
+                    key={p.type}
+                    type="button"
+                    onClick={() => { onPick(p); setOpen(false); setQ(''); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-left hover:bg-gray-100"
+                  >
+                    <div className="w-6 h-6 rounded bg-orange-100 flex items-center justify-center flex-shrink-0">
+                      <Icon className="w-3 h-3 text-orange-600" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-semibold text-gray-800 leading-tight">{p.label}</div>
+                      <div className="text-[11px] text-gray-500 leading-tight truncate">{p.description}</div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
 }
 
 // ─── Sortable Canvas Block (WYSIWYG) ──────────────────────────────────────────
@@ -573,16 +674,20 @@ function SortableCanvasBlock({
   block,
   template,
   selected,
+  previewMode = false,
   onSelect,
   onRemove,
   onToggleVisible,
+  onUpdateConfig,
 }: {
   block: DocumentBlock;
   template: DocumentTemplate;
   selected: boolean;
+  previewMode?: boolean;
   onSelect: (id: string) => void;
   onRemove: (id: string) => void;
   onToggleVisible: (id: string) => void;
+  onUpdateConfig?: (id: string, config: DocumentBlock['config']) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id });
   const co = resolveCompanyInfo(template as unknown as Record<string, unknown>);
@@ -593,52 +698,66 @@ function SortableCanvasBlock({
     opacity: isDragging ? 0.3 : 1,
   };
 
-  const rendered = renderDocumentBlock(block, template, SAMPLE_CTX, co);
+  const editable = !previewMode && onUpdateConfig
+    ? {
+        onEdit: (field: string, value: string) => {
+          const current = block.config as unknown as Record<string, unknown>;
+          const next = { ...current, [field]: value } as unknown as DocumentBlock['config'];
+          onUpdateConfig(block.id, next);
+        },
+      }
+    : undefined;
+
+  const rendered = renderDocumentBlock(block, template, SAMPLE_CTX, co, editable);
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      onClick={() => onSelect(block.id)}
-      className={`group relative cursor-pointer rounded-sm transition-all
-        ${selected ? 'ring-2 ring-orange-400' : 'hover:ring-1 hover:ring-orange-300'}
+      onClick={previewMode ? undefined : () => onSelect(block.id)}
+      className={`group relative rounded-sm transition-all
+        ${previewMode ? '' : 'cursor-pointer'}
+        ${selected && !previewMode ? 'ring-2 ring-orange-400' : !previewMode ? 'hover:ring-1 hover:ring-orange-300' : ''}
         ${!block.visible ? 'opacity-40' : ''}
       `}
       data-testid={`canvas-block-${block.type}`}
     >
-      {/* Hover toolbar — stays in DOM (visibility toggle, not display) for layout stability */}
+      {/* Hover toolbar — always above the block, persists on selection, hidden in customer view */}
+      {!previewMode && (
       <div
-        className="absolute -top-8 left-0 flex items-center gap-1 bg-white border border-gray-200 rounded shadow-sm px-2 py-0.5 z-10 invisible group-hover:visible group-focus-within:visible"
+        className={`absolute -top-8 left-1 flex items-center gap-0.5 bg-slate-900 text-slate-200 rounded-md shadow-md px-1.5 py-1 z-20 transition-opacity
+          ${selected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div
           {...attributes}
           {...listeners}
-          className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+          className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-white px-0.5"
           title="Drag to reorder"
         >
           <GripVertical className="w-3.5 h-3.5" />
         </div>
-        <span className="text-xs text-gray-500 px-1 select-none">{BLOCK_LABELS[block.type]}</span>
-        <Button
-          size="icon"
-          variant="ghost"
+        <span className="text-[10px] font-semibold text-slate-300 px-1.5 select-none uppercase tracking-wide">{BLOCK_LABELS[block.type]}</span>
+        <button
+          type="button"
           onClick={() => onToggleVisible(block.id)}
           title={block.visible ? 'Hide block' : 'Show block'}
           data-testid={`btn-toggle-${block.id}`}
+          className="w-6 h-6 rounded flex items-center justify-center text-slate-300 hover:bg-slate-800 hover:text-white"
         >
           {block.visible ? <Eye className="w-3.5 h-3.5" /> : <EyeOff className="w-3.5 h-3.5" />}
-        </Button>
-        <Button
-          size="icon"
-          variant="ghost"
+        </button>
+        <button
+          type="button"
           onClick={() => onRemove(block.id)}
           title="Remove block"
           data-testid={`btn-remove-${block.id}`}
+          className="w-6 h-6 rounded flex items-center justify-center text-red-300 hover:bg-slate-800 hover:text-red-200"
         >
-          <X className="w-3.5 h-3.5 text-red-400" />
-        </Button>
+          <X className="w-3.5 h-3.5" />
+        </button>
       </div>
+      )}
 
       {/* True invoice content from shared renderer */}
       <div className="pointer-events-none">
@@ -730,6 +849,9 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
   const [blocks, setBlocks] = useState<DocumentBlock[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState(false);
+  const [deviceWidth, setDeviceWidth] = useState<'desktop' | 'mobile'>('desktop');
+  const [paletteQuery, setPaletteQuery] = useState('');
 
   const effectiveBlocks: DocumentBlock[] = blocks
     ?? (template?.blockConfig as DocumentBlock[] | null)
@@ -815,6 +937,23 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
     setSelectedId(newBlock.id);
   }, [effectiveBlocks]);
 
+  const addBlockAt = useCallback((index: number, item: PaletteItem) => {
+    const newBlock: DocumentBlock = {
+      id: `${item.type}-${crypto.randomUUID().slice(0, 8)}`,
+      type: item.type,
+      order: 0,
+      visible: true,
+      config: item.defaultConfig as DocumentBlock['config'],
+    };
+    setBlocks((prev) => {
+      const base = prev ?? effectiveBlocks;
+      const safeIdx = Math.max(0, Math.min(index, base.length));
+      const updated = [...base.slice(0, safeIdx), newBlock, ...base.slice(safeIdx)];
+      return updated.map((b, i) => ({ ...b, order: i }));
+    });
+    setSelectedId(newBlock.id);
+  }, [effectiveBlocks]);
+
   const removeBlock = useCallback((id: string) => {
     setBlocks((prev) => (prev ?? effectiveBlocks).filter((b) => b.id !== id));
     setSelectedId((prev) => (prev === id ? null : prev));
@@ -853,6 +992,14 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
 
   const selectedBlock = selectedId ? effectiveBlocks.find((b) => b.id === selectedId) ?? null : null;
 
+  // Default-select the first block once blocks resolve, so the inspector is
+  // populated on first open instead of showing the empty "Select a block" state.
+  useEffect(() => {
+    if (!selectedId && effectiveBlocks.length > 0) {
+      setSelectedId(effectiveBlocks[0].id);
+    }
+  }, [selectedId, effectiveBlocks]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -889,6 +1036,45 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center bg-gray-100 rounded-md p-0.5" data-testid="builder-mode-toggle">
+            <Button
+              size="sm"
+              variant={previewMode ? 'ghost' : 'secondary'}
+              onClick={() => setPreviewMode(false)}
+              className="h-7 px-3"
+            >
+              Edit
+            </Button>
+            <Button
+              size="sm"
+              variant={previewMode ? 'secondary' : 'ghost'}
+              onClick={() => setPreviewMode(true)}
+              className="h-7 px-3"
+            >
+              <Eye className="w-3.5 h-3.5 mr-1.5" />
+              Customer view
+            </Button>
+          </div>
+          <div className="flex items-center bg-gray-100 rounded-md p-0.5" data-testid="builder-device-toggle" title="Preview device width">
+            <Button
+              size="icon"
+              variant={deviceWidth === 'desktop' ? 'secondary' : 'ghost'}
+              onClick={() => setDeviceWidth('desktop')}
+              className="h-7 w-7"
+              title="Desktop"
+            >
+              <Monitor className="w-3.5 h-3.5" />
+            </Button>
+            <Button
+              size="icon"
+              variant={deviceWidth === 'mobile' ? 'secondary' : 'ghost'}
+              onClick={() => setDeviceWidth('mobile')}
+              className="h-7 w-7"
+              title="Mobile"
+            >
+              <Smartphone className="w-3.5 h-3.5" />
+            </Button>
+          </div>
           <Button variant="outline" size="sm" onClick={resetToDefault}>
             Reset to Default
           </Button>
@@ -912,20 +1098,49 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
         onDragEnd={handleDragEnd}
       >
       <div className="flex flex-1 overflow-hidden">
-        {/* Left: Block Palette */}
-        <div className="w-52 flex-shrink-0 border-r bg-gray-50 overflow-y-auto p-3 space-y-1.5">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">Block Palette</div>
-          <p className="text-xs text-gray-400 px-1 mb-1">Drag onto canvas or click +</p>
-          {kindPalette.map((item) => (
-            <PaletteCard key={item.type} item={item} onAdd={addBlock} />
-          ))}
-        </div>
+        {/* Left: Block Palette (hidden in customer-view preview) */}
+        {!previewMode && (
+          <div className="w-52 flex-shrink-0 border-r bg-gray-50 overflow-y-auto p-3 space-y-1.5">
+            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">Block Palette</div>
+            <div className="flex items-center gap-2 px-2 py-1.5 mb-2 bg-white border border-gray-200 rounded">
+              <Search className="w-3 h-3 text-gray-400" />
+              <input
+                value={paletteQuery}
+                onChange={(e) => setPaletteQuery(e.target.value)}
+                placeholder="Search blocks…"
+                className="flex-1 text-xs outline-none bg-transparent"
+                data-testid="palette-search"
+              />
+            </div>
+            {(() => {
+              const q = paletteQuery.trim().toLowerCase();
+              const filtered = q
+                ? kindPalette.filter(
+                    (i) =>
+                      i.label.toLowerCase().includes(q) ||
+                      i.description.toLowerCase().includes(q),
+                  )
+                : kindPalette;
+              if (filtered.length === 0) {
+                return <p className="text-xs text-gray-400 italic px-1 py-3">No blocks match.</p>;
+              }
+              return filtered.map((item) => (
+                <PaletteCard key={item.type} item={item} onAdd={addBlock} />
+              ));
+            })()}
+          </div>
+        )}
 
         {/* Center: Invoice canvas — true WYSIWYG invoice surface */}
         <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
-          <div className="max-w-2xl mx-auto">
-            <p className="text-xs text-gray-400 text-center mb-3 select-none">
-              Live preview — hover a block to drag or configure it
+          <div
+            className="mx-auto transition-[max-width] duration-200"
+            style={{ maxWidth: deviceWidth === 'mobile' ? '390px' : '42rem' }}
+          >
+            <p className="text-xs text-center mb-3 select-none" style={{ color: previewMode ? '#1e40af' : '#9ca3af' }}>
+              {previewMode
+                ? 'Customer view — this is how the proposal will look to the customer.'
+                : 'Live preview — hover a block to drag or configure it'}
             </p>
 
             {/* White paper invoice surface */}
@@ -935,17 +1150,32 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
                 strategy={verticalListSortingStrategy}
               >
                 <CanvasDropZone>
-                  {effectiveBlocks.map((block) => (
-                    <SortableCanvasBlock
-                      key={block.id}
-                      block={block}
-                      template={template}
-                      selected={selectedId === block.id}
-                      onSelect={setSelectedId}
-                      onRemove={removeBlock}
-                      onToggleVisible={toggleVisible}
-                    />
+                  {effectiveBlocks.map((block, idx) => (
+                    <div key={block.id}>
+                      {!previewMode && (
+                        <InlineAddZone
+                          palette={kindPalette}
+                          onPick={(p) => addBlockAt(idx, p)}
+                        />
+                      )}
+                      <SortableCanvasBlock
+                        block={block}
+                        template={template}
+                        selected={selectedId === block.id}
+                        previewMode={previewMode}
+                        onSelect={setSelectedId}
+                        onRemove={removeBlock}
+                        onToggleVisible={toggleVisible}
+                        onUpdateConfig={updateBlockConfig}
+                      />
+                    </div>
                   ))}
+                  {!previewMode && effectiveBlocks.length > 0 && (
+                    <InlineAddZone
+                      palette={kindPalette}
+                      onPick={(p) => addBlockAt(effectiveBlocks.length, p)}
+                    />
+                  )}
                 </CanvasDropZone>
               </SortableContext>
 
@@ -983,7 +1213,8 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
           </DragOverlay>
         </div>
 
-        {/* Right: Inspector */}
+        {/* Right: Inspector (hidden in customer-view preview) */}
+        {!previewMode && (
         <div className="w-64 flex-shrink-0 border-l bg-white overflow-y-auto">
           {selectedBlock ? (
             <div className="p-4">
@@ -1009,6 +1240,7 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
             </div>
           )}
         </div>
+        )}
       </div>
       </DndContext>
     </div>

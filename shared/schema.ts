@@ -3206,7 +3206,8 @@ export type DocumentBlockType =
   | 'proposalMeta'
   | 'lineItemsWithChoices'
   | 'photoGallery'
-  | 'acceptance';
+  | 'acceptance'
+  | 'googleReview';
 
 export interface DocumentBlockConfigHeader {
   logoAlignment: 'left' | 'center' | 'right';
@@ -3332,6 +3333,11 @@ export interface DocumentBlockConfigAcceptance {
   showAcceptedStamp: boolean;
 }
 
+export interface DocumentBlockConfigGoogleReview {
+  label: string;
+  showLabel: boolean;
+}
+
 export type DocumentBlockConfig =
   | DocumentBlockConfigHeader
   | DocumentBlockConfigCompanyInfo
@@ -3347,7 +3353,8 @@ export type DocumentBlockConfig =
   | DocumentBlockConfigProposalMeta
   | DocumentBlockConfigLineItemsWithChoices
   | DocumentBlockConfigPhotoGallery
-  | DocumentBlockConfigAcceptance;
+  | DocumentBlockConfigAcceptance
+  | DocumentBlockConfigGoogleReview;
 
 export interface DocumentBlock {
   id: string;
@@ -3380,7 +3387,8 @@ export const DEFAULT_PROPOSAL_BLOCKS: DocumentBlock[] = [
   { id: 'totals-default', type: 'totals', order: 7, visible: true, config: { showSubtotal: true, showGST: true, labelSubtotal: 'Subtotal (excl GST)', labelGST: 'GST (15%)', labelTotal: 'Total Amount' } },
   { id: 'customText-default', type: 'customText', order: 8, visible: true, config: { text: 'Terms & Conditions', fontSize: 'sm', align: 'left' } },
   { id: 'acceptance-default', type: 'acceptance', order: 9, visible: true, config: { label: 'Accept This Proposal', buttonText: 'Accept & Sign', requireSignature: true, signaturePromptText: 'By signing below you agree to the above scope and pricing.', showAcceptedStamp: true } },
-  { id: 'footer-default', type: 'footer', order: 10, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: false } },
+  { id: 'googleReview-default', type: 'googleReview', order: 10, visible: true, config: { label: 'What our customers say', showLabel: true } },
+  { id: 'footer-default', type: 'footer', order: 11, visible: true, config: { showCompanyName: true, showAddress: true, showPhone: true, showEmail: true, showGST: true, showPaymentTerms: false } },
 ];
 
 // TypeScript Types

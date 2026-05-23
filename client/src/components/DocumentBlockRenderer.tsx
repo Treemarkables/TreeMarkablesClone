@@ -4,6 +4,7 @@
  * used by both InvoiceTemplate.tsx (final output) and
  * DocumentBuilderPage.tsx (live WYSIWYG canvas).
  */
+import type { FocusEvent, MouseEvent } from 'react';
 import { format, addDays } from 'date-fns';
 import type { DocumentBlock, DocumentTemplate } from '@shared/schema';
 import type {
@@ -22,9 +23,11 @@ import type {
   DocumentBlockConfigLineItemsWithChoices,
   DocumentBlockConfigPhotoGallery,
   DocumentBlockConfigAcceptance,
+  DocumentBlockConfigGoogleReview,
 } from '@shared/schema';
 import type { CompanyInfo } from '@shared/documentBlockDefaults';
 import { LinkifiedText } from '@/utils/linkify';
+import { ProposalReviewsWidget } from '@/components/ProposalReviewsWidget';
 
 export interface DocumentRenderContext {
   invoiceNumber: string;
@@ -137,6 +140,61 @@ const formatCurrency = (amount: number) =>
   new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(amount);
 
 /**
+ * Optional inline-edit handler. Builder canvas passes one in; final/customer
+ * rendering callers leave it undefined for read-only output.
+ */
+export interface EditableHandler {
+  onEdit: (field: string, value: string) => void;
+}
+
+/** Small contenteditable wrapper used on the builder canvas. */
+function EditableText({
+  value,
+  onChange,
+  as = 'span',
+  className,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  as?: 'span' | 'div';
+  className?: string;
+}) {
+  const handleBlur = (e: FocusEvent<HTMLElement>) => {
+    const next = (e.currentTarget.textContent ?? '').trim();
+    if (next !== value) onChange(next);
+  };
+  const stop = (e: MouseEvent<HTMLElement>) => e.stopPropagation();
+  const baseClass =
+    'pointer-events-auto outline-none rounded-sm hover:bg-orange-50/60 focus:bg-orange-50 focus:ring-1 focus:ring-orange-300 px-0.5 -mx-0.5 cursor-text';
+  if (as === 'div') {
+    return (
+      <div
+        contentEditable
+        suppressContentEditableWarning
+        onBlur={handleBlur}
+        onClick={stop}
+        onMouseDown={stop}
+        className={`${baseClass} ${className ?? ''}`}
+      >
+        {value}
+      </div>
+    );
+  }
+  return (
+    <span
+      contentEditable
+      suppressContentEditableWarning
+      onBlur={handleBlur}
+      onClick={stop}
+      onMouseDown={stop}
+      className={`${baseClass} ${className ?? ''}`}
+    >
+      {value}
+    </span>
+  );
+}
+
+/**
  * Render a single invoice block to JSX.
  * Returns null for invisible or inapplicable blocks.
  */
@@ -145,7 +203,25 @@ export function renderDocumentBlock(
   template: DocumentTemplate,
   ctx: DocumentRenderContext,
   co: CompanyInfo,
+  editable?: EditableHandler,
 ): JSX.Element | null {
+  // Helper: when editable is set, return an inline-editable span/div; otherwise
+  // the raw text. The renderer is shared with customer rendering, which passes
+  // no editable handler — same JSX, no behaviour change there.
+  const editText = (
+    field: string,
+    value: string,
+    as: 'span' | 'div' = 'span',
+  ): JSX.Element | string =>
+    editable
+      ? (
+          <EditableText
+            value={value}
+            onChange={(v) => editable.onEdit(field, v)}
+            as={as}
+          />
+        )
+      : value;
   switch (block.type) {
     case 'header': {
       const cfg = block.config as DocumentBlockConfigHeader;
@@ -222,7 +298,7 @@ export function renderDocumentBlock(
       const cfg = block.config as DocumentBlockConfigBillTo;
       return (
         <div key={block.id} className="mb-4">
-          <h2 className="text-xs font-semibold text-black mb-2">{cfg.label || 'Bill To'}</h2>
+          <h2 className="text-xs font-semibold text-black mb-2">{editText('label', cfg.label || 'Bill To')}</h2>
           <div>
             <p className="font-semibold text-black text-xs mb-1">{ctx.billingName}</p>
             {cfg.showAddress && (ctx.jobAddress || ctx.customerAddress) && (
@@ -243,7 +319,7 @@ export function renderDocumentBlock(
       if (!ctx.description) return null;
       return (
         <div key={block.id} className="mb-4">
-          <h2 className="text-xs font-semibold text-black mb-2">{cfg.label || 'Description'}</h2>
+          <h2 className="text-xs font-semibold text-black mb-2">{editText('label', cfg.label || 'Description')}</h2>
           <div className="text-xs text-gray-700 whitespace-pre-wrap">
             <LinkifiedText text={ctx.description} />
           </div>
@@ -326,7 +402,7 @@ export function renderDocumentBlock(
       const alignMap: Record<string, string> = { left: 'text-left', center: 'text-center', right: 'text-right' };
       return (
         <div key={block.id} className={`my-2 ${sizeMap[cfg.fontSize] || 'text-sm'} ${alignMap[cfg.align] || 'text-left'} text-gray-700 whitespace-pre-wrap`}>
-          {cfg.text}
+          {editText('text', cfg.text, 'div')}
         </div>
       );
     }
@@ -467,7 +543,7 @@ export function renderDocumentBlock(
         const p = photos[0];
         return (
           <div key={block.id} className="mb-4">
-            {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{cfg.label}</h2>}
+            {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{editText('label', cfg.label)}</h2>}
             <div className={`w-full ${aspectClass} bg-gray-100 rounded overflow-hidden relative`}>
               <img src={p.url} alt={p.altText ?? p.caption ?? 'Photo'} className="w-full h-full object-cover" />
               {cfg.layout === 'slideshow' && photos.length > 1 && (
@@ -482,7 +558,7 @@ export function renderDocumentBlock(
       const gridClass = ({ 1: 'grid-cols-1', 2: 'grid-cols-2', 3: 'grid-cols-3', 4: 'grid-cols-4' } as const)[cols];
       return (
         <div key={block.id} className="mb-4">
-          {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{cfg.label}</h2>}
+          {cfg.label && <h2 className="text-xs font-semibold text-black mb-2">{editText('label', cfg.label)}</h2>}
           <div className={`grid ${gridClass} gap-2`}>
             {photos.map(p => (
               <div key={p.id}>
@@ -520,15 +596,26 @@ export function renderDocumentBlock(
       // Visual placeholder — interactive accept UX is layered on by ProposalAccept in a later PR.
       return (
         <div key={block.id} className="mt-4 p-4 border border-gray-300 rounded-lg">
-          <h3 className="text-sm font-semibold text-black mb-2">{cfg.label || 'Accept This Proposal'}</h3>
-          {cfg.termsText && <p className="text-xs text-gray-600 mb-3 whitespace-pre-wrap">{cfg.termsText}</p>}
-          <p className="text-xs text-gray-700 mb-3">{cfg.signaturePromptText || 'By signing below you agree to the scope and pricing shown above.'}</p>
+          <h3 className="text-sm font-semibold text-black mb-2">{editText('label', cfg.label || 'Accept This Proposal')}</h3>
+          {cfg.termsText && <p className="text-xs text-gray-600 mb-3 whitespace-pre-wrap">{editText('termsText', cfg.termsText, 'div')}</p>}
+          <p className="text-xs text-gray-700 mb-3">{editText('signaturePromptText', cfg.signaturePromptText || 'By signing below you agree to the scope and pricing shown above.')}</p>
           {cfg.requireSignature && (
             <div className="mb-3 text-[10px] text-gray-500 italic">Signature field appears here</div>
           )}
           <div className="text-center py-2 bg-blue-600 text-white text-xs font-semibold rounded">
-            {cfg.buttonText || 'Accept & Sign'}
+            {editText('buttonText', cfg.buttonText || 'Accept & Sign')}
           </div>
+        </div>
+      );
+    }
+    case 'googleReview': {
+      const cfg = block.config as DocumentBlockConfigGoogleReview;
+      return (
+        <div key={block.id} className="mt-4">
+          {cfg.showLabel && cfg.label && (
+            <h2 className="text-xs font-semibold text-black mb-2 text-center">{editText('label', cfg.label)}</h2>
+          )}
+          <ProposalReviewsWidget />
         </div>
       );
     }
