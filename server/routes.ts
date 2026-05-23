@@ -13965,8 +13965,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       console.error('Error fetching employees:', error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching employees',
-        debug: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack?.split('\n').slice(0, 6) } : String(error),
+        message: 'Error fetching employees'
       });
     }
   });
@@ -13983,8 +13982,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       console.error('Error fetching active employees:', error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching active employees',
-        debug: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack?.split('\n').slice(0, 6) } : String(error),
+        message: 'Error fetching active employees'
       });
     }
   });
@@ -14007,8 +14005,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       console.error('Error fetching employee:', error);
       res.status(500).json({
         success: false,
-        message: 'Error fetching employee',
-        debug: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack?.split('\n').slice(0, 6) } : String(error),
+        message: 'Error fetching employee'
       });
     }
   });
@@ -14174,11 +14171,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       res.json({ success: true, data: tiers });
     } catch (error) {
       console.error('Error fetching role tiers:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Error fetching role tiers',
-        debug: error instanceof Error ? { name: error.name, message: error.message, stack: error.stack?.split('\n').slice(0, 6) } : String(error),
-      });
+      res.status(500).json({ success: false, message: 'Error fetching role tiers' });
     }
   });
 
