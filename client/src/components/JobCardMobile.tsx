@@ -25,6 +25,7 @@ import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
+import { JobBillingPanel } from "@/components/JobBillingPanel";
 
 export type JobCardMobileTab =
   | "details"
@@ -196,7 +197,7 @@ export function JobCardMobile({
       <div className="flex-1 overflow-y-auto bg-slate-50">
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-          {activeTab === "billing" && <ComingNextPanel label="Billing" />}
+          {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
           {activeTab === "checklist" && (
             <div className="bg-white">
               <JobChecklistPanel jobId={jobId} />
@@ -269,22 +270,3 @@ function ActionBtn({
   );
 }
 
-function ComingNextPanel({ label }: { label: string }) {
-  return (
-    <div className="p-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center">
-        <div className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-          {label} tab
-        </div>
-        <h3 className="text-lg font-bold text-slate-900 mb-2">Coming in Phase B</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          {label === "Details"
-            ? "Customer card, job description, internal notes, status, contacts."
-            : "Line items, totals, invoice, payment."}
-          <br />
-          For now, the old layout is still active — open the job the regular way to use it.
-        </p>
-      </div>
-    </div>
-  );
-}
