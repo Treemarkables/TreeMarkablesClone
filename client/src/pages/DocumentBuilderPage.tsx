@@ -70,6 +70,32 @@ export type DocumentKind = 'invoice' | 'proposal';
 const INVOICE_ONLY_BLOCKS: DocumentBlockType[] = ['invoiceMeta', 'payment'];
 const PROPOSAL_ONLY_BLOCKS: DocumentBlockType[] = ['proposalMeta', 'lineItemsWithChoices', 'photoGallery', 'acceptance', 'googleReview'];
 
+type PaletteCategory = 'header' | 'content' | 'close';
+const PALETTE_CATEGORY: Record<DocumentBlockType, PaletteCategory> = {
+  header: 'header',
+  companyInfo: 'header',
+  billTo: 'header',
+  invoiceMeta: 'header',
+  proposalMeta: 'header',
+  jobDescription: 'content',
+  lineItems: 'content',
+  lineItemsWithChoices: 'content',
+  photoGallery: 'content',
+  customText: 'content',
+  divider: 'content',
+  totals: 'close',
+  payment: 'close',
+  acceptance: 'close',
+  googleReview: 'close',
+  footer: 'close',
+};
+const CATEGORY_LABELS: Record<PaletteCategory, string> = {
+  header: 'Header & info',
+  content: 'Content',
+  close: 'Totals & close',
+};
+const CATEGORY_ORDER: PaletteCategory[] = ['header', 'content', 'close'];
+
 const KIND_META: Record<DocumentKind, { title: string; defaultBlocks: DocumentBlock[] }> = {
   invoice: { title: 'Invoice Block Builder', defaultBlocks: DEFAULT_INVOICE_BLOCKS },
   proposal: { title: 'Proposal Block Builder', defaultBlocks: DEFAULT_PROPOSAL_BLOCKS },
@@ -590,9 +616,11 @@ function InspectorPanel({
 function InlineAddZone({
   palette,
   onPick,
+  variant = 'inline',
 }: {
   palette: PaletteItem[];
   onPick: (item: PaletteItem) => void;
+  variant?: 'inline' | 'empty';
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
@@ -602,19 +630,29 @@ function InlineAddZone({
       p.label.toLowerCase().includes(q.toLowerCase()) ||
       p.description.toLowerCase().includes(q.toLowerCase()),
   );
+  const wrapperClass =
+    variant === 'empty'
+      ? 'flex items-center justify-center py-10 border-2 border-dashed border-gray-200 rounded-lg'
+      : 'relative group/zone h-4 -my-1 flex items-center justify-center';
+  const triggerClass =
+    variant === 'empty'
+      ? 'inline-flex items-center gap-2 px-4 py-2 rounded-md border border-orange-300 bg-orange-50 text-sm font-semibold text-orange-700 hover:bg-orange-100 hover:border-orange-400'
+      : 'relative z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-gray-300 bg-white text-[11px] text-gray-500 opacity-0 group-hover/zone:opacity-100 hover:border-orange-400 hover:text-orange-600 transition-opacity';
   return (
-    <div className="relative group/zone h-4 -my-1 flex items-center justify-center">
-      <div className="absolute inset-x-6 h-px bg-gray-200 opacity-0 group-hover/zone:opacity-100 transition-opacity" />
+    <div className={wrapperClass}>
+      {variant === 'inline' && (
+        <div className="absolute inset-x-6 h-px bg-gray-200 opacity-0 group-hover/zone:opacity-100 transition-opacity" />
+      )}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="relative z-10 inline-flex items-center gap-1 px-2 py-0.5 rounded-full border border-dashed border-gray-300 bg-white text-[11px] text-gray-500 opacity-0 group-hover/zone:opacity-100 hover:border-orange-400 hover:text-orange-600 transition-opacity"
-            data-testid="inline-add-block"
+            className={triggerClass}
+            data-testid={variant === 'empty' ? 'empty-add-block' : 'inline-add-block'}
           >
-            <Plus className="w-3 h-3" />
-            Add block
+            <Plus className={variant === 'empty' ? 'w-4 h-4' : 'w-3 h-3'} />
+            {variant === 'empty' ? 'Add your first block' : 'Add block'}
           </button>
         </PopoverTrigger>
         <PopoverContent
@@ -1124,9 +1162,20 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
               if (filtered.length === 0) {
                 return <p className="text-xs text-gray-400 italic px-1 py-3">No blocks match.</p>;
               }
-              return filtered.map((item) => (
-                <PaletteCard key={item.type} item={item} onAdd={addBlock} />
-              ));
+              return CATEGORY_ORDER.map((cat) => {
+                const items = filtered.filter((i) => PALETTE_CATEGORY[i.type] === cat);
+                if (items.length === 0) return null;
+                return (
+                  <div key={cat} className="mb-2">
+                    <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 px-1 mb-1.5 mt-2">
+                      {CATEGORY_LABELS[cat]}
+                    </div>
+                    {items.map((item) => (
+                      <PaletteCard key={item.type} item={item} onAdd={addBlock} />
+                    ))}
+                  </div>
+                );
+              });
             })()}
           </div>
         )}
@@ -1179,11 +1228,17 @@ export default function DocumentBuilderPage({ documentKind = 'invoice' }: { docu
                 </CanvasDropZone>
               </SortableContext>
 
-              {effectiveBlocks.length === 0 && (
+              {effectiveBlocks.length === 0 && !previewMode && (
+                <InlineAddZone
+                  palette={kindPalette}
+                  variant="empty"
+                  onPick={(p) => addBlockAt(0, p)}
+                />
+              )}
+              {effectiveBlocks.length === 0 && previewMode && (
                 <div className="border-2 border-dashed border-gray-200 rounded-lg p-12 text-center">
                   <LayoutTemplate className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No blocks added yet</p>
-                  <p className="text-xs text-gray-400 mt-1">Drag a block from the palette or click +</p>
+                  <p className="text-sm text-gray-500">No blocks in this proposal</p>
                 </div>
               )}
             </div>

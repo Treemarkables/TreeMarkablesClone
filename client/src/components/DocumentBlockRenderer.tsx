@@ -337,10 +337,10 @@ export function renderDocumentBlock(
             <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900" style={{ width: `${descPct}%` }}>{cfg.labelDescription || 'Service'}</th>
-                  {cfg.showQty && <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900">{cfg.labelQty || 'Qty'}</th>}
-                  {cfg.showRate && <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{cfg.labelRate || 'Rate'}</th>}
-                  <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{cfg.labelAmount || 'Price'}</th>
+                  <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900" style={{ width: `${descPct}%` }}>{editText('labelDescription', cfg.labelDescription || 'Service')}</th>
+                  {cfg.showQty && <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900">{editText('labelQty', cfg.labelQty || 'Qty')}</th>}
+                  {cfg.showRate && <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{editText('labelRate', cfg.labelRate || 'Rate')}</th>}
+                  <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{editText('labelAmount', cfg.labelAmount || 'Price')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -369,9 +369,9 @@ export function renderDocumentBlock(
         <div key={block.id} className="pt-3 border-t border-gray-200">
           <div className="flex justify-end">
             <div className="w-full max-w-sm space-y-1">
-              {cfg.showSubtotal && <div className="flex justify-between text-xs"><span className="text-gray-600">{cfg.labelSubtotal || 'Subtotal (excl GST)'}:</span><span className="text-black">{formatCurrency(ctx.subtotal)}</span></div>}
-              {cfg.showGST && <div className="flex justify-between text-xs border-b border-gray-200 pb-1"><span className="text-gray-600">{cfg.labelGST || 'GST (15%)'}:</span><span className="text-black">{formatCurrency(ctx.gstAmount)}</span></div>}
-              <div className="flex justify-between pt-2"><span className="text-sm font-bold text-black">{cfg.labelTotal || 'Total Amount'}:</span><span className="text-sm font-bold text-black">{formatCurrency(ctx.totalAmount)}</span></div>
+              {cfg.showSubtotal && <div className="flex justify-between text-xs"><span className="text-gray-600">{editText('labelSubtotal', cfg.labelSubtotal || 'Subtotal (excl GST)')}:</span><span className="text-black">{formatCurrency(ctx.subtotal)}</span></div>}
+              {cfg.showGST && <div className="flex justify-between text-xs border-b border-gray-200 pb-1"><span className="text-gray-600">{editText('labelGST', cfg.labelGST || 'GST (15%)')}:</span><span className="text-black">{formatCurrency(ctx.gstAmount)}</span></div>}
+              <div className="flex justify-between pt-2"><span className="text-sm font-bold text-black">{editText('labelTotal', cfg.labelTotal || 'Total Amount')}:</span><span className="text-sm font-bold text-black">{formatCurrency(ctx.totalAmount)}</span></div>
             </div>
           </div>
         </div>
@@ -464,10 +464,10 @@ export function renderDocumentBlock(
             <table className="w-full border-collapse border border-gray-200 rounded-lg overflow-hidden">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900" style={{ width: `${descPct}%` }}>{cfg.labelDescription || 'Service'}</th>
-                  {cfg.showQty && <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900">{cfg.labelQty || 'Qty'}</th>}
-                  {cfg.showRate && <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{cfg.labelRate || 'Rate'}</th>}
-                  <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{cfg.labelAmount || 'Price'}</th>
+                  <th className="border border-gray-200 px-2 py-2 text-left text-xs font-semibold text-gray-900" style={{ width: `${descPct}%` }}>{editText('labelDescription', cfg.labelDescription || 'Service')}</th>
+                  {cfg.showQty && <th className="border border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-900">{editText('labelQty', cfg.labelQty || 'Qty')}</th>}
+                  {cfg.showRate && <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{editText('labelRate', cfg.labelRate || 'Rate')}</th>}
+                  <th className="border border-gray-200 px-2 py-2 text-right text-xs font-semibold text-gray-900">{editText('labelAmount', cfg.labelAmount || 'Price')}</th>
                 </tr>
               </thead>
               <tbody>
