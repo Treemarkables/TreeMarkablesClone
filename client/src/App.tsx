@@ -10,7 +10,6 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
-import HomeV2 from "@/pages/HomeV2";
 import TreeRemoval from "@/pages/TreeRemoval";
 import TreePruning from "@/pages/TreePruning";
 import StumpGrinding from "@/pages/StumpGrinding";
@@ -858,7 +857,6 @@ function Router() {
     <Switch>
       <Route path="/login" component={Login}/>
       <Route path="/home" component={Home}/>
-      <Route path="/v2" component={HomeV2}/>
       <Route path="/tree-removal" component={TreeRemoval}/>
       <Route path="/tree-pruning" component={TreePruning}/>
       <Route path="/stump-grinding" component={StumpGrinding}/>
