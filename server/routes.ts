@@ -106,6 +106,7 @@ import { businessIntelligenceService } from "./services/businessIntelligence";
 import { weatherService } from "./services/weatherService";
 import { smsService } from "./services/smsService";
 import { emailService } from "./services/emailService";
+import { renderBrandedEmail } from "./emailTemplates";
 import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
@@ -8107,20 +8108,16 @@ Draft the reply now.`;
       // Generate proposal acceptance URL - goes directly to acceptance page
       const proposalAcceptUrl = `${baseUrl}/proposal/${proposalId}/accept`;
       
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <p>Dear ${customerName},</p>
-          
-          <p>${message || `Thank you for your inquiry, we are pleased to provide you with the following proposal.`}</p>
-          
-          <p><strong>Total cost: $${total.toFixed(2)}</strong></p>
-          
-          <p>View and accept your proposal online here: <a href="${proposalAcceptUrl}">${proposalAcceptUrl}</a></p>
-          
-          <p>Regards,<br>
-          Treemarkables</p>
-        </div>
-      `;
+      const htmlContent = renderBrandedEmail({
+        customerName,
+        intro: message || 'Thank you for your enquiry — we\'re pleased to provide the following proposal. Tap the button below to review the full scope, pricing, and accept online.',
+        documentLabel: `Proposal #${proposalNumber}`,
+        totalAmount: total,
+        totalLabel: 'incl. GST',
+        ctaText: 'View Proposal',
+        ctaUrl: proposalAcceptUrl,
+        ctaHint: 'Opens the proposal in your browser — no login required.',
+      });
 
       console.log('📧 EMAIL HTML CONTENT:', htmlContent);
       console.log('📧 EMAIL TEXT CONTENT:', `Proposal ${proposalNumber} for ${customerName}. Total Amount: $${total.toFixed(2)} NZD. ${message || 'Thank you for your interest in our tree services.'}`);
@@ -8341,23 +8338,17 @@ Draft the reply now.`;
         ? message
         : `Thank you for your enquiry. Please find your quote attached as a PDF.`;
 
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 640px;">
-          <p>Dear ${customerName},</p>
-          <p>${bodyLead}</p>
-          <p><strong>Quote:</strong> ${quoteNumber}<br>
-          <strong>Total (inc. GST):</strong> $${total.toFixed(2)} NZD</p>
-          <p>The quote is attached to this email as a PDF. To accept, tap the button below and press send in your email app — no signature required.</p>
-          <p style="margin: 24px 0;">
-            <a href="${acceptMailto}"
-               style="background: #f97316; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: 600; display: inline-block;">
-              Accept Quote
-            </a>
-          </p>
-          <p style="color: #6b7280; font-size: 12px;">If the button doesn't work in your email app, simply reply to this email with the words "I accept quote ${quoteNumber}".</p>
-          <p>Regards,<br>Treemarkables</p>
-        </div>
-      `;
+      const htmlContent = renderBrandedEmail({
+        customerName,
+        intro: `${bodyLead}\n\nThe full quote is attached as a PDF.`,
+        documentLabel: `Quote #${quoteNumber}`,
+        totalAmount: total,
+        totalLabel: 'incl. GST',
+        ctaText: 'Accept Quote',
+        ctaUrl: acceptMailto,
+        ctaHint: 'Tap to open your email app — press send to confirm. No signature required.',
+        fineprint: `Button not working? Reply to this email with: "I accept quote ${quoteNumber}".`,
+      });
 
       const textContent = [
         `Quote ${quoteNumber} for ${customerName}.`,
@@ -11034,20 +11025,16 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       const gst = subtotal * 0.15;
       const total = subtotal + gst;
 
-      const htmlContent = `
-        <div style="font-family: Arial, sans-serif; padding: 20px;">
-          <p>Dear ${customerName},</p>
-
-          <p>${message || `Please find your invoice attached. Payment can be made via bank transfer.`}</p>
-
-          <p><strong>Total due: $${total.toFixed(2)}</strong></p>
-
-          <p>View your invoice online here: <a href="${invoiceViewUrl}">${invoiceViewUrl}</a></p>
-
-          <p>Regards,<br>
-          Treemarkables</p>
-        </div>
-      `;
+      const htmlContent = renderBrandedEmail({
+        customerName,
+        intro: message || 'Your invoice is ready. Tap below to view the full breakdown and payment details — bank transfer instructions are on the invoice.',
+        documentLabel: `Invoice #${invoice.invoiceNumber}`,
+        totalAmount: total,
+        totalLabel: 'due',
+        ctaText: 'View Invoice',
+        ctaUrl: invoiceViewUrl,
+        ctaHint: 'Opens your invoice in the browser — no login required.',
+      });
 
       const emailResult = await emailService.sendEmail({
         to,
