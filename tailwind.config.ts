@@ -116,11 +116,19 @@ export default {
           busy: "rgb(239 68 68)",
           offline: "rgb(156 163 175)",
         },
+        // Redesign (v2) marketing palette — used by the new home page
+        ink: "#0a0d09",
+        ink2: "#0f140d",
+        paper: "#f5f7f2",
+        neon: "#39FF14",
+        forest: "#10301a",
+        mute: "#7c857a",
       },
       fontFamily: {
         sans: ["Inter", "var(--font-sans)"],
         serif: ["Merriweather", "var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        display: ['"Space Grotesk"', "Inter", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {
