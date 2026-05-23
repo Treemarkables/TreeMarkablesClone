@@ -8,6 +8,7 @@
 // ============================================================================
 import type { Request, Response, NextFunction } from 'express';
 import { storage } from './storage';
+import { ensureSchemaUpToDate } from './schemaMigrations';
 import {
   resolvePermissions,
   DEFAULT_TIER_SEEDS,
@@ -74,6 +75,8 @@ export function ensureRoleTiersSeeded(): Promise<void> {
   if (!seedPromise) {
     seedPromise = (async () => {
       try {
+        // Seeder writes to role_tiers — guarantee the table exists first.
+        await ensureSchemaUpToDate();
         const existing = await storage.getAllRoleTiers();
         const byKey = new Map(existing.filter((t) => t.key).map((t) => [t.key as string, t]));
         let sortOrder = 0;

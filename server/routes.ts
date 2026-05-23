@@ -72,6 +72,7 @@ import {
   requirePermission,
   validatePermissionKeys,
 } from "./permissions";
+import { ensureSchemaUpToDate } from "./schemaMigrations";
 import {
   PERMISSION_CATEGORIES,
   ALL_PERMISSION_KEYS,
@@ -1543,6 +1544,12 @@ function isMicrosoftEmailDomain(email: string): boolean {
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Bring the database schema up to date before anything queries new columns.
+  // Idempotent and additive-only — see server/schemaMigrations.ts.
+  ensureSchemaUpToDate().catch((err) => {
+    console.error('[startup] Schema migration failed (will retry on next dependent call):', err);
+  });
+
   // Kick off role-tier seeding in the background — first call to a permission-protected
   // route will await this, but boot stays fast for routes that don't need it.
   ensureRoleTiersSeeded().catch((err) => {

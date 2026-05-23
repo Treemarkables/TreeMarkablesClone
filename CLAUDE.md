@@ -26,6 +26,16 @@ These files are critical infrastructure or tooling-owned:
 - **Never** run `npm run db:push`, `drizzle-kit push`, or any migration command without explicit user approval
 - **Never** change primary key column types (serial ↔ varchar causes irreversible data loss)
 - Always check `shared/schema.ts` before proposing schema changes
+- **Local `.env` `DATABASE_URL` points at a Neon dev branch, NOT production.** DO Apps has its own `DATABASE_URL` env var pointing at the real prod DB. Running scripts/migrations locally hits the dev branch — for prod, use the DO Apps Console (cloud.digitalocean.com/apps/.../console/…) so the container's prod URL is used automatically.
+
+### Boot-time schema migrations
+
+Idempotent additive migrations live in `server/schemaMigrations.ts` and run automatically on every app boot (called from `registerRoutes` and again defensively from `ensureRoleTiersSeeded`). When you add a new column or table that the deployed code needs to query immediately, **append a new entry to the `MIGRATIONS` array** with `IF NOT EXISTS` / FK-precheck guards. The next DO deploy applies it before any handler runs — no console step required.
+
+Rules for entries in `MIGRATIONS`:
+- Append-only (don't rename or reorder existing entries — names are stable).
+- Strictly additive: `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, FK-via-pg_constraint-precheck. **No** `DROP`, `DELETE`, type-changing `ALTER COLUMN`, or anything that loses data — those go in a one-shot script the user runs manually.
+- Strictly idempotent: re-running on every boot must be a no-op once applied.
 
 ---
 
