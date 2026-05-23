@@ -128,18 +128,6 @@ function SidebarNavContent({
           <SidebarGroupLabel>{isCrew ? "My Work" : "Core Dashboard"}</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="font-normal text-[16px]">
-              {/* One Dashboard — top-level overview */}
-              {isAdmin && (
-                <SidebarMenuItem>
-                  <SidebarMenuButton asChild isActive={location === "/metrics"} className={ITEM}>
-                    <Link href="/metrics" onClick={handleLinkClick} data-testid="link-one-dashboard">
-                      <Glyph>📊</Glyph>
-                      <span>One Dashboard</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              )}
-
               {/* Dispatch Board */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/dispatch"} className={ITEM}>
