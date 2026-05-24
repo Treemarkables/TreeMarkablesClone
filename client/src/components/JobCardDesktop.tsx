@@ -88,6 +88,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useJobActions } from "@/hooks/useJobActions";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
+import { JobVideos } from "@/components/JobVideos";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
@@ -587,6 +588,13 @@ export function JobCardDesktop({
               referencing one is tapped. Undefined is safe — JobDiarySection
               no-ops the click. */}
           <div className="bg-white min-w-0 min-h-0 overflow-hidden flex flex-col">
+            {/* Job Videos sits above the diary feed — same vertical order as
+                the legacy GlobalJobCard layout. Collapsed by default; expand
+                to upload a walkthrough and (post-upload) opt into the AI
+                quote-description flow. */}
+            <div className="p-3 flex-shrink-0">
+              <JobVideos jobId={jobId} />
+            </div>
             <JobDiarySection
               jobId={jobId}
               customerId={customerId}
