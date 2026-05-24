@@ -7303,7 +7303,15 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       });
 
       // Download GCS object to a temp file — OpenAI's SDK takes a ReadStream.
-      const ext = (video.filename.split('.').pop() || 'mp4').toLowerCase();
+      // Whisper accepts FLAC, M4A, MP3, MP4, MPEG, MPGA, OGA, OGG, WAV, WEBM —
+      // it rejects on file extension, not on actual codec. iPhone records to
+      // .mov (QuickTime container) which is on the reject list, even though
+      // the H.264/AAC bytes inside are identical to .mp4. Repack-free rename
+      // to .mp4 works for QuickTime; anything else unsupported falls back to
+      // .mp4 too (Whisper will then try its ffmpeg decode by codec).
+      const WHISPER_OK_EXTS = new Set(['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']);
+      const rawExt = (video.filename.split('.').pop() || '').toLowerCase();
+      const ext = WHISPER_OK_EXTS.has(rawExt) ? rawExt : 'mp4';
       tmpPath = path.join(os.tmpdir(), `tm-transcribe-${randomUUID()}.${ext}`);
       await videoStorage.downloadToFile(video.url, tmpPath);
 
