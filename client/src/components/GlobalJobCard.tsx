@@ -10514,21 +10514,20 @@ The Treemarkables Team`;
     </div>
   );
 
-  // ── Feature-flag gate for the new mobile job-card layout ─────────────────
-  // Default-on for mobile viewports. The opt-out is `?mobileV2=0` on any URL
-  // — handy if a customer hits a regression and needs to fall back to the
-  // legacy inline JSX without waiting on a deploy. Any other value (including
-  // missing or `?mobileV2=1`) means on.
-  // Desktop / inline / no-job paths fall through to the existing UI
-  // regardless of the flag.
-  const useMobileV2 = typeof window === "undefined"
-    ? true
-    : new URLSearchParams(window.location.search).get("mobileV2") !== "0";
-  const showMobileV2 = useMobileV2 && isMobile && !renderInline && isOpen && !!editingJob?.id;
+  // ── Mobile layout gate ───────────────────────────────────────────────────
+  // Mobile viewports get the redesigned JobCardMobile shell for the edit
+  // case (it's the default and only mobile-edit path now — the ?mobileV2=0
+  // escape hatch was removed after the new UI baked in production).
+  //
+  // Desktop, split-screen panel (renderInline), and create-mode (no
+  // editingJob.id yet) all fall through to the existing jobCardContent
+  // inside its responsive Dialog — that legacy code still owns mobile
+  // create-mode because create has no jobId to render against.
+  const showMobileCard = isMobile && !renderInline && isOpen && !!editingJob?.id;
 
   return (
     <>
-      {showMobileV2 ? (
+      {showMobileCard ? (
         <JobCardMobile
           jobId={editingJob!.id}
           onClose={() => handleDialogClose(false)}
@@ -10576,7 +10575,7 @@ The Treemarkables Team`;
 
       {/* ─────────────────────────────────────────────────────────────────
           Secondary modals — hoisted out of jobCardContent so they mount
-          regardless of which top-level branch (mobileV2 vs legacy) is
+          regardless of which top-level branch (JobCardMobile vs legacy) is
           rendering. State setters live where they always have; only the
           JSX rendering moved up here. */}
       {/* Proposal Builder */}
