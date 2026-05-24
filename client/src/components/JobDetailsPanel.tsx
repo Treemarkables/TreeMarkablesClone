@@ -34,7 +34,11 @@ interface JobShape {
   internalNotes?: string | null;
   status?: string | null;
   leadSource?: string | null;
-  presentationMethod?: string | null;
+  // The existing app saves the on-site / sent-later toggle to
+  // quotePresentationMethod (jobs.quote_presentation_method). There's also an
+  // older presentationMethod column kicking around, but the desktop UI binds
+  // to quotePresentationMethod — saving anywhere else is a silent no-op.
+  quotePresentationMethod?: string | null;
   customerConfirmed?: boolean | null;
   customerId?: string | null;
   address?: string | null;
@@ -259,13 +263,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         />
         <SelectField
           label="Quote Method"
-          value={job?.presentationMethod ?? ""}
-          onChange={(v) => saveField.mutate({ presentationMethod: v || null })}
+          value={job?.quotePresentationMethod ?? ""}
+          onChange={(v) => saveField.mutate({ quotePresentationMethod: v || null })}
           options={[
             { value: "", label: "—" },
             { value: "on_site", label: "On-site" },
             { value: "sent_later", label: "Sent later" },
-            { value: "phone", label: "Phone" },
           ]}
         />
       </div>
