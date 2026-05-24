@@ -78,6 +78,23 @@ export interface JobCardMobileProps {
   onQuoteClick?: () => void;
   onInvoiceClick?: () => void;
   onProposalClick?: (proposalNumber: string) => void;
+  /**
+   * Handlers for the 9 tiles in the bottom Actions sheet. Parent
+   * (GlobalJobCard) supplies these so the new mobile UI opens the same
+   * modals its desktop counterpart does. Any missing handler renders a
+   * "coming soon" toast — keeps the preview route functional too.
+   */
+  actions?: {
+    speechToQuote?: () => void;
+    schedule?: () => void;
+    quote?: () => void;
+    invoice?: () => void;
+    proposal?: () => void;
+    timeTracking?: () => void;
+    profitTracker?: () => void;
+    queueJob?: () => void;
+    sendToXero?: () => void;
+  };
 }
 
 // Map job status → badge colour. Mirrors the colour scheme used by
@@ -120,6 +137,7 @@ export function JobCardMobile({
   onQuoteClick,
   onInvoiceClick,
   onProposalClick,
+  actions,
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
 
@@ -369,15 +387,15 @@ export function JobCardMobile({
 
             <div className="overflow-y-auto px-5 py-5">
               <div className="grid grid-cols-4 gap-3">
-                <ActionTile label="Speech to Quote" icon={Mic} colour="purple" onClick={actionStub("Speech to Quote")} />
-                <ActionTile label="Schedule" icon={Calendar} colour="blue" onClick={actionStub("Schedule")} />
-                <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actionStub("Quote")} />
-                <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actionStub("Invoice")} />
-                <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actionStub("Proposal")} />
-                <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actionStub("Time Tracking")} />
-                <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actionStub("Profit Tracker")} />
-                <ActionTile label="Queue Job" icon={ListOrdered} colour="indigo" onClick={actionStub("Queue Job")} />
-                <ActionTile label="Send to Xero" icon={Send} colour="slate" disabled onClick={actionStub("Send to Xero")} />
+                <ActionTile label="Speech to Quote" icon={Mic} colour="purple" onClick={actions?.speechToQuote ?? actionStub("Speech to Quote")} />
+                <ActionTile label="Schedule" icon={Calendar} colour="blue" onClick={actions?.schedule ?? actionStub("Schedule")} />
+                <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actions?.quote ?? actionStub("Quote")} />
+                <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actions?.invoice ?? actionStub("Invoice")} />
+                <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
+                <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actions?.timeTracking ?? actionStub("Time Tracking")} />
+                <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
+                <ActionTile label="Queue Job" icon={ListOrdered} colour="indigo" onClick={actions?.queueJob ?? actionStub("Queue Job")} />
+                <ActionTile label="Send to Xero" icon={Send} colour="slate" disabled={!actions?.sendToXero} onClick={actions?.sendToXero ?? actionStub("Send to Xero")} />
               </div>
 
               {/* Secondary admin actions — kept around because they're already wired

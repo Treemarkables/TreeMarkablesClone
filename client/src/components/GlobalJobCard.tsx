@@ -11216,6 +11216,18 @@ The Treemarkables Team`;
         <JobCardMobile
           jobId={editingJob!.id}
           onClose={() => handleDialogClose(false)}
+          actions={{
+            speechToQuote: () => setIsSpeechToQuoteOpen(true),
+            schedule: () => setIsSchedulingModalOpen(true),
+            quote: () => setIsQuoteModalOpen(true),
+            invoice: () => setIsInvoiceModalOpen(true),
+            proposal: () => setIsProposalBuilderOpen(true),
+            timeTracking: () => setIsTimeTrackingOpen(true),
+            profitTracker: () => setIsProfitTrackerOpen(true),
+            sendToXero: () => sendToXeroMutation.mutate(),
+            // queueJob: no existing handler yet — left undefined so the
+            // tile surfaces a "coming soon" toast.
+          }}
         />
       ) : renderInline ? (
         // Inline rendering for split-screen panel (desktop)
