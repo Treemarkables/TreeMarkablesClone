@@ -11213,35 +11213,22 @@ The Treemarkables Team`;
   return (
     <>
       {showMobileV2 ? (
-        <>
-          <JobCardMobile
-            jobId={editingJob!.id}
-            onClose={() => handleDialogClose(false)}
-            actions={{
-              speechToQuote: () => setIsSpeechToQuoteOpen(true),
-              schedule: () => setIsSchedulingModalOpen(true),
-              quote: () => setIsQuoteModalOpen(true),
-              invoice: () => setIsInvoiceModalOpen(true),
-              proposal: () => setIsProposalBuilderOpen(true),
-              timeTracking: () => setIsTimeTrackingOpen(true),
-              profitTracker: () => setIsProfitTrackerOpen(true),
-              sendToXero: () => sendToXeroMutation.mutate(),
-              // queueJob: no existing handler yet — left undefined so the
-              // tile surfaces a "coming soon" toast.
-            }}
-          />
-          {/*
-            ProposalBuilderV2, the scheduling sheet, the invoice composer,
-            the speech-to-quote modal, the profit-tracker modal — all of
-            them are rendered INSIDE jobCardContent's JSX tree. When we
-            short-circuit to the new mobile UI we'd otherwise unmount that
-            tree, so the action-tile setters would update state with no
-            visible effect. Keep the legacy tree mounted but hidden — Radix
-            renders its dialogs via portals at document.body so they appear
-            over the mobile UI just fine.
-          */}
-          <div className="hidden" aria-hidden="true">{jobCardContent}</div>
-        </>
+        <JobCardMobile
+          jobId={editingJob!.id}
+          onClose={() => handleDialogClose(false)}
+          actions={{
+            speechToQuote: () => setIsSpeechToQuoteOpen(true),
+            schedule: () => setIsSchedulingModalOpen(true),
+            quote: () => setIsQuoteModalOpen(true),
+            invoice: () => setIsInvoiceModalOpen(true),
+            proposal: () => setIsProposalBuilderOpen(true),
+            timeTracking: () => setIsTimeTrackingOpen(true),
+            profitTracker: () => setIsProfitTrackerOpen(true),
+            sendToXero: () => sendToXeroMutation.mutate(),
+            // queueJob: no existing handler yet — left undefined so the
+            // tile surfaces a "coming soon" toast.
+          }}
+        />
       ) : renderInline ? (
         // Inline rendering for split-screen panel (desktop)
         jobCardContent
