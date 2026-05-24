@@ -118,8 +118,10 @@ export default function History() {
         valueB = b.status || '';
         break;
       case 'amount':
-        valueA = parseFloat(a.totalAmount || '0');
-        valueB = parseFloat(b.totalAmount || '0');
+        // Use the full chain helper so proposal-sourced jobs sort by their
+        // real (lineItems-derived) value rather than the absent totalAmount.
+        valueA = getJobAmountIncGst(a);
+        valueB = getJobAmountIncGst(b);
         break;
       default:
         valueA = '';
@@ -171,12 +173,45 @@ export default function History() {
     return date.toLocaleDateString('en-GB'); // DD/MM/YYYY format like ServiceM8
   };
 
-  const formatCurrency = (amount: string | null) => {
-    if (!amount) return '';
-    return new Intl.NumberFormat('en-NZ', { 
-      style: 'currency', 
-      currency: 'NZD' 
-    }).format(parseFloat(amount));
+  // Accepts a string, number, or null so callers can pass either a raw DB
+  // column value (string) or a computed amount (number). Empty/zero stays
+  // blank rather than rendering "\$0.00" — matches the original behaviour.
+  const formatCurrency = (amount: string | number | null | undefined) => {
+    if (amount == null || amount === '' || amount === 0) return '';
+    const n = typeof amount === 'number' ? amount : parseFloat(amount);
+    if (!Number.isFinite(n) || n === 0) return '';
+    return new Intl.NumberFormat('en-NZ', {
+      style: 'currency',
+      currency: 'NZD'
+    }).format(n);
+  };
+
+  // Inc-GST job amount used for both the amount-column sort key and the
+  // displayed dollar value. Same chain as JobDashboard.getJobPrice — the
+  // fix for the lineItems blind spot (PR #28 / #30 / this PR): proposal-
+  // sourced jobs carry lineItems but no rolled-up totalAmount, so they
+  // were sorting to the bottom + showing blank.
+  const getJobAmountIncGst = (job: Job): number => {
+    const toNum = (v: unknown): number => {
+      if (v == null) return 0;
+      const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const lineItems = (job as any).lineItems as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(lineItems) && lineItems.length > 0) {
+      const lineItemsTotalExGst = lineItems.reduce((sum, li) => {
+        const exGst =
+          toNum(li.totalExGst) ||
+          (li.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
+        return sum + (exGst || toNum(li.total));
+      }, 0);
+      if (lineItemsTotalExGst > 0) return lineItemsTotalExGst * 1.15;
+    }
+    const subtotal = toNum(job.subtotal);
+    if (subtotal > 0) return subtotal * 1.15;
+    const incGst = toNum((job as any).totalIncludingGst);
+    if (incGst > 0) return incGst;
+    return toNum(job.totalAmount);
   };
 
   const getSortIcon = (column: SortColumn) => {
@@ -336,7 +371,7 @@ export default function History() {
                         </div>
                         <div className="text-right">
                           <p className="text-base font-semibold text-gray-900" data-testid={`text-amount-${job.id}`}>
-                            {formatCurrency(job.totalAmount)}
+                            {formatCurrency(getJobAmountIncGst(job))}
                           </p>
                           <p className="text-xs text-gray-500" data-testid={`text-date-${job.id}`}>
                             {formatDate(job.createdAt ? job.createdAt.toString() : null)}
@@ -501,7 +536,7 @@ export default function History() {
                       {getStatusBadge(job.status || '')}
                     </TableCell>
                     <TableCell className="text-sm font-medium">
-                      {formatCurrency(job.totalAmount)}
+                      {formatCurrency(getJobAmountIncGst(job))}
                     </TableCell>
                   </TableRow>
                 );
