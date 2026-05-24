@@ -23,18 +23,25 @@ import {
   Mail,
   MoreHorizontal,
   CheckCircle,
-  Copy,
   Trash2,
-  ExternalLink,
+  Mic,
+  Calendar,
+  FileText,
+  CreditCard,
+  FilePen,
+  Clock,
+  TrendingUp,
+  ListOrdered,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
@@ -218,6 +225,15 @@ export function JobCardMobile({
     }
   };
 
+  // Each action in the Actions sheet currently surfaces a "coming soon" toast
+  // until we wire it through to the right modal/flow in GlobalJobCard.
+  const actionStub = (which: string) => () => {
+    toast({
+      title: `${which} — coming soon`,
+      description: "We'll wire this up to the existing flow in a follow-up phase.",
+    });
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="job-card-mobile">
       {/* ── Header ── */}
@@ -325,41 +341,72 @@ export function JobCardMobile({
         <ActionBtn label="SMS" color="bg-blue-600" onClick={handleSms} icon={MessageSquare} />
         <ActionBtn label="Email" color="bg-red-500" onClick={handleEmail} icon={Mail} />
 
-        {/* More — opens a dropdown with secondary actions. */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+        {/* More — opens an iOS-style Actions sheet from the bottom. */}
+        <Sheet>
+          <SheetTrigger asChild>
             <button
               type="button"
               className="flex flex-col items-center gap-1 py-1 px-2 min-w-[52px]"
               data-testid="job-card-mobile-action-more"
-              onClick={() => onMore?.() /* parent can intercept; Radix still opens the menu */}
+              onClick={() => onMore?.()}
             >
               <div className="w-12 h-12 rounded-full bg-slate-700 grid place-items-center text-white shadow-md">
                 <MoreHorizontal className="w-5 h-5" />
               </div>
               <div className="text-[12px] font-semibold text-slate-800">More</div>
             </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="top" className="w-56">
-            <DropdownMenuItem onClick={onMarkComplete} disabled={markComplete.isPending || job?.status === "completed"}>
-              <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
-              {job?.status === "completed" ? "Already complete" : "Mark as complete"}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onDuplicate}>
-              <Copy className="w-4 h-4 mr-2 text-slate-600" />
-              Duplicate job
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onOpenFull}>
-              <ExternalLink className="w-4 h-4 mr-2 text-slate-600" />
-              Open full version
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onDelete} disabled={deleteJob.isPending} className="text-red-600 focus:text-red-700">
-              <Trash2 className="w-4 h-4 mr-2" />
-              Delete job
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+          </SheetTrigger>
+          <SheetContent
+            side="bottom"
+            className="rounded-t-3xl border-t border-slate-200 p-0 max-h-[90vh] flex flex-col"
+          >
+            <SheetHeader className="px-6 pt-3 pb-4 border-b border-slate-100 flex-shrink-0">
+              <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 mb-3" />
+              <SheetTitle className="text-center text-lg font-extrabold tracking-tight text-slate-900">
+                Actions
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="overflow-y-auto px-5 py-5">
+              <div className="grid grid-cols-4 gap-3">
+                <ActionTile label="Speech to Quote" icon={Mic} colour="purple" onClick={actionStub("Speech to Quote")} />
+                <ActionTile label="Schedule" icon={Calendar} colour="blue" onClick={actionStub("Schedule")} />
+                <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actionStub("Quote")} />
+                <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actionStub("Invoice")} />
+                <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actionStub("Proposal")} />
+                <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actionStub("Time Tracking")} />
+                <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actionStub("Profit Tracker")} />
+                <ActionTile label="Queue Job" icon={ListOrdered} colour="indigo" onClick={actionStub("Queue Job")} />
+                <ActionTile label="Send to Xero" icon={Send} colour="slate" disabled onClick={actionStub("Send to Xero")} />
+              </div>
+
+              {/* Secondary admin actions — kept around because they're already wired
+                  and live data deletion shouldn't be buried any further. */}
+              <div className="mt-6 pt-5 border-t border-slate-100 space-y-2">
+                <button
+                  type="button"
+                  onClick={onMarkComplete}
+                  disabled={markComplete.isPending || job?.status === "completed"}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                  <span className="text-[15px] font-semibold text-slate-900">
+                    {job?.status === "completed" ? "Already complete" : "Mark job as complete"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleteJob.isPending}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-red-50 hover:bg-red-100 disabled:opacity-50"
+                >
+                  <Trash2 className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <span className="text-[15px] font-semibold text-red-700">Delete job</span>
+                </button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
       {/* ── Composer modals (reused from GlobalJobCard) ── */}
@@ -387,6 +434,53 @@ export function JobCardMobile({
         />
       )}
     </div>
+  );
+}
+
+// Coloured action tile shown in the Actions sheet. iOS-style: rounded square
+// tinted background, lucide icon, label below.
+type TileColour = "purple" | "blue" | "amber" | "green" | "red" | "orange" | "cyan" | "indigo" | "slate";
+const TILE_COLOURS: Record<TileColour, { bg: string; icon: string }> = {
+  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
+  blue:   { bg: "bg-blue-100",   icon: "text-blue-600" },
+  amber:  { bg: "bg-amber-100",  icon: "text-amber-600" },
+  green:  { bg: "bg-emerald-100", icon: "text-emerald-600" },
+  red:    { bg: "bg-red-100",    icon: "text-red-600" },
+  orange: { bg: "bg-orange-100", icon: "text-orange-600" },
+  cyan:   { bg: "bg-cyan-100",   icon: "text-cyan-600" },
+  indigo: { bg: "bg-indigo-100", icon: "text-indigo-600" },
+  slate:  { bg: "bg-slate-100",  icon: "text-slate-400" },
+};
+
+function ActionTile({
+  label,
+  icon: Icon,
+  colour,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  icon: React.ElementType;
+  colour: TileColour;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const c = TILE_COLOURS[colour];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex flex-col items-center gap-1.5 group disabled:opacity-50"
+      data-testid={`action-tile-${label.toLowerCase().replace(/\s+/g, "-")}`}
+    >
+      <div className={`w-16 h-16 rounded-2xl ${c.bg} grid place-items-center shadow-sm group-active:scale-95 transition-transform`}>
+        <Icon className={`w-7 h-7 ${c.icon}`} />
+      </div>
+      <div className="text-[11.5px] font-semibold text-slate-900 leading-tight text-center max-w-[72px]">
+        {label}
+      </div>
+    </button>
   );
 }
 
