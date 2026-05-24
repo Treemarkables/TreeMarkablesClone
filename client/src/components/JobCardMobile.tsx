@@ -393,6 +393,33 @@ export function JobCardMobile({
     }
   };
 
+  // Close-with-empty-draft guard. Mirror of JobCardDesktop's handleClose
+  // (PR #42). The "+ New Job" flow pre-creates a draft, so a user who
+  // opens the card and closes without picking a customer / writing
+  // anything leaves an empty row in /all-jobs. Prompt to delete catches it.
+  //
+  // Same tight heuristic as desktop (customer AND description AND title
+  // all blank) — a user mid-fill isn't prompted. Auto-save data-loss
+  // history says err on the side of less-prompt-more-explicit.
+  const isJobEmpty =
+    !((job?.customerId as string | undefined) ?? "") &&
+    !(((job?.description as string | undefined) ?? "").trim()) &&
+    !(((job?.title as string | undefined) ?? "").trim());
+
+  const handleClose = () => {
+    if (isJobEmpty) {
+      if (
+        window.confirm(
+          "This job is empty (no customer, description, or title). Delete it?",
+        )
+      ) {
+        deleteJob.mutate(); // deleteJob.onSuccess calls onClose() itself
+        return;
+      }
+    }
+    onClose();
+  };
+
   // Each action in the Actions sheet currently surfaces a "coming soon" toast
   // until we wire it through to the right modal/flow in GlobalJobCard.
   const actionStub = (which: string) => () => {
@@ -423,7 +450,7 @@ export function JobCardMobile({
         <div className="flex items-center gap-2 flex-shrink-0">
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Close"
             className="w-7 h-7 rounded-full bg-slate-100 text-slate-600 grid place-items-center hover:bg-slate-200"
           >
