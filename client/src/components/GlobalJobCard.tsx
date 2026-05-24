@@ -96,6 +96,7 @@ import { JobVideos } from "./JobVideos";
 import { JobChecklistPanel } from "./JobChecklistPanel";
 import { JobQuotingPanel } from "./JobQuotingPanel";
 import { JobCardMobile } from "./JobCardMobile";
+import { JobCardDesktop } from "./JobCardDesktop";
 import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
@@ -342,6 +343,36 @@ export function GlobalJobCard({
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { isAdmin, currentUser } = useAuth();
+
+  // ── desktopV2 feature flag ─────────────────────────────────────────────
+  // Mirrors how mobileV2 was rolled out — opt-in via `?desktopV2=1` URL
+  // param, persisted to localStorage so it sticks across navigations. Set
+  // `?desktopV2=0` to flip back to the legacy desktop card. Default OFF
+  // for now; a later phase flips the default ON, and a final phase removes
+  // the flag entirely (same arc as PRs #21 → #23 for mobile).
+  //
+  // Read once at mount — if a user toggles the URL param mid-session they
+  // can hard-refresh to pick up the new value (no need for live reactivity
+  // and the extra re-renders that would imply).
+  const desktopV2Enabled = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const url = new URLSearchParams(window.location.search);
+      const urlFlag = url.get("desktopV2");
+      if (urlFlag === "1") {
+        window.localStorage.setItem("desktopV2", "1");
+        return true;
+      }
+      if (urlFlag === "0") {
+        window.localStorage.setItem("desktopV2", "0");
+        return false;
+      }
+      return window.localStorage.getItem("desktopV2") === "1";
+    } catch {
+      // localStorage can throw in private-mode Safari etc — fall back to off
+      return false;
+    }
+  }, []);
 
   // Fetch customers for the dropdown (needed upfront)
   const { data: customersData, isLoading: customersLoading } = useQuery({
@@ -10514,16 +10545,47 @@ The Treemarkables Team`;
     </div>
   );
 
-  // ── Mobile layout gate ───────────────────────────────────────────────────
+  // ── Layout gate ─────────────────────────────────────────────────────────
   // Mobile viewports get the redesigned JobCardMobile shell for the edit
   // case (it's the default and only mobile-edit path now — the ?mobileV2=0
   // escape hatch was removed after the new UI baked in production).
   //
-  // Desktop, split-screen panel (renderInline), and create-mode (no
-  // editingJob.id yet) all fall through to the existing jobCardContent
-  // inside its responsive Dialog — that legacy code still owns mobile
-  // create-mode because create has no jobId to render against.
+  // Desktop viewports get the redesigned JobCardDesktop shell when the
+  // desktopV2 flag is on (opt-in via `?desktopV2=1`). Off-by-default during
+  // Phase F rollout — a follow-up flips the default ON, and a final cleanup
+  // removes the flag (same arc mobile took in PRs #21 → #23).
+  //
+  // Split-screen panel (renderInline) and create-mode (no editingJob.id
+  // yet) always fall through to the existing jobCardContent inside its
+  // responsive Dialog — that legacy code still owns mobile create-mode
+  // because create has no jobId to render against, and the inline split-
+  // screen panel is its own beast.
   const showMobileCard = isMobile && !renderInline && isOpen && !!editingJob?.id;
+  const showDesktopCard =
+    !isMobile && !renderInline && isOpen && !!editingJob?.id && desktopV2Enabled;
+
+  // Document-modal openers reused by both mobile and desktop. Hoisting
+  // these as a single bag means the two surfaces stay in lockstep — if a
+  // new action is wired for one, the other picks it up for free.
+  const sharedDocActions = {
+    quote: () => setIsQuoteModalOpen(true),
+    invoice: () => setIsInvoiceModalOpen(true),
+    proposal: () => setIsProposalBuilderOpen(true),
+  };
+
+  // Diary doc-click handlers reused by both surfaces. Quote/invoice just
+  // open the relevant modal; proposal additionally pre-selects the right
+  // proposal id so the builder opens to that document instead of a fresh
+  // one. Pulled out so the desktop card mirrors what GlobalJobCard's
+  // own diary panel already wires.
+  const handleDiaryQuoteClick = () => setIsQuoteModalOpen(true);
+  const handleDiaryInvoiceClick = () => setIsInvoiceModalOpen(true);
+  const handleDiaryProposalClick = (proposalNumber: string) => {
+    const proposals = (jobProposalResponse as any)?.data || [];
+    const proposal = proposals.find((p: any) => p.proposalNumber === proposalNumber);
+    setEditingProposalId(proposal?.id);
+    setIsProposalBuilderOpen(true);
+  };
 
   return (
     <>
@@ -10541,9 +10603,7 @@ The Treemarkables Team`;
           actions={{
             speechToQuote: () => setIsSpeechToQuoteOpen(true),
             schedule: () => setIsSchedulingModalOpen(true),
-            quote: () => setIsQuoteModalOpen(true),
-            invoice: () => setIsInvoiceModalOpen(true),
-            proposal: () => setIsProposalBuilderOpen(true),
+            ...sharedDocActions,
             timeTracking: () => setIsTimeTrackingOpen(true),
             profitTracker: () => setIsProfitTrackerOpen(true),
             sendToXero: () => sendToXeroMutation.mutate(),
@@ -10551,6 +10611,15 @@ The Treemarkables Team`;
             // queue-reason dialog and PUTs inQueue/queueReason directly).
             // GlobalJobCard doesn't need to wire it.
           }}
+        />
+      ) : showDesktopCard ? (
+        <JobCardDesktop
+          jobId={editingJob!.id}
+          onClose={() => handleDialogClose(false)}
+          actions={sharedDocActions}
+          onQuoteClick={handleDiaryQuoteClick}
+          onInvoiceClick={handleDiaryInvoiceClick}
+          onProposalClick={handleDiaryProposalClick}
         />
       ) : renderInline ? (
         // Inline rendering for split-screen panel (desktop)
