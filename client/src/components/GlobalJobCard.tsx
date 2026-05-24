@@ -10530,13 +10530,19 @@ The Treemarkables Team`;
   const showDesktopCard =
     !isMobile && !renderInline && isOpen && !!editingJob?.id;
 
-  // Document-modal openers reused by both mobile and desktop. Hoisting
-  // these as a single bag means the two surfaces stay in lockstep — if a
-  // new action is wired for one, the other picks it up for free.
-  const sharedDocActions = {
+  // Action handlers reused by both mobile and desktop. Hoisting as a
+  // single bag keeps the two surfaces in lockstep — if a new action is
+  // wired for one, the other picks it up for free. Desktop's "More"
+  // dropdown and mobile's Actions sheet read from this same object.
+  const sharedActions = {
+    speechToQuote: () => setIsSpeechToQuoteOpen(true),
+    schedule: () => setIsSchedulingModalOpen(true),
     quote: () => setIsQuoteModalOpen(true),
     invoice: () => setIsInvoiceModalOpen(true),
     proposal: () => setIsProposalBuilderOpen(true),
+    timeTracking: () => setIsTimeTrackingOpen(true),
+    profitTracker: () => setIsProfitTrackerOpen(true),
+    sendToXero: () => sendToXeroMutation.mutate(),
   };
 
   // Diary doc-click handlers reused by both surfaces. Quote/invoice just
@@ -10566,23 +10572,18 @@ The Treemarkables Team`;
             // minus the close/find/tap dance.
             setCreatedJobId(newJobId);
           }}
-          actions={{
-            speechToQuote: () => setIsSpeechToQuoteOpen(true),
-            schedule: () => setIsSchedulingModalOpen(true),
-            ...sharedDocActions,
-            timeTracking: () => setIsTimeTrackingOpen(true),
-            profitTracker: () => setIsProfitTrackerOpen(true),
-            sendToXero: () => sendToXeroMutation.mutate(),
-            // queueJob: handled internally by JobCardMobile (opens its own
-            // queue-reason dialog and PUTs inQueue/queueReason directly).
-            // GlobalJobCard doesn't need to wire it.
-          }}
+          actions={sharedActions}
+          // queueJob: handled internally by JobCardMobile (opens its own
+          // queue-reason dialog and PUTs inQueue/queueReason directly).
+          // GlobalJobCard doesn't need to wire it. Desktop defers Queue
+          // entirely for now — same reason, no dialog ported across yet.
         />
       ) : showDesktopCard ? (
         <JobCardDesktop
           jobId={editingJob!.id}
           onClose={() => handleDialogClose(false)}
-          actions={sharedDocActions}
+          onDuplicated={(newJobId) => setCreatedJobId(newJobId)}
+          actions={sharedActions}
           onQuoteClick={handleDiaryQuoteClick}
           onInvoiceClick={handleDiaryInvoiceClick}
           onProposalClick={handleDiaryProposalClick}

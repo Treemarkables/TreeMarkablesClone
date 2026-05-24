@@ -39,7 +39,7 @@
  * does not persist across opens — easy to add when there's user demand.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   X as XIcon,
   Camera,
@@ -50,9 +50,25 @@ import {
   CreditCard,
   FilePen,
   MoreHorizontal,
+  Mic,
+  Calendar as CalendarIcon,
+  Clock,
+  TrendingUp,
+  Send,
+  CheckCircle,
+  Copy,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
@@ -79,14 +95,17 @@ export interface JobCardDesktopProps {
   onSave?: () => void;
   isSaving?: boolean;
   /**
-   * Overrides for the bottom action bar. Photo/Call/SMS/Email have local
-   * defaults (open the relevant composer modal / `tel:` link). Quote /
-   * Invoice / Proposal / More have no sensible default in isolation —
-   * the parent (GlobalJobCard) supplies these by routing to the same
-   * modals it already manages. When omitted, the button surfaces a
-   * "not wired up" toast (mirrors JobCardMobile's actionStub pattern).
+   * Overrides for the bottom action bar + items shown in the "More"
+   * dropdown menu. Photo / Call / SMS / Email have local defaults (open
+   * the relevant composer modal / `tel:` link). The rest have no
+   * sensible default in isolation — the parent (GlobalJobCard) routes
+   * them to the same modals / mutations it already owns. Mirrors the
+   * shape of JobCardMobile's `actions` so the two surfaces stay in sync
+   * when a new action lands; any item the parent doesn't supply is
+   * simply hidden from the More menu rather than rendered as a stub.
    */
   actions?: {
+    // Bottom bar
     photo?: () => void;
     call?: () => void;
     sms?: () => void;
@@ -94,8 +113,21 @@ export interface JobCardDesktopProps {
     quote?: () => void;
     invoice?: () => void;
     proposal?: () => void;
-    more?: () => void;
+    // More menu (parent-supplied)
+    speechToQuote?: () => void;
+    schedule?: () => void;
+    timeTracking?: () => void;
+    profitTracker?: () => void;
+    sendToXero?: () => void;
   };
+  /**
+   * Called after Duplicate Job succeeds. Parent (GlobalJobCard) typically
+   * wires this to swap the open card over to the new duplicate so the
+   * user is dropped straight into editing it. Omitting it falls back to
+   * closing the card — the duplicate still appears in the jobs list, the
+   * user finds it from there. Mirrors JobCardMobile's onDuplicated.
+   */
+  onDuplicated?: (newJobId: string) => void;
   /**
    * Forwarded straight to JobDiarySection. Fired when a diary entry that
    * references a quote / invoice / proposal is clicked. Parent supplies
@@ -139,6 +171,7 @@ export function JobCardDesktop({
   onSave,
   isSaving,
   actions,
+  onDuplicated,
   onQuoteClick,
   onInvoiceClick,
   onProposalClick,
@@ -156,6 +189,70 @@ export function JobCardDesktop({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // ── Internal mutations for the More menu ──────────────────────────────
+  // Mark Complete / Duplicate / Delete mirror JobCardMobile's mutations
+  // (lines 270-330) exactly — same endpoints, same invalidations, same
+  // error toasts. Duplicated code is acceptable here: if a third surface
+  // ever needs these we can lift them into a useJobActions(jobId) hook.
+  const markComplete = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, { status: "completed" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't mark complete", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteJob = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds: [jobId] });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't delete job", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // POST /api/jobs/:id/duplicate copies scoping (customer, address, line
+  // items, contacts, checklists) into a fresh quote-status job with a new
+  // jobNumber. Scheduling, assignments, completion state, payments, and
+  // Xero IDs all reset — see server/routes.ts for the field whitelist.
+  const duplicateJob = useMutation<
+    { success?: boolean; data?: { id?: string; jobNumber?: string } },
+    Error
+  >({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/duplicate`, {});
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Duplicate failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: (json) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      const newId = json?.data?.id;
+      if (newId && onDuplicated) {
+        onDuplicated(newId);
+      } else {
+        onClose();
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't duplicate job", description: err.message, variant: "destructive" });
+    },
+  });
 
   // Fetch job — shares cache with GlobalJobCard / JobCardMobile so a job
   // already open elsewhere doesn't trigger a duplicate request.
@@ -288,9 +385,10 @@ export function JobCardDesktop({
   }, [job, customer]);
 
   // Each handler: parent-supplied action wins, else local default. Quote /
-  // Invoice / Proposal / More have no local default — they fall back to a
-  // toast on the rare path where the parent doesn't supply them (e.g. a
-  // future standalone usage outside GlobalJobCard).
+  // Invoice / Proposal have no local default — they fall back to a toast
+  // on the rare path where the parent doesn't supply them (e.g. a future
+  // standalone usage outside GlobalJobCard). The More button is a dropdown
+  // trigger so it doesn't need a handler.
   const actionStub = (label: string) => () => {
     toast({
       title: `${label} — not wired up`,
@@ -314,7 +412,27 @@ export function JobCardDesktop({
   const handleQuote = actions?.quote ?? actionStub("Quote");
   const handleInvoice = actions?.invoice ?? actionStub("Invoice");
   const handleProposal = actions?.proposal ?? actionStub("Proposal");
-  const handleMore = actions?.more ?? actionStub("More menu");
+
+  // ── More menu wrapper handlers ────────────────────────────────────────
+  // Internal mutations get a confirm() before firing (Mark Complete is the
+  // exception — fast-path, easy to undo via status dropdown if mistaken).
+  // Duplicate prompts because it creates a new job in the list; Delete
+  // because it's destructive.
+  const onMarkComplete = () => markComplete.mutate();
+  const onDuplicate = () => {
+    if (
+      window.confirm(
+        "Create a copy of this job? The duplicate starts as a fresh quote — no scheduling, no payments, new job number.",
+      )
+    ) {
+      duplicateJob.mutate();
+    }
+  };
+  const onDelete = () => {
+    if (window.confirm("Delete this job? This can't be undone.")) {
+      deleteJob.mutate();
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4" data-testid="job-card-desktop">
@@ -467,7 +585,86 @@ export function JobCardDesktop({
             {actionBtn("Quote", FileText, "bg-amber-100", "text-amber-600", handleQuote)}
             {actionBtn("Invoice", CreditCard, "bg-emerald-100", "text-emerald-600", handleInvoice)}
             {actionBtn("Proposal", FilePen, "bg-red-100", "text-red-600", handleProposal)}
-            {actionBtn("More", MoreHorizontal, "bg-slate-100", "text-slate-600", handleMore)}
+
+            {/* More menu — items render only if their handler is supplied,
+                so the menu shrinks gracefully if the parent doesn't wire
+                everything. Three blocks separated by dividers: parent-
+                supplied tooling, job-lifecycle, then destructive Delete. */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-slate-100 text-sm font-semibold text-slate-700"
+                  data-testid="job-card-desktop-action-more"
+                >
+                  <span className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 grid place-items-center">
+                    <MoreHorizontal className="w-4 h-4" />
+                  </span>
+                  More
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                {actions?.speechToQuote && (
+                  <DropdownMenuItem onClick={actions.speechToQuote} data-testid="more-speech-to-quote">
+                    <Mic className="w-4 h-4 mr-2 text-purple-600" />
+                    Speech to Quote
+                  </DropdownMenuItem>
+                )}
+                {actions?.schedule && (
+                  <DropdownMenuItem onClick={actions.schedule} data-testid="more-schedule">
+                    <CalendarIcon className="w-4 h-4 mr-2 text-blue-600" />
+                    Schedule
+                  </DropdownMenuItem>
+                )}
+                {actions?.timeTracking && (
+                  <DropdownMenuItem onClick={actions.timeTracking} data-testid="more-time-tracking">
+                    <Clock className="w-4 h-4 mr-2 text-emerald-600" />
+                    Time Tracking
+                  </DropdownMenuItem>
+                )}
+                {actions?.profitTracker && (
+                  <DropdownMenuItem onClick={actions.profitTracker} data-testid="more-profit-tracker">
+                    <TrendingUp className="w-4 h-4 mr-2 text-emerald-600" />
+                    Profit Tracker
+                  </DropdownMenuItem>
+                )}
+                {actions?.sendToXero && (
+                  <DropdownMenuItem onClick={actions.sendToXero} data-testid="more-send-to-xero">
+                    <Send className="w-4 h-4 mr-2 text-blue-600" />
+                    Send to Xero
+                  </DropdownMenuItem>
+                )}
+                {(actions?.speechToQuote || actions?.schedule || actions?.timeTracking || actions?.profitTracker || actions?.sendToXero) && (
+                  <DropdownMenuSeparator />
+                )}
+                <DropdownMenuItem
+                  onClick={onMarkComplete}
+                  disabled={markComplete.isPending}
+                  data-testid="more-mark-complete"
+                >
+                  <CheckCircle className="w-4 h-4 mr-2 text-emerald-600" />
+                  {markComplete.isPending ? "Marking…" : "Mark Complete"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={onDuplicate}
+                  disabled={duplicateJob.isPending}
+                  data-testid="more-duplicate"
+                >
+                  <Copy className="w-4 h-4 mr-2 text-blue-600" />
+                  {duplicateJob.isPending ? "Duplicating…" : "Duplicate Job"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={onDelete}
+                  disabled={deleteJob.isPending}
+                  className="text-red-600 focus:text-red-700 focus:bg-red-50"
+                  data-testid="more-delete"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  {deleteJob.isPending ? "Deleting…" : "Delete Job"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
