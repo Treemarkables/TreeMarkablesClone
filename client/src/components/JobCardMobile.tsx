@@ -62,6 +62,7 @@ import { Label } from "@/components/ui/label";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
+import { JobVideos } from "@/components/JobVideos";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
@@ -382,6 +383,13 @@ export function JobCardMobile({
           )}
           {activeTab === "diary" && (
             <div className="bg-white">
+              {/* Job Videos sits above the diary feed — same vertical order
+                  as the legacy GlobalJobCard layout. Collapsed by default;
+                  expand to upload a walkthrough and (post-upload) opt into
+                  the AI quote-description flow. */}
+              <div className="p-3">
+                <JobVideos jobId={jobId} />
+              </div>
               <JobDiarySection
                 jobId={jobId}
                 customerId={customerId}
