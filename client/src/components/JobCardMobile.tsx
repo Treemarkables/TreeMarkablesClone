@@ -199,9 +199,36 @@ export function JobCardMobile({
   const jobNumber = (job?.jobNumber as number | undefined) ?? undefined;
   const status = (job?.status as string | undefined) ?? "lead";
   const badge = STATUS_BADGE[status] ?? { label: status, bg: "#64748b" };
+  // Header price — mirrors the desktop GlobalJobCard header (lines 4582-4613)
+  // so the same number appears in both UIs. Previously read three made-up
+  // field names (jobPrice / totalValue / estimatedValue) that don't exist
+  // on the jobs row, so it always displayed $0.00.
+  //
+  // Line items are stored GST-EXCLUSIVE (item.total = ex-GST per
+  // priceIncludesTax: false default — see GlobalJobCard line 4583).
+  // Desktop header displays the ex-GST total, so we do too.
+  //
+  // Fallback chain: line items → job.subtotal (already ex-GST) →
+  // job.totalAmount / 1.15 (totalAmount is stored inc-GST).
   const jobValue = useMemo(() => {
-    const v = job?.jobPrice ?? job?.totalValue ?? job?.estimatedValue;
-    return typeof v === "string" ? parseFloat(v) : (v as number | undefined);
+    const toNum = (v: unknown): number => {
+      if (v == null) return 0;
+      const n = typeof v === "string" ? parseFloat(v) : (v as number);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const lineItems = (job?.lineItems as Array<Record<string, unknown>> | undefined) ?? [];
+    const lineItemsTotal = lineItems.reduce((sum, li) => {
+      // Prefer explicit ex-GST fields; fall back to .total (also ex-GST by default).
+      const exGst =
+        toNum(li.totalExGst) ||
+        (li.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
+      return sum + (exGst || toNum(li.total));
+    }, 0);
+    if (lineItemsTotal > 0) return lineItemsTotal;
+    const jobSubtotal = toNum(job?.subtotal);
+    if (jobSubtotal > 0) return jobSubtotal;
+    const totalAmount = toNum(job?.totalAmount);
+    return totalAmount > 0 ? totalAmount / 1.15 : undefined;
   }, [job]);
 
   // Modal state for the three composer modals reused from GlobalJobCard.
