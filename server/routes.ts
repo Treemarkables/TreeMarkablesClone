@@ -96,6 +96,7 @@ const upload = multer({
   }
 });
 import fs from "fs";
+import os from "os";
 import { format } from "date-fns";
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime } from "@shared/dateUtils";
@@ -7251,6 +7252,163 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     } catch (error) {
       console.error('Error deleting video:', error);
       res.status(500).json({ success: false, message: 'Error deleting video' });
+    }
+  });
+
+  // Whisper rejects audio/video files over 25MB. We cap a touch under that so we
+  // don't waste a download + API round-trip on something that's going to bounce.
+  // Phase 1.5 will add ffmpeg audio-only extraction to lift this ceiling.
+  const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
+
+  // AI quote-from-video: transcribe the on-site walkthrough with Whisper, clean
+  // it into a customer-ready job description with GPT-5, and persist both on
+  // the video row. Returns the generated description so the client can preview
+  // before applying it to jobs.description. Synchronous on purpose — quote
+  // videos are short, the arborist is actively waiting, and there's no queue
+  // infra in the app yet. Phase 2 may move this to a background job.
+  app.post('/api/videos/:id/transcribe', async (req: Request, res: Response) => {
+    const videoId = req.params.id;
+    let tmpPath: string | null = null;
+
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+
+      // Idempotent fast-path: if we've already transcribed this video, return the
+      // cached result instead of re-billing OpenAI on every retry/refresh.
+      if (video.transcriptStatus === 'ready' && video.generatedDescription) {
+        return res.json({
+          success: true,
+          data: {
+            transcript: video.transcript,
+            generatedDescription: video.generatedDescription,
+            cached: true,
+          },
+        });
+      }
+
+      if (video.fileSize > WHISPER_MAX_BYTES) {
+        const mb = (video.fileSize / (1024 * 1024)).toFixed(1);
+        return res.status(413).json({
+          success: false,
+          message: `Video is ${mb}MB. Transcription currently supports files under 24MB — try a shorter clip or record at lower quality.`,
+        });
+      }
+
+      await storage.updateVideo(videoId, {
+        transcriptStatus: 'processing',
+        transcriptError: null,
+      });
+
+      // Download GCS object to a temp file — OpenAI's SDK takes a ReadStream.
+      const ext = (video.filename.split('.').pop() || 'mp4').toLowerCase();
+      tmpPath = path.join(os.tmpdir(), `tm-transcribe-${randomUUID()}.${ext}`);
+      await videoStorage.downloadToFile(video.url, tmpPath);
+
+      // Step 1: Whisper transcription. Mirrors the speech-to-quote pattern at
+      // /api/mobile/speech-to-quote — same model, same response_format.
+      const rawTranscription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(tmpPath),
+        model: 'whisper-1',
+        language: 'en',
+        response_format: 'text',
+      });
+      const rawTranscript = typeof rawTranscription === 'string'
+        ? rawTranscription
+        : (rawTranscription as any).text;
+
+      if (!rawTranscript || !rawTranscript.trim()) {
+        await storage.updateVideo(videoId, {
+          transcriptStatus: 'error',
+          transcriptError: 'No speech detected in video',
+        });
+        return res.status(422).json({
+          success: false,
+          message: 'No speech detected in the video.',
+        });
+      }
+
+      // Step 2: clean the transcript into a quote-ready job description. GPT-5
+      // doesn't accept temperature; rely on the model's defaults.
+      const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
+
+Requirements:
+- Plain English, suitable for a homeowner to read
+- Group related work items together (e.g. all pruning, then all removals)
+- Use bullet points if there are multiple distinct work items; otherwise short paragraphs
+- Strip filler words ("um", "ah", "you know"), asides, and any speech directed at someone other than the customer
+- Keep the arborist's tree/species terms verbatim (e.g. "manuka", "kauri", "macrocarpa")
+- Write in first person plural ("we'll prune…") — never "Arborist will…" or "I will…"
+- Do not invent details, measurements, or species not mentioned in the transcript
+- Do not include pricing unless the arborist explicitly stated a number
+- No preamble, no sign-off — just the description content
+
+Transcript:
+"""
+${rawTranscript.trim()}
+"""
+
+Return only the cleaned job description.`;
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: 'You convert raw arborist walkthrough transcripts into clean, customer-ready job descriptions for quotes.',
+          },
+          { role: 'user', content: prompt },
+        ],
+      });
+      const generatedDescription = completion.choices[0]?.message?.content?.trim() || '';
+
+      if (!generatedDescription) {
+        await storage.updateVideo(videoId, {
+          transcript: rawTranscript,
+          transcriptStatus: 'error',
+          transcriptError: 'GPT returned empty description',
+        });
+        return res.status(502).json({
+          success: false,
+          message: 'Could not generate a description from this transcript.',
+        });
+      }
+
+      const updated = await storage.updateVideo(videoId, {
+        transcript: rawTranscript,
+        generatedDescription,
+        transcriptStatus: 'ready',
+        transcriptError: null,
+      });
+
+      console.log(`📝 Transcribed video ${videoId} — ${rawTranscript.length} chars → ${generatedDescription.length} chars`);
+
+      res.json({
+        success: true,
+        data: {
+          transcript: updated.transcript,
+          generatedDescription: updated.generatedDescription,
+          cached: false,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Transcription failed';
+      console.error(`❌ Transcribe video ${videoId} failed:`, error);
+      try {
+        await storage.updateVideo(videoId, {
+          transcriptStatus: 'error',
+          transcriptError: message.slice(0, 500),
+        });
+      } catch {/* best-effort status write */}
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message });
+      }
+    } finally {
+      if (tmpPath) {
+        fs.promises.unlink(tmpPath).catch(() => {/* best-effort */});
+      }
     }
   });
 
