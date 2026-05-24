@@ -702,8 +702,31 @@ export function CalendarGrid({
   // across week/2week views, so the price MUST be divided by jobDayCount or the
   // same total double-counts in every cell. Use this for any per-day price label
   // — do not introduce a separate "full price" helper for cell rendering.
+  //
+  // Hierarchy mirrors the canonical desktop GlobalJobCard header (lines 4582-
+  // 4613) and the Live Roster `getJobPrice` fixed in PR #28: line items
+  // (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 → job.totalAmount
+  // / 1.15. Jobs created from accepted proposals carry `lineItems` populated
+  // but no rolled-up `subtotal`, so without the lineItems check those jobs
+  // contribute $0 to the day's revenue bar even though they're worth real
+  // money — same blank-price symptom that surfaced on the Live Roster.
   const jobRevenue = (job: Job): number => {
+    const toNum = (v: unknown): number => {
+      if (v == null) return 0;
+      const n = typeof v === "string" ? parseFloat(v) : (v as number);
+      return Number.isFinite(n) ? n : 0;
+    };
     const raw = (() => {
+      const lineItems = (job as any).lineItems as Array<Record<string, unknown>> | undefined;
+      if (Array.isArray(lineItems) && lineItems.length > 0) {
+        const lineItemsTotal = lineItems.reduce((sum, li) => {
+          const exGst =
+            toNum(li.totalExGst) ||
+            (li.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
+          return sum + (exGst || toNum(li.total));
+        }, 0);
+        if (lineItemsTotal > 0) return Math.round(lineItemsTotal * 100) / 100;
+      }
       const sub = parseFloat(job.subtotal || "0");
       if (sub > 0) return sub;
       const incGst = parseFloat(job.totalIncludingGst || "0");
