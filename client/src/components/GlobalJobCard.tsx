@@ -10530,31 +10530,13 @@ The Treemarkables Team`;
   const showDesktopCard =
     !isMobile && !renderInline && isOpen && !!editingJob?.id;
 
-  // Instrumentation: log when the legacy Dialog fallthrough actually
-  // renders. After 18 PRs of routing every entry point through the new
-  // JobCard{Mobile,Desktop}, jobCardContent should be effectively
-  // unreachable — but proving that conclusively requires a day or two of
-  // production logs. The next PR deletes ~6k lines of jobCardContent +
-  // this Dialog branch once no [legacy-jobcard-render] warnings show up
-  // in DO logs. If they do, the warning tells us exactly which mode +
-  // jobId combination still trips it so we can fix the entry point
-  // rather than leave the safety net in place forever.
-  const isLegacyFallthrough = isOpen && !renderInline && !showMobileCard && !showDesktopCard;
-  useEffect(() => {
-    if (isLegacyFallthrough) {
-      // eslint-disable-next-line no-console
-      console.warn("[legacy-jobcard-render] Dialog fallthrough rendered", {
-        mode,
-        internalMode,
-        isMobile,
-        isOpen,
-        jobId,
-        createdJobId,
-        editingJobId: editingJob?.id,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLegacyFallthrough]);
+  // (PR #45's instrumentation useEffect was removed in the hotfix that
+  // followed it. The useEffect lands after the `if (jobLoading) return …`
+  // early return at line ~4486 — it was the only post-early-return hook
+  // in the component, so React threw "Rendered more hooks than during the
+  // previous render" the moment jobLoading transitioned. The renderInline
+  // branch deletion from #45 stays; the legacy-fallthrough telemetry can
+  // come back later in a hook-rules-safe spot.)
 
   // Action handlers reused by both mobile and desktop. Hoisting as a
   // single bag keeps the two surfaces in lockstep — if a new action is
