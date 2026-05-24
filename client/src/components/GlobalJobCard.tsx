@@ -10515,12 +10515,15 @@ The Treemarkables Team`;
   );
 
   // ── Feature-flag gate for the new mobile job-card layout ─────────────────
-  // Opt-in via `?mobileV2=1` on any URL while we shake it out on real jobs.
-  // When the flag is on AND we're on a mobile viewport AND we have a real
-  // job loaded, render JobCardMobile in place of the legacy mobile inline
-  // JSX. Desktop / inline / no-job paths fall through to the existing UI.
-  const useMobileV2 = typeof window !== "undefined"
-    && new URLSearchParams(window.location.search).get("mobileV2") === "1";
+  // Default-on for mobile viewports. The opt-out is `?mobileV2=0` on any URL
+  // — handy if a customer hits a regression and needs to fall back to the
+  // legacy inline JSX without waiting on a deploy. Any other value (including
+  // missing or `?mobileV2=1`) means on.
+  // Desktop / inline / no-job paths fall through to the existing UI
+  // regardless of the flag.
+  const useMobileV2 = typeof window === "undefined"
+    ? true
+    : new URLSearchParams(window.location.search).get("mobileV2") !== "0";
   const showMobileV2 = useMobileV2 && isMobile && !renderInline && isOpen && !!editingJob?.id;
 
   return (
