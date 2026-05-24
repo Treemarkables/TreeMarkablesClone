@@ -103,6 +103,48 @@ export function invoiceRevenueExGst(invoice: { amount?: any; items?: any }): num
   return parseFloat(invoice.amount?.toString() || '0') / 1.15;
 }
 
+// ── jobRevenueExGst ─────────────────────────────────────────────────────────
+//
+// Canonical job-amount lookup, ex-GST. Same hierarchy the client surfaces
+// converged on after PRs #28 / #30 / #36 fixed the same blind spot in four
+// places (Live Roster, Dispatch Board, /all-jobs, /history):
+//
+//   line items (ex-GST: totalExGst → priceExGst × quantity → total)
+//   → job.subtotal           (ex-GST by definition of the column)
+//   → job.totalIncludingGst / 1.15
+//   → job.totalAmount / 1.15 (inc-GST per project convention)
+//
+// Without the line-items step, a job sourced from an accepted proposal
+// (lineItems populated but no rolled-up subtotal / totalAmount yet)
+// returns 0 — exactly the symptom PR #28 surfaced on the Live Roster.
+//
+// Returns ex-GST because the two known server callers (gross-margin
+// calculation, quote-presentation analytics) compare against ex-GST cost
+// fields; callers that want the customer-facing inc-GST value gross up
+// by * 1.15 at the callsite.
+export function jobRevenueExGst(job: { lineItems?: any; subtotal?: any; totalIncludingGst?: any; totalAmount?: any }): number {
+  const toNum = (v: unknown): number => {
+    if (v == null) return 0;
+    const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const items = Array.isArray(job.lineItems) ? job.lineItems : null;
+  if (items && items.length > 0) {
+    const lineItemsTotal = items.reduce((sum: number, li: any) => {
+      const exGst =
+        toNum(li?.totalExGst) ||
+        (li?.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
+      return sum + (exGst || toNum(li?.total));
+    }, 0);
+    if (lineItemsTotal > 0) return lineItemsTotal;
+  }
+  const sub = parseFloat(job.subtotal?.toString() || '0');
+  if (sub > 0) return sub;
+  const incGst = parseFloat(job.totalIncludingGst?.toString() || '0');
+  if (incGst > 0) return incGst / 1.15;
+  return parseFloat(job.totalAmount?.toString() || '0') / 1.15;
+}
+
 // modify the interface with any CRUD methods
 // you might need
 
@@ -2665,17 +2707,13 @@ class DatabaseStorage implements IStorage {
     const job = await this.getJob(jobId);
     if (!job) throw new Error("Job not found");
 
-    // job.totalAmount is GST-inclusive (it's stored as subtotal + gstAmount —
-    // see PUT /api/jobs/:id). All cost fields are GST-exclusive. So compare
-    // ex-GST revenue to ex-GST costs; otherwise the margin gets inflated by
-    // the GST component, which is owed to IRD, not revenue.
-    const taxRate = parseFloat(job.taxRate?.toString() || "15");
-    const subtotalExGst = parseFloat(job.subtotal?.toString() || "0");
-    const totalAmountIncGst = parseFloat(job.totalAmount?.toString() || "0");
-    const totalRevenue =
-      subtotalExGst > 0
-        ? subtotalExGst
-        : totalAmountIncGst / (1 + taxRate / 100);
+    // Ex-GST revenue compared against ex-GST cost fields (otherwise the
+    // margin gets inflated by the GST component, which is owed to IRD,
+    // not revenue). jobRevenueExGst pulls from lineItems first so jobs
+    // sourced from accepted proposals (lineItems-only, no rolled-up
+    // subtotal/totalAmount yet) aren't treated as $0 revenue, which would
+    // make their gross-margin readout report 0%.
+    const totalRevenue = jobRevenueExGst(job);
 
     const laborCosts = parseFloat(job.actualLaborCosts?.toString() || job.laborCosts?.toString() || "0");
     const materialsCosts = parseFloat(job.actualMaterialsCosts?.toString() || job.materialsCosts?.toString() || "0");
@@ -3287,14 +3325,16 @@ class DatabaseStorage implements IStorage {
     const sentLaterTotal = sentLaterAccepted.length + sentLaterRejected.length;
     const sentLaterAcceptanceRate = sentLaterTotal > 0 ? (sentLaterAccepted.length / sentLaterTotal) * 100 : 0;
     
-    // Calculate average values
-    const onSiteAvgValue = onSiteAccepted.length > 0 
-      ? onSiteAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0) / onSiteAccepted.length 
-      : 0;
-    const sentLaterAvgValue = sentLaterAccepted.length > 0 
-      ? sentLaterAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0) / sentLaterAccepted.length 
-      : 0;
-    
+    // Calculate average + total values. Output is inc-GST (× 1.15 from the
+    // ex-GST helper) because this surface reports customer-facing quote
+    // totals — what the customer was quoted and accepted — not internal
+    // ex-GST revenue. Matches the original semantics of reading totalAmount
+    // (project convention: that column stores inc-GST).
+    const onSiteAcceptedTotal = onSiteAccepted.reduce((sum, j) => sum + jobRevenueExGst(j) * 1.15, 0);
+    const sentLaterAcceptedTotal = sentLaterAccepted.reduce((sum, j) => sum + jobRevenueExGst(j) * 1.15, 0);
+    const onSiteAvgValue = onSiteAccepted.length > 0 ? onSiteAcceptedTotal / onSiteAccepted.length : 0;
+    const sentLaterAvgValue = sentLaterAccepted.length > 0 ? sentLaterAcceptedTotal / sentLaterAccepted.length : 0;
+
     return {
       hasData: jobsWithMethod.length > 0,
       onSite: {
@@ -3304,7 +3344,7 @@ class DatabaseStorage implements IStorage {
         pending: onSitePending.length,
         acceptanceRate: Math.round(onSiteAcceptanceRate * 10) / 10,
         avgAcceptedValue: Math.round(onSiteAvgValue * 100) / 100,
-        totalAcceptedValue: onSiteAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0)
+        totalAcceptedValue: onSiteAcceptedTotal
       },
       sentLater: {
         total: sentLaterJobs.length,
@@ -3313,7 +3353,7 @@ class DatabaseStorage implements IStorage {
         pending: sentLaterPending.length,
         acceptanceRate: Math.round(sentLaterAcceptanceRate * 10) / 10,
         avgAcceptedValue: Math.round(sentLaterAvgValue * 100) / 100,
-        totalAcceptedValue: sentLaterAccepted.reduce((sum, j) => sum + parseFloat(j.totalAmount || '0'), 0)
+        totalAcceptedValue: sentLaterAcceptedTotal
       },
       comparison: {
         rateAdvantage: Math.round((onSiteAcceptanceRate - sentLaterAcceptanceRate) * 10) / 10,
