@@ -9891,7 +9891,16 @@ Draft the reply now.`;
           message: 'Twilio API Key not configured. Set TWILIO_API_KEY and TWILIO_API_SECRET secrets.',
         });
       }
-      const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      // Identity isolation: only admins (the owner) get the shared inbound
+      // identity that the answer webhook dials. Other employees get a
+      // per-employee identity so their devices don't ring on inbound customer
+      // calls — twilio-answer only <Dial>s the owner identity.
+      const requestingEmployee = await storage.getEmployee(req.session.employeeId);
+      const ownerIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      const isAdmin = requestingEmployee?.role === 'admin';
+      const clientIdentity = isAdmin
+        ? ownerIdentity
+        : `treemarkables-emp-${req.session.employeeId}`;
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       const pushCredentialSid = process.env.TWILIO_PUSH_CREDENTIAL_SID;
       const { AccessToken } = twilio.jwt;
