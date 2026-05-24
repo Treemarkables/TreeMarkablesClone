@@ -23,6 +23,7 @@ import Contact from "@/pages/Contact";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import JobDashboard from "@/pages/JobDashboard";
 import JobCardPreview from "@/pages/JobCardPreview";
+import JobCardDesktopPreview from "@/pages/JobCardDesktopPreview";
 import MetricsDashboard from "@/pages/MetricsDashboard";
 import Tasks from "@/pages/Tasks";
 import Videos from "@/pages/Videos";
@@ -894,6 +895,20 @@ function Router() {
       <Route path="/job-card-preview">
         <ProtectedRoute>
           <JobCardPreview />
+        </ProtectedRoute>
+      </Route>
+
+      {/* JobCardDesktop preview — Phase A scaffold for the desktop rebuild.
+          Throwaway route for QA. Removed once Phase F wires the new layout
+          into the real flow via a feature flag. */}
+      <Route path="/job-card-preview-desktop/:jobId">
+        <ProtectedRoute>
+          <JobCardDesktopPreview />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/job-card-preview-desktop">
+        <ProtectedRoute>
+          <JobCardDesktopPreview />
         </ProtectedRoute>
       </Route>
 
