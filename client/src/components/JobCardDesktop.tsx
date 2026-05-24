@@ -1,19 +1,20 @@
 /**
- * Desktop-first job card modal — Phases A + B + C + D + E.
+ * Desktop-first job card modal.
  *
- * Mirrors the mobile rebuild's phasing: scaffold first (header + tab
- * strip + split-screen body + draggable divider + bottom action bar),
- * then wire panels in tab-by-tab. All four tabs (Details, Billing,
- * Checklist, Quoting) reuse the same panel components the mobile card
- * uses; the always-visible Diary in the right pane is wired; the bottom
- * action bar is live — Photo/Call/SMS/Email own their composer modals
- * locally, Quote/Invoice/Proposal/More accept overrides via the
- * `actions` prop (mirrors the mobile API) and fall back to a "coming
- * in Phase F" toast on the standalone preview route. Phase F
- * flag-gates this into GlobalJobCard's real flow.
+ * Replaces GlobalJobCard's legacy desktop edit-mode layout. Mounted from
+ * GlobalJobCard when the viewport is ≥768px, the modal is open in edit
+ * mode (`editingJob?.id` set), and we're not in renderInline (split-
+ * screen panel) mode. Create-mode and the inline panel still use the
+ * legacy `jobCardContent` — see the layout-gate comment in GlobalJobCard.
  *
- * Reachable at /job-card-preview-desktop/:jobId. Throwaway preview route;
- * delete once Phase F feature-flags this into the real flow.
+ * Header + tab strip + split-screen body + draggable divider + bottom
+ * action bar. All four tabs (Details, Billing, Checklist, Quoting) and
+ * the always-visible Diary on the right reuse the same panel components
+ * the mobile card mounts, so React Query cache and auto-save behaviour
+ * are identical across surfaces. Bottom-bar Photo/Call/SMS/Email own
+ * their composer modals locally; Quote/Invoice/Proposal/More wire into
+ * GlobalJobCard's existing modal setters via the `actions` prop (the
+ * same callback bag mobile receives, so the two surfaces stay aligned).
  *
  * Layout (matches the approved mockup in mockups/job-card-rounding.html):
  *
@@ -35,7 +36,7 @@
  *
  * Default split is 60/40. The divider between the two panes is draggable
  * (clamped to 30%–80%); the chosen ratio is held in component state and
- * does not persist across opens yet (defer until Phase F if useful).
+ * does not persist across opens — easy to add when there's user demand.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -79,12 +80,11 @@ export interface JobCardDesktopProps {
   isSaving?: boolean;
   /**
    * Overrides for the bottom action bar. Photo/Call/SMS/Email have local
-   * defaults (open the relevant composer modal / `tel:` link) so the
-   * standalone preview route works out of the box. Quote/Invoice/Proposal/
-   * More have no sensible default in isolation — the parent (Phase F)
-   * supplies these by routing to the same modals GlobalJobCard already
-   * manages. When omitted, the button surfaces a "coming in Phase F"
-   * toast (mirrors JobCardMobile's actionStub pattern).
+   * defaults (open the relevant composer modal / `tel:` link). Quote /
+   * Invoice / Proposal / More have no sensible default in isolation —
+   * the parent (GlobalJobCard) supplies these by routing to the same
+   * modals it already manages. When omitted, the button surfaces a
+   * "not wired up" toast (mirrors JobCardMobile's actionStub pattern).
    */
   actions?: {
     photo?: () => void;
@@ -98,9 +98,9 @@ export interface JobCardDesktopProps {
   };
   /**
    * Forwarded straight to JobDiarySection. Fired when a diary entry that
-   * references a quote / invoice / proposal is clicked. Parent (Phase F)
-   * wires these to its existing document modals so clicks in the diary
-   * open the same UI desktop users expect.
+   * references a quote / invoice / proposal is clicked. Parent supplies
+   * these so clicks in the diary open the same modals desktop users get
+   * from any other surface.
    */
   onQuoteClick?: (quoteNumber: string) => void;
   onInvoiceClick?: (invoiceNumber: string) => void;
@@ -148,10 +148,10 @@ export function JobCardDesktop({
   // approved mockup. Clamped to 30–80 during drag so neither pane disappears.
   const [splitPct, setSplitPct] = useState(60);
 
-  // Composer-modal state (Phase E). Same pattern JobCardMobile uses — local
-  // state for Photo/SMS/Email modals so the bottom-bar buttons work without
-  // any parent wiring on the preview route. The `actions` prop can override
-  // any of these to route into GlobalJobCard's modal system in Phase F.
+  // Composer-modal state. Same pattern JobCardMobile uses — local state for
+  // Photo / SMS / Email modals keeps the bottom-bar buttons self-contained.
+  // The `actions` prop can override any of these to route into the parent's
+  // modal system if a deeper integration is needed later.
   const [showPhotoModal, setShowPhotoModal] = useState(false);
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -272,7 +272,7 @@ export function JobCardDesktop({
       .filter(Boolean)
       .join(" · ");
 
-  // ── Bottom action bar handlers (Phase E) ──────────────────────────────
+  // ── Bottom action bar handlers ────────────────────────────────────────
   // Pick the best phone for the native dialer: job-level mobile → customer
   // mobile → job-level phone → customer phone. Strip spaces so tel: parses
   // cleanly. Matches JobCardMobile's phoneForCall logic exactly.
@@ -289,11 +289,12 @@ export function JobCardDesktop({
 
   // Each handler: parent-supplied action wins, else local default. Quote /
   // Invoice / Proposal / More have no local default — they fall back to a
-  // toast because the document modals live in GlobalJobCard for now.
+  // toast on the rare path where the parent doesn't supply them (e.g. a
+  // future standalone usage outside GlobalJobCard).
   const actionStub = (label: string) => () => {
     toast({
-      title: `${label} — coming soon on desktop`,
-      description: "Phase F wires this through to the existing flow.",
+      title: `${label} — not wired up`,
+      description: "This action needs to be supplied via the actions prop.",
     });
   };
   const handlePhoto = actions?.photo ?? (() => setShowPhotoModal(true));
@@ -423,20 +424,18 @@ export function JobCardDesktop({
             </div>
           </div>
 
-          {/* RIGHT — always-visible Job Diary (Phase C + E).
+          {/* RIGHT — always-visible Job Diary.
               Reuses the same JobDiarySection the mobile card uses, so the
-              feed/composer/email-threading behaviour is identical across
-              surfaces and shares the React Query cache.
+              feed / composer / email-threading behaviour is identical
+              across surfaces and shares the React Query cache.
 
               JobDiarySection brings its own "Job Diary" header, quick-note
-              input, and composer modals — so we don't wrap it in any of
-              the placeholder chrome that was here before. The outer div
-              just constrains height + provides the pane background.
-
-              Phase E forwards onQuote/Invoice/ProposalClick straight from
-              our props so the parent can open its document modals when a
-              diary entry referencing one of those is tapped. Undefined is
-              still safe — JobDiarySection no-ops the click in that case. */}
+              input, and composer modals — so the outer div just constrains
+              height + provides the pane background. The onQuote / Invoice /
+              ProposalClick props are forwarded straight from ours so the
+              parent can open its document modals when a diary entry
+              referencing one is tapped. Undefined is safe — JobDiarySection
+              no-ops the click. */}
           <div className="bg-white min-w-0 min-h-0 overflow-hidden flex flex-col">
             <JobDiarySection
               jobId={jobId}
@@ -451,12 +450,12 @@ export function JobCardDesktop({
           </div>
         </div>
 
-        {/* ── Bottom action bar (Phase E) ──
-            Photo / Call / SMS / Email work end-to-end on the preview route
-            via local modal state + the native dialer. Quote / Invoice /
-            Proposal / More need parent wiring (the document modals live in
-            GlobalJobCard) — they fall back to a "coming in Phase F" toast
-            so the buttons are at least discoverable. */}
+        {/* ── Bottom action bar ──
+            Photo / Call / SMS / Email work end-to-end via local modal
+            state + the native dialer. Quote / Invoice / Proposal / More
+            need parent wiring (the document modals live in GlobalJobCard)
+            — they fall back to a "not wired up" toast on the unusual path
+            where no actions prop is supplied. */}
         <div className="bg-white border-t border-slate-200 px-6 py-3 flex items-center justify-between flex-shrink-0">
           <div className="flex items-center gap-2">
             {actionBtn("Photo", Camera, "bg-purple-100", "text-purple-600", handlePhoto)}
@@ -474,7 +473,7 @@ export function JobCardDesktop({
 
       </div>
 
-      {/* ── Composer modals (Phase E) ──
+      {/* ── Composer modals ──
           Mounted at the root of the modal so they overlay everything,
           including the split-screen body. Mirrors JobCardMobile's
           placement so the two surfaces feel identical. */}
