@@ -215,6 +215,45 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     },
   });
 
+  // ── New-customer inline form (picker UI) ───────────────────────────────
+  // Toggled open from the "+ New customer" button under the picker. POSTs
+  // /api/customers with the entered fields, then chains into saveField to
+  // link the new customer to this job in a single click. Form state is
+  // local — the picker block re-renders on success and unmounts the form.
+  const [showNewCustomerForm, setShowNewCustomerForm] = useState(false);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const createCustomer = useMutation<
+    { data?: { id?: string } },
+    Error,
+    { name: string; phone?: string; email?: string }
+  >({
+    mutationFn: async (payload) => {
+      const res = await apiRequest("POST", "/api/customers", payload);
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Create customer failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: (json) => {
+      const newId = json?.data?.id;
+      if (!newId) return;
+      // Invalidate the customers list so the new customer shows up next
+      // time the picker opens elsewhere.
+      queryClient.invalidateQueries({ queryKey: ["/api/customers"] });
+      // Link this job to the new customer — same path the picker's
+      // existing select uses. The next render swaps to the normal
+      // customer header and unmounts this form.
+      saveField.mutate({ customerId: newId });
+      setShowNewCustomerForm(false);
+      setNewCustomerName("");
+      setNewCustomerPhone("");
+      setNewCustomerEmail("");
+    },
+  });
+
   const status = job?.status ?? "lead";
   const statusLabel = STATUS_LABEL[status] ?? status;
 
@@ -299,10 +338,86 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             </select>
             <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
           </div>
-          <p className="text-[12px] text-blue-700/70 mt-2">
-            Customer not on the list? Add them from the Customers page first,
-            then come back here.
-          </p>
+
+          {/* New-customer inline form — expanded via the toggle below. Lets
+              the user create + link a customer without leaving the card. */}
+          {showNewCustomerForm ? (
+            <div className="mt-3 border-t border-blue-200 pt-3 space-y-2">
+              <input
+                type="text"
+                value={newCustomerName}
+                onChange={(e) => setNewCustomerName(e.target.value)}
+                placeholder="Customer name (required)"
+                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                data-testid="new-customer-name"
+                autoFocus
+              />
+              <input
+                type="tel"
+                value={newCustomerPhone}
+                onChange={(e) => setNewCustomerPhone(e.target.value)}
+                placeholder="Phone (optional)"
+                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                data-testid="new-customer-phone"
+              />
+              <input
+                type="email"
+                value={newCustomerEmail}
+                onChange={(e) => setNewCustomerEmail(e.target.value)}
+                placeholder="Email (optional)"
+                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                data-testid="new-customer-email"
+              />
+              {createCustomer.error && (
+                <p className="text-[12px] text-red-700">
+                  {createCustomer.error.message}
+                </p>
+              )}
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowNewCustomerForm(false);
+                    setNewCustomerName("");
+                    setNewCustomerPhone("");
+                    setNewCustomerEmail("");
+                  }}
+                  disabled={createCustomer.isPending}
+                  className="flex-1 bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-semibold text-blue-700 hover:bg-blue-100 disabled:opacity-60"
+                  data-testid="new-customer-cancel"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const name = newCustomerName.trim();
+                    if (!name) return;
+                    createCustomer.mutate({
+                      name,
+                      phone: newCustomerPhone.trim() || undefined,
+                      email: newCustomerEmail.trim() || undefined,
+                    });
+                  }}
+                  disabled={!newCustomerName.trim() || createCustomer.isPending || saveField.isPending}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-[14px] font-semibold disabled:opacity-60"
+                  data-testid="new-customer-save"
+                >
+                  {createCustomer.isPending || saveField.isPending ? "Saving…" : "Create + link"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setShowNewCustomerForm(true)}
+              className="mt-3 text-[13px] font-semibold text-blue-700 hover:text-blue-900 inline-flex items-center gap-1"
+              data-testid="show-new-customer-form"
+            >
+              <UserPlus className="w-3.5 h-3.5" />
+              + New customer
+            </button>
+          )}
         </div>
       )}
 
