@@ -19,8 +19,9 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, ChevronDown, Mic, Lock } from "lucide-react";
+import { MapPin, ChevronDown, Mic, MicOff, Lock } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useSpeechToText } from "@/hooks/useSpeechToText";
 
 interface JobDetailsPanelProps {
   jobId: string;
@@ -33,10 +34,37 @@ interface JobShape {
   internalNotes?: string | null;
   status?: string | null;
   leadSource?: string | null;
-  presentationMethod?: string | null;
+  // The existing app saves the on-site / sent-later toggle to
+  // quotePresentationMethod (jobs.quote_presentation_method). There's also an
+  // older presentationMethod column kicking around, but the desktop UI binds
+  // to quotePresentationMethod — saving anywhere else is a silent no-op.
+  quotePresentationMethod?: string | null;
   customerConfirmed?: boolean | null;
   customerId?: string | null;
   address?: string | null;
+  // Job-level contact (overrides customer contact for this job).
+  jobContactFirstName?: string | null;
+  jobContactLastName?: string | null;
+  jobContactEmail?: string | null;
+  jobContactPhone?: string | null;
+  jobContactMobile?: string | null;
+  // Tenant contact — used when the job address is a rental property.
+  tenantContactFirstName?: string | null;
+  tenantContactLastName?: string | null;
+  tenantContactEmail?: string | null;
+  tenantContactPhone?: string | null;
+  tenantContactMobile?: string | null;
+}
+
+interface SavedContact {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  role?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
+  isPrimary?: boolean | null;
 }
 
 interface CustomerShape {
@@ -150,15 +178,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       <div className="bg-white border border-slate-200 rounded-2xl p-4">
         <div className="flex items-center justify-between mb-2">
           <div className="text-[14px] font-bold text-blue-600">Job Description</div>
-          <button
-            type="button"
-            disabled
-            title="Voice transcription — coming soon"
-            className="flex items-center gap-1 text-[14px] font-bold text-purple-600 opacity-60"
-          >
-            <Mic className="w-3.5 h-3.5" />
-            Voice
-          </button>
+          <VoiceButton
+            onTranscript={(text) => {
+              const next = description ? `${description} ${text}` : text;
+              setDescription(next);
+              saveField.mutate({ description: next });
+            }}
+          />
         </div>
         <textarea
           value={description}
@@ -180,15 +206,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             <Lock className="w-3.5 h-3.5" />
             Internal Notes
           </div>
-          <button
-            type="button"
-            disabled
-            title="Voice transcription — coming soon"
-            className="flex items-center gap-1 text-[14px] font-bold text-purple-600 opacity-60"
-          >
-            <Mic className="w-3.5 h-3.5" />
-            Voice
-          </button>
+          <VoiceButton
+            onTranscript={(text) => {
+              const next = internalNotes ? `${internalNotes} ${text}` : text;
+              setInternalNotes(next);
+              saveField.mutate({ internalNotes: next });
+            }}
+          />
         </div>
         <div className="text-[12.5px] font-semibold text-orange-700/70 mb-2.5">
           Staff only — not visible to customers
@@ -239,13 +263,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         />
         <SelectField
           label="Quote Method"
-          value={job?.presentationMethod ?? ""}
-          onChange={(v) => saveField.mutate({ presentationMethod: v || null })}
+          value={job?.quotePresentationMethod ?? ""}
+          onChange={(v) => saveField.mutate({ quotePresentationMethod: v || null })}
           options={[
             { value: "", label: "—" },
             { value: "on_site", label: "On-site" },
             { value: "sent_later", label: "Sent later" },
-            { value: "phone", label: "Phone" },
           ]}
         />
       </div>
@@ -262,12 +285,248 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
         Customer confirmed
       </label>
 
-      {/* Contacts card — deferred to Phase B.5 */}
-      <div className="bg-white border border-dashed border-slate-300 rounded-2xl p-4 text-center">
-        <div className="text-[12px] font-bold uppercase tracking-wider text-slate-400 mb-1">Contacts</div>
-        <div className="text-[13px] text-slate-500">Coming next — for now the legacy modal still owns saved contacts &amp; tenant details.</div>
+      {/* ── Contacts card ── */}
+      <ContactsCard job={job} customer={customer} customerId={customerId} />
+    </div>
+  );
+}
+
+// ─── Contacts card ──────────────────────────────────────────────────────────
+
+function ContactsCard({
+  job,
+  customer,
+  customerId,
+}: {
+  job: JobShape | undefined;
+  customer: CustomerShape | undefined;
+  customerId: string | undefined;
+}) {
+  const queryClient = useQueryClient();
+  const [tab, setTab] = useState<"job" | "tenant">("job");
+
+  // Saved contacts under this customer — pulled from /api/customers/:id/contacts.
+  const { data: savedResp } = useQuery<{ success?: boolean; data?: SavedContact[] }>({
+    queryKey: ["/api/customers", customerId, "contacts"],
+    enabled: !!customerId,
+    staleTime: 60_000,
+  });
+  const savedContacts = savedResp?.data ?? [];
+
+  const jobId = job?.id;
+  const saveField = useMutation({
+    mutationFn: async (patch: Partial<JobShape>) => {
+      if (!jobId) throw new Error("no job id");
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, patch);
+      return res.json();
+    },
+    onSuccess: () => {
+      if (jobId) queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+    },
+  });
+
+  // Pick the right set of fields based on which tab is active.
+  const fields = tab === "job"
+    ? {
+        firstName: job?.jobContactFirstName ?? "",
+        lastName: job?.jobContactLastName ?? "",
+        email: job?.jobContactEmail ?? "",
+        mobile: job?.jobContactMobile ?? "",
+        phone: job?.jobContactPhone ?? "",
+      }
+    : {
+        firstName: job?.tenantContactFirstName ?? "",
+        lastName: job?.tenantContactLastName ?? "",
+        email: job?.tenantContactEmail ?? "",
+        mobile: job?.tenantContactMobile ?? "",
+        phone: job?.tenantContactPhone ?? "",
+      };
+
+  const fieldKey = (k: "firstName" | "lastName" | "email" | "mobile" | "phone"): keyof JobShape => {
+    const prefix = tab === "job" ? "jobContact" : "tenantContact";
+    const cap = k.charAt(0).toUpperCase() + k.slice(1);
+    return `${prefix}${cap}` as keyof JobShape;
+  };
+
+  // Local edit state — keeps the input snappy without round-tripping every keystroke.
+  // Re-syncs from the job record whenever the tab changes or the underlying data refetches.
+  const [draft, setDraft] = useState(fields);
+  useEffect(() => { setDraft(fields); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [
+    tab,
+    job?.jobContactFirstName, job?.jobContactLastName, job?.jobContactEmail, job?.jobContactMobile, job?.jobContactPhone,
+    job?.tenantContactFirstName, job?.tenantContactLastName, job?.tenantContactEmail, job?.tenantContactMobile, job?.tenantContactPhone,
+  ]);
+
+  const commit = (k: "firstName" | "lastName" | "email" | "mobile" | "phone") => {
+    const next = draft[k];
+    const current = fields[k];
+    if ((next ?? "") === (current ?? "")) return;
+    saveField.mutate({ [fieldKey(k)]: next || null } as Partial<JobShape>);
+  };
+
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4">
+      <h3 className="text-[17px] font-extrabold tracking-tight text-slate-900 mb-3">Contacts</h3>
+
+      {/* Saved contacts banner */}
+      <div className="bg-blue-50 rounded-xl px-3.5 py-3 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[14px] font-bold text-blue-700 leading-tight">
+            Saved contacts under {customer?.name ?? "this customer"}
+          </div>
+          <div className="text-[12.5px] text-blue-600/85 mt-1 leading-snug">
+            {savedContacts.length === 0
+              ? "No saved contacts yet — add one to reuse across jobs at this customer."
+              : `${savedContacts.length} saved ${savedContacts.length === 1 ? "contact" : "contacts"} — tap to load.`}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            // eslint-disable-next-line no-console
+            console.warn("[JobDetailsPanel] + Add saved contact not wired up yet — Phase B.6");
+          }}
+          className="text-[14px] font-bold text-blue-600 flex-shrink-0 self-start"
+          data-testid="add-saved-contact"
+        >
+          + Add
+        </button>
+      </div>
+
+      {/* Saved contacts list — when present */}
+      {savedContacts.length > 0 && (
+        <div className="mt-2 space-y-1.5">
+          {savedContacts.map((sc) => {
+            const name = [sc.firstName, sc.lastName].filter(Boolean).join(" ") || "(unnamed)";
+            return (
+              <button
+                key={sc.id}
+                type="button"
+                onClick={() => {
+                  // Tap-to-load: populate the active contact tab with this saved contact.
+                  const patch: Partial<JobShape> = tab === "job"
+                    ? {
+                        jobContactFirstName: sc.firstName ?? null,
+                        jobContactLastName: sc.lastName ?? null,
+                        jobContactEmail: sc.email ?? null,
+                        jobContactMobile: sc.mobile ?? null,
+                        jobContactPhone: sc.phone ?? null,
+                      }
+                    : {
+                        tenantContactFirstName: sc.firstName ?? null,
+                        tenantContactLastName: sc.lastName ?? null,
+                        tenantContactEmail: sc.email ?? null,
+                        tenantContactMobile: sc.mobile ?? null,
+                        tenantContactPhone: sc.phone ?? null,
+                      };
+                  saveField.mutate(patch);
+                }}
+                className="w-full flex items-center justify-between px-3 py-2 rounded-lg border border-slate-200 hover:bg-slate-50 text-left"
+              >
+                <div className="min-w-0">
+                  <div className="text-[14px] font-semibold text-slate-900 truncate">{name}</div>
+                  {sc.role && <div className="text-[12px] text-slate-500 truncate">{sc.role}</div>}
+                </div>
+                {sc.isPrimary && (
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full flex-shrink-0">Primary</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Job Contact / Tenant Details segmented pill */}
+      <div className="flex bg-slate-100 rounded-full p-1 mt-3.5">
+        <button
+          type="button"
+          onClick={() => setTab("job")}
+          className={`flex-1 py-2 rounded-full text-[14px] font-semibold ${tab === "job" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+          data-testid="contacts-tab-job"
+        >
+          Job Contact
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("tenant")}
+          className={`flex-1 py-2 rounded-full text-[14px] font-semibold ${tab === "tenant" ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+          data-testid="contacts-tab-tenant"
+        >
+          Tenant Details
+        </button>
+      </div>
+
+      {/* Editable fields for the active tab */}
+      <div className="mt-3.5 grid grid-cols-2 gap-2.5">
+        <InputField placeholder="First name" value={draft.firstName} onChange={(v) => setDraft({ ...draft, firstName: v })} onBlur={() => commit("firstName")} />
+        <InputField placeholder="Last name" value={draft.lastName} onChange={(v) => setDraft({ ...draft, lastName: v })} onBlur={() => commit("lastName")} />
+      </div>
+      <div className="mt-2.5">
+        <InputField placeholder="Email" value={draft.email} onChange={(v) => setDraft({ ...draft, email: v })} onBlur={() => commit("email")} type="email" />
+      </div>
+      <div className="mt-2.5">
+        <InputField placeholder="Mobile" value={draft.mobile} onChange={(v) => setDraft({ ...draft, mobile: v })} onBlur={() => commit("mobile")} type="tel" />
+      </div>
+      <div className="mt-2.5">
+        <InputField placeholder="Phone (landline)" value={draft.phone} onChange={(v) => setDraft({ ...draft, phone: v })} onBlur={() => commit("phone")} type="tel" />
       </div>
     </div>
+  );
+}
+
+// ─── Voice transcription button ─────────────────────────────────────────────
+
+function VoiceButton({ onTranscript }: { onTranscript: (text: string) => void }) {
+  const { isListening, isSupported, toggleListening } = useSpeechToText({
+    onResult: (text) => {
+      const trimmed = text.trim();
+      if (trimmed) onTranscript(trimmed);
+    },
+    continuous: false,
+    language: "en-NZ",
+  });
+
+  // Browser doesn't support Web Speech (e.g. Firefox). Render nothing rather
+  // than a permanently-disabled stub.
+  if (!isSupported) return null;
+
+  return (
+    <button
+      type="button"
+      onClick={toggleListening}
+      className={`flex items-center gap-1 text-[14px] font-bold ${
+        isListening ? "text-red-600 animate-pulse" : "text-purple-600"
+      }`}
+      data-testid="voice-button"
+    >
+      {isListening ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+      {isListening ? "Stop" : "Voice"}
+    </button>
+  );
+}
+
+function InputField({
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+  type,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onBlur: () => void;
+  placeholder?: string;
+  type?: string;
+}) {
+  return (
+    <input
+      type={type ?? "text"}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
+      placeholder={placeholder}
+      className="w-full bg-slate-100 rounded-xl px-3.5 py-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:ring-2 focus:ring-blue-500"
+    />
   );
 }
 

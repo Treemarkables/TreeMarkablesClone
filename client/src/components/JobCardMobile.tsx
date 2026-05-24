@@ -11,7 +11,10 @@
  * we wire it into the real flow.
  */
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   X as XIcon,
   Camera,
@@ -19,12 +22,51 @@ import {
   MessageSquare,
   Mail,
   MoreHorizontal,
+  CheckCircle,
+  Copy,
+  Trash2,
+  Mic,
+  Calendar,
+  FileText,
+  CreditCard,
+  FilePen,
+  Clock,
+  TrendingUp,
+  ListOrdered,
+  Send,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Sheet,
+  SheetTrigger,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
+import { JobBillingPanel } from "@/components/JobBillingPanel";
+import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
+import { SMSComposerModal } from "@/components/SMSComposerModal";
+import { EmailComposerModal } from "@/components/EmailComposerModal";
 
 export type JobCardMobileTab =
   | "details"
@@ -53,6 +95,31 @@ export interface JobCardMobileProps {
   onQuoteClick?: () => void;
   onInvoiceClick?: () => void;
   onProposalClick?: (proposalNumber: string) => void;
+  /**
+   * Called after Duplicate Job succeeds. Parent (GlobalJobCard) typically
+   * wires this to swap the open modal over to the newly created job so the
+   * user is dropped straight into editing the duplicate. If omitted,
+   * JobCardMobile just closes itself — the duplicate still appears in the
+   * jobs list, the user finds it from there.
+   */
+  onDuplicated?: (newJobId: string) => void;
+  /**
+   * Handlers for the 9 tiles in the bottom Actions sheet. Parent
+   * (GlobalJobCard) supplies these so the new mobile UI opens the same
+   * modals its desktop counterpart does. Any missing handler renders a
+   * "coming soon" toast — keeps the preview route functional too.
+   */
+  actions?: {
+    speechToQuote?: () => void;
+    schedule?: () => void;
+    quote?: () => void;
+    invoice?: () => void;
+    proposal?: () => void;
+    timeTracking?: () => void;
+    profitTracker?: () => void;
+    queueJob?: () => void;
+    sendToXero?: () => void;
+  };
 }
 
 // Map job status → badge colour. Mirrors the colour scheme used by
@@ -72,6 +139,19 @@ const TABS: { id: JobCardMobileTab; label: string }[] = [
   { id: "checklist", label: "Checklist" },
   { id: "quoting", label: "Quoting" },
   { id: "diary", label: "Diary" },
+];
+
+// Mirrors DispatchBoard's QUEUE_REASONS so the two surfaces stay aligned.
+// If you add/rename a reason, update both lists (a future refactor could
+// hoist this into shared/ — for now duplication is the smaller change).
+const QUEUE_REASONS = [
+  "Weather Hold",
+  "Awaiting Permit",
+  "Customer Not Ready",
+  "Awaiting Quote Approval",
+  "Materials Needed",
+  "Crew Unavailable",
+  "Other",
 ];
 
 function formatNzd(amount?: number | string | null): string {
@@ -95,6 +175,8 @@ export function JobCardMobile({
   onQuoteClick,
   onInvoiceClick,
   onProposalClick,
+  onDuplicated,
+  actions,
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
 
@@ -122,18 +204,182 @@ export function JobCardMobile({
     return typeof v === "string" ? parseFloat(v) : (v as number | undefined);
   }, [job]);
 
-  // Action-bar no-op fallback — shows a toast-less alert so devs notice it's
-  // not wired up yet, but doesn't crash. Real handlers come in Phase B+.
-  const noop = (which: string) => () => {
-    // eslint-disable-next-line no-console
-    console.warn(`[JobCardMobile] ${which} not wired up in Phase A`);
+  // Modal state for the three composer modals reused from GlobalJobCard.
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
+  const [showSmsModal, setShowSmsModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+
+  // Pick the best phone for native dialer: job-level mobile → customer mobile →
+  // job-level phone → customer phone. Strips spaces so tel: parses cleanly.
+  const phoneForCall = useMemo(() => {
+    const candidates = [
+      (job?.jobContactMobile as string | undefined),
+      (customer?.mobile as string | undefined),
+      (job?.jobContactPhone as string | undefined),
+      (customer?.phone as string | undefined),
+    ];
+    const picked = candidates.find((p) => p && String(p).trim().length > 0);
+    return picked ? String(picked).replace(/\s+/g, "") : null;
+  }, [job, customer]);
+
+  // Resolve handler precedence: parent-provided prop wins, else our default.
+  const handlePhoto = onPhoto ?? (() => setShowPhotoModal(true));
+  const handleSms = onSms ?? (() => setShowSmsModal(true));
+  const handleEmail = onEmail ?? (() => setShowEmailModal(true));
+  const handleCall = onCall ?? (() => {
+    if (phoneForCall) {
+      window.location.href = `tel:${phoneForCall}`;
+    } else {
+      // eslint-disable-next-line no-console
+      console.warn("[JobCardMobile] Call — no phone number on this job or customer");
+    }
+  });
+
+  // ─── More menu handlers ──────────────────────────────────────────────────
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+
+  const markComplete = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, { status: "completed" });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't mark complete", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const deleteJob = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds: [jobId] });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      onClose();
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't delete job", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // POST /api/jobs/:id/duplicate copies scoping (customer, address, line items,
+  // contacts, checklists) into a fresh quote-status job with a new jobNumber.
+  // Scheduling, assignments, completion state, payments, and Xero IDs all
+  // reset — see server/routes.ts for the field whitelist.
+  const duplicateJob = useMutation<
+    { success?: boolean; data?: { id?: string; jobNumber?: string } },
+    Error
+  >({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/duplicate`, {});
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Duplicate failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: (json) => {
+      // Refresh the jobs list so the duplicate appears in dispatch/calendar/etc.
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      const newId = json?.data?.id;
+      if (newId && onDuplicated) {
+        // Parent decides what to do with the new job (e.g. swap the open
+        // modal over to it). If not handled, close so the user can find the
+        // duplicate in the jobs list.
+        onDuplicated(newId);
+      } else {
+        onClose();
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't duplicate job", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Dispatch Queue toggle — parks a job in the queue with a reason
+  // (Weather Hold, Awaiting Permit, …) or pulls it back out. Reads/writes
+  // the same `inQueue` / `queueReason` columns DispatchBoard uses, so
+  // queuing here shows up there immediately.
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [queueReasonInput, setQueueReasonInput] = useState("");
+  const queueJob = useMutation<
+    { success?: boolean },
+    Error,
+    { inQueue: boolean; queueReason: string | null }
+  >({
+    mutationFn: async ({ inQueue, queueReason }) => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, {
+        inQueue,
+        queueReason,
+      });
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Queue update failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setShowQueueDialog(false);
+      setQueueReasonInput("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update queue", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const onMarkComplete = () => markComplete.mutate();
+  const onDuplicate = () => {
+    if (window.confirm("Create a copy of this job? The duplicate starts as a fresh quote — no scheduling, no payments, new job number.")) {
+      duplicateJob.mutate();
+    }
+  };
+
+  // Queue tile click: if already queued, one-tap unqueue (with a confirm so
+  // a fat-finger doesn't accidentally pull a job back into the live board);
+  // otherwise open the reason picker dialog.
+  const jobInQueue = (job?.inQueue as boolean | undefined) ?? false;
+  const onQueueTile = () => {
+    if (jobInQueue) {
+      if (window.confirm("Remove this job from the dispatch queue?")) {
+        queueJob.mutate({ inQueue: false, queueReason: null });
+      }
+    } else {
+      setQueueReasonInput("");
+      setShowQueueDialog(true);
+    }
+  };
+  const onOpenFull = () => {
+    onClose();
+    navigate("/dispatch");
+  };
+  const onDelete = () => {
+    if (window.confirm("Delete this job? This can't be undone.")) {
+      deleteJob.mutate();
+    }
+  };
+
+  // Each action in the Actions sheet currently surfaces a "coming soon" toast
+  // until we wire it through to the right modal/flow in GlobalJobCard.
+  const actionStub = (which: string) => () => {
+    toast({
+      title: `${which} — coming soon`,
+      description: "We'll wire this up to the existing flow in a follow-up phase.",
+    });
   };
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="job-card-mobile">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
-        <div className="flex items-baseline gap-2.5 min-w-0">
+      {/* ── Header (compact — price sits inline with the badge to save vertical space) ── */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 flex-shrink-0" style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+        <div className="flex items-baseline gap-2 min-w-0">
           <h1 className="text-[22px] font-extrabold tracking-tight text-slate-900 truncate">
             Job {jobNumber ?? ""}
           </h1>
@@ -142,6 +388,9 @@ export function JobCardMobile({
             style={{ background: badge.bg }}
           >
             {badge.label}
+          </span>
+          <span className="text-[16px] font-bold text-slate-900 truncate" data-testid="job-card-mobile-price">
+            {formatNzd(jobValue)}
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -163,10 +412,6 @@ export function JobCardMobile({
             {isSaving ? "Saving..." : "Save"}
           </Button>
         </div>
-      </div>
-
-      <div className="px-4 pb-3 text-[30px] font-extrabold tracking-tight text-slate-900 flex-shrink-0">
-        {formatNzd(jobValue)}
       </div>
 
       {/* ── Tab strip ── */}
@@ -196,7 +441,7 @@ export function JobCardMobile({
       <div className="flex-1 overflow-y-auto bg-slate-50">
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-          {activeTab === "billing" && <ComingNextPanel label="Billing" />}
+          {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
           {activeTab === "checklist" && (
             <div className="bg-white">
               <JobChecklistPanel jobId={jobId} />
@@ -231,13 +476,233 @@ export function JobCardMobile({
           paddingBottom: "max(22px, env(safe-area-inset-bottom))",
         }}
       >
-        <ActionBtn label="Photo" color="bg-emerald-500" onClick={onPhoto ?? noop("Photo")} icon={Camera} />
-        <ActionBtn label="Call" color="bg-green-600" onClick={onCall ?? noop("Call")} icon={Phone} />
-        <ActionBtn label="SMS" color="bg-blue-600" onClick={onSms ?? noop("SMS")} icon={MessageSquare} />
-        <ActionBtn label="Email" color="bg-red-500" onClick={onEmail ?? noop("Email")} icon={Mail} />
-        <ActionBtn label="More" color="bg-slate-700" onClick={onMore ?? noop("More")} icon={MoreHorizontal} />
+        <ActionBtn label="Photo" color="bg-emerald-500" onClick={handlePhoto} icon={Camera} />
+        <ActionBtn label="Call" color="bg-green-600" onClick={handleCall} icon={Phone} />
+        <ActionBtn label="SMS" color="bg-blue-600" onClick={handleSms} icon={MessageSquare} />
+        <ActionBtn label="Email" color="bg-red-500" onClick={handleEmail} icon={Mail} />
+
+        {/* More — opens an iOS-style Actions sheet from the bottom. */}
+        <Sheet>
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              className="flex flex-col items-center gap-1 py-1 px-2 min-w-[52px]"
+              data-testid="job-card-mobile-action-more"
+              onClick={() => onMore?.()}
+            >
+              <div className="w-12 h-12 rounded-full bg-slate-700 grid place-items-center text-white shadow-md">
+                <MoreHorizontal className="w-5 h-5" />
+              </div>
+              <div className="text-[12px] font-semibold text-slate-800">More</div>
+            </button>
+          </SheetTrigger>
+          <SheetContent
+            side="bottom"
+            className="rounded-t-3xl border-t border-slate-200 p-0 max-h-[90vh] flex flex-col"
+          >
+            <SheetHeader className="px-6 pt-3 pb-4 border-b border-slate-100 flex-shrink-0">
+              <div className="mx-auto w-10 h-1 rounded-full bg-slate-300 mb-3" />
+              <SheetTitle className="text-center text-lg font-extrabold tracking-tight text-slate-900">
+                Actions
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="overflow-y-auto px-5 py-5">
+              <div className="grid grid-cols-4 gap-3">
+                <ActionTile label="Speech to Quote" icon={Mic} colour="purple" onClick={actions?.speechToQuote ?? actionStub("Speech to Quote")} />
+                <ActionTile label="Schedule" icon={Calendar} colour="blue" onClick={actions?.schedule ?? actionStub("Schedule")} />
+                <ActionTile label="Quote" icon={FileText} colour="amber" onClick={actions?.quote ?? actionStub("Quote")} />
+                <ActionTile label="Invoice" icon={CreditCard} colour="green" onClick={actions?.invoice ?? actionStub("Invoice")} />
+                <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
+                <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actions?.timeTracking ?? actionStub("Time Tracking")} />
+                <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
+                <ActionTile
+                  label={jobInQueue ? "In Queue" : "Queue Job"}
+                  icon={ListOrdered}
+                  colour="indigo"
+                  onClick={actions?.queueJob ?? onQueueTile}
+                />
+                <ActionTile label="Send to Xero" icon={Send} colour="slate" disabled={!actions?.sendToXero} onClick={actions?.sendToXero ?? actionStub("Send to Xero")} />
+              </div>
+
+              {/* Secondary admin actions — kept around because they're already wired
+                  and live data deletion shouldn't be buried any further. */}
+              <div className="mt-6 pt-5 border-t border-slate-100 space-y-2">
+                <button
+                  type="button"
+                  onClick={onMarkComplete}
+                  disabled={markComplete.isPending || job?.status === "completed"}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                >
+                  <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                  <span className="text-[15px] font-semibold text-slate-900">
+                    {job?.status === "completed" ? "Already complete" : "Mark job as complete"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onDuplicate}
+                  disabled={duplicateJob.isPending}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                  data-testid="btn-duplicate-job"
+                >
+                  <Copy className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <span className="text-[15px] font-semibold text-slate-900">
+                    {duplicateJob.isPending ? "Duplicating..." : "Duplicate job"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onDelete}
+                  disabled={deleteJob.isPending}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-red-50 hover:bg-red-100 disabled:opacity-50"
+                >
+                  <Trash2 className="w-5 h-5 text-red-600 flex-shrink-0" />
+                  <span className="text-[15px] font-semibold text-red-700">Delete job</span>
+                </button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
+
+      {/* ── Composer modals (reused from GlobalJobCard) ── */}
+      {showPhotoModal && (
+        <PhotoCaptureModal
+          isOpen={showPhotoModal}
+          onClose={() => setShowPhotoModal(false)}
+          jobId={jobId}
+        />
+      )}
+      {showSmsModal && (
+        <SMSComposerModal
+          isOpen={showSmsModal}
+          onClose={() => setShowSmsModal(false)}
+          job={job}
+          customer={customer}
+        />
+      )}
+      {showEmailModal && (
+        <EmailComposerModal
+          isOpen={showEmailModal}
+          onClose={() => setShowEmailModal(false)}
+          job={job}
+          customer={customer}
+        />
+      )}
+
+      {/* Queue-reason picker — opened from the Queue Job tile when the job
+          isn't already in queue. Mirrors DispatchBoard's queue dialog so
+          the two surfaces feel identical. */}
+      <Dialog
+        open={showQueueDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowQueueDialog(false);
+            setQueueReasonInput("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListOrdered className="h-5 w-5 text-indigo-500" />
+              Add to Dispatch Queue
+            </DialogTitle>
+            <DialogDescription>
+              Job {jobNumber ?? ""} will move out of the live board until you
+              pull it back. Pick a reason so dispatch knows why it's parked.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="text-sm font-medium mb-2 block">
+              Reason for queuing
+            </Label>
+            <Select value={queueReasonInput} onValueChange={setQueueReasonInput}>
+              <SelectTrigger data-testid="select-queue-reason">
+                <SelectValue placeholder="Select a reason…" />
+              </SelectTrigger>
+              <SelectContent>
+                {QUEUE_REASONS.map((reason) => (
+                  <SelectItem key={reason} value={reason}>
+                    {reason}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowQueueDialog(false);
+                setQueueReasonInput("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!queueReasonInput || queueJob.isPending}
+              onClick={() => {
+                if (queueReasonInput) {
+                  queueJob.mutate({ inQueue: true, queueReason: queueReasonInput });
+                }
+              }}
+              data-testid="btn-confirm-queue"
+            >
+              {queueJob.isPending ? "Queuing..." : "Add to Queue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+// Coloured action tile shown in the Actions sheet. iOS-style: rounded square
+// tinted background, lucide icon, label below.
+type TileColour = "purple" | "blue" | "amber" | "green" | "red" | "orange" | "cyan" | "indigo" | "slate";
+const TILE_COLOURS: Record<TileColour, { bg: string; icon: string }> = {
+  purple: { bg: "bg-purple-100", icon: "text-purple-600" },
+  blue:   { bg: "bg-blue-100",   icon: "text-blue-600" },
+  amber:  { bg: "bg-amber-100",  icon: "text-amber-600" },
+  green:  { bg: "bg-emerald-100", icon: "text-emerald-600" },
+  red:    { bg: "bg-red-100",    icon: "text-red-600" },
+  orange: { bg: "bg-orange-100", icon: "text-orange-600" },
+  cyan:   { bg: "bg-cyan-100",   icon: "text-cyan-600" },
+  indigo: { bg: "bg-indigo-100", icon: "text-indigo-600" },
+  slate:  { bg: "bg-slate-100",  icon: "text-slate-400" },
+};
+
+function ActionTile({
+  label,
+  icon: Icon,
+  colour,
+  onClick,
+  disabled,
+}: {
+  label: string;
+  icon: React.ElementType;
+  colour: TileColour;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  const c = TILE_COLOURS[colour];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex flex-col items-center gap-1.5 group disabled:opacity-50"
+      data-testid={`action-tile-${label.toLowerCase().replace(/\s+/g, "-")}`}
+    >
+      <div className={`w-16 h-16 rounded-2xl ${c.bg} grid place-items-center shadow-sm group-active:scale-95 transition-transform`}>
+        <Icon className={`w-7 h-7 ${c.icon}`} />
+      </div>
+      <div className="text-[11.5px] font-semibold text-slate-900 leading-tight text-center max-w-[72px]">
+        {label}
+      </div>
+    </button>
   );
 }
 
@@ -269,22 +734,3 @@ function ActionBtn({
   );
 }
 
-function ComingNextPanel({ label }: { label: string }) {
-  return (
-    <div className="p-6">
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center">
-        <div className="text-[13px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-          {label} tab
-        </div>
-        <h3 className="text-lg font-bold text-slate-900 mb-2">Coming in Phase B</h3>
-        <p className="text-sm text-slate-600 leading-relaxed">
-          {label === "Details"
-            ? "Customer card, job description, internal notes, status, contacts."
-            : "Line items, totals, invoice, payment."}
-          <br />
-          For now, the old layout is still active — open the job the regular way to use it.
-        </p>
-      </div>
-    </div>
-  );
-}

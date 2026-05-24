@@ -6569,10 +6569,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       const { jobId, itemId } = req.params;
       const { completed } = req.body ?? {};
+      // The rest of this app's mutation endpoints (PUT /api/jobs/:id etc.)
+      // don't gate on req.session.employeeId — they trust the session cookie.
+      // The original toggle handler was the outlier: it returned 401 whenever
+      // employeeId was missing, which broke the mobile flow for owners /
+      // admins who aren't registered as employees. Match the rest: if we
+      // have an employeeId we record it; if not, we still allow the toggle
+      // and leave the completer fields null.
       const employeeId = req.session.employeeId;
-      if (!employeeId) {
-        return res.status(401).json({ success: false, message: 'Not authenticated' });
-      }
       if (jobId.startsWith('temp-')) {
         return res.status(400).json({ success: false, message: 'Save the job before ticking checklist items' });
       }
@@ -6583,11 +6587,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         await storage.clearJobChecklistItem(jobId, itemId);
         return res.json({ success: true, data: null });
       }
-      const employee = await storage.getEmployee(employeeId);
-      const employeeName = employee
-        ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
-        : null;
-      const result = await storage.setJobChecklistItem(jobId, itemId, employeeId, employeeName);
+      let employeeName: string | null = null;
+      if (employeeId) {
+        const employee = await storage.getEmployee(employeeId);
+        employeeName = employee
+          ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
+          : null;
+      }
+      const result = await storage.setJobChecklistItem(jobId, itemId, employeeId ?? null, employeeName);
       res.json({ success: true, data: result });
     } catch (error) {
       console.error('Error toggling job checklist item:', error);
@@ -8048,14 +8055,144 @@ Draft the reply now.`;
 
       console.log(`📋 Job ${job.jobNumber} converted to quote ${quoteNumber}`);
 
-      res.json({ 
-        success: true, 
+      res.json({
+        success: true,
         data: quote,
         message: 'Quote created successfully'
       });
     } catch (error) {
       console.error('Error converting job to quote:', error);
       res.status(500).json({ success: false, message: 'Error creating quote' });
+    }
+  });
+
+  // Duplicate a job — copy the scoping/billing/line-item shape into a fresh
+  // quote-status job. The intent is "same kind of work, new instance": same
+  // customer + address + description + line items + contacts + checklists,
+  // but new jobNumber, no scheduling, no assignments, no completion state,
+  // no payments, no Xero/proposal sent flags. Used by the More-menu
+  // "Duplicate Job" tile on JobCardMobile.
+  app.post('/api/jobs/:id/duplicate', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const source = await storage.getJob(id);
+      if (!source) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      // Reset checklist/equipmentChecklist completion state — the structure
+      // (item text + ids) carries over, but every "completed/checked" flag
+      // resets so the duplicate starts fresh.
+      const resetChecklist = Array.isArray(source.checklist)
+        ? (source.checklist as any[]).map((it) => ({
+            ...it,
+            completed: false,
+            completedAt: undefined,
+            completedBy: undefined,
+            completedByEmployeeId: undefined,
+          }))
+        : [];
+      const resetEquipmentChecklist = Array.isArray(source.equipmentChecklist)
+        ? (source.equipmentChecklist as any[]).map((it) => ({
+            ...it,
+            checked: false,
+            checkedAt: undefined,
+            checkedBy: undefined,
+          }))
+        : [];
+
+      const jobNumber = await storage.getNextJobNumber();
+      const now = new Date();
+
+      // Build the new job. Whitelist what carries — anything not listed below
+      // intentionally resets to its column default. Don't spread `source`
+      // wholesale; that would carry payment state, completion timestamps,
+      // Xero IDs, etc. into the duplicate.
+      const newJob: any = {
+        // identity
+        jobNumber,
+        // scoping
+        customerId: source.customerId,
+        customerContactId: source.customerContactId,
+        title: source.title,
+        description: source.description,
+        includeDescriptionInQuotesProposals: source.includeDescriptionInQuotesProposals,
+        leadSource: source.leadSource,
+        address: source.address,
+        // workflow
+        status: 'quote',
+        priority: source.priority,
+        // assignment/scheduling intentionally cleared — re-decide on the dup
+        // crew, equipment templates
+        equipment: source.equipment,
+        specialInstructions: source.specialInstructions,
+        // estimates carry, actuals do not
+        estimatedDuration: source.estimatedDuration,
+        estimatedManHours: source.estimatedManHours,
+        hourlyRate: source.hourlyRate,
+        totalAmount: source.totalAmount,
+        costOfGoods: source.costOfGoods,
+        laborCosts: source.laborCosts,
+        materialsCosts: source.materialsCosts,
+        otherCosts: source.otherCosts,
+        minimumMarginThreshold: source.minimumMarginThreshold,
+        // job-card content
+        checklist: resetChecklist,
+        equipmentChecklist: resetEquipmentChecklist,
+        notes: source.notes,
+        internalNotes: source.internalNotes,
+        lineItems: source.lineItems,
+        // proposal structure carries; sent state does not
+        proposalTitle: source.proposalTitle,
+        proposalSections: source.proposalSections,
+        quotePresentationMethod: source.quotePresentationMethod,
+        // job attributes
+        weatherDependent: source.weatherDependent,
+        permitRequired: source.permitRequired,
+        insuranceClaim: source.insuranceClaim,
+        // billing
+        billingAddress: source.billingAddress,
+        billingNameOverride: source.billingNameOverride,
+        city: source.city,
+        region: source.region,
+        invoiceDescription: source.invoiceDescription,
+        billingContactEmail: source.billingContactEmail,
+        billingContactPhone: source.billingContactPhone,
+        billingContactMobile: source.billingContactMobile,
+        sameAsJobAddress: source.sameAsJobAddress,
+        // contacts
+        jobContactFirstName: source.jobContactFirstName,
+        jobContactLastName: source.jobContactLastName,
+        jobContactEmail: source.jobContactEmail,
+        jobContactPhone: source.jobContactPhone,
+        jobContactMobile: source.jobContactMobile,
+        tenantContactFirstName: source.tenantContactFirstName,
+        tenantContactLastName: source.tenantContactLastName,
+        tenantContactEmail: source.tenantContactEmail,
+        tenantContactPhone: source.tenantContactPhone,
+        tenantContactMobile: source.tenantContactMobile,
+        // GST shape carries; totals will be recalculated on edit
+        taxMode: source.taxMode,
+        taxRate: source.taxRate,
+        // metrics — duplicates count as fresh metrics-eligible jobs
+        metricsEligible: true,
+        metricsStartDate: now,
+        // dispatch sort signal
+        lastActivityAt: now,
+      };
+
+      const created = await storage.createJob(newJob);
+      console.log(`🧬 Duplicated job ${source.jobNumber} → ${created.jobNumber} (${created.id})`);
+
+      res.json({
+        success: true,
+        data: created,
+        sourceJobNumber: source.jobNumber,
+        message: `Created job ${created.jobNumber} from ${source.jobNumber}`,
+      });
+    } catch (error) {
+      console.error('Error duplicating job:', error);
+      res.status(500).json({ success: false, message: 'Failed to duplicate job' });
     }
   });
 
