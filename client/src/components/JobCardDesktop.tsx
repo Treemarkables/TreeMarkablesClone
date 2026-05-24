@@ -58,8 +58,17 @@ import {
   CheckCircle,
   Copy,
   Trash2,
+  ListOrdered,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,6 +76,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
@@ -155,6 +172,19 @@ const TABS: { id: JobCardDesktopTab; label: string }[] = [
   { id: "billing", label: "Billing" },
   { id: "checklist", label: "Checklist" },
   { id: "quoting", label: "Quoting" },
+];
+
+// Mirrors JobCardMobile + DispatchBoard's QUEUE_REASONS so the three
+// surfaces stay aligned. If you add/rename a reason, update all three
+// (or hoist into shared/ — duplication is the smaller change for now).
+const QUEUE_REASONS = [
+  "Weather Hold",
+  "Awaiting Permit",
+  "Customer Not Ready",
+  "Awaiting Quote Approval",
+  "Materials Needed",
+  "Crew Unavailable",
+  "Other",
 ];
 
 function formatNzd(amount?: number | string | null): string {
@@ -251,6 +281,40 @@ export function JobCardDesktop({
     },
     onError: (err: Error) => {
       toast({ title: "Couldn't duplicate job", description: err.message, variant: "destructive" });
+    },
+  });
+
+  // Dispatch Queue toggle — parks a job in the queue with a reason
+  // (Weather Hold, Awaiting Permit, …) or pulls it back out. Reads /
+  // writes the same `inQueue` / `queueReason` columns DispatchBoard +
+  // JobCardMobile use, so queuing here surfaces on the dispatch board
+  // immediately. Mirrors JobCardMobile lines 332-363.
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [queueReasonInput, setQueueReasonInput] = useState("");
+  const queueJob = useMutation<
+    { success?: boolean },
+    Error,
+    { inQueue: boolean; queueReason: string | null }
+  >({
+    mutationFn: async ({ inQueue, queueReason }) => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, {
+        inQueue,
+        queueReason,
+      });
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Queue update failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setShowQueueDialog(false);
+      setQueueReasonInput("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update queue", description: err.message, variant: "destructive" });
     },
   });
 
@@ -431,6 +495,22 @@ export function JobCardDesktop({
   const onDelete = () => {
     if (window.confirm("Delete this job? This can't be undone.")) {
       deleteJob.mutate();
+    }
+  };
+
+  // Queue menu-item click: if already queued, one-tap unqueue (with a
+  // confirm so an accidental click doesn't pull a job back into the live
+  // board); otherwise open the reason picker dialog. Mirrors mobile's
+  // onQueueTile so the two surfaces behave identically.
+  const jobInQueue = (job?.inQueue as boolean | undefined) ?? false;
+  const onQueueMenuClick = () => {
+    if (jobInQueue) {
+      if (window.confirm("Remove this job from the dispatch queue?")) {
+        queueJob.mutate({ inQueue: false, queueReason: null });
+      }
+    } else {
+      setQueueReasonInput("");
+      setShowQueueDialog(true);
     }
   };
 
@@ -638,6 +718,14 @@ export function JobCardDesktop({
                   <DropdownMenuSeparator />
                 )}
                 <DropdownMenuItem
+                  onClick={onQueueMenuClick}
+                  disabled={queueJob.isPending}
+                  data-testid="more-queue-job"
+                >
+                  <ListOrdered className="w-4 h-4 mr-2 text-indigo-600" />
+                  {jobInQueue ? "Remove from Queue" : "Queue Job"}
+                </DropdownMenuItem>
+                <DropdownMenuItem
                   onClick={onMarkComplete}
                   disabled={markComplete.isPending}
                   data-testid="more-mark-complete"
@@ -697,6 +785,71 @@ export function JobCardDesktop({
           customer={customer}
         />
       )}
+
+      {/* Queue-reason picker — opened from the Queue Job menu item when
+          the job isn't already in the queue. Mirrors JobCardMobile +
+          DispatchBoard so the three surfaces feel identical. */}
+      <Dialog
+        open={showQueueDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowQueueDialog(false);
+            setQueueReasonInput("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListOrdered className="h-5 w-5 text-indigo-500" />
+              Add to Dispatch Queue
+            </DialogTitle>
+            <DialogDescription>
+              Job {jobNumber ?? ""} will move out of the live board until you
+              pull it back. Pick a reason so dispatch knows why it's parked.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="text-sm font-medium mb-2 block">
+              Reason for queuing
+            </Label>
+            <Select value={queueReasonInput} onValueChange={setQueueReasonInput}>
+              <SelectTrigger data-testid="select-queue-reason">
+                <SelectValue placeholder="Select a reason…" />
+              </SelectTrigger>
+              <SelectContent>
+                {QUEUE_REASONS.map((reason) => (
+                  <SelectItem key={reason} value={reason}>
+                    {reason}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowQueueDialog(false);
+                setQueueReasonInput("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!queueReasonInput || queueJob.isPending}
+              onClick={() => {
+                if (queueReasonInput) {
+                  queueJob.mutate({ inQueue: true, queueReason: queueReasonInput });
+                }
+              }}
+              data-testid="btn-confirm-queue"
+            >
+              {queueJob.isPending ? "Queuing..." : "Add to Queue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
