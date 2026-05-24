@@ -22483,16 +22483,59 @@ Keep the tone professional but conversational. Use NZD for currency.`;
   });
 
   // Create proposal section
+  // Helper: when a proposal section's content is the customer-facing "Job
+  // Description" (sectionType service_description, or title containing
+  // "description" for older/custom templates), mirror it onto the linked
+  // job's description column. Only fills empty job.description fields —
+  // never overwrites — so users who've already typed a description on the
+  // job card don't get it clobbered when the proposal is re-saved.
+  // Background: pre-sync, jobs that came via accept-proposal had a blank
+  // description because the work scope was only in proposal_sections.
+  const isJobDescriptionSection = (s: { sectionType?: string | null; title?: string | null }) =>
+    s.sectionType === 'service_description' ||
+    (s.title ?? '').toLowerCase().includes('description');
+
+  const syncProposalDescriptionToJob = async (
+    proposalId: string,
+    sectionContent: string | null | undefined,
+    source: 'create' | 'update',
+  ): Promise<void> => {
+    try {
+      const content = (sectionContent ?? '').trim();
+      if (!content) return;
+      const proposal = await storage.getProposal(proposalId);
+      if (!proposal?.jobId) return;
+      const job = await storage.getJob(proposal.jobId);
+      if (!job) return;
+      // Empty-only policy. Protects user edits made directly on the job card.
+      if ((job.description ?? '').trim()) return;
+      await storage.updateJob(job.id, { description: content });
+      console.log(
+        `🔄 [PROPOSAL_DESCRIPTION_SYNC] job ${job.jobNumber} (${job.id}) ← proposal ${proposalId} (${source}): ${content.slice(0, 60)}${content.length > 60 ? '…' : ''}`,
+      );
+    } catch (err) {
+      // Sync failure shouldn't break the section save — log and continue.
+      console.error('[PROPOSAL_DESCRIPTION_SYNC] failed:', err);
+    }
+  };
+
   app.post('/api/proposals/:proposalId/sections', async (req: Request, res: Response) => {
     try {
       const sectionData = {
         ...req.body,
         proposalId: req.params.proposalId
       };
-      
+
       const validatedData = insertProposalSectionSchema.parse(sectionData);
       const section = await storage.createProposalSection(validatedData);
-      
+
+      // Sync to job.description when this is the customer-facing description
+      // section. Awaited so the new job state is visible to subsequent reads
+      // in the same tick (e.g. JobCardMobile reloading after this returns).
+      if (isJobDescriptionSection(section)) {
+        await syncProposalDescriptionToJob(req.params.proposalId, section.content, 'create');
+      }
+
       res.status(201).json({
         success: true,
         data: section,
@@ -22500,7 +22543,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       });
     } catch (error: any) {
       console.error('Error creating proposal section:', error);
-      
+
       if (error.name === 'ZodError') {
         return res.status(400).json({
           success: false,
@@ -22508,7 +22551,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           errors: error.errors
         });
       }
-      
+
       res.status(500).json({
         success: false,
         message: 'Error creating proposal section'
@@ -22521,7 +22564,23 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     try {
       const validatedData = updateProposalSectionSchema.parse(req.body);
       const section = await storage.updateProposalSection(req.params.id, validatedData);
-      
+
+      // Sync to job.description (empty-only). The update endpoint hits when
+      // the user edits the section text in the proposal builder — same
+      // intent as a create from job.description's perspective.
+      // Narrow assertion (not `as any`): the Drizzle-inferred ProposalSection
+      // type is missing proposalId here but the column exists in the schema
+      // (shared/schema.ts line 705) and is always present at runtime.
+      if (isJobDescriptionSection(section)) {
+        // Go via `unknown` because the Drizzle-inferred section type lists
+        // proposalId nowhere even though the column exists (schema line 705).
+        const narrowed = section as unknown as {
+          proposalId: string;
+          content: string | null;
+        };
+        await syncProposalDescriptionToJob(narrowed.proposalId, narrowed.content, 'update');
+      }
+
       res.json({
         success: true,
         data: section,
@@ -22529,14 +22588,14 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       });
     } catch (error: any) {
       console.error('Error updating proposal section:', error);
-      
+
       if (error.message === 'Proposal section not found') {
         return res.status(404).json({
           success: false,
           message: 'Proposal section not found'
         });
       }
-      
+
       if (error.name === 'ZodError') {
         return res.status(400).json({
           success: false,
@@ -22544,7 +22603,7 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           errors: error.errors
         });
       }
-      
+
       res.status(500).json({
         success: false,
         message: 'Error updating proposal section'
