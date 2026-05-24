@@ -10529,6 +10529,13 @@ The Treemarkables Team`;
         <JobCardMobile
           jobId={editingJob!.id}
           onClose={() => handleDialogClose(false)}
+          onDuplicated={(newJobId) => {
+            // Swap the open modal over to the duplicate. setCreatedJobId
+            // re-derives editingJob (line ~1123) so the modal re-renders
+            // showing the new job — same UX as opening it from the list,
+            // minus the close/find/tap dance.
+            setCreatedJobId(newJobId);
+          }}
           actions={{
             speechToQuote: () => setIsSpeechToQuoteOpen(true),
             schedule: () => setIsSchedulingModalOpen(true),

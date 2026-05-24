@@ -23,6 +23,7 @@ import {
   Mail,
   MoreHorizontal,
   CheckCircle,
+  Copy,
   Trash2,
   Mic,
   Calendar,
@@ -78,6 +79,14 @@ export interface JobCardMobileProps {
   onQuoteClick?: () => void;
   onInvoiceClick?: () => void;
   onProposalClick?: (proposalNumber: string) => void;
+  /**
+   * Called after Duplicate Job succeeds. Parent (GlobalJobCard) typically
+   * wires this to swap the open modal over to the newly created job so the
+   * user is dropped straight into editing the duplicate. If omitted,
+   * JobCardMobile just closes itself — the duplicate still appears in the
+   * jobs list, the user finds it from there.
+   */
+  onDuplicated?: (newJobId: string) => void;
   /**
    * Handlers for the 9 tiles in the bottom Actions sheet. Parent
    * (GlobalJobCard) supplies these so the new mobile UI opens the same
@@ -137,6 +146,7 @@ export function JobCardMobile({
   onQuoteClick,
   onInvoiceClick,
   onProposalClick,
+  onDuplicated,
   actions,
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
@@ -229,9 +239,45 @@ export function JobCardMobile({
     },
   });
 
+  // POST /api/jobs/:id/duplicate copies scoping (customer, address, line items,
+  // contacts, checklists) into a fresh quote-status job with a new jobNumber.
+  // Scheduling, assignments, completion state, payments, and Xero IDs all
+  // reset — see server/routes.ts for the field whitelist.
+  const duplicateJob = useMutation<
+    { success?: boolean; data?: { id?: string; jobNumber?: string } },
+    Error
+  >({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/duplicate`, {});
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Duplicate failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: (json) => {
+      // Refresh the jobs list so the duplicate appears in dispatch/calendar/etc.
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      const newId = json?.data?.id;
+      if (newId && onDuplicated) {
+        // Parent decides what to do with the new job (e.g. swap the open
+        // modal over to it). If not handled, close so the user can find the
+        // duplicate in the jobs list.
+        onDuplicated(newId);
+      } else {
+        onClose();
+      }
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't duplicate job", description: err.message, variant: "destructive" });
+    },
+  });
+
   const onMarkComplete = () => markComplete.mutate();
   const onDuplicate = () => {
-    toast({ title: "Duplicate job — coming soon", description: "Hold tight while we wire this up." });
+    if (window.confirm("Create a copy of this job? The duplicate starts as a fresh quote — no scheduling, no payments, new job number.")) {
+      duplicateJob.mutate();
+    }
   };
   const onOpenFull = () => {
     onClose();
@@ -409,6 +455,18 @@ export function JobCardMobile({
                   <CheckCircle className="w-5 h-5 text-emerald-600 flex-shrink-0" />
                   <span className="text-[15px] font-semibold text-slate-900">
                     {job?.status === "completed" ? "Already complete" : "Mark job as complete"}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onDuplicate}
+                  disabled={duplicateJob.isPending}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                  data-testid="btn-duplicate-job"
+                >
+                  <Copy className="w-5 h-5 text-blue-600 flex-shrink-0" />
+                  <span className="text-[15px] font-semibold text-slate-900">
+                    {duplicateJob.isPending ? "Duplicating..." : "Duplicate job"}
                   </span>
                 </button>
                 <button
