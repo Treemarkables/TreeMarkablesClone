@@ -6975,7 +6975,7 @@ The Treemarkables Team`;
 
                             {/* Unsuccessful Reason - Only show when status is unsuccessful */}
                             {watchedStatus === "unsuccessful" && (
-                              <div className="mt-3 space-y-3 p-3 bg-orange-50 rounded-lg border border-orange-200">
+                              <div className="mt-3 space-y-3 p-3 bg-orange-50 rounded-xl border border-orange-200">
                                 <FormField
                                   control={form.control}
                                   name="unsuccessfulReason"
@@ -7981,7 +7981,7 @@ The Treemarkables Team`;
                           <label className="text-xs font-medium text-gray-600 mb-2 block">
                             Upcoming Bookings
                           </label>
-                          <div className="border rounded-lg p-3 bg-blue-50 text-sm space-y-2">
+                          <div className="border rounded-xl p-3 bg-blue-50 text-sm space-y-2">
                             {Array.isArray(editingJob?.assignedTo) &&
                               editingJob.assignedTo.map(
                                 (employeeId: string) => {
@@ -8778,7 +8778,7 @@ The Treemarkables Team`;
 
                         {/* Manual Add Line Item Form */}
                         {isAddingLineItem && (
-                          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-4">
+                          <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
                             <div className="flex items-center justify-between">
                               <h4 className="font-medium">
                                 Add Custom Line Item
@@ -8896,7 +8896,7 @@ The Treemarkables Team`;
                         {/* ServiceM8-Style Line Items Table */}
                         <div className="space-y-4 px-3 sm:px-4 py-4">
                           {lineItemFields.length > 0 && (
-                            <div className="border border-gray-200 rounded-lg overflow-hidden">
+                            <div className="border border-gray-200 rounded-xl overflow-hidden">
                               <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex items-center justify-between">
                                 <h4 className="font-medium text-gray-800">
                                   Items & Services
@@ -9398,7 +9398,7 @@ The Treemarkables Team`;
 
                           {/* Empty State - Show when no line items */}
                           {lineItemFields.length === 0 && !isAddingLineItem && (
-                            <div className="border border-gray-200 border-dashed rounded-lg p-8 text-center">
+                            <div className="border border-gray-200 border-dashed rounded-xl p-8 text-center">
                               <div className="text-gray-400 mb-3">
                                 <DollarSign className="w-12 h-12 mx-auto" />
                               </div>
@@ -9541,7 +9541,7 @@ The Treemarkables Team`;
                                 {sentInvoices.map((invoice: any) => (
                                   <div
                                     key={invoice.id}
-                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors"
+                                    className="flex items-center justify-between p-3 bg-gray-50 rounded-xl border border-gray-100 hover:bg-gray-100 transition-colors"
                                   >
                                     <div className="flex items-center gap-3">
                                       <div
