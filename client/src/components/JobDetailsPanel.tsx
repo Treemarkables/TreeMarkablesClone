@@ -17,7 +17,7 @@
  *   - Voice transcription wired into the textareas
  *   - "Notify on arrival" toggle (not a real DB field — needs design call)
  */
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { MapPin, ChevronDown, Mic, MicOff, Lock } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
@@ -118,10 +118,72 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   });
   const customer = custResp?.data;
 
+  // ── Proposal-description fallback ───────────────────────────────────────────
+  // Many jobs (especially those that came via accept-proposal → work_order)
+  // have an empty `job.description` because the customer-facing work scope
+  // was only written into the proposal's "Job Description" section. Pull
+  // the most recent proposal for this job so we can surface that text when
+  // the job row is empty. No backend writes — pure display fallback.
+  const { data: proposalsResp } = useQuery<{
+    success?: boolean;
+    data?: Array<{
+      id: string;
+      status?: string;
+      createdAt?: string;
+      sections?: Array<{ sectionType?: string; title?: string; content?: string }>;
+    }>;
+  }>({
+    queryKey: ["/api/proposals", { jobId, includeSections: true }],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/proposals?jobId=${encodeURIComponent(jobId)}&includeSections=true`,
+        { credentials: "include" },
+      );
+      if (!res.ok) throw new Error(`Failed to load proposals (HTTP ${res.status})`);
+      return res.json();
+    },
+    enabled: !!jobId && !job?.description,
+    staleTime: 60_000,
+  });
+  const proposalDescription = useMemo(() => {
+    const proposals = proposalsResp?.data ?? [];
+    if (proposals.length === 0) return "";
+    // Prefer the most recent — proposals come ordered newest-first from
+    // storage.getProposalsByJob, but sort defensively in case that changes.
+    const sorted = [...proposals].sort((a, b) =>
+      (b.createdAt ?? "").localeCompare(a.createdAt ?? ""),
+    );
+    for (const p of sorted) {
+      const sections = p.sections ?? [];
+      // Primary match: semantic sectionType. Fallback: title contains
+      // "description" (case-insensitive) — handles older/custom templates.
+      const match =
+        sections.find((s) => s.sectionType === "service_description") ??
+        sections.find((s) => (s.title ?? "").toLowerCase().includes("description"));
+      if (match?.content?.trim()) return match.content.trim();
+    }
+    return "";
+  }, [proposalsResp]);
+
   // ── Local edit state (mirrors server, updated on every render with fresh data) ─
+  // Description falls back to the proposal's "Job Description" section when
+  // the job row's description is empty — see proposalDescription above.
   const [description, setDescription] = useState("");
   const [internalNotes, setInternalNotes] = useState("");
-  useEffect(() => { if (job) setDescription(job.description ?? ""); }, [job?.description]);
+  const [descriptionFromProposal, setDescriptionFromProposal] = useState(false);
+  useEffect(() => {
+    if (!job) return;
+    if (job.description && job.description.trim()) {
+      setDescription(job.description);
+      setDescriptionFromProposal(false);
+    } else if (proposalDescription) {
+      setDescription(proposalDescription);
+      setDescriptionFromProposal(true);
+    } else {
+      setDescription("");
+      setDescriptionFromProposal(false);
+    }
+  }, [job?.description, proposalDescription]);
   useEffect(() => { if (job) setInternalNotes(job.internalNotes ?? ""); }, [job?.internalNotes]);
 
   // ── Save mutation ───────────────────────────────────────────────────────────
@@ -186,6 +248,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
             }}
           />
         </div>
+        {descriptionFromProposal && (
+          // Light hint so the user knows where this text came from. The first
+          // edit + blur saves it onto job.description, after which the
+          // fallback disappears on its own (job.description is no longer empty).
+          <div className="mb-2 text-[12px] text-slate-500" data-testid="description-from-proposal-hint">
+            From the accepted proposal — edit and tap away to save to the job.
+          </div>
+        )}
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
