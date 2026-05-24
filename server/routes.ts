@@ -45,7 +45,7 @@ import {
   insertCommunicationSchema, updateCommunicationSchema,
   insertConversationSchema, updateConversationSchema,
   insertConversationMessageSchema, updateConversationMessageSchema,
-  insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, gpsLocationSchema,
+  insertPhotoSchema, updatePhotoSchema, photoUploadSchema, photoSearchSchema, videoSearchSchema, gpsLocationSchema,
   insertInvoiceSchema, insertInvoiceSectionSchema, updateInvoiceSectionSchema,
   insertServiceRequestSchema, insertCustomerAuthSchema,
   insertCommunicationPreferencesSchema,
@@ -16207,6 +16207,22 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Error searching photos',
+      });
+    }
+  });
+
+  // Search videos — same shape as /api/photos/search. Powers the /library
+  // unified media search across photos + videos.
+  app.post('/api/videos/search', async (req: Request, res: Response) => {
+    try {
+      const filters = videoSearchSchema.parse(req.body);
+      const videos = await storage.searchVideos(filters);
+      res.json({ success: true, videos, filters });
+    } catch (error) {
+      console.error('Error searching videos:', error);
+      res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error searching videos',
       });
     }
   });

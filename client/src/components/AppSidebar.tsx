@@ -180,6 +180,16 @@ function SidebarNavContent({
                 </SidebarMenuButton>
               </SidebarMenuItem>
 
+              {/* Library — unified search across all photos + videos with optional map view */}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild isActive={location === "/library"} className={ITEM}>
+                  <Link href="/library" onClick={handleLinkClick} data-testid="link-library">
+                    <Glyph>🔍</Glyph>
+                    <span>Library</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+
               {/* Help — subscriber-facing SOPs + how-to videos */}
               <SidebarMenuItem>
                 <SidebarMenuButton asChild isActive={location === "/help"} className={ITEM}>

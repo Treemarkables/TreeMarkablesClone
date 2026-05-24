@@ -2879,6 +2879,7 @@ export type InsertHelpArticle = z.infer<typeof insertHelpArticleSchema>;
 export type UpdateHelpArticle = z.infer<typeof updateHelpArticleSchema>;
 
 export const photoSearchSchema = z.object({
+  q: z.string().optional(), // free-text: matches notes / aiDescription / gpsAddress / location / filename
   jobId: z.string().optional(),
   customerId: z.string().optional(),
   type: z.string().optional(),
@@ -2894,6 +2895,24 @@ export const photoSearchSchema = z.object({
   limit: z.number().min(1).max(100).default(20),
   offset: z.number().min(0).default(0),
 });
+
+// Mirror of photoSearchSchema for videos. Videos don't have type/category/quality
+// score; otherwise the shape is identical so the same UI surface can drive both.
+// NOTE: hasGps is reserved for Phase 2 — videos table has no GPS columns yet.
+export const videoSearchSchema = z.object({
+  q: z.string().optional(), // matches title / description / filename
+  kind: z.enum(["job", "knowledge"]).optional(),
+  jobId: z.string().optional(),
+  customerId: z.string().optional(),
+  category: z.string().optional(), // only meaningful for kind='knowledge'
+  uploadedBy: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+  showToCustomer: z.boolean().optional(),
+  limit: z.number().min(1).max(100).default(20),
+  offset: z.number().min(0).default(0),
+});
+export type VideoSearch = z.infer<typeof videoSearchSchema>;
 
 // Type exports for photos
 export type Photo = typeof photos.$inferSelect;

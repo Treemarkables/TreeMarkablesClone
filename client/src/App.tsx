@@ -36,6 +36,7 @@ const JobCardPreview = lazy(() => import("@/pages/JobCardPreview"));
 const MetricsDashboard = lazy(() => import("@/pages/MetricsDashboard"));
 const Tasks = lazy(() => import("@/pages/Tasks"));
 const Videos = lazy(() => import("@/pages/Videos"));
+const Library = lazy(() => import("@/pages/Library"));
 const Help = lazy(() => import("@/pages/Help"));
 const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
 const Pipeline = lazy(() => import("@/pages/Pipeline"));
@@ -1080,6 +1081,13 @@ function Router() {
         <ProtectedRoute>
           <SidebarLayout>
             <Videos />
+          </SidebarLayout>
+        </ProtectedRoute>
+      </Route>
+      <Route path="/library">
+        <ProtectedRoute>
+          <SidebarLayout>
+            <Library />
           </SidebarLayout>
         </ProtectedRoute>
       </Route>
