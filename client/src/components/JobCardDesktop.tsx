@@ -1,10 +1,10 @@
 /**
- * Desktop-first job card modal — Phase A scaffold.
+ * Desktop-first job card modal — Phases A + B.
  *
- * Mirrors the mobile rebuild's Phase A philosophy: ship a working chrome
- * (header + tab strip + split-screen body + draggable divider + bottom
- * action bar) with placeholder bodies, so we can QA the layout in the
- * real app before wiring real data into the panels in Phase B+.
+ * Mirrors the mobile rebuild's phasing: scaffold first (header + tab
+ * strip + split-screen body + draggable divider + bottom action bar),
+ * then wire panels in tab-by-tab. The Details tab is wired (Phase B);
+ * other tabs are placeholders until Phase D.
  *
  * Reachable at /job-card-preview-desktop/:jobId. Throwaway preview route;
  * delete once Phase F feature-flags this into the real flow.
@@ -45,6 +45,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 
 export type JobCardDesktopTab =
   | "details"
@@ -311,14 +312,20 @@ export function JobCardDesktop({
               </span>
             </div>
 
-            {/* Placeholder body — Phase B wires real panels (reuses
-                JobDetailsPanel / JobBillingPanel / JobChecklistPanel /
-                JobQuotingPanel, the same components the mobile card uses). */}
-            <div className="flex-1 overflow-y-auto p-6">
-              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500">
-                <p className="text-[14px] font-semibold text-slate-700">{TABS.find((t) => t.id === activeTab)?.label} body</p>
-                <p className="text-[12px] mt-1">Placeholder — Phase B will plug in the real panel for this tab.</p>
-              </div>
+            {/* Tab bodies. Details is wired via JobDetailsPanel (the same
+                component the mobile card uses — shared cache, identical
+                auto-save behaviour). Other tabs remain placeholders until
+                Phase D drops the matching panels in. */}
+            <div className="flex-1 overflow-y-auto min-h-0">
+              {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
+              {activeTab !== "details" && (
+                <div className="p-6">
+                  <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500">
+                    <p className="text-[14px] font-semibold text-slate-700">{TABS.find((t) => t.id === activeTab)?.label} body</p>
+                    <p className="text-[12px] mt-1">Placeholder — Phase D will plug in the real panel for this tab.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
