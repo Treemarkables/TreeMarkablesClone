@@ -884,13 +884,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       const tab = params.get("tab");
       const newJob = params.get("newJob");
 
-      // Handle ?newJob=true — open the create job flow (same as blue "+ New Job" button)
+      // Handle ?newJob=true — open the create job flow (same as the global
+      // top-bar "+ New Job" button, which navigates here with this param).
+      // Routes through createDraftMutation so the new card mounts directly.
       if (newJob === "true") {
         window.history.replaceState({}, "", "/dispatch");
-        setJobToEdit(null);
-        setInitialJobData({ status: "work_order" });
-        setGlobalJobCardMode("create");
-        setShowGlobalJobCard(true);
+        handleCreateJob();
         return;
       }
 
@@ -2212,10 +2211,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   };
 
   const handleCreateInvoice = () => {
-    setJobToEdit(null);
-    setInitialJobData({ status: "invoiced" });
-    setGlobalJobCardMode("create");
-    setShowGlobalJobCard(true);
+    createDraftMutation.mutate({ status: "invoiced" });
   };
 
   const saveSchedule = () => {
