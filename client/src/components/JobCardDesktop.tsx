@@ -552,6 +552,36 @@ export function JobCardDesktop({
     }
   };
 
+  // Close-with-empty-draft guard. Drafts created from the "+ New Job"
+  // flow (PR #38 / #39) are an empty row with just a status — if the user
+  // closes without picking a customer / writing a description, the row
+  // sits in /all-jobs as litter. Prompt to delete on close when the job
+  // still has nothing meaningful filled in. Existing jobs that happen to
+  // be empty get the same prompt — same intent, easy clean-up.
+  //
+  // Heuristic kept tight on purpose (customer + description + title) so a
+  // user mid-fill — say, picked a customer but hasn't typed the
+  // description yet — isn't prompted. Auto-save data-loss history says
+  // err on the side of less-prompt-more-explicit.
+  const isJobEmpty =
+    !((job?.customerId as string | undefined) ?? "") &&
+    !(((job?.description as string | undefined) ?? "").trim()) &&
+    !(((job?.title as string | undefined) ?? "").trim());
+
+  const handleClose = () => {
+    if (isJobEmpty) {
+      if (
+        window.confirm(
+          "This job is empty (no customer, description, or title). Delete it?",
+        )
+      ) {
+        deleteJob.mutate(); // deleteJob.onSuccess calls onClose() itself
+        return;
+      }
+    }
+    onClose();
+  };
+
   // Queue menu-item click: if already queued, one-tap unqueue (with a
   // confirm so an accidental click doesn't pull a job back into the live
   // board); otherwise open the reason picker dialog. Mirrors mobile's
@@ -603,7 +633,7 @@ export function JobCardDesktop({
             </Button>
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               aria-label="Close"
               className="w-9 h-9 rounded-full bg-slate-100 text-slate-600 grid place-items-center hover:bg-slate-200"
             >
