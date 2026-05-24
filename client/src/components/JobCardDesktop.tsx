@@ -1,11 +1,12 @@
 /**
- * Desktop-first job card modal — Phases A + B + C.
+ * Desktop-first job card modal — Phases A + B + C + D.
  *
  * Mirrors the mobile rebuild's phasing: scaffold first (header + tab
  * strip + split-screen body + draggable divider + bottom action bar),
- * then wire panels in tab-by-tab. The Details tab is wired (Phase B);
- * the always-visible Diary in the right pane is wired (Phase C); the
- * Billing/Checklist/Quoting tabs remain placeholders until Phase D.
+ * then wire panels in tab-by-tab. All four tabs (Details, Billing,
+ * Checklist, Quoting) now reuse the same panel components the mobile
+ * card uses; the always-visible Diary in the right pane is wired too.
+ * Bottom action bar still no-ops — those land in Phase E.
  *
  * Reachable at /job-card-preview-desktop/:jobId. Throwaway preview route;
  * delete once Phase F feature-flags this into the real flow.
@@ -48,6 +49,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
+import { JobBillingPanel } from "@/components/JobBillingPanel";
+import { JobChecklistPanel } from "@/components/JobChecklistPanel";
+import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 
 export type JobCardDesktopTab =
   | "details"
@@ -314,20 +318,16 @@ export function JobCardDesktop({
               </span>
             </div>
 
-            {/* Tab bodies. Details is wired via JobDetailsPanel (the same
-                component the mobile card uses — shared cache, identical
-                auto-save behaviour). Other tabs remain placeholders until
-                Phase D drops the matching panels in. */}
+            {/* Tab bodies. Every panel is the same component the mobile
+                card mounts, so React Query cache and auto-save behaviour
+                are identical between surfaces — opening a job that's
+                already open in mobile / GlobalJobCard / the diary triggers
+                no duplicate fetches. */}
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
-              {activeTab !== "details" && (
-                <div className="p-6">
-                  <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500">
-                    <p className="text-[14px] font-semibold text-slate-700">{TABS.find((t) => t.id === activeTab)?.label} body</p>
-                    <p className="text-[12px] mt-1">Placeholder — Phase D will plug in the real panel for this tab.</p>
-                  </div>
-                </div>
-              )}
+              {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+              {activeTab === "checklist" && <JobChecklistPanel jobId={jobId} />}
+              {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
             </div>
           </div>
 
