@@ -35,8 +35,8 @@
  *   └────────────────────────────────────────────────────────────────┘
  *
  * Default split is 60/40. The divider between the two panes is draggable
- * (clamped to 30%–80%); the chosen ratio is held in component state and
- * does not persist across opens — easy to add when there's user demand.
+ * (clamped to 30%–80%); the chosen ratio + last-active tab persist to
+ * localStorage so the layout the user settles on sticks across opens.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -187,6 +187,44 @@ const QUEUE_REASONS = [
   "Other",
 ];
 
+// localStorage keys for the two persisted preferences. Per-user, not
+// per-job — most users settle on a split + tab that suits their workflow
+// and want that to stick across opens. Try/catch around all reads/writes
+// since private-mode Safari throws on localStorage access.
+const STORAGE_KEY_SPLIT = "jobCardDesktop.splitPct";
+const STORAGE_KEY_TAB = "jobCardDesktop.activeTab";
+const DEFAULT_SPLIT_PCT = 60;
+
+function readStoredSplitPct(): number {
+  if (typeof window === "undefined") return DEFAULT_SPLIT_PCT;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY_SPLIT);
+    if (!raw) return DEFAULT_SPLIT_PCT;
+    const n = parseFloat(raw);
+    // Clamp to the same 30–80 range the drag handle uses — guards against
+    // a malformed / out-of-range value left over from older code.
+    if (!Number.isFinite(n)) return DEFAULT_SPLIT_PCT;
+    return Math.max(30, Math.min(80, n));
+  } catch {
+    return DEFAULT_SPLIT_PCT;
+  }
+}
+
+function readStoredTab(fallback: JobCardDesktopTab): JobCardDesktopTab {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY_TAB);
+    // Validate against the known tab ids — anything stale or hand-edited
+    // falls through to the fallback rather than crashing the layout.
+    if (raw === "details" || raw === "billing" || raw === "checklist" || raw === "quoting") {
+      return raw;
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function formatNzd(amount?: number | string | null): string {
   if (amount == null) return "$0.00";
   const n = typeof amount === "string" ? parseFloat(amount) : amount;
@@ -206,10 +244,26 @@ export function JobCardDesktop({
   onInvoiceClick,
   onProposalClick,
 }: JobCardDesktopProps) {
-  const [activeTab, setActiveTab] = useState<JobCardDesktopTab>(initialTab);
+  // Persisted preferences — last-used tab + split ratio, restored across
+  // opens. Caller-supplied initialTab still wins (so a future "Open the
+  // Billing tab when the user clicks an invoice in the diary" flow can
+  // override the stored preference for one open).
+  const [activeTab, setActiveTab] = useState<JobCardDesktopTab>(
+    () => readStoredTab(initialTab),
+  );
   // Split ratio (left pane as a percentage). 60/40 default to match the
   // approved mockup. Clamped to 30–80 during drag so neither pane disappears.
-  const [splitPct, setSplitPct] = useState(60);
+  const [splitPct, setSplitPct] = useState<number>(() => readStoredSplitPct());
+
+  // Persist tab + split changes back to localStorage on every change. No
+  // debounce on splitPct — writes are cheap and we want the new value to
+  // stick the moment the user releases the drag, not 200ms later.
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY_TAB, activeTab); } catch { /* private-mode Safari */ }
+  }, [activeTab]);
+  useEffect(() => {
+    try { window.localStorage.setItem(STORAGE_KEY_SPLIT, String(splitPct)); } catch { /* private-mode Safari */ }
+  }, [splitPct]);
 
   // Composer-modal state. Same pattern JobCardMobile uses — local state for
   // Photo / SMS / Email modals keeps the bottom-bar buttons self-contained.
