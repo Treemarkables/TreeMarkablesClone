@@ -34,7 +34,6 @@ import {
   ResizablePanel,
   ResizableHandle,
 } from "@/components/ui/resizable";
-import type { ImperativePanelHandle } from "react-resizable-panels";
 import {
   Calendar,
   Clock,
@@ -722,14 +721,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   const [globalJobCardMode, setGlobalJobCardMode] = useState<"create" | "edit">(
     "create",
   );
-  const leftDispatchPanelRef = useRef<ImperativePanelHandle>(null);
 
-  // Imperatively resize the left panel when the job card panel opens/closes.
-  // defaultSize on an already-mounted ResizablePanel has no effect, so we use
-  // the imperative API to drive the 100 ↔ 50 transition.
-  useEffect(() => {
-    leftDispatchPanelRef.current?.resize(showGlobalJobCard ? 50 : 100);
-  }, [showGlobalJobCard]);
+  // (The 100 ↔ 50 left-panel resize effect was removed alongside PR #35's
+  // switch to opening the job card in a modal. The sibling right panel it
+  // was balancing against is gone, so calling .resize(50) on the only
+  // surviving panel made the library throw "Previous layout not found for
+  // panel index -1" every time a job card opened.)
 
   const [jobToEdit, setJobToEdit] = useState<JobAssignment | null>(null);
   const [initialJobData, setInitialJobData] = useState<any>(null);
@@ -2533,12 +2530,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           data-testid="dispatch-desktop-layout"
         >
           <ResizablePanelGroup direction="horizontal" className="h-full w-full">
-            {/* Left Panel: Dispatch Board (Calendar + Job Cards) */}
-            <ResizablePanel
-              ref={leftDispatchPanelRef}
-              defaultSize={100}
-              minSize={30}
-            >
+            {/* Left Panel: Dispatch Board (Calendar + Job Cards).
+                Sole child of the outer group since PR #35 removed the right
+                inline panel. The outer group is left in place as a thin
+                wrapper for layout-class continuity; deleting it would shift
+                spacing without changing behaviour. */}
+            <ResizablePanel minSize={30}>
               <ResizablePanelGroup
                 direction="horizontal"
                 className="h-full"
