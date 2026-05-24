@@ -416,6 +416,53 @@ export function JobVideos({ jobId }: JobVideosProps) {
                     </span>
                   </div>
                   <div className="flex items-center gap-1">
+                    {/* AI: per-row retry — handles two cases the post-upload
+                        prompt can't: (1) video uploaded but Generate was
+                        declined, (2) previous Generate failed and left
+                        transcriptStatus=error or none. Clicking re-runs the
+                        same endpoint (idempotent fast-path returns cached
+                        result if ready). */}
+                    {v.transcriptStatus !== "ready" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => transcribeMutation.mutate(v.id)}
+                        disabled={
+                          transcribeMutation.isPending &&
+                          transcribeMutation.variables === v.id
+                        }
+                        title="Transcribe this video and generate a job description with AI"
+                        data-testid={`button-generate-${v.id}`}
+                      >
+                        {transcribeMutation.isPending &&
+                        transcribeMutation.variables === v.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                      </Button>
+                    )}
+                    {v.transcriptStatus === "ready" && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          // Open the result dialog with the cached AI
+                          // description so the user can re-apply it
+                          // (replace/append) without re-running OpenAI.
+                          if (v.generatedDescription) {
+                            setGeneratedDescription(v.generatedDescription);
+                            setShowResult(true);
+                          }
+                        }}
+                        title="View the AI-generated description for this video"
+                        data-testid={`button-view-generated-${v.id}`}
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-primary" />
+                      </Button>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
