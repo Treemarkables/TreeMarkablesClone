@@ -19,6 +19,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { formatNZTime, getNZDateString } from "@shared/dateUtils";
 import type { RoleChecklistTask } from "@shared/schema";
 
@@ -99,6 +100,7 @@ const FALLBACK_ROLE_ITEMS: Record<RoleKey, ChecklistItem[]> = {
 
 export function JobChecklistPanel({ jobId }: { jobId: string }) {
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   const isTempJob = jobId.startsWith("temp-");
 
   // Tasks are now driven by the role_checklist_tasks table so users can
@@ -217,9 +219,43 @@ export function JobChecklistPanel({ jobId }: { jobId: string }) {
         `/api/jobs/${jobId}/checklist/${itemId}`,
         { completed },
       );
-      return res.json();
+      // The API wraps results in {success, data, message}; surface server-
+      // reported failures (auth, validation) as exceptions so onError fires
+      // and the user actually sees what's wrong instead of a silent no-op.
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message || `HTTP ${res.status}`);
+      }
+      return json;
     },
-    onSuccess: () => {
+    // Optimistic update: flip the local cache before the server replies so the
+    // tick is instant. If the request fails, onError rolls back.
+    onMutate: async ({ itemId, completed }) => {
+      const key = ["/api/jobs", jobId, "checklist"];
+      await queryClient.cancelQueries({ queryKey: key });
+      const prev = queryClient.getQueryData<{ success?: boolean; data?: ChecklistCompletion[] }>(key);
+      const prevCompletions = prev?.data ?? [];
+      const nextCompletions = completed
+        ? [
+            ...prevCompletions.filter((c) => c.itemId !== itemId),
+            { itemId, completedAt: new Date().toISOString(), completedByName: null } as ChecklistCompletion,
+          ]
+        : prevCompletions.filter((c) => c.itemId !== itemId);
+      queryClient.setQueryData(key, { success: true, data: nextCompletions });
+      return { prev };
+    },
+    onError: (err: Error, _vars, ctx) => {
+      // Roll back the optimistic update.
+      if (ctx?.prev !== undefined) {
+        queryClient.setQueryData(["/api/jobs", jobId, "checklist"], ctx.prev);
+      }
+      toast({
+        title: "Couldn't update checklist",
+        description: err.message || "Something went wrong",
+        variant: "destructive",
+      });
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId, "checklist"] });
     },
   });
