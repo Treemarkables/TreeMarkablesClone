@@ -344,18 +344,18 @@ export function GlobalJobCard({
   const isMobile = useIsMobile();
   const { isAdmin, currentUser } = useAuth();
 
-  // ── desktopV2 feature flag ─────────────────────────────────────────────
-  // Mirrors how mobileV2 was rolled out — opt-in via `?desktopV2=1` URL
-  // param, persisted to localStorage so it sticks across navigations. Set
-  // `?desktopV2=0` to flip back to the legacy desktop card. Default OFF
-  // for now; a later phase flips the default ON, and a final phase removes
-  // the flag entirely (same arc as PRs #21 → #23 for mobile).
+  // ── desktopV2 feature flag (default ON since Phase F2) ─────────────────
+  // Mirrors how mobileV2 was rolled out — `?desktopV2=0` URL param opts a
+  // user back into the legacy desktop card (persisted to localStorage so
+  // the choice sticks across navigations). Default is now ON; only an
+  // explicit `"0"` in localStorage falls back to legacy. A final phase
+  // removes the flag entirely (same arc as PRs #21 → #23 for mobile).
   //
   // Read once at mount — if a user toggles the URL param mid-session they
   // can hard-refresh to pick up the new value (no need for live reactivity
   // and the extra re-renders that would imply).
   const desktopV2Enabled = useMemo(() => {
-    if (typeof window === "undefined") return false;
+    if (typeof window === "undefined") return true;
     try {
       const url = new URLSearchParams(window.location.search);
       const urlFlag = url.get("desktopV2");
@@ -367,10 +367,12 @@ export function GlobalJobCard({
         window.localStorage.setItem("desktopV2", "0");
         return false;
       }
-      return window.localStorage.getItem("desktopV2") === "1";
+      // No URL flag: default ON, opt out only with explicit "0".
+      return window.localStorage.getItem("desktopV2") !== "0";
     } catch {
-      // localStorage can throw in private-mode Safari etc — fall back to off
-      return false;
+      // localStorage can throw in private-mode Safari etc — fall back to ON
+      // since that's the new default.
+      return true;
     }
   }, []);
 
@@ -10550,10 +10552,11 @@ The Treemarkables Team`;
   // case (it's the default and only mobile-edit path now — the ?mobileV2=0
   // escape hatch was removed after the new UI baked in production).
   //
-  // Desktop viewports get the redesigned JobCardDesktop shell when the
-  // desktopV2 flag is on (opt-in via `?desktopV2=1`). Off-by-default during
-  // Phase F rollout — a follow-up flips the default ON, and a final cleanup
-  // removes the flag (same arc mobile took in PRs #21 → #23).
+  // Desktop viewports get the redesigned JobCardDesktop shell by default
+  // (since Phase F2). `?desktopV2=0` flips back to the legacy desktop card
+  // — useful as a temporary escape hatch while the new card bakes. The
+  // final cleanup phase removes the flag entirely (same arc mobile took in
+  // PRs #21 → #23).
   //
   // Split-screen panel (renderInline) and create-mode (no editingJob.id
   // yet) always fall through to the existing jobCardContent inside its
