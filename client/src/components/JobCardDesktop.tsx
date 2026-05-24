@@ -1,10 +1,11 @@
 /**
- * Desktop-first job card modal — Phases A + B.
+ * Desktop-first job card modal — Phases A + B + C.
  *
  * Mirrors the mobile rebuild's phasing: scaffold first (header + tab
  * strip + split-screen body + draggable divider + bottom action bar),
  * then wire panels in tab-by-tab. The Details tab is wired (Phase B);
- * other tabs are placeholders until Phase D.
+ * the always-visible Diary in the right pane is wired (Phase C); the
+ * Billing/Checklist/Quoting tabs remain placeholders until Phase D.
  *
  * Reachable at /job-card-preview-desktop/:jobId. Throwaway preview route;
  * delete once Phase F feature-flags this into the real flow.
@@ -46,6 +47,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
+import { JobDiarySection } from "@/components/JobDiarySection";
 
 export type JobCardDesktopTab =
   | "details"
@@ -329,31 +331,29 @@ export function JobCardDesktop({
             </div>
           </div>
 
-          {/* RIGHT — Diary split-screen panel placeholder */}
-          <div className="bg-white flex flex-col min-w-0 min-h-0">
-            <div className="border-b border-slate-200 px-5 py-3 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-2">
-                <span className="text-[15px] font-bold text-slate-900">Job Diary</span>
-              </div>
-              <button type="button" className="text-xs font-semibold text-blue-600" disabled>+ New entry</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="bg-slate-50 border border-slate-200 rounded-2xl p-6 text-center text-slate-500">
-                <p className="text-[13px] font-semibold text-slate-700">Diary feed</p>
-                <p className="text-[12px] mt-1">Placeholder — Phase C builds the JobDiarySplitPanel that mounts here.</p>
-              </div>
-            </div>
-            <div className="border-t border-slate-200 p-3 bg-slate-50 flex-shrink-0">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Add a diary note…"
-                  disabled
-                  className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-2 text-[13px] placeholder:text-slate-400 disabled:opacity-60"
-                />
-                <button type="button" disabled className="bg-blue-600 disabled:opacity-60 text-white font-semibold rounded-xl px-3 text-sm">Send</button>
-              </div>
-            </div>
+          {/* RIGHT — always-visible Job Diary (Phase C).
+              Reuses the same JobDiarySection the mobile card uses, so the
+              feed/composer/email-threading behaviour is identical across
+              surfaces and shares the React Query cache.
+
+              JobDiarySection brings its own "Job Diary" header, quick-note
+              input, and composer modals — so we don't wrap it in any of
+              the placeholder chrome that was here before. The outer div
+              just constrains height + provides the pane background.
+
+              onQuoteClick / onInvoiceClick / onProposalClick are left
+              undefined for now — those open document modals from inside
+              the diary. They wire up when the matching tabs (Billing /
+              Quoting) land in Phase D, so we can reuse the existing modal
+              state instead of duplicating it here. */}
+          <div className="bg-white min-w-0 min-h-0 overflow-hidden flex flex-col">
+            <JobDiarySection
+              jobId={jobId}
+              customerId={customerId}
+              customerEmail={(customer?.email as string | undefined) ?? undefined}
+              customerPhone={(customer?.phone as string | undefined) ?? undefined}
+              className="flex-1 min-h-0"
+            />
           </div>
         </div>
 
