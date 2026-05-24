@@ -2941,59 +2941,10 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               </ResizablePanelGroup>
             </ResizablePanel>
 
-            {/* Resizable Handle */}
-            {showGlobalJobCard && (
-              <>
-                <ResizableHandle withHandle />
-
-                {/* Right Panel: Job Card */}
-                <ResizablePanel defaultSize={50} minSize={30}>
-                  <div
-                    className="h-full pl-2 overflow-hidden"
-                    data-testid="desktop-job-panel"
-                  >
-                    <div className="h-full bg-gray-50 rounded-lg border overflow-hidden flex flex-col">
-                      {/* Close button */}
-                      <div className="flex items-center justify-between p-2 border-b bg-white">
-                        <h2 className="text-sm font-semibold">Job Details</h2>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => {
-                            console.log("❌ Closing desktop panel");
-                            setShowGlobalJobCard(false);
-                            setJobToEdit(null);
-                          }}
-                          className="h-8 w-8"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-
-                      {/* GlobalJobCard content */}
-                      <div className="flex-1 overflow-auto">
-                        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); }}>
-                          <GlobalJobCard
-                            isOpen={true}
-                            mode={globalJobCardMode}
-                            jobId={jobToEdit?.jobId || jobToEdit?.id}
-                            initialData={initialJobData}
-                            initialSidebarTab={initialSidebarTab}
-                            onClose={() => {
-                              setShowGlobalJobCard(false);
-                              setJobToEdit(null);
-                              setInitialJobData(null);
-                              setInitialSidebarTab(undefined);
-                            }}
-                            renderInline={true}
-                          />
-                        </JobCardErrorBoundary>
-                      </div>
-                    </div>
-                  </div>
-                </ResizablePanel>
-              </>
-            )}
+            {/* Right-side inline job panel was removed — dispatch now opens
+                jobs in the same full-screen modal /all-jobs uses, mounted
+                below (no longer lg:hidden). Frees the full board width and
+                keeps a single job-view layout across the app. */}
           </ResizablePanelGroup>
         </div>
 
@@ -3380,25 +3331,28 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         </div>
       </div>
 
-      {/* Modal version for mobile only - only mounted when a job is open, hidden on lg+ screens */}
+      {/* Modal version — mounts on all screen sizes now (mobile already
+          mounted it here; desktop used to dock GlobalJobCard inline in a
+          ResizablePanel above, which was removed when we switched dispatch
+          to use the same modal /all-jobs uses). The modal itself routes
+          through GlobalJobCard's layout gate: mobile gets JobCardMobile,
+          desktop gets JobCardDesktop. */}
       {showGlobalJobCard && (
-        <div className="lg:hidden">
-          <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
-            <GlobalJobCard
-              isOpen={true}
-              mode={globalJobCardMode}
-              jobId={jobToEdit?.jobId || jobToEdit?.id}
-              initialData={initialJobData}
-              initialSidebarTab={initialSidebarTab}
-              onClose={() => {
-                setShowGlobalJobCard(false);
-                setJobToEdit(null);
-                setInitialJobData(null);
-                setInitialSidebarTab(undefined);
-              }}
-            />
-          </JobCardErrorBoundary>
-        </div>
+        <JobCardErrorBoundary onClose={() => { setShowGlobalJobCard(false); setJobToEdit(null); setInitialJobData(null); }}>
+          <GlobalJobCard
+            isOpen={true}
+            mode={globalJobCardMode}
+            jobId={jobToEdit?.jobId || jobToEdit?.id}
+            initialData={initialJobData}
+            initialSidebarTab={initialSidebarTab}
+            onClose={() => {
+              setShowGlobalJobCard(false);
+              setJobToEdit(null);
+              setInitialJobData(null);
+              setInitialSidebarTab(undefined);
+            }}
+          />
+        </JobCardErrorBoundary>
       )}
 
       {/* Create Lead from Message Dialog */}
