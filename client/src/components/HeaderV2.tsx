@@ -66,10 +66,10 @@ export default function HeaderV2() {
           : "bg-gradient-to-b from-ink/60 to-transparent"
       }`}
     >
-      <div className="max-w-7xl mx-auto px-5 sm:px-8">
-        <div className="flex items-center justify-between h-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8">
+        <div className="flex items-center justify-between h-16 lg:h-24">
           <Link href={HOME} className="flex items-center shrink-0">
-            <img src={logoImage} alt="Treemarkables" className="h-32 w-auto object-contain" />
+            <img src={logoImage} alt="Treemarkables" className="h-20 lg:h-32 w-auto object-contain" />
           </Link>
           <nav className="hidden lg:flex items-center gap-8">
             <DropdownMenu>
@@ -100,25 +100,26 @@ export default function HeaderV2() {
               </a>
             ))}
           </nav>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <a
               href={`tel:${PHONE}`}
               onClick={handlePhoneClick}
               aria-label="Call 027 216 6882"
-              className="inline-flex items-center justify-center gap-2 h-11 px-4 sm:px-5 rounded-full bg-neon text-black font-bold text-base shadow-[0_4px_18px_rgba(57,255,20,0.35)] hover:brightness-95 transition-all"
+              className="inline-flex items-center justify-center gap-2 h-10 lg:h-11 w-10 lg:w-auto lg:px-5 rounded-full bg-neon text-black font-bold text-base shadow-[0_4px_18px_rgba(57,255,20,0.35)] hover:brightness-95 transition-all"
             >
               <Phone className="h-5 w-5" />
-              <span className="hidden md:inline">027 216 6882</span>
+              <span className="hidden lg:inline">027 216 6882</span>
             </a>
             <a
               href={`${HOME}#contact`}
-              className="inline-flex items-center justify-center gap-1.5 h-11 px-4 sm:px-5 rounded-full bg-neon text-black font-bold text-base shadow-[0_4px_18px_rgba(57,255,20,0.35)] hover:brightness-95 transition-all"
+              className="hidden sm:inline-flex items-center justify-center gap-1.5 h-10 lg:h-11 px-4 sm:px-5 rounded-full bg-neon text-black font-bold text-base shadow-[0_4px_18px_rgba(57,255,20,0.35)] hover:brightness-95 transition-all"
             >
               Get a quote <ArrowUpRight className="h-5 w-5" />
             </a>
             <button
-              className="lg:hidden text-white p-2 -mr-2"
+              className="lg:hidden text-white p-2 -mr-1 shrink-0"
               aria-label="Menu"
+              aria-expanded={menuOpen}
               onClick={() => setMenuOpen((v) => !v)}
             >
               <Menu className="h-7 w-7" />
@@ -151,6 +152,13 @@ export default function HeaderV2() {
                 {l.label}
               </a>
             ))}
+            <a
+              href={`${HOME}#contact`}
+              onClick={() => setMenuOpen(false)}
+              className="sm:hidden mt-1 inline-flex items-center justify-center gap-1.5 h-11 rounded-full bg-neon text-black font-bold text-base shadow-[0_4px_18px_rgba(57,255,20,0.35)]"
+            >
+              Get a quote <ArrowUpRight className="h-5 w-5" />
+            </a>
             <a href={`tel:${PHONE}`} onClick={handlePhoneClick} className="px-3 py-3 rounded-lg text-neon font-semibold">
               Call 027 216 6882
             </a>
