@@ -10545,8 +10545,9 @@ The Treemarkables Team`;
             timeTracking: () => setIsTimeTrackingOpen(true),
             profitTracker: () => setIsProfitTrackerOpen(true),
             sendToXero: () => sendToXeroMutation.mutate(),
-            // queueJob: no existing handler yet — left undefined so the
-            // tile surfaces a "coming soon" toast.
+            // queueJob: handled internally by JobCardMobile (opens its own
+            // queue-reason dialog and PUTs inQueue/queueReason directly).
+            // GlobalJobCard doesn't need to wire it.
           }}
         />
       ) : renderInline ? (

@@ -43,6 +43,22 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectTrigger,
+  SelectContent,
+  SelectItem,
+  SelectValue,
+} from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
@@ -123,6 +139,19 @@ const TABS: { id: JobCardMobileTab; label: string }[] = [
   { id: "checklist", label: "Checklist" },
   { id: "quoting", label: "Quoting" },
   { id: "diary", label: "Diary" },
+];
+
+// Mirrors DispatchBoard's QUEUE_REASONS so the two surfaces stay aligned.
+// If you add/rename a reason, update both lists (a future refactor could
+// hoist this into shared/ — for now duplication is the smaller change).
+const QUEUE_REASONS = [
+  "Weather Hold",
+  "Awaiting Permit",
+  "Customer Not Ready",
+  "Awaiting Quote Approval",
+  "Materials Needed",
+  "Crew Unavailable",
+  "Other",
 ];
 
 function formatNzd(amount?: number | string | null): string {
@@ -273,10 +302,58 @@ export function JobCardMobile({
     },
   });
 
+  // Dispatch Queue toggle — parks a job in the queue with a reason
+  // (Weather Hold, Awaiting Permit, …) or pulls it back out. Reads/writes
+  // the same `inQueue` / `queueReason` columns DispatchBoard uses, so
+  // queuing here shows up there immediately.
+  const [showQueueDialog, setShowQueueDialog] = useState(false);
+  const [queueReasonInput, setQueueReasonInput] = useState("");
+  const queueJob = useMutation<
+    { success?: boolean },
+    Error,
+    { inQueue: boolean; queueReason: string | null }
+  >({
+    mutationFn: async ({ inQueue, queueReason }) => {
+      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, {
+        inQueue,
+        queueReason,
+      });
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Queue update failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      setShowQueueDialog(false);
+      setQueueReasonInput("");
+    },
+    onError: (err: Error) => {
+      toast({ title: "Couldn't update queue", description: err.message, variant: "destructive" });
+    },
+  });
+
   const onMarkComplete = () => markComplete.mutate();
   const onDuplicate = () => {
     if (window.confirm("Create a copy of this job? The duplicate starts as a fresh quote — no scheduling, no payments, new job number.")) {
       duplicateJob.mutate();
+    }
+  };
+
+  // Queue tile click: if already queued, one-tap unqueue (with a confirm so
+  // a fat-finger doesn't accidentally pull a job back into the live board);
+  // otherwise open the reason picker dialog.
+  const jobInQueue = (job?.inQueue as boolean | undefined) ?? false;
+  const onQueueTile = () => {
+    if (jobInQueue) {
+      if (window.confirm("Remove this job from the dispatch queue?")) {
+        queueJob.mutate({ inQueue: false, queueReason: null });
+      }
+    } else {
+      setQueueReasonInput("");
+      setShowQueueDialog(true);
     }
   };
   const onOpenFull = () => {
@@ -439,7 +516,12 @@ export function JobCardMobile({
                 <ActionTile label="Proposal" icon={FilePen} colour="red" onClick={actions?.proposal ?? actionStub("Proposal")} />
                 <ActionTile label="Time Tracking" icon={Clock} colour="orange" onClick={actions?.timeTracking ?? actionStub("Time Tracking")} />
                 <ActionTile label="Profit Tracker" icon={TrendingUp} colour="cyan" onClick={actions?.profitTracker ?? actionStub("Profit Tracker")} />
-                <ActionTile label="Queue Job" icon={ListOrdered} colour="indigo" onClick={actions?.queueJob ?? actionStub("Queue Job")} />
+                <ActionTile
+                  label={jobInQueue ? "In Queue" : "Queue Job"}
+                  icon={ListOrdered}
+                  colour="indigo"
+                  onClick={actions?.queueJob ?? onQueueTile}
+                />
                 <ActionTile label="Send to Xero" icon={Send} colour="slate" disabled={!actions?.sendToXero} onClick={actions?.sendToXero ?? actionStub("Send to Xero")} />
               </div>
 
@@ -508,6 +590,71 @@ export function JobCardMobile({
           customer={customer}
         />
       )}
+
+      {/* Queue-reason picker — opened from the Queue Job tile when the job
+          isn't already in queue. Mirrors DispatchBoard's queue dialog so
+          the two surfaces feel identical. */}
+      <Dialog
+        open={showQueueDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowQueueDialog(false);
+            setQueueReasonInput("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ListOrdered className="h-5 w-5 text-indigo-500" />
+              Add to Dispatch Queue
+            </DialogTitle>
+            <DialogDescription>
+              Job {jobNumber ?? ""} will move out of the live board until you
+              pull it back. Pick a reason so dispatch knows why it's parked.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="text-sm font-medium mb-2 block">
+              Reason for queuing
+            </Label>
+            <Select value={queueReasonInput} onValueChange={setQueueReasonInput}>
+              <SelectTrigger data-testid="select-queue-reason">
+                <SelectValue placeholder="Select a reason…" />
+              </SelectTrigger>
+              <SelectContent>
+                {QUEUE_REASONS.map((reason) => (
+                  <SelectItem key={reason} value={reason}>
+                    {reason}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowQueueDialog(false);
+                setQueueReasonInput("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              disabled={!queueReasonInput || queueJob.isPending}
+              onClick={() => {
+                if (queueReasonInput) {
+                  queueJob.mutate({ inQueue: true, queueReason: queueReasonInput });
+                }
+              }}
+              data-testid="btn-confirm-queue"
+            >
+              {queueJob.isPending ? "Queuing..." : "Add to Queue"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
