@@ -10530,6 +10530,32 @@ The Treemarkables Team`;
   const showDesktopCard =
     !isMobile && !renderInline && isOpen && !!editingJob?.id;
 
+  // Instrumentation: log when the legacy Dialog fallthrough actually
+  // renders. After 18 PRs of routing every entry point through the new
+  // JobCard{Mobile,Desktop}, jobCardContent should be effectively
+  // unreachable — but proving that conclusively requires a day or two of
+  // production logs. The next PR deletes ~6k lines of jobCardContent +
+  // this Dialog branch once no [legacy-jobcard-render] warnings show up
+  // in DO logs. If they do, the warning tells us exactly which mode +
+  // jobId combination still trips it so we can fix the entry point
+  // rather than leave the safety net in place forever.
+  const isLegacyFallthrough = isOpen && !renderInline && !showMobileCard && !showDesktopCard;
+  useEffect(() => {
+    if (isLegacyFallthrough) {
+      // eslint-disable-next-line no-console
+      console.warn("[legacy-jobcard-render] Dialog fallthrough rendered", {
+        mode,
+        internalMode,
+        isMobile,
+        isOpen,
+        jobId,
+        createdJobId,
+        editingJobId: editingJob?.id,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLegacyFallthrough]);
+
   // Action handlers reused by both mobile and desktop. Hoisting as a
   // single bag keeps the two surfaces in lockstep — if a new action is
   // wired for one, the other picks it up for free. Desktop's "More"
@@ -10588,11 +10614,13 @@ The Treemarkables Team`;
           onInvoiceClick={handleDiaryInvoiceClick}
           onProposalClick={handleDiaryProposalClick}
         />
-      ) : renderInline ? (
-        // Inline rendering for split-screen panel (desktop)
-        jobCardContent
       ) : (
-        // Dialog rendering for mobile and standalone use
+        // Legacy Dialog fallthrough — currently reachable only when isOpen
+        // but no jobId/editingJob (create-mode before save, or transient
+        // pre-load states). Instrumented below so the next PR can delete
+        // the ~6k-line jobCardContent + this Dialog branch once production
+        // logs confirm nothing real trips it. The renderInline branch was
+        // removed in this PR — no external caller passed it after PR #35.
         <Dialog open={isOpen} onOpenChange={handleDialogClose}>
           <DialogContent
             className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
