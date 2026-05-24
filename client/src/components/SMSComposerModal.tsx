@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  X,
   MessageSquare,
   Smartphone,
   Send,
@@ -312,25 +311,12 @@ export function SMSComposerModal({
   return (
     <>
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg p-0">
-        <DialogHeader className="bg-gradient-to-r from-purple-500 to-pink-500 text-white p-4 rounded-t-lg">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <MessageSquare className="w-5 h-5" />
-              <DialogTitle className="text-white">
-                {invoiceData ? "Send SMS Invoice" : "Send SMS"}
-              </DialogTitle>
-            </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleClose}
-              className="text-white hover:bg-white/20 p-1 h-auto"
-              data-testid="button-close-sms"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+      <DialogContent className="sm:max-w-lg p-0 gap-0">
+        <DialogHeader className="border-b px-6 py-4 space-y-0">
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <MessageSquare className="w-4 h-4 text-muted-foreground" />
+            {invoiceData ? "Send SMS Invoice" : "Send SMS"}
+          </DialogTitle>
         </DialogHeader>
 
         <Form {...form}>
@@ -340,7 +326,7 @@ export function SMSComposerModal({
           >
             {/* Recipient selector — switches the phone field between Job Contact and Tenant */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-gray-600">Send to:</span>
+              <span className="text-xs font-medium text-muted-foreground">Send to:</span>
               <div className="inline-flex rounded-md border overflow-hidden">
                 <button
                   type="button"
@@ -353,8 +339,8 @@ export function SMSComposerModal({
                   }}
                   className={`px-3 py-1 text-xs font-medium transition-colors ${
                     recipientMode === "job"
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-foreground hover:bg-muted"
                   }`}
                   data-testid="btn-sms-recipient-job"
                 >
@@ -373,8 +359,8 @@ export function SMSComposerModal({
                   title={!tenantContactPhoneCandidate ? "No tenant phone on this job" : "Send to the tenant instead"}
                   className={`px-3 py-1 text-xs font-medium transition-colors border-l ${
                     recipientMode === "tenant"
-                      ? "bg-purple-600 text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-background text-foreground hover:bg-muted"
                   } ${!tenantContactPhoneCandidate ? "opacity-40 cursor-not-allowed" : ""}`}
                   data-testid="btn-sms-recipient-tenant"
                 >
@@ -391,10 +377,7 @@ export function SMSComposerModal({
                 <FormItem>
                   <div className="flex items-center justify-between">
                     <FormLabel className="flex items-center gap-2">
-                      <Smartphone
-                        className="w-4 h-4"
-                        style={{ color: "hsl(var(--purple))" }}
-                      />
+                      <Smartphone className="w-4 h-4 text-muted-foreground" />
                       Phone Number
                     </FormLabel>
                     {(job?.jobContactPhone ||
@@ -452,12 +435,9 @@ export function SMSComposerModal({
 
             {/* Invoice Attachment Preview */}
             {invoiceData && (
-              <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 p-3 rounded-md border border-purple-200 dark:border-purple-700">
+              <div className="bg-muted/50 p-3 rounded-md border border-border">
                 <div className="flex items-center gap-2 mb-2">
-                  <FileText
-                    className="w-4 h-4"
-                    style={{ color: "hsl(var(--purple))" }}
-                  />
+                  <FileText className="w-4 h-4 text-muted-foreground" />
                   <span className="font-medium text-sm">
                     Invoice Attachment
                   </span>
@@ -467,10 +447,7 @@ export function SMSComposerModal({
                     Invoice{" "}
                     {invoiceData.invoiceNumber || "#" + (job?.jobNumber || "")}
                   </span>
-                  <span
-                    className="font-semibold"
-                    style={{ color: "hsl(var(--purple))" }}
-                  >
+                  <span className="font-semibold">
                     ${invoiceData.amount || "0.00"}
                   </span>
                 </div>
@@ -557,7 +534,7 @@ export function SMSComposerModal({
               <Button
                 type="submit"
                 disabled={sendSMSMutation.isPending}
-                className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                className="flex-1"
                 data-testid="button-send-sms"
               >
                 {sendSMSMutation.isPending ? (
