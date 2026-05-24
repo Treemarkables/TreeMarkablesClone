@@ -825,6 +825,14 @@ export const videos = pgTable("videos", {
   thumbnailUrl: text("thumbnail_url"), // optional poster frame
   processingStatus: text("processing_status").default("ready"), // 'uploading', 'ready', 'error'
   sequenceOrder: integer("sequence_order").default(0),
+  // AI-driven quote generation from on-site walkthrough videos. Set when the
+  // arborist opts in via the post-upload prompt; Whisper produces `transcript`,
+  // then GPT-5 cleans it into a customer-ready `generatedDescription` that the
+  // user can apply to jobs.description.
+  transcript: text("transcript"),
+  generatedDescription: text("generated_description"),
+  transcriptStatus: text("transcript_status").default("none"), // 'none' | 'processing' | 'ready' | 'error'
+  transcriptError: text("transcript_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
