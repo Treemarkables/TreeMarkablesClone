@@ -200,8 +200,14 @@ export function EmailComposerModal({
     insertAfterGreeting(phrase);
   };
 
-  // Fetch email templates from database
-  const { data: dbTemplates = [] } = useQuery({
+  // Fetch email templates from database. We must expose isLoading so the
+  // init effect below can wait — otherwise on first open the effect runs
+  // before the fetch returns, finds only the hardcoded Custom Message in
+  // EMAIL_TEMPLATES, applies it, and locks itself with hasInitialized=true.
+  // The user sees an empty subject + greeting-only body and only gets the
+  // real template (Invoice/Quote/Proposal) by closing and reopening (when
+  // dbTemplates is then cached).
+  const { data: dbTemplates = [], isLoading: isLoadingTemplates } = useQuery({
     queryKey: ["/api/email-templates"],
     select: (response: any) => response.data || [],
     enabled: isOpen,
@@ -364,9 +370,12 @@ export function EmailComposerModal({
     }
   }, [isOpen, invoiceData, quoteData, proposalData, job?.jobNumber]);
 
-  // Pre-populate email data when modal opens (only on first open, not on data updates)
+  // Pre-populate email data when modal opens (only on first open, not on data updates).
+  // Gate on !isLoadingTemplates so the templated subject/body is applied on FIRST
+  // open — previously the effect ran before the templates query returned and the
+  // user had to close + reopen for the data to appear.
   useEffect(() => {
-    if (isOpen && job && customer && !hasInitialized) {
+    if (isOpen && job && customer && !hasInitialized && !isLoadingTemplates) {
       const isInvoiceContext = !!invoiceData;
       const billingEmail =
         customEmail ||
@@ -432,17 +441,17 @@ export function EmailComposerModal({
       // Use current domain for links (works in both dev and production)
       const baseUrl = window.location.origin;
 
+      // Use `\$?` so templates can write either `{invoiceAmount}` (raw token)
+      // OR `${invoiceAmount}` (with a leading $ for currency framing) and get
+      // a single `$<amount>` either way. Previously the leading `$` survived
+      // the replace and rendered as `$$1322.50`.
       const populatedSubject = template.subject
         .replace(/{jobNumber}/g, job.jobNumber || "")
         .replace(/{address}/g, job.address || customer.address || "")
         .replace(/{customerAddress}/g, job.address || "")
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
         .replace(
-          /{invoiceAmount}/g,
-          `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`,
-        )
-        .replace(
-          /\$\{invoiceAmount\}/g,
+          /\$?{invoiceAmount}/g,
           `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`,
         );
 
@@ -480,7 +489,7 @@ export function EmailComposerModal({
             ? new Date(quoteData.validUntil).toLocaleDateString()
             : "",
         )
-        .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
+        .replace(/\$?{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
         .replace(
           /{proposalNumber}/g,
           proposalData?.proposalNumber ||
@@ -488,7 +497,7 @@ export function EmailComposerModal({
         )
         .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
         .replace(
-          /{invoiceAmount}/g,
+          /\$?{invoiceAmount}/g,
           `$${formatAmount(invoiceTotalWithGST || invoiceData?.totalAmount || invoiceData?.amount)}`,
         )
         .replace(
@@ -550,6 +559,7 @@ export function EmailComposerModal({
     hasInitialized,
     jobInvoice,
     defaultCc,
+    isLoadingTemplates,
   ]);
 
   // When job invoice loads asynchronously (after init ran), auto-attach if the active template needs it
@@ -810,24 +820,22 @@ export function EmailComposerModal({
     // Use current domain for links (works in both dev and production)
     const baseUrl = window.location.origin;
 
+    // See init effect — `\$?{xxxAmount}` swallows the optional leading `$` so
+    // templates can write either form and we never emit `$$1322.50`.
     const populatedSubject = template.subject
       .replace(/{jobNumber}/g, job?.jobNumber || "")
       .replace(/{address}/g, job?.address || customer?.address || "")
       .replace(/{customerAddress}/g, job?.address || "")
       .replace(/{invoiceNumber}/g, invoiceData?.invoiceNumber || "")
       .replace(
-        /{invoiceAmount}/g,
-        `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`,
-      )
-      .replace(
-        /\$\{invoiceAmount\}/g,
+        /\$?{invoiceAmount}/g,
         `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`,
       )
       .replace(/{quoteNumber}/g, quoteData?.quoteNumber || "")
-      .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
+      .replace(/\$?{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
       .replace(/{proposalNumber}/g, proposalData?.proposalNumber || "")
       .replace(
-        /{proposalAmount}/g,
+        /\$?{proposalAmount}/g,
         `$${formatAmount(proposalData?.totalAmount)}`,
       );
 
@@ -866,7 +874,7 @@ export function EmailComposerModal({
           ? new Date(quoteData.validUntil).toLocaleDateString()
           : "",
       )
-      .replace(/{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
+      .replace(/\$?{quoteAmount}/g, `$${formatAmount(quoteData?.totalAmount)}`)
       .replace(
         /{proposalNumber}/g,
         proposalData?.proposalNumber ||
@@ -880,7 +888,7 @@ export function EmailComposerModal({
           "027-XXX-XXXX",
       )
       .replace(
-        /{invoiceAmount}/g,
+        /\$?{invoiceAmount}/g,
         `$${formatAmount(invoiceData?.totalAmount || invoiceData?.amount)}`,
       )
       .replace(
