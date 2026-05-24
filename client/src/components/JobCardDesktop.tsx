@@ -461,7 +461,13 @@ export function JobCardDesktop({
   // shared confirm + mutation flow.
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4" data-testid="job-card-desktop">
+    <div
+      className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4"
+      data-testid="job-card-desktop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
       <div className="bg-slate-50 rounded-2xl shadow-xl border border-slate-200 w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
