@@ -39,7 +39,7 @@
  * localStorage so the layout the user settles on sticks across opens.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   X as XIcon,
   Camera,
@@ -85,7 +85,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
+import { useJobActions } from "@/hooks/useJobActions";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
@@ -273,104 +273,29 @@ export function JobCardDesktop({
   const [showSmsModal, setShowSmsModal] = useState(false);
   const [showEmailModal, setShowEmailModal] = useState(false);
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  // ── Internal mutations for the More menu ──────────────────────────────
-  // Mark Complete / Duplicate / Delete mirror JobCardMobile's mutations
-  // (lines 270-330) exactly — same endpoints, same invalidations, same
-  // error toasts. Duplicated code is acceptable here: if a third surface
-  // ever needs these we can lift them into a useJobActions(jobId) hook.
-  const markComplete = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, { status: "completed" });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-    },
-    onError: (err: Error) => {
-      toast({ title: "Couldn't mark complete", description: err.message, variant: "destructive" });
-    },
-  });
-
-  const deleteJob = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("DELETE", "/api/jobs/bulk-delete", { jobIds: [jobId] });
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      onClose();
-    },
-    onError: (err: Error) => {
-      toast({ title: "Couldn't delete job", description: err.message, variant: "destructive" });
-    },
-  });
-
-  // POST /api/jobs/:id/duplicate copies scoping (customer, address, line
-  // items, contacts, checklists) into a fresh quote-status job with a new
-  // jobNumber. Scheduling, assignments, completion state, payments, and
-  // Xero IDs all reset — see server/routes.ts for the field whitelist.
-  const duplicateJob = useMutation<
-    { success?: boolean; data?: { id?: string; jobNumber?: string } },
-    Error
-  >({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/jobs/${jobId}/duplicate`, {});
-      const json = await res.json();
-      if (!res.ok || json?.success === false) {
-        throw new Error(json?.message ?? `Duplicate failed (HTTP ${res.status})`);
-      }
-      return json;
-    },
-    onSuccess: (json) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      const newId = json?.data?.id;
-      if (newId && onDuplicated) {
-        onDuplicated(newId);
-      } else {
-        onClose();
-      }
-    },
-    onError: (err: Error) => {
-      toast({ title: "Couldn't duplicate job", description: err.message, variant: "destructive" });
-    },
-  });
-
-  // Dispatch Queue toggle — parks a job in the queue with a reason
-  // (Weather Hold, Awaiting Permit, …) or pulls it back out. Reads /
-  // writes the same `inQueue` / `queueReason` columns DispatchBoard +
-  // JobCardMobile use, so queuing here surfaces on the dispatch board
-  // immediately. Mirrors JobCardMobile lines 332-363.
-  const [showQueueDialog, setShowQueueDialog] = useState(false);
-  const [queueReasonInput, setQueueReasonInput] = useState("");
-  const queueJob = useMutation<
-    { success?: boolean },
-    Error,
-    { inQueue: boolean; queueReason: string | null }
-  >({
-    mutationFn: async ({ inQueue, queueReason }) => {
-      const res = await apiRequest("PUT", `/api/jobs/${jobId}`, {
-        inQueue,
-        queueReason,
-      });
-      const json = await res.json();
-      if (!res.ok || json?.success === false) {
-        throw new Error(json?.message ?? `Queue update failed (HTTP ${res.status})`);
-      }
-      return json;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
-      setShowQueueDialog(false);
-      setQueueReasonInput("");
-    },
-    onError: (err: Error) => {
-      toast({ title: "Couldn't update queue", description: err.message, variant: "destructive" });
-    },
-  });
+  // ── Shared job-action mutations + handlers ─────────────────────────────
+  // Mark Complete / Duplicate / Delete / Queue and the empty-draft delete
+  // prompt all live in useJobActions so this card and JobCardMobile share a
+  // single implementation. The hook also exposes the queue dialog state and
+  // the isJobEmpty derived used here.
+  const jobActions = useJobActions(jobId, { onClose, onDuplicated });
+  const {
+    markComplete,
+    deleteJob,
+    duplicateJob,
+    queueJob,
+    showQueueDialog,
+    setShowQueueDialog,
+    queueReasonInput,
+    setQueueReasonInput,
+    jobInQueue,
+    onMarkComplete,
+    onDuplicate,
+    onDelete,
+    onQueueMenuClick,
+    handleClose,
+  } = jobActions;
 
   // Fetch job — shares cache with GlobalJobCard / JobCardMobile so a job
   // already open elsewhere doesn't trigger a duplicate request.
@@ -531,72 +456,9 @@ export function JobCardDesktop({
   const handleInvoice = actions?.invoice ?? actionStub("Invoice");
   const handleProposal = actions?.proposal ?? actionStub("Proposal");
 
-  // ── More menu wrapper handlers ────────────────────────────────────────
-  // Internal mutations get a confirm() before firing (Mark Complete is the
-  // exception — fast-path, easy to undo via status dropdown if mistaken).
-  // Duplicate prompts because it creates a new job in the list; Delete
-  // because it's destructive.
-  const onMarkComplete = () => markComplete.mutate();
-  const onDuplicate = () => {
-    if (
-      window.confirm(
-        "Create a copy of this job? The duplicate starts as a fresh quote — no scheduling, no payments, new job number.",
-      )
-    ) {
-      duplicateJob.mutate();
-    }
-  };
-  const onDelete = () => {
-    if (window.confirm("Delete this job? This can't be undone.")) {
-      deleteJob.mutate();
-    }
-  };
-
-  // Close-with-empty-draft guard. Drafts created from the "+ New Job"
-  // flow (PR #38 / #39) are an empty row with just a status — if the user
-  // closes without picking a customer / writing a description, the row
-  // sits in /all-jobs as litter. Prompt to delete on close when the job
-  // still has nothing meaningful filled in. Existing jobs that happen to
-  // be empty get the same prompt — same intent, easy clean-up.
-  //
-  // Heuristic kept tight on purpose (customer + description + title) so a
-  // user mid-fill — say, picked a customer but hasn't typed the
-  // description yet — isn't prompted. Auto-save data-loss history says
-  // err on the side of less-prompt-more-explicit.
-  const isJobEmpty =
-    !((job?.customerId as string | undefined) ?? "") &&
-    !(((job?.description as string | undefined) ?? "").trim()) &&
-    !(((job?.title as string | undefined) ?? "").trim());
-
-  const handleClose = () => {
-    if (isJobEmpty) {
-      if (
-        window.confirm(
-          "This job is empty (no customer, description, or title). Delete it?",
-        )
-      ) {
-        deleteJob.mutate(); // deleteJob.onSuccess calls onClose() itself
-        return;
-      }
-    }
-    onClose();
-  };
-
-  // Queue menu-item click: if already queued, one-tap unqueue (with a
-  // confirm so an accidental click doesn't pull a job back into the live
-  // board); otherwise open the reason picker dialog. Mirrors mobile's
-  // onQueueTile so the two surfaces behave identically.
-  const jobInQueue = (job?.inQueue as boolean | undefined) ?? false;
-  const onQueueMenuClick = () => {
-    if (jobInQueue) {
-      if (window.confirm("Remove this job from the dispatch queue?")) {
-        queueJob.mutate({ inQueue: false, queueReason: null });
-      }
-    } else {
-      setQueueReasonInput("");
-      setShowQueueDialog(true);
-    }
-  };
+  // Mark Complete / Duplicate / Delete / Queue handlers + isJobEmpty +
+  // handleClose all come from useJobActions above. See the hook for the
+  // shared confirm + mutation flow.
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4" data-testid="job-card-desktop">
