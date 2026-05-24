@@ -10408,6 +10408,166 @@ The Treemarkables Team`;
         />
       )}
 
+
+      {/* Catalog Selection Modal */}
+      <Dialog open={isCatalogModalOpen} onOpenChange={setIsCatalogModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Add New Line Item</h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsCatalogModalOpen(false)}
+                data-testid="button-close-catalog-modal"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-medium mb-4">
+                Quick Select from Catalog
+              </h3>
+
+              {materialsAndServices.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {materialsAndServices.map((item: any) => {
+                    const itemPrice = parseFloat(item.displayPrice || 0);
+                    const currentLineItems = form.getValues("lineItems") || [];
+                    const currentTotal = currentLineItems.reduce(
+                      (sum, item) => sum + (item.total || 0),
+                      0,
+                    );
+                    const newTotal = currentTotal + itemPrice;
+
+                    return (
+                      <Card
+                        key={item.id}
+                        className="cursor-pointer hover:shadow-md transition-shadow border border-gray-200 hover:border-gray-300"
+                        onClick={() => selectFromCatalog(item)}
+                        data-testid={`catalog-item-${item.id}`}
+                      >
+                        <CardContent className="p-4">
+                          <div className="space-y-2">
+                            <div className="font-medium text-gray-900 text-sm leading-tight">
+                              {item.name || item.itemNumber}
+                            </div>
+                            <div className="text-lg font-semibold text-green-600">
+                              ${itemPrice.toFixed(2)}
+                            </div>
+                            {item.category && (
+                              <Badge variant="outline" className="text-xs">
+                                {item.category}
+                              </Badge>
+                            )}
+                            {item.type && (
+                              <Badge
+                                variant={
+                                  item.type === "material"
+                                    ? "default"
+                                    : "secondary"
+                                }
+                                className="text-xs ml-1"
+                              >
+                                {item.type}
+                              </Badge>
+                            )}
+                            <div className="text-xs bg-green-50 text-green-700 p-2 rounded border">
+                              Profit: $
+                              {(
+                                itemPrice -
+                                parseFloat(item.cost || item.baseCost || 0)
+                              ).toFixed(2)}{" "}
+                              • Job Total: ${currentTotal.toFixed(2)} → $
+                              {newTotal.toFixed(2)}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-500">
+                    No materials or services available in catalog
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("/materials-services", "_blank")}
+                    className="mt-2"
+                  >
+                    <Settings className="w-4 h-4 mr-1" />
+                    Manage Catalog
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+
+  // ── Feature-flag gate for the new mobile job-card layout ─────────────────
+  // Opt-in via `?mobileV2=1` on any URL while we shake it out on real jobs.
+  // When the flag is on AND we're on a mobile viewport AND we have a real
+  // job loaded, render JobCardMobile in place of the legacy mobile inline
+  // JSX. Desktop / inline / no-job paths fall through to the existing UI.
+  const useMobileV2 = typeof window !== "undefined"
+    && new URLSearchParams(window.location.search).get("mobileV2") === "1";
+  const showMobileV2 = useMobileV2 && isMobile && !renderInline && isOpen && !!editingJob?.id;
+
+  return (
+    <>
+      {showMobileV2 ? (
+        <JobCardMobile
+          jobId={editingJob!.id}
+          onClose={() => handleDialogClose(false)}
+          actions={{
+            speechToQuote: () => setIsSpeechToQuoteOpen(true),
+            schedule: () => setIsSchedulingModalOpen(true),
+            quote: () => setIsQuoteModalOpen(true),
+            invoice: () => setIsInvoiceModalOpen(true),
+            proposal: () => setIsProposalBuilderOpen(true),
+            timeTracking: () => setIsTimeTrackingOpen(true),
+            profitTracker: () => setIsProfitTrackerOpen(true),
+            sendToXero: () => sendToXeroMutation.mutate(),
+            // queueJob: no existing handler yet — left undefined so the
+            // tile surfaces a "coming soon" toast.
+          }}
+        />
+      ) : renderInline ? (
+        // Inline rendering for split-screen panel (desktop)
+        jobCardContent
+      ) : (
+        // Dialog rendering for mobile and standalone use
+        <Dialog open={isOpen} onOpenChange={handleDialogClose}>
+          <DialogContent
+            className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
+            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+            onEscapeKeyDown={(e) => {
+              if (isInvoiceModalOpen) e.preventDefault();
+            }}
+            onInteractOutside={(e) => {
+              if (isInvoiceModalOpen) e.preventDefault();
+            }}
+          >
+            {jobCardContent}
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────────
+          Secondary modals — hoisted out of jobCardContent so they mount
+          regardless of which top-level branch (mobileV2 vs legacy) is
+          rendering. State setters live where they always have; only the
+          JSX rendering moved up here. */}
       {/* Proposal Builder */}
       {isProposalBuilderOpen && (
         <ProposalBuilderV2
@@ -11095,160 +11255,6 @@ The Treemarkables Team`;
         onQuoteGenerated={handleSpeechToQuoteGenerated}
         context={speechToQuoteContext}
       />
-
-      {/* Catalog Selection Modal */}
-      <Dialog open={isCatalogModalOpen} onOpenChange={setIsCatalogModalOpen}>
-        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Add New Line Item</h2>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsCatalogModalOpen(false)}
-                data-testid="button-close-catalog-modal"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-medium mb-4">
-                Quick Select from Catalog
-              </h3>
-
-              {materialsAndServices.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {materialsAndServices.map((item: any) => {
-                    const itemPrice = parseFloat(item.displayPrice || 0);
-                    const currentLineItems = form.getValues("lineItems") || [];
-                    const currentTotal = currentLineItems.reduce(
-                      (sum, item) => sum + (item.total || 0),
-                      0,
-                    );
-                    const newTotal = currentTotal + itemPrice;
-
-                    return (
-                      <Card
-                        key={item.id}
-                        className="cursor-pointer hover:shadow-md transition-shadow border border-gray-200 hover:border-gray-300"
-                        onClick={() => selectFromCatalog(item)}
-                        data-testid={`catalog-item-${item.id}`}
-                      >
-                        <CardContent className="p-4">
-                          <div className="space-y-2">
-                            <div className="font-medium text-gray-900 text-sm leading-tight">
-                              {item.name || item.itemNumber}
-                            </div>
-                            <div className="text-lg font-semibold text-green-600">
-                              ${itemPrice.toFixed(2)}
-                            </div>
-                            {item.category && (
-                              <Badge variant="outline" className="text-xs">
-                                {item.category}
-                              </Badge>
-                            )}
-                            {item.type && (
-                              <Badge
-                                variant={
-                                  item.type === "material"
-                                    ? "default"
-                                    : "secondary"
-                                }
-                                className="text-xs ml-1"
-                              >
-                                {item.type}
-                              </Badge>
-                            )}
-                            <div className="text-xs bg-green-50 text-green-700 p-2 rounded border">
-                              Profit: $
-                              {(
-                                itemPrice -
-                                parseFloat(item.cost || item.baseCost || 0)
-                              ).toFixed(2)}{" "}
-                              • Job Total: ${currentTotal.toFixed(2)} → $
-                              {newTotal.toFixed(2)}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-8">
-                  <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">
-                    No materials or services available in catalog
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => window.open("/materials-services", "_blank")}
-                    className="mt-2"
-                  >
-                    <Settings className="w-4 h-4 mr-1" />
-                    Manage Catalog
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
-
-  // ── Feature-flag gate for the new mobile job-card layout ─────────────────
-  // Opt-in via `?mobileV2=1` on any URL while we shake it out on real jobs.
-  // When the flag is on AND we're on a mobile viewport AND we have a real
-  // job loaded, render JobCardMobile in place of the legacy mobile inline
-  // JSX. Desktop / inline / no-job paths fall through to the existing UI.
-  const useMobileV2 = typeof window !== "undefined"
-    && new URLSearchParams(window.location.search).get("mobileV2") === "1";
-  const showMobileV2 = useMobileV2 && isMobile && !renderInline && isOpen && !!editingJob?.id;
-
-  return (
-    <>
-      {showMobileV2 ? (
-        <JobCardMobile
-          jobId={editingJob!.id}
-          onClose={() => handleDialogClose(false)}
-          actions={{
-            speechToQuote: () => setIsSpeechToQuoteOpen(true),
-            schedule: () => setIsSchedulingModalOpen(true),
-            quote: () => setIsQuoteModalOpen(true),
-            invoice: () => setIsInvoiceModalOpen(true),
-            proposal: () => setIsProposalBuilderOpen(true),
-            timeTracking: () => setIsTimeTrackingOpen(true),
-            profitTracker: () => setIsProfitTrackerOpen(true),
-            sendToXero: () => sendToXeroMutation.mutate(),
-            // queueJob: no existing handler yet — left undefined so the
-            // tile surfaces a "coming soon" toast.
-          }}
-        />
-      ) : renderInline ? (
-        // Inline rendering for split-screen panel (desktop)
-        jobCardContent
-      ) : (
-        // Dialog rendering for mobile and standalone use
-        <Dialog open={isOpen} onOpenChange={handleDialogClose}>
-          <DialogContent
-            className="w-full h-[100dvh] max-w-full flex flex-col p-0 sm:p-0 bg-gray-50 overflow-hidden sm:max-w-6xl sm:h-[91vh] sm:rounded-xl"
-            style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
-            onEscapeKeyDown={(e) => {
-              if (isInvoiceModalOpen) e.preventDefault();
-            }}
-            onInteractOutside={(e) => {
-              if (isInvoiceModalOpen) e.preventDefault();
-            }}
-          >
-            {jobCardContent}
-          </DialogContent>
-        </Dialog>
-      )}
 
       {/* Job Description Popup - Responsive Width with safe area for iPhone notch */}
       <Dialog
