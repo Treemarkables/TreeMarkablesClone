@@ -347,9 +347,44 @@ export default function JobDashboard({
     return customer?.name || "Unknown Customer";
   };
 
-  // Get job price directly from job.totalAmount — fast, no cross-table lookups
+  // Job price for the All Jobs list column.
+  //
+  // Output is INCLUSIVE of GST — that's what /all-jobs has always shown and
+  // changing it would silently shrink every dollar amount on the list by
+  // ~13%. Other surfaces (Live Roster, Dispatch Board) display ex-GST; this
+  // surface intentionally differs.
+  //
+  // Source hierarchy matches the canonical desktop card header logic +
+  // PR #28/#30 lineItems fix, but with inc-GST output:
+  //   line items (ex-GST × 1.15) → subtotal (ex-GST × 1.15) →
+  //   totalIncludingGst (as-is) → totalAmount (as-is, project convention
+  //   says this column is stored inc-GST).
+  //
+  // The bug fixed here: previously only `totalAmount` was checked, so a
+  // job sourced from an accepted proposal (lineItems populated, no rolled-
+  // up subtotal/totalAmount yet) showed \$0 in the list. Same blind spot
+  // PR #28 fixed on the Live Roster.
   const getJobPrice = (job: Job): number => {
-    return job.totalAmount ? Number(job.totalAmount) : 0;
+    const toNum = (v: unknown): number => {
+      if (v == null) return 0;
+      const n = typeof v === "string" ? parseFloat(v) : (v as number);
+      return Number.isFinite(n) ? n : 0;
+    };
+    const lineItems = (job as any).lineItems as Array<Record<string, unknown>> | undefined;
+    if (Array.isArray(lineItems) && lineItems.length > 0) {
+      const lineItemsTotalExGst = lineItems.reduce((sum, li) => {
+        const exGst =
+          toNum(li.totalExGst) ||
+          (li.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
+        return sum + (exGst || toNum(li.total));
+      }, 0);
+      if (lineItemsTotalExGst > 0) return lineItemsTotalExGst * 1.15;
+    }
+    const subtotal = toNum(job.subtotal);
+    if (subtotal > 0) return subtotal * 1.15;
+    const incGst = toNum((job as any).totalIncludingGst);
+    if (incGst > 0) return incGst;
+    return toNum(job.totalAmount);
   };
 
   // Transform API data to display format - now safe to use getCustomerName
