@@ -154,7 +154,27 @@ function formatTimeFromMins(mins: number): string {
 }
 
 // Job price exc. GST. Returns 0 if no price has been set yet.
+// Mirrors the canonical hierarchy from GlobalJobCard / JobCardMobile (PR #24):
+// line items (ex-GST) → job.subtotal → job.totalIncludingGst / 1.15 →
+// job.totalAmount / 1.15. Jobs created from accepted proposals often have
+// lineItems populated but no rolled-up subtotal — without the lineItems
+// check those jobs render as $0 on the roster.
 function getJobPrice(job: Job): number {
+  const toNum = (v: unknown): number => {
+    if (v == null) return 0;
+    const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const lineItems = (job as any).lineItems as Array<Record<string, unknown>> | undefined;
+  if (Array.isArray(lineItems) && lineItems.length > 0) {
+    const lineItemsTotal = lineItems.reduce((sum, li) => {
+      const exGst =
+        toNum(li.totalExGst) ||
+        (li.priceExGst != null ? toNum(li.priceExGst) * toNum(li.quantity || 1) : 0);
+      return sum + (exGst || toNum(li.total));
+    }, 0);
+    if (lineItemsTotal > 0) return lineItemsTotal;
+  }
   const sub = parseFloat(job.subtotal || '0');
   if (sub > 0) return sub;
   const incGst = parseFloat(job.totalIncludingGst || '0');
@@ -255,9 +275,13 @@ export default function StaffSchedule() {
   // Daily revenue tracker — computed client-side from dayJobs, mirroring the
   // dispatch board's CalendarGrid logic so the two views always agree.
   // Multi-day jobs are split evenly across the NZ-local days they span.
+  // Excludes only statuses that don't represent confirmed revenue — matches
+  // CalendarGrid's REVENUE_EXCLUDE set. `completed`/`invoiced`/`paid` jobs
+  // DID generate revenue and must stay in the tally on past days.
   const DAILY_TARGET = Number(businessSettingsData?.data?.dailyRevenueTarget) || 3500;
   const revenueInfo = useMemo(() => {
-    const revenueJobs = dayJobs.filter(j => j.status !== 'completed' && j.status !== 'unsuccessful');
+    const REVENUE_EXCLUDE = new Set(['archived', 'unsuccessful', 'cancelled', 'quote', 'lead']);
+    const revenueJobs = dayJobs.filter(j => !REVENUE_EXCLUDE.has(j.status));
     const scheduledRevenue = revenueJobs.reduce(
       (sum, j) => sum + getJobPricePerDay(j),
       0,
