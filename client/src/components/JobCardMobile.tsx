@@ -254,9 +254,9 @@ export function JobCardMobile({
 
   return (
     <div className="fixed inset-0 z-50 bg-white flex flex-col" data-testid="job-card-mobile">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between px-4 py-3 flex-shrink-0" style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
-        <div className="flex items-baseline gap-2.5 min-w-0">
+      {/* ── Header (compact — price sits inline with the badge to save vertical space) ── */}
+      <div className="flex items-center justify-between gap-2 px-4 py-3 flex-shrink-0" style={{ paddingTop: "max(12px, env(safe-area-inset-top))" }}>
+        <div className="flex items-baseline gap-2 min-w-0">
           <h1 className="text-[22px] font-extrabold tracking-tight text-slate-900 truncate">
             Job {jobNumber ?? ""}
           </h1>
@@ -265,6 +265,9 @@ export function JobCardMobile({
             style={{ background: badge.bg }}
           >
             {badge.label}
+          </span>
+          <span className="text-[16px] font-bold text-slate-900 truncate" data-testid="job-card-mobile-price">
+            {formatNzd(jobValue)}
           </span>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
@@ -286,10 +289,6 @@ export function JobCardMobile({
             {isSaving ? "Saving..." : "Save"}
           </Button>
         </div>
-      </div>
-
-      <div className="px-4 pb-3 text-[30px] font-extrabold tracking-tight text-slate-900 flex-shrink-0">
-        {formatNzd(jobValue)}
       </div>
 
       {/* ── Tab strip ── */}
