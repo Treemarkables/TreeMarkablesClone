@@ -19,7 +19,7 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, ChevronDown, Mic, MicOff, Lock } from "lucide-react";
+import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
 
@@ -118,6 +118,24 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   });
   const customer = custResp?.data;
 
+  // All customers — only fetched when the job has no customer set yet, so
+  // we can render a picker instead of "Unnamed customer". Drafts created
+  // from /dispatch's "+ New" buttons land here with customerId=null and
+  // need a picker to link to a customer record. Existing jobs with a
+  // customer skip this query entirely.
+  const { data: allCustomersResp } = useQuery<{ success?: boolean; data?: CustomerShape[] }>({
+    queryKey: ["/api/customers"],
+    enabled: !customerId,
+    staleTime: 60_000,
+  });
+  const allCustomers = useMemo(
+    () =>
+      [...(allCustomersResp?.data ?? [])].sort((a, b) =>
+        (a.name ?? "").localeCompare(b.name ?? ""),
+      ),
+    [allCustomersResp],
+  );
+
   // ── Proposal-description fallback ───────────────────────────────────────────
   // Many jobs (especially those that came via accept-proposal → work_order)
   // have an empty `job.description` because the customer-facing work scope
@@ -204,37 +222,89 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
 
   return (
     <div className="p-4 space-y-3.5">
-      {/* ── Customer card ── */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-4">
-        <div className="flex items-start justify-between gap-3">
-          <h2 className="text-[20px] font-extrabold tracking-tight text-slate-900 leading-tight truncate">
-            {customer?.name ?? "Unnamed customer"}
-          </h2>
-          <span
-            className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
-            style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
-          >
-            {statusLabel}
-          </span>
-        </div>
-        {addressDisplay && (
-          <div className="flex items-center gap-1.5 mt-2 text-[14px] text-slate-600">
-            <MapPin className="w-3.5 h-3.5 text-slate-400" />
-            <span className="truncate">{addressDisplay}</span>
+      {/* ── Customer card ──
+          Two flavours: when there's a linked customer, show the standard
+          name + address + map link. When there isn't (drafts created from
+          /dispatch's "+ New" buttons land here), show a picker so the user
+          can attach a customer record without leaving the card. Pick
+          updates job.customerId via the existing saveField mutation; the
+          picker disappears on the next render once customerId is set.
+          New-customer creation deferred — for now point users at the
+          /customers page if their customer isn't on the list. */}
+      {customerId ? (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4">
+          <div className="flex items-start justify-between gap-3">
+            <h2 className="text-[20px] font-extrabold tracking-tight text-slate-900 leading-tight truncate">
+              {customer?.name ?? "Unnamed customer"}
+            </h2>
+            <span
+              className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
+              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+            >
+              {statusLabel}
+            </span>
           </div>
-        )}
-        {addressDisplay && (
-          <a
-            href={`https://www.google.com/maps/place/${encodeURIComponent(addressDisplay)}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1 mt-2.5 text-[14px] font-semibold text-blue-600"
-          >
-            View on Map (Bird's Eye)
-            <ChevronDown className="w-3 h-3" />
-          </a>
-        )}
-      </div>
+          {addressDisplay && (
+            <div className="flex items-center gap-1.5 mt-2 text-[14px] text-slate-600">
+              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+              <span className="truncate">{addressDisplay}</span>
+            </div>
+          )}
+          {addressDisplay && (
+            <a
+              href={`https://www.google.com/maps/place/${encodeURIComponent(addressDisplay)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 mt-2.5 text-[14px] font-semibold text-blue-600"
+            >
+              View on Map (Bird's Eye)
+              <ChevronDown className="w-3 h-3" />
+            </a>
+          )}
+        </div>
+      ) : (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <UserPlus className="w-4 h-4 text-blue-600 shrink-0" />
+              <h2 className="text-[16px] font-bold text-blue-900 truncate">
+                Pick a customer to get started
+              </h2>
+            </div>
+            <span
+              className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
+              style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
+            >
+              {statusLabel}
+            </span>
+          </div>
+          <p className="text-[13px] text-blue-700/85 mt-1">
+            Link this job to a customer. Auto-saves on select.
+          </p>
+          <div className="relative mt-3">
+            <select
+              value=""
+              onChange={(e) => {
+                const newId = e.target.value;
+                if (newId) saveField.mutate({ customerId: newId });
+              }}
+              className="w-full appearance-none bg-white border border-blue-300 rounded-lg pl-3 pr-8 py-2.5 text-[14px] font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="customer-picker"
+              disabled={saveField.isPending}
+            >
+              <option value="">Select a customer…</option>
+              {allCustomers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+          <p className="text-[12px] text-blue-700/70 mt-2">
+            Customer not on the list? Add them from the Customers page first,
+            then come back here.
+          </p>
+        </div>
+      )}
 
       {/* ── Job Description ── */}
       <div className="bg-white border border-slate-200 rounded-2xl p-4">

@@ -2144,27 +2144,71 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     })();
   };
 
+  // Pre-create a blank draft job and open the new card directly in edit
+  // mode. Skips the legacy "create" form entirely — the new JobCardDesktop
+  // (and JobCardMobile, once its create entry points get the same
+  // treatment) handles the rest via its panels, including the customer
+  // picker that JobDetailsPanel shows when customerId is null.
+  //
+  // The afterOpen callback lets each caller apply its existing side
+  // effects (e.g. setJobFilter for lead/quote) once the draft is open.
+  const createDraftMutation = useMutation<
+    { success?: boolean; data?: { id?: string } },
+    Error,
+    { status: string; afterOpen?: () => void }
+  >({
+    mutationFn: async ({ status }) => {
+      const res = await apiRequest("POST", "/api/jobs", { status });
+      const json = await res.json();
+      if (!res.ok || json?.success === false) {
+        throw new Error(json?.message ?? `Create failed (HTTP ${res.status})`);
+      }
+      return json;
+    },
+    onSuccess: (json, vars) => {
+      const newId = json?.data?.id;
+      if (!newId) {
+        toast({
+          title: "Couldn't open the new job",
+          description: "Server didn't return an id — refresh and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/jobs"] });
+      // Set the modal to open against the brand-new draft. GlobalJobCard's
+      // layout gate sees a real jobId and mounts JobCardDesktop directly.
+      setJobToEdit({ jobId: newId, id: newId } as JobAssignment);
+      setInitialJobData(null);
+      setGlobalJobCardMode("edit");
+      setShowGlobalJobCard(true);
+      vars.afterOpen?.();
+    },
+    onError: (error) => {
+      toast({
+        title: "Couldn't create job",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleCreateJob = () => {
-    setJobToEdit(null);
-    setInitialJobData({ status: "work_order" });
-    setGlobalJobCardMode("create");
-    setShowGlobalJobCard(true);
+    createDraftMutation.mutate({ status: "work_order" });
   };
 
   const handleCreateLead = () => {
-    setJobToEdit(null);
-    setInitialJobData({ status: "lead" });
-    setGlobalJobCardMode("create");
-    setShowGlobalJobCard(true);
-    setJobFilter("lead");
+    createDraftMutation.mutate({
+      status: "lead",
+      afterOpen: () => setJobFilter("lead"),
+    });
   };
 
   const handleCreateQuote = () => {
-    setJobToEdit(null);
-    setInitialJobData({ status: "quote" });
-    setGlobalJobCardMode("create");
-    setShowGlobalJobCard(true);
-    setJobFilter("quote");
+    createDraftMutation.mutate({
+      status: "quote",
+      afterOpen: () => setJobFilter("quote"),
+    });
   };
 
   const handleCreateInvoice = () => {
