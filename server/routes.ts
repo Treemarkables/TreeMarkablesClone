@@ -6569,10 +6569,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     try {
       const { jobId, itemId } = req.params;
       const { completed } = req.body ?? {};
+      // The rest of this app's mutation endpoints (PUT /api/jobs/:id etc.)
+      // don't gate on req.session.employeeId — they trust the session cookie.
+      // The original toggle handler was the outlier: it returned 401 whenever
+      // employeeId was missing, which broke the mobile flow for owners /
+      // admins who aren't registered as employees. Match the rest: if we
+      // have an employeeId we record it; if not, we still allow the toggle
+      // and leave the completer fields null.
       const employeeId = req.session.employeeId;
-      if (!employeeId) {
-        return res.status(401).json({ success: false, message: 'Not authenticated' });
-      }
       if (jobId.startsWith('temp-')) {
         return res.status(400).json({ success: false, message: 'Save the job before ticking checklist items' });
       }
@@ -6583,11 +6587,14 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         await storage.clearJobChecklistItem(jobId, itemId);
         return res.json({ success: true, data: null });
       }
-      const employee = await storage.getEmployee(employeeId);
-      const employeeName = employee
-        ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
-        : null;
-      const result = await storage.setJobChecklistItem(jobId, itemId, employeeId, employeeName);
+      let employeeName: string | null = null;
+      if (employeeId) {
+        const employee = await storage.getEmployee(employeeId);
+        employeeName = employee
+          ? [employee.firstName, employee.lastName].filter(Boolean).join(' ').trim() || employee.email || null
+          : null;
+      }
+      const result = await storage.setJobChecklistItem(jobId, itemId, employeeId ?? null, employeeName);
       res.json({ success: true, data: result });
     } catch (error) {
       console.error('Error toggling job checklist item:', error);
