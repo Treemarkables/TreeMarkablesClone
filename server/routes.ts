@@ -97,7 +97,16 @@ const upload = multer({
 });
 import fs from "fs";
 import os from "os";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
 import { format } from "date-fns";
+
+// Point fluent-ffmpeg at the bundled binary so we don't depend on a
+// system-installed ffmpeg on the deploy host. ffmpegStatic is a string path
+// at runtime; the type is `string | null` (null only on unsupported arches).
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
+}
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
@@ -7255,10 +7264,33 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   });
 
-  // Whisper rejects audio/video files over 25MB. We cap a touch under that so we
-  // don't waste a download + API round-trip on something that's going to bounce.
-  // Phase 1.5 will add ffmpeg audio-only extraction to lift this ceiling.
-  const WHISPER_MAX_BYTES = 24 * 1024 * 1024;
+  // Whisper's API caps inputs at 25MB. We never send the raw video — ffmpeg
+  // extracts audio-only mp3 first (16kHz mono 64kbps ≈ 0.5MB/min), so the
+  // file Whisper actually sees is comfortably under that cap for any
+  // realistic quote walkthrough length. The MAX_VIDEO_BYTES guard below is
+  // operational: it bounds the download + ffmpeg time per request so a
+  // dropped giant file can't pin the worker. ~500MB is roughly 8min of 1080p
+  // / 1min of 4K iPhone — well above typical quote videos.
+  const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+
+  // Extract audio from a video file into a small mp3 suitable for Whisper.
+  // 16kHz mono is plenty for speech; 64kbps mp3 keeps file size at ~0.5MB/min.
+  // This is the path that lets us transcribe arbitrarily long iPhone .mov
+  // walkthroughs without bumping into Whisper's 25MB limit.
+  function extractAudio(videoPath: string, audioPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .noVideo()
+        .audioCodec('libmp3lame')
+        .audioBitrate('64k')
+        .audioChannels(1)
+        .audioFrequency(16000)
+        .format('mp3')
+        .on('end', () => resolve())
+        .on('error', (err: Error) => reject(err))
+        .save(audioPath);
+    });
+  }
 
   // AI quote-from-video: transcribe the on-site walkthrough with Whisper, clean
   // it into a customer-ready job description with GPT-5, and persist both on
@@ -7268,7 +7300,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // infra in the app yet. Phase 2 may move this to a background job.
   app.post('/api/videos/:id/transcribe', async (req: Request, res: Response) => {
     const videoId = req.params.id;
-    let tmpPath: string | null = null;
+    let videoTmpPath: string | null = null;
+    let audioTmpPath: string | null = null;
 
     try {
       const video = await storage.getVideo(videoId);
@@ -7289,11 +7322,11 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         });
       }
 
-      if (video.fileSize > WHISPER_MAX_BYTES) {
+      if (video.fileSize > MAX_VIDEO_BYTES) {
         const mb = (video.fileSize / (1024 * 1024)).toFixed(1);
         return res.status(413).json({
           success: false,
-          message: `Video is ${mb}MB. Transcription currently supports files under 24MB — try a shorter clip or record at lower quality.`,
+          message: `Video is ${mb}MB. Transcription currently supports files up to 500MB — try recording at 1080p instead of 4K.`,
         });
       }
 
@@ -7302,23 +7335,23 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         transcriptError: null,
       });
 
-      // Download GCS object to a temp file — OpenAI's SDK takes a ReadStream.
-      // Whisper accepts FLAC, M4A, MP3, MP4, MPEG, MPGA, OGA, OGG, WAV, WEBM —
-      // it rejects on file extension, not on actual codec. iPhone records to
-      // .mov (QuickTime container) which is on the reject list, even though
-      // the H.264/AAC bytes inside are identical to .mp4. Repack-free rename
-      // to .mp4 works for QuickTime; anything else unsupported falls back to
-      // .mp4 too (Whisper will then try its ffmpeg decode by codec).
-      const WHISPER_OK_EXTS = new Set(['flac', 'm4a', 'mp3', 'mp4', 'mpeg', 'mpga', 'oga', 'ogg', 'wav', 'webm']);
-      const rawExt = (video.filename.split('.').pop() || '').toLowerCase();
-      const ext = WHISPER_OK_EXTS.has(rawExt) ? rawExt : 'mp4';
-      tmpPath = path.join(os.tmpdir(), `tm-transcribe-${randomUUID()}.${ext}`);
-      await videoStorage.downloadToFile(video.url, tmpPath);
+      // Step 1: download the original from GCS to a temp file. We keep the
+      // source extension so ffmpeg can sniff the container correctly.
+      const rawExt = (video.filename.split('.').pop() || 'mp4').toLowerCase();
+      videoTmpPath = path.join(os.tmpdir(), `tm-video-${randomUUID()}.${rawExt}`);
+      await videoStorage.downloadToFile(video.url, videoTmpPath);
 
-      // Step 1: Whisper transcription. Mirrors the speech-to-quote pattern at
+      // Step 2: extract audio to a tiny mp3. This is the key Phase 1.5 move —
+      // a 60MB iPhone .mov becomes a ~250KB mp3, slipping comfortably under
+      // Whisper's 25MB API cap and dodging the .mov-extension rejection we
+      // patched around in #56 (Whisper now sees a vanilla .mp3).
+      audioTmpPath = path.join(os.tmpdir(), `tm-audio-${randomUUID()}.mp3`);
+      await extractAudio(videoTmpPath, audioTmpPath);
+
+      // Step 3: Whisper transcription. Mirrors the speech-to-quote pattern at
       // /api/mobile/speech-to-quote — same model, same response_format.
       const rawTranscription = await openai.audio.transcriptions.create({
-        file: fs.createReadStream(tmpPath),
+        file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
         response_format: 'text',
@@ -7414,8 +7447,12 @@ Return only the cleaned job description.`;
         res.status(500).json({ success: false, message });
       }
     } finally {
-      if (tmpPath) {
-        fs.promises.unlink(tmpPath).catch(() => {/* best-effort */});
+      // Clean up both temp files (video download + extracted audio).
+      if (videoTmpPath) {
+        fs.promises.unlink(videoTmpPath).catch(() => {/* best-effort */});
+      }
+      if (audioTmpPath) {
+        fs.promises.unlink(audioTmpPath).catch(() => {/* best-effort */});
       }
     }
   });
