@@ -92,6 +92,7 @@ import { JobVideos } from "@/components/JobVideos";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
+import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
@@ -99,6 +100,7 @@ import { EmailComposerModal } from "@/components/EmailComposerModal";
 export type JobCardDesktopTab =
   | "details"
   | "billing"
+  | "backcosting"
   | "checklist"
   | "quoting";
 
@@ -163,7 +165,6 @@ const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
   lead: { label: "Lead", bg: "#f59e0b" },
   quote: { label: "Quote", bg: "#f59e0b" },
   work_order: { label: "Work Order", bg: "#2563eb" },
-  scheduled: { label: "Scheduled", bg: "#7c3aed" },
   completed: { label: "Completed", bg: "#16a34a" },
   unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
 };
@@ -171,6 +172,11 @@ const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
 const TABS: { id: JobCardDesktopTab; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "billing", label: "Billing" },
+  // Back Costing — consolidates time entries, all cost categories on the
+  // job, and revenue into a single margin rollup. Slots between Billing and
+  // Checklist so the visual flow goes "what we'll charge" → "what it cost"
+  // → "did we finish everything we said we would".
+  { id: "backcosting", label: "Back Costing" },
   { id: "checklist", label: "Checklist" },
   { id: "quoting", label: "Quoting" },
 ];
@@ -540,7 +546,15 @@ export function JobCardDesktop({
           {/* LEFT — tab strip + body */}
           <div className="border-r border-slate-200 flex flex-col min-w-0 min-h-0">
             <div className="bg-white border-b border-slate-200 px-6 flex gap-7 flex-shrink-0">
-              {TABS.map((t) => {
+              {TABS.filter((t) => {
+                // Back Costing is only meaningful once work has happened —
+                // hide it on lead/quote so the tab strip stays focused on
+                // the job's current stage.
+                if (t.id === "backcosting" && (status === "lead" || status === "quote")) {
+                  return false;
+                }
+                return true;
+              }).map((t) => {
                 const on = t.id === activeTab;
                 return (
                   <button
@@ -570,6 +584,12 @@ export function JobCardDesktop({
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
               {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+              {activeTab === "backcosting" && (
+                <BackCostingPanel
+                  jobId={jobId}
+                  onOpenTimeEntries={actions?.timeTracking}
+                />
+              )}
               {activeTab === "checklist" && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
             </div>

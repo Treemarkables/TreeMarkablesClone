@@ -206,6 +206,14 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     }
   }, [job?.description, proposalDescription]);
   useEffect(() => { if (job) setInternalNotes(job.internalNotes ?? ""); }, [job?.internalNotes]);
+  // Per-job address override. Initial value falls back to the customer's
+  // address so the field reflects what's shown elsewhere (dispatch board,
+  // etc.) — saving writes to job.address, leaving the customer record alone.
+  const [address, setAddress] = useState("");
+  useEffect(() => {
+    if (!job) return;
+    setAddress(job.address ?? customer?.address ?? "");
+  }, [job?.address, customer?.address]);
 
   // ── Save mutation ───────────────────────────────────────────────────────────
   const saveField = useMutation({
@@ -260,7 +268,10 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const status = job?.status ?? "lead";
   const statusLabel = STATUS_LABEL[status] ?? status;
 
-  const addressDisplay = customer?.address ?? job?.address ?? "";
+  // Prefer the per-job address when set; fall back to the customer's
+  // address. Inverted from the original order so a per-job override actually
+  // wins — matches GlobalJobCard's behaviour.
+  const addressDisplay = job?.address || customer?.address || "";
 
   return (
     <div className="p-4 space-y-3.5">
@@ -286,12 +297,29 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               {statusLabel}
             </span>
           </div>
-          {addressDisplay && (
-            <div className="flex items-center gap-1.5 mt-2 text-[14px] text-slate-600">
-              <MapPin className="w-3.5 h-3.5 text-slate-400" />
-              <span className="truncate">{addressDisplay}</span>
-            </div>
-          )}
+          <div className="flex items-center gap-1.5 mt-2">
+            <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              onBlur={() => {
+                const trimmed = address.trim();
+                const oldVal = job?.address ?? "";
+                if (oldVal === trimmed) return;
+                // Server preserves non-empty fields against empty values unless
+                // _clearFields lists them — see server/routes.ts:5618.
+                if (trimmed === "") {
+                  saveField.mutate({ address: null, _clearFields: ["address"] } as any);
+                } else {
+                  saveField.mutate({ address: trimmed });
+                }
+              }}
+              placeholder="Add job address..."
+              className="flex-1 min-w-0 bg-transparent text-[14px] text-slate-700 placeholder:text-slate-400 outline-none focus:bg-slate-50 focus:rounded-md focus:px-1.5 focus:-mx-1.5 transition-all"
+              data-testid="input-job-address"
+            />
+          </div>
           {addressDisplay && (
             <a
               href={`https://www.google.com/maps/place/${encodeURIComponent(addressDisplay)}`}

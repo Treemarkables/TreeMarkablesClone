@@ -219,9 +219,10 @@ class BusinessIntelligenceService {
       ? completedJobs.reduce((sum, job) => sum + exGst(job), 0) / completedJobs.length
       : 0;
     
-    // Calculate active projects
-    const activeProjects = filteredJobs.filter(job => 
-      ['work_order', 'in_progress', 'scheduled'].includes(job.status)
+    // Calculate active projects ('scheduled' retired 2026-05 — work_order
+    // now covers both unscheduled and date-booked active work).
+    const activeProjects = filteredJobs.filter(job =>
+      job.status === 'work_order'
     ).length;
     
     // Calculate equipment utilization (simplified)

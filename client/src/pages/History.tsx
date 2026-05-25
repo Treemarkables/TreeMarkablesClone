@@ -154,8 +154,6 @@ export default function History() {
         return <Badge className="bg-green-100 text-green-800">Completed</Badge>;
       case 'work_order':
         return <Badge className="bg-green-100 text-green-800">Work Order</Badge>;
-      case 'scheduled':
-        return <Badge className="bg-blue-100 text-blue-800">Scheduled</Badge>;
       case 'quote':
         return <Badge className="bg-gray-100 text-gray-800">Quote</Badge>;
       case 'unsuccessful':

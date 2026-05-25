@@ -18,21 +18,17 @@ export class AutomatedTriggers {
 
       console.log(`🔄 Job status changed: ${job.title} (${oldStatus} → ${newStatus})`);
 
-      // SKIP automatic customer notifications for 'scheduled' status
-      // Customer scheduling notifications are controlled explicitly via the UI checkbox
-      if (newStatus !== 'scheduled') {
-        // Trigger notification for job status change
-        await notificationService.processNotificationTrigger({
-          event: 'job_status_change',
-          data: {
-            job,
-            oldStatus,
-            newStatus
-          }
-        });
-      } else {
-        console.log(`📋 Skipping automatic customer notification for 'scheduled' status - controlled by user checkbox`);
-      }
+      // ('scheduled' status retired 2026-05 — scheduling is now date-driven,
+      // not status-driven. Customer scheduling notifications fire via the
+      // sendClientNotification checkbox in the UI when a date is set.)
+      await notificationService.processNotificationTrigger({
+        event: 'job_status_change',
+        data: {
+          job,
+          oldStatus,
+          newStatus
+        }
+      });
 
       // Trigger workflow automation for job status changes
       await workflowAutomationService.processWorkflowTrigger('job_status_changed', {
@@ -41,11 +37,6 @@ export class AutomatedTriggers {
         newStatus,
         job
       });
-
-      // Additional specific triggers for important status changes
-      if (newStatus === 'scheduled' && oldStatus !== 'scheduled') {
-        await this.onJobScheduled(job);
-      }
 
       if (newStatus === 'completed' && oldStatus !== 'completed') {
         await this.onJobCompleted(job);
@@ -183,8 +174,10 @@ export class AutomatedTriggers {
         job
       });
       
-      // If the job is created with a scheduled status, trigger scheduling notifications
-      if (job.status === 'scheduled' && job.scheduledDate) {
+      // If the job is created already on the calendar, trigger scheduling
+      // notifications. ('scheduled' status retired 2026-05 — the signal is
+      // now scheduledDate, not status.)
+      if (job.status === 'work_order' && job.scheduledDate) {
         await this.onJobScheduled(job);
       }
     } catch (error) {
@@ -222,19 +215,19 @@ export class AutomatedTriggers {
       console.log('⏰ Checking for overdue jobs...');
       
       const now = new Date();
-      const scheduledJobs = await storage.getJobsByStatus('scheduled');
-      
-      for (const job of scheduledJobs) {
+      // 'scheduled' status retired 2026-05 — overdue = work_order with a
+      // scheduledDate in the past.
+      const workOrderJobs = await storage.getJobsByStatus('work_order');
+
+      for (const job of workOrderJobs) {
         if (job.scheduledDate && job.scheduledDate < now) {
-          // Job is overdue
           console.log(`🚨 Overdue job detected: ${job.title}`);
-          
-          // Create internal notification for team
+
           await notificationService.processNotificationTrigger({
             event: 'job_status_change',
             data: {
               job,
-              oldStatus: 'scheduled',
+              oldStatus: 'work_order',
               newStatus: 'overdue'
             }
           });

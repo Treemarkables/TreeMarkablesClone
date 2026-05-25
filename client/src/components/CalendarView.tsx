@@ -92,8 +92,9 @@ export function CalendarView({ view = 'week', onEventClick, onAddEvent }: Calend
 
   // Helper function to get job status colors - defined before use
   const getJobStatusColor = (status: string) => {
+    // 'scheduled' retired 2026-05 — work_order is the booked/active state.
     switch (status) {
-      case 'scheduled': return 'hsl(var(--primary))';
+      case 'work_order': return 'hsl(var(--primary))';
       case 'in_progress': return 'hsl(var(--primary))';
       case 'completed': return 'hsl(var(--muted-foreground))';
       case 'cancelled': return 'hsl(var(--muted-foreground))';

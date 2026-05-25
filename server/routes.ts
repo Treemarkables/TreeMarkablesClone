@@ -4226,8 +4226,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const activeFollowUps = enrichedProposals.filter(p => {
         if (!p.job) return true; // Keep if no job linked
         const jobStatus = p.job.status?.toLowerCase();
-        // Remove if job is scheduled, work order, unsuccessful, completed, cancelled, or archived
-        const completedStatuses = ['scheduled', 'work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
+        // Remove if job has moved past the quote stage (i.e. the proposal
+        // doesn't need following up anymore). 'scheduled' retired 2026-05.
+        const completedStatuses = ['work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
         return !completedStatuses.includes(jobStatus);
       });
 
@@ -7054,6 +7055,51 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // streaming route below (matches the photo route's public-by-URL model).
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Public watch URL for a video — hardcoded to the customer-facing domain
+  // per CLAUDE.md so the link in jobs.description is always something the
+  // customer can click from their quote, regardless of which DO/Cloudflare
+  // alias the staff session happens to be on.
+  function getWatchUrl(videoId: string): string {
+    return `https://app.treemarkables.co.nz/watch/${videoId}`;
+  }
+  function buildVideoLinkLine(videoId: string): string {
+    return `Watch the on-site walkthrough: ${getWatchUrl(videoId)}`;
+  }
+
+  // Keep jobs.description in sync with this video's "Show to customer" state:
+  // when ON, append a clickable link line so the customer-facing quote shows
+  // it; when OFF (or on delete), strip the line. Detection is by URL match
+  // so we still recognize the link even if the surrounding text was edited.
+  // Best-effort — a failure here never breaks the parent video operation.
+  async function syncVideoLinkInJobDescription(
+    jobId: string,
+    videoId: string,
+    shouldBePresent: boolean,
+  ): Promise<void> {
+    try {
+      const job = await storage.getJob(jobId);
+      if (!job) return;
+      const watchUrl = getWatchUrl(videoId);
+      const currentDesc = (job.description || '').trim();
+      const hasLink = currentDesc.includes(watchUrl);
+
+      if (shouldBePresent && !hasLink) {
+        const linkLine = buildVideoLinkLine(videoId);
+        const newDesc = currentDesc ? `${currentDesc}\n\n${linkLine}` : linkLine;
+        await storage.updateJob(jobId, { description: newDesc });
+      } else if (!shouldBePresent && hasLink) {
+        // Remove any line containing this watch URL; collapse consecutive
+        // blank lines so we don't leave gaps where the link used to be.
+        const lines = currentDesc.split('\n');
+        const filtered = lines.filter((line) => !line.includes(watchUrl));
+        const newDesc = filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        await storage.updateJob(jobId, { description: newDesc });
+      }
+    } catch (err) {
+      console.warn(`Could not sync video link for video ${videoId} in job ${jobId}:`, err);
+    }
+  }
+
   // Stream a video (public, range-aware so the <video> player can seek).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
@@ -7098,6 +7144,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         showToCustomer,
         processingStatus: 'ready',
       });
+
+      // If this video is customer-visible, drop a clickable link line into the
+      // job's description so it surfaces on the customer-facing quote page.
+      if (showToCustomer) {
+        await syncVideoLinkInJobDescription(jobId, video.id, true);
+      }
 
       res.json({ success: true, data: video });
     } catch (error) {
@@ -7199,6 +7251,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         showToCustomer,
         processingStatus: 'ready',
       });
+
+      // If linked to a job and customer-visible, surface a clickable link in
+      // the job's description (matches the per-job upload path above).
+      if (jobId && showToCustomer && kind === 'job') {
+        await syncVideoLinkInJobDescription(jobId, video.id, true);
+      }
+
       res.json({ success: true, data: video });
     } catch (error) {
       console.error('Error uploading video:', error);
@@ -7224,6 +7283,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // Update a video's metadata (title, showToCustomer toggle, or link to a job).
   app.patch('/api/videos/:id', async (req: Request, res: Response) => {
     try {
+      // Snapshot the prior state so we can detect toggle / job-link changes
+      // and sync the corresponding link in jobs.description after the update.
+      const priorVideo = await storage.getVideo(req.params.id);
+
       const updates: schema.UpdateVideo = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.description !== undefined) updates.description = req.body.description;
@@ -7241,6 +7304,37 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         }
       }
       const video = await storage.updateVideo(req.params.id, updates);
+
+      // Keep the job description's "watch the walkthrough" link in sync with
+      // the toggle (and with any rewiring of the video to a different job).
+      if (priorVideo) {
+        const toggleChanged =
+          req.body.showToCustomer !== undefined &&
+          !!priorVideo.showToCustomer !== !!video.showToCustomer;
+        if (toggleChanged && video.jobId) {
+          await syncVideoLinkInJobDescription(video.jobId, video.id, !!video.showToCustomer);
+        }
+        // If the video was unlinked from its previous job, scrub the link from
+        // the old job's description regardless of the toggle state.
+        if (
+          req.body.jobId !== undefined &&
+          priorVideo.jobId &&
+          priorVideo.jobId !== video.jobId
+        ) {
+          await syncVideoLinkInJobDescription(priorVideo.jobId, video.id, false);
+        }
+        // If the video was linked to a (new) job and is customer-visible,
+        // ensure that new job's description has the link.
+        if (
+          req.body.jobId !== undefined &&
+          video.jobId &&
+          video.jobId !== priorVideo.jobId &&
+          video.showToCustomer
+        ) {
+          await syncVideoLinkInJobDescription(video.jobId, video.id, true);
+        }
+      }
+
       res.json({ success: true, data: video });
     } catch (error) {
       console.error('Error updating video:', error);
@@ -7257,6 +7351,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       }
       await storage.deleteVideo(req.params.id);
       await videoStorage.deleteVideoObject(video.url);
+      // Strip the "watch the walkthrough" link from the job description if
+      // we'd previously injected one — leaving a dead link behind would be
+      // worse than a slight description rewrite.
+      if (video.jobId) {
+        await syncVideoLinkInJobDescription(video.jobId, video.id, false);
+      }
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting video:', error);
@@ -7300,6 +7400,14 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // infra in the app yet. Phase 2 may move this to a background job.
   app.post('/api/videos/:id/transcribe', async (req: Request, res: Response) => {
     const videoId = req.params.id;
+    // ?force=1 (or { force: true } in the body) bypasses the cached-result
+    // fast-path below, so the user can iterate on a generated description
+    // by re-running the pipeline (e.g. if Whisper misheard a species or
+    // GPT's structure needs another pass after a prompt tweak).
+    const force =
+      req.query.force === '1' ||
+      req.query.force === 'true' ||
+      req.body?.force === true;
     let videoTmpPath: string | null = null;
     let audioTmpPath: string | null = null;
 
@@ -7311,7 +7419,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Idempotent fast-path: if we've already transcribed this video, return the
       // cached result instead of re-billing OpenAI on every retry/refresh.
-      if (video.transcriptStatus === 'ready' && video.generatedDescription) {
+      // Skipped when ?force=1.
+      if (!force && video.transcriptStatus === 'ready' && video.generatedDescription) {
         return res.json({
           success: true,
           data: {
@@ -7348,12 +7457,25 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       audioTmpPath = path.join(os.tmpdir(), `tm-audio-${randomUUID()}.mp3`);
       await extractAudio(videoTmpPath, audioTmpPath);
 
-      // Step 3: Whisper transcription. Mirrors the speech-to-quote pattern at
-      // /api/mobile/speech-to-quote — same model, same response_format.
+      // Step 3: Whisper transcription. The `prompt` parameter biases the
+      // model toward domain-specific terms (Whisper accepts up to 224 tokens
+      // here as a style/vocabulary hint). Seeding it with NZ tree species
+      // + common arborist operations stops it from inventing words like
+      // "gladitziers" when the arborist said "gleditsias".
+      const WHISPER_BIAS_PROMPT = [
+        'New Zealand tree services walkthrough.',
+        'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
+        'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
+        'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
+        'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
+        'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
+        'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
+      ].join(' ');
       const rawTranscription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
+        prompt: WHISPER_BIAS_PROMPT,
         response_format: 'text',
       });
       const rawTranscript = typeof rawTranscription === 'string'
@@ -7371,20 +7493,27 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         });
       }
 
-      // Step 2: clean the transcript into a quote-ready job description. GPT-5
-      // doesn't accept temperature; rely on the model's defaults.
+      // Step 4: clean the transcript into a quote-ready job description.
+      // GPT-5 doesn't accept temperature; rely on the model's defaults.
       const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
-Requirements:
-- Plain English, suitable for a homeowner to read
-- Group related work items together (e.g. all pruning, then all removals)
-- Use bullet points if there are multiple distinct work items; otherwise short paragraphs
-- Strip filler words ("um", "ah", "you know"), asides, and any speech directed at someone other than the customer
-- Keep the arborist's tree/species terms verbatim (e.g. "manuka", "kauri", "macrocarpa")
-- Write in first person plural ("we'll prune…") — never "Arborist will…" or "I will…"
-- Do not invent details, measurements, or species not mentioned in the transcript
-- Do not include pricing unless the arborist explicitly stated a number
-- No preamble, no sign-off — just the description content
+STRUCTURE
+- For multiple work items: list them as bullets directly. NO lead-in, header, or intro line (no "We'll:", "Scope of work:", "The job involves:", etc.) — just the bullets. Each bullet is a concise imperative-style phrase: "Remove all four Gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
+- For a single work item: write it as one short statement, no bullets. First person plural is fine here ("We'll prune the Oak and remove the deadwood.").
+- Group related work items together (all pruning, then all removals, then cleanup).
+- No preamble, no sign-off — just the description content.
+
+LANGUAGE
+- Plain English, suitable for a homeowner to read.
+- Strip filler ("um", "ah", "you know"), asides, and speech directed at coworkers rather than the customer.
+
+FIDELITY
+- **Tree species names must be Capitalized as proper nouns** — Gleditsia/Gleditsias, Manuka, Kauri, Pohutukawa, Macrocarpa, Oak, Pine, Eucalyptus, Gum, Willow, Magnolia, etc. Apply this even when the raw transcript has them lowercase.
+- Keep the arborist's species terms in spirit — same species, standard spelling.
+- If a clearly-mistranscribed word is obviously a known NZ tree species (e.g. "gladitziers" → "Gleditsias", "macrocarper" → "Macrocarpa"), correct it to the standard spelling. Do NOT invent species the arborist didn't say.
+- Common arborist terminology fix-ups are fine: "firewood rings" → "firewood lengths".
+- Do not invent measurements, counts, or details not mentioned in the transcript.
+- Do not include pricing unless the arborist explicitly stated a number.
 
 Transcript:
 """
@@ -7976,6 +8105,137 @@ Draft the reply now.`;
       } else {
         res.status(500).json({ success: false, message: 'Error checking invoice eligibility' });
       }
+    }
+  });
+
+  // Consolidated back-costing rollup: revenue, labor, all cost categories,
+  // completion state and gross margin in one payload. Reads only — every
+  // mutation goes through the existing /expenses and /expense-completion
+  // endpoints. Backs the Back Costing tab in the job card.
+  app.get('/api/jobs/:id/back-costing', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const num = (v: unknown): number => {
+        if (v === null || v === undefined || v === '') return 0;
+        const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const [staffEntries, invoices] = await Promise.all([
+        storage.getJobStaffTimeEntries(id).catch(() => [] as any[]),
+        storage.getInvoicesByJob(id).catch(() => [] as any[]),
+      ]);
+
+      const laborTotalHours = (staffEntries as any[]).reduce(
+        (sum, e: any) => sum + num(e.hours),
+        0,
+      );
+
+      // Replicates the labor-cost rollup used by POST /api/jobs/:id/staff-time:
+      // each entry's costRate, falling back to the employee's hourlyRate.
+      let laborCalculatedCost = 0;
+      for (const e of staffEntries as any[]) {
+        let costRate: number = num(e.costRate);
+        if (!costRate && e.employeeId) {
+          const employee = await storage.getEmployee(e.employeeId).catch(() => null as any);
+          costRate = num(employee?.hourlyRate);
+        }
+        laborCalculatedCost += num(e.hours) * costRate;
+      }
+
+      // actualLaborCosts is auto-synced from staff time on every entry change,
+      // but owners can override via PUT /expenses. Trust the stored value;
+      // fall back to the calculated cost when nothing has been stored yet.
+      const storedLaborCost = num(job.actualLaborCosts);
+      const laborCost = storedLaborCost > 0 ? storedLaborCost : laborCalculatedCost;
+
+      const costs = {
+        actualLaborCosts: laborCost,
+        actualMaterialsCosts: num(job.actualMaterialsCosts),
+        equipmentCosts: num(job.equipmentCosts),
+        subcontractorCosts: num(job.subcontractorCosts),
+        permitCosts: num(job.permitCosts),
+        travelCosts: num(job.travelCosts),
+        disposalCosts: num(job.disposalCosts),
+        miscExpenses: num(job.miscExpenses),
+      };
+      const costsTotal =
+        costs.actualLaborCosts +
+        costs.actualMaterialsCosts +
+        costs.equipmentCosts +
+        costs.subcontractorCosts +
+        costs.permitCosts +
+        costs.travelCosts +
+        costs.disposalCosts +
+        costs.miscExpenses;
+
+      const primaryInvoice = (invoices as any[])[0];
+      const invoiceTotal = primaryInvoice ? num(primaryInvoice.totalAmount) : null;
+      const quoteTotal = num(job.totalAmount);
+      const revenueSource: 'invoice' | 'quote' | 'none' =
+        invoiceTotal !== null && invoiceTotal > 0
+          ? 'invoice'
+          : quoteTotal > 0
+            ? 'quote'
+            : 'none';
+      const revenueAmount =
+        revenueSource === 'invoice' ? (invoiceTotal as number) : quoteTotal;
+
+      const grossProfit = revenueAmount - costsTotal;
+      const grossMarginPercent =
+        revenueAmount > 0 ? (grossProfit / revenueAmount) * 100 : null;
+
+      res.json({
+        success: true,
+        data: {
+          job: {
+            id: job.id,
+            jobNumber: (job as any).jobNumber ?? null,
+            status: job.status,
+            customerName: (job as any).customerName ?? null,
+          },
+          revenue: {
+            amount: revenueAmount,
+            invoiceTotal,
+            quoteTotal,
+            source: revenueSource,
+            invoiceId: primaryInvoice?.id ?? null,
+            xeroStatus: (job as any).xeroStatus ?? null,
+          },
+          labor: {
+            totalHours: laborTotalHours,
+            totalCost: laborCost,
+            calculatedCost: laborCalculatedCost,
+            hasOverride: storedLaborCost > 0 && Math.abs(storedLaborCost - laborCalculatedCost) > 0.01,
+            entryCount: (staffEntries as any[]).length,
+          },
+          costs: {
+            ...costs,
+            total: costsTotal,
+          },
+          completion: {
+            labor: !!job.laborCostsComplete,
+            materials: !!job.materialsCostsComplete,
+            equipment: !!job.equipmentCostsComplete,
+            subcontractor: !!job.subcontractorCostsComplete,
+            other: !!job.otherExpensesComplete,
+            allComplete: !!job.allExpensesComplete,
+            invoiceBlocked: job.invoiceBlocked !== false,
+          },
+          margin: {
+            grossProfit,
+            grossMarginPercent,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Error building back-costing rollup:', error);
+      res.status(500).json({ success: false, message: 'Error building back-costing rollup' });
     }
   });
 
@@ -9809,7 +10069,7 @@ Draft the reply now.`;
           const isConfirmation = !isReschedule && confirmKeywords.test(Body);
           if (
             isConfirmation &&
-            (recentJob.status === 'scheduled' || recentJob.status === 'work_order') &&
+            recentJob.status === 'work_order' &&
             !recentJob.customerConfirmed
           ) {
             try {
@@ -12789,7 +13049,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
       }
 
-      const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+      // 'scheduled' retired 2026-05 — its jobs migrated to 'work_order'.
+      const acceptedStatuses = ['completed', 'invoiced', 'work_order'];
       const rejectedStatuses = ['unsuccessful'];
       const pendingStatuses = ['quote'];
 
@@ -15622,16 +15883,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity.
-  // Status revert: only flip 'scheduled' back to 'work_order'. A 'quote' job
-  // booked in for a site visit keeps its 'quote' status when unscheduled
-  // (the booking was a quoting visit, not a work-crew assignment).
+  // Status is left alone: bookings became pure calendar actions in 2026-05,
+  // so unscheduling no longer needs to revert a status transition.
   app.post('/api/jobs/:jobId/unschedule', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       await storage.deleteJobStaffAssignmentsByJob(jobId);
       await storage.deleteScheduleEventsByJob(jobId);
-      const existing = await storage.getJob(jobId);
-      const nextStatus = existing?.status === 'scheduled' ? 'work_order' : existing?.status;
       const job = await storage.updateJob(jobId, {
         scheduledDate: null,
         scheduledEndDate: null,
@@ -15639,7 +15897,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         scheduledEndTime: null,
         assignedTo: [],
         assignedTeam: [],
-        ...(nextStatus ? { status: nextStatus } : {}),
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });
@@ -19264,7 +19521,7 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(confirmedJobNumber);
           }
           if (targetJob && !targetJob.customerConfirmed &&
-              (targetJob.status === 'scheduled' || targetJob.status === 'work_order')) {
+              targetJob.status === 'work_order') {
             await storage.updateJob(targetJob.id, {
               customerConfirmed: true,
               customerConfirmedAt: new Date(),
@@ -20373,17 +20630,19 @@ Transcription: ${transcriptText}`;
     try {
       // Get active jobs (work_order, scheduled, in_progress)
       const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
-      const activeJobs = allJobs.filter(job => 
-        ['work_order', 'scheduled', 'in_progress'].includes(job.status)
-      );
-      
+      // Active = work_order. 'scheduled' was retired as a status in 2026-05;
+      // the conceptual bucket is now "work_order with a scheduledDate" vs
+      // "work_order without one". Both still count as active.
+      const activeJobs = allJobs.filter(job => job.status === 'work_order');
+
       // Get employees for crew count calculation
       const employees = await storage.getAllEmployees();
-      
-      // Calculate summary stats
-      const workOrderJobs = activeJobs.filter(j => j.status === 'work_order');
-      const scheduledJobs = activeJobs.filter(j => j.status === 'scheduled');
-      const inProgressJobs = activeJobs.filter(j => j.status === 'in_progress');
+
+      // Calculate summary stats. workOrder = unscheduled work orders ready
+      // to book in. scheduled = work orders that have a date set.
+      const workOrderJobs = activeJobs.filter(j => !j.scheduledDate);
+      const scheduledJobs = activeJobs.filter(j => !!j.scheduledDate);
+      const inProgressJobs: typeof activeJobs = [];
       
       const totalValue = activeJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
       const totalEstimatedHours = activeJobs.reduce((sum, job) => sum + parseFloat(job.estimatedManHours || '0'), 0);
@@ -20519,8 +20778,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // or already done. We exclude leads/quotes (never booked), cancelled/
       // unsuccessful (booking fell through), and archived (housekeeping) so the
       // total reflects work that actually was/is scheduled to happen.
+      // 'scheduled' retired 2026-05 — work_order with a scheduledDate is
+      // the new "booked" signal.
       const BOOKED_STATUSES = new Set([
-        'scheduled', 'work_order', 'in_progress', 'completed', 'invoiced'
+        'work_order', 'completed', 'invoiced'
       ]);
       const bookedJobs = allJobs.filter(job => {
         if (!job.scheduledDate) return false;
@@ -28260,7 +28521,9 @@ Return a valid JSON object only (no markdown) with this EXACT structure:
       const alreadyScheduledToday = allJobs.filter(j => {
         if (!j.scheduledDate) return false;
         const d = new Date(j.scheduledDate);
-        return d >= proposeDayStart && d <= proposeDayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+        // 'scheduled' status retired 2026-05 — any work_order with a date
+        // on this day occupies a slot.
+        return d >= proposeDayStart && d <= proposeDayEnd && j.status === 'work_order';
       }).map(j => ({
         jobNumber: j.jobNumber,
         title: j.title || 'existing job',
@@ -28388,7 +28651,9 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         if (proposedJobIds.has(j.id)) return false; // Skip jobs in this proposal
         if (!j.scheduledDate) return false;
         const d = new Date(j.scheduledDate);
-        return d >= dayStart && d <= dayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+        // 'scheduled' status retired 2026-05 — any work_order with a date
+        // on this day occupies a slot.
+        return d >= dayStart && d <= dayEnd && j.status === 'work_order';
       });
       for (const ej of existingDayJobs) {
         const existStart = ej.scheduledStartTime || '08:00';

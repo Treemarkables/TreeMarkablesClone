@@ -274,6 +274,14 @@ const globalJobCardSchema = insertJobSchema
 
 type GlobalJobCardFormData = z.infer<typeof globalJobCardSchema>;
 
+type SidebarTab =
+  | "details"
+  | "billing"
+  | "backcosting"
+  | "checklist"
+  | "quoting"
+  | "diary";
+
 interface GlobalJobCardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -296,7 +304,7 @@ interface GlobalJobCardProps {
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
-  initialSidebarTab?: "details" | "billing" | "checklist"; // Deep-link from push notifications
+  initialSidebarTab?: SidebarTab; // Deep-link from push notifications
 }
 
 export function GlobalJobCard({
@@ -317,8 +325,8 @@ export function GlobalJobCard({
   );
   const [checklistCollapsed, setChecklistCollapsed] = useState(true);
   const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [activeTab, setActiveTab] = useState(initialSidebarTab ?? "details");
-  const [sidebarTab, setSidebarTab] = useState(initialSidebarTab ?? "details");
+  const [activeTab, setActiveTab] = useState<SidebarTab>(initialSidebarTab ?? "details");
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(initialSidebarTab ?? "details");
   const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);
@@ -5480,14 +5488,15 @@ The Treemarkables Team`;
                                     <button
                                       className="font-bold text-gray-900 text-xl text-left flex items-center gap-2 hover:text-blue-600 transition-colors"
                                       data-testid="customer-name-link-trigger"
-                                      aria-label="Edit name or link to an existing customer"
+                                      aria-label="Edit name or change linked customer"
                                     >
                                       {selectedCustomerName}
                                       {selectedVipCustomer?.isVipMember && (
                                         <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />
                                       )}
-                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-50 text-blue-600 flex-shrink-0">
-                                        <Link2 className="h-3.5 w-3.5" />
+                                      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                                        <Pencil className="h-3 w-3" />
+                                        Change
                                       </span>
                                     </button>
                                   </PopoverTrigger>
@@ -5769,13 +5778,20 @@ The Treemarkables Team`;
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="ghost"
-                                  className="p-0 h-auto font-bold text-gray-900 text-xl hover:bg-transparent hover:underline"
+                                  className="p-0 h-auto font-bold text-gray-900 text-xl hover:bg-transparent group"
+                                  data-testid="button-change-customer-desktop"
+                                  aria-label="Change linked customer"
                                 >
-                                  {selectedCustomerName || "Select Customer"}
+                                  <span className="group-hover:underline">
+                                    {selectedCustomerName || "Select Customer"}
+                                  </span>
                                   {selectedVipCustomer?.isVipMember && (
                                     <Crown className="ml-1 h-4 w-4 text-amber-500 flex-shrink-0" />
                                   )}
-                                  <Pencil className="ml-2 h-4 w-4 opacity-50" />
+                                  <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 group-hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">
+                                    <Pencil className="h-3 w-3" />
+                                    Change
+                                  </span>
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent

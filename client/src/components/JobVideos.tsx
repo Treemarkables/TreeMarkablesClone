@@ -54,6 +54,9 @@ export function JobVideos({ jobId }: JobVideosProps) {
   const [pendingTranscribeId, setPendingTranscribeId] = useState<string | null>(null);
   const [generatedDescription, setGeneratedDescription] = useState("");
   const [showResult, setShowResult] = useState(false);
+  // The video the result dialog is "about" — needed so the Re-generate button
+  // knows which video to re-run when the user wants another pass.
+  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
 
   const videosKey = ["/api/jobs", jobId, "videos"];
 
@@ -104,19 +107,29 @@ export function JobVideos({ jobId }: JobVideosProps) {
   });
 
   // AI: transcribe the walkthrough and turn it into a quote-ready description.
+  // The optional `force` flag bypasses the server's cached-result fast-path
+  // — used by the "Re-generate" button in the result dialog so the user can
+  // iterate when Whisper mishears a species or GPT's structure misses the
+  // mark on first pass.
   const transcribeMutation = useMutation({
-    mutationFn: async (videoId: string) => {
-      const r = await fetch(`/api/videos/${videoId}/transcribe`, {
+    mutationFn: async ({ videoId, force }: { videoId: string; force?: boolean }) => {
+      const url = force
+        ? `/api/videos/${videoId}/transcribe?force=1`
+        : `/api/videos/${videoId}/transcribe`;
+      const r = await fetch(url, {
         method: "POST",
         credentials: "include",
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body?.message || "Transcription failed");
-      return body;
+      return { ...body, videoId };
     },
     onSuccess: (response: any) => {
       const desc = response?.data?.generatedDescription || "";
       setGeneratedDescription(desc);
+      // Remember which video this result belongs to so the "Re-generate"
+      // button knows what to re-run.
+      setActiveVideoId(response?.videoId || null);
       setPendingTranscribeId(null);
       setShowResult(true);
       queryClient.invalidateQueries({ queryKey: videosKey });
@@ -158,6 +171,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
     onSuccess: () => {
       setShowResult(false);
       setGeneratedDescription("");
+      setActiveVideoId(null);
       // Invalidate anything keyed off this job so the open job card re-renders
       // with the new description.
       queryClient.invalidateQueries({ queryKey: ["/api/jobs", jobId] });
@@ -427,16 +441,16 @@ export function JobVideos({ jobId }: JobVideosProps) {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => transcribeMutation.mutate(v.id)}
+                        onClick={() => transcribeMutation.mutate({ videoId: v.id })}
                         disabled={
                           transcribeMutation.isPending &&
-                          transcribeMutation.variables === v.id
+                          transcribeMutation.variables?.videoId === v.id
                         }
                         title="Transcribe this video and generate a job description with AI"
                         data-testid={`button-generate-${v.id}`}
                       >
                         {transcribeMutation.isPending &&
-                        transcribeMutation.variables === v.id ? (
+                        transcribeMutation.variables?.videoId === v.id ? (
                           <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
                           <Sparkles className="w-3.5 h-3.5" />
@@ -451,9 +465,11 @@ export function JobVideos({ jobId }: JobVideosProps) {
                         onClick={() => {
                           // Open the result dialog with the cached AI
                           // description so the user can re-apply it
-                          // (replace/append) without re-running OpenAI.
+                          // (replace/append) or click Re-generate to force
+                          // a fresh server-side pass.
                           if (v.generatedDescription) {
                             setGeneratedDescription(v.generatedDescription);
+                            setActiveVideoId(v.id);
                             setShowResult(true);
                           }
                         }}
@@ -521,7 +537,7 @@ export function JobVideos({ jobId }: JobVideosProps) {
               onClick={(e) => {
                 e.preventDefault();
                 if (pendingTranscribeId) {
-                  transcribeMutation.mutate(pendingTranscribeId);
+                  transcribeMutation.mutate({ videoId: pendingTranscribeId });
                 }
               }}
               disabled={transcribeMutation.isPending}
@@ -547,9 +563,10 @@ export function JobVideos({ jobId }: JobVideosProps) {
       <Dialog
         open={showResult}
         onOpenChange={(o) => {
-          if (!o && !applyDescriptionMutation.isPending) {
+          if (!o && !applyDescriptionMutation.isPending && !transcribeMutation.isPending) {
             setShowResult(false);
             setGeneratedDescription("");
+            setActiveVideoId(null);
           }
         }}
       >
@@ -571,18 +588,53 @@ export function JobVideos({ jobId }: JobVideosProps) {
             className="font-mono text-sm"
             data-testid="textarea-generated-description"
           />
-          <DialogFooter className="gap-2 sm:gap-2">
+          <DialogFooter className="gap-2 sm:gap-2 flex-wrap">
             <Button
               type="button"
               variant="outline"
               onClick={() => {
                 setShowResult(false);
                 setGeneratedDescription("");
+                setActiveVideoId(null);
               }}
-              disabled={applyDescriptionMutation.isPending}
+              disabled={
+                applyDescriptionMutation.isPending ||
+                transcribeMutation.isPending
+              }
               data-testid="button-discard-generated"
             >
               Discard
+            </Button>
+            {/* Re-generate forces a fresh server-side pass (bypasses cache).
+                Useful when Whisper misheard a species or the structure
+                missed the mark — clicking it re-runs Whisper + GPT-5 with
+                the latest prompts. */}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                if (activeVideoId) {
+                  transcribeMutation.mutate({ videoId: activeVideoId, force: true });
+                }
+              }}
+              disabled={
+                !activeVideoId ||
+                transcribeMutation.isPending ||
+                applyDescriptionMutation.isPending
+              }
+              data-testid="button-regenerate-generated"
+            >
+              {transcribeMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Re-running…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Re-generate
+                </>
+              )}
             </Button>
             <Button
               type="button"

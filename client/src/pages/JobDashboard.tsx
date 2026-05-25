@@ -443,13 +443,15 @@ export default function JobDashboard({
     (job) => job.status === "completed",
   ).length;
   const activeJobs = displayJobs.filter(
-    (job) => job.status === "in-progress" || job.status === "scheduled",
+    // 'scheduled' status retired 2026-05 — work_order covers all active.
+    (job) => job.status === "work_order" || job.status === "in-progress",
   ).length;
   const newLeads = displayLeads.filter((lead) => lead.status === "new").length;
 
   const getJobStatusBadge = (status: string) => {
     const jobStatusConfig = {
-      scheduled: { variant: "outline" as const, label: "Scheduled" },
+      // 'scheduled' retired 2026-05 — replaced with work_order in the badge map.
+      work_order: { variant: "outline" as const, label: "Work Order" },
       "in-progress": { variant: "default" as const, label: "In Progress" },
       completed: { variant: "default" as const, label: "Completed" },
       cancelled: { variant: "destructive" as const, label: "Cancelled" },
