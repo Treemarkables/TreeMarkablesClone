@@ -7054,6 +7054,51 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // streaming route below (matches the photo route's public-by-URL model).
   // ──────────────────────────────────────────────────────────────────────────
 
+  // Public watch URL for a video — hardcoded to the customer-facing domain
+  // per CLAUDE.md so the link in jobs.description is always something the
+  // customer can click from their quote, regardless of which DO/Cloudflare
+  // alias the staff session happens to be on.
+  function getWatchUrl(videoId: string): string {
+    return `https://app.treemarkables.co.nz/watch/${videoId}`;
+  }
+  function buildVideoLinkLine(videoId: string): string {
+    return `Watch the on-site walkthrough: ${getWatchUrl(videoId)}`;
+  }
+
+  // Keep jobs.description in sync with this video's "Show to customer" state:
+  // when ON, append a clickable link line so the customer-facing quote shows
+  // it; when OFF (or on delete), strip the line. Detection is by URL match
+  // so we still recognize the link even if the surrounding text was edited.
+  // Best-effort — a failure here never breaks the parent video operation.
+  async function syncVideoLinkInJobDescription(
+    jobId: string,
+    videoId: string,
+    shouldBePresent: boolean,
+  ): Promise<void> {
+    try {
+      const job = await storage.getJob(jobId);
+      if (!job) return;
+      const watchUrl = getWatchUrl(videoId);
+      const currentDesc = (job.description || '').trim();
+      const hasLink = currentDesc.includes(watchUrl);
+
+      if (shouldBePresent && !hasLink) {
+        const linkLine = buildVideoLinkLine(videoId);
+        const newDesc = currentDesc ? `${currentDesc}\n\n${linkLine}` : linkLine;
+        await storage.updateJob(jobId, { description: newDesc });
+      } else if (!shouldBePresent && hasLink) {
+        // Remove any line containing this watch URL; collapse consecutive
+        // blank lines so we don't leave gaps where the link used to be.
+        const lines = currentDesc.split('\n');
+        const filtered = lines.filter((line) => !line.includes(watchUrl));
+        const newDesc = filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+        await storage.updateJob(jobId, { description: newDesc });
+      }
+    } catch (err) {
+      console.warn(`Could not sync video link for video ${videoId} in job ${jobId}:`, err);
+    }
+  }
+
   // Stream a video (public, range-aware so the <video> player can seek).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
@@ -7098,6 +7143,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         showToCustomer,
         processingStatus: 'ready',
       });
+
+      // If this video is customer-visible, drop a clickable link line into the
+      // job's description so it surfaces on the customer-facing quote page.
+      if (showToCustomer) {
+        await syncVideoLinkInJobDescription(jobId, video.id, true);
+      }
 
       res.json({ success: true, data: video });
     } catch (error) {
@@ -7199,6 +7250,13 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         showToCustomer,
         processingStatus: 'ready',
       });
+
+      // If linked to a job and customer-visible, surface a clickable link in
+      // the job's description (matches the per-job upload path above).
+      if (jobId && showToCustomer && kind === 'job') {
+        await syncVideoLinkInJobDescription(jobId, video.id, true);
+      }
+
       res.json({ success: true, data: video });
     } catch (error) {
       console.error('Error uploading video:', error);
@@ -7224,6 +7282,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // Update a video's metadata (title, showToCustomer toggle, or link to a job).
   app.patch('/api/videos/:id', async (req: Request, res: Response) => {
     try {
+      // Snapshot the prior state so we can detect toggle / job-link changes
+      // and sync the corresponding link in jobs.description after the update.
+      const priorVideo = await storage.getVideo(req.params.id);
+
       const updates: schema.UpdateVideo = {};
       if (req.body.title !== undefined) updates.title = req.body.title;
       if (req.body.description !== undefined) updates.description = req.body.description;
@@ -7241,6 +7303,37 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         }
       }
       const video = await storage.updateVideo(req.params.id, updates);
+
+      // Keep the job description's "watch the walkthrough" link in sync with
+      // the toggle (and with any rewiring of the video to a different job).
+      if (priorVideo) {
+        const toggleChanged =
+          req.body.showToCustomer !== undefined &&
+          !!priorVideo.showToCustomer !== !!video.showToCustomer;
+        if (toggleChanged && video.jobId) {
+          await syncVideoLinkInJobDescription(video.jobId, video.id, !!video.showToCustomer);
+        }
+        // If the video was unlinked from its previous job, scrub the link from
+        // the old job's description regardless of the toggle state.
+        if (
+          req.body.jobId !== undefined &&
+          priorVideo.jobId &&
+          priorVideo.jobId !== video.jobId
+        ) {
+          await syncVideoLinkInJobDescription(priorVideo.jobId, video.id, false);
+        }
+        // If the video was linked to a (new) job and is customer-visible,
+        // ensure that new job's description has the link.
+        if (
+          req.body.jobId !== undefined &&
+          video.jobId &&
+          video.jobId !== priorVideo.jobId &&
+          video.showToCustomer
+        ) {
+          await syncVideoLinkInJobDescription(video.jobId, video.id, true);
+        }
+      }
+
       res.json({ success: true, data: video });
     } catch (error) {
       console.error('Error updating video:', error);
@@ -7257,6 +7350,12 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       }
       await storage.deleteVideo(req.params.id);
       await videoStorage.deleteVideoObject(video.url);
+      // Strip the "watch the walkthrough" link from the job description if
+      // we'd previously injected one — leaving a dead link behind would be
+      // worse than a slight description rewrite.
+      if (video.jobId) {
+        await syncVideoLinkInJobDescription(video.jobId, video.id, false);
+      }
       res.json({ success: true });
     } catch (error) {
       console.error('Error deleting video:', error);

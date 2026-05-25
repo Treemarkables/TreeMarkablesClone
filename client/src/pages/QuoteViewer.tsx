@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Download, Mail, Check, Clock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { Linkify } from "@/components/Linkify";
 
 interface QuoteViewerProps {}
 
@@ -453,7 +454,7 @@ export default function QuoteViewer({}: QuoteViewerProps) {
                   </h3>
                   <div className="bg-gray-50 rounded-lg p-3">
                     <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                      {job.description}
+                      <Linkify>{job.description}</Linkify>
                     </p>
                   </div>
                 </div>
