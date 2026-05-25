@@ -5480,14 +5480,15 @@ The Treemarkables Team`;
                                     <button
                                       className="font-bold text-gray-900 text-xl text-left flex items-center gap-2 hover:text-blue-600 transition-colors"
                                       data-testid="customer-name-link-trigger"
-                                      aria-label="Edit name or link to an existing customer"
+                                      aria-label="Edit name or change linked customer"
                                     >
                                       {selectedCustomerName}
                                       {selectedVipCustomer?.isVipMember && (
                                         <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />
                                       )}
-                                      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-blue-50 text-blue-600 flex-shrink-0">
-                                        <Link2 className="h-3.5 w-3.5" />
+                                      <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                                        <Pencil className="h-3 w-3" />
+                                        Change
                                       </span>
                                     </button>
                                   </PopoverTrigger>
@@ -5769,13 +5770,20 @@ The Treemarkables Team`;
                               <PopoverTrigger asChild>
                                 <Button
                                   variant="ghost"
-                                  className="p-0 h-auto font-bold text-gray-900 text-xl hover:bg-transparent hover:underline"
+                                  className="p-0 h-auto font-bold text-gray-900 text-xl hover:bg-transparent group"
+                                  data-testid="button-change-customer-desktop"
+                                  aria-label="Change linked customer"
                                 >
-                                  {selectedCustomerName || "Select Customer"}
+                                  <span className="group-hover:underline">
+                                    {selectedCustomerName || "Select Customer"}
+                                  </span>
                                   {selectedVipCustomer?.isVipMember && (
                                     <Crown className="ml-1 h-4 w-4 text-amber-500 flex-shrink-0" />
                                   )}
-                                  <Pencil className="ml-2 h-4 w-4 opacity-50" />
+                                  <span className="ml-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 group-hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-full">
+                                    <Pencil className="h-3 w-3" />
+                                    Change
+                                  </span>
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent
