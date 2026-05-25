@@ -4555,6 +4555,27 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             processedBody.address = existingCustomer.address;
             console.log('✅ Auto-filled job address from customer:', existingCustomer.address);
           }
+          // Auto-populate job contact fields from the existing customer when
+          // the caller didn't supply them. The job-card modal reads these
+          // columns directly, so empty values render as blank contact details
+          // even when the linked customer has them on file (e.g. jobs created
+          // from the Conversations page only pass phone/mobile through).
+          if (!processedBody.jobContactFirstName && existingCustomer.name) {
+            const nameParts = existingCustomer.name.trim().split(/\s+/);
+            processedBody.jobContactFirstName = nameParts[0] || '';
+            if (!processedBody.jobContactLastName) {
+              processedBody.jobContactLastName = nameParts.slice(1).join(' ') || '';
+            }
+          }
+          if (!processedBody.jobContactEmail && existingCustomer.email) {
+            processedBody.jobContactEmail = existingCustomer.email;
+          }
+          if (!processedBody.jobContactPhone && existingCustomer.phone) {
+            processedBody.jobContactPhone = existingCustomer.phone;
+          }
+          if (!processedBody.jobContactMobile && existingCustomer.mobile) {
+            processedBody.jobContactMobile = existingCustomer.mobile;
+          }
           // GDC always gets council lead source, regardless of what was submitted
           if (existingCustomer.name && existingCustomer.name.toLowerCase().includes('gisborne district council')) {
             processedBody.leadSource = 'council';
