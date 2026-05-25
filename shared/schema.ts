@@ -799,6 +799,31 @@ export const photos = pgTable("photos", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// Photo annotations (CompanyCam-style markup). Keyed by the served photo URL
+// instead of photos.id because most photos in this app live as URL strings on
+// jobs.beforePhotos / jobDiaryEntries.photos[] / etc., NOT as rows in the
+// `photos` table — keying by URL lets annotation work universally regardless
+// of where the photo lives upstream.
+//
+// Hybrid storage:
+//   - `annotations`: structured Konva shape JSON, so we can re-open the editor
+//     and tweak existing arrows/text instead of starting from a flat pixel.
+//   - `annotatedUrl`: GCS path of the baked-pixel composite (image + markup),
+//     used wherever the photo is displayed. Falls back to `sourceUrl` if
+//     missing. Original `sourceUrl` is never overwritten so annotations
+//     are always reversible.
+export const photoAnnotations = pgTable("photo_annotations", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sourceUrl: text("source_url").notNull().unique(), // e.g. /objects/photos/foo.jpg
+  annotations: jsonb("annotations").notNull(), // Konva shape array
+  annotatedUrl: text("annotated_url"), // e.g. /objects/photos/annotated_<sha>.png
+  annotatedBy: text("annotated_by"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  sourceIdx: index("photo_annotations_source_url_idx").on(table.sourceUrl),
+}));
+
 // Job Videos — native replacement for Loom. The video file itself lives in GCS
 // object storage (same bucket as photos); this row only holds metadata + the
 // object path (`url` like `/objects/videos/<file>`). showToCustomer gates
