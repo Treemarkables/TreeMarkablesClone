@@ -61,6 +61,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
+import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobVideos } from "@/components/JobVideos";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
@@ -72,6 +73,7 @@ import { EmailComposerModal } from "@/components/EmailComposerModal";
 export type JobCardMobileTab =
   | "details"
   | "billing"
+  | "backcosting"
   | "checklist"
   | "quoting"
   | "diary";
@@ -129,7 +131,6 @@ const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
   lead: { label: "Lead", bg: "#f59e0b" },
   quote: { label: "Quote", bg: "#f59e0b" },
   work_order: { label: "Work Order", bg: "#2563eb" },
-  scheduled: { label: "Scheduled", bg: "#7c3aed" },
   completed: { label: "Completed", bg: "#16a34a" },
   unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
 };
@@ -137,6 +138,8 @@ const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
 const TABS: { id: JobCardMobileTab; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "billing", label: "Billing" },
+  // Back Costing — see comment in JobCardDesktop.tsx for the rationale.
+  { id: "backcosting", label: "Back Costing" },
   { id: "checklist", label: "Checklist" },
   { id: "quoting", label: "Quoting" },
   { id: "diary", label: "Diary" },
@@ -345,7 +348,15 @@ export function JobCardMobile({
 
       {/* ── Tab strip ── */}
       <div className="flex border-b border-slate-200 px-4 gap-5 flex-shrink-0 overflow-x-auto" data-testid="job-card-mobile-tabs">
-        {TABS.map((t) => {
+        {TABS.filter((t) => {
+          // Back Costing is only meaningful once work has happened — hide
+          // it on lead/quote so the tab strip stays focused on the job's
+          // current stage.
+          if (t.id === "backcosting" && (status === "lead" || status === "quote")) {
+            return false;
+          }
+          return true;
+        }).map((t) => {
           const on = t.id === activeTab;
           return (
             <button
@@ -371,6 +382,14 @@ export function JobCardMobile({
         <div className="pb-[110px]">
           {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
           {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+          {activeTab === "backcosting" && (
+            <div className="bg-white">
+              <BackCostingPanel
+                jobId={jobId}
+                onOpenTimeEntries={actions?.timeTracking}
+              />
+            </div>
+          )}
           {activeTab === "checklist" && (
             <div className="bg-white">
               <JobChecklistPanel jobId={jobId} />

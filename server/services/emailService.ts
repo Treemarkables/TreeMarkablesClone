@@ -187,6 +187,9 @@ class EmailService {
     jobNumber?: string // Job number for job-specific reply-to address
   ): Promise<EmailResult> {
     const statusTemplates = {
+      // 'scheduled' status retired 2026-05. The template body lives on under
+      // the work_order key so the existing "your job is booked" notification
+      // wording still works when a work_order gets a scheduledDate set.
       scheduled: {
         subject: `Job Scheduled: ${jobTitle}`,
         text: `Hi ${customerName},\n\nGood news! Your tree service job "${jobTitle}" has been scheduled.\n\nWe'll send you more details soon.\n\nBest regards,\nTreemarkables Team`,
