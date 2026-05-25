@@ -4150,13 +4150,12 @@ export function JobDiarySection({
           // and the shapes can be re-edited in place.
           src={currentSourceUrl ?? ""}
           initialAnnotations={currentAnnotation?.shapes ?? null}
-          onSave={async ({ annotations, dataUrl }) => {
+          onSave={async ({ annotations }) => {
             if (!currentSourceUrl) return;
             try {
               const rec = await savePhotoAnnotation({
                 sourceUrl: currentSourceUrl,
                 annotations,
-                dataUrl,
                 annotatedBy:
                   currentUser?.firstName && currentUser?.lastName
                     ? `${currentUser.firstName} ${currentUser.lastName}`

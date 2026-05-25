@@ -14,34 +14,22 @@ export interface PhotoAnnotationRecord {
   updatedAt: string;
 }
 
-/** Convert a data URL (returned by PhotoAnnotator's onSave) into a Blob the
- *  fetch API can upload. */
-function dataUrlToBlob(dataUrl: string): Blob {
-  const [meta, b64] = dataUrl.split(",");
-  const mimeMatch = /data:([^;]+)/.exec(meta);
-  const mime = mimeMatch ? mimeMatch[1] : "image/png";
-  const bin = atob(b64);
-  const arr = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
-  return new Blob([arr], { type: mime });
-}
-
 export async function savePhotoAnnotation(params: {
   sourceUrl: string;
   annotations: AnnotationShape[];
-  dataUrl: string;
   annotatedBy?: string;
 }): Promise<PhotoAnnotationRecord> {
-  const fd = new FormData();
-  fd.append("sourceUrl", params.sourceUrl);
-  fd.append("annotations", JSON.stringify(params.annotations));
-  if (params.annotatedBy) fd.append("annotatedBy", params.annotatedBy);
-  fd.append("annotated", dataUrlToBlob(params.dataUrl), "annotated.png");
-
+  // Server bakes the composite PNG from the shape JSON (see
+  // server/photoAnnotationRenderer.ts). The client only sends data.
   const res = await fetch("/api/photo-annotations", {
     method: "POST",
-    body: fd,
+    headers: { "Content-Type": "application/json" },
     credentials: "include",
+    body: JSON.stringify({
+      sourceUrl: params.sourceUrl,
+      annotations: params.annotations,
+      annotatedBy: params.annotatedBy,
+    }),
   });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
