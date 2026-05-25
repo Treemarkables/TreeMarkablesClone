@@ -7398,19 +7398,19 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
 STRUCTURE
-- For multiple work items: open with a single short lead-in like "We'll:" on its own line, then list the items as bullets. Do NOT repeat "we'll" on each bullet — the lead-in covers it. Each bullet should be a concise imperative-style phrase: "Remove all four gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
-- For a single work item: write it as one short sentence in first person plural ("We'll prune the oak…"), no bullets.
+- For multiple work items: list them as bullets directly. NO lead-in, header, or intro line (no "We'll:", "Scope of work:", "The job involves:", etc.) — just the bullets. Each bullet is a concise imperative-style phrase: "Remove all four Gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
+- For a single work item: write it as one short statement, no bullets. First person plural is fine here ("We'll prune the Oak and remove the deadwood.").
 - Group related work items together (all pruning, then all removals, then cleanup).
 - No preamble, no sign-off — just the description content.
 
 LANGUAGE
 - Plain English, suitable for a homeowner to read.
-- First person plural ("we'll…") — never "Arborist will…" or "I will…".
 - Strip filler ("um", "ah", "you know"), asides, and speech directed at coworkers rather than the customer.
 
 FIDELITY
-- Keep tree/species terms verbatim (manuka, kauri, gleditsia, macrocarpa, pohutukawa, etc.).
-- If a clearly-mistranscribed word is obviously a known NZ tree species (e.g. "gladitziers" → "gleditsias", "macrocarper" → "macrocarpa"), correct it to the standard spelling. Do NOT invent species the arborist didn't say.
+- **Tree species names must be Capitalized as proper nouns** — Gleditsia/Gleditsias, Manuka, Kauri, Pohutukawa, Macrocarpa, Oak, Pine, Eucalyptus, Gum, Willow, Magnolia, etc. Apply this even when the raw transcript has them lowercase.
+- Keep the arborist's species terms in spirit — same species, standard spelling.
+- If a clearly-mistranscribed word is obviously a known NZ tree species (e.g. "gladitziers" → "Gleditsias", "macrocarper" → "Macrocarpa"), correct it to the standard spelling. Do NOT invent species the arborist didn't say.
 - Common arborist terminology fix-ups are fine: "firewood rings" → "firewood lengths".
 - Do not invent measurements, counts, or details not mentioned in the transcript.
 - Do not include pricing unless the arborist explicitly stated a number.
