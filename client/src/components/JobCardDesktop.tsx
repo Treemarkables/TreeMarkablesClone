@@ -591,8 +591,14 @@ export function JobCardDesktop({
             {/* Job Videos sits above the diary feed — same vertical order as
                 the legacy GlobalJobCard layout. Collapsed by default; expand
                 to upload a walkthrough and (post-upload) opt into the AI
-                quote-description flow. */}
-            <div className="p-3 flex-shrink-0">
+                quote-description flow.
+
+                Cap to ~half the right-column height with internal scroll —
+                otherwise an expanded panel (video player + list of videos
+                + retry buttons) pushes past the parent's overflow-hidden
+                boundary, hiding content with no way to scroll. Collapsed
+                state still uses only its natural ~40px height. */}
+            <div className="p-3 flex-shrink-0 max-h-[50vh] overflow-y-auto">
               <JobVideos jobId={jobId} />
             </div>
             <JobDiarySection
