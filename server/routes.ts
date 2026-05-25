@@ -7300,6 +7300,14 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   // infra in the app yet. Phase 2 may move this to a background job.
   app.post('/api/videos/:id/transcribe', async (req: Request, res: Response) => {
     const videoId = req.params.id;
+    // ?force=1 (or { force: true } in the body) bypasses the cached-result
+    // fast-path below, so the user can iterate on a generated description
+    // by re-running the pipeline (e.g. if Whisper misheard a species or
+    // GPT's structure needs another pass after a prompt tweak).
+    const force =
+      req.query.force === '1' ||
+      req.query.force === 'true' ||
+      req.body?.force === true;
     let videoTmpPath: string | null = null;
     let audioTmpPath: string | null = null;
 
@@ -7311,7 +7319,8 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
       // Idempotent fast-path: if we've already transcribed this video, return the
       // cached result instead of re-billing OpenAI on every retry/refresh.
-      if (video.transcriptStatus === 'ready' && video.generatedDescription) {
+      // Skipped when ?force=1.
+      if (!force && video.transcriptStatus === 'ready' && video.generatedDescription) {
         return res.json({
           success: true,
           data: {
@@ -7348,12 +7357,25 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       audioTmpPath = path.join(os.tmpdir(), `tm-audio-${randomUUID()}.mp3`);
       await extractAudio(videoTmpPath, audioTmpPath);
 
-      // Step 3: Whisper transcription. Mirrors the speech-to-quote pattern at
-      // /api/mobile/speech-to-quote — same model, same response_format.
+      // Step 3: Whisper transcription. The `prompt` parameter biases the
+      // model toward domain-specific terms (Whisper accepts up to 224 tokens
+      // here as a style/vocabulary hint). Seeding it with NZ tree species
+      // + common arborist operations stops it from inventing words like
+      // "gladitziers" when the arborist said "gleditsias".
+      const WHISPER_BIAS_PROMPT = [
+        'New Zealand tree services walkthrough.',
+        'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
+        'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
+        'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
+        'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
+        'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
+        'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
+      ].join(' ');
       const rawTranscription = await openai.audio.transcriptions.create({
         file: fs.createReadStream(audioTmpPath),
         model: 'whisper-1',
         language: 'en',
+        prompt: WHISPER_BIAS_PROMPT,
         response_format: 'text',
       });
       const rawTranscript = typeof rawTranscription === 'string'
@@ -7371,20 +7393,27 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         });
       }
 
-      // Step 2: clean the transcript into a quote-ready job description. GPT-5
-      // doesn't accept temperature; rely on the model's defaults.
+      // Step 4: clean the transcript into a quote-ready job description.
+      // GPT-5 doesn't accept temperature; rely on the model's defaults.
       const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
 
-Requirements:
-- Plain English, suitable for a homeowner to read
-- Group related work items together (e.g. all pruning, then all removals)
-- Use bullet points if there are multiple distinct work items; otherwise short paragraphs
-- Strip filler words ("um", "ah", "you know"), asides, and any speech directed at someone other than the customer
-- Keep the arborist's tree/species terms verbatim (e.g. "manuka", "kauri", "macrocarpa")
-- Write in first person plural ("we'll prune…") — never "Arborist will…" or "I will…"
-- Do not invent details, measurements, or species not mentioned in the transcript
-- Do not include pricing unless the arborist explicitly stated a number
-- No preamble, no sign-off — just the description content
+STRUCTURE
+- For multiple work items: open with a single short lead-in like "We'll:" on its own line, then list the items as bullets. Do NOT repeat "we'll" on each bullet — the lead-in covers it. Each bullet should be a concise imperative-style phrase: "Remove all four gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
+- For a single work item: write it as one short sentence in first person plural ("We'll prune the oak…"), no bullets.
+- Group related work items together (all pruning, then all removals, then cleanup).
+- No preamble, no sign-off — just the description content.
+
+LANGUAGE
+- Plain English, suitable for a homeowner to read.
+- First person plural ("we'll…") — never "Arborist will…" or "I will…".
+- Strip filler ("um", "ah", "you know"), asides, and speech directed at coworkers rather than the customer.
+
+FIDELITY
+- Keep tree/species terms verbatim (manuka, kauri, gleditsia, macrocarpa, pohutukawa, etc.).
+- If a clearly-mistranscribed word is obviously a known NZ tree species (e.g. "gladitziers" → "gleditsias", "macrocarper" → "macrocarpa"), correct it to the standard spelling. Do NOT invent species the arborist didn't say.
+- Common arborist terminology fix-ups are fine: "firewood rings" → "firewood lengths".
+- Do not invent measurements, counts, or details not mentioned in the transcript.
+- Do not include pricing unless the arborist explicitly stated a number.
 
 Transcript:
 """
