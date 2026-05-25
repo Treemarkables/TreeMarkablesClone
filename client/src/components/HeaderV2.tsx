@@ -61,11 +61,21 @@ export default function HeaderV2() {
 
   return (
     <header
-      // translate3d + will-change forces the header onto its own GPU layer.
-      // Without this iOS Safari occasionally loses the `position: fixed`
-      // pinning on scroll-down (header appears to scroll away with the page).
-      style={{ transform: "translate3d(0,0,0)", willChange: "transform" }}
-      className={`fixed top-0 inset-x-0 z-50 transition-[background-color,backdrop-filter,box-shadow,border-color] duration-300 ${
+      // iOS Safari kitchen-sink for `position: fixed` losing its pin on
+      // scroll-down. Same incantation as the older Header.tsx (which pins
+      // correctly on the other marketing pages — Mulch / Contact / Blog):
+      //   - duplicate `position: fixed` inline so it wins specificity
+      //   - WebkitTransform: translateZ(0) promotes to its own compositor layer
+      //   - backfaceVisibility: hidden forces hardware compositing
+      //   - z-[100] keeps it above anything else on the page
+      style={{
+        position: "fixed",
+        WebkitTransform: "translateZ(0)",
+        transform: "translateZ(0)",
+        backfaceVisibility: "hidden",
+        WebkitBackfaceVisibility: "hidden",
+      }}
+      className={`fixed top-0 left-0 right-0 z-[100] transition-[background-color,backdrop-filter,box-shadow,border-color] duration-300 ${
         scrolled
           ? "bg-ink/90 backdrop-blur shadow-lg border-b border-white/10"
           : "bg-gradient-to-b from-ink/60 to-transparent"
