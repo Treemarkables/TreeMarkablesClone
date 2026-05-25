@@ -347,7 +347,7 @@ export function JobCardMobile({
       </div>
 
       {/* ── Tab strip ── */}
-      <div className="flex border-b border-slate-200 px-4 gap-5 flex-shrink-0 overflow-x-auto" data-testid="job-card-mobile-tabs">
+      <div className="flex border-b border-slate-200 px-4 gap-5 flex-shrink-0 overflow-x-auto overflow-y-hidden" data-testid="job-card-mobile-tabs">
         {TABS.filter((t) => {
           // Back Costing is only meaningful once work has happened — hide
           // it on lead/quote so the tab strip stays focused on the job's
