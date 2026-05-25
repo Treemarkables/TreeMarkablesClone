@@ -17,7 +17,6 @@ import {
   Text,
   Image as KonvaImage,
 } from "react-konva";
-import useImage from "use-image";
 import type Konva from "konva";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -87,7 +86,53 @@ export default function PhotoAnnotator({
   initialAnnotations,
   onSave,
 }: PhotoAnnotatorProps) {
-  const [image] = useImage(src, "anonymous");
+  // Load the image via fetch → Blob → object URL instead of useImage with
+  // crossOrigin="anonymous". Two reasons:
+  //   1. iOS Safari refuses to load same-origin images that declare a CORS
+  //      attribute unless the server also sends matching CORS headers, and
+  //      our /objects/photos/:filename route doesn't. Without this workaround
+  //      the canvas stays empty on iPhone (the bug that prompted this fix).
+  //   2. Object URLs are always same-origin, so the Konva canvas is never
+  //      tainted — stage.toDataURL() on save still works for the export.
+  const [image, setImage] = useState<HTMLImageElement | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!src) {
+      setImage(null);
+      setImageError(null);
+      return;
+    }
+    let cancelled = false;
+    let objUrl: string | null = null;
+    setImageError(null);
+    fetch(src, { credentials: "include" })
+      .then((r) => {
+        if (!r.ok) throw new Error(`Image fetch failed: ${r.status}`);
+        return r.blob();
+      })
+      .then((blob) => {
+        if (cancelled) return;
+        objUrl = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          if (!cancelled) setImage(img);
+        };
+        img.onerror = () => {
+          if (!cancelled) setImageError("Image decode failed");
+        };
+        img.src = objUrl;
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("PhotoAnnotator: image load failed", err);
+        setImageError(err instanceof Error ? err.message : String(err));
+      });
+    return () => {
+      cancelled = true;
+      if (objUrl) URL.revokeObjectURL(objUrl);
+    };
+  }, [src]);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<Konva.Stage>(null);
 
@@ -403,8 +448,11 @@ export default function PhotoAnnotator({
         className="max-w-none w-screen h-[100dvh] p-0 gap-0 border-0 rounded-none sm:rounded-none flex flex-col bg-black translate-x-0 translate-y-0 left-0 top-0"
         data-testid="modal-photo-annotator"
       >
-        {/* Top bar */}
-        <div className="flex items-center justify-between p-3 bg-neutral-900 border-b border-neutral-800 flex-shrink-0">
+        {/* Top bar — pt accounts for the iPhone status bar / notch */}
+        <div
+          className="flex items-center justify-between px-3 pb-3 bg-neutral-900 border-b border-neutral-800 flex-shrink-0"
+          style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+        >
           <Button
             variant="ghost"
             size="sm"
@@ -436,6 +484,18 @@ export default function PhotoAnnotator({
           ref={containerRef}
           className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
         >
+          {/* Surface load failures instead of leaving the canvas mysteriously
+              blank — saves a lot of "what's wrong?" guessing. */}
+          {imageError && (
+            <div className="absolute inset-0 flex items-center justify-center text-white text-sm px-6 text-center">
+              Couldn't load photo: {imageError}
+            </div>
+          )}
+          {!image && !imageError && src && (
+            <div className="absolute inset-0 flex items-center justify-center">
+              <Loader2 className="w-8 h-8 text-white animate-spin" />
+            </div>
+          )}
           {image && stageSize.w > 0 && (
             <Stage
               ref={stageRef}
@@ -493,8 +553,11 @@ export default function PhotoAnnotator({
           )}
         </div>
 
-        {/* Bottom toolbar */}
-        <div className="bg-neutral-900 border-t border-neutral-800 flex-shrink-0 px-2 py-2 flex flex-wrap items-center gap-1.5 sm:gap-2 justify-center">
+        {/* Bottom toolbar — pb accounts for the iPhone home indicator */}
+        <div
+          className="bg-neutral-900 border-t border-neutral-800 flex-shrink-0 px-2 pt-2 flex flex-wrap items-center gap-1.5 sm:gap-2 justify-center"
+          style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
+        >
           <ToolBtn
             icon={<ArrowUpRight className="w-5 h-5" />}
             active={tool === "arrow"}
