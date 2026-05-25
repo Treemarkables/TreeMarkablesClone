@@ -4216,8 +4216,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const activeFollowUps = enrichedProposals.filter(p => {
         if (!p.job) return true; // Keep if no job linked
         const jobStatus = p.job.status?.toLowerCase();
-        // Remove if job is scheduled, work order, unsuccessful, completed, cancelled, or archived
-        const completedStatuses = ['scheduled', 'work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
+        // Remove if job has moved past the quote stage (i.e. the proposal
+        // doesn't need following up anymore). 'scheduled' retired 2026-05.
+        const completedStatuses = ['work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
         return !completedStatuses.includes(jobStatus);
       });
 
@@ -7776,6 +7777,137 @@ Draft the reply now.`;
     }
   });
 
+  // Consolidated back-costing rollup: revenue, labor, all cost categories,
+  // completion state and gross margin in one payload. Reads only — every
+  // mutation goes through the existing /expenses and /expense-completion
+  // endpoints. Backs the Back Costing tab in the job card.
+  app.get('/api/jobs/:id/back-costing', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const num = (v: unknown): number => {
+        if (v === null || v === undefined || v === '') return 0;
+        const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const [staffEntries, invoices] = await Promise.all([
+        storage.getJobStaffTimeEntries(id).catch(() => [] as any[]),
+        storage.getInvoicesByJob(id).catch(() => [] as any[]),
+      ]);
+
+      const laborTotalHours = (staffEntries as any[]).reduce(
+        (sum, e: any) => sum + num(e.hours),
+        0,
+      );
+
+      // Replicates the labor-cost rollup used by POST /api/jobs/:id/staff-time:
+      // each entry's costRate, falling back to the employee's hourlyRate.
+      let laborCalculatedCost = 0;
+      for (const e of staffEntries as any[]) {
+        let costRate: number = num(e.costRate);
+        if (!costRate && e.employeeId) {
+          const employee = await storage.getEmployee(e.employeeId).catch(() => null as any);
+          costRate = num(employee?.hourlyRate);
+        }
+        laborCalculatedCost += num(e.hours) * costRate;
+      }
+
+      // actualLaborCosts is auto-synced from staff time on every entry change,
+      // but owners can override via PUT /expenses. Trust the stored value;
+      // fall back to the calculated cost when nothing has been stored yet.
+      const storedLaborCost = num(job.actualLaborCosts);
+      const laborCost = storedLaborCost > 0 ? storedLaborCost : laborCalculatedCost;
+
+      const costs = {
+        actualLaborCosts: laborCost,
+        actualMaterialsCosts: num(job.actualMaterialsCosts),
+        equipmentCosts: num(job.equipmentCosts),
+        subcontractorCosts: num(job.subcontractorCosts),
+        permitCosts: num(job.permitCosts),
+        travelCosts: num(job.travelCosts),
+        disposalCosts: num(job.disposalCosts),
+        miscExpenses: num(job.miscExpenses),
+      };
+      const costsTotal =
+        costs.actualLaborCosts +
+        costs.actualMaterialsCosts +
+        costs.equipmentCosts +
+        costs.subcontractorCosts +
+        costs.permitCosts +
+        costs.travelCosts +
+        costs.disposalCosts +
+        costs.miscExpenses;
+
+      const primaryInvoice = (invoices as any[])[0];
+      const invoiceTotal = primaryInvoice ? num(primaryInvoice.totalAmount) : null;
+      const quoteTotal = num(job.totalAmount);
+      const revenueSource: 'invoice' | 'quote' | 'none' =
+        invoiceTotal !== null && invoiceTotal > 0
+          ? 'invoice'
+          : quoteTotal > 0
+            ? 'quote'
+            : 'none';
+      const revenueAmount =
+        revenueSource === 'invoice' ? (invoiceTotal as number) : quoteTotal;
+
+      const grossProfit = revenueAmount - costsTotal;
+      const grossMarginPercent =
+        revenueAmount > 0 ? (grossProfit / revenueAmount) * 100 : null;
+
+      res.json({
+        success: true,
+        data: {
+          job: {
+            id: job.id,
+            jobNumber: (job as any).jobNumber ?? null,
+            status: job.status,
+            customerName: (job as any).customerName ?? null,
+          },
+          revenue: {
+            amount: revenueAmount,
+            invoiceTotal,
+            quoteTotal,
+            source: revenueSource,
+            invoiceId: primaryInvoice?.id ?? null,
+            xeroStatus: (job as any).xeroStatus ?? null,
+          },
+          labor: {
+            totalHours: laborTotalHours,
+            totalCost: laborCost,
+            calculatedCost: laborCalculatedCost,
+            hasOverride: storedLaborCost > 0 && Math.abs(storedLaborCost - laborCalculatedCost) > 0.01,
+            entryCount: (staffEntries as any[]).length,
+          },
+          costs: {
+            ...costs,
+            total: costsTotal,
+          },
+          completion: {
+            labor: !!job.laborCostsComplete,
+            materials: !!job.materialsCostsComplete,
+            equipment: !!job.equipmentCostsComplete,
+            subcontractor: !!job.subcontractorCostsComplete,
+            other: !!job.otherExpensesComplete,
+            allComplete: !!job.allExpensesComplete,
+            invoiceBlocked: job.invoiceBlocked !== false,
+          },
+          margin: {
+            grossProfit,
+            grossMarginPercent,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Error building back-costing rollup:', error);
+      res.status(500).json({ success: false, message: 'Error building back-costing rollup' });
+    }
+  });
+
   // Convert job to invoice
   app.post('/api/jobs/:id/convert-to-invoice', async (req: Request, res: Response) => {
     try {
@@ -9606,7 +9738,7 @@ Draft the reply now.`;
           const isConfirmation = !isReschedule && confirmKeywords.test(Body);
           if (
             isConfirmation &&
-            (recentJob.status === 'scheduled' || recentJob.status === 'work_order') &&
+            recentJob.status === 'work_order' &&
             !recentJob.customerConfirmed
           ) {
             try {
@@ -12577,7 +12709,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
       }
 
-      const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+      // 'scheduled' retired 2026-05 — its jobs migrated to 'work_order'.
+      const acceptedStatuses = ['completed', 'invoiced', 'work_order'];
       const rejectedStatuses = ['unsuccessful'];
       const pendingStatuses = ['quote'];
 
@@ -15250,16 +15383,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity.
-  // Status revert: only flip 'scheduled' back to 'work_order'. A 'quote' job
-  // booked in for a site visit keeps its 'quote' status when unscheduled
-  // (the booking was a quoting visit, not a work-crew assignment).
+  // Status is left alone: bookings became pure calendar actions in 2026-05,
+  // so unscheduling no longer needs to revert a status transition.
   app.post('/api/jobs/:jobId/unschedule', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       await storage.deleteJobStaffAssignmentsByJob(jobId);
       await storage.deleteScheduleEventsByJob(jobId);
-      const existing = await storage.getJob(jobId);
-      const nextStatus = existing?.status === 'scheduled' ? 'work_order' : existing?.status;
       const job = await storage.updateJob(jobId, {
         scheduledDate: null,
         scheduledEndDate: null,
@@ -15267,7 +15397,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         scheduledEndTime: null,
         assignedTo: [],
         assignedTeam: [],
-        ...(nextStatus ? { status: nextStatus } : {}),
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });
@@ -18892,7 +19021,7 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(confirmedJobNumber);
           }
           if (targetJob && !targetJob.customerConfirmed &&
-              (targetJob.status === 'scheduled' || targetJob.status === 'work_order')) {
+              targetJob.status === 'work_order') {
             await storage.updateJob(targetJob.id, {
               customerConfirmed: true,
               customerConfirmedAt: new Date(),
@@ -20001,17 +20130,19 @@ Transcription: ${transcriptText}`;
     try {
       // Get active jobs (work_order, scheduled, in_progress)
       const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
-      const activeJobs = allJobs.filter(job => 
-        ['work_order', 'scheduled', 'in_progress'].includes(job.status)
-      );
-      
+      // Active = work_order. 'scheduled' was retired as a status in 2026-05;
+      // the conceptual bucket is now "work_order with a scheduledDate" vs
+      // "work_order without one". Both still count as active.
+      const activeJobs = allJobs.filter(job => job.status === 'work_order');
+
       // Get employees for crew count calculation
       const employees = await storage.getAllEmployees();
-      
-      // Calculate summary stats
-      const workOrderJobs = activeJobs.filter(j => j.status === 'work_order');
-      const scheduledJobs = activeJobs.filter(j => j.status === 'scheduled');
-      const inProgressJobs = activeJobs.filter(j => j.status === 'in_progress');
+
+      // Calculate summary stats. workOrder = unscheduled work orders ready
+      // to book in. scheduled = work orders that have a date set.
+      const workOrderJobs = activeJobs.filter(j => !j.scheduledDate);
+      const scheduledJobs = activeJobs.filter(j => !!j.scheduledDate);
+      const inProgressJobs: typeof activeJobs = [];
       
       const totalValue = activeJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
       const totalEstimatedHours = activeJobs.reduce((sum, job) => sum + parseFloat(job.estimatedManHours || '0'), 0);
@@ -20147,8 +20278,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // or already done. We exclude leads/quotes (never booked), cancelled/
       // unsuccessful (booking fell through), and archived (housekeeping) so the
       // total reflects work that actually was/is scheduled to happen.
+      // 'scheduled' retired 2026-05 — work_order with a scheduledDate is
+      // the new "booked" signal.
       const BOOKED_STATUSES = new Set([
-        'scheduled', 'work_order', 'in_progress', 'completed', 'invoiced'
+        'work_order', 'completed', 'invoiced'
       ]);
       const bookedJobs = allJobs.filter(job => {
         if (!job.scheduledDate) return false;
@@ -27888,7 +28021,9 @@ Return a valid JSON object only (no markdown) with this EXACT structure:
       const alreadyScheduledToday = allJobs.filter(j => {
         if (!j.scheduledDate) return false;
         const d = new Date(j.scheduledDate);
-        return d >= proposeDayStart && d <= proposeDayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+        // 'scheduled' status retired 2026-05 — any work_order with a date
+        // on this day occupies a slot.
+        return d >= proposeDayStart && d <= proposeDayEnd && j.status === 'work_order';
       }).map(j => ({
         jobNumber: j.jobNumber,
         title: j.title || 'existing job',
@@ -28016,7 +28151,9 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         if (proposedJobIds.has(j.id)) return false; // Skip jobs in this proposal
         if (!j.scheduledDate) return false;
         const d = new Date(j.scheduledDate);
-        return d >= dayStart && d <= dayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+        // 'scheduled' status retired 2026-05 — any work_order with a date
+        // on this day occupies a slot.
+        return d >= dayStart && d <= dayEnd && j.status === 'work_order';
       });
       for (const ej of existingDayJobs) {
         const existStart = ej.scheduledStartTime || '08:00';

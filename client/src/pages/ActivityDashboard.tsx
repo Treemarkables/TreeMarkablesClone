@@ -134,7 +134,8 @@ export default function ActivityDashboard() {
   };
 
   const statusLabels: Record<string, string> = {
-    scheduled: 'Scheduled',
+    // 'scheduled' retired 2026-05 — kept here for legacy activity rows still
+    // referencing the old status string.
     in_progress: 'In Progress',
     completed: 'Completed',
     work_order: 'Work Order',

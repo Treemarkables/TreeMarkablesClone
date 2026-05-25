@@ -274,6 +274,14 @@ const globalJobCardSchema = insertJobSchema
 
 type GlobalJobCardFormData = z.infer<typeof globalJobCardSchema>;
 
+type SidebarTab =
+  | "details"
+  | "billing"
+  | "backcosting"
+  | "checklist"
+  | "quoting"
+  | "diary";
+
 interface GlobalJobCardProps {
   isOpen: boolean;
   onClose: () => void;
@@ -296,7 +304,7 @@ interface GlobalJobCardProps {
   onJobCreated?: (job: any) => void;
   onJobUpdated?: (job: any) => void;
   renderInline?: boolean; // For split-screen panel rendering (desktop)
-  initialSidebarTab?: "details" | "billing" | "checklist"; // Deep-link from push notifications
+  initialSidebarTab?: SidebarTab; // Deep-link from push notifications
 }
 
 export function GlobalJobCard({
@@ -317,8 +325,8 @@ export function GlobalJobCard({
   );
   const [checklistCollapsed, setChecklistCollapsed] = useState(true);
   const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [activeTab, setActiveTab] = useState(initialSidebarTab ?? "details");
-  const [sidebarTab, setSidebarTab] = useState(initialSidebarTab ?? "details");
+  const [activeTab, setActiveTab] = useState<SidebarTab>(initialSidebarTab ?? "details");
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(initialSidebarTab ?? "details");
   const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);

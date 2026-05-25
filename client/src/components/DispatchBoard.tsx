@@ -177,6 +177,7 @@ interface JobAssignment {
   createdAt?: string; // Immutable job-creation timestamp — fallback for FIFO sorting when workOrderAt is NULL (legacy jobs)
   totalAmount?: string; // Job price for display on dispatch board (exc-GST normalised)
   subtotal?: string; // Exc-GST subtotal from job record (preferred price source)
+  scheduledDate?: string; // The job's scheduled start date from the API. Used by the "Scheduled" filter post-2026-05 ('scheduled' status retired — date presence is the new signal).
   scheduledEndDate?: string; // For multi-day jobs
   inQueue?: boolean; // Whether job is parked in the dispatch queue
   queueReason?: string | null; // Reason for being in queue
@@ -686,7 +687,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   const countUnconfirmed = (jobs: { status: string; customerConfirmed?: boolean }[]) =>
     jobs.filter(
-      (j) => (j.status === "scheduled" || j.status === "work_order") && !j.customerConfirmed,
+      // 'scheduled' status retired 2026-05 — every booked job is now a work_order.
+      (j) => j.status === "work_order" && !j.customerConfirmed,
     ).length;
 
   const STATUS_TAB_FILTERS = [
@@ -1168,6 +1170,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           lastActivityAt: apiJob.lastActivityAt,
           workOrderAt: apiJob.workOrderAt,
           createdAt: apiJob.createdAt,
+          scheduledDate: apiJob.scheduledDate || undefined,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
@@ -1258,6 +1261,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           lastActivityAt: apiJob.lastActivityAt,
           workOrderAt: apiJob.workOrderAt,
           createdAt: apiJob.createdAt,
+          scheduledDate: apiJob.scheduledDate || undefined,
           scheduledEndDate: apiJob.scheduledEndDate || undefined,
           inQueue: apiJob.inQueue || false,
           queueReason: apiJob.queueReason || null,
@@ -1625,11 +1629,14 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         if (jobFilter === "queue") return job.inQueue === true;
         if (job.inQueue) return false;
 
-        // When a specific tab is selected, scope to that tab
+        // When a specific tab is selected, scope to that tab.
+        // 'scheduled' status retired 2026-05 — the W/O and Scheduled tabs now
+        // partition work_orders by whether they have a scheduledDate set,
+        // so every work_order shows in exactly one of the two tabs.
         if (jobFilter === "lead") return job.status === "lead";
         if (jobFilter === "quote") return job.status === "quote";
-        if (jobFilter === "work_order") return job.status === "work_order";
-        if (jobFilter === "scheduled") return job.status === "scheduled";
+        if (jobFilter === "work_order") return job.status === "work_order" && !job.scheduledDate;
+        if (jobFilter === "scheduled") return job.status === "work_order" && !!job.scheduledDate;
 
         // 'all' tab, no search: only the three most actionable statuses
         return (
@@ -1651,17 +1658,16 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           jobFilter === "work_order" ||
           jobFilter === "all";
         if (!tabSupportsFilter) return true;
-        return (
-          (job.status === "scheduled" || job.status === "work_order") &&
-          !job.customerConfirmed
-        );
+        // 'scheduled' status retired 2026-05 — booked work is all work_order.
+        return job.status === "work_order" && !job.customerConfirmed;
       })
       .filter((job) => {
         // When searching or a specific status filter is active, skip the date window
         if (isSearching || jobFilter !== "all") return true;
 
-        // Always include jobs with 'scheduled' or 'work_order' status - these are active jobs that need dispatching
-        if (job.status === "scheduled" || job.status === "work_order") {
+        // Always include work_order jobs — these are active jobs that need
+        // dispatching. ('scheduled' status retired 2026-05.)
+        if (job.status === "work_order") {
           return true;
         }
 
@@ -2380,8 +2386,9 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     const activeStaff = staffMembers.filter(
       (staff) => staff.status === "available",
     ).length;
+    // 'scheduled' status retired 2026-05 — today's bookings are work_orders.
     const scheduledJobs = todaysJobs.filter(
-      (job) => job.status === "scheduled",
+      (job) => job.status === "work_order",
     ).length;
     const unconfirmedCount = countUnconfirmed(todaysJobs);
 
