@@ -142,10 +142,41 @@ export default function PhotoAnnotator({
   useEffect(() => {
     if (!image || !containerRef.current) return;
     const el = containerRef.current;
+    let raf: number | null = null;
+    let retries = 0;
+    const measure = () => {
+      // Prefer getBoundingClientRect — clientWidth/Height can transiently
+      // return 0 in iOS WKWebView during the first layout pass even after
+      // the element is rendered. getBoundingClientRect gives subpixel
+      // values that update one frame sooner.
+      const rect = el.getBoundingClientRect();
+      return { cw: rect.width || el.clientWidth, ch: rect.height || el.clientHeight };
+    };
     const update = () => {
-      const cw = el.clientWidth;
-      const ch = el.clientHeight;
-      if (cw === 0 || ch === 0) return;
+      let { cw, ch } = measure();
+      if (cw === 0 || ch === 0) {
+        // Layout hasn't settled. Retry on next frame — on iOS,
+        // ResizeObserver doesn't fire its initial callback if the box
+        // is 0×0 when observe() is called, so we can't rely on RO alone.
+        if (retries < 10) {
+          if (raf == null) {
+            retries++;
+            raf = requestAnimationFrame(() => {
+              raf = null;
+              update();
+            });
+          }
+          return;
+        }
+        // Retries exhausted (~166ms). Fall back to the viewport so the
+        // canvas renders something rather than a blank screen. The
+        // container's flex-1 should normally give us its true size, but
+        // a misbehaving WKWebView layout shouldn't strand the user.
+        if (cw === 0) cw = window.innerWidth;
+        if (ch === 0) ch = Math.max(200, window.innerHeight - 200);
+        if (cw === 0 || ch === 0) return;
+      }
+      retries = 0;
       const imgRatio = image.naturalWidth / image.naturalHeight;
       const conRatio = cw / ch;
       const w = conRatio > imgRatio ? ch * imgRatio : cw;
@@ -155,7 +186,16 @@ export default function PhotoAnnotator({
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    return () => ro.disconnect();
+    // Orientation / keyboard / dvh changes don't always trigger RO on iOS
+    // — listen to window resize as a belt-and-suspenders fallback.
+    window.addEventListener("resize", update);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+      window.removeEventListener("orientationchange", update);
+      if (raf != null) cancelAnimationFrame(raf);
+    };
   }, [image, open]);
 
   // Toolbar state
