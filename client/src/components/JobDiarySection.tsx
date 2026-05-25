@@ -77,6 +77,11 @@ import { PullToRefresh } from "@/components/PullToRefresh";
 import WelcomeVideoModal from "@/components/WelcomeVideoModal";
 import { BeforeAfterCaptureModal } from "@/components/BeforeAfterCaptureModal";
 import { PendingMessagesCard } from "@/components/PendingMessagesCard";
+import PhotoAnnotator, { type AnnotationShape } from "@/components/PhotoAnnotator";
+import {
+  savePhotoAnnotation,
+  fetchPhotoAnnotation,
+} from "@/lib/photoAnnotations";
 import { MdStickyNote2, MdEmail } from "react-icons/md";
 
 // ── Email-thread helpers ────────────────────────────────────────────────────
@@ -688,6 +693,16 @@ export function JobDiarySection({
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(
     null,
   );
+  // Annotation overlays keyed by the photo's source URL. Populated lazily as
+  // the user opens photos in the viewer. `annotatedUrl` carries a cache-bust
+  // query param after a save so the swapped-in image refreshes immediately.
+  const [annotationsByUrl, setAnnotationsByUrl] = useState<
+    Record<
+      string,
+      { annotatedUrl: string | null; shapes: AnnotationShape[] }
+    >
+  >({});
+  const [annotatorOpen, setAnnotatorOpen] = useState(false);
   const [diaryTab, setDiaryTab] = useState<"timeline" | "photos">("timeline");
   const quickNoteInputRef = React.useRef<HTMLTextAreaElement>(null);
   const [replyToEmail, setReplyToEmail] = useState<string>("");
@@ -1334,6 +1349,47 @@ export function JobDiarySection({
     });
     return photos;
   }, [diaryEntries]);
+
+  // Lazy-fetch any saved annotation for the currently-viewed photo. Result is
+  // cached in `annotationsByUrl` so we don't re-fetch as the user navigates
+  // back and forth.
+  React.useEffect(() => {
+    if (viewingPhotoIndex === null) return;
+    const url = allPhotos[viewingPhotoIndex];
+    if (!url || annotationsByUrl[url] !== undefined) return;
+    let cancelled = false;
+    fetchPhotoAnnotation(url)
+      .then((rec) => {
+        if (cancelled) return;
+        setAnnotationsByUrl((m) => ({
+          ...m,
+          [url]: rec
+            ? { annotatedUrl: rec.annotatedUrl, shapes: rec.annotations }
+            : { annotatedUrl: null, shapes: [] },
+        }));
+      })
+      .catch(() => {
+        // Network errors shouldn't break the viewer — just leave it
+        // un-annotated. Marking with an empty record prevents re-fetch loops.
+        if (cancelled) return;
+        setAnnotationsByUrl((m) => ({
+          ...m,
+          [url]: { annotatedUrl: null, shapes: [] },
+        }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [viewingPhotoIndex, allPhotos, annotationsByUrl]);
+
+  // Resolved URL/shapes for the currently-viewed photo
+  const currentSourceUrl =
+    viewingPhotoIndex !== null ? allPhotos[viewingPhotoIndex] ?? null : null;
+  const currentAnnotation = currentSourceUrl
+    ? annotationsByUrl[currentSourceUrl]
+    : undefined;
+  const currentDisplayUrl =
+    currentAnnotation?.annotatedUrl ?? currentSourceUrl ?? null;
 
   // Photo entries with metadata, used by the Photos tab grid so each tile
   // can show its timestamp and author and link back to the right gallery
@@ -3965,14 +4021,19 @@ export function JobDiarySection({
                   </Button>
                 )}
 
-                {/* Photo */}
+                {/* Photo — swap in annotated version if one exists for this URL */}
                 <img
-                  src={allPhotos[viewingPhotoIndex]}
+                  src={currentDisplayUrl ?? allPhotos[viewingPhotoIndex]}
                   alt={`Job photo ${viewingPhotoIndex + 1}`}
                   className="max-w-full max-h-full object-contain rounded-lg select-none"
                   data-testid="img-photo-viewer"
                   draggable="false"
                 />
+                {currentAnnotation?.annotatedUrl && (
+                  <div className="absolute top-3 left-3 bg-black/70 text-white text-xs px-2 py-1 rounded">
+                    Annotated
+                  </div>
+                )}
 
                 {/* Next Button */}
                 {allPhotos.length > 1 &&
@@ -3994,6 +4055,17 @@ export function JobDiarySection({
 
             <div className="p-4 border-t flex-shrink-0 flex gap-2">
               <Button
+                variant="outline"
+                onClick={() => {
+                  if (currentSourceUrl) setAnnotatorOpen(true);
+                }}
+                disabled={!currentSourceUrl}
+                data-testid="button-annotate-photo"
+              >
+                <Edit className="w-4 h-4 mr-2" />
+                Annotate
+              </Button>
+              <Button
                 className="flex-1"
                 onClick={async () => {
                   if (
@@ -4002,7 +4074,9 @@ export function JobDiarySection({
                   ) {
                     return;
                   }
-                  const url = allPhotos[viewingPhotoIndex];
+                  // Download the annotated version when one exists, so the
+                  // user gets what they see in the viewer.
+                  const url = currentDisplayUrl ?? allPhotos[viewingPhotoIndex];
                   const filename = `job-photo-${viewingPhotoIndex + 1}-${Date.now()}.jpg`;
                   try {
                     const response = await fetch(url, { credentials: "include" });
@@ -4065,6 +4139,49 @@ export function JobDiarySection({
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Photo Annotator — CompanyCam-style markup overlay. Opens from the
+            Annotate button in the photo viewer modal above. */}
+        <PhotoAnnotator
+          open={annotatorOpen}
+          onClose={() => setAnnotatorOpen(false)}
+          // Always annotate against the original photo (never the already-
+          // baked annotatedUrl), so the editor starts with a clean canvas
+          // and the shapes can be re-edited in place.
+          src={currentSourceUrl ?? ""}
+          initialAnnotations={currentAnnotation?.shapes ?? null}
+          onSave={async ({ annotations, dataUrl }) => {
+            if (!currentSourceUrl) return;
+            try {
+              const rec = await savePhotoAnnotation({
+                sourceUrl: currentSourceUrl,
+                annotations,
+                dataUrl,
+                annotatedBy:
+                  currentUser?.firstName && currentUser?.lastName
+                    ? `${currentUser.firstName} ${currentUser.lastName}`
+                    : currentUser?.firstName ?? undefined,
+              });
+              // Cache-bust so the swapped <img> picks up the new bytes
+              // even though the URL itself is stable.
+              setAnnotationsByUrl((m) => ({
+                ...m,
+                [currentSourceUrl]: {
+                  annotatedUrl: rec.annotatedUrl
+                    ? `${rec.annotatedUrl}?t=${Date.now()}`
+                    : null,
+                  shapes: rec.annotations,
+                },
+              }));
+            } catch (err) {
+              toast({
+                title: "Couldn't save annotations",
+                description: err instanceof Error ? err.message : String(err),
+                variant: "destructive",
+              });
+            }
+          }}
+        />
 
         {/* Calendar Booking Dialog */}
         <Dialog

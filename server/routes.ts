@@ -14161,7 +14161,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     try {
       const { photoId } = req.params;
       const updates = updatePhotoSchema.parse(req.body);
-      
+
       const photo = await storage.updatePhoto(photoId, updates);
       res.json({ success: true, photo });
     } catch (error) {
@@ -14169,6 +14169,166 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       res.status(500).json({
         success: false,
         message: error instanceof Error ? error.message : 'Error updating photo',
+      });
+    }
+  });
+
+  // ── Photo annotations (CompanyCam-style markup) ─────────────────────────
+  // Keyed by the served photo URL, not photos.id — most photos in this app
+  // live as URL strings on jobs.beforePhotos / jobDiaryEntries.photos[] /
+  // proposal blocks, NOT as rows in the `photos` table. URL-keyed lookup
+  // lets annotation work universally regardless of upstream data model.
+
+  // Save (upsert) annotations for a photo identified by its served URL.
+  //
+  // Multipart fields:
+  //   - file:  annotated   (PNG of image+markup, baked client-side)
+  //   - text:  sourceUrl   (the photo's served URL, e.g. /objects/photos/foo.jpg)
+  //   - text:  annotations (Konva shape array as JSON string)
+  //   - text:  annotatedBy (display name; optional, falls back to session user)
+  app.post(
+    '/api/photo-annotations',
+    imageUpload.single('annotated'),
+    async (req: Request, res: Response) => {
+      try {
+        if (!req.file) {
+          return res.status(400).json({ success: false, message: 'Missing annotated image file' });
+        }
+        const sourceUrl = typeof req.body.sourceUrl === 'string' ? req.body.sourceUrl.trim() : '';
+        if (!sourceUrl) {
+          return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
+        }
+
+        let annotations: unknown;
+        try {
+          annotations = JSON.parse(req.body.annotations ?? '[]');
+        } catch {
+          return res.status(400).json({ success: false, message: 'Invalid annotations JSON' });
+        }
+
+        // Write the baked PNG to GCS at a deterministic filename derived from
+        // the source URL — keeps the upsert idempotent (re-saving overwrites
+        // in place, no orphaned files accumulate).
+        const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
+        if (!privateDir) throw new Error('PRIVATE_OBJECT_DIR not set');
+        const pathParts = privateDir.startsWith('/')
+          ? privateDir.split('/')
+          : `/${privateDir}`.split('/');
+        const bucketName = pathParts[1];
+        const objectPrefix = pathParts.slice(2).join('/');
+
+        const sourceHash = createHash('sha256').update(sourceUrl).digest('hex').slice(0, 16);
+        const annotatedFilename = `annotated_${sourceHash}.png`;
+        const objectName = `${objectPrefix}/photos/${annotatedFilename}`;
+        const servedUrl = `/objects/photos/${annotatedFilename}`;
+
+        await objectStorageClient
+          .bucket(bucketName)
+          .file(objectName)
+          .save(req.file.buffer, { metadata: { contentType: 'image/png' } });
+
+        const annotatedBy =
+          (typeof req.body.annotatedBy === 'string' && req.body.annotatedBy.trim()) ||
+          (req as any).user?.fullName ||
+          (req as any).user?.username ||
+          'Unknown';
+
+        // Upsert by sourceUrl — second-and-later saves update in place.
+        const [row] = await db
+          .insert(schema.photoAnnotations)
+          .values({
+            sourceUrl,
+            annotations: annotations as any,
+            annotatedUrl: servedUrl,
+            annotatedBy,
+          })
+          .onConflictDoUpdate({
+            target: schema.photoAnnotations.sourceUrl,
+            set: {
+              annotations: annotations as any,
+              annotatedUrl: servedUrl,
+              annotatedBy,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+
+        console.log(`✅ Annotated ${sourceUrl} → ${servedUrl} (by ${annotatedBy})`);
+        return res.json({ success: true, annotation: row });
+      } catch (error) {
+        console.error('Error saving photo annotations:', error);
+        return res.status(500).json({
+          success: false,
+          message: error instanceof Error ? error.message : 'Error saving annotations',
+        });
+      }
+    },
+  );
+
+  // Look up an annotation by source URL (used by viewers to swap in the
+  // annotated version + populate the editor on re-open).
+  app.get('/api/photo-annotations', async (req: Request, res: Response) => {
+    try {
+      const sourceUrl = typeof req.query.sourceUrl === 'string' ? req.query.sourceUrl : '';
+      if (!sourceUrl) {
+        return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
+      }
+      const [row] = await db
+        .select()
+        .from(schema.photoAnnotations)
+        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl))
+        .limit(1);
+      return res.json({ success: true, annotation: row ?? null });
+    } catch (error) {
+      console.error('Error fetching photo annotation:', error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error fetching annotation',
+      });
+    }
+  });
+
+  // Clear an annotation: revert to showing the original. Drops the baked PNG
+  // from GCS too so we don't keep paying for orphaned bytes.
+  app.delete('/api/photo-annotations', async (req: Request, res: Response) => {
+    try {
+      const sourceUrl =
+        (typeof req.body?.sourceUrl === 'string' && req.body.sourceUrl) ||
+        (typeof req.query.sourceUrl === 'string' && req.query.sourceUrl) ||
+        '';
+      if (!sourceUrl) {
+        return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
+      }
+
+      const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
+      if (privateDir) {
+        const pathParts = privateDir.startsWith('/')
+          ? privateDir.split('/')
+          : `/${privateDir}`.split('/');
+        const bucketName = pathParts[1];
+        const objectPrefix = pathParts.slice(2).join('/');
+        const sourceHash = createHash('sha256').update(sourceUrl).digest('hex').slice(0, 16);
+        const objectName = `${objectPrefix}/photos/annotated_${sourceHash}.png`;
+        try {
+          await objectStorageClient
+            .bucket(bucketName)
+            .file(objectName)
+            .delete({ ignoreNotFound: true });
+        } catch (gcsErr) {
+          console.warn(`Could not delete annotated PNG for ${sourceUrl}:`, gcsErr);
+        }
+      }
+
+      await db
+        .delete(schema.photoAnnotations)
+        .where(eq(schema.photoAnnotations.sourceUrl, sourceUrl));
+
+      return res.json({ success: true });
+    } catch (error) {
+      console.error('Error clearing photo annotations:', error);
+      return res.status(500).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Error clearing annotations',
       });
     }
   });
