@@ -71,11 +71,12 @@ export interface PhotoAnnotatorProps {
    *  can export via toDataURL — same-origin GCS or public URLs work. */
   src: string;
   initialAnnotations?: AnnotationShape[] | null;
-  /** Called when the user taps Save. Receives the new shape JSON and a
-   *  full-resolution PNG data URL (image + annotations baked together). */
+  /** Called when the user taps Save. Receives the shape JSON; the server
+   *  bakes the composite PNG (see server/photoAnnotationRenderer). The
+   *  client no longer rasterizes anything — keeps us out of CORS /
+   *  tainted-canvas territory entirely. */
   onSave: (payload: {
     annotations: AnnotationShape[];
-    dataUrl: string;
   }) => Promise<void> | void;
 }
 
@@ -328,36 +329,17 @@ export default function PhotoAnnotator({
   const clearAll = () => setShapes([]);
 
   // --- save
+  // Server bakes the composite PNG from the shape JSON (see
+  // server/photoAnnotationRenderer). The client doesn't touch toDataURL
+  // anymore — no CORS, no tainted-canvas issues.
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const handleSave = async () => {
-    if (!stageRef.current || !image) return;
+    if (!image) return;
     setSaving(true);
     setSaveError(null);
     try {
-      // Render at the image's natural resolution. Because the stage matches
-      // the image's aspect, we can use a single uniform pixelRatio scale.
-      const pixelRatio = image.naturalWidth / stageSize.w;
-      let dataUrl: string;
-      try {
-        dataUrl = stageRef.current.toDataURL({
-          mimeType: "image/png",
-          pixelRatio,
-        });
-      } catch (err) {
-        // SecurityError: canvas tainted because the image was loaded
-        // without CORS. Until server-side baking lands, surface a clear
-        // message instead of a silent failure.
-        const msg =
-          err instanceof Error && err.name === "SecurityError"
-            ? "Save not available yet — server-side baking needed to export this photo. Annotations only saved in viewer this session."
-            : err instanceof Error
-              ? err.message
-              : String(err);
-        setSaveError(msg);
-        return;
-      }
-      await onSave({ annotations: shapes, dataUrl });
+      await onSave({ annotations: shapes });
       onClose();
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : String(err));
