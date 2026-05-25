@@ -71,6 +71,9 @@ interface CustomerShape {
   id?: string;
   name?: string | null;
   address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  mobile?: string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -581,13 +584,21 @@ function ContactsCard({
   });
 
   // Pick the right set of fields based on which tab is active.
+  // For "job" tab, fall back to the customer record when job-level overrides are
+  // empty — leads created from the website only ever stamp jobContactMobile/Phone
+  // onto the job row (see server/routes.ts inquiry conversion), so firstName/
+  // lastName/email live solely on the customer. Without this fallback the UI
+  // looks empty even though the data exists.
+  const custNameParts = (customer?.name ?? "").trim().split(/\s+/).filter(Boolean);
+  const custFirstName = custNameParts[0] ?? "";
+  const custLastName = custNameParts.slice(1).join(" ");
   const fields = tab === "job"
     ? {
-        firstName: job?.jobContactFirstName ?? "",
-        lastName: job?.jobContactLastName ?? "",
-        email: job?.jobContactEmail ?? "",
-        mobile: job?.jobContactMobile ?? "",
-        phone: job?.jobContactPhone ?? "",
+        firstName: job?.jobContactFirstName ?? custFirstName ?? "",
+        lastName: job?.jobContactLastName ?? custLastName ?? "",
+        email: job?.jobContactEmail ?? customer?.email ?? "",
+        mobile: job?.jobContactMobile ?? customer?.mobile ?? "",
+        phone: job?.jobContactPhone ?? customer?.phone ?? "",
       }
     : {
         firstName: job?.tenantContactFirstName ?? "",
@@ -610,6 +621,7 @@ function ContactsCard({
     tab,
     job?.jobContactFirstName, job?.jobContactLastName, job?.jobContactEmail, job?.jobContactMobile, job?.jobContactPhone,
     job?.tenantContactFirstName, job?.tenantContactLastName, job?.tenantContactEmail, job?.tenantContactMobile, job?.tenantContactPhone,
+    customer?.name, customer?.email, customer?.phone, customer?.mobile,
   ]);
 
   const commit = (k: "firstName" | "lastName" | "email" | "mobile" | "phone") => {
