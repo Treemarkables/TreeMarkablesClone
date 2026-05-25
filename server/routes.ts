@@ -120,6 +120,7 @@ import { renderBrandedEmail } from "./emailTemplates";
 import { getVonageCredentials } from "./services/vonageClient";
 import { manHoursService } from "./manHoursService";
 import { PhotoStorageService, objectStorageClient, composeBeforeAfter } from "./photoStorage";
+import { bakeAnnotations, type AnnotationShape } from "./photoAnnotationRenderer";
 import { videoStorage, createVideoUploadEngine } from "./videoStorage";
 import { googleCalendarService } from "./services/googleCalendarService";
 import * as notificationHelper from "./services/notificationHelper";
@@ -14442,34 +14443,48 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
 
   // Save (upsert) annotations for a photo identified by its served URL.
   //
-  // Multipart fields:
-  //   - file:  annotated   (PNG of image+markup, baked client-side)
-  //   - text:  sourceUrl   (the photo's served URL, e.g. /objects/photos/foo.jpg)
-  //   - text:  annotations (Konva shape array as JSON string)
-  //   - text:  annotatedBy (display name; optional, falls back to session user)
+  // JSON body:
+  //   { sourceUrl: string, annotations: AnnotationShape[], annotatedBy?: string }
+  //
+  // Server fetches the source image from GCS, composites the annotation
+  // shapes onto it via sharp (see photoAnnotationRenderer), and saves the
+  // baked PNG to GCS at a hash-derived filename — idempotent: re-saving
+  // overwrites in place.
+  //
+  // (Server-side baking replaces the original client-side toDataURL approach,
+  // which forced a CORS-clean image load that broke on iOS Safari.)
   app.post(
     '/api/photo-annotations',
-    imageUpload.single('annotated'),
     async (req: Request, res: Response) => {
       try {
-        if (!req.file) {
-          return res.status(400).json({ success: false, message: 'Missing annotated image file' });
-        }
-        const sourceUrl = typeof req.body.sourceUrl === 'string' ? req.body.sourceUrl.trim() : '';
+        const sourceUrl = typeof req.body?.sourceUrl === 'string' ? req.body.sourceUrl.trim() : '';
         if (!sourceUrl) {
           return res.status(400).json({ success: false, message: 'Missing sourceUrl' });
         }
-
-        let annotations: unknown;
-        try {
-          annotations = JSON.parse(req.body.annotations ?? '[]');
-        } catch {
-          return res.status(400).json({ success: false, message: 'Invalid annotations JSON' });
+        const annotations = req.body?.annotations;
+        if (!Array.isArray(annotations)) {
+          return res.status(400).json({ success: false, message: 'annotations must be an array' });
         }
 
+        // Fetch the source image bytes from GCS so we can composite over them.
+        const photoStorage = new PhotoStorageService();
+        const downloaded = await photoStorage.downloadPhotoBuffer(sourceUrl);
+        if (!downloaded || !downloaded.exists) {
+          return res.status(404).json({
+            success: false,
+            message: `Source photo not found in object storage: ${sourceUrl}`,
+          });
+        }
+
+        // Composite the annotations onto the source via sharp + SVG overlay.
+        const bakedBuffer = await bakeAnnotations(
+          downloaded.buffer,
+          annotations as AnnotationShape[],
+        );
+
         // Write the baked PNG to GCS at a deterministic filename derived from
-        // the source URL — keeps the upsert idempotent (re-saving overwrites
-        // in place, no orphaned files accumulate).
+        // the source URL — keeps the upsert idempotent and matches the path
+        // pattern served by the existing GET /objects/photos/:filename route.
         const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
         if (!privateDir) throw new Error('PRIVATE_OBJECT_DIR not set');
         const pathParts = privateDir.startsWith('/')
@@ -14486,10 +14501,10 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         await objectStorageClient
           .bucket(bucketName)
           .file(objectName)
-          .save(req.file.buffer, { metadata: { contentType: 'image/png' } });
+          .save(bakedBuffer, { metadata: { contentType: 'image/png' } });
 
         const annotatedBy =
-          (typeof req.body.annotatedBy === 'string' && req.body.annotatedBy.trim()) ||
+          (typeof req.body?.annotatedBy === 'string' && req.body.annotatedBy.trim()) ||
           (req as any).user?.fullName ||
           (req as any).user?.username ||
           'Unknown';
@@ -14514,7 +14529,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
           })
           .returning();
 
-        console.log(`✅ Annotated ${sourceUrl} → ${servedUrl} (by ${annotatedBy})`);
+        console.log(`✅ Baked annotations for ${sourceUrl} → ${servedUrl} (by ${annotatedBy})`);
         return res.json({ success: true, annotation: row });
       } catch (error) {
         console.error('Error saving photo annotations:', error);

@@ -71,11 +71,12 @@ export interface PhotoAnnotatorProps {
    *  can export via toDataURL — same-origin GCS or public URLs work. */
   src: string;
   initialAnnotations?: AnnotationShape[] | null;
-  /** Called when the user taps Save. Receives the new shape JSON and a
-   *  full-resolution PNG data URL (image + annotations baked together). */
+  /** Called when the user taps Save. Receives the shape JSON; the server
+   *  bakes the composite PNG (see server/photoAnnotationRenderer). The
+   *  client no longer rasterizes anything — keeps us out of CORS /
+   *  tainted-canvas territory entirely. */
   onSave: (payload: {
     annotations: AnnotationShape[];
-    dataUrl: string;
   }) => Promise<void> | void;
 }
 
@@ -94,6 +95,17 @@ export default function PhotoAnnotator({
   //      the canvas stays empty on iPhone (the bug that prompted this fix).
   //   2. Object URLs are always same-origin, so the Konva canvas is never
   //      tainted — stage.toDataURL() on save still works for the export.
+  // Load the image with the simplest possible path: a plain `new Image()`
+  // pointed at the same-origin URL. No fetch, no Blob, no crossOrigin
+  // attribute. Earlier attempts (useImage with crossOrigin="anonymous",
+  // then fetch → Blob → object URL) both failed silently on iOS Safari,
+  // leaving the canvas blank with no error to surface.
+  //
+  // Trade-off: the canvas is "tainted" (because we can't prove the image
+  // is CORS-clean), so stage.toDataURL() will throw on save. handleSave
+  // catches that SecurityError and shows a user-facing message. A proper
+  // fix (server-side baking via sharp, like composeBeforeAfter) is
+  // tracked as a follow-up — right now image display takes priority.
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   useEffect(() => {
@@ -103,33 +115,21 @@ export default function PhotoAnnotator({
       return;
     }
     let cancelled = false;
-    let objUrl: string | null = null;
+    setImage(null);
     setImageError(null);
-    fetch(src, { credentials: "include" })
-      .then((r) => {
-        if (!r.ok) throw new Error(`Image fetch failed: ${r.status}`);
-        return r.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objUrl = URL.createObjectURL(blob);
-        const img = new Image();
-        img.onload = () => {
-          if (!cancelled) setImage(img);
-        };
-        img.onerror = () => {
-          if (!cancelled) setImageError("Image decode failed");
-        };
-        img.src = objUrl;
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("PhotoAnnotator: image load failed", err);
-        setImageError(err instanceof Error ? err.message : String(err));
-      });
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) setImage(img);
+    };
+    img.onerror = () => {
+      if (!cancelled) {
+        console.error("PhotoAnnotator: image load failed for", src);
+        setImageError(`Couldn't load image (…${src.slice(-40)})`);
+      }
+    };
+    img.src = src;
     return () => {
       cancelled = true;
-      if (objUrl) URL.revokeObjectURL(objUrl);
     };
   }, [src]);
 
@@ -329,20 +329,20 @@ export default function PhotoAnnotator({
   const clearAll = () => setShapes([]);
 
   // --- save
+  // Server bakes the composite PNG from the shape JSON (see
+  // server/photoAnnotationRenderer). The client doesn't touch toDataURL
+  // anymore — no CORS, no tainted-canvas issues.
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const handleSave = async () => {
-    if (!stageRef.current || !image) return;
+    if (!image) return;
     setSaving(true);
+    setSaveError(null);
     try {
-      // Render at the image's natural resolution. Because the stage matches
-      // the image's aspect, we can use a single uniform pixelRatio scale.
-      const pixelRatio = image.naturalWidth / stageSize.w;
-      const dataUrl = stageRef.current.toDataURL({
-        mimeType: "image/png",
-        pixelRatio,
-      });
-      await onSave({ annotations: shapes, dataUrl });
+      await onSave({ annotations: shapes });
       onClose();
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : String(err));
     } finally {
       setSaving(false);
     }
@@ -484,6 +484,19 @@ export default function PhotoAnnotator({
           ref={containerRef}
           className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
         >
+          {/* Temporary diagnostic strip — leaves a breadcrumb when the
+              canvas appears blank so we can tell which state we're in
+              (no src? loaded but no stage? errored?). Remove once the
+              iOS image-load path is solid. */}
+          <div className="absolute top-2 left-2 right-2 z-10 text-[10px] text-white/60 font-mono bg-black/40 px-2 py-1 rounded pointer-events-none">
+            src: {src ? `…${src.slice(-30)}` : "(empty)"} · img:{" "}
+            {image
+              ? `${image.naturalWidth}×${image.naturalHeight}`
+              : imageError
+                ? "ERR"
+                : "loading"}{" "}
+            · stage: {Math.round(stageSize.w)}×{Math.round(stageSize.h)}
+          </div>
           {/* Surface load failures instead of leaving the canvas mysteriously
               blank — saves a lot of "what's wrong?" guessing. */}
           {imageError && (
@@ -491,9 +504,19 @@ export default function PhotoAnnotator({
               Couldn't load photo: {imageError}
             </div>
           )}
+          {!src && (
+            <div className="absolute inset-0 flex items-center justify-center text-white text-sm px-6 text-center">
+              No photo URL provided to the editor.
+            </div>
+          )}
           {!image && !imageError && src && (
             <div className="absolute inset-0 flex items-center justify-center">
               <Loader2 className="w-8 h-8 text-white animate-spin" />
+            </div>
+          )}
+          {saveError && (
+            <div className="absolute bottom-2 left-2 right-2 z-10 text-xs text-white bg-red-600/90 px-3 py-2 rounded">
+              {saveError}
             </div>
           )}
           {image && stageSize.w > 0 && (
