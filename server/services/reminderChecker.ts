@@ -135,7 +135,9 @@ async function checkUnstaffedTomorrowJobs(): Promise<void> {
   const dayAfterTomorrow = new Date(tomorrow);
   dayAfterTomorrow.setDate(dayAfterTomorrow.getDate() + 1);
 
-  const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'scheduled' });
+  // 'scheduled' status retired 2026-05 — tomorrow's bookings are
+  // work_orders with a scheduledDate inside tomorrow's window.
+  const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'work_order' });
 
   for (const job of jobs) {
     if (!job.scheduledDate) continue;

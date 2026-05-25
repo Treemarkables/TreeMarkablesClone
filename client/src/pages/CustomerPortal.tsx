@@ -424,8 +424,6 @@ export function CustomerPortal() {
         return "bg-green-500";
       case "in_progress":
         return "bg-blue-500";
-      case "scheduled":
-        return "bg-orange-500";
       case "cancelled":
         return "bg-red-500";
       default:

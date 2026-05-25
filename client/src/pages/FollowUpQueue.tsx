@@ -87,8 +87,6 @@ const getJobStatusColor = (status?: string) => {
       return "#3b82f6"; // blue-500
     case "work order":
       return "#3b82f6"; // blue-500
-    case "scheduled":
-      return "#3b82f6"; // blue-500
     case "quote":
       return "#f97316"; // orange-500
     case "lead":
@@ -105,8 +103,6 @@ const getStatusInitials = (status?: string) => {
       return "Q";
     case "lead":
       return "L";
-    case "scheduled":
-      return "S";
     case "work_order":
     case "work order":
       return "WO";

@@ -3214,12 +3214,13 @@ class DatabaseStorage implements IStorage {
     let filteredJobs = allJobs.filter(j => !j.archived);
     
     // Quote Acceptance based on JOB STATUS:
-    // - Accepted = jobs with status: completed, scheduled, in_progress, invoiced, work_order (customer said yes)
+    // - Accepted = jobs with status: completed, invoiced, work_order (customer said yes)
     // - Rejected = jobs with status: unsuccessful (customer said no)
     // - Pending = jobs with status: quote (waiting for response)
     // - ONLY include jobs that have a proposal sent (not draft)
-    
-    const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+    // ('scheduled' retired 2026-05 — those jobs now live as work_order.)
+
+    const acceptedStatuses = ['completed', 'invoiced', 'work_order'];
     const rejectedStatuses = ['unsuccessful'];
     const pendingStatuses = ['quote'];
     
@@ -3298,14 +3299,14 @@ class DatabaseStorage implements IStorage {
       });
     }
     
-    // Status definitions
-    const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+    // Status definitions ('scheduled' retired 2026-05).
+    const acceptedStatuses = ['completed', 'invoiced', 'work_order'];
     const rejectedStatuses = ['unsuccessful'];
-    
+
     // Filter jobs that have quote presentation method set
     // Include both 'lead' and 'quote' status — the presentation method is set during the quoting process
-    const jobsWithMethod = filteredJobs.filter(j => 
-      (j as any).quotePresentationMethod && 
+    const jobsWithMethod = filteredJobs.filter(j =>
+      (j as any).quotePresentationMethod &&
       j.status !== 'archived'
     );
     
@@ -3622,8 +3623,9 @@ class DatabaseStorage implements IStorage {
         const invoiceRevenue = jobInvoiceMap.get(job.id) || 0;
         const hasProposal = jobsWithProposals.has(job.id);
 
-        // Count as quoted if a proposal exists OR if status is quote/scheduled/in_progress/completed
-        if (hasProposal || ['quote', 'scheduled', 'in_progress', 'completed'].includes(job.status || '')) {
+        // Count as quoted if a proposal exists OR if status is quote/work_order/completed.
+        // ('scheduled' retired 2026-05.)
+        if (hasProposal || ['quote', 'work_order', 'completed'].includes(job.status || '')) {
           existing.quotedJobIds.add(job.id);
           const proposalAmount = jobProposalAmountMap.get(job.id) || 0;
           if (proposalAmount > 0) {
@@ -3809,8 +3811,8 @@ class DatabaseStorage implements IStorage {
         'unspecified': 'Not Specified'
       };
 
-      // Status definitions for conversion tracking
-      const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+      // Status definitions for conversion tracking ('scheduled' retired 2026-05).
+      const acceptedStatuses = ['completed', 'invoiced', 'work_order'];
       const rejectedStatuses = ['unsuccessful'];
       const pendingStatuses = ['quote', 'lead'];
 

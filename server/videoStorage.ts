@@ -7,6 +7,8 @@
 // single object-storage client for the process.
 
 import { randomUUID } from "crypto";
+import { createWriteStream } from "fs";
+import { pipeline } from "stream/promises";
 import type { Request, Response } from "express";
 import type { StorageEngine } from "multer";
 import { objectStorageClient } from "./photoStorage";
@@ -170,6 +172,24 @@ export class VideoStorageService {
       else res.destroy();
     });
     stream.pipe(res);
+  }
+
+  // Download the video object from GCS to a local file path. Used by the AI
+  // transcription endpoint, which needs an on-disk file to hand to the OpenAI
+  // SDK (Whisper takes a ReadStream). Returns the byte size written.
+  async downloadToFile(videoPath: string, destPath: string): Promise<number> {
+    const file = this.getFile(videoPath);
+    const [exists] = await file.exists();
+    if (!exists) {
+      throw new Error(`Video object not found: ${videoPath}`);
+    }
+    let bytes = 0;
+    const read = file.createReadStream();
+    read.on("data", (chunk: Buffer) => {
+      bytes += chunk.length;
+    });
+    await pipeline(read, createWriteStream(destPath));
+    return bytes;
   }
 
   // Delete the underlying object (best-effort; used when a video row is removed).

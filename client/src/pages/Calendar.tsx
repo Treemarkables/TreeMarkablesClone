@@ -219,11 +219,10 @@ export default function Calendar() {
   const goToNextMonth = () => setCurrentDate((prev) => addMonths(prev, 1));
   const goToToday = () => setCurrentDate(new Date());
 
-  // Get status color
+  // Get status color ('scheduled' retired 2026-05 — work_order covers both
+  // unscheduled and date-booked active jobs).
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "scheduled":
-        return "bg-blue-500";
       case "work_order":
         return "bg-purple-500";
       case "completed":
@@ -428,8 +427,7 @@ export default function Calendar() {
                         <div className="flex-1 space-y-0.5 overflow-hidden">
                           {dayAppointments.slice(0, 3).map((appointment) => {
                             const awaitingConfirm =
-                              (appointment.status === "scheduled" ||
-                                appointment.status === "work_order") &&
+                              appointment.status === "work_order" &&
                               !appointment.customerConfirmed;
                             return (
                               <div
@@ -526,8 +524,7 @@ export default function Calendar() {
                     <div className="space-y-3">
                       {selectedDateAppointments.map((appointment) => {
                         const awaitingConfirm =
-                          (appointment.status === "scheduled" ||
-                            appointment.status === "work_order") &&
+                          appointment.status === "work_order" &&
                           !appointment.customerConfirmed;
                         return (
                         <Card

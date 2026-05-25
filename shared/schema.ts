@@ -150,8 +150,11 @@ export type InsertLeadSubmission = Omit<LeadSubmission, 'id' | 'createdAt'>;
 // COMPREHENSIVE BUSINESS SYSTEM SCHEMAS
 // ========================================
 
-// Job Status Enum
-export const JobStatus = z.enum(['lead', 'quote', 'mulch', 'scheduled', 'work_order', 'completed', 'unsuccessful']);
+// Job Status Enum. Note: 'scheduled' was retired 2026-05 — scheduling is now
+// a calendar/date concept (a job has a scheduledDate or it doesn't) and no
+// longer a status value. Bookings never auto-transition status; the owner
+// drives status changes explicitly.
+export const JobStatus = z.enum(['lead', 'quote', 'mulch', 'work_order', 'completed', 'unsuccessful']);
 export type JobStatusType = z.infer<typeof JobStatus>;
 
 export const LeadSourceType = z.enum(['phone', 'website', 'referral', 'friend', 'saw_working', 'repeat', 'google', 'facebook', 'direct', 'advertisement', 'council', 'other']);
@@ -825,6 +828,14 @@ export const videos = pgTable("videos", {
   thumbnailUrl: text("thumbnail_url"), // optional poster frame
   processingStatus: text("processing_status").default("ready"), // 'uploading', 'ready', 'error'
   sequenceOrder: integer("sequence_order").default(0),
+  // AI-driven quote generation from on-site walkthrough videos. Set when the
+  // arborist opts in via the post-upload prompt; Whisper produces `transcript`,
+  // then GPT-5 cleans it into a customer-ready `generatedDescription` that the
+  // user can apply to jobs.description.
+  transcript: text("transcript"),
+  generatedDescription: text("generated_description"),
+  transcriptStatus: text("transcript_status").default("none"), // 'none' | 'processing' | 'ready' | 'error'
+  transcriptError: text("transcript_error"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({

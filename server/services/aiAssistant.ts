@@ -122,7 +122,9 @@ async function executeTool(name: string, args: Record<string, unknown>): Promise
         const days = (args.days as number) || 7;
         const cutoff = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
         const now = new Date();
-        const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'scheduled' });
+        // 'scheduled' status retired 2026-05 — upcoming jobs are work_orders
+        // with a future scheduledDate.
+        const { jobs } = await storage.getAllJobs({ limit: 999999, status: 'work_order' });
 
         const upcoming = jobs
           .filter(j => j.scheduledDate && new Date(j.scheduledDate) >= now && new Date(j.scheduledDate) <= cutoff)

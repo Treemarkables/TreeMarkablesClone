@@ -96,7 +96,17 @@ const upload = multer({
   }
 });
 import fs from "fs";
+import os from "os";
+import ffmpeg from "fluent-ffmpeg";
+import ffmpegStatic from "ffmpeg-static";
 import { format } from "date-fns";
+
+// Point fluent-ffmpeg at the bundled binary so we don't depend on a
+// system-installed ffmpeg on the deploy host. ffmpegStatic is a string path
+// at runtime; the type is `string | null` (null only on unsupported arches).
+if (ffmpegStatic) {
+  ffmpeg.setFfmpegPath(ffmpegStatic as unknown as string);
+}
 import { toZonedTime, fromZonedTime } from "date-fns-tz";
 import { formatNZTime } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
@@ -4216,8 +4226,9 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       const activeFollowUps = enrichedProposals.filter(p => {
         if (!p.job) return true; // Keep if no job linked
         const jobStatus = p.job.status?.toLowerCase();
-        // Remove if job is scheduled, work order, unsuccessful, completed, cancelled, or archived
-        const completedStatuses = ['scheduled', 'work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
+        // Remove if job has moved past the quote stage (i.e. the proposal
+        // doesn't need following up anymore). 'scheduled' retired 2026-05.
+        const completedStatuses = ['work_order', 'work order', 'unsuccessful', 'completed', 'cancelled', 'invoiced', 'archived'];
         return !completedStatuses.includes(jobStatus);
       });
 
@@ -7254,6 +7265,228 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   });
 
+  // Whisper's API caps inputs at 25MB. We never send the raw video — ffmpeg
+  // extracts audio-only mp3 first (16kHz mono 64kbps ≈ 0.5MB/min), so the
+  // file Whisper actually sees is comfortably under that cap for any
+  // realistic quote walkthrough length. The MAX_VIDEO_BYTES guard below is
+  // operational: it bounds the download + ffmpeg time per request so a
+  // dropped giant file can't pin the worker. ~500MB is roughly 8min of 1080p
+  // / 1min of 4K iPhone — well above typical quote videos.
+  const MAX_VIDEO_BYTES = 500 * 1024 * 1024;
+
+  // Extract audio from a video file into a small mp3 suitable for Whisper.
+  // 16kHz mono is plenty for speech; 64kbps mp3 keeps file size at ~0.5MB/min.
+  // This is the path that lets us transcribe arbitrarily long iPhone .mov
+  // walkthroughs without bumping into Whisper's 25MB limit.
+  function extractAudio(videoPath: string, audioPath: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      ffmpeg(videoPath)
+        .noVideo()
+        .audioCodec('libmp3lame')
+        .audioBitrate('64k')
+        .audioChannels(1)
+        .audioFrequency(16000)
+        .format('mp3')
+        .on('end', () => resolve())
+        .on('error', (err: Error) => reject(err))
+        .save(audioPath);
+    });
+  }
+
+  // AI quote-from-video: transcribe the on-site walkthrough with Whisper, clean
+  // it into a customer-ready job description with GPT-5, and persist both on
+  // the video row. Returns the generated description so the client can preview
+  // before applying it to jobs.description. Synchronous on purpose — quote
+  // videos are short, the arborist is actively waiting, and there's no queue
+  // infra in the app yet. Phase 2 may move this to a background job.
+  app.post('/api/videos/:id/transcribe', async (req: Request, res: Response) => {
+    const videoId = req.params.id;
+    // ?force=1 (or { force: true } in the body) bypasses the cached-result
+    // fast-path below, so the user can iterate on a generated description
+    // by re-running the pipeline (e.g. if Whisper misheard a species or
+    // GPT's structure needs another pass after a prompt tweak).
+    const force =
+      req.query.force === '1' ||
+      req.query.force === 'true' ||
+      req.body?.force === true;
+    let videoTmpPath: string | null = null;
+    let audioTmpPath: string | null = null;
+
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video) {
+        return res.status(404).json({ success: false, message: 'Video not found' });
+      }
+
+      // Idempotent fast-path: if we've already transcribed this video, return the
+      // cached result instead of re-billing OpenAI on every retry/refresh.
+      // Skipped when ?force=1.
+      if (!force && video.transcriptStatus === 'ready' && video.generatedDescription) {
+        return res.json({
+          success: true,
+          data: {
+            transcript: video.transcript,
+            generatedDescription: video.generatedDescription,
+            cached: true,
+          },
+        });
+      }
+
+      if (video.fileSize > MAX_VIDEO_BYTES) {
+        const mb = (video.fileSize / (1024 * 1024)).toFixed(1);
+        return res.status(413).json({
+          success: false,
+          message: `Video is ${mb}MB. Transcription currently supports files up to 500MB — try recording at 1080p instead of 4K.`,
+        });
+      }
+
+      await storage.updateVideo(videoId, {
+        transcriptStatus: 'processing',
+        transcriptError: null,
+      });
+
+      // Step 1: download the original from GCS to a temp file. We keep the
+      // source extension so ffmpeg can sniff the container correctly.
+      const rawExt = (video.filename.split('.').pop() || 'mp4').toLowerCase();
+      videoTmpPath = path.join(os.tmpdir(), `tm-video-${randomUUID()}.${rawExt}`);
+      await videoStorage.downloadToFile(video.url, videoTmpPath);
+
+      // Step 2: extract audio to a tiny mp3. This is the key Phase 1.5 move —
+      // a 60MB iPhone .mov becomes a ~250KB mp3, slipping comfortably under
+      // Whisper's 25MB API cap and dodging the .mov-extension rejection we
+      // patched around in #56 (Whisper now sees a vanilla .mp3).
+      audioTmpPath = path.join(os.tmpdir(), `tm-audio-${randomUUID()}.mp3`);
+      await extractAudio(videoTmpPath, audioTmpPath);
+
+      // Step 3: Whisper transcription. The `prompt` parameter biases the
+      // model toward domain-specific terms (Whisper accepts up to 224 tokens
+      // here as a style/vocabulary hint). Seeding it with NZ tree species
+      // + common arborist operations stops it from inventing words like
+      // "gladitziers" when the arborist said "gleditsias".
+      const WHISPER_BIAS_PROMPT = [
+        'New Zealand tree services walkthrough.',
+        'Species: pohutukawa, manuka, kanuka, kauri, totara, rimu, kahikatea,',
+        'miro, tawa, rewarewa, kowhai, ribbonwood, pittosporum, cabbage tree,',
+        'ti kouka, gleditsia, magnolia, oak, pine, eucalyptus, gum tree,',
+        'macrocarpa, leyland cypress, willow, poplar, silver birch, plum.',
+        'Operations: prune, lift, crown reduction, deadwood, remove, fell,',
+        'dismantle, stump grind, mulch, chip, firewood lengths, cleanup.',
+      ].join(' ');
+      const rawTranscription = await openai.audio.transcriptions.create({
+        file: fs.createReadStream(audioTmpPath),
+        model: 'whisper-1',
+        language: 'en',
+        prompt: WHISPER_BIAS_PROMPT,
+        response_format: 'text',
+      });
+      const rawTranscript = typeof rawTranscription === 'string'
+        ? rawTranscription
+        : (rawTranscription as any).text;
+
+      if (!rawTranscript || !rawTranscript.trim()) {
+        await storage.updateVideo(videoId, {
+          transcriptStatus: 'error',
+          transcriptError: 'No speech detected in video',
+        });
+        return res.status(422).json({
+          success: false,
+          message: 'No speech detected in the video.',
+        });
+      }
+
+      // Step 4: clean the transcript into a quote-ready job description.
+      // GPT-5 doesn't accept temperature; rely on the model's defaults.
+      const prompt = `You are a quote-writing assistant for a New Zealand tree services company. An arborist recorded a walkthrough video describing the work needed at a customer's property. Convert the raw transcript into a clean, professional job description that will appear on the customer's quote.
+
+STRUCTURE
+- For multiple work items: open with a single short lead-in like "We'll:" on its own line, then list the items as bullets. Do NOT repeat "we'll" on each bullet — the lead-in covers it. Each bullet should be a concise imperative-style phrase: "Remove all four gleditsias", "Mulch the branches", "Cut the wood into firewood lengths", "Grind the stumps".
+- For a single work item: write it as one short sentence in first person plural ("We'll prune the oak…"), no bullets.
+- Group related work items together (all pruning, then all removals, then cleanup).
+- No preamble, no sign-off — just the description content.
+
+LANGUAGE
+- Plain English, suitable for a homeowner to read.
+- First person plural ("we'll…") — never "Arborist will…" or "I will…".
+- Strip filler ("um", "ah", "you know"), asides, and speech directed at coworkers rather than the customer.
+
+FIDELITY
+- Keep tree/species terms verbatim (manuka, kauri, gleditsia, macrocarpa, pohutukawa, etc.).
+- If a clearly-mistranscribed word is obviously a known NZ tree species (e.g. "gladitziers" → "gleditsias", "macrocarper" → "macrocarpa"), correct it to the standard spelling. Do NOT invent species the arborist didn't say.
+- Common arborist terminology fix-ups are fine: "firewood rings" → "firewood lengths".
+- Do not invent measurements, counts, or details not mentioned in the transcript.
+- Do not include pricing unless the arborist explicitly stated a number.
+
+Transcript:
+"""
+${rawTranscript.trim()}
+"""
+
+Return only the cleaned job description.`;
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-5',
+        messages: [
+          {
+            role: 'system',
+            content: 'You convert raw arborist walkthrough transcripts into clean, customer-ready job descriptions for quotes.',
+          },
+          { role: 'user', content: prompt },
+        ],
+      });
+      const generatedDescription = completion.choices[0]?.message?.content?.trim() || '';
+
+      if (!generatedDescription) {
+        await storage.updateVideo(videoId, {
+          transcript: rawTranscript,
+          transcriptStatus: 'error',
+          transcriptError: 'GPT returned empty description',
+        });
+        return res.status(502).json({
+          success: false,
+          message: 'Could not generate a description from this transcript.',
+        });
+      }
+
+      const updated = await storage.updateVideo(videoId, {
+        transcript: rawTranscript,
+        generatedDescription,
+        transcriptStatus: 'ready',
+        transcriptError: null,
+      });
+
+      console.log(`📝 Transcribed video ${videoId} — ${rawTranscript.length} chars → ${generatedDescription.length} chars`);
+
+      res.json({
+        success: true,
+        data: {
+          transcript: updated.transcript,
+          generatedDescription: updated.generatedDescription,
+          cached: false,
+        },
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Transcription failed';
+      console.error(`❌ Transcribe video ${videoId} failed:`, error);
+      try {
+        await storage.updateVideo(videoId, {
+          transcriptStatus: 'error',
+          transcriptError: message.slice(0, 500),
+        });
+      } catch {/* best-effort status write */}
+      if (!res.headersSent) {
+        res.status(500).json({ success: false, message });
+      }
+    } finally {
+      // Clean up both temp files (video download + extracted audio).
+      if (videoTmpPath) {
+        fs.promises.unlink(videoTmpPath).catch(() => {/* best-effort */});
+      }
+      if (audioTmpPath) {
+        fs.promises.unlink(audioTmpPath).catch(() => {/* best-effort */});
+      }
+    }
+  });
+
   // Help articles (subscriber-facing /help page). See INFLOW_HELP_PLAN.md.
   // GET routes are subscriber-readable (no auth gate here, matching the videos
   // pattern); POST/PATCH/DELETE are owner-only via requireAdmin.
@@ -7773,6 +8006,137 @@ Draft the reply now.`;
       } else {
         res.status(500).json({ success: false, message: 'Error checking invoice eligibility' });
       }
+    }
+  });
+
+  // Consolidated back-costing rollup: revenue, labor, all cost categories,
+  // completion state and gross margin in one payload. Reads only — every
+  // mutation goes through the existing /expenses and /expense-completion
+  // endpoints. Backs the Back Costing tab in the job card.
+  app.get('/api/jobs/:id/back-costing', async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const job = await storage.getJob(id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const num = (v: unknown): number => {
+        if (v === null || v === undefined || v === '') return 0;
+        const n = typeof v === 'string' ? parseFloat(v) : (v as number);
+        return Number.isFinite(n) ? n : 0;
+      };
+
+      const [staffEntries, invoices] = await Promise.all([
+        storage.getJobStaffTimeEntries(id).catch(() => [] as any[]),
+        storage.getInvoicesByJob(id).catch(() => [] as any[]),
+      ]);
+
+      const laborTotalHours = (staffEntries as any[]).reduce(
+        (sum, e: any) => sum + num(e.hours),
+        0,
+      );
+
+      // Replicates the labor-cost rollup used by POST /api/jobs/:id/staff-time:
+      // each entry's costRate, falling back to the employee's hourlyRate.
+      let laborCalculatedCost = 0;
+      for (const e of staffEntries as any[]) {
+        let costRate: number = num(e.costRate);
+        if (!costRate && e.employeeId) {
+          const employee = await storage.getEmployee(e.employeeId).catch(() => null as any);
+          costRate = num(employee?.hourlyRate);
+        }
+        laborCalculatedCost += num(e.hours) * costRate;
+      }
+
+      // actualLaborCosts is auto-synced from staff time on every entry change,
+      // but owners can override via PUT /expenses. Trust the stored value;
+      // fall back to the calculated cost when nothing has been stored yet.
+      const storedLaborCost = num(job.actualLaborCosts);
+      const laborCost = storedLaborCost > 0 ? storedLaborCost : laborCalculatedCost;
+
+      const costs = {
+        actualLaborCosts: laborCost,
+        actualMaterialsCosts: num(job.actualMaterialsCosts),
+        equipmentCosts: num(job.equipmentCosts),
+        subcontractorCosts: num(job.subcontractorCosts),
+        permitCosts: num(job.permitCosts),
+        travelCosts: num(job.travelCosts),
+        disposalCosts: num(job.disposalCosts),
+        miscExpenses: num(job.miscExpenses),
+      };
+      const costsTotal =
+        costs.actualLaborCosts +
+        costs.actualMaterialsCosts +
+        costs.equipmentCosts +
+        costs.subcontractorCosts +
+        costs.permitCosts +
+        costs.travelCosts +
+        costs.disposalCosts +
+        costs.miscExpenses;
+
+      const primaryInvoice = (invoices as any[])[0];
+      const invoiceTotal = primaryInvoice ? num(primaryInvoice.totalAmount) : null;
+      const quoteTotal = num(job.totalAmount);
+      const revenueSource: 'invoice' | 'quote' | 'none' =
+        invoiceTotal !== null && invoiceTotal > 0
+          ? 'invoice'
+          : quoteTotal > 0
+            ? 'quote'
+            : 'none';
+      const revenueAmount =
+        revenueSource === 'invoice' ? (invoiceTotal as number) : quoteTotal;
+
+      const grossProfit = revenueAmount - costsTotal;
+      const grossMarginPercent =
+        revenueAmount > 0 ? (grossProfit / revenueAmount) * 100 : null;
+
+      res.json({
+        success: true,
+        data: {
+          job: {
+            id: job.id,
+            jobNumber: (job as any).jobNumber ?? null,
+            status: job.status,
+            customerName: (job as any).customerName ?? null,
+          },
+          revenue: {
+            amount: revenueAmount,
+            invoiceTotal,
+            quoteTotal,
+            source: revenueSource,
+            invoiceId: primaryInvoice?.id ?? null,
+            xeroStatus: (job as any).xeroStatus ?? null,
+          },
+          labor: {
+            totalHours: laborTotalHours,
+            totalCost: laborCost,
+            calculatedCost: laborCalculatedCost,
+            hasOverride: storedLaborCost > 0 && Math.abs(storedLaborCost - laborCalculatedCost) > 0.01,
+            entryCount: (staffEntries as any[]).length,
+          },
+          costs: {
+            ...costs,
+            total: costsTotal,
+          },
+          completion: {
+            labor: !!job.laborCostsComplete,
+            materials: !!job.materialsCostsComplete,
+            equipment: !!job.equipmentCostsComplete,
+            subcontractor: !!job.subcontractorCostsComplete,
+            other: !!job.otherExpensesComplete,
+            allComplete: !!job.allExpensesComplete,
+            invoiceBlocked: job.invoiceBlocked !== false,
+          },
+          margin: {
+            grossProfit,
+            grossMarginPercent,
+          },
+        },
+      });
+    } catch (error) {
+      console.error('Error building back-costing rollup:', error);
+      res.status(500).json({ success: false, message: 'Error building back-costing rollup' });
     }
   });
 
@@ -9606,7 +9970,7 @@ Draft the reply now.`;
           const isConfirmation = !isReschedule && confirmKeywords.test(Body);
           if (
             isConfirmation &&
-            (recentJob.status === 'scheduled' || recentJob.status === 'work_order') &&
+            recentJob.status === 'work_order' &&
             !recentJob.customerConfirmed
           ) {
             try {
@@ -9725,7 +10089,16 @@ Draft the reply now.`;
           message: 'Twilio API Key not configured. Set TWILIO_API_KEY and TWILIO_API_SECRET secrets.',
         });
       }
-      const clientIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      // Identity isolation: only admins (the owner) get the shared inbound
+      // identity that the answer webhook dials. Other employees get a
+      // per-employee identity so their devices don't ring on inbound customer
+      // calls — twilio-answer only <Dial>s the owner identity.
+      const requestingEmployee = await storage.getEmployee(req.session.employeeId);
+      const ownerIdentity = process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner';
+      const isAdmin = requestingEmployee?.role === 'admin';
+      const clientIdentity = isAdmin
+        ? ownerIdentity
+        : `treemarkables-emp-${req.session.employeeId}`;
       const twimlAppSid = process.env.TWILIO_TWIML_APP_SID;
       const pushCredentialSid = process.env.TWILIO_PUSH_CREDENTIAL_SID;
       const { AccessToken } = twilio.jwt;
@@ -12577,7 +12950,8 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         }
       }
 
-      const acceptedStatuses = ['completed', 'scheduled', 'in_progress', 'invoiced', 'work_order'];
+      // 'scheduled' retired 2026-05 — its jobs migrated to 'work_order'.
+      const acceptedStatuses = ['completed', 'invoiced', 'work_order'];
       const rejectedStatuses = ['unsuccessful'];
       const pendingStatuses = ['quote'];
 
@@ -15250,16 +15624,13 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
   });
 
   // Dedicated unschedule endpoint — clears scheduling fields directly without Zod/safeguard complexity.
-  // Status revert: only flip 'scheduled' back to 'work_order'. A 'quote' job
-  // booked in for a site visit keeps its 'quote' status when unscheduled
-  // (the booking was a quoting visit, not a work-crew assignment).
+  // Status is left alone: bookings became pure calendar actions in 2026-05,
+  // so unscheduling no longer needs to revert a status transition.
   app.post('/api/jobs/:jobId/unschedule', async (req: Request, res: Response) => {
     try {
       const { jobId } = req.params;
       await storage.deleteJobStaffAssignmentsByJob(jobId);
       await storage.deleteScheduleEventsByJob(jobId);
-      const existing = await storage.getJob(jobId);
-      const nextStatus = existing?.status === 'scheduled' ? 'work_order' : existing?.status;
       const job = await storage.updateJob(jobId, {
         scheduledDate: null,
         scheduledEndDate: null,
@@ -15267,7 +15638,6 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
         scheduledEndTime: null,
         assignedTo: [],
         assignedTeam: [],
-        ...(nextStatus ? { status: nextStatus } : {}),
       } as any);
       if (!job) return res.status(404).json({ success: false, message: 'Job not found' });
       res.json({ success: true, data: job });
@@ -18892,7 +19262,7 @@ Transcription: ${transcriptText}`;
             targetJob = await storage.getJobByJobNumber(confirmedJobNumber);
           }
           if (targetJob && !targetJob.customerConfirmed &&
-              (targetJob.status === 'scheduled' || targetJob.status === 'work_order')) {
+              targetJob.status === 'work_order') {
             await storage.updateJob(targetJob.id, {
               customerConfirmed: true,
               customerConfirmedAt: new Date(),
@@ -20001,17 +20371,19 @@ Transcription: ${transcriptText}`;
     try {
       // Get active jobs (work_order, scheduled, in_progress)
       const { jobs: allJobs } = await storage.getAllJobs({ limit: 999999 });
-      const activeJobs = allJobs.filter(job => 
-        ['work_order', 'scheduled', 'in_progress'].includes(job.status)
-      );
-      
+      // Active = work_order. 'scheduled' was retired as a status in 2026-05;
+      // the conceptual bucket is now "work_order with a scheduledDate" vs
+      // "work_order without one". Both still count as active.
+      const activeJobs = allJobs.filter(job => job.status === 'work_order');
+
       // Get employees for crew count calculation
       const employees = await storage.getAllEmployees();
-      
-      // Calculate summary stats
-      const workOrderJobs = activeJobs.filter(j => j.status === 'work_order');
-      const scheduledJobs = activeJobs.filter(j => j.status === 'scheduled');
-      const inProgressJobs = activeJobs.filter(j => j.status === 'in_progress');
+
+      // Calculate summary stats. workOrder = unscheduled work orders ready
+      // to book in. scheduled = work orders that have a date set.
+      const workOrderJobs = activeJobs.filter(j => !j.scheduledDate);
+      const scheduledJobs = activeJobs.filter(j => !!j.scheduledDate);
+      const inProgressJobs: typeof activeJobs = [];
       
       const totalValue = activeJobs.reduce((sum, job) => sum + parseFloat(job.totalAmount || '0'), 0);
       const totalEstimatedHours = activeJobs.reduce((sum, job) => sum + parseFloat(job.estimatedManHours || '0'), 0);
@@ -20147,8 +20519,10 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       // or already done. We exclude leads/quotes (never booked), cancelled/
       // unsuccessful (booking fell through), and archived (housekeeping) so the
       // total reflects work that actually was/is scheduled to happen.
+      // 'scheduled' retired 2026-05 — work_order with a scheduledDate is
+      // the new "booked" signal.
       const BOOKED_STATUSES = new Set([
-        'scheduled', 'work_order', 'in_progress', 'completed', 'invoiced'
+        'work_order', 'completed', 'invoiced'
       ]);
       const bookedJobs = allJobs.filter(job => {
         if (!job.scheduledDate) return false;
@@ -27888,7 +28262,9 @@ Return a valid JSON object only (no markdown) with this EXACT structure:
       const alreadyScheduledToday = allJobs.filter(j => {
         if (!j.scheduledDate) return false;
         const d = new Date(j.scheduledDate);
-        return d >= proposeDayStart && d <= proposeDayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+        // 'scheduled' status retired 2026-05 — any work_order with a date
+        // on this day occupies a slot.
+        return d >= proposeDayStart && d <= proposeDayEnd && j.status === 'work_order';
       }).map(j => ({
         jobNumber: j.jobNumber,
         title: j.title || 'existing job',
@@ -28016,7 +28392,9 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
         if (proposedJobIds.has(j.id)) return false; // Skip jobs in this proposal
         if (!j.scheduledDate) return false;
         const d = new Date(j.scheduledDate);
-        return d >= dayStart && d <= dayEnd && (j.status === 'scheduled' || j.status === 'in_progress');
+        // 'scheduled' status retired 2026-05 — any work_order with a date
+        // on this day occupies a slot.
+        return d >= dayStart && d <= dayEnd && j.status === 'work_order';
       });
       for (const ej of existingDayJobs) {
         const existStart = ej.scheduledStartTime || '08:00';

@@ -44,18 +44,18 @@ const STAFF_PALETTE = [
 
 // 12 visually distinct colours — each job on the day gets its own, consistent across all crew rows
 const JOB_IDENTITY_PALETTE = [
-  { bg: '#dbeafe', border: '#2563eb', text: '#1e3a8a' }, // blue
-  { bg: '#d1fae5', border: '#059669', text: '#064e3b' }, // emerald
-  { bg: '#ffedd5', border: '#ea580c', text: '#7c2d12' }, // orange
-  { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // purple
-  { bg: '#fce7f3', border: '#db2777', text: '#831843' }, // pink
-  { bg: '#fef9c3', border: '#ca8a04', text: '#713f12' }, // amber
-  { bg: '#ccfbf1', border: '#0d9488', text: '#134e4a' }, // teal
-  { bg: '#fee2e2', border: '#dc2626', text: '#7f1d1d' }, // red
-  { bg: '#e0e7ff', border: '#4f46e5', text: '#312e81' }, // indigo
-  { bg: '#dcfce7', border: '#16a34a', text: '#14532d' }, // green
-  { bg: '#fef3c7', border: '#d97706', text: '#78350f' }, // yellow
-  { bg: '#ede9fe', border: '#7c3aed', text: '#4c1d95' }, // violet
+  { bg: '#eff6ff', border: '#2563eb', text: '#1e3a8a' }, // blue-50
+  { bg: '#ecfdf5', border: '#059669', text: '#064e3b' }, // emerald-50
+  { bg: '#fff7ed', border: '#ea580c', text: '#7c2d12' }, // orange-50
+  { bg: '#faf5ff', border: '#a855f7', text: '#6b21a8' }, // purple-50
+  { bg: '#fdf2f8', border: '#db2777', text: '#831843' }, // pink-50
+  { bg: '#fffbeb', border: '#ca8a04', text: '#713f12' }, // amber-50
+  { bg: '#f0fdfa', border: '#0d9488', text: '#134e4a' }, // teal-50
+  { bg: '#fef2f2', border: '#dc2626', text: '#7f1d1d' }, // red-50
+  { bg: '#eef2ff', border: '#4f46e5', text: '#312e81' }, // indigo-50
+  { bg: '#f0fdf4', border: '#16a34a', text: '#14532d' }, // green-50
+  { bg: '#fefce8', border: '#d97706', text: '#78350f' }, // yellow-50
+  { bg: '#f5f3ff', border: '#7c3aed', text: '#4c1d95' }, // violet-50
 ];
 
 // Status dot colours used in the legend only
@@ -705,7 +705,7 @@ export default function StaffSchedule() {
                   {/* Staff name cell */}
                   <div
                     className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-2 md:px-3 py-2 sticky left-0 z-10 w-[72px] md:w-[148px]"
-                    style={{ backgroundColor: palette.row }}
+                    style={{ backgroundColor: palette.row + '80' }}
                   >
                     <div
                       className="hidden md:flex w-7 h-7 rounded-full items-center justify-center text-white text-[10px] font-bold shrink-0"

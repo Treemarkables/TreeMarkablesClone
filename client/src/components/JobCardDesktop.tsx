@@ -88,9 +88,11 @@ import { useToast } from "@/hooks/use-toast";
 import { useJobActions } from "@/hooks/useJobActions";
 import { JobDetailsPanel } from "@/components/JobDetailsPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
+import { JobVideos } from "@/components/JobVideos";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
+import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
 import { SMSComposerModal } from "@/components/SMSComposerModal";
 import { EmailComposerModal } from "@/components/EmailComposerModal";
@@ -98,6 +100,7 @@ import { EmailComposerModal } from "@/components/EmailComposerModal";
 export type JobCardDesktopTab =
   | "details"
   | "billing"
+  | "backcosting"
   | "checklist"
   | "quoting";
 
@@ -162,7 +165,6 @@ const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
   lead: { label: "Lead", bg: "#f59e0b" },
   quote: { label: "Quote", bg: "#f59e0b" },
   work_order: { label: "Work Order", bg: "#2563eb" },
-  scheduled: { label: "Scheduled", bg: "#7c3aed" },
   completed: { label: "Completed", bg: "#16a34a" },
   unsuccessful: { label: "Unsuccessful", bg: "#ef4444" },
 };
@@ -170,6 +172,11 @@ const STATUS_BADGE: Record<string, { label: string; bg: string }> = {
 const TABS: { id: JobCardDesktopTab; label: string }[] = [
   { id: "details", label: "Details" },
   { id: "billing", label: "Billing" },
+  // Back Costing — consolidates time entries, all cost categories on the
+  // job, and revenue into a single margin rollup. Slots between Billing and
+  // Checklist so the visual flow goes "what we'll charge" → "what it cost"
+  // → "did we finish everything we said we would".
+  { id: "backcosting", label: "Back Costing" },
   { id: "checklist", label: "Checklist" },
   { id: "quoting", label: "Quoting" },
 ];
@@ -461,7 +468,13 @@ export function JobCardDesktop({
   // shared confirm + mutation flow.
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4" data-testid="job-card-desktop">
+    <div
+      className="fixed inset-0 z-50 bg-slate-100 flex items-center justify-center p-4"
+      data-testid="job-card-desktop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
       <div className="bg-slate-50 rounded-2xl shadow-xl border border-slate-200 w-full max-w-[1480px] h-[92vh] flex flex-col overflow-hidden">
 
         {/* ── Header ── */}
@@ -533,7 +546,15 @@ export function JobCardDesktop({
           {/* LEFT — tab strip + body */}
           <div className="border-r border-slate-200 flex flex-col min-w-0 min-h-0">
             <div className="bg-white border-b border-slate-200 px-6 flex gap-7 flex-shrink-0">
-              {TABS.map((t) => {
+              {TABS.filter((t) => {
+                // Back Costing is only meaningful once work has happened —
+                // hide it on lead/quote so the tab strip stays focused on
+                // the job's current stage.
+                if (t.id === "backcosting" && (status === "lead" || status === "quote")) {
+                  return false;
+                }
+                return true;
+              }).map((t) => {
                 const on = t.id === activeTab;
                 return (
                   <button
@@ -563,6 +584,12 @@ export function JobCardDesktop({
             <div className="flex-1 overflow-y-auto min-h-0">
               {activeTab === "details" && <JobDetailsPanel jobId={jobId} />}
               {activeTab === "billing" && <JobBillingPanel jobId={jobId} />}
+              {activeTab === "backcosting" && (
+                <BackCostingPanel
+                  jobId={jobId}
+                  onOpenTimeEntries={actions?.timeTracking}
+                />
+              )}
               {activeTab === "checklist" && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
             </div>
@@ -581,6 +608,19 @@ export function JobCardDesktop({
               referencing one is tapped. Undefined is safe — JobDiarySection
               no-ops the click. */}
           <div className="bg-white min-w-0 min-h-0 overflow-hidden flex flex-col">
+            {/* Job Videos sits above the diary feed — same vertical order as
+                the legacy GlobalJobCard layout. Collapsed by default; expand
+                to upload a walkthrough and (post-upload) opt into the AI
+                quote-description flow.
+
+                Cap to ~half the right-column height with internal scroll —
+                otherwise an expanded panel (video player + list of videos
+                + retry buttons) pushes past the parent's overflow-hidden
+                boundary, hiding content with no way to scroll. Collapsed
+                state still uses only its natural ~40px height. */}
+            <div className="p-3 flex-shrink-0 max-h-[50vh] overflow-y-auto">
+              <JobVideos jobId={jobId} />
+            </div>
             <JobDiarySection
               jobId={jobId}
               customerId={customerId}
