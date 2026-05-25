@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { Phone, Menu, ChevronDown, ArrowUpRight } from "lucide-react";
+import { Phone, Mail, Menu, ChevronDown, ArrowUpRight } from "lucide-react";
 import logoImage from "@assets/logo-11_1775755479888.png";
 import {
   DropdownMenu,
@@ -17,6 +17,7 @@ declare global {
 }
 
 const PHONE = "0272166882";
+const EMAIL = "quotes@treemarkables.nz";
 // Base path of the home page. Section links and "Get a quote" hash-jump from here.
 const HOME = "/";
 
@@ -60,7 +61,11 @@ export default function HeaderV2() {
 
   return (
     <header
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
+      // translate3d + will-change forces the header onto its own GPU layer.
+      // Without this iOS Safari occasionally loses the `position: fixed`
+      // pinning on scroll-down (header appears to scroll away with the page).
+      style={{ transform: "translate3d(0,0,0)", willChange: "transform" }}
+      className={`fixed top-0 inset-x-0 z-50 transition-[background-color,backdrop-filter,box-shadow,border-color] duration-300 ${
         scrolled
           ? "bg-ink/90 backdrop-blur shadow-lg border-b border-white/10"
           : "bg-gradient-to-b from-ink/60 to-transparent"
@@ -109,6 +114,13 @@ export default function HeaderV2() {
             >
               <Phone className="h-5 w-5" />
               <span className="hidden lg:inline">027 216 6882</span>
+            </a>
+            <a
+              href={`mailto:${EMAIL}`}
+              aria-label={`Email ${EMAIL}`}
+              className="inline-flex items-center justify-center h-10 lg:h-11 w-10 lg:w-11 rounded-full bg-neon text-black shadow-[0_4px_18px_rgba(57,255,20,0.35)] hover:brightness-95 transition-all"
+            >
+              <Mail className="h-5 w-5" />
             </a>
             <a
               href={`${HOME}#contact`}
