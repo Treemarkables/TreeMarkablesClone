@@ -87,25 +87,12 @@ export default function PhotoAnnotator({
   initialAnnotations,
   onSave,
 }: PhotoAnnotatorProps) {
-  // Load the image via fetch → Blob → object URL instead of useImage with
-  // crossOrigin="anonymous". Two reasons:
-  //   1. iOS Safari refuses to load same-origin images that declare a CORS
-  //      attribute unless the server also sends matching CORS headers, and
-  //      our /objects/photos/:filename route doesn't. Without this workaround
-  //      the canvas stays empty on iPhone (the bug that prompted this fix).
-  //   2. Object URLs are always same-origin, so the Konva canvas is never
-  //      tainted — stage.toDataURL() on save still works for the export.
-  // Load the image with the simplest possible path: a plain `new Image()`
-  // pointed at the same-origin URL. No fetch, no Blob, no crossOrigin
-  // attribute. Earlier attempts (useImage with crossOrigin="anonymous",
-  // then fetch → Blob → object URL) both failed silently on iOS Safari,
-  // leaving the canvas blank with no error to surface.
-  //
-  // Trade-off: the canvas is "tainted" (because we can't prove the image
-  // is CORS-clean), so stage.toDataURL() will throw on save. handleSave
-  // catches that SecurityError and shows a user-facing message. A proper
-  // fix (server-side baking via sharp, like composeBeforeAfter) is
-  // tracked as a follow-up — right now image display takes priority.
+  // Load the image with a plain `new Image()` against the same-origin
+  // URL — no fetch, no Blob, no `crossOrigin` attribute. Earlier attempts
+  // using either fetch+Blob or `crossOrigin="anonymous"` failed silently
+  // on iOS Safari and the Mac shell. The resulting canvas is "tainted"
+  // (we can't read its pixels), which is fine because rendering is done
+  // server-side now via photoAnnotationRenderer.
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [imageError, setImageError] = useState<string | null>(null);
   useEffect(() => {
@@ -525,21 +512,8 @@ export default function PhotoAnnotator({
           ref={containerRef}
           className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
         >
-          {/* Temporary diagnostic strip — leaves a breadcrumb when the
-              canvas appears blank so we can tell which state we're in
-              (no src? loaded but no stage? errored?). Remove once the
-              iOS image-load path is solid. */}
-          <div className="absolute top-2 left-2 right-2 z-10 text-[10px] text-white/60 font-mono bg-black/40 px-2 py-1 rounded pointer-events-none">
-            src: {src ? `…${src.slice(-30)}` : "(empty)"} · img:{" "}
-            {image
-              ? `${image.naturalWidth}×${image.naturalHeight}`
-              : imageError
-                ? "ERR"
-                : "loading"}{" "}
-            · stage: {Math.round(stageSize.w)}×{Math.round(stageSize.h)}
-          </div>
-          {/* Surface load failures instead of leaving the canvas mysteriously
-              blank — saves a lot of "what's wrong?" guessing. */}
+          {/* Surface load failures instead of leaving the canvas
+              mysteriously blank. */}
           {imageError && (
             <div className="absolute inset-0 flex items-center justify-center text-white text-sm px-6 text-center">
               Couldn't load photo: {imageError}
