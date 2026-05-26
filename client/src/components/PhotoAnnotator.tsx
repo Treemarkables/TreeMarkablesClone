@@ -117,13 +117,19 @@ export default function PhotoAnnotator({
     let cancelled = false;
     setImage(null);
     setImageError(null);
+    console.log("[PhotoAnnotator] starting image load", src);
     const img = new Image();
     img.onload = () => {
+      console.log(
+        "[PhotoAnnotator] image loaded",
+        src,
+        `${img.naturalWidth}×${img.naturalHeight}`,
+      );
       if (!cancelled) setImage(img);
     };
-    img.onerror = () => {
+    img.onerror = (ev) => {
+      console.error("[PhotoAnnotator] image load failed", src, ev);
       if (!cancelled) {
-        console.error("PhotoAnnotator: image load failed for", src);
         setImageError(`Couldn't load image (…${src.slice(-40)})`);
       }
     };
@@ -524,18 +530,34 @@ export default function PhotoAnnotator({
           ref={containerRef}
           className="flex-1 relative overflow-hidden flex items-center justify-center select-none"
         >
-          {/* Temporary diagnostic strip — leaves a breadcrumb when the
-              canvas appears blank so we can tell which state we're in
-              (no src? loaded but no stage? errored?). Remove once the
-              iOS image-load path is solid. */}
-          <div className="absolute top-2 left-2 right-2 z-10 text-[10px] text-white/60 font-mono bg-black/40 px-2 py-1 rounded pointer-events-none">
-            src: {src ? `…${src.slice(-30)}` : "(empty)"} · img:{" "}
-            {image
-              ? `${image.naturalWidth}×${image.naturalHeight}`
-              : imageError
-                ? "ERR"
-                : "loading"}{" "}
-            · stage: {Math.round(stageSize.w)}×{Math.round(stageSize.h)}
+          {/* Loud diagnostic banner — temporary. If you don't see this
+              bright yellow strip on iPhone, the new JS bundle hasn't
+              loaded yet (Safari cache); clear site data and retry. */}
+          <div
+            className="absolute top-0 left-0 right-0 z-50 bg-yellow-400 text-black text-xs font-mono px-2 py-2 border-b-2 border-red-600 pointer-events-none leading-tight"
+            data-testid="annotator-debug-banner"
+          >
+            <div className="font-bold">DEBUG v3 (delete me after fix)</div>
+            <div>
+              src: {src ? `…${src.slice(-40)}` : "(EMPTY)"}
+            </div>
+            <div>
+              img:{" "}
+              {image
+                ? `LOADED ${image.naturalWidth}×${image.naturalHeight}`
+                : imageError
+                  ? `ERROR: ${imageError}`
+                  : src
+                    ? "loading…"
+                    : "no-src"}
+            </div>
+            <div>
+              stage: {Math.round(stageSize.w)}×{Math.round(stageSize.h)} ·
+              container:{" "}
+              {containerRef.current
+                ? `${containerRef.current.clientWidth}×${containerRef.current.clientHeight}`
+                : "no-ref"}
+            </div>
           </div>
           {/* Surface load failures instead of leaving the canvas mysteriously
               blank — saves a lot of "what's wrong?" guessing. */}
