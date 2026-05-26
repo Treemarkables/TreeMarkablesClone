@@ -766,13 +766,16 @@ function Router() {
     const handleSWMessage = (event: MessageEvent) => {
       if (event.data?.type === 'NOTIFICATION_CLICKED') {
         const url: string | undefined = event.data?.url;
+        console.log('🔔 SW NOTIFICATION_CLICKED received:', { url });
         if (url) {
           setLocation(url);
           // If navigating to dispatch with a job, fire the event so DispatchBoard opens that job card
           if (url.startsWith('/dispatch')) {
-            setTimeout(() => {
-              window.dispatchEvent(new CustomEvent('notification-navigation', { detail: { url } }));
-            }, 150);
+            const fire = () => window.dispatchEvent(
+              new CustomEvent('notification-navigation', { detail: { url } }),
+            );
+            fire();
+            setTimeout(fire, 150);
           }
         }
       }
@@ -789,13 +792,23 @@ function Router() {
   useEffect(() => {
     const handler = (event: Event) => {
       const url = (event as CustomEvent<string>).detail;
-      if (typeof url !== 'string' || !url) return;
+      console.log('🔔 nativeNotificationTap received:', { url, currentPath: window.location.pathname + window.location.search });
+      if (typeof url !== 'string' || !url) {
+        console.warn('🔔 nativeNotificationTap: empty URL, skipping');
+        return;
+      }
       window.dispatchEvent(new Event('nativeNotificationTapAck'));
       setLocation(url);
+      // Fire the dispatch-board signal immediately AND again at 150ms — the
+      // first catches the case where DispatchBoard is already mounted and
+      // wouter's same-pathname setLocation doesn't trigger a re-render; the
+      // second catches the case where setLocation needed a tick to settle.
       if (url.startsWith('/dispatch')) {
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('notification-navigation', { detail: { url } }));
-        }, 150);
+        const fire = () => window.dispatchEvent(
+          new CustomEvent('notification-navigation', { detail: { url } }),
+        );
+        fire();
+        setTimeout(fire, 150);
       }
     };
     window.addEventListener('nativeNotificationTap', handler);
