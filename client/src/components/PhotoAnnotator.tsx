@@ -140,61 +140,62 @@ export default function PhotoAnnotator({
   const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
 
   useEffect(() => {
-    if (!image || !containerRef.current) return;
-    const el = containerRef.current;
-    let raf: number | null = null;
-    let retries = 0;
-    const measure = () => {
-      // Prefer getBoundingClientRect — clientWidth/Height can transiently
-      // return 0 in iOS WKWebView during the first layout pass even after
-      // the element is rendered. getBoundingClientRect gives subpixel
-      // values that update one frame sooner.
-      const rect = el.getBoundingClientRect();
-      return { cw: rect.width || el.clientWidth, ch: rect.height || el.clientHeight };
-    };
+    if (!image) return;
+    // Use the viewport as the primary source of truth for stage sizing,
+    // not the container's clientWidth/clientHeight.
+    //
+    // Why: in embedded webviews (iOS WKWebView and the Mac Inflow shell
+    // we tested in), the flex-1 container's measurement reads as 0×0
+    // even after the dialog is fully laid out. Earlier rAF/RO retries
+    // didn't fix it — measurement just kept reading 0. Falling back to
+    // window dimensions sidesteps the broken container measurement
+    // entirely while still giving us the right aspect-fit dimensions.
+    //
+    // Top + bottom toolbars together are ~120-150px depending on safe
+    // areas. Subtracting 180 leaves a small breathing margin so the
+    // canvas doesn't bleed under the toolbars.
     const update = () => {
-      let { cw, ch } = measure();
-      if (cw === 0 || ch === 0) {
-        // Layout hasn't settled. Retry on next frame — on iOS,
-        // ResizeObserver doesn't fire its initial callback if the box
-        // is 0×0 when observe() is called, so we can't rely on RO alone.
-        if (retries < 10) {
-          if (raf == null) {
-            retries++;
-            raf = requestAnimationFrame(() => {
-              raf = null;
-              update();
-            });
-          }
-          return;
-        }
-        // Retries exhausted (~166ms). Fall back to the viewport so the
-        // canvas renders something rather than a blank screen. The
-        // container's flex-1 should normally give us its true size, but
-        // a misbehaving WKWebView layout shouldn't strand the user.
-        if (cw === 0) cw = window.innerWidth;
-        if (ch === 0) ch = Math.max(200, window.innerHeight - 200);
-        if (cw === 0 || ch === 0) return;
+      let cw = window.innerWidth;
+      let ch = Math.max(200, window.innerHeight - 180);
+
+      // If the container DOES have a real measurement, prefer it — it's
+      // more precise than the window heuristic above.
+      const el = containerRef.current;
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        if (rect.width > 0) cw = rect.width;
+        if (rect.height > 0) ch = rect.height;
       }
-      retries = 0;
+      if (cw === 0 || ch === 0) return;
+
       const imgRatio = image.naturalWidth / image.naturalHeight;
       const conRatio = cw / ch;
       const w = conRatio > imgRatio ? ch * imgRatio : cw;
       const h = conRatio > imgRatio ? ch : cw / imgRatio;
       setStageSize({ w, h });
     };
+
     update();
-    const ro = new ResizeObserver(update);
-    ro.observe(el);
-    // Orientation / keyboard / dvh changes don't always trigger RO on iOS
-    // — listen to window resize as a belt-and-suspenders fallback.
+    // Re-measure after one frame and one short timeout in case the
+    // container's real dimensions become available later — we want to
+    // tighten the fit when we can.
+    const raf = requestAnimationFrame(update);
+    const t1 = setTimeout(update, 100);
+    const t2 = setTimeout(update, 500);
+
+    const el = containerRef.current;
+    const ro = el ? new ResizeObserver(update) : null;
+    if (ro && el) ro.observe(el);
     window.addEventListener("resize", update);
     window.addEventListener("orientationchange", update);
+
     return () => {
-      ro.disconnect();
+      cancelAnimationFrame(raf);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      if (ro) ro.disconnect();
       window.removeEventListener("resize", update);
       window.removeEventListener("orientationchange", update);
-      if (raf != null) cancelAnimationFrame(raf);
     };
   }, [image, open]);
 
