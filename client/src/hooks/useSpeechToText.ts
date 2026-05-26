@@ -6,19 +6,27 @@ interface UseSpeechToTextProps {
   language?: string;
 }
 
-export function useSpeechToText({ 
-  onResult, 
+export function useSpeechToText({
+  onResult,
   continuous = false,
-  language = 'en-NZ' 
+  language = 'en-NZ'
 }: UseSpeechToTextProps) {
   const [isListening, setIsListening] = useState(false);
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<any>(null);
+  // Callers pass inline arrow functions, so `onResult` is a new reference each render.
+  // Stash it in a ref so the recognition object below is built once and not torn down
+  // mid-recording every time the parent re-renders (e.g. a React Query refetch).
+  const onResultRef = useRef(onResult);
+
+  useEffect(() => {
+    onResultRef.current = onResult;
+  }, [onResult]);
 
   useEffect(() => {
     // Check if browser supports Speech Recognition
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
+
     if (!SpeechRecognition) {
       setIsSupported(false);
       return;
@@ -41,9 +49,9 @@ export function useSpeechToText({
         .map((result: any) => result[0])
         .map((result: any) => result.transcript)
         .join('');
-      
+
       if (event.results[event.results.length - 1].isFinal) {
-        onResult(transcript);
+        onResultRef.current(transcript);
       }
     };
 
@@ -59,21 +67,33 @@ export function useSpeechToText({
     recognitionRef.current = recognition;
 
     return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
+      try {
+        recognition.stop();
+      } catch {
+        // ignore — already stopped or never started
       }
+      recognitionRef.current = null;
     };
-  }, [onResult, continuous, language]);
+  }, [continuous, language]);
 
   const startListening = () => {
     if (recognitionRef.current && !isListening) {
-      recognitionRef.current.start();
+      try {
+        recognitionRef.current.start();
+      } catch (err) {
+        // Chrome throws InvalidStateError if start() is called while already starting.
+        console.error('Failed to start speech recognition:', err);
+      }
     }
   };
 
   const stopListening = () => {
     if (recognitionRef.current && isListening) {
-      recognitionRef.current.stop();
+      try {
+        recognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
     }
   };
 
