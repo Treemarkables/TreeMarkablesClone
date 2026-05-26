@@ -19,9 +19,10 @@
  */
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus } from "lucide-react";
+import { MapPin, ChevronDown, Mic, MicOff, Lock, UserPlus, Pencil, X } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useSpeechToText } from "@/hooks/useSpeechToText";
+import { AddressAutocomplete, type ParsedAddress } from "@/components/AddressAutocomplete";
 
 interface JobDetailsPanelProps {
   jobId: string;
@@ -121,14 +122,13 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   });
   const customer = custResp?.data;
 
-  // All customers — only fetched when the job has no customer set yet, so
-  // we can render a picker instead of "Unnamed customer". Drafts created
-  // from /dispatch's "+ New" buttons land here with customerId=null and
-  // need a picker to link to a customer record. Existing jobs with a
-  // customer skip this query entirely.
+  // All customers — used in two places: (a) the empty-state picker when the
+  // job has no customer linked yet, and (b) the "✎ Change" popover on a
+  // linked-customer card so the user can re-link to a different record
+  // without leaving the panel. The list is small + cached for 60s; React
+  // Query shares the cache with the Clients page and dispatch board.
   const { data: allCustomersResp } = useQuery<{ success?: boolean; data?: CustomerShape[] }>({
     queryKey: ["/api/customers"],
-    enabled: !customerId,
     staleTime: 60_000,
   });
   const allCustomers = useMemo(
@@ -226,6 +226,24 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
     },
   });
 
+  // ── Change-customer popover (linked-customer card) ─────────────────────
+  // Toggled open from the "✎ Change" pill next to the customer name. Lets
+  // the user re-link this job to a different customer record without
+  // leaving the panel — handy when a duplicate was picked at create time
+  // and merged later. On select, PATCH job.customerId via saveField; the
+  // customer query at line 117 then re-fires against the new id and the
+  // card re-renders with the new name/address.
+  const [isChangingCustomer, setIsChangingCustomer] = useState(false);
+  const [changeCustomerSearch, setChangeCustomerSearch] = useState("");
+  const filteredChangeCustomers = useMemo(() => {
+    const q = changeCustomerSearch.trim().toLowerCase();
+    const base = allCustomers.filter((c) => c.id !== customerId);
+    if (!q) return base.slice(0, 50);
+    return base
+      .filter((c) => (c.name ?? "").toLowerCase().includes(q))
+      .slice(0, 50);
+  }, [allCustomers, changeCustomerSearch, customerId]);
+
   // ── New-customer inline form (picker UI) ───────────────────────────────
   // Toggled open from the "+ New customer" button under the picker. POSTs
   // /api/customers with the entered fields, then chains into saveField to
@@ -287,9 +305,21 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       {customerId ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-4">
           <div className="flex items-start justify-between gap-3">
-            <h2 className="text-[20px] font-extrabold tracking-tight text-slate-900 leading-tight truncate">
-              {customer?.name ?? "Unnamed customer"}
-            </h2>
+            <button
+              type="button"
+              onClick={() => setIsChangingCustomer((v) => !v)}
+              className="group flex items-center gap-2 min-w-0 text-left"
+              data-testid="button-change-customer"
+              aria-label="Change linked customer"
+            >
+              <h2 className="text-[20px] font-extrabold tracking-tight text-slate-900 leading-tight truncate group-hover:underline">
+                {customer?.name ?? "Unnamed customer"}
+              </h2>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 group-hover:bg-blue-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                <Pencil className="w-3 h-3" />
+                Change
+              </span>
+            </button>
             <span
               className="text-[11px] font-bold px-2.5 py-0.5 rounded-full flex-shrink-0"
               style={{ background: STATUS_BG[status] ?? "#f1f5f9", color: STATUS_FG[status] ?? "#475569" }}
@@ -297,28 +327,102 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
               {statusLabel}
             </span>
           </div>
-          <div className="flex items-center gap-1.5 mt-2">
-            <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" />
-            <input
-              type="text"
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              onBlur={() => {
-                const trimmed = address.trim();
-                const oldVal = job?.address ?? "";
-                if (oldVal === trimmed) return;
-                // Server preserves non-empty fields against empty values unless
-                // _clearFields lists them — see server/routes.ts:5618.
-                if (trimmed === "") {
-                  saveField.mutate({ address: null, _clearFields: ["address"] } as any);
-                } else {
-                  saveField.mutate({ address: trimmed });
-                }
-              }}
-              placeholder="Add job address..."
-              className="flex-1 min-w-0 bg-transparent text-[14px] text-slate-700 placeholder:text-slate-400 outline-none focus:bg-slate-50 focus:rounded-md focus:px-1.5 focus:-mx-1.5 transition-all"
-              data-testid="input-job-address"
-            />
+
+          {isChangingCustomer && (
+            <div className="mt-3 border border-blue-200 rounded-xl bg-blue-50/40 p-2">
+              <div className="flex items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={changeCustomerSearch}
+                  onChange={(e) => setChangeCustomerSearch(e.target.value)}
+                  placeholder="Search customers..."
+                  className="flex-1 bg-white border border-blue-200 rounded-lg px-3 py-2 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+                  data-testid="input-change-customer-search"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsChangingCustomer(false);
+                    setChangeCustomerSearch("");
+                  }}
+                  className="p-2 text-slate-500 hover:text-slate-800"
+                  data-testid="button-change-customer-cancel"
+                  aria-label="Cancel"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <ul className="max-h-60 overflow-y-auto bg-white rounded-lg border border-blue-100 divide-y divide-blue-50">
+                {filteredChangeCustomers.length === 0 ? (
+                  <li className="px-3 py-2 text-[13px] text-slate-500">No matches</li>
+                ) : (
+                  filteredChangeCustomers.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!c.id) return;
+                          saveField.mutate({ customerId: c.id });
+                          setIsChangingCustomer(false);
+                          setChangeCustomerSearch("");
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-blue-50 flex flex-col"
+                        data-testid={`change-customer-option-${c.id}`}
+                      >
+                        <span className="text-[14px] font-semibold text-slate-900">
+                          {c.name}
+                        </span>
+                        {c.address && (
+                          <span className="text-[12px] text-slate-500 truncate">
+                            {c.address}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex items-start gap-1.5 mt-2">
+            <MapPin className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-2" />
+            <div className="flex-1 min-w-0">
+              <AddressAutocomplete
+                value={address}
+                onChange={setAddress}
+                onAddressSelect={(parsed: ParsedAddress) => {
+                  // Save immediately when the user picks from the suggestions
+                  // dropdown — onBlur won't always fire (selecting closes the
+                  // popover before the input blurs in some browsers).
+                  const picked = (parsed.fullAddress ?? "").trim();
+                  if (!picked) return;
+                  setAddress(picked);
+                  if ((job?.address ?? "") !== picked) {
+                    saveField.mutate({ address: picked });
+                  }
+                }}
+                onBlur={() => {
+                  const trimmed = address.trim();
+                  const oldVal = job?.address ?? "";
+                  if (oldVal === trimmed) return;
+                  // Server preserves non-empty fields against empty values
+                  // unless _clearFields lists them — matches the previous
+                  // plain-input save behaviour.
+                  if (trimmed === "") {
+                    saveField.mutate({ address: null, _clearFields: ["address"] } as any);
+                  } else {
+                    saveField.mutate({ address: trimmed });
+                  }
+                }}
+                placeholder="Add job address..."
+                mode="full"
+                bare
+                className="bg-transparent border-0 px-1.5 -mx-1.5 h-auto py-1 text-[14px] text-slate-700 placeholder:text-slate-400 focus-visible:ring-0 focus-visible:bg-slate-50 focus-visible:rounded-md"
+                data-testid="input-job-address"
+              />
+            </div>
           </div>
           {addressDisplay && (
             <a
