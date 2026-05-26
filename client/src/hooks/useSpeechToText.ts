@@ -40,28 +40,60 @@ export function useSpeechToText({
     recognition.interimResults = true;
     recognition.lang = language;
 
+    // Accumulate final-result text across multiple onresult events for one
+    // recording session. The prior "fire only if the *last* result is final"
+    // gate could miss the transcript entirely when Chrome's final-segment
+    // delivery interleaves with interims — by the time the session ends, the
+    // last event was an interim and the callback never fired. Instead we now
+    // rebuild from finals on every onresult and flush on `onend`, which
+    // always fires when a session ends.
+    let finalText = '';
+
     recognition.onstart = () => {
+      finalText = '';
+      console.log(
+        '[useSpeechToText] onstart — lang=' + language + ' continuous=' + continuous,
+      );
       setIsListening(true);
     };
 
     recognition.onresult = (event: any) => {
-      const transcript = Array.from(event.results)
-        .map((result: any) => result[0])
-        .map((result: any) => result.transcript)
-        .join('');
-
-      if (event.results[event.results.length - 1].isFinal) {
-        onResultRef.current(transcript);
+      // event.results is the cumulative list for this session, not a delta —
+      // rebuild finals from the whole list each time.
+      let interim = '';
+      let collected = '';
+      for (let i = 0; i < event.results.length; i++) {
+        const r = event.results[i];
+        const text = r[0]?.transcript ?? '';
+        if (r.isFinal) {
+          collected += text;
+        } else {
+          interim += text;
+        }
       }
+      finalText = collected;
+      console.log(
+        '[useSpeechToText] onresult — finals="' + finalText + '" interim="' + interim + '" count=' + event.results.length,
+      );
     };
 
     recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
+      console.error('[useSpeechToText] onerror —', event.error);
       setIsListening(false);
     };
 
     recognition.onend = () => {
+      console.log('[useSpeechToText] onend — flushing finalText="' + finalText + '"');
       setIsListening(false);
+      const trimmed = finalText.trim();
+      if (trimmed) {
+        try {
+          onResultRef.current(trimmed);
+        } catch (err) {
+          console.error('[useSpeechToText] onResult callback threw:', err);
+        }
+      }
+      finalText = '';
     };
 
     recognitionRef.current = recognition;
