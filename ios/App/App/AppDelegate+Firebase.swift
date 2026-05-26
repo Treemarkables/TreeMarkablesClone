@@ -186,13 +186,47 @@ extension NotificationHandler: UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let userInfo = response.notification.request.content.userInfo
-        if let clickAction = userInfo["clickAction"] as? String, !clickAction.isEmpty {
-            print("📲 Push tap — navigating WebView to: \(clickAction)")
-            navigateWebView(to: clickAction)
+        print("📲 Push tap — userInfo keys: \(userInfo.keys.map { "\($0)" })")
+
+        // 1. Prefer the explicit clickAction the server includes.
+        // 2. Fall back to constructing a URL from the data fields, so the tap
+        //    still routes somewhere meaningful if clickAction is ever missing
+        //    (matches the firebase-messaging-sw.js fallback logic).
+        let path = pathFromUserInfo(userInfo)
+        if let path = path {
+            print("📲 Push tap — navigating WebView to: \(path)")
+            navigateWebView(to: path)
         } else {
-            print("📲 Push tap — no clickAction in payload")
+            print("📲 Push tap — could not resolve a navigation target; userInfo=\(userInfo)")
         }
         completionHandler()
+    }
+
+    private func pathFromUserInfo(_ userInfo: [AnyHashable: Any]) -> String? {
+        if let clickAction = userInfo["clickAction"] as? String, !clickAction.isEmpty {
+            return clickAction
+        }
+
+        let type = (userInfo["type"] as? String) ?? ""
+        let jobId = (userInfo["jobId"] as? String) ?? ""
+        let conversationId = (userInfo["conversationId"] as? String) ?? ""
+
+        switch type {
+        case "job_assignment", "schedule_change":
+            return jobId.isEmpty ? "/dispatch" : "/dispatch?job=\(jobId)"
+        case "new_conversation", "conversation_reply":
+            if !jobId.isEmpty { return "/dispatch?job=\(jobId)&tab=diary" }
+            if !conversationId.isEmpty { return "/conversation/\(conversationId)" }
+            return "/conversations"
+        case "new_lead":
+            return jobId.isEmpty ? "/conversations" : "/dispatch?job=\(jobId)&tab=diary"
+        case "invoice_payment":
+            return "/invoices"
+        case "quote_accepted":
+            return "/quotes"
+        default:
+            return nil
+        }
     }
 
     private func navigateWebView(to path: String, attempt: Int = 0) {

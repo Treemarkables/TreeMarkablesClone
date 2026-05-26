@@ -325,8 +325,38 @@ export function GlobalJobCard({
   );
   const [checklistCollapsed, setChecklistCollapsed] = useState(true);
   const [newChecklistItem, setNewChecklistItem] = useState("");
-  const [activeTab, setActiveTab] = useState<SidebarTab>(initialSidebarTab ?? "details");
-  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(initialSidebarTab ?? "details");
+  // Push notifications deep-link to ?tab=diary. On desktop the diary panel is
+  // always visible alongside Details, so showing the empty "diary" main panel
+  // there would look broken — fall back to Details. On mobile the Diary tab
+  // is its own view and renders the diary in the main content area, so keep
+  // it as the initial tab there.
+  const resolvedInitialSidebarTab: SidebarTab = (() => {
+    if (initialSidebarTab !== "diary") return initialSidebarTab ?? "details";
+    const isDesktopAtMount =
+      typeof window !== "undefined" &&
+      window.matchMedia("(min-width: 768px)").matches;
+    return isDesktopAtMount ? "details" : "diary";
+  })();
+  const [activeTab, setActiveTab] = useState<SidebarTab>(resolvedInitialSidebarTab);
+  const [sidebarTab, setSidebarTab] = useState<SidebarTab>(resolvedInitialSidebarTab);
+
+  // DispatchBoard fires this when a push notification arrives for the job
+  // that's already open — switch to the requested tab without remounting.
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const requested = (event as CustomEvent<SidebarTab>).detail;
+      if (!requested) return;
+      const isDesktop =
+        typeof window !== "undefined" &&
+        window.matchMedia("(min-width: 768px)").matches;
+      const next: SidebarTab =
+        requested === "diary" && isDesktop ? "details" : requested;
+      setSidebarTab(next);
+      setActiveTab(next);
+    };
+    window.addEventListener("job-card-switch-tab", handler);
+    return () => window.removeEventListener("job-card-switch-tab", handler);
+  }, []);
   const [showMoreActionsSheet, setShowMoreActionsSheet] = useState(false);
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [mobileNamePopoverOpen, setMobileNamePopoverOpen] = useState(false);

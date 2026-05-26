@@ -735,7 +735,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
   // Sidebar tab to open the job card on — set from the `?tab=` URL param when
   // a push notification deep-links to a specific section (e.g. the diary).
   const [initialSidebarTab, setInitialSidebarTab] = useState<
-    "details" | "billing" | "checklist" | undefined
+    "details" | "billing" | "checklist" | "diary" | undefined
   >(undefined);
   const [newJobFormData, setNewJobFormData] = useState({
     customerName: "",
@@ -876,9 +876,17 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
   // Handle URL parameters for opening specific jobs (e.g., from notifications)
   useEffect(() => {
-    const handleUrlChange = () => {
-      // Parse URL parameters from window.location.search directly for immediate access
-      const params = new URLSearchParams(window.location.search);
+    // When triggered by a notification we get the intended URL as an argument.
+    // Trusting it directly is more reliable than re-reading window.location,
+    // which can be raced by Wouter on same-pathname navigation or by other
+    // effects that call history.replaceState before this handler runs.
+    const handleUrlChange = (sourceUrl?: string) => {
+      const search = sourceUrl
+        ? (sourceUrl.includes("?")
+            ? sourceUrl.substring(sourceUrl.indexOf("?"))
+            : "")
+        : window.location.search;
+      const params = new URLSearchParams(search);
       const jobId = params.get("job");
       const tab = params.get("tab");
       const newJob = params.get("newJob");
@@ -899,6 +907,8 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         jobCount: jobsData?.data?.length || 0,
         location,
         windowSearch: window.location.search,
+        sourceUrl,
+        searchUsed: search,
         currentlyEditing: jobToEdit?.id,
       });
 
@@ -919,20 +929,29 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
 
         console.log("🔔 Job search result:", { found: !!job, jobId });
 
-        // Old push notifications used ?tab=diary — the dedicated Diary tab is
-        // gone but the diary still renders alongside Details, so silently fall
-        // back to "details" instead of dropping the user on a missing tab.
+        // Push notifications use ?tab=diary to deep-link a customer message
+        // reply to the diary view. On mobile the Diary is its own tab; on
+        // desktop the diary panel is always visible alongside Details, so the
+        // job card falls back to Details there (see GlobalJobCard).
         const tabParam =
-          tab === "diary"
-            ? ("details" as const)
-            : tab === "checklist" || tab === "billing" || tab === "details"
-              ? (tab as "details" | "billing" | "checklist")
-              : undefined;
+          tab === "diary" ||
+          tab === "checklist" ||
+          tab === "billing" ||
+          tab === "details"
+            ? (tab as "details" | "billing" | "checklist" | "diary")
+            : undefined;
 
         const openJob = (jobData: any) => {
-          // Guard: Don't re-open if we're already editing this job
+          // Already viewing this job — don't remount the card, but if the
+          // notification asked for a specific tab (e.g. diary) tell the card
+          // to switch to it.
           if (showGlobalJobCard && jobToEdit?.id === jobId) {
             window.history.replaceState({}, "", "/dispatch");
+            if (tabParam) {
+              window.dispatchEvent(
+                new CustomEvent("job-card-switch-tab", { detail: tabParam }),
+              );
+            }
             return;
           }
           window.history.replaceState({}, "", "/dispatch");
@@ -976,14 +995,20 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
     // Run on mount and when dependencies change
     handleUrlChange();
 
-    // Listen for notification navigation events
+    // Listen for notification navigation events. The event carries the URL
+    // we want to land on — pass it straight through so we don't depend on
+    // window.location having been updated by the time we run.
     const handleNotificationNav = (event: Event) => {
       const customEvent = event as CustomEvent;
       console.log(
         "🔔 Notification navigation event received:",
         customEvent.detail,
       );
-      handleUrlChange();
+      const detailUrl: string | undefined =
+        typeof customEvent.detail === "string"
+          ? customEvent.detail
+          : customEvent.detail?.url;
+      handleUrlChange(detailUrl);
     };
 
     // Handle the "New Job" orange header button firing a custom event when already on /dispatch
@@ -998,8 +1023,12 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
       setShowGlobalJobCard(true);
     };
 
+    // popstate fires with a PopStateEvent — pass no arg so handleUrlChange
+    // falls back to reading window.location (which is what we want for
+    // back/forward navigation).
+    const handlePopState = () => handleUrlChange();
     window.addEventListener("notification-navigation", handleNotificationNav);
-    window.addEventListener("popstate", handleUrlChange);
+    window.addEventListener("popstate", handlePopState);
     window.addEventListener("dispatch-new-job", handleNewJobEvent);
 
     const handleNewLeadEvent = () => handleCreateLead();
@@ -1016,7 +1045,7 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
         "notification-navigation",
         handleNotificationNav,
       );
-      window.removeEventListener("popstate", handleUrlChange);
+      window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("dispatch-new-job", handleNewJobEvent);
       window.removeEventListener("dispatch-new-lead", handleNewLeadEvent);
       window.removeEventListener("dispatch-new-quote", handleNewQuoteEvent);
