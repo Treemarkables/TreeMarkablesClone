@@ -7101,6 +7101,75 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
     }
   }
 
+  // De-dupe in-flight thumbnail extractions per video id. Lazy backfill from
+  // GET /api/videos kicks off one job per refresh otherwise; this keeps the
+  // request from re-firing while ffmpeg is still working.
+  const thumbnailJobsInFlight = new Set<string>();
+
+  // Extract a poster frame from a GCS-hosted video, encode as webp, upload back
+  // to GCS, and persist the URL on the row. Best-effort: any failure is logged
+  // and swallowed — the video itself stays playable, just without a poster.
+  async function generateVideoThumbnail(videoId: string): Promise<void> {
+    if (thumbnailJobsInFlight.has(videoId)) return;
+    thumbnailJobsInFlight.add(videoId);
+    let videoTmpPath: string | null = null;
+    let frameTmpPath: string | null = null;
+    try {
+      const video = await storage.getVideo(videoId);
+      if (!video || video.thumbnailUrl) return;
+
+      const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
+      if (!privateDir) return;
+
+      const rawExt = (video.filename.split('.').pop() || 'mp4').toLowerCase();
+      videoTmpPath = path.join(os.tmpdir(), `tm-vthumb-src-${randomUUID()}.${rawExt}`);
+      frameTmpPath = path.join(os.tmpdir(), `tm-vthumb-frame-${randomUUID()}.jpg`);
+      await videoStorage.downloadToFile(video.url, videoTmpPath);
+
+      // Grab a frame ~1s in (most iPhone clips have a black settle-frame at 0s).
+      // -frames:v 1 outputs a single still; mjpeg keeps it lossy + small.
+      await new Promise<void>((resolve, reject) => {
+        ffmpeg(videoTmpPath as string)
+          .seekInput(1)
+          .outputOptions(['-frames:v', '1', '-q:v', '4'])
+          .format('mjpeg')
+          .on('end', () => resolve())
+          .on('error', (err: Error) => reject(err))
+          .save(frameTmpPath as string);
+      });
+
+      const rawFrame = await fs.promises.readFile(frameTmpPath);
+      const thumbnailBuffer = await sharp(rawFrame)
+        .resize(960, null, { fit: 'inside', withoutEnlargement: true })
+        .webp({ quality: 70 })
+        .toBuffer();
+
+      const thumbFilename = `thumb_${video.filename.replace(/\.[^./]+$/, '')}.webp`;
+      const thumbObjectPath = `${privateDir}/videos/${thumbFilename}`;
+      const parts = thumbObjectPath.replace(/^\//, '').split('/');
+      const bucketName = parts[0];
+      const objectName = parts.slice(1).join('/');
+      await objectStorageClient
+        .bucket(bucketName)
+        .file(objectName)
+        .save(thumbnailBuffer, {
+          resumable: false,
+          metadata: { contentType: 'image/webp' },
+        });
+
+      const thumbnailUrl = `/objects/videos/${thumbFilename}`;
+      await storage.updateVideo(videoId, { thumbnailUrl });
+      console.log(`🎞️  Video thumbnail generated: ${thumbnailUrl}`);
+    } catch (err) {
+      console.warn(`Could not generate thumbnail for video ${videoId}:`, err);
+    } finally {
+      thumbnailJobsInFlight.delete(videoId);
+      for (const p of [videoTmpPath, frameTmpPath]) {
+        if (p) fs.promises.unlink(p).catch(() => {});
+      }
+    }
+  }
+
   // Stream a video (public, range-aware so the <video> player can seek).
   app.get('/objects/videos/:filename', async (req: Request, res: Response) => {
     try {
@@ -7151,6 +7220,10 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
       if (showToCustomer) {
         await syncVideoLinkInJobDescription(jobId, video.id, true);
       }
+
+      // Fire-and-forget: extract a poster frame so the card stops showing
+      // a black <video> placeholder. Don't block the upload response on it.
+      generateVideoThumbnail(video.id).catch(() => {});
 
       res.json({ success: true, data: video });
     } catch (error) {
@@ -7259,6 +7332,9 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
         await syncVideoLinkInJobDescription(jobId, video.id, true);
       }
 
+      // Fire-and-forget: poster frame so the library card isn't a black box.
+      generateVideoThumbnail(video.id).catch(() => {});
+
       res.json({ success: true, data: video });
     } catch (error) {
       console.error('Error uploading video:', error);
@@ -7269,11 +7345,50 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
   });
 
   // Videos library list (staff). Optional filters: ?kind=job|knowledge, ?unassigned=true
+  // Enriches each row with the linked job's number/address and the customer
+  // name so the library page can show *which* job a video belongs to instead
+  // of just a "linked" badge. Also lazily backfills missing thumbnails so the
+  // cards stop rendering as black boxes for videos uploaded before #76.
   app.get('/api/videos', async (req: Request, res: Response) => {
     try {
       const kind = typeof req.query.kind === 'string' ? req.query.kind : undefined;
       const unassigned = req.query.unassigned === 'true';
-      const data = await storage.getVideos({ kind, unassigned });
+      const rows = await storage.getVideos({ kind, unassigned });
+
+      const jobIds = Array.from(new Set(rows.map((v) => v.jobId).filter((id): id is string => !!id)));
+      const jobs = await Promise.all(jobIds.map((id) => storage.getJob(id)));
+      const jobById = new Map(jobs.filter((j): j is NonNullable<typeof j> => !!j).map((j) => [j.id, j]));
+
+      const customerIds = Array.from(
+        new Set(
+          Array.from(jobById.values())
+            .map((j) => j.customerId)
+            .filter((id): id is string => !!id),
+        ),
+      );
+      const customers = await Promise.all(customerIds.map((id) => storage.getCustomer(id)));
+      const customerById = new Map(
+        customers.filter((c): c is NonNullable<typeof c> => !!c).map((c) => [c.id, c]),
+      );
+
+      const data = rows.map((v) => {
+        const job = v.jobId ? jobById.get(v.jobId) : undefined;
+        const customer = job?.customerId ? customerById.get(job.customerId) : undefined;
+        return {
+          ...v,
+          jobNumber: job?.jobNumber ?? null,
+          jobTitle: job?.title ?? null,
+          jobAddress: job?.address ?? null,
+          customerName: customer?.name ?? null,
+        };
+      });
+
+      // Kick off poster-frame backfill for any row missing a thumbnail.
+      // Fire-and-forget: the next list refresh will pick up the generated URLs.
+      for (const v of rows) {
+        if (!v.thumbnailUrl) generateVideoThumbnail(v.id).catch(() => {});
+      }
+
       res.json({ success: true, data });
     } catch (error) {
       console.error('Error listing videos:', error);

@@ -3,13 +3,14 @@
 // to a job later (backend supports PATCH /api/videos/:id { jobId }). Knowledge /
 // how-to videos will also live here once that surface is built (schema-ready).
 import { useRef, useState } from "react";
+import { Link } from "wouter";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X } from "lucide-react";
+import { Trash2, Upload, Copy, Video as VideoIcon, Search, Pencil, Check, X, Briefcase } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function Videos() {
@@ -200,59 +201,75 @@ export default function Videos() {
               data-testid={`library-video-${v.id}`}
             >
               <CardContent className="p-3 space-y-2">
-                <div className="flex items-center justify-between gap-2">
-                  {editingId === v.id ? (
-                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                      <Input
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") saveEdit(v.id);
-                          if (e.key === "Escape") setEditingId(null);
-                        }}
-                        placeholder="Video title"
-                        className="h-8"
-                        autoFocus
-                        data-testid={`input-edit-title-${v.id}`}
-                      />
-                      <Button
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    {editingId === v.id ? (
+                      <div className="flex items-center gap-1">
+                        <Input
+                          value={editTitle}
+                          onChange={(e) => setEditTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") saveEdit(v.id);
+                            if (e.key === "Escape") setEditingId(null);
+                          }}
+                          placeholder="Video title"
+                          className="h-8"
+                          autoFocus
+                          data-testid={`input-edit-title-${v.id}`}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => saveEdit(v.id)}
+                          disabled={renameMutation.isPending}
+                          data-testid={`button-save-title-${v.id}`}
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => setEditingId(null)}
+                          data-testid={`button-cancel-title-${v.id}`}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <button
                         type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => saveEdit(v.id)}
-                        disabled={renameMutation.isPending}
-                        data-testid={`button-save-title-${v.id}`}
+                        onClick={() => startEdit(v)}
+                        className="flex items-center gap-1.5 min-w-0 text-left group w-full"
+                        data-testid={`button-edit-title-${v.id}`}
                       >
-                        <Check className="w-3.5 h-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        onClick={() => setEditingId(null)}
-                        data-testid={`button-cancel-title-${v.id}`}
+                        <span className="text-sm font-medium truncate">
+                          {v.title || v.originalName || (v.customerName ? `Walkthrough — ${v.customerName}` : "Untitled video")}
+                        </span>
+                        <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
+                      </button>
+                    )}
+                    {v.jobId ? (
+                      <Link
+                        href={`/dispatch?job=${v.jobId}`}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline min-w-0"
+                        data-testid={`link-video-job-${v.id}`}
                       >
-                        <X className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(v)}
-                      className="flex items-center gap-1.5 min-w-0 text-left group"
-                      data-testid={`button-edit-title-${v.id}`}
-                    >
-                      <span className="text-sm font-medium truncate">
-                        {v.title || v.originalName || "Untitled"}
-                      </span>
-                      <Pencil className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 shrink-0" />
-                    </button>
-                  )}
-                  {v.jobId ? (
-                    <Badge variant="secondary" className="shrink-0">Linked to job</Badge>
-                  ) : (
+                        <Briefcase className="w-3 h-3 shrink-0" />
+                        <span className="truncate">
+                          {v.customerName || "Linked job"}
+                          {v.jobNumber ? ` · #${v.jobNumber}` : ""}
+                          {v.jobAddress ? ` · ${v.jobAddress}` : ""}
+                        </span>
+                      </Link>
+                    ) : (
+                      <span className="block text-xs text-muted-foreground">Not linked to a job yet</span>
+                    )}
+                  </div>
+                  {!v.jobId && (
                     <Badge variant="outline" className="shrink-0">Unassigned</Badge>
                   )}
                 </div>
