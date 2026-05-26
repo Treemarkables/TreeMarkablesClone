@@ -4,16 +4,28 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 
+export interface ParsedAddress {
+  fullAddress: string;
+  streetNumber: string;
+  streetName: string;
+  suburb: string;
+  city: string;
+  region: string;
+  postcode: string;
+}
+
 interface AddressAutocompleteProps {
   value: string;
   onChange: (value: string) => void;
-  onAddressSelect?: (address: string) => void;
-  onManualEdit?: (value: string) => void;
+  onAddressSelect?: (address: ParsedAddress) => void;
+  onManualEdit?: () => void;
+  onBlur?: () => void;
   placeholder?: string;
   className?: string;
   disabled?: boolean;
   "data-testid"?: string;
   mode?: "full" | "street" | "city" | "region"; // Different modes for different field types
+  bare?: boolean; // When true, drop the default px-4 wrapper padding (for inline use inside already-padded cards)
 }
 
 interface AddySuggestion {
@@ -34,11 +46,13 @@ export function AddressAutocomplete({
   onChange,
   onAddressSelect,
   onManualEdit,
+  onBlur,
   placeholder = "Start typing an address...",
   className,
   disabled,
   "data-testid": testId,
-  mode = "full"
+  mode = "full",
+  bare = false,
 }: AddressAutocompleteProps) {
   const [suggestions, setSuggestions] = useState<AddySuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -327,7 +341,7 @@ export function AddressAutocomplete({
   }, []);
 
   return (
-    <div ref={containerRef} className="relative px-4">
+    <div ref={containerRef} className={bare ? "relative" : "relative px-4"}>
       <div className="relative">
         <Input
           ref={inputRef}
@@ -335,6 +349,7 @@ export function AddressAutocomplete({
           onChange={(e) => handleInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
           onFocus={() => value.length >= 3 && setShowSuggestions(suggestions.length > 0)}
+          onBlur={onBlur}
           placeholder={placeholder}
           className={`${className} leading-relaxed`}
           disabled={disabled}
