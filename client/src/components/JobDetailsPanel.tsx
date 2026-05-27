@@ -244,6 +244,23 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
       .slice(0, 50);
   }, [allCustomers, changeCustomerSearch, customerId]);
 
+  // ── Pick-a-customer search (no-customer state) ─────────────────────────
+  // Replaces the native <select> with a text input + filtered list so the
+  // user sees what they're typing. Native macOS <select> didn't surface the
+  // search string at all — typing just jumped to the first prefix match.
+  const [pickCustomerSearch, setPickCustomerSearch] = useState("");
+  const filteredPickCustomers = useMemo(() => {
+    const q = pickCustomerSearch.trim().toLowerCase();
+    if (!q) return allCustomers.slice(0, 50);
+    return allCustomers
+      .filter(
+        (c) =>
+          (c.name ?? "").toLowerCase().includes(q) ||
+          (c.address ?? "").toLowerCase().includes(q),
+      )
+      .slice(0, 50);
+  }, [allCustomers, pickCustomerSearch]);
+
   // ── New-customer inline form (picker UI) ───────────────────────────────
   // Toggled open from the "+ New customer" button under the picker. POSTs
   // /api/customers with the entered fields, then chains into saveField to
@@ -455,23 +472,46 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
           <p className="text-[13px] text-blue-700/85 mt-1">
             Link this job to a customer. Auto-saves on select.
           </p>
-          <div className="relative mt-3">
-            <select
-              value=""
-              onChange={(e) => {
-                const newId = e.target.value;
-                if (newId) saveField.mutate({ customerId: newId });
-              }}
-              className="w-full appearance-none bg-white border border-blue-300 rounded-lg pl-3 pr-8 py-2.5 text-[14px] font-semibold text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
-              data-testid="customer-picker"
+          <div className="mt-3">
+            <input
+              type="text"
+              value={pickCustomerSearch}
+              onChange={(e) => setPickCustomerSearch(e.target.value)}
+              placeholder="Search customers..."
+              className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2.5 text-[14px] outline-none focus:ring-2 focus:ring-blue-500"
+              data-testid="customer-picker-search"
               disabled={saveField.isPending}
-            >
-              <option value="">Select a customer…</option>
-              {allCustomers.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+            />
+            <ul className="mt-2 max-h-60 overflow-y-auto bg-white rounded-lg border border-blue-100 divide-y divide-blue-50">
+              {filteredPickCustomers.length === 0 ? (
+                <li className="px-3 py-2 text-[13px] text-slate-500">No matches</li>
+              ) : (
+                filteredPickCustomers.map((c) => (
+                  <li key={c.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!c.id) return;
+                        saveField.mutate({ customerId: c.id });
+                        setPickCustomerSearch("");
+                      }}
+                      disabled={saveField.isPending}
+                      className="w-full text-left px-3 py-2 hover:bg-blue-50 flex flex-col disabled:opacity-60"
+                      data-testid={`customer-picker-option-${c.id}`}
+                    >
+                      <span className="text-[14px] font-semibold text-slate-900">
+                        {c.name}
+                      </span>
+                      {c.address && (
+                        <span className="text-[12px] text-slate-500 truncate">
+                          {c.address}
+                        </span>
+                      )}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
           </div>
 
           {/* New-customer inline form — expanded via the toggle below. Lets
