@@ -198,10 +198,21 @@ import { LinkifyMultiline } from "@/lib/linkify";
 import { Link } from "wouter";
 
 // Many imported customers have a null `address` column but populated `city`/`region`.
-// Compose a best-effort job address so picking an existing customer auto-fills the field
-// instead of silently leaving it blank.
+// A second slice of imports had the street address typed into the `name` field itself
+// ("175 gaddums", "21 Stanley road") — for those the address columns are all empty and
+// the name pattern-matches "<digits> <word>". Compose a best-effort job address from
+// whichever of those the customer has, so picking auto-fills the field instead of
+// silently leaving it blank.
 function composeCustomerAddress(
-  customer: { address?: string | null; city?: string | null; region?: string | null } | null | undefined,
+  customer:
+    | {
+        address?: string | null;
+        city?: string | null;
+        region?: string | null;
+        name?: string | null;
+      }
+    | null
+    | undefined,
 ): string {
   if (!customer) return "";
   const street = (customer.address || "").trim();
@@ -209,14 +220,16 @@ function composeCustomerAddress(
   const parts = [customer.city, customer.region]
     .map((p) => (p || "").trim())
     .filter(Boolean);
-  const composed = parts.join(", ");
-  if (!composed) {
-    console.log(
-      "📍 composeCustomerAddress: no address/city/region on customer",
-      { id: (customer as any).id, name: (customer as any).name },
-    );
-  }
-  return composed;
+  if (parts.length) return parts.join(", ");
+  // Last-resort fallback: many imports stored the address in the name field.
+  // Heuristic: starts with one or more digits, whitespace, then a word.
+  const name = (customer.name || "").trim();
+  if (/^\d+\s+\S/.test(name)) return name;
+  console.log(
+    "📍 composeCustomerAddress: no usable address fields on customer",
+    { id: (customer as any).id, name: (customer as any).name },
+  );
+  return "";
 }
 
 // Form validation schema extending the base insertJobSchema

@@ -80,12 +80,23 @@ interface CustomerShape {
 }
 
 // Many imported customers have a null `customers.address` but populated
-// `city`/`region`. Compose a best-effort address so picking a customer
-// still surfaces something to display + save instead of a blank field.
+// `city`/`region`. A second slice of imports had the street address typed
+// into the `name` field itself ("175 gaddums", "21 Stanley road") — for
+// those the address columns are all empty and the name pattern-matches
+// "<digits> <word>". Compose a best-effort address from whichever of those
+// the customer has, so picking still surfaces something to display + save.
 // Mirrors the helper in GlobalJobCard.tsx — kept local to avoid a shared
 // import that has to thread through too many call sites.
 function composeCustomerAddress(
-  customer: { address?: string | null; city?: string | null; region?: string | null } | null | undefined,
+  customer:
+    | {
+        address?: string | null;
+        city?: string | null;
+        region?: string | null;
+        name?: string | null;
+      }
+    | null
+    | undefined,
 ): string {
   if (!customer) return "";
   const street = (customer.address || "").trim();
@@ -93,7 +104,12 @@ function composeCustomerAddress(
   const parts = [customer.city, customer.region]
     .map((p) => (p || "").trim())
     .filter(Boolean);
-  return parts.join(", ");
+  if (parts.length) return parts.join(", ");
+  // Last-resort fallback: many imports stored the address in the name field.
+  // Heuristic: starts with one or more digits, whitespace, then a word.
+  const name = (customer.name || "").trim();
+  if (/^\d+\s+\S/.test(name)) return name;
+  return "";
 }
 
 const STATUS_LABEL: Record<string, string> = {
