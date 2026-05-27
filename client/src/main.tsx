@@ -1,7 +1,42 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import App from "./App";
 import "./index.css";
+
+// Sentry frontend init — disabled when VITE_SENTRY_DSN is unset so local
+// development without a DSN doesn't spam Sentry.
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    environment: import.meta.env.MODE,
+    integrations: [
+      // Records the user's session as a replayable timeline. We only ever
+      // record on error (sessionSampleRate=0, errorSampleRate=1) so we stay
+      // well under the free-tier 50/mo cap.
+      Sentry.replayIntegration({
+        maskAllText: false,
+        blockAllMedia: false,
+      }),
+    ],
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 1.0,
+    // Stay on the free tier — no perf tracing, just errors + replays.
+    tracesSampleRate: 0,
+    // Stale-bundle chunk errors are already handled by the listeners below
+    // (they trigger a hard reload). Don't double-report them to Sentry.
+    ignoreErrors: [
+      "Failed to fetch dynamically imported module",
+      "Importing a module script failed",
+      "Loading chunk",
+      "ChunkLoadError",
+      // Browser extensions injecting into the page — not our bugs.
+      "ResizeObserver loop limit exceeded",
+      "ResizeObserver loop completed with undelivered notifications",
+    ],
+  });
+}
 
 // v14 - Auto-recover from stale cached JS bundles
 // When a new deployment happens, old cached index.html references old JS filenames.
