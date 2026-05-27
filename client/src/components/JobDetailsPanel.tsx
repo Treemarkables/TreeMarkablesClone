@@ -72,9 +72,28 @@ interface CustomerShape {
   id?: string;
   name?: string | null;
   address?: string | null;
+  city?: string | null;
+  region?: string | null;
   email?: string | null;
   phone?: string | null;
   mobile?: string | null;
+}
+
+// Many imported customers have a null `customers.address` but populated
+// `city`/`region`. Compose a best-effort address so picking a customer
+// still surfaces something to display + save instead of a blank field.
+// Mirrors the helper in GlobalJobCard.tsx — kept local to avoid a shared
+// import that has to thread through too many call sites.
+function composeCustomerAddress(
+  customer: { address?: string | null; city?: string | null; region?: string | null } | null | undefined,
+): string {
+  if (!customer) return "";
+  const street = (customer.address || "").trim();
+  if (street) return street;
+  const parts = [customer.city, customer.region]
+    .map((p) => (p || "").trim())
+    .filter(Boolean);
+  return parts.join(", ");
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -212,8 +231,8 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const [address, setAddress] = useState("");
   useEffect(() => {
     if (!job) return;
-    setAddress(job.address ?? customer?.address ?? "");
-  }, [job?.address, customer?.address]);
+    setAddress(job.address || composeCustomerAddress(customer));
+  }, [job?.address, customer?.address, customer?.city, customer?.region]);
 
   // ── Save mutation ───────────────────────────────────────────────────────────
   const saveField = useMutation({
@@ -303,10 +322,26 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const status = job?.status ?? "lead";
   const statusLabel = STATUS_LABEL[status] ?? status;
 
+  // Link a customer to this job. On first link (no existing job.address),
+  // also patch the job's address from the customer so it surfaces in
+  // GlobalJobCard / dispatch board / map links without a second save step.
+  // Never overwrites an address the user already set on this job.
+  const linkCustomer = (c: CustomerShape) => {
+    if (!c.id) return;
+    const patch: Partial<JobShape> = { customerId: c.id };
+    const hasJobAddress = (job?.address ?? "").trim().length > 0;
+    if (!hasJobAddress) {
+      const composed = composeCustomerAddress(c);
+      if (composed) patch.address = composed;
+    }
+    saveField.mutate(patch);
+  };
+
   // Prefer the per-job address when set; fall back to the customer's
-  // address. Inverted from the original order so a per-job override actually
-  // wins — matches GlobalJobCard's behaviour.
-  const addressDisplay = job?.address || customer?.address || "";
+  // address (composed from city/region when the address column is null).
+  // Inverted from the original order so a per-job override actually wins —
+  // matches GlobalJobCard's behaviour.
+  const addressDisplay = job?.address || composeCustomerAddress(customer);
 
   return (
     <div className="p-4 space-y-3.5">
@@ -379,8 +414,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                       <button
                         type="button"
                         onClick={() => {
-                          if (!c.id) return;
-                          saveField.mutate({ customerId: c.id });
+                          linkCustomer(c);
                           setIsChangingCustomer(false);
                           setChangeCustomerSearch("");
                         }}
@@ -491,8 +525,7 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!c.id) return;
-                        saveField.mutate({ customerId: c.id });
+                        linkCustomer(c);
                         setPickCustomerSearch("");
                       }}
                       disabled={saveField.isPending}
