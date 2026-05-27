@@ -6283,11 +6283,18 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     }
   });
 
-  // Bulk delete jobs endpoint
-  app.delete('/api/jobs/bulk-delete', async (req: Request, res: Response) => {
+  // Bulk delete jobs endpoint. Also serves single-job deletes via [jobId]
+  // (see hooks/useJobActions.ts). storage.deleteJob() cascades to every
+  // table that FKs jobs.id — proposals, quotes, invoices, photos, diary
+  // entries, etc. — and the cascade has no soft-delete, so once a job row
+  // is gone the children are unrecoverable from this database. Logged at
+  // warn level so it surfaces in DO production log retention; this is
+  // the only forensic trail for cascaded children. Matches the shape of
+  // PROPOSAL_DELETE_AUDIT.
+  app.delete('/api/jobs/bulk-delete', requireAdmin, async (req: Request, res: Response) => {
     try {
       const { jobIds } = req.body;
-      
+
       if (!jobIds || !Array.isArray(jobIds)) {
         return res.status(400).json({
           success: false,
@@ -6302,6 +6309,44 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
           message: 'No jobs to delete'
         });
       }
+
+      const auditTs = new Date().toISOString();
+      const auditSession = req.session?.employeeId ?? 'anon';
+      const auditUa = req.headers['user-agent'] ?? 'n/a';
+      await Promise.all(jobIds.map(async (jobId: string) => {
+        try {
+          const snapshot = await storage.getJob(jobId).catch(() => null);
+          if (!snapshot) {
+            console.warn(`🛑 JOB_DELETE_AUDIT id=${jobId} ts=${auditTs} (no snapshot — job already missing) session=${auditSession}`);
+            return;
+          }
+          const [proposalCountRows, quoteCountRows, invoiceCountRows] = await Promise.all([
+            db.select({ c: sql<number>`count(*)` }).from(schema.proposals).where(eq(schema.proposals.jobId, jobId)),
+            db.select({ c: sql<number>`count(*)` }).from(schema.quotes).where(eq(schema.quotes.jobId, jobId)),
+            db.select({ c: sql<number>`count(*)` }).from(schema.invoices).where(eq(schema.invoices.jobId, jobId)),
+          ]);
+          const proposalCount = Number(proposalCountRows[0]?.c) || 0;
+          const quoteCount = Number(quoteCountRows[0]?.c) || 0;
+          const invoiceCount = Number(invoiceCountRows[0]?.c) || 0;
+          console.warn(
+            `🛑 JOB_DELETE_AUDIT id=${jobId} ts=${auditTs} session=${auditSession} ua=${auditUa} snapshot=${JSON.stringify({
+              jobNumber: snapshot.jobNumber,
+              title: snapshot.title,
+              status: snapshot.status,
+              customerId: snapshot.customerId,
+              scheduledDate: snapshot.scheduledDate,
+              createdAt: snapshot.createdAt,
+              updatedAt: snapshot.updatedAt,
+              proposalCount,
+              quoteCount,
+              invoiceCount,
+            })}`
+          );
+        } catch (auditErr) {
+          // Never let audit failure block the delete the user asked for.
+          console.error(`JOB_DELETE_AUDIT snapshot failed for id=${jobId}:`, auditErr);
+        }
+      }));
 
       // Delete jobs using storage layer
       const result = await storage.bulkDeleteJobs(jobIds);
