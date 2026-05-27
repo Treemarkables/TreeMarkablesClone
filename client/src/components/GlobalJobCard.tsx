@@ -4291,14 +4291,16 @@ The Treemarkables Team`;
     }
   };
 
-  // Picking a customer (new or existing) on a fresh job card commits the card
-  // immediately and transitions to split-screen edit mode — no Save click needed.
-  // Deferred so form.setValue calls from the onSelect handler flush first.
+  // Previously: picking a customer on a fresh job card auto-committed the
+  // job and jumped into split-screen edit mode. Disabled by user request —
+  // manually-created jobs should stay as drafts until the user presses Save
+  // explicitly. Auto-save still kicks in afterwards (gated on editingJob?.id),
+  // and JobDetailsPanel's customer-link save-on-pick continues to fire for
+  // jobs that were already created server-side (e.g. from conversations).
+  // Kept as a no-op so the call sites in the customer-pick popovers don't
+  // need to be torn out, but it no longer commits anything.
   const autoSaveOnCustomerPick = () => {
-    if (mode !== "create") return;
-    if (createdJobId) return;
-    if (isSavingRef.current || isSaving) return;
-    setTimeout(() => handleSave(), 0);
+    return;
   };
 
   // Callback for ProposalBuilder to request job save (returns job ID)
