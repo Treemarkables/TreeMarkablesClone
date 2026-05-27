@@ -1,4 +1,9 @@
 // Force recompile 2025-11-24
+// IMPORTANT: ./instrument MUST be the very first import. The Sentry Node SDK
+// patches modules (express, http, pg) at load time via OpenTelemetry — if it
+// loads after other modules, breadcrumbs and stack-trace context go missing.
+import "./instrument";
+import * as Sentry from "@sentry/node";
 import http from "http";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes.ts";
@@ -305,9 +310,14 @@ process.on('uncaughtException', (error) => {
     log(`Network/IMAP connection error (recovering — not crashing): ${msg}`, "error");
     return;
   }
-  log(`Uncaught Exception: ${msg}`, "error");
-  console.error('Stack trace:', stack);
-  process.exit(1);
+  // Non-recoverable: report to Sentry before we exit. Flush so the event
+  // actually leaves the process before process.exit kills us.
+  Sentry.captureException(error);
+  Sentry.flush(2000).finally(() => {
+    log(`Uncaught Exception: ${msg}`, "error");
+    console.error('Stack trace:', stack);
+    process.exit(1);
+  });
 });
 
 process.on('unhandledRejection', (reason: any, promise) => {
@@ -317,6 +327,9 @@ process.on('unhandledRejection', (reason: any, promise) => {
     log(`Database connection promise rejected (recovering): ${msg}`, "error");
     return;
   }
+  // Real rejection — report to Sentry. We don't exit (see comment below) so
+  // no flush is required; Sentry's background transport will deliver it.
+  Sentry.captureException(reason);
   // Log but do NOT exit — crashing the entire server over a background task
   // error causes a restart loop that is far more disruptive than the error itself.
   log(`Unhandled Promise Rejection (recovered): ${msg}`, "error");
@@ -405,6 +418,11 @@ function startNotificationQueueWorker() {
       console.error('Route registration error:', err.stack);
       throw error;
     }
+
+    // Sentry Express error handler — MUST be after all routes/middleware are
+    // registered but BEFORE our custom error handler below. It captures the
+    // error and passes it on, so our handler still controls the HTTP response.
+    Sentry.setupExpressErrorHandler(app);
 
     app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
       if (!res.headersSent) {

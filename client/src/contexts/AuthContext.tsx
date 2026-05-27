@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useRef, ReactNode, useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
+import * as Sentry from '@sentry/react';
 import { Employee } from '@shared/schema';
 import { apiRequest, queryClient } from '@/lib/queryClient';
 import { useLocation } from 'wouter';
@@ -55,8 +56,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentUserState(user);
     if (user) {
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(user)); } catch {}
+      // Tag Sentry errors with the logged-in user so we know WHO hit each issue.
+      // Intentionally minimal: id + email + a display name. No phone/PII.
+      try {
+        const displayName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim();
+        Sentry.setUser({
+          id: user.id,
+          email: user.email ?? undefined,
+          username: displayName || undefined,
+        });
+      } catch {}
     } else {
       try { localStorage.removeItem(STORAGE_KEY); } catch {}
+      // Clear the user from Sentry on logout so errors from the login screen
+      // aren't attributed to the previous session.
+      try { Sentry.setUser(null); } catch {}
     }
   };
 

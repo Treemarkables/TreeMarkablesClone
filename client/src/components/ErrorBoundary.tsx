@@ -1,4 +1,5 @@
 import { Component, ReactNode } from 'react';
+import * as Sentry from '@sentry/react';
 import { Button } from '@/components/ui/button';
 import { RefreshCw, AlertTriangle } from 'lucide-react';
 
@@ -29,6 +30,16 @@ export class ErrorBoundary extends Component<Props, State> {
     // which can cause infinite loops when the error itself is a maximum-update-depth error.
     // Instead, store the component stack in a class property.
     this.capturedComponentStack = errorInfo.componentStack || '';
+
+    // Report to Sentry with the React component stack as extra context.
+    // No-op when VITE_SENTRY_DSN is unset (Sentry.init was skipped).
+    try {
+      Sentry.captureException(error, {
+        contexts: {
+          react: { componentStack: this.capturedComponentStack },
+        },
+      });
+    } catch (_) {}
 
     // Persist to localStorage for post-reload diagnosis
     try {
