@@ -10440,6 +10440,36 @@ Draft the reply now.`;
     // so CallKit can show the customer's name instead of a raw number. The
     // name is passed to the iOS Voice SDK as a <Parameter> on <Client>, which
     // the app reads from callInvite.customParameters["callerName"].
+    //
+    // When there's no customer match, fall through to showing the actual
+    // phone number (with an " · Inflow" suffix so it's clear which app rang).
+    // The iOS plugin's generic "Inflow Customer" fallback hid the number
+    // behind a tap — sending the number as the caller name surfaces it on
+    // the lock screen directly.
+    const formatCallerNumber = (raw: string): string => {
+      const digits = raw.replace(/\D/g, '');
+      // NZ mobile in E.164: +64 2X XXX XXXX(X)
+      if (digits.startsWith('64') && digits.length >= 11 && digits[2] === '2') {
+        const rest = digits.slice(2);
+        return `+64 ${rest.slice(0, 2)} ${rest.slice(2, 5)} ${rest.slice(5)}`;
+      }
+      // NZ landline in E.164: +64 X XXX XXXX
+      if (digits.startsWith('64') && digits.length === 10) {
+        const rest = digits.slice(2);
+        return `+64 ${rest.slice(0, 1)} ${rest.slice(1, 4)} ${rest.slice(4)}`;
+      }
+      // Local NZ mobile: 02X XXX XXXX(X)
+      if (digits.startsWith('02') && digits.length >= 10) {
+        return `${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+      }
+      // Local NZ landline: 0X XXX XXXX
+      if (digits.startsWith('0') && digits.length === 9) {
+        return `${digits.slice(0, 2)} ${digits.slice(2, 5)} ${digits.slice(5)}`;
+      }
+      // Unknown shape — show whatever Twilio gave us verbatim.
+      return raw;
+    };
+
     let callerName = '';
     if (inboundFrom) {
       try {
@@ -10453,6 +10483,9 @@ Draft the reply now.`;
         }
       } catch (lookupErr) {
         console.error('Caller-name lookup failed:', lookupErr);
+      }
+      if (!callerName) {
+        callerName = `${formatCallerNumber(inboundFrom)} · Inflow`;
       }
     }
 
