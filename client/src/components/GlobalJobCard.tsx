@@ -197,6 +197,19 @@ import { statusAfterBooking } from "@shared/jobStatus";
 import { LinkifyMultiline } from "@/lib/linkify";
 import { Link } from "wouter";
 
+// Lead jobs auto-created on the server land with a literal
+// `address: "Address not specified"` placeholder (see server/routes.ts and
+// storage.ts). Treat that placeholder as "no address" everywhere we gate
+// on `!form.getValues("address")`, otherwise the customer-pick auto-fill
+// silently no-ops because the form field already holds the placeholder.
+const PLACEHOLDER_ADDRESS_RE = /^\s*address not specified\s*$/i;
+function isMeaningfulAddress(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return !PLACEHOLDER_ADDRESS_RE.test(trimmed);
+}
+
 // Many imported customers have a null `address` column but populated `city`/`region`.
 // A second slice of imports had the street address typed into the `name` field itself
 // ("175 gaddums", "21 Stanley road") — for those the address columns are all empty and
@@ -1884,8 +1897,9 @@ export function GlobalJobCard({
     if (mode === "create" && hasUserSelectedCustomer && selectedCustomer) {
       const composed = composeCustomerAddress(selectedCustomer);
       const currentAddress = form.getValues("address");
-      // Only populate if address field is empty
-      if (composed && (!currentAddress || currentAddress.trim() === "")) {
+      // Only populate if the address field is empty or holds the server's
+      // "Address not specified" placeholder.
+      if (composed && !isMeaningfulAddress(currentAddress)) {
         form.setValue("address", composed);
       }
     }
@@ -5498,8 +5512,10 @@ The Treemarkables Team`;
                                                         );
                                                       if (
                                                         composed &&
-                                                        !form.getValues(
-                                                          "address",
+                                                        !isMeaningfulAddress(
+                                                          form.getValues(
+                                                            "address",
+                                                          ),
                                                         )
                                                       ) {
                                                         form.setValue(
@@ -5679,7 +5695,11 @@ The Treemarkables Team`;
                                                       );
                                                     if (
                                                       composed &&
-                                                      !form.getValues("address")
+                                                      !isMeaningfulAddress(
+                                                        form.getValues(
+                                                          "address",
+                                                        ),
+                                                      )
                                                     ) {
                                                       form.setValue(
                                                         "address",
@@ -5976,7 +5996,9 @@ The Treemarkables Team`;
                                                   );
                                                 if (
                                                   composed &&
-                                                  !form.getValues("address")
+                                                  !isMeaningfulAddress(
+                                                    form.getValues("address"),
+                                                  )
                                                 ) {
                                                   form.setValue(
                                                     "address",
@@ -6299,8 +6321,10 @@ The Treemarkables Team`;
                                                         );
                                                       if (
                                                         composed &&
-                                                        !form.getValues(
-                                                          "address",
+                                                        !isMeaningfulAddress(
+                                                          form.getValues(
+                                                            "address",
+                                                          ),
                                                         )
                                                       ) {
                                                         form.setValue(
@@ -6474,7 +6498,9 @@ The Treemarkables Team`;
                                                     );
                                                   if (
                                                     composed &&
-                                                    !form.getValues("address")
+                                                    !isMeaningfulAddress(
+                                                      form.getValues("address"),
+                                                    )
                                                   ) {
                                                     form.setValue(
                                                       "address",

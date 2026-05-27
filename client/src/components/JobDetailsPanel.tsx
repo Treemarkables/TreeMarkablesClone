@@ -79,6 +79,19 @@ interface CustomerShape {
   mobile?: string | null;
 }
 
+// Lead jobs auto-created on the server land with a literal `address:
+// "Address not specified"` placeholder (see server/routes.ts:2663, :2927
+// and storage.ts:2267, :4133). Treat that placeholder as "no address" for
+// every guard / display path; otherwise linkCustomer's hasJobAddress check
+// trips on the placeholder and skips auto-fill.
+const PLACEHOLDER_ADDRESS_RE = /^\s*address not specified\s*$/i;
+function isMeaningfulAddress(value: string | null | undefined): boolean {
+  if (!value) return false;
+  const trimmed = value.trim();
+  if (!trimmed) return false;
+  return !PLACEHOLDER_ADDRESS_RE.test(trimmed);
+}
+
 // Many imported customers have a null `customers.address` but populated
 // `city`/`region`. A second slice of imports had the street address typed
 // into the `name` field itself ("175 gaddums", "21 Stanley road") — for
@@ -247,8 +260,20 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   const [address, setAddress] = useState("");
   useEffect(() => {
     if (!job) return;
-    setAddress(job.address || composeCustomerAddress(customer));
-  }, [job?.address, customer?.address, customer?.city, customer?.region]);
+    setAddress(
+      isMeaningfulAddress(job.address)
+        ? (job.address as string)
+        : composeCustomerAddress(customer),
+    );
+    // Include customer?.name so that the name-as-address fallback re-fires
+    // when the linked customer changes but address/city/region stay null.
+  }, [
+    job?.address,
+    customer?.address,
+    customer?.city,
+    customer?.region,
+    customer?.name,
+  ]);
 
   // ── Save mutation ───────────────────────────────────────────────────────────
   const saveField = useMutation({
@@ -341,12 +366,12 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   // Link a customer to this job. On first link (no existing job.address),
   // also patch the job's address from the customer so it surfaces in
   // GlobalJobCard / dispatch board / map links without a second save step.
-  // Never overwrites an address the user already set on this job.
+  // Never overwrites a real address the user already set on this job —
+  // but the server's "Address not specified" placeholder counts as empty.
   const linkCustomer = (c: CustomerShape) => {
     if (!c.id) return;
     const patch: Partial<JobShape> = { customerId: c.id };
-    const hasJobAddress = (job?.address ?? "").trim().length > 0;
-    if (!hasJobAddress) {
+    if (!isMeaningfulAddress(job?.address)) {
       const composed = composeCustomerAddress(c);
       if (composed) patch.address = composed;
     }
@@ -356,8 +381,11 @@ export function JobDetailsPanel({ jobId }: JobDetailsPanelProps) {
   // Prefer the per-job address when set; fall back to the customer's
   // address (composed from city/region when the address column is null).
   // Inverted from the original order so a per-job override actually wins —
-  // matches GlobalJobCard's behaviour.
-  const addressDisplay = job?.address || composeCustomerAddress(customer);
+  // matches GlobalJobCard's behaviour. Treats the server-side
+  // "Address not specified" placeholder as empty.
+  const addressDisplay = isMeaningfulAddress(job?.address)
+    ? (job?.address as string)
+    : composeCustomerAddress(customer);
 
   return (
     <div className="p-4 space-y-3.5">
