@@ -197,6 +197,28 @@ import { statusAfterBooking } from "@shared/jobStatus";
 import { LinkifyMultiline } from "@/lib/linkify";
 import { Link } from "wouter";
 
+// Many imported customers have a null `address` column but populated `city`/`region`.
+// Compose a best-effort job address so picking an existing customer auto-fills the field
+// instead of silently leaving it blank.
+function composeCustomerAddress(
+  customer: { address?: string | null; city?: string | null; region?: string | null } | null | undefined,
+): string {
+  if (!customer) return "";
+  const street = (customer.address || "").trim();
+  if (street) return street;
+  const parts = [customer.city, customer.region]
+    .map((p) => (p || "").trim())
+    .filter(Boolean);
+  const composed = parts.join(", ");
+  if (!composed) {
+    console.log(
+      "📍 composeCustomerAddress: no address/city/region on customer",
+      { id: (customer as any).id, name: (customer as any).name },
+    );
+  }
+  return composed;
+}
+
 // Form validation schema extending the base insertJobSchema
 const globalJobCardSchema = insertJobSchema
   .extend({
@@ -1846,15 +1868,12 @@ export function GlobalJobCard({
   useEffect(() => {
     // Only auto-populate if user has explicitly selected a customer (tracked by flag)
     // This prevents auto-populate from using stale customer data from previously viewed jobs
-    if (
-      mode === "create" &&
-      hasUserSelectedCustomer &&
-      selectedCustomer?.address
-    ) {
+    if (mode === "create" && hasUserSelectedCustomer && selectedCustomer) {
+      const composed = composeCustomerAddress(selectedCustomer);
       const currentAddress = form.getValues("address");
       // Only populate if address field is empty
-      if (!currentAddress || currentAddress.trim() === "") {
-        form.setValue("address", selectedCustomer.address);
+      if (composed && (!currentAddress || currentAddress.trim() === "")) {
+        form.setValue("address", composed);
       }
     }
   }, [mode, hasUserSelectedCustomer, selectedCustomer, form]);
@@ -5459,14 +5478,22 @@ The Treemarkables Team`;
                                                     setCustomerSearchOpen(
                                                       false,
                                                     );
-                                                    if (
-                                                      customer.address &&
-                                                      !form.getValues("address")
-                                                    ) {
-                                                      form.setValue(
-                                                        "address",
-                                                        customer.address,
-                                                      );
+                                                    {
+                                                      const composed =
+                                                        composeCustomerAddress(
+                                                          customer,
+                                                        );
+                                                      if (
+                                                        composed &&
+                                                        !form.getValues(
+                                                          "address",
+                                                        )
+                                                      ) {
+                                                        form.setValue(
+                                                          "address",
+                                                          composed,
+                                                        );
+                                                      }
                                                     }
                                                     saveCustomerImmediately(
                                                       customer.id,
@@ -5632,14 +5659,20 @@ The Treemarkables Team`;
                                                   setMobileNamePopoverOpen(
                                                     false,
                                                   );
-                                                  if (
-                                                    customer.address &&
-                                                    !form.getValues("address")
-                                                  ) {
-                                                    form.setValue(
-                                                      "address",
-                                                      customer.address,
-                                                    );
+                                                  {
+                                                    const composed =
+                                                      composeCustomerAddress(
+                                                        customer,
+                                                      );
+                                                    if (
+                                                      composed &&
+                                                      !form.getValues("address")
+                                                    ) {
+                                                      form.setValue(
+                                                        "address",
+                                                        composed,
+                                                      );
+                                                    }
                                                   }
                                                   if (
                                                     customer.email &&
@@ -5922,15 +5955,21 @@ The Treemarkables Team`;
                                               );
                                               setCustomerSearchOpen(false);
                                               setCustomerSearchValue("");
-                                              // Pre-fill address from customer if available
-                                              if (
-                                                customer.address &&
-                                                !form.getValues("address")
-                                              ) {
-                                                form.setValue(
-                                                  "address",
-                                                  customer.address,
-                                                );
+                                              // Pre-fill address from customer (falls back to city/region for imports with null address)
+                                              {
+                                                const composed =
+                                                  composeCustomerAddress(
+                                                    customer,
+                                                  );
+                                                if (
+                                                  composed &&
+                                                  !form.getValues("address")
+                                                ) {
+                                                  form.setValue(
+                                                    "address",
+                                                    composed,
+                                                  );
+                                                }
                                               }
                                               // Pre-fill contact info from customer if not already set
                                               if (
@@ -6119,12 +6158,12 @@ The Treemarkables Team`;
                                     </FormControl>
                                   </PopoverTrigger>
                                   <PopoverContent
-                                    className="w-[300px] md:w-[400px] p-0"
+                                    className="w-[300px] md:w-[400px] p-0 max-h-[min(70vh,420px)] flex flex-col overflow-hidden"
                                     align="start"
                                     onWheel={(e) => e.stopPropagation()}
                                   >
-                                    <Command>
-                                      <div className="flex items-center gap-1 p-2 border-b">
+                                    <Command className="flex flex-col flex-1 min-h-0">
+                                      <div className="flex items-center gap-1 p-2 border-b bg-popover sticky top-0 z-10 flex-shrink-0">
                                         <CommandInput
                                           placeholder="Search or add customer..."
                                           value={customerSearchValue}
@@ -6155,7 +6194,7 @@ The Treemarkables Team`;
                                           </span>
                                         </Button>
                                       </div>
-                                      <CommandList className="max-h-[300px]">
+                                      <CommandList className="flex-1 min-h-0 max-h-none">
                                         {/* Always show Create New Customer option when search has value */}
                                         {customerSearchValue.trim() && (
                                           <CommandGroup
@@ -6240,14 +6279,22 @@ The Treemarkables Team`;
                                                       false,
                                                     );
                                                     // Pre-fill fields
-                                                    if (
-                                                      customer.address &&
-                                                      !form.getValues("address")
-                                                    ) {
-                                                      form.setValue(
-                                                        "address",
-                                                        customer.address,
-                                                      );
+                                                    {
+                                                      const composed =
+                                                        composeCustomerAddress(
+                                                          customer,
+                                                        );
+                                                      if (
+                                                        composed &&
+                                                        !form.getValues(
+                                                          "address",
+                                                        )
+                                                      ) {
+                                                        form.setValue(
+                                                          "address",
+                                                          composed,
+                                                        );
+                                                      }
                                                     }
                                                     if (
                                                       customer.email &&
@@ -6406,15 +6453,21 @@ The Treemarkables Team`;
                                                 setHasUserSelectedCustomer(
                                                   true,
                                                 );
-                                                // Pre-fill address from customer if available
-                                                if (
-                                                  customer.address &&
-                                                  !form.getValues("address")
-                                                ) {
-                                                  form.setValue(
-                                                    "address",
-                                                    customer.address,
-                                                  );
+                                                // Pre-fill address (falls back to city/region for imports with null address)
+                                                {
+                                                  const composed =
+                                                    composeCustomerAddress(
+                                                      customer,
+                                                    );
+                                                  if (
+                                                    composed &&
+                                                    !form.getValues("address")
+                                                  ) {
+                                                    form.setValue(
+                                                      "address",
+                                                      composed,
+                                                    );
+                                                  }
                                                 }
                                                 // Pre-fill contact info from customer if not already set
                                                 if (
