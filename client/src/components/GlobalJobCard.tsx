@@ -3160,19 +3160,82 @@ export function GlobalJobCard({
     // Clear any stale conflict data
     setStaffConflicts([]);
 
-    // Fetch existing staff assignments for this job
+    // Step 1: build defaults from the job's own scheduling fields. This is
+    // the safety net — if /staff-assignments returns empty or fails, or if
+    // the job was scheduled through a path that didn't create assignment
+    // rows, we still show the user the time and crew that are on the job.
+    let existingEndDate = "";
+    if (editingJob?.scheduledEndDate) {
+      const endDateNZ = utcToNZTime(new Date(editingJob.scheduledEndDate));
+      existingEndDate = endDateNZ.date;
+    }
+
+    let baseDate = "";
+    let baseStartTime = "";
+    let baseDuration = "";
+    if (editingJob?.scheduledDate) {
+      const startNZ = utcToNZTime(new Date(editingJob.scheduledDate));
+      baseDate = startNZ.date;
+      // Prefer the explicit HH:MM column when set — it's the source of truth
+      // for what the user picked. scheduledDate-as-UTC can drift across DST
+      // boundaries or if it was stored without the time component.
+      baseStartTime = editingJob.scheduledStartTime || startNZ.time;
+      if (
+        editingJob.scheduledEndTime &&
+        baseStartTime &&
+        !editingJob.scheduledEndDate
+      ) {
+        // Single-day: derive duration from the start/end HH:MM pair.
+        const [sh, sm] = baseStartTime.split(":").map(Number);
+        const [eh, em] = editingJob.scheduledEndTime.split(":").map(Number);
+        const mins = eh * 60 + em - (sh * 60 + sm);
+        if (mins > 0) baseDuration = String(mins);
+      }
+      if (!baseDuration && editingJob.estimatedDuration) {
+        baseDuration = String(
+          Math.round(Number(editingJob.estimatedDuration) * 60),
+        );
+      }
+    }
+
+    // Crew can live in any of three fields depending on the path that
+    // scheduled the job (modal save → assignedTo, drag-drop/older flows →
+    // assignedTeam/assignedStaffIds). Take the first non-empty one.
+    const baseAssignedTo: string[] =
+      Array.isArray(editingJob?.assignedTo) &&
+      (editingJob.assignedTo as string[]).length > 0
+        ? (editingJob.assignedTo as string[])
+        : Array.isArray(editingJob?.assignedTeam) &&
+            (editingJob.assignedTeam as string[]).length > 0
+          ? (editingJob.assignedTeam as string[])
+          : Array.isArray((editingJob as any)?.assignedStaffIds) &&
+              (editingJob as any).assignedStaffIds.length > 0
+            ? ((editingJob as any).assignedStaffIds as string[])
+            : [];
+
+    // Always reset to job-derived defaults first so stale state from a
+    // previous modal session can never leak in.
+    let nextData = {
+      date: baseDate,
+      endDate: existingEndDate,
+      startTime: baseStartTime,
+      duration: baseDuration,
+      day2Duration: "",
+      assignedTo: baseAssignedTo,
+      notes: "",
+      sendClientNotification: false,
+      sendProposalEmail: false,
+      scheduleBookingReminders: false,
+    };
+
+    // Step 2: overlay staff-assignments data when it exists. This is more
+    // precise than the job fields (separate rows per employee/day, per-row
+    // notes) so it wins when present.
     try {
       const response = await fetch(
         `/api/jobs/${editingJob.id}/staff-assignments`,
       );
       const data = await response.json();
-
-      // Pre-populate endDate from the job's scheduledEndDate if set
-      let existingEndDate = "";
-      if (editingJob?.scheduledEndDate) {
-        const endDateNZ = utcToNZTime(new Date(editingJob.scheduledEndDate));
-        existingEndDate = endDateNZ.date;
-      }
 
       if (data.success && data.data && data.data.length > 0) {
         // Prefer the assignment matching the job's scheduledDate — drag-drop
@@ -3197,7 +3260,6 @@ export function GlobalJobCard({
         const durationMinutes =
           (endDateUTC.getTime() - startDateUTC.getTime()) / 60000;
 
-        // Convert UTC time from database to NZ time for display
         const startNZ = utcToNZTime(startDateUTC);
 
         // Only include employees whose assignment shares the chosen start
@@ -3215,48 +3277,30 @@ export function GlobalJobCard({
           ),
         ] as string[];
 
-        setSchedulingData({
-          date: startNZ.date, // NZ date, not UTC!
-          endDate: existingEndDate,
-          startTime: startNZ.time, // NZ time, not UTC!
-          duration: durationMinutes.toString(),
-          day2Duration: "",
-          assignedTo: uniqueEmployeeIds,
-          notes: chosenAssignment.notes || "",
-          sendClientNotification: false,
-          sendProposalEmail: false,
-          scheduleBookingReminders: false,
-        });
-      } else if (editingJob?.scheduledDate) {
-        // No staff assignments yet but the job already has a scheduledDate
-        // (e.g. set elsewhere). Open the modal at that time instead of blank,
-        // so saving doesn't write an empty/default startTime back to the job.
-        const startDateUTC = new Date(editingJob.scheduledDate);
-        const startNZ = utcToNZTime(startDateUTC);
-        const durationMinutes = editingJob?.estimatedDuration
-          ? Math.round(Number(editingJob.estimatedDuration) * 60)
-          : 60;
-        const existingAssignedTo = Array.isArray(editingJob.assignedTo)
-          ? (editingJob.assignedTo as string[])
-          : [];
-
-        setSchedulingData({
+        nextData = {
+          ...nextData,
           date: startNZ.date,
-          endDate: existingEndDate,
           startTime: startNZ.time,
           duration: durationMinutes.toString(),
-          day2Duration: "",
-          assignedTo: existingAssignedTo,
-          notes: "",
-          sendClientNotification: false,
-          sendProposalEmail: false,
-          scheduleBookingReminders: false,
-        });
+          assignedTo:
+            uniqueEmployeeIds.length > 0
+              ? uniqueEmployeeIds
+              : nextData.assignedTo,
+          notes: chosenAssignment.notes || "",
+        };
       }
+
+      console.log("[handleScheduleClick] loaded", {
+        jobId: editingJob.id,
+        staffAssignmentRows: data?.data?.length ?? 0,
+        usedFallback: !(data?.data?.length > 0),
+        nextData,
+      });
     } catch (error) {
       console.error("Error loading existing assignments:", error);
     }
 
+    setSchedulingData(nextData);
     setIsSchedulingModalOpen(true);
   };
 
