@@ -50,7 +50,7 @@ import {
 } from "@/components/ui/select";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { GlobalJobCard } from "@/components/GlobalJobCard";
-import { formatNZTime } from "@shared/dateUtils";
+import { formatNZTime, getNZDateString } from "@shared/dateUtils";
 
 interface DashboardStats {
   totalLeads: number;
@@ -435,12 +435,23 @@ export default function MetricsDashboard() {
       return { from: startDate, to: endDate };
     }
 
-    const today = new Date();
-    const fromDate = new Date();
+    // Anchor on today's NZ calendar date (not the browser's local date or UTC),
+    // then build all Date objects at local midnight of that date. Day-of-week and
+    // date math are therefore correct regardless of the browser's timezone, and we
+    // format outputs from local components — never toISOString(), which would shift
+    // to UTC and roll dates back a day during NZ morning hours.
+    const todayStr = getNZDateString(new Date());
+    const today = new Date(`${todayStr}T00:00:00`);
+    const fmt = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+    const fromDate = new Date(today);
 
     switch (dateRangePreset) {
       case "today": {
-        const todayStr = today.toISOString().split("T")[0];
         return { from: todayStr, to: todayStr };
       }
       case "7": {
@@ -453,8 +464,8 @@ export default function MetricsDashboard() {
         const sunday = new Date(monday);
         sunday.setDate(monday.getDate() + 6);
         return {
-          from: monday.toISOString().split("T")[0],
-          to: sunday.toISOString().split("T")[0],
+          from: fmt(monday),
+          to: fmt(sunday),
         };
       }
       case "mon-fri": {
@@ -468,37 +479,37 @@ export default function MetricsDashboard() {
         const lastSunday = new Date(thisMonday);
         lastSunday.setDate(thisMonday.getDate() - 1);
         return {
-          from: lastMonday.toISOString().split("T")[0],
-          to: lastSunday.toISOString().split("T")[0],
+          from: fmt(lastMonday),
+          to: fmt(lastSunday),
         };
       }
       case "30":
         fromDate.setDate(today.getDate() - 30);
         return {
-          from: fromDate.toISOString().split("T")[0],
-          to: today.toISOString().split("T")[0],
+          from: fmt(fromDate),
+          to: todayStr,
         };
       case "90":
         fromDate.setDate(today.getDate() - 90);
         return {
-          from: fromDate.toISOString().split("T")[0],
-          to: today.toISOString().split("T")[0],
+          from: fmt(fromDate),
+          to: todayStr,
         };
       case "all":
       default:
         // Return last 12 months for "all" to enable Xero payroll metrics
         fromDate.setFullYear(today.getFullYear() - 1);
         return {
-          from: fromDate.toISOString().split("T")[0],
-          to: today.toISOString().split("T")[0],
+          from: fmt(fromDate),
+          to: todayStr,
         };
     }
   };
 
   const dateRange = getDateRange();
 
-  // Get today's date string for "Today's Metrics" section
-  const todayStr = new Date().toISOString().split("T")[0];
+  // Get today's date string for "Today's Metrics" section (NZ calendar date)
+  const todayStr = getNZDateString(new Date());
 
   // Today's metrics query - always shows today's activity regardless of date range
   const { data: todayStats, isLoading: todayLoading } = useQuery<{
