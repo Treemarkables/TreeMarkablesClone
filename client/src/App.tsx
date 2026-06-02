@@ -77,6 +77,7 @@ import ProposalAccept from "@/pages/ProposalAccept";
 import QuoteViewer from "@/pages/QuoteViewer";
 import InvoiceViewer from "@/pages/InvoiceViewer";
 import InvoiceView from "@/pages/InvoiceView";
+import PaymentComplete from "@/pages/PaymentComplete";
 import PublicReview from "@/pages/PublicReview";
 import MulchDrops from "@/pages/MulchDrops";
 import NearMissReport from "@/pages/NearMissReport";
@@ -966,6 +967,7 @@ function Router() {
       <Route path="/quote/:quoteId" component={QuoteViewer}/>
       <Route path="/invoice/:invoiceId/view" component={InvoiceView}/>
       <Route path="/invoice/:invoiceId" component={InvoiceViewer}/>
+      <Route path="/payment-complete" component={PaymentComplete}/>
       <Route path="/review/:token" component={PublicReview}/>
       <Route path="/watch/:videoId" component={WatchVideo}/>
       
