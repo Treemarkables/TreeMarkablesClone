@@ -1,0 +1,3 @@
+# SPA fallback — serve index.html for all client-side (wouter) routes
+# so deep links like /pricing, /features, /about, /contact don't 404.
+/*    /index.html   200
