@@ -26,11 +26,12 @@ This is the design + handoff doc for that work, in the same spirit as `MIGRATION
 | Roles | Replace the hardcoded `role` enum (`admin`/`crew`) with a per-business `roles` table + a code-defined capability catalog | **Locked** | "Every little feature has a toggle" is impossible with a 2-value enum. |
 | Permission storage | Role grants + per-employee overrides; effective = role grants, then employee allow/deny applied on top | **Locked** | Satisfies "per role *and* per staff member." |
 | Entitlements vs permissions | Two layers: subscription (what the *business* paid for) gates which capabilities are *available*; RBAC (what each *staff* can do) gates within that | **Locked** | Ties billing → add-ons → toggles together. You can't grant `calls.record` if the business hasn't bought the Call Recording add-on. |
-| Billing provider | Stripe, NZD, GST-inclusive | **Locked** | Standard SaaS billing; NZ tax handled. (Note: customer *invoicing* already exists and is unrelated — this is subscription billing.) |
-| Tier count | TBD — possibly one membership + add-ons | **OPEN — user deciding** | — |
+| Billing provider | Stripe, NZD, **prices displayed ex-GST** (+15% GST at checkout) | **Locked** | Ex-GST display is the B2B norm — GST-registered customers claim it back and read ex-GST as cheaper. (Customer *invoicing* already exists and is unrelated — this is subscription billing.) |
+| Tier count | Three tiers: **Freemium (free) / Crew / Business** (free entry + two paid) | **Decided (2026-05-30)** — structure draft in §Subscriptions | Freemium (free) tier is the funnel; paid tiers gate features + raise job caps. |
 | Cost-incurring features | Sold as add-ons (call recording, SMS, anything with per-use cost to us) | **Locked** | — |
-| Trial / freemium model | TBD | **OPEN** | — |
-| Pricing (NZD per tier / add-on) | TBD | **OPEN** | Drives Stripe product setup + sales-page copy. |
+| Trial / freemium model | **Freemium** — the Freemium (free) tier is the trial (job-capped, no time limit); optional 14-day Business trial on top | **Decided (2026-05-30)** | — |
+| Pricing (NZD per tier / add-on) | Crew $89/mo, Business $189/mo (draft, ex-GST); Freemium $0 | **Draft — needs validation** | Drives Stripe product setup + sales-page copy. |
+| Treemarkables (tenant #1) billing | **Comped — does not pay.** Gets full (Business-equivalent) entitlements at $0 | **Decided (2026-06-02)** | Owner's own business, backfilled as tenant #1 in Phase 1; exercises the full feature set without charging ourselves. |
 | Domain / sales page | Migrate to `inflowapp.co.nz`, build marketing/sales site | **Locked (intent), later phase** | Owned already. |
 
 ---
@@ -160,6 +161,105 @@ businessAddOns         -- which add-ons a business has switched on
 - **Metered vs flat:** SMS is naturally per-message (Stripe metered/usage records). Call recording is more likely a flat monthly add-on. Decide per add-on.
 - **Onboarding:** new businesses need a self-serve sign-up → create `business` row → seed default roles → start trial/subscription. Today employees are created internally only; this flow is net-new.
 
+### Proposed three-tier structure — **DRAFT for review (NOT locked)**
+
+> Resolves open question #1 with a concrete starting point. **The entry tier is free (freemium), named "Freemium" — decided by user 2026-05-30.** Pricing and bracket sizes on the paid tiers are placeholders to react to, not final. Grounded in the ServiceM8 NZ benchmark but **calibrated down**: tree work is lower-volume / higher-value / multi-day, so job brackets are smaller than ServiceM8's (30/150/500). NZD, **prices shown ex-GST** (15% GST added at checkout — B2B norm; customers claim it back). **Jobs/month is the price axis — never per-seat; users are unlimited on every *paid* tier** (field-service buyers reject per-seat pricing; high crew turnover). Freemium is the one exception — single-user, as a funnel limit.
+
+| | **Freemium** (free) | **Crew** | **Business** |
+|---|---|---|---|
+| **Price (NZD/mo, ex-GST)** | $0 | $89 | $189 |
+| **Annual (2 months free)** | — | $890/yr | $1,890/yr |
+| **Who it's for** | Trial / solo owner-operator testing the water | Small established crew | Multi-crew company |
+| **Active jobs / month** | 15 | 75 | Unlimited |
+| **Users** | 1 user | Unlimited | Unlimited |
+| **Core: jobs, invoicing, scheduling, photos** | ✅ | ✅ | ✅ |
+| **Photos** | ✅ max 3 / job | ✅ Unlimited | ✅ Unlimited |
+| **Quoting & Proposals** | ✅ | ✅ | ✅ |
+| **SMS (booking reminders, customer texting)** | — | ✅ capped allowance | ✅ capped allowance |
+| **Safety module (SWMS, toolbox talks, checklists)** | — | ✅ | ✅ |
+| **Custom roles & per-staff permissions (RBAC)** | Defaults only (Admin/Crew) | ✅ Full | ✅ Full |
+| **CompanyCam-style: voice captions, public timeline link, before/after** | — | ✅ | ✅ |
+| **Marketing suite (Meta/social planner, campaigns)** | — | — | ✅ |
+| **Advanced analytics & job costing** | — | Basic | ✅ |
+| **Help centre access** | ✅ | ✅ | ✅ |
+| **Support** | Community / docs | Email | Priority |
+| **Card-processing fee** | 3.4% | 2.8% | 2.49% |
+
+**What counts as an "active job":** a job **created within the calendar month** (the counter resets on the 1st) — *not* open-status. Simple to display, simple to meter in Stripe, and can't be gamed by closing/reopening jobs.
+
+**SMS handling** (cost-incurring → **paid tiers only, capped**):
+- **Freemium:** no SMS at all. Keeps the free tier free of any payment method (cleaner funnel) and makes "text your customers / send booking reminders" a concrete Freemium→Crew upgrade hook.
+- **Crew / Business:** bundled monthly allowance (300 / 1000 messages) that rides the tier and is **capped**. Once the cap is hit, choose per-business: **soft-stop** (block further sends until next cycle) or **metered overage** (~10c/SMS) + top-up packs. The allowance is the cost ceiling; overage is opt-in. *(Open sub-choice: soft-stop vs. overage as the default.)*
+
+**AI/GPT assist:** **not on Freemium** (it has no payment method, and GPT/Whisper carry real per-use cost). AI features — Smart Dispatch, Speech-to-Quote, lead/message extraction, video transcription — sit on **Business** (bundled with a fair-use cap) or as a **metered add-on** to Crew. Freemium users see them as locked upsells.
+
+**Add-ons (flat, on top of any *paid* tier):**
+- **Call recording** — flat monthly (per the locked decision; real per-use cost to us).
+- **AI bundle** — metered usage, or a flat "unlimited-AI" add-on for Crew (Business bundles it under fair-use).
+
+**Freemium funnel (resolves open question #2 — freemium chosen):**
+- The **Freemium** (free) tier *is* the trial — no time limit, but single-user, hard-capped at 15 active jobs/month and max 3 photos/job, core features only. Upgrade prompts appear when a business hits the job cap, needs a second user, exceeds the photo limit, or taps a gated feature (SMS, safety, marketing).
+- Optionally layer a **14-day Business trial** on top of Freemium for new sign-ups so they can feel the full product before the free caps bite — auto-reverts to Freemium (not data deletion) on expiry.
+- Freemium businesses are still full tenants (their own `business` row, RLS-isolated) — freemium doesn't change the tenancy model, only the entitlement set.
+
+**How this maps to the entitlements layer above:** each tier = one `subscriptionPlans` row; each ✅ feature = a capability key the plan unlocks; SMS allowance + call recording = `addOns` rows (one metered, one flat). The RBAC page then only lets an owner grant capabilities their tier has unlocked — e.g. `safety.*` is grantable on Crew/Business but shows a locked upsell on Freemium.
+
+### Billing lifecycle — failed payments & downgrades
+
+> Resolves the dunning gap + the over-cap question (#4). One policy covers failed payments, voluntary downgrades, and trial expiry — they all funnel to the same place: **drop to Freemium, never delete data.**
+
+**Failed payment (dunning):**
+1. Card declines → Stripe **Smart Retries** re-attempt over ~14 days (e.g. days 1, 3, 5, 7, 14). Subscription status → `past_due`.
+2. During this window, **paid features stay ON** — don't punish a transient bank glitch. Owner gets an email + an in-app banner on each failed attempt prompting them to update their card (Stripe customer portal).
+3. If no attempt succeeds by the end of the retry window → **auto-downgrade to Freemium**. No suspension, no lockout of the account itself, no data deletion.
+
+**Voluntary downgrade** (Business→Crew→Freemium) and **trial expiry** use the identical downgrade path.
+
+**Over-cap handling when landing on a smaller tier** (the #4 question — proposed default, your call):
+- **Jobs over the cap:** existing jobs stay **read-only/viewable**; creating *new* jobs is blocked until they're back under the limit (or upgrade). Nothing is hidden or deleted.
+- **Extra users:** seats beyond the new tier's limit are **deactivated** — on a drop to Freemium (1 user), the owner picks who keeps the single seat; the rest can't log in until re-upgrade.
+- **Gated features** (SMS, safety, AI, marketing, integrations): lock to upsell prompts; any data they produced is retained and reappears on re-subscribe.
+- **Re-subscribing instantly restores** full access — the data was never touched, just gated.
+
+### Complete feature → tier mapping (derived from a 2026-06-02 code audit)
+
+> Built by walking `client/src/components/AppSidebar.tsx`, all ~94 pages in `client/src/pages/`, and the route groups in `server/routes.ts` (~100+ groups, 30k lines). This is the real feature surface — the high-level table above is the summary; this is the line-by-line placement. **Placement is a proposal — the upsell hooks (what's free vs. what forces an upgrade) are a business call, not a code fact.**
+
+| Module | Features (from code) | Freemium | Crew | Business |
+|---|---|---|---|---|
+| **Jobs & Dispatch** | Job dashboard, job cards, tasks/Kanban, activity dashboard, daily briefing | Jobs + tasks only | ✅ + dispatch board, job templates | ✅ |
+| **AI Smart Dispatch** | `/ai-scheduler` (GPT) | — | — | ✅ *(AI add-on / fair-use)* |
+| **Quoting & Proposals** | Quotes, quote viewer, follow-up automation, quoting-process settings, multi-item proposal builder, proposal viewer/accept | ✅ | ✅ | ✅ |
+| **Speech-to-Quote** | `/api/speech-to-quote` (Whisper + GPT) | — | — | ✅ *(AI add-on)* |
+| **Invoicing & Finance** | Invoices, invoice viewer, reconciliation, profitability calculator | Basic invoicing | ✅ + reconciliation, profitability | ✅ |
+| **Scheduling** | Calendar, staff schedule, schedule events | Basic calendar | ✅ + staff schedule | ✅ |
+| **Photos & media** | Photos, annotations, before/after, voice captions, public timeline link | Photos + annotations (max 3 / job) | ✅ Unlimited + captions, timeline | ✅ |
+| **Videos** | Upload/playback (GCS), video transcription (Whisper) | — | ✅ playback/upload | ✅ + transcription *(AI add-on)* |
+| **Safety & compliance** (13 modules) | Safety hub, toolbox talks, SWMS, pre-start checklists, equipment register, competency register, notifiable events, JHA, near-miss (+ attachments/witnesses/actions) | — | ✅ Full suite | ✅ + safety analytics |
+| **Equipment** | Catalog, checkouts, maintenance, inductions, vehicle inspections | — | ✅ | ✅ |
+| **Staff & permissions** | Staff management, assignments, competencies, time tracking, RBAC, permissions-management page | Defaults only (Admin/Crew) | ✅ Full custom RBAC + time tracking | ✅ |
+| **Communications** | Email (transactional), SMS templates, comms templates, booking reminders, inquiry auto-reply, unified inbox | Transactional email only | ✅ templates, reminders, auto-reply, inbox | ✅ |
+| **Calls / voice** | Call records, recording playback, in-app calling, unlinked calls (Twilio/Vonage) | — | — | — *(**flat add-on**, any tier)* |
+| **Marketing & reputation** | Marketing planner, social plans, campaigns, reputation, reviews (Google/FB), price rules, blog/SEO | — | — | ✅ |
+| **Documents** | Template builder, document builder, generated docs | — | ✅ | ✅ |
+| **Analytics** | Dashboard stats, today metrics, man-hours, revenue stats/breakdown | Basic dashboard | Basic | ✅ Advanced + job costing |
+| **Workflows / automation** | Workflow rules, automated triggers | — | — | ✅ |
+| **Integrations** | Xero (accounting/payroll), Google Calendar, Gmail | — | ✅ Xero, Calendar, Gmail | ✅ + Mailchimp, Facebook |
+| **Field specializations** | Tree removal, pruning, stump grinding, hedge trimming, mulch drops planners | ✅ (core job types) | ✅ | ✅ |
+| **Help centre** | `/help` consumption (see `INFLOW_HELP_PLAN.md`) | ✅ | ✅ | ✅ |
+
+**Cost-incurring features → add-ons (per the locked rule), regardless of tier:**
+- **Call recording + in-app calling** (Twilio/Vonage voice) — flat monthly add-on + per-minute usage.
+- **AI bundle** (smart dispatch, speech-to-quote, lead extraction from screenshots/messages, video transcription) — metered, or bundled into Business with a fair-use cap and sold as a flat add-on to Crew (not Freemium — no payment method).
+- **SMS** — bundled allowance on paid tiers + metered overage (see SMS handling above).
+- **Storage overage** (GCS photos/videos, 2 GB uploads) — watch as a future metered line if heavy-video tenants appear.
+
+**Placement decisions that are genuinely yours to make (not derivable from code):**
+1. Is the **safety suite** a Crew feature (as drafted) or a paid-everywhere differentiator? It's your biggest build and a strong upgrade hook — could justify its own tier or add-on.
+2. Should **Xero** be Crew or Business-only? Accounting integration is a classic "serious business" gate.
+3. Is **15 jobs/month + 1 user + 3 photos/job** the right Freemium cap for multi-day tree work, or does it strangle the funnel?
+4. Does **AI** belong bundled-in-Business, or always a metered add-on (cleaner cost control)?
+
 ---
 
 ## Phased plan
@@ -219,10 +319,10 @@ Migrate app to `inflowapp.co.nz`, public sales/marketing page, pricing page, sig
 
 ## Open questions (need user input)
 
-1. **Tier count + structure** — one membership, or two/three? (User deciding.)
-2. **Trial model** — free trial, freemium, or paid-only?
-3. **Pricing** — NZD base price + per-add-on prices (drives Stripe + sales page).
-4. **Help-centre format** — in-app static, embedded docs tool, or contextual walkthroughs?
+1. ~~**Tier count + structure**~~ — **DECIDED 2026-05-30:** three tiers, Freemium (free) / Crew / Business (free entry + two paid). Draft in §Subscriptions.
+2. ~~**Trial model**~~ — **DECIDED 2026-05-30:** freemium (the Freemium free tier is the trial), optional 14-day Business trial on top.
+3. **Pricing** — Crew/Business NZD prices are draft placeholders; still need validation against cost-to-serve + willingness-to-pay. Add-on prices TBD.
+4. **Help-centre format** — RESOLVED in `INFLOW_HELP_PLAN.md` (in-app `/help`).
 5. **Subdomain branding** — worth the wildcard-cert complexity later, or stay single-domain?
 
 ---
