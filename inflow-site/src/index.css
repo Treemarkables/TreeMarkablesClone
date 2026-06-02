@@ -1,0 +1,41 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    @apply bg-paper text-ink-900 font-sans antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  ::selection {
+    background: #C8FF3D;
+    color: #0A0A0B;
+  }
+}
+
+@layer utilities {
+  .heading-display {
+    @apply font-sans font-semibold tracking-crunch;
+    line-height: 1.02;
+  }
+  .heading-section {
+    @apply font-sans font-semibold tracking-snug;
+    line-height: 1.05;
+  }
+  .eyebrow {
+    @apply text-xs font-medium uppercase tracking-[0.18em] text-ink-500;
+  }
+  .grain {
+    background-image: radial-gradient(rgba(10, 10, 11, 0.04) 1px, transparent 1px);
+    background-size: 3px 3px;
+  }
+  .stripe-divider {
+    background-image: linear-gradient(90deg, transparent, #DDE1E7 50%, transparent);
+    height: 1px;
+  }
+}
