@@ -49,6 +49,15 @@ interface InvoiceShape {
   totalAmount?: string | number | null;
 }
 
+interface PaymentShape {
+  id: string;
+  amount?: string | number | null;
+  kind?: string | null;
+  provider?: string | null;
+  status?: string | null;
+  paidAt?: string | null;
+}
+
 const GST_RATE = 0.15;
 
 function money(n: number): string {
@@ -117,6 +126,17 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
     staleTime: 60_000,
   });
   const invoice = invResp?.data?.[0];
+
+  // Payment ledger — surfaces deposit-paid state without conflating it
+  // with the legacy "partial payment" branch.
+  const { data: payResp } = useQuery<{ success?: boolean; data?: PaymentShape[] }>({
+    queryKey: ["/api/jobs", jobId, "payments"],
+    enabled: !!jobId,
+    staleTime: 60_000,
+  });
+  const payments = payResp?.data ?? [];
+  const depositPayments = payments.filter((p) => p.kind === "deposit" && p.status === "succeeded");
+  const depositPaidAmount = depositPayments.reduce((s, p) => s + toNum(p.amount), 0);
 
   // ── Editing helpers ──────────────────────────────────────────────────────
   const updateField = (idx: number, patch: Partial<LineItem>) => {
@@ -274,6 +294,12 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
               <span className="text-slate-900 font-semibold">Paid in full</span>
               <span className="text-slate-500 ml-1">· {money(paidAmount)}</span>
             </>
+          ) : depositPaidAmount > 0 && paidAmount > 0 && paidAmount <= depositPaidAmount + 0.01 ? (
+            <>
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="text-slate-900 font-semibold">Deposit received</span>
+              <span className="text-slate-500 ml-1">· {money(depositPaidAmount)} of {money(total)}</span>
+            </>
           ) : paidAmount > 0 ? (
             <>
               <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0" />
@@ -287,6 +313,20 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             </>
           )}
         </div>
+        {depositPayments.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-slate-100 space-y-1.5">
+            {depositPayments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-[12.5px]">
+                <span className="text-slate-600">
+                  Deposit
+                  {p.provider === "stripe" && <span className="text-slate-400"> · Stripe</span>}
+                  {p.paidAt && <span className="text-slate-400"> · {new Date(p.paidAt).toLocaleDateString("en-NZ")}</span>}
+                </span>
+                <span className="font-semibold text-slate-900">{money(toNum(p.amount))}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="text-[12.5px] text-slate-500 mt-2 leading-relaxed">
           Payment recording lives on the invoice itself — once an invoice is generated above, payments will surface here automatically.
         </div>

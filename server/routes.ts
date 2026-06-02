@@ -67,6 +67,14 @@ import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
 import {
+  isStripeConfigured,
+  getPublishableKey,
+  createDepositCheckoutSession,
+  constructWebhookEvent,
+  computeDepositAmount,
+} from "./stripe";
+import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
+import {
   ensureRoleTiersSeeded,
   getEmployeePermissions,
   requirePermission,
@@ -5408,6 +5416,18 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
+    }
+  });
+
+  // Payments ledger for a job. Returns every payment row (Stripe deposit,
+  // manual bank-transfer entry, future card capture) ordered by paidAt desc.
+  app.get('/api/jobs/:id/payments', async (req: Request, res: Response) => {
+    try {
+      const payments = await storage.getPaymentsByJob(req.params.id);
+      res.json({ success: true, data: payments });
+    } catch (error) {
+      console.error('Error fetching job payments:', error);
+      res.status(500).json({ success: false, message: 'Error fetching payments' });
     }
   });
 
@@ -22768,18 +22788,41 @@ Keep the tone professional but conversational. Use NZD for currency.`;
       if (proposal.status === 'accepted') {
         console.log('⚠️ Proposal already accepted, returning success:', id);
         const job = proposal.jobId ? await storage.getJob(proposal.jobId) : null;
-        return res.json({ 
-          success: true, 
-          data: { 
-            proposal: proposal, 
+        return res.json({
+          success: true,
+          data: {
+            proposal: proposal,
             workOrder: job,
             message: 'Proposal accepted successfully'
           }
         });
       }
 
+      // Already accepted but deposit not yet paid — return the same shape
+      // the deposit-required path returns below so the customer UI can
+      // re-open the Stripe Checkout flow.
+      if (proposal.status === 'accepted_pending_deposit') {
+        const pendingAmount = computeDepositAmount(
+          (proposal as any).depositType,
+          (proposal as any).depositValue,
+          proposal.totalAmount,
+        );
+        return res.json({
+          success: true,
+          requiresDeposit: true,
+          data: {
+            proposal,
+            depositType: (proposal as any).depositType,
+            depositValue: (proposal as any).depositValue,
+            depositAmount: pendingAmount,
+            totalAmount: parseFloat(proposal.totalAmount?.toString() || '0'),
+            message: 'Deposit payment required to finalize acceptance',
+          },
+        });
+      }
+
       // Check if expired
-      if (proposal.validUntil && new Date(proposal.validUntil) < new Date()) {
+      if ((proposal as any).validUntil && new Date((proposal as any).validUntil) < new Date()) {
         return res.status(400).json({ success: false, message: 'Proposal has expired' });
       }
 
@@ -22891,152 +22934,60 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         console.log(`💰 Recalculated totals: subtotal=${updatedSubtotal}, discount=${discountAmount}, subtotalAfterDiscount=${Math.round(subtotalAfterDiscount * 100) / 100}, gst=${roundedGst}, total=${updatedTotalAmount}`);
       }
       
-      // Update proposal status to accepted (with updated sections/totals if choices were selected)
-      const updatedProposal = await storage.updateProposal(id, { 
+      // Deposit gate. If this proposal requires an upfront payment, persist
+      // the updated sections/totals and stop here — the customer UI will
+      // open Stripe Checkout via /api/proposals/:id/deposit-checkout and
+      // the webhook will run finalizeProposalAcceptance() on payment.
+      const depositAmount = computeDepositAmount(
+        (proposal as any).depositType,
+        (proposal as any).depositValue,
+        updatedTotalAmount,
+      );
+
+      if (depositAmount > 0) {
+        const pendingProposal = await storage.updateProposal(id, {
+          status: 'accepted_pending_deposit',
+          acceptedDate: new Date(),
+          sections: updatedSections,
+          totalAmount: updatedTotalAmount,
+          subtotal: updatedSubtotal,
+        } as any);
+        console.log(`⏸️ Proposal ${proposal.proposalNumber} acceptance pending deposit of ${depositAmount}`);
+        return res.json({
+          success: true,
+          requiresDeposit: true,
+          data: {
+            proposal: pendingProposal,
+            depositType: (proposal as any).depositType,
+            depositValue: (proposal as any).depositValue,
+            depositAmount,
+            totalAmount: updatedTotalAmount,
+            message: 'Deposit payment required to finalize acceptance',
+          },
+        });
+      }
+
+      // No deposit required — full acceptance now
+      const updatedProposal = await storage.updateProposal(id, {
         status: 'accepted',
         acceptedDate: new Date(),
         sections: updatedSections,
         totalAmount: updatedTotalAmount,
-        subtotal: updatedSubtotal
+        subtotal: updatedSubtotal,
+      } as any);
+
+      const { job, jobNumber } = await finalizeProposalAcceptance({
+        proposal: { ...proposal, totalAmount: updatedTotalAmount as any } as any,
+        updatedTotalAmount,
+        updatedSubtotal,
       });
-
-      let job;
-      let jobNumber;
-      
-      // If proposal is linked to an existing job, update it to work_order status
-      if (proposal.jobId) {
-        const existingJob = await storage.getJob(proposal.jobId);
-        if (existingJob) {
-          // Update existing job to work_order status (use updated totals if customer selected different choices)
-          job = await storage.updateJob(proposal.jobId, {
-            status: 'work_order',
-            totalAmount: updatedTotalAmount,
-            subtotal: updatedSubtotal,
-            gstAmount: (updatedTotalAmount || 0) - (updatedSubtotal || 0),
-          });
-          jobNumber = existingJob.jobNumber;
-          console.log(`✅ Updated existing job ${jobNumber} to work_order status with totals: ${updatedTotalAmount}`);
-        } else {
-          // Job not found, create new one
-          const jobData = {
-            title: `Work Order from Proposal #${proposal.proposalNumber}`,
-            description: proposal.description || `Work based on accepted proposal #${proposal.proposalNumber}`,
-            customerId: proposal.customerId,
-            leadId: proposal.leadId,
-            quoteId: proposal.quoteId,
-            status: 'work_order',
-            priority: 'medium',
-            totalAmount: updatedTotalAmount,
-            subtotal: updatedSubtotal,
-            gstAmount: (updatedTotalAmount || 0) - (updatedSubtotal || 0),
-            metricsEligible: true,
-            metricsStartDate: new Date()
-          };
-          jobNumber = await storage.getNextJobNumber();
-          job = await storage.createJob({ ...jobData, jobNumber });
-        }
-      } else {
-        // No linked job, create a new work order
-        const jobData = {
-          title: `Work Order from Proposal #${proposal.proposalNumber}`,
-          description: proposal.description || `Work based on accepted proposal #${proposal.proposalNumber}`,
-          customerId: proposal.customerId,
-          leadId: proposal.leadId,
-          quoteId: proposal.quoteId,
-          status: 'work_order',
-          priority: 'medium',
-          totalAmount: updatedTotalAmount,
-          subtotal: updatedSubtotal,
-          gstAmount: (updatedTotalAmount || 0) - (updatedSubtotal || 0),
-          metricsEligible: true,
-          metricsStartDate: new Date()
-        };
-        jobNumber = await storage.getNextJobNumber();
-        job = await storage.createJob({ ...jobData, jobNumber });
-      }
-
-      // Create notification for business owner
-      const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
-      const notificationData = {
-        title: 'Proposal Accepted!',
-        message: `${customer?.name || 'Customer'} has accepted proposal #${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(updatedTotalAmount || 0)}. Work order #${jobNumber} has been created.`,
-        type: 'proposal_accepted',
-        priority: 'high',
-        isRead: false,
-        proposalId: id,
-        jobId: job.id,
-        customerId: proposal.customerId
-      };
-
-      await storage.createNotification(notificationData);
-
-      // Create a pending holding message draft for the owner to approve
-      const firstName = customer?.name?.split(' ')[0] || 'there';
-      const phone = customer?.mobile || customer?.phone;
-      const email = customer?.email;
-      const channel = phone ? 'sms' : (email ? 'email' : 'sms');
-      const holdingMsg = `Hey ${firstName}, thanks for accepting our proposal. We'll be in touch within 24 hours to get your job scheduled.`;
-
-      const pendingMsg = await storage.createPendingOutboundMessage({
-        jobId: job.id,
-        customerId: proposal.customerId || undefined,
-        proposalId: id,
-        proposalNumber: proposal.proposalNumber,
-        recipientName: customer?.name || undefined,
-        recipientPhone: phone || undefined,
-        recipientEmail: email || undefined,
-        message: holdingMsg,
-        channel,
-        status: 'pending',
-      });
-
-      // Notify owner that the holding message needs approval
-      await storage.createNotification({
-        title: 'Holding message awaiting approval',
-        message: `A holding message to ${customer?.name || 'the customer'} is ready to send — tap to review and approve.`,
-        type: 'holding_message_pending',
-        priority: 'high',
-        isRead: false,
-        jobId: job.id,
-        customerId: proposal.customerId || undefined,
-        // No actionUrl: the NotificationBell routes holding_message_pending
-        // notifications with a jobId to the job card's diary tab, where the
-        // pending draft is rendered for in-line approval.
-        metadata: { pendingMessageId: pendingMsg.id }
-      });
-
-      // Create diary entry for the job to record the acceptance. Wrapped in
-      // its own try/catch so a diary failure can't 500 the customer-facing
-      // accept response after we've already created the job + pending draft.
-      if (job?.id) {
-        try {
-          const acceptanceContent = `${customer?.name || 'Customer'} accepted proposal ${proposal.proposalNumber} for ${new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD' }).format(updatedTotalAmount || 0)}. Job converted to work order.`;
-          await storage.createJobDiaryEntry({
-            jobId: job.id,
-            entryType: 'system',
-            title: `Proposal Accepted: ${proposal.proposalNumber}`,
-            description: acceptanceContent,
-            content: acceptanceContent,
-            authorName: customer?.name || 'Customer',
-            authorRole: 'customer',
-            metadata: {
-              proposalId: proposal.id,
-              proposalNumber: proposal.proposalNumber,
-              totalAmount: proposal.totalAmount,
-              eventType: 'proposal_accepted'
-            }
-          });
-        } catch (diaryErr) {
-          console.error('Failed to log proposal-accepted diary entry:', diaryErr);
-        }
-      }
 
       console.log(`✅ Proposal ${proposal.proposalNumber} accepted and converted to work order ${jobNumber}`);
 
-      res.json({ 
-        success: true, 
-        data: { 
-          proposal: updatedProposal, 
+      res.json({
+        success: true,
+        data: {
+          proposal: updatedProposal,
           workOrder: job,
           message: 'Proposal accepted successfully and work order created'
         }
@@ -23044,6 +22995,196 @@ Keep the tone professional but conversational. Use NZD for currency.`;
     } catch (error) {
       console.error('Error accepting proposal:', error);
       res.status(500).json({ success: false, message: 'Error accepting proposal' });
+    }
+  });
+
+  // Create a Stripe Checkout Session for a proposal's required deposit.
+  // Called from the customer-facing ProposalAccept page after the customer
+  // hits Accept and the accept response came back with requiresDeposit=true.
+  // The webhook (see /api/stripe/webhook) finalizes the acceptance and
+  // creates the work order on payment success.
+  app.post('/api/proposals/:id/deposit-checkout', async (req: Request, res: Response) => {
+    try {
+      if (!isStripeConfigured()) {
+        return res.status(503).json({
+          success: false,
+          message: 'Payment processing is not yet configured. Please contact us to complete acceptance.',
+        });
+      }
+
+      const { id } = req.params;
+      const proposal = await storage.getProposal(id);
+      if (!proposal) {
+        return res.status(404).json({ success: false, message: 'Proposal not found' });
+      }
+
+      if (proposal.status !== 'accepted_pending_deposit') {
+        return res.status(400).json({
+          success: false,
+          message: 'Proposal is not in a state that requires a deposit',
+        });
+      }
+
+      const depositAmount = computeDepositAmount(
+        (proposal as any).depositType,
+        (proposal as any).depositValue,
+        proposal.totalAmount,
+      );
+      if (depositAmount <= 0) {
+        return res.status(400).json({ success: false, message: 'No deposit amount calculated for this proposal' });
+      }
+      const amountCents = Math.round(depositAmount * 100);
+
+      const customer = proposal.customerId ? await storage.getCustomer(proposal.customerId) : null;
+      const settings = await storage.getBusinessSettings().catch(() => null);
+
+      // Build absolute return URLs. Customer-facing links always point at
+      // the canonical production host per CLAUDE.md, falling back to the
+      // request origin in dev/preview environments.
+      const origin =
+        process.env.NODE_ENV === 'production'
+          ? 'https://app.treemarkables.co.nz'
+          : `${req.protocol}://${req.get('host')}`;
+      const successUrl = `${origin}/proposal/${proposal.id}/accept?deposit=success&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${origin}/proposal/${proposal.id}/accept?deposit=cancelled`;
+
+      const session = await createDepositCheckoutSession({
+        proposalId: proposal.id,
+        proposalNumber: proposal.proposalNumber,
+        amountCents,
+        customerEmail: customer?.email || null,
+        customerName: customer?.name || null,
+        successUrl,
+        cancelUrl,
+        businessName: (settings as any)?.businessName || 'Treemarkables',
+      });
+
+      res.json({ success: true, data: { sessionId: session.id, url: session.url, depositAmount } });
+    } catch (error: any) {
+      console.error('Error creating deposit checkout session:', error);
+      res.status(500).json({
+        success: false,
+        message: error?.message || 'Error creating deposit checkout session',
+      });
+    }
+  });
+
+  // Lightweight public endpoint so the customer modal can guard the "Pay
+  // now" button when Stripe isn't configured yet (e.g. local dev).
+  app.get('/api/payments/config', async (_req: Request, res: Response) => {
+    res.json({
+      success: true,
+      data: {
+        stripeConfigured: isStripeConfigured(),
+        stripePublishableKey: getPublishableKey(),
+      },
+    });
+  });
+
+  // Stripe webhook. Verifies signature against the raw body captured by the
+  // express.json verify callback, then dispatches by event type. Idempotent:
+  // a duplicate checkout.session.completed for the same session_id will be
+  // rejected by the unique index on payments.provider_session_id.
+  app.post('/api/stripe/webhook', async (req: Request, res: Response) => {
+    const rawBody: Buffer | undefined = (req as any).rawBody;
+    const signature = req.headers['stripe-signature'] as string | undefined;
+    if (!rawBody) {
+      console.error('Stripe webhook: raw body unavailable');
+      return res.status(400).send('Raw body unavailable');
+    }
+    let event: any;
+    try {
+      event = await constructWebhookEvent(rawBody, signature);
+    } catch (err: any) {
+      console.error('Stripe webhook signature verification failed:', err?.message);
+      return res.status(400).send(`Webhook Error: ${err?.message || 'invalid signature'}`);
+    }
+
+    try {
+      if (event.type === 'checkout.session.completed') {
+        const session = event.data.object as any;
+        const proposalId: string | undefined = session?.metadata?.proposalId;
+        const kind: string | undefined = session?.metadata?.kind;
+        const amountTotalCents: number = session?.amount_total || 0;
+        const amountPaid = Math.round(amountTotalCents) / 100;
+
+        if (kind !== 'deposit' || !proposalId) {
+          console.log('Stripe webhook: ignoring non-deposit checkout.session.completed', { kind, proposalId });
+          return res.json({ received: true });
+        }
+
+        // Idempotency check — if we've already recorded this session, skip.
+        const existing = await storage.getPaymentBySessionId(session.id);
+        if (existing) {
+          console.log(`Stripe webhook: session ${session.id} already processed`);
+          return res.json({ received: true, duplicate: true });
+        }
+
+        const proposal = await storage.getProposal(proposalId);
+        if (!proposal) {
+          console.error('Stripe webhook: proposal not found for session', { proposalId, sessionId: session.id });
+          // 200 so Stripe doesn't keep retrying — the proposal isn't coming back.
+          return res.json({ received: true, missingProposal: true });
+        }
+
+        if (proposal.status === 'accepted') {
+          console.log(`Stripe webhook: proposal ${proposalId} already accepted; recording payment only`);
+          // Still record the payment so the ledger reflects it, but skip the
+          // finalize side effects (job already exists).
+          try {
+            const targetJobId = proposal.jobId || null;
+            await storage.createPayment({
+              jobId: targetJobId as any,
+              proposalId: proposal.id,
+              customerId: proposal.customerId,
+              amount: amountPaid as any,
+              currency: 'NZD',
+              provider: 'stripe',
+              providerSessionId: session.id,
+              providerPaymentId: session.payment_intent || null,
+              kind: 'deposit',
+              status: 'succeeded',
+              paidAt: new Date(),
+            } as any);
+          } catch (e) {
+            console.warn('Stripe webhook: payment insert skipped (likely duplicate)', e);
+          }
+          return res.json({ received: true });
+        }
+
+        // Move proposal to fully accepted + record deposit timestamps
+        const updatedProposal = await storage.updateProposal(proposalId, {
+          status: 'accepted',
+          depositPaidAt: new Date(),
+          depositAmountPaid: amountPaid as any,
+        } as any);
+
+        const totalAmount = parseFloat(updatedProposal.totalAmount?.toString() || proposal.totalAmount?.toString() || '0');
+        const subtotal = parseFloat(updatedProposal.subtotal?.toString() || proposal.subtotal?.toString() || '0');
+
+        await finalizeProposalAcceptance({
+          proposal: updatedProposal,
+          updatedTotalAmount: totalAmount,
+          updatedSubtotal: subtotal,
+          depositPaid: {
+            amount: amountPaid,
+            provider: 'stripe',
+            providerSessionId: session.id,
+            providerPaymentId: session.payment_intent || undefined,
+          },
+        });
+
+        console.log(`✅ Stripe webhook: deposit of $${amountPaid} captured for proposal ${updatedProposal.proposalNumber}; work order created`);
+        return res.json({ received: true });
+      }
+
+      // Other event types we don't act on yet
+      console.log(`Stripe webhook: ignoring event type ${event.type}`);
+      res.json({ received: true });
+    } catch (err: any) {
+      console.error('Stripe webhook handler error:', err);
+      // 500 so Stripe retries — but only for unexpected errors, not signature failures
+      res.status(500).json({ received: false, error: err?.message || 'handler error' });
     }
   });
 
