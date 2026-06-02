@@ -70,6 +70,7 @@ import {
   isStripeConfigured,
   getPublishableKey,
   createDepositCheckoutSession,
+  createInvoiceCheckoutSession,
   constructWebhookEvent,
   computeDepositAmount,
 } from "./stripe";
@@ -11896,6 +11897,90 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     }
   });
 
+  // Public: create a Stripe Checkout session to pay an invoice online. Mirrors
+  // the proposal deposit-checkout endpoint. Charges the GST-inclusive
+  // outstanding balance (invoice total computed the same way as the email /
+  // customer view, minus any payments already recorded against this invoice).
+  app.post('/api/invoices/:id/payment-checkout', async (req: Request, res: Response) => {
+    try {
+      if (!isStripeConfigured()) {
+        return res.status(503).json({
+          success: false,
+          message: 'Online payment is not available right now. Please use the bank details on your invoice or contact us.',
+        });
+      }
+
+      const invoice = await storage.getInvoice(req.params.id);
+      if (!invoice) {
+        return res.status(404).json({ success: false, message: 'Invoice not found' });
+      }
+      if (invoice.status === 'paid') {
+        return res.status(400).json({ success: false, message: 'This invoice has already been paid' });
+      }
+      if (invoice.status === 'cancelled') {
+        return res.status(400).json({ success: false, message: 'This invoice has been cancelled' });
+      }
+
+      // Total = subtotal (line items, or invoice.amount fallback) + 15% GST.
+      // Mirrors send-email + InvoiceView so we charge exactly what the
+      // customer sees.
+      const dbLineItems = await db.select().from(invoiceLineItems).where(eq(invoiceLineItems.invoiceId, invoice.id));
+      let subtotal = 0;
+      for (const li of dbLineItems) {
+        subtotal += parseFloat(li.totalPrice || '0') || 0;
+      }
+      if (subtotal === 0) {
+        subtotal = parseFloat((invoice as any).amount || '0') || 0;
+      }
+      const total = Math.round((subtotal * 1.15) * 100) / 100;
+
+      // Subtract anything already paid against this invoice (succeeded, non-refund).
+      const priorPayments = await storage.getPaymentsByInvoice(invoice.id);
+      const alreadyPaid = priorPayments
+        .filter((p) => p.status === 'succeeded' && p.kind !== 'refund')
+        .reduce((s, p) => s + (parseFloat(p.amount?.toString() || '0') || 0), 0);
+      const outstanding = Math.round((total - alreadyPaid) * 100) / 100;
+
+      if (outstanding <= 0) {
+        return res.status(400).json({ success: false, message: 'There is no outstanding balance on this invoice' });
+      }
+      const amountCents = Math.round(outstanding * 100);
+      if (amountCents < 50) {
+        // Stripe's minimum NZD charge is ~$0.50
+        return res.status(400).json({ success: false, message: 'The outstanding balance is too small to pay online' });
+      }
+
+      const customer = invoice.customerId ? await storage.getCustomer(invoice.customerId) : null;
+      const settings = await storage.getBusinessSettings().catch(() => null);
+
+      const origin =
+        process.env.NODE_ENV === 'production'
+          ? 'https://app.treemarkables.co.nz'
+          : `${req.protocol}://${req.get('host')}`;
+      const successUrl = `${origin}/invoice/${invoice.id}/view?payment=success&session_id={CHECKOUT_SESSION_ID}`;
+      const cancelUrl = `${origin}/invoice/${invoice.id}/view?payment=cancelled`;
+
+      const session = await createInvoiceCheckoutSession({
+        invoiceId: invoice.id,
+        invoiceNumber: invoice.invoiceNumber,
+        amountCents,
+        customerEmail: customer?.email || null,
+        customerName: customer?.name || null,
+        successUrl,
+        cancelUrl,
+        businessName: (settings as any)?.businessName || 'Treemarkables',
+      });
+
+      res.json({ success: true, data: { sessionId: session.id, url: session.url, amount: outstanding } });
+    } catch (error: any) {
+      console.error('Error creating invoice payment checkout session:', error);
+      res.status(500).json({
+        success: false,
+        message: error?.message || 'Error creating payment checkout session',
+      });
+    }
+  });
+
   // Send invoice email — mirrors /api/proposals/:proposalId/send-email
   app.post('/api/invoices/:invoiceId/send-email', async (req: Request, res: Response) => {
     try {
@@ -23107,6 +23192,42 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         const kind: string | undefined = session?.metadata?.kind;
         const amountTotalCents: number = session?.amount_total || 0;
         const amountPaid = Math.round(amountTotalCents) / 100;
+        const invoiceId: string | undefined = session?.metadata?.invoiceId;
+
+        // Invoice payment (kind='payment'). Record the payment and mark the
+        // invoice paid — we always charge the full outstanding balance, so a
+        // succeeded session settles it.
+        if (kind === 'payment' && invoiceId) {
+          const existingInvoicePay = await storage.getPaymentBySessionId(session.id);
+          if (existingInvoicePay) {
+            console.log(`Stripe webhook: session ${session.id} already processed`);
+            return res.json({ received: true, duplicate: true });
+          }
+          const invoice = await storage.getInvoice(invoiceId);
+          if (!invoice) {
+            console.error('Stripe webhook: invoice not found for session', { invoiceId, sessionId: session.id });
+            // 200 so Stripe stops retrying — the invoice isn't coming back.
+            return res.json({ received: true, missingInvoice: true });
+          }
+          await storage.createPayment({
+            jobId: (invoice.jobId || null) as any,
+            invoiceId: invoice.id,
+            customerId: invoice.customerId,
+            amount: amountPaid as any,
+            currency: 'NZD',
+            provider: 'stripe',
+            providerSessionId: session.id,
+            providerPaymentId: session.payment_intent || null,
+            kind: 'payment',
+            status: 'succeeded',
+            paidAt: new Date(),
+          } as any);
+          if (invoice.status !== 'paid') {
+            await storage.updateInvoice(invoice.id, { status: 'paid', paidAt: new Date() } as any);
+          }
+          console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}; marked paid`);
+          return res.json({ received: true });
+        }
 
         if (kind !== 'deposit' || !proposalId) {
           console.log('Stripe webhook: ignoring non-deposit checkout.session.completed', { kind, proposalId });

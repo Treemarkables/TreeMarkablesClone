@@ -104,6 +104,69 @@ export async function createDepositCheckoutSession(input: DepositCheckoutInput):
   return { id: session.id, url: session.url };
 }
 
+export interface InvoiceCheckoutInput {
+  invoiceId: string;
+  invoiceNumber: string;
+  amountCents: number; // outstanding amount in cents, NZD (GST-inclusive)
+  customerEmail?: string | null;
+  customerName?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+  businessName?: string;
+}
+
+// Creates a Stripe Checkout Session for an invoice payment. Mirrors the
+// deposit flow but tags the session metadata with kind='payment' + invoiceId
+// so the webhook records the payment against the right invoice and marks it
+// paid when the charge succeeds.
+export async function createInvoiceCheckoutSession(input: InvoiceCheckoutInput): Promise<{
+  id: string;
+  url: string;
+}> {
+  const stripe = await getStripe();
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    currency: 'nzd',
+    customer_email: input.customerEmail || undefined,
+    line_items: [
+      {
+        price_data: {
+          currency: 'nzd',
+          product_data: {
+            name: `Invoice ${input.invoiceNumber}`,
+            description: input.businessName
+              ? `Payment for invoice ${input.invoiceNumber} — ${input.businessName}`
+              : `Payment for invoice ${input.invoiceNumber}`,
+          },
+          unit_amount: input.amountCents,
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    metadata: {
+      kind: 'payment',
+      invoiceId: input.invoiceId,
+      invoiceNumber: input.invoiceNumber,
+    },
+    payment_intent_data: {
+      metadata: {
+        kind: 'payment',
+        invoiceId: input.invoiceId,
+        invoiceNumber: input.invoiceNumber,
+      },
+    },
+  });
+
+  if (!session.url) {
+    throw new Error('Stripe checkout session did not return a redirect URL');
+  }
+  return { id: session.id, url: session.url };
+}
+
 // Verifies a Stripe webhook signature against the raw request body and
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.

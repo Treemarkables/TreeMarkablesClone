@@ -1,12 +1,15 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useParams } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import {
   AlertCircle,
   ChevronLeft,
   ChevronRight,
+  CreditCard,
   Loader2,
   Receipt,
   X,
@@ -59,7 +62,9 @@ export default function InvoiceView() {
     index: number;
   } | null>(null);
 
-  const { data: response, isLoading } = useQuery<{
+  const { toast } = useToast();
+
+  const { data: response, isLoading, refetch } = useQuery<{
     success: boolean;
     data?: PublicInvoiceData;
   }>({
@@ -75,6 +80,60 @@ export default function InvoiceView() {
   });
   const logoUrl =
     templateResponse?.data?.logoUrl || "/treemarkables-logo.png";
+
+  const { data: paymentConfig } = useQuery<{
+    success?: boolean;
+    data?: { stripeConfigured?: boolean };
+  }>({
+    queryKey: ["/api/payments/config"],
+  });
+  const stripeConfigured = paymentConfig?.data?.stripeConfigured === true;
+
+  // Customer just returned from Stripe Checkout. The webhook may take a beat to
+  // mark the invoice paid, so refetch a couple of times to pick up the update.
+  const justPaid =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("payment") === "success";
+
+  useEffect(() => {
+    if (!justPaid) return;
+    const timers = [1500, 4000].map((ms) => setTimeout(() => refetch(), ms));
+    return () => timers.forEach(clearTimeout);
+  }, [justPaid, refetch]);
+
+  const payMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/invoices/${invoiceId}/payment-checkout`,
+        {},
+      );
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      const url = data?.data?.url;
+      if (url) {
+        window.location.href = url;
+        return;
+      }
+      toast({
+        variant: "destructive",
+        title: "Payment unavailable",
+        description:
+          data?.message ||
+          "Could not start the payment. Please try again or contact us.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Payment unavailable",
+        description:
+          err?.message ||
+          "Could not start the payment. Please try again or contact us.",
+      });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -205,6 +264,49 @@ export default function InvoiceView() {
             </div>
           </div>
         )}
+        {justPaid && invoice.status !== "paid" && (
+          <div className="bg-green-100 border border-green-300 rounded-lg p-3">
+            <div className="flex items-center text-sm">
+              <Receipt className="w-4 h-4 text-green-600 mr-2" />
+              <span className="text-green-800 font-medium">
+                Payment received — confirming now, this page will update
+                shortly.
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Pay online */}
+        {stripeConfigured &&
+          !justPaid &&
+          invoice.status !== "paid" &&
+          invoice.status !== "cancelled" &&
+          total > 0 && (
+            <Card className="bg-white shadow-sm border-orange-200">
+              <CardContent className="p-4 sm:p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm text-gray-600">Amount due</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {formatCurrency(total)}
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  onClick={() => payMutation.mutate()}
+                  disabled={payMutation.isPending}
+                  className="w-full sm:w-auto"
+                  data-testid="button-pay-invoice"
+                >
+                  {payMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <CreditCard className="w-4 h-4 mr-2" />
+                  )}
+                  Pay now
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Invoice meta + bill-to */}
         <Card className="bg-white shadow-sm">
