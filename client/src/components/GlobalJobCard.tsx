@@ -194,7 +194,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatTime12Hour, nzTimeToUTC, utcToNZTime } from "@shared/dateUtils";
 import { statusAfterBooking } from "@shared/jobStatus";
-import { LinkifyMultiline } from "@/lib/linkify";
+import { Linkify, LinkifyMultiline } from "@/lib/linkify";
 import { Link } from "wouter";
 
 // Lead jobs auto-created on the server land with a literal
@@ -8033,14 +8033,20 @@ The Treemarkables Team`;
                                   </button>
                                 </div>
                                 <p className="text-sm text-gray-700 whitespace-pre-wrap min-h-[120px]">
-                                  {(formLoadedJobId === editingJob?.id
-                                    ? watchedDescription
-                                    : watchedDescription ||
-                                      editingJob?.description) || (
-                                    <span className="text-gray-400 italic">
-                                      Click to add a job description...
-                                    </span>
-                                  )}
+                                  {(() => {
+                                    const desc =
+                                      formLoadedJobId === editingJob?.id
+                                        ? watchedDescription
+                                        : watchedDescription ||
+                                          editingJob?.description;
+                                    return desc ? (
+                                      <Linkify text={desc} />
+                                    ) : (
+                                      <span className="text-gray-400 italic">
+                                        Click to add a job description...
+                                      </span>
+                                    );
+                                  })()}
                                 </p>
                               </div>
                             </div>
