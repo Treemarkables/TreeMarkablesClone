@@ -15,7 +15,15 @@ import {
   TrendingUp,
   Percent,
   FileText,
+  Banknote,
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -39,6 +47,8 @@ export default function SettingsPreferences() {
     useState<string>("");
   const [invoicePaymentDays, setInvoicePaymentDays] = useState<string>("7");
   const [dailyRevenueTarget, setDailyRevenueTarget] = useState<string>("3500");
+  const [defaultDepositType, setDefaultDepositType] = useState<"none" | "percent" | "fixed">("none");
+  const [defaultDepositValue, setDefaultDepositValue] = useState<string>("");
 
   // Fetch current settings
   const { data: settings, isLoading } = useQuery({
@@ -56,6 +66,12 @@ export default function SettingsPreferences() {
     setInvoicePaymentDays(String(days));
     const target = parseFloat(settings?.data?.dailyRevenueTarget || "3500") || 3500;
     setDailyRevenueTarget(String(target));
+    const depType = settings?.data?.defaultDepositType;
+    if (depType === "percent" || depType === "fixed" || depType === "none") {
+      setDefaultDepositType(depType);
+    }
+    const depValue = parseFloat(settings?.data?.defaultDepositValue || "0") || 0;
+    setDefaultDepositValue(depValue > 0 ? String(depValue) : "");
   }, [settings]);
 
   // Mutation to update settings
@@ -85,6 +101,7 @@ export default function SettingsPreferences() {
     const marginValue = parseFloat(defaultGrossMarginPct) || 0;
     const daysValue = parseInt(invoicePaymentDays, 10);
     const targetValue = parseFloat(dailyRevenueTarget) || 3500;
+    const depositValueNum = parseFloat(defaultDepositValue) || 0;
     updateSettingsMutation.mutate({
       metricsStartDate: metricsStartDate
         ? metricsStartDate.toISOString()
@@ -94,6 +111,9 @@ export default function SettingsPreferences() {
       invoicePaymentDays:
         !isNaN(daysValue) && daysValue >= 1 && daysValue <= 365 ? daysValue : 7,
       dailyRevenueTarget: targetValue > 0 ? targetValue : 3500,
+      defaultDepositType,
+      defaultDepositValue:
+        defaultDepositType === "none" || depositValueNum < 0 ? 0 : depositValueNum,
     });
   };
 
@@ -347,6 +367,68 @@ export default function SettingsPreferences() {
                 </div>
                 <span className="text-sm text-muted-foreground">NZD per day</span>
               </div>
+            </div>
+
+            {/* Default Deposit on Proposal Acceptance */}
+            <div className="space-y-2 pt-2 border-t">
+              <Label
+                htmlFor="default-deposit-type"
+                className="text-base font-medium flex items-center gap-2"
+              >
+                <Banknote className="w-4 h-4" />
+                Default Deposit on Proposal Acceptance
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                Pre-fills the deposit setting on every new proposal. When set,
+                customers must complete a Stripe Checkout payment before their
+                acceptance is finalized and a work order is created. You can
+                still override per proposal in the proposal builder.
+              </p>
+              <div className="flex items-center gap-3 mt-3">
+                <Select
+                  value={defaultDepositType}
+                  onValueChange={(v) => setDefaultDepositType(v as "none" | "percent" | "fixed")}
+                >
+                  <SelectTrigger
+                    id="default-deposit-type"
+                    className="w-40"
+                    data-testid="select-default-deposit-type"
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No deposit</SelectItem>
+                    <SelectItem value="percent">% Percent of total</SelectItem>
+                    <SelectItem value="fixed">$ Fixed amount</SelectItem>
+                  </SelectContent>
+                </Select>
+                {defaultDepositType !== "none" && (
+                  <div className="relative w-40">
+                    {defaultDepositType === "fixed" && (
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                    )}
+                    <Input
+                      type="number"
+                      min="0"
+                      step={defaultDepositType === "percent" ? "1" : "0.01"}
+                      value={defaultDepositValue}
+                      onChange={(e) => setDefaultDepositValue(e.target.value)}
+                      placeholder={defaultDepositType === "percent" ? "50" : "0.00"}
+                      className={cn(defaultDepositType === "fixed" && "pl-7")}
+                      data-testid="input-default-deposit-value"
+                    />
+                    {defaultDepositType === "percent" && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">%</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Requires Stripe to be configured on the server
+                (<code className="bg-muted px-1 rounded">STRIPE_SECRET_KEY</code>,
+                <code className="bg-muted px-1 rounded ml-1">STRIPE_WEBHOOK_SECRET</code>).
+                Until then, customers will see a "contact us" message in place of the deposit flow.
+              </p>
             </div>
 
             <div className="flex gap-3 pt-4">

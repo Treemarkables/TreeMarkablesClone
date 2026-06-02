@@ -1218,6 +1218,12 @@ export function ProposalBuilderV2({
     refetchInterval: false,
   });
   const { data: materialsData } = useQuery({ queryKey: ["/api/materials"], enabled: isOpen });
+  // Business settings — used to pre-fill the default deposit on new proposals.
+  const { data: businessSettingsData } = useQuery<any>({
+    queryKey: ["/api/business-settings"],
+    enabled: isOpen,
+    staleTime: 5 * 60 * 1000,
+  });
 
   const template = (templateData as { success?: boolean; data?: Record<string, unknown> })?.success
     ? (templateData as { success: boolean; data: Record<string, unknown> }).data
@@ -1272,6 +1278,11 @@ export function ProposalBuilderV2({
   const [taxRate] = useState(15);
   const [draftTotalExtra, setDraftTotalExtra] = useState(0);
   const [validUntil, setValidUntil] = useState("");
+  // Required-deposit settings. When depositType is 'percent' or 'fixed' the
+  // customer's acceptance is gated behind a Stripe Checkout deposit payment
+  // (see server/services/proposalAcceptanceService.ts).
+  const [depositType, setDepositType] = useState<"none" | "percent" | "fixed">("none");
+  const [depositValue, setDepositValue] = useState(0);
   const [showEmailDialog, setShowEmailDialog] = useState(false);
   const [showSmsDialog, setShowSmsDialog] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -1298,6 +1309,8 @@ export function ProposalBuilderV2({
       setDiscountAmount(0);
       setDiscountType("fixed");
       setValidUntil("");
+      setDepositType("none");
+      setDepositValue(0);
       setPreviewMode(false);
       setPreviewServerData(null);
     }
@@ -1329,6 +1342,9 @@ export function ProposalBuilderV2({
     const p = (existingData as { data: Record<string, unknown> }).data;
     setProposalTitle((p.title as string) || "Treemarkables Quote");
     setDraftId((p.id as string) || proposalId || null);
+    const depRaw = (p.depositType as string) || "none";
+    setDepositType((["none", "percent", "fixed"].includes(depRaw) ? depRaw : "none") as "none" | "percent" | "fixed");
+    setDepositValue(parseFloat(p.depositValue as string) || 0);
 
     if (Array.isArray(p.sections)) {
       const loadedBlocks: WysiwygBlock[] = (p.sections as Array<{
@@ -1448,6 +1464,15 @@ export function ProposalBuilderV2({
     initCreateRef.current = true;
 
     setProposalTitle((job as { title?: string } | null)?.title || "Treemarkables Quote");
+
+    // Pre-fill deposit settings from business defaults
+    const bs = (businessSettingsData as { data?: Record<string, unknown> } | undefined)?.data
+            ?? (businessSettingsData as Record<string, unknown> | undefined);
+    const defaultType = (bs?.defaultDepositType as string) || "none";
+    if (["none", "percent", "fixed"].includes(defaultType)) {
+      setDepositType(defaultType as "none" | "percent" | "fixed");
+      setDepositValue(parseFloat(bs?.defaultDepositValue as string) || 0);
+    }
 
     const includeDesc = (job as { includeDescriptionInQuotesProposals?: boolean } | null)?.includeDescriptionInQuotesProposals !== false;
     const desc = includeDesc ? (jobDescription || (job as { description?: string } | null)?.description || "") : "";
@@ -1599,6 +1624,8 @@ export function ProposalBuilderV2({
       discountAmount: discountValue.toString(),
       discountType,
       validUntil: validUntil || undefined,
+      depositType,
+      depositValue: depositValue.toString(),
       status: "draft",
       deliveryMethod: "email",
       createdBy: "system",
@@ -1632,7 +1659,7 @@ export function ProposalBuilderV2({
           }
         : {}),
     };
-  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil, isQuote, draftId, template]);
+  }, [blocks, proposalTitle, customer, customerId, job, jobId, subtotalAfterDiscount, gst, grandTotal, taxRate, discountValue, discountType, validUntil, depositType, depositValue, isQuote, draftId, template]);
 
   const saveDraftMutation = useMutation({
     mutationFn: async (data: ReturnType<typeof buildPayload>) => {
@@ -2052,6 +2079,42 @@ export function ProposalBuilderV2({
                         className="h-8 text-sm mt-1"
                       />
                     </div>
+                    <div>
+                      <label className="text-xs text-gray-500 font-medium">Deposit on acceptance</label>
+                      <div className="flex gap-1.5 mt-1">
+                        <Select
+                          value={depositType}
+                          onValueChange={(v) => setDepositType(v as "none" | "percent" | "fixed")}
+                        >
+                          <SelectTrigger className="h-8 w-28">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
+                            <SelectItem value="percent">% Percent</SelectItem>
+                            <SelectItem value="fixed">$ Fixed</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={depositType === "none" ? "" : depositValue || ""}
+                          onChange={(e) => setDepositValue(parseFloat(e.target.value) || 0)}
+                          className="h-8 text-sm"
+                          placeholder={depositType === "percent" ? "50" : "0"}
+                          disabled={depositType === "none"}
+                          data-testid="input-deposit-value"
+                        />
+                      </div>
+                      {depositType !== "none" && depositValue > 0 && grandTotal > 0 && (
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          Customer must pay {depositType === "percent"
+                            ? `${depositValue}% (≈ $${(grandTotal * (depositValue / 100)).toFixed(2)})`
+                            : `$${Math.min(depositValue, grandTotal).toFixed(2)}`} upfront via Stripe to confirm.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -2337,6 +2400,10 @@ export function ProposalBuilderV2({
                 notes: null,
                 internalNotes: null,
                 presentationMethod: null,
+                depositType,
+                depositValue: depositValue.toString(),
+                depositPaidAt: null,
+                depositAmountPaid: "0.00",
               };
               const legacySections = blocks.map((b) => ({
                 id: b.id,

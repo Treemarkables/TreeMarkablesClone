@@ -7423,6 +7423,29 @@ class DatabaseStorage implements IStorage {
       .returning();
     return !!updated;
   }
+
+  // ─── Payments ───────────────────────────────────────────────────────────
+  // Lightweight ledger for customer-received payments (today: Stripe-only
+  // deposits at proposal acceptance). The schema is provider-agnostic so we
+  // can extend to manual bank-transfer entries without migration.
+
+  async createPayment(payment: schema.InsertPayment): Promise<schema.Payment> {
+    const [created] = await db.insert(schema.payments).values(payment).returning();
+    return created;
+  }
+
+  async getPaymentBySessionId(sessionId: string): Promise<schema.Payment | undefined> {
+    const [row] = await db.select().from(schema.payments).where(eq(schema.payments.providerSessionId, sessionId));
+    return row || undefined;
+  }
+
+  async getPaymentsByProposal(proposalId: string): Promise<schema.Payment[]> {
+    return db.select().from(schema.payments).where(eq(schema.payments.proposalId, proposalId));
+  }
+
+  async getPaymentsByJob(jobId: string): Promise<schema.Payment[]> {
+    return db.select().from(schema.payments).where(eq(schema.payments.jobId, jobId));
+  }
 }
 
 export const storage = new DatabaseStorage();

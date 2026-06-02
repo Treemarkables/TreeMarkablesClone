@@ -697,6 +697,17 @@ export const proposals = pgTable("proposals", {
   discountAmount: decimal("discount_amount", { precision: 10, scale: 2 }).default("0.00"),
   discountType: text("discount_type").default("fixed"), // fixed or percentage
   potentialValue: decimal("potential_value", { precision: 10, scale: 2 }).default("0.00"), // Total of ALL line items for metrics (regardless of selection)
+
+  // Deposit collection. When deposit_type is 'percent' or 'fixed' the customer
+  // must complete a Stripe Checkout for the calculated deposit amount before
+  // the proposal is fully accepted and a work order is created. The webhook
+  // at /api/stripe/webhook is what flips the proposal to 'accepted' and
+  // creates the job — direct acceptance is gated until then.
+  depositType: text("deposit_type").default("none"), // 'none' | 'percent' | 'fixed'
+  depositValue: decimal("deposit_value", { precision: 10, scale: 2 }).default("0.00"),
+  depositPaidAt: timestamp("deposit_paid_at"),
+  depositAmountPaid: decimal("deposit_amount_paid", { precision: 10, scale: 2 }).default("0.00"),
+
   createdBy: text("created_by").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -1229,6 +1240,11 @@ export const businessSettings = pgTable("business_settings", {
   emailIntegrationEnabled: boolean("email_integration_enabled").default(false),
   paymentGatewayEnabled: boolean("payment_gateway_enabled").default(false),
   paymentProvider: text("payment_provider").default("stripe"), // stripe, paypal, square
+
+  // Default deposit pre-fill for new proposals. Subscribers can override
+  // per-proposal in the builder; this is just the starting value.
+  defaultDepositType: text("default_deposit_type").default("none"), // 'none' | 'percent' | 'fixed'
+  defaultDepositValue: decimal("default_deposit_value", { precision: 10, scale: 2 }).default("0.00"),
   
   // Mailchimp Integration
   mailchimpEnabled: boolean("mailchimp_enabled").default(false),
@@ -1321,6 +1337,7 @@ export const insertBusinessSettingsSchema = createInsertSchema(businessSettings)
   backupFrequency: z.enum(['daily', 'weekly', 'monthly']).optional(),
   exportFormat: z.enum(['csv', 'excel', 'json']).optional(),
   paymentProvider: z.enum(['stripe', 'paypal', 'square']).optional(),
+  defaultDepositType: z.enum(['none', 'percent', 'fixed']).optional(),
   locationAccuracy: z.enum(['low', 'medium', 'high']).optional(),
   bookingReminderChannel: z.enum(['email', 'sms', 'both']).optional(),
   bookingReminderOffsets: z.array(z.object({
@@ -1858,6 +1875,9 @@ export const insertProposalSchema = createInsertSchema(proposals).omit({
   ).optional(),
   quoteId: z.string().optional(), // Make optional for standalone proposals
   proposalNumber: z.string().optional(), // Auto-generate if not provided
+  depositType: z.enum(['none', 'percent', 'fixed']).optional(),
+  // Accept numbers from the builder UI; storage layer stringifies for decimal.
+  depositValue: z.union([z.string(), z.number()]).optional(),
 });
 
 export const updateProposalSchema = insertProposalSchema.partial();
@@ -2730,6 +2750,37 @@ export const invoiceLineItems = pgTable("invoice_line_items", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// Payments ledger. One row per payment received from a customer. Today this
+// is Stripe-only (deposits collected at proposal acceptance), but the schema
+// is provider-agnostic so we can add manual bank-transfer entries later.
+//
+// Idempotency: provider_session_id is unique so the Stripe webhook can be
+// retried safely without double-counting a deposit.
+export const payments = pgTable("payments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  jobId: varchar("job_id").references(() => jobs.id),
+  proposalId: varchar("proposal_id").references(() => proposals.id),
+  invoiceId: varchar("invoice_id").references(() => invoices.id),
+  customerId: varchar("customer_id").references(() => customers.id),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("NZD"),
+  provider: text("provider").notNull(), // 'stripe' | 'manual' | 'bank_transfer' | 'xero'
+  providerSessionId: text("provider_session_id").unique(), // stripe checkout session id
+  providerPaymentId: text("provider_payment_id"), // stripe payment intent id
+  kind: text("kind").notNull().default("payment"), // 'deposit' | 'payment' | 'refund'
+  status: text("status").notNull().default("succeeded"), // 'pending' | 'succeeded' | 'failed' | 'refunded'
+  metadata: jsonb("metadata"),
+  paidAt: timestamp("paid_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertPaymentSchema = createInsertSchema(payments).omit({
+  id: true,
+  createdAt: true,
+});
+export type Payment = typeof payments.$inferSelect;
+export type InsertPayment = z.infer<typeof insertPaymentSchema>;
 
 // Xero OAuth2 Integration
 export const xeroConnections = pgTable("xero_connections", {
