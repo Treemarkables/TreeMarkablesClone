@@ -167,6 +167,69 @@ export async function createInvoiceCheckoutSession(input: InvoiceCheckoutInput):
   return { id: session.id, url: session.url };
 }
 
+export interface JobCheckoutInput {
+  jobId: string;
+  jobNumber?: string | null;
+  amountCents: number; // outstanding amount in cents, NZD (GST-inclusive)
+  customerEmail?: string | null;
+  customerName?: string | null;
+  successUrl: string;
+  cancelUrl: string;
+  businessName?: string;
+}
+
+// Creates a Stripe Checkout Session for an on-the-spot job payment (staff
+// takes payment at job completion). metadata kind='payment' + jobId so the
+// webhook records the payment against the job and updates its paid/balance.
+export async function createJobCheckoutSession(input: JobCheckoutInput): Promise<{
+  id: string;
+  url: string;
+}> {
+  const stripe = await getStripe();
+  const label = input.jobNumber ? `Job ${input.jobNumber}` : 'Job payment';
+
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    currency: 'nzd',
+    customer_email: input.customerEmail || undefined,
+    line_items: [
+      {
+        price_data: {
+          currency: 'nzd',
+          product_data: {
+            name: label,
+            description: input.businessName
+              ? `Payment for ${label} — ${input.businessName}`
+              : `Payment for ${label}`,
+          },
+          unit_amount: input.amountCents,
+        },
+        quantity: 1,
+      },
+    ],
+    success_url: input.successUrl,
+    cancel_url: input.cancelUrl,
+    metadata: {
+      kind: 'payment',
+      jobId: input.jobId,
+      jobNumber: input.jobNumber || '',
+    },
+    payment_intent_data: {
+      metadata: {
+        kind: 'payment',
+        jobId: input.jobId,
+        jobNumber: input.jobNumber || '',
+      },
+    },
+  });
+
+  if (!session.url) {
+    throw new Error('Stripe checkout session did not return a redirect URL');
+  }
+  return { id: session.id, url: session.url };
+}
+
 // Verifies a Stripe webhook signature against the raw request body and
 // returns the parsed event. Throws on signature mismatch — caller should
 // 400 the response so Stripe will retry.

@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
+import { Plus, AlertCircle, CheckCircle2, CreditCard, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
@@ -138,6 +138,44 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
   const depositPayments = payments.filter((p) => p.kind === "deposit" && p.status === "succeeded");
   const depositPaidAmount = depositPayments.reduce((s, p) => s + toNum(p.amount), 0);
 
+  const { data: paymentConfig } = useQuery<{
+    success?: boolean;
+    data?: { stripeConfigured?: boolean };
+  }>({
+    queryKey: ["/api/payments/config"],
+  });
+  const stripeConfigured = paymentConfig?.data?.stripeConfigured === true;
+
+  // "Take payment" — opens Stripe Checkout for the job's outstanding balance in
+  // a new tab so the customer can pay on the device (card entry or camera scan)
+  // while the job card stays put. The webhook records the payment + updates the
+  // job; the panel refetches on focus when staff returns.
+  const takePayment = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/jobs/${jobId}/payment-checkout`, {});
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      const url = data?.data?.url;
+      if (url) {
+        window.open(url, "_blank");
+        return;
+      }
+      toast({
+        variant: "destructive",
+        title: "Payment unavailable",
+        description: data?.message || "Could not start the payment. Please try again.",
+      });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Payment unavailable",
+        description: err?.message || "Could not start the payment. Please try again.",
+      });
+    },
+  });
+
   // ── Editing helpers ──────────────────────────────────────────────────────
   const updateField = (idx: number, patch: Partial<LineItem>) => {
     setItems((prev) => {
@@ -189,6 +227,7 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
 
   const paidAmount = toNum(job?.paidAmount);
   const isPaid = paidAmount >= total && total > 0;
+  const outstanding = Math.max(0, Math.round((total - paidAmount) * 100) / 100);
 
   return (
     <div className="p-4 space-y-3.5">
@@ -327,8 +366,22 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             ))}
           </div>
         )}
+        {stripeConfigured && outstanding > 0.01 && (
+          <button
+            type="button"
+            onClick={() => takePayment.mutate()}
+            disabled={takePayment.isPending}
+            className="w-full mt-3 bg-slate-900 text-white py-3 rounded-xl font-bold text-[15px] flex items-center justify-center gap-1.5 disabled:opacity-60"
+            data-testid="take-payment"
+          >
+            <CreditCard className="w-4 h-4" />
+            {takePayment.isPending ? "Starting…" : `Take payment · ${money(outstanding)}`}
+          </button>
+        )}
         <div className="text-[12.5px] text-slate-500 mt-2 leading-relaxed">
-          Payment recording lives on the invoice itself — once an invoice is generated above, payments will surface here automatically.
+          {stripeConfigured
+            ? "Take payment opens a secure Stripe page on this device — the customer can enter or camera-scan their card. Bank-transfer details stay on the invoice."
+            : "Payment recording lives on the invoice itself — once an invoice is generated above, payments will surface here automatically."}
         </div>
       </div>
     </div>

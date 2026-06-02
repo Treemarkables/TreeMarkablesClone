@@ -71,6 +71,7 @@ import {
   getPublishableKey,
   createDepositCheckoutSession,
   createInvoiceCheckoutSession,
+  createJobCheckoutSession,
   constructWebhookEvent,
   computeDepositAmount,
 } from "./stripe";
@@ -5429,6 +5430,65 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
     } catch (error) {
       console.error('Error fetching job payments:', error);
       res.status(500).json({ success: false, message: 'Error fetching payments' });
+    }
+  });
+
+  // Staff "Take payment" on the job card: create a Stripe Checkout session for
+  // the job's outstanding balance (total − already paid). The customer enters
+  // their card (or scans it via the device camera) on the hosted Stripe page.
+  app.post('/api/jobs/:id/payment-checkout', async (req: Request, res: Response) => {
+    try {
+      if (!isStripeConfigured()) {
+        return res.status(503).json({ success: false, message: 'Online payment is not configured.' });
+      }
+      const job = await storage.getJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ success: false, message: 'Job not found' });
+      }
+
+      const total = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
+      const paid = parseFloat((job as any).paidAmount?.toString() || '0') || 0;
+      const outstanding = Math.round((total - paid) * 100) / 100;
+
+      if (total <= 0) {
+        return res.status(400).json({ success: false, message: 'This job has no total amount to charge' });
+      }
+      if (outstanding <= 0) {
+        return res.status(400).json({ success: false, message: 'This job is already paid in full' });
+      }
+      const amountCents = Math.round(outstanding * 100);
+      if (amountCents < 50) {
+        return res.status(400).json({ success: false, message: 'The outstanding balance is too small to charge' });
+      }
+
+      const customer = (job as any).customerId ? await storage.getCustomer((job as any).customerId) : null;
+      const settings = await storage.getBusinessSettings().catch(() => null);
+
+      const origin =
+        process.env.NODE_ENV === 'production'
+          ? 'https://app.treemarkables.co.nz'
+          : `${req.protocol}://${req.get('host')}`;
+      const successUrl = `${origin}/payment-complete?status=success`;
+      const cancelUrl = `${origin}/payment-complete?status=cancelled`;
+
+      const session = await createJobCheckoutSession({
+        jobId: job.id,
+        jobNumber: (job as any).jobNumber || null,
+        amountCents,
+        customerEmail: customer?.email || null,
+        customerName: customer?.name || null,
+        successUrl,
+        cancelUrl,
+        businessName: (settings as any)?.businessName || 'Treemarkables',
+      });
+
+      res.json({ success: true, data: { sessionId: session.id, url: session.url, amount: outstanding } });
+    } catch (error: any) {
+      console.error('Error creating job payment checkout session:', error);
+      res.status(500).json({
+        success: false,
+        message: error?.message || 'Error creating payment checkout session',
+      });
     }
   });
 
@@ -23226,6 +23286,46 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             await storage.updateInvoice(invoice.id, { status: 'paid', paidAt: new Date() } as any);
           }
           console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for invoice ${invoice.invoiceNumber}; marked paid`);
+          return res.json({ received: true });
+        }
+
+        // Job payment (kind='payment' + jobId) — staff "Take payment" on the
+        // job card. Record the payment and roll the job's paid/balance forward.
+        const jobIdMeta: string | undefined = session?.metadata?.jobId;
+        if (kind === 'payment' && jobIdMeta) {
+          const existingJobPay = await storage.getPaymentBySessionId(session.id);
+          if (existingJobPay) {
+            console.log(`Stripe webhook: session ${session.id} already processed`);
+            return res.json({ received: true, duplicate: true });
+          }
+          const job = await storage.getJob(jobIdMeta);
+          if (!job) {
+            console.error('Stripe webhook: job not found for session', { jobIdMeta, sessionId: session.id });
+            return res.json({ received: true, missingJob: true });
+          }
+          await storage.createPayment({
+            jobId: job.id,
+            customerId: (job as any).customerId || null,
+            amount: amountPaid as any,
+            currency: 'NZD',
+            provider: 'stripe',
+            providerSessionId: session.id,
+            providerPaymentId: session.payment_intent || null,
+            kind: 'payment',
+            status: 'succeeded',
+            paidAt: new Date(),
+          } as any);
+
+          const jobTotal = parseFloat((job as any).totalAmount?.toString() || '0') || 0;
+          const prevPaid = parseFloat((job as any).paidAmount?.toString() || '0') || 0;
+          const newPaid = Math.round((prevPaid + amountPaid) * 100) / 100;
+          const newBalance = Math.max(0, Math.round((jobTotal - newPaid) * 100) / 100);
+          await storage.updateJob(job.id, {
+            paidAmount: String(newPaid),
+            balanceDue: String(newBalance),
+          } as any);
+
+          console.log(`✅ Stripe webhook: payment of $${amountPaid} captured for job ${(job as any).jobNumber}; paid ${newPaid}/${jobTotal}`);
           return res.json({ received: true });
         }
 
