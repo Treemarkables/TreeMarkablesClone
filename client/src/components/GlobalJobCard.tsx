@@ -10728,7 +10728,11 @@ The Treemarkables Team`;
   // dropdown and mobile's Actions sheet read from this same object.
   const sharedActions = {
     speechToQuote: () => setIsSpeechToQuoteOpen(true),
-    schedule: () => setIsSchedulingModalOpen(true),
+    // Route through handleScheduleClick (not a bare modal-open) so the form
+    // pre-populates from the job's existing schedule + staff-assignment rows.
+    // The bare setIsSchedulingModalOpen(true) opened a blank form, so a
+    // re-opened booking looked like it had "no recollection" of its details.
+    schedule: () => handleScheduleClick(),
     quote: () => setIsQuoteModalOpen(true),
     invoice: () => setIsInvoiceModalOpen(true),
     proposal: () => setIsProposalBuilderOpen(true),
