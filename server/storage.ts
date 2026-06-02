@@ -7446,6 +7446,10 @@ class DatabaseStorage implements IStorage {
   async getPaymentsByJob(jobId: string): Promise<schema.Payment[]> {
     return db.select().from(schema.payments).where(eq(schema.payments.jobId, jobId));
   }
+
+  async getPaymentsByInvoice(invoiceId: string): Promise<schema.Payment[]> {
+    return db.select().from(schema.payments).where(eq(schema.payments.invoiceId, invoiceId));
+  }
 }
 
 export const storage = new DatabaseStorage();
