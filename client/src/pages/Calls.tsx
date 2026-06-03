@@ -30,6 +30,7 @@ import {
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Call, Customer } from "@shared/schema";
+import { VoicemailGreetingCard } from "@/components/VoicemailGreetingCard";
 
 // Match the last 8 digits of a phone number, the same heuristic the Twilio
 // answer webhook uses for caller-ID enrichment (handles +64 vs 0 prefixes).
@@ -146,6 +147,8 @@ export default function Calls() {
           Every recorded call, with the caller's name when they're a known customer
         </p>
       </div>
+
+      <VoicemailGreetingCard />
 
       <Card>
         <CardHeader>
