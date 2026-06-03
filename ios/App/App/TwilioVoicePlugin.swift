@@ -181,12 +181,19 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
+        // Retain these call-lifecycle events until a JS listener consumes them.
+        // When the app is cold-launched (or foregrounded) by the VoIP push, the
+        // native side reports the call and the user can answer from CallKit
+        // BEFORE the webview's React listeners have attached. Without retention,
+        // Capacitor drops those early events, so the web `callState` never
+        // leaves "idle" and the in-call overlay (mute/speaker/end-call) never
+        // appears — the user lands on the current route with no controls.
         notifyListeners("incomingCall", data: [
             "from": callerNumber,
             "to": callInvite.to ?? "",
             "callSid": callInvite.callSid,
             "callerName": knownName ?? "",
-        ])
+        ], retainUntilConsumed: true)
     }
 }
 
@@ -262,7 +269,7 @@ extension TwilioVoicePlugin: NotificationDelegate {
         callKitProvider?.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         self.callInvite = nil
         self.callUUID = nil
-        notifyListeners("callCancelled", data: [:])
+        notifyListeners("callCancelled", data: [:], retainUntilConsumed: true)
     }
 }
 
@@ -283,7 +290,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         self.activeCall = callInvite.accept(options: acceptOptions, delegate: self)
         self.callInvite = nil
         action.fulfill()
-        notifyListeners("callAnswered", data: [:])
+        notifyListeners("callAnswered", data: [:], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
@@ -293,7 +300,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
         activeCall = nil
         callUUID = nil
         action.fulfill()
-        notifyListeners("callEnded", data: [:])
+        notifyListeners("callEnded", data: [:], retainUntilConsumed: true)
     }
 
     public func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
@@ -314,7 +321,7 @@ extension TwilioVoicePlugin: CXProviderDelegate {
 
 extension TwilioVoicePlugin: CallDelegate {
     public func callDidConnect(call: Call) {
-        notifyListeners("callConnected", data: ["sid": call.sid ?? ""])
+        notifyListeners("callConnected", data: ["sid": call.sid ?? ""], retainUntilConsumed: true)
     }
 
     public func callDidDisconnect(call: Call, error: Error?) {
@@ -325,7 +332,7 @@ extension TwilioVoicePlugin: CallDelegate {
         callUUID = nil
         notifyListeners("callDisconnected", data: [
             "error": error?.localizedDescription ?? "",
-        ])
+        ], retainUntilConsumed: true)
     }
 
     public func callDidFailToConnect(call: Call, error: Error) {
@@ -334,6 +341,6 @@ extension TwilioVoicePlugin: CallDelegate {
         }
         activeCall = nil
         callUUID = nil
-        notifyListeners("callFailed", data: ["error": error.localizedDescription])
+        notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
     }
 }
