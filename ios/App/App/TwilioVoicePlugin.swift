@@ -22,6 +22,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setSpeaker", returnType: CAPPluginReturnPromise),
     ]
 
+    /// Shared instance so the AppDelegate can stand up VoIP push handling at app
+    /// launch — required to catch a call that cold-launches a killed/locked app,
+    /// since iOS delivers the VoIP push before the Capacitor webview loads —
+    /// while Capacitor registers this SAME instance for JS bridge calls.
+    static let shared = TwilioVoicePlugin()
+
     // MARK: - Stored Properties (strongly retained)
 
     /// Retained reference to PKPushRegistry — must be a stored property or callbacks stop.
@@ -38,17 +44,25 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
 
     public override func load() {
         super.load()
-        DispatchQueue.main.async {
-            self.setupCallKit()
-            // Stand up the VoIP push registry at launch — NOT lazily inside
-            // register() (which only runs once the webview has loaded and JS
-            // calls it). When a call cold-launches the app (screen locked or
-            // app killed), iOS delivers the VoIP push during launch and requires
-            // a live PKPushRegistry delegate to receive it and report a call to
-            // CallKit. If the registry isn't up yet, the push is dropped and the
-            // phone never rings. Handling an incoming push needs no access token,
-            // so this is safe to do before JS hands one over.
-            self.registerForVoIPPush()
+        startVoIP()
+    }
+
+    /// Sets up CallKit + the VoIP push registry. Called from the AppDelegate at
+    /// `didFinishLaunchingWithOptions` (so the registry is live before iOS
+    /// delivers a cold-launch VoIP push to a killed/locked app — the webview
+    /// hasn't loaded yet at that point) and again from `load()` for normal
+    /// launches. Both setup steps are idempotent, so repeat calls are no-ops.
+    /// Handling an incoming push needs no access token, so this is safe to run
+    /// before JS hands one over.
+    func startVoIP() {
+        if Thread.isMainThread {
+            setupCallKit()
+            registerForVoIPPush()
+        } else {
+            DispatchQueue.main.async {
+                self.setupCallKit()
+                self.registerForVoIPPush()
+            }
         }
     }
 
@@ -146,6 +160,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - CallKit Setup
 
     private func setupCallKit() {
+        guard callKitProvider == nil else { return }
         let config = CXProviderConfiguration(localizedName: "Inflow")
         config.maximumCallGroups = 1
         config.maximumCallsPerCallGroup = 1
@@ -402,6 +417,9 @@ extension TwilioVoicePlugin: CallDelegate {
 /// local plugin. The storyboard's root view controller points at this class.
 class MainViewController: CAPBridgeViewController {
     override func capacitorDidLoad() {
-        bridge?.registerPluginInstance(TwilioVoicePlugin())
+        // Register the SAME instance the AppDelegate already used to stand up
+        // VoIP push handling at launch, so JS bridge calls and the live push
+        // registry share one plugin instance.
+        bridge?.registerPluginInstance(TwilioVoicePlugin.shared)
     }
 }
