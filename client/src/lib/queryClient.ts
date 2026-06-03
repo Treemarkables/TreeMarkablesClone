@@ -1,4 +1,10 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryFunction,
+  dehydrate,
+  hydrate,
+  keepPreviousData,
+} from "@tanstack/react-query";
 
 export class ApiError extends Error {
   status: number;
@@ -82,7 +88,14 @@ export const queryClient = new QueryClient({
       queryFn: getQueryFn({ on401: "throw" }),
       refetchInterval: 30000,
       refetchOnWindowFocus: false,
-      staleTime: 5000,
+      // Treat data as fresh for a minute so navigating back to an
+      // already-loaded screen renders instantly instead of re-flashing a
+      // skeleton. Background freshness is still handled by refetchInterval.
+      staleTime: 60_000,
+      // During a background refetch (e.g. switching customers/jobs), keep the
+      // previously rendered data on screen instead of dropping to an empty
+      // loading state. Eliminates the "blank then fill in" flicker.
+      placeholderData: keepPreviousData,
       retry: (failureCount, error) => {
         if (failureCount >= 3) return false;
         const msg = (error as Error)?.message || '';
@@ -100,3 +113,71 @@ export const queryClient = new QueryClient({
     },
   },
 });
+
+// ---------------------------------------------------------------------------
+// Offline cache persistence (stale-while-revalidate across app restarts)
+//
+// On a cold start (e.g. the iOS TestFlight webview booting) the in-memory query
+// cache is empty, so every screen mounts with isLoading=true and shows a
+// skeleton/spinner until the network responds. By snapshotting the cache to
+// localStorage and rehydrating it *synchronously* before the first render, the
+// app paints the last data the user saw instantly, then quietly revalidates in
+// the background — no visible "fetching" flash on open.
+//
+// Implemented with react-query's built-in dehydrate/hydrate so it needs no
+// extra dependency. Logout already calls localStorage.clear(), so persisted
+// data does not survive sign-out.
+// ---------------------------------------------------------------------------
+const PERSIST_KEY = "tm-query-cache-v1";
+const PERSIST_MAX_AGE = 1000 * 60 * 60 * 24; // discard snapshots older than 24h
+const PERSIST_MAX_BYTES = 4 * 1024 * 1024; // stay well under the ~5MB quota
+
+function hydratePersistedQueryCache() {
+  try {
+    const raw = localStorage.getItem(PERSIST_KEY);
+    if (!raw) return;
+    const snapshot = JSON.parse(raw) as { savedAt?: number; state?: unknown };
+    if (!snapshot?.savedAt || Date.now() - snapshot.savedAt > PERSIST_MAX_AGE) {
+      localStorage.removeItem(PERSIST_KEY);
+      return;
+    }
+    hydrate(queryClient, snapshot.state);
+  } catch {
+    // Corrupt/incompatible snapshot — drop it and start clean.
+    try {
+      localStorage.removeItem(PERSIST_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+function schedulePersist() {
+  if (persistTimer) return;
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    try {
+      const state = dehydrate(queryClient, {
+        // Only persist settled, successful queries.
+        shouldDehydrateQuery: (query) => query.state.status === "success",
+      });
+      const payload = JSON.stringify({ savedAt: Date.now(), state });
+      if (payload.length > PERSIST_MAX_BYTES) return; // too big — skip this write
+      localStorage.setItem(PERSIST_KEY, payload);
+    } catch {
+      // Quota exceeded or serialization failure — drop the snapshot so a
+      // half-written/oversized value never blocks the app.
+      try {
+        localStorage.removeItem(PERSIST_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, 1000);
+}
+
+if (typeof window !== "undefined") {
+  hydratePersistedQueryCache();
+  queryClient.getQueryCache().subscribe(schedulePersist);
+}
