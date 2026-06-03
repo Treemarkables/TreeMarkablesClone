@@ -27,6 +27,11 @@ export interface CallEvent {
   error?: string;
   deviceToken?: string;
   message?: string;
+  // "true" when the app was in the foreground as the call arrived. Native only
+  // surfaces a full-screen call UI for lock-screen/background answers, so the
+  // web in-app call screen is shown only for foreground calls (see
+  // TwilioCallContext) to avoid competing with the native UI.
+  foreground?: string;
 }
 
 export interface TwilioVoiceOptions {

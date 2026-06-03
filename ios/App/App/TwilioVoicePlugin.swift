@@ -181,6 +181,22 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
+        // Whether the app was in the foreground when the call arrived. iOS only
+        // takes over the screen with its native in-call UI when a call is
+        // answered from OUTSIDE the app (lock screen / background); when the app
+        // is already open, iOS keeps you in-app and tucks the call into the
+        // Dynamic Island. The web layer uses this flag to show a native-styled
+        // in-app call screen ONLY for foreground calls, so it never competes
+        // with the real native UI in the lock-screen case.
+        let isForeground: Bool
+        if Thread.isMainThread {
+            isForeground = UIApplication.shared.applicationState == .active
+        } else {
+            isForeground = DispatchQueue.main.sync {
+                UIApplication.shared.applicationState == .active
+            }
+        }
+
         // Retain these call-lifecycle events until a JS listener consumes them.
         // When the app is cold-launched (or foregrounded) by the VoIP push, the
         // native side reports the call and the user can answer from CallKit
@@ -193,6 +209,7 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
             "to": callInvite.to ?? "",
             "callSid": callInvite.callSid,
             "callerName": knownName ?? "",
+            "foreground": isForeground ? "true" : "false",
         ], retainUntilConsumed: true)
     }
 }
