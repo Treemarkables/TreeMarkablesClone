@@ -104,23 +104,39 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
 
   const answer = useCallback(async () => {
     if (!isNative) return;
-    await TwilioVoice.answer();
+    try {
+      await TwilioVoice.answer();
+    } catch (err) {
+      console.warn("[TwilioVoice] answer failed:", err);
+    }
   }, [isNative]);
 
   const reject = useCallback(async () => {
     if (!isNative) return;
-    await TwilioVoice.reject();
+    try {
+      await TwilioVoice.reject();
+    } catch (err) {
+      console.warn("[TwilioVoice] reject failed:", err);
+    }
   }, [isNative]);
 
   const hangup = useCallback(async () => {
     if (!isNative) return;
-    await TwilioVoice.hangup();
+    try {
+      await TwilioVoice.hangup();
+    } catch (err) {
+      console.warn("[TwilioVoice] hangup failed:", err);
+    }
   }, [isNative]);
 
   const mute = useCallback(
     async (muted: boolean) => {
       if (!isNative) return;
-      await TwilioVoice.mute({ muted });
+      try {
+        await TwilioVoice.mute({ muted });
+      } catch (err) {
+        console.warn("[TwilioVoice] mute failed:", err);
+      }
     },
     [isNative],
   );
@@ -128,7 +144,13 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
   const setSpeaker = useCallback(
     async (on: boolean) => {
       if (!isNative) return;
-      await TwilioVoice.setSpeaker({ on });
+      try {
+        await TwilioVoice.setSpeaker({ on });
+      } catch (err) {
+        // The iOS native plugin doesn't implement setSpeaker; swallow so a
+        // failed toggle doesn't surface as an unhandled promise rejection.
+        console.warn("[TwilioVoice] setSpeaker failed:", err);
+      }
     },
     [isNative],
   );
