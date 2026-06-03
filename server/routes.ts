@@ -11255,6 +11255,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
       TWILIO_API_SECRET: { set: !!process.env.TWILIO_API_SECRET, masked: mask(process.env.TWILIO_API_SECRET) },
       TWILIO_PHONE_NUMBER: { set: !!process.env.TWILIO_PHONE_NUMBER, value: process.env.TWILIO_PHONE_NUMBER || null },
       TWILIO_TWIML_APP_SID: { set: !!process.env.TWILIO_TWIML_APP_SID, masked: mask(process.env.TWILIO_TWIML_APP_SID) },
+      TWILIO_PUSH_CREDENTIAL_SID: { set: !!process.env.TWILIO_PUSH_CREDENTIAL_SID, masked: mask(process.env.TWILIO_PUSH_CREDENTIAL_SID) },
       TWILIO_CLIENT_IDENTITY: { set: !!process.env.TWILIO_CLIENT_IDENTITY, value: process.env.TWILIO_CLIENT_IDENTITY || 'treemarkables-owner (default)' },
       OWNER_PHONE_NUMBER: { set: !!process.env.OWNER_PHONE_NUMBER, value: process.env.OWNER_PHONE_NUMBER || null },
       OPENAI_API_KEY: { set: !!process.env.OPENAI_API_KEY, masked: mask(process.env.OPENAI_API_KEY) },
@@ -11333,6 +11334,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`
     if (!env.PRIVATE_OBJECT_DIR.set) recommendations.push('Set PRIVATE_OBJECT_DIR so recordings persist to GCS Object Storage');
     if (!env.TWILIO_API_KEY.set || !env.TWILIO_API_SECRET.set) recommendations.push('Set TWILIO_API_KEY + TWILIO_API_SECRET so the iOS app can register for incoming calls via the Voice SDK');
     if (!env.TWILIO_TWIML_APP_SID.set) recommendations.push('Set TWILIO_TWIML_APP_SID to enable outgoing calls from the iOS app');
+    if (!env.TWILIO_PUSH_CREDENTIAL_SID.set) recommendations.push('Set TWILIO_PUSH_CREDENTIAL_SID (a VoIP Push Credential in Twilio Console → Voice → Push Credentials, backed by an Apple VoIP Services APNs certificate) so the iOS app can RECEIVE incoming calls');
     if (twilioPhoneNumber && !twilioPhoneNumber.voiceUrlMatchesExpected) {
       recommendations.push(`Update Twilio console voice webhook to ${expectedWebhooks.answer} (currently: ${twilioPhoneNumber.voiceUrl || 'unset'})`);
     }
