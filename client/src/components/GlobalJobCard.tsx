@@ -1476,6 +1476,20 @@ export function GlobalJobCard({
       : null;
   }, [editingJob, customers]);
 
+  // Name shown in the card header. Prefer the user-edited/selected value, but
+  // fall back synchronously to the cached customer record (and the job's
+  // contact fields) so the name paints on the very first render frame instead
+  // of after the post-paint effect at ~line 1862 runs. Without this fallback,
+  // a cold/hydrated open briefly shows an empty/placeholder name before the
+  // effect populates selectedCustomerName — the "flash then fill in" the
+  // customer name exhibited on the mobile webview.
+  const customerDisplayName =
+    selectedCustomerName ||
+    editingJobCustomer?.name ||
+    [editingJob?.jobContactFirstName, editingJob?.jobContactLastName]
+      .filter(Boolean)
+      .join(" ");
+
   // Saved contacts under the selected customer org. Lets jobs at multi-contact
   // customers (councils, agencies, property managers) reuse the same person
   // record across jobs instead of retyping name/email/phone every time.
@@ -5622,7 +5636,7 @@ The Treemarkables Team`;
                                       data-testid="customer-name-link-trigger"
                                       aria-label="Edit name or change linked customer"
                                     >
-                                      {selectedCustomerName}
+                                      {customerDisplayName}
                                       {selectedVipCustomer?.isVipMember && (
                                         <Crown className="h-4 w-4 text-amber-500 flex-shrink-0" />
                                       )}
@@ -5925,7 +5939,7 @@ The Treemarkables Team`;
                                   aria-label="Change linked customer"
                                 >
                                   <span className="group-hover:underline">
-                                    {selectedCustomerName || "Select Customer"}
+                                    {customerDisplayName || "Select Customer"}
                                   </span>
                                   {selectedVipCustomer?.isVipMember && (
                                     <Crown className="ml-1 h-4 w-4 text-amber-500 flex-shrink-0" />
