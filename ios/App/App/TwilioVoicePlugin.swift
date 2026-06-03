@@ -40,6 +40,15 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         super.load()
         DispatchQueue.main.async {
             self.setupCallKit()
+            // Stand up the VoIP push registry at launch — NOT lazily inside
+            // register() (which only runs once the webview has loaded and JS
+            // calls it). When a call cold-launches the app (screen locked or
+            // app killed), iOS delivers the VoIP push during launch and requires
+            // a live PKPushRegistry delegate to receive it and report a call to
+            // CallKit. If the registry isn't up yet, the push is dropped and the
+            // phone never rings. Handling an incoming push needs no access token,
+            // so this is safe to do before JS hands one over.
+            self.registerForVoIPPush()
         }
     }
 
@@ -52,7 +61,12 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         }
         self.accessToken = token
         DispatchQueue.main.async {
+            // Registry is normally already up from load(); this is a no-op then.
             self.registerForVoIPPush()
+            // If the device token already arrived (registry came up at launch),
+            // bind/refresh it with Twilio now. Otherwise didUpdate handles it
+            // once the token is delivered.
+            self.registerWithTwilioIfReady()
         }
         call.resolve()
     }
@@ -148,12 +162,34 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
     // MARK: - VoIP Push Registration
 
     private func registerForVoIPPush() {
+        // Idempotent: the registry is created once (at launch in load()) and
+        // reused when JS later calls register(). Creating a second registry
+        // would orphan the delegate callbacks.
+        guard self.voipRegistry == nil else { return }
         // Assign to stored property so the registry — and therefore the delegate
         // callbacks — remain alive for the lifetime of the plugin instance.
         let registry = PKPushRegistry(queue: DispatchQueue.main)
         registry.delegate = self
         registry.desiredPushTypes = [.voIP]
         self.voipRegistry = registry
+    }
+
+    /// Binds the VoIP device token to the Twilio identity so inbound calls get
+    /// pushed here. No-op until BOTH the access token (from JS `register()`) and
+    /// the device token (from the PKPushRegistry) are available — the two can
+    /// arrive in either order depending on app launch path.
+    private func registerWithTwilioIfReady() {
+        guard let token = self.accessToken, let deviceToken = self.deviceToken else { return }
+        TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
+            if let error = error {
+                NSLog("[TwilioVoice] Registration error: \(error)")
+                self.notifyListeners("registrationError", data: ["message": error.localizedDescription])
+            } else {
+                let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
+                NSLog("[TwilioVoice] Registered — device token: \(hex.prefix(8))...")
+                self.notifyListeners("registered", data: ["deviceToken": hex])
+            }
+        }
     }
 
     // MARK: - Incoming Call Presentation
@@ -223,20 +259,13 @@ extension TwilioVoicePlugin: PKPushRegistryDelegate {
         didUpdate pushCredentials: PKPushCredentials,
         for type: PKPushType
     ) {
-        guard type == .voIP, let token = self.accessToken else { return }
-        let deviceToken = pushCredentials.token
-        self.deviceToken = deviceToken
-
-        TwilioVoiceSDK.register(accessToken: token, deviceToken: deviceToken) { error in
-            if let error = error {
-                NSLog("[TwilioVoice] Registration error: \(error)")
-                self.notifyListeners("registrationError", data: ["message": error.localizedDescription])
-            } else {
-                let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
-                NSLog("[TwilioVoice] Registered — device token: \(hex.prefix(8))...")
-                self.notifyListeners("registered", data: ["deviceToken": hex])
-            }
-        }
+        guard type == .voIP else { return }
+        // Always keep the device token — the registry can come up at launch
+        // (load) before JS has supplied an access token. The Twilio binding then
+        // happens as soon as register() provides the token (or right here if it
+        // already has).
+        self.deviceToken = pushCredentials.token
+        registerWithTwilioIfReady()
     }
 
     public func pushRegistry(
