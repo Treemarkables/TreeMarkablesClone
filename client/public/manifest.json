@@ -10,13 +10,13 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/inflow-icon-192.png?v=7",
+      "src": "/inflow-icon-192.png?v=8",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/inflow-icon-512.png?v=7",
+      "src": "/inflow-icon-512.png?v=8",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
@@ -29,14 +29,14 @@
       "short_name": "New Job",
       "description": "Create a new job quickly",
       "url": "/dispatch?action=new",
-      "icons": [{"src": "/inflow-icon-192.png?v=7", "sizes": "192x192"}]
+      "icons": [{"src": "/inflow-icon-192.png?v=8", "sizes": "192x192"}]
     },
     {
       "name": "Today's Jobs",
       "short_name": "Today",
       "description": "View today's scheduled jobs",
       "url": "/dispatch?filter=today",
-      "icons": [{"src": "/inflow-icon-192.png?v=7", "sizes": "192x192"}]
+      "icons": [{"src": "/inflow-icon-192.png?v=8", "sizes": "192x192"}]
     }
   ]
 }
