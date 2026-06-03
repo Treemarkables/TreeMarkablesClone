@@ -48,6 +48,12 @@ export function TwilioCallProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const handleIncomingCall = useCallback((data: CallEvent) => {
+    // Diagnostic: confirms the event reached the webview and what the native
+    // side reported for foreground (visible in Safari Web Inspector).
+    console.log("[TwilioCall] incomingCall", {
+      foreground: data.foreground,
+      from: data.from,
+    });
     // Remember who's calling and whether iOS will hand us the in-app case.
     setCallInfo({
       from: data.from,
