@@ -1166,11 +1166,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
               (1000 * 60 * 60)
             : 2; // Default to 2 hours if parsing fails
 
-        // Safari-safe customer name lookup - check multiple sources
+        // Safari-safe customer name lookup - check multiple sources.
+        // Prefer the name folded onto the job payload by GET /api/jobs so the
+        // tile renders immediately without waiting on the separate
+        // /api/customers fetch + client-side map (which caused a name flash).
         const customerName =
-          apiJob.customerId && customerMap.has(apiJob.customerId)
+          apiJob.customerName ||
+          (apiJob.customerId && customerMap.has(apiJob.customerId)
             ? customerMap.get(apiJob.customerId)
-            : apiJob.clientName || apiJob.title || "";
+            : apiJob.clientName || apiJob.title || "");
 
         jobAssignments.push({
           id: apiJob.id,
@@ -1261,11 +1265,15 @@ export function DispatchBoard({ compact = false }: DispatchBoardProps) {
           ).toISOString();
         }
 
-        // Safari-safe customer name lookup - check multiple sources
+        // Safari-safe customer name lookup - check multiple sources.
+        // Prefer the name folded onto the job payload by GET /api/jobs so the
+        // tile renders immediately without waiting on the separate
+        // /api/customers fetch + client-side map (which caused a name flash).
         const customerName =
-          apiJob.customerId && customerMap.has(apiJob.customerId)
+          apiJob.customerName ||
+          (apiJob.customerId && customerMap.has(apiJob.customerId)
             ? customerMap.get(apiJob.customerId)
-            : apiJob.clientName || apiJob.title || "";
+            : apiJob.clientName || apiJob.title || "");
 
         jobAssignments.push({
           id: apiJob.id,

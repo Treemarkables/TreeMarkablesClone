@@ -1483,8 +1483,16 @@ export function GlobalJobCard({
   // a cold/hydrated open briefly shows an empty/placeholder name before the
   // effect populates selectedCustomerName — the "flash then fill in" the
   // customer name exhibited on the mobile webview.
+  // Customer name carried on the job payload itself (GET /api/jobs/:id folds
+  // it in), so it's available the instant the job query resolves — no separate
+  // /api/customers round-trip. Typed structural read since the base Job type
+  // doesn't declare it.
+  const customerNameFromJob = (
+    editingJob as { customerName?: string | null } | null
+  )?.customerName;
   const customerDisplayName =
     selectedCustomerName ||
+    customerNameFromJob ||
     editingJobCustomer?.name ||
     [editingJob?.jobContactFirstName, editingJob?.jobContactLastName]
       .filter(Boolean)

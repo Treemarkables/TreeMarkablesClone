@@ -5067,51 +5067,78 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
   app.get('/api/jobs', async (req: Request, res: Response) => {
     try {
       const { customerId, status, limit, offset, excludeCompleted, excludeArchived } = req.query;
-      
+
       // Parse pagination params
       const parsedLimit = limit ? parseInt(limit as string) : 10;
       const parsedOffset = offset ? parseInt(offset as string) : 0;
-      
+
+      // Fold the customer name onto each job row so list consumers (e.g. the
+      // dispatch board tiles) can render the name immediately, instead of
+      // waiting on a *separate* /api/customers fetch and a client-side join.
+      // Without this the board shows a placeholder, then the name "fetches in"
+      // a beat later — a visible flash. Customers are loaded once per request
+      // and mapped in memory; failure is non-fatal (name falls back to null).
+      let customerNameById: Map<string, string> | null = null;
+      const attachCustomerNames = async <T extends { customerId?: string | null }>(
+        jobs: T[],
+      ): Promise<Array<T & { customerName: string | null }>> => {
+        try {
+          if (!customerNameById) {
+            const allCustomers = await storage.getAllCustomers();
+            customerNameById = new Map(
+              allCustomers.map((c) => [c.id, c.name] as [string, string]),
+            );
+          }
+          return jobs.map((j) => ({
+            ...j,
+            customerName: j.customerId ? customerNameById!.get(j.customerId) ?? null : null,
+          }));
+        } catch (custErr) {
+          console.error('Error attaching customer names to jobs list:', custErr);
+          return jobs.map((j) => ({ ...j, customerName: null }));
+        }
+      };
+
       // Handle customer-specific queries (return all jobs for that customer, no pagination)
       if (customerId && typeof customerId === 'string') {
         const jobs = await storage.getJobsByCustomer(customerId);
         // Serialize timestamps to ISO UTC format
-        const serializedJobs = jobs.map(serializeJobTimestamps);
+        const serializedJobs = await attachCustomerNames(jobs.map(serializeJobTimestamps));
         return res.json({ success: true, data: serializedJobs, total: jobs.length, limit: jobs.length, offset: 0 });
       }
-      
+
       // Handle status-specific queries with pagination
       if (status && typeof status === 'string') {
-        const result = await storage.getAllJobs({ 
-          limit: parsedLimit, 
-          offset: parsedOffset, 
-          status 
+        const result = await storage.getAllJobs({
+          limit: parsedLimit,
+          offset: parsedOffset,
+          status
         });
         // Serialize timestamps to ISO UTC format
-        const serializedJobs = result.jobs.map(serializeJobTimestamps);
-        return res.json({ 
-          success: true, 
-          data: serializedJobs, 
+        const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
+        return res.json({
+          success: true,
+          data: serializedJobs,
           total: result.total,
           limit: parsedLimit,
           offset: parsedOffset
         });
       }
-      
+
       // Default: get all jobs with optional exclusion filters
-      const result = await storage.getAllJobs({ 
-        limit: parsedLimit, 
+      const result = await storage.getAllJobs({
+        limit: parsedLimit,
         offset: parsedOffset,
         excludeCompleted: excludeCompleted === 'true',
         excludeArchived: excludeArchived === 'true',
       });
-      
+
       // Serialize timestamps to ISO UTC format
-      const serializedJobs = result.jobs.map(serializeJobTimestamps);
-      
-      res.json({ 
-        success: true, 
-        data: serializedJobs, 
+      const serializedJobs = await attachCustomerNames(result.jobs.map(serializeJobTimestamps));
+
+      res.json({
+        success: true,
+        data: serializedJobs,
         total: result.total,
         limit: parsedLimit,
         offset: parsedOffset
@@ -5414,7 +5441,25 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
       if (!job) {
         return res.status(404).json({ success: false, message: 'Job not found' });
       }
-      res.json({ success: true, data: job });
+      // Eagerly resolve the linked customer and fold the name (+ the full
+      // record) into the job payload. The customer name is otherwise only
+      // available via a *separate* /api/customers fetch, which means the job
+      // card renders, then the name "fetches in" a beat later — a visible
+      // flash on slow/mobile connections. Carrying it on the job removes that
+      // second round-trip so the name paints with the job itself.
+      let customerName: string | null = null;
+      let customer: Awaited<ReturnType<typeof storage.getCustomer>> | undefined;
+      if (job.customerId) {
+        try {
+          customer = await storage.getCustomer(job.customerId);
+          customerName = customer?.name ?? null;
+        } catch (custErr) {
+          // Non-fatal: the job still loads, the name just falls back to the
+          // client's existing /api/customers lookup.
+          console.error('Error resolving customer for job payload:', custErr);
+        }
+      }
+      res.json({ success: true, data: { ...job, customerName, customer } });
     } catch (error) {
       console.error('Error fetching job:', error);
       res.status(500).json({ success: false, message: 'Error fetching job' });
