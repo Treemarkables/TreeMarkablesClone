@@ -8,101 +8,109 @@ import { LogoSidebarTrigger } from "@/components/LogoSidebarTrigger";
 import { AppSidebar } from "@/components/AppSidebar";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TwilioCallProvider } from "@/contexts/TwilioCallContext";
-import Login from "@/pages/Login";
-import Home from "@/pages/Home";
-import TreeRemoval from "@/pages/TreeRemoval";
-import TreePruning from "@/pages/TreePruning";
-import StumpGrinding from "@/pages/StumpGrinding";
-import HedgeTrimming from "@/pages/HedgeTrimming";
-import Mulch from "@/pages/Mulch";
-import MulchThanks from "@/pages/MulchThanks";
-import Blog from "@/pages/Blog";
-import BlogPost from "@/pages/BlogPost";
-import SummerOffer from "@/pages/SummerOffer";
-import Contact from "@/pages/Contact";
-import PrivacyPolicy from "@/pages/PrivacyPolicy";
-import JobDashboard from "@/pages/JobDashboard";
-import JobCardPreview from "@/pages/JobCardPreview";
-import MetricsDashboard from "@/pages/MetricsDashboard";
-import Tasks from "@/pages/Tasks";
-import Videos from "@/pages/Videos";
-import Help from "@/pages/Help";
-import HelpAdmin from "@/pages/admin/HelpAdmin";
-import Pipeline from "@/pages/Pipeline";
-import Opportunities from "@/pages/Opportunities";
-import ConversationDetail from "@/pages/ConversationDetail";
-import Reputation from "@/pages/Reputation";
-import Reviews from "@/pages/Reviews";
-import Inbox from "@/pages/Inbox";
-import Integrations from "@/pages/Integrations";
-import Invoices from "@/pages/Invoices";
-import MarketingPlanner from "@/pages/MarketingPlanner";
-import NotFound from "@/pages/not-found";
-import { CustomerPortal } from "@/pages/CustomerPortal";
-import CommunicationsManagement from "@/pages/CommunicationsManagement";
-import Calls from "@/pages/Calls";
-import WatchVideo from "@/pages/WatchVideo";
-import Dispatch from "@/pages/Dispatch";
-import { WorkflowAutomation } from "@/components/WorkflowAutomation";
-import History from "@/pages/History";
-import Clients from "@/pages/Clients";
-import MaterialsServices from "@/pages/MaterialsServices";
-import Settings from "@/pages/Settings";
-import StaffManagement from "@/pages/StaffManagement";
-import PermissionsManagement from "@/pages/PermissionsManagement";
-import TemplateManagement from "@/pages/TemplateManagement";
-import Equipment from "@/pages/Equipment";
-import Developer from "@/pages/Developer";
-import Calendar from "@/pages/Calendar";
-import StaffSchedule from "@/pages/StaffSchedule";
-import SettingsPreferences from "@/pages/SettingsPreferences";
-import BookingReminderSettings from "@/pages/BookingReminderSettings";
-import CommunicationTemplates from "@/pages/CommunicationTemplates";
-import VehicleInspectionSettings from "@/pages/VehicleInspectionSettings";
-import NotificationPreferences from "@/pages/NotificationPreferences";
-import VehicleInspection from "@/pages/VehicleInspection";
-import VehicleInspectionHistory from "@/pages/VehicleInspectionHistory";
-import EquipmentInductionSettings from "@/pages/EquipmentInductionSettings";
-import EquipmentInductionRunner from "@/pages/EquipmentInductionRunner";
-import SignatureCapture from "@/pages/SignatureCapture";
-import JHATemplates from "@/pages/JHATemplates";
-import JHARiskControlTemplates from "@/pages/JHARiskControlTemplates";
-import SmsTemplates from "@/pages/SmsTemplates";
-import JHAAssessment from "@/pages/JHAAssessment";
-import JHAHistory from "@/pages/JHAHistory";
-import { SettingsPlaceholder } from "@/components/SettingsPlaceholder";
-import JobTemplateManagement from "@/components/JobTemplateManagement";
-import ProposalViewer from "@/pages/ProposalViewer";
-import ProposalAccept from "@/pages/ProposalAccept";
-import QuoteViewer from "@/pages/QuoteViewer";
-import InvoiceViewer from "@/pages/InvoiceViewer";
-import InvoiceView from "@/pages/InvoiceView";
-import PaymentComplete from "@/pages/PaymentComplete";
-import PublicReview from "@/pages/PublicReview";
-import MulchDrops from "@/pages/MulchDrops";
-import NearMissReport from "@/pages/NearMissReport";
-import NearMissHistory from "@/pages/NearMissHistory";
-import SafetyHub from "@/pages/SafetyHub";
-import ToolboxTalks from "@/pages/ToolboxTalks";
-import PrestartChecklists from "@/pages/PrestartChecklists";
-import EquipmentInspectionRegister from "@/pages/EquipmentInspectionRegister";
-import CompetencyRegister from "@/pages/CompetencyRegister";
-import SWMSBuilder from "@/pages/SWMSBuilder";
-import NotifiableEvents from "@/pages/NotifiableEvents";
-import EquipmentRegister from "@/pages/EquipmentRegister";
-import AIDispatchScheduler from "@/pages/AIDispatchScheduler";
-import ChecklistTemplatePage from "@/pages/ChecklistTemplatePage";
-import RoleChecklistSettings from "@/pages/RoleChecklistSettings";
-import QuotingProcessSettings from "@/pages/QuotingProcessSettings";
-import DocumentBuilderPage from "@/pages/DocumentBuilderPage";
-import SettingsCompany from "@/pages/SettingsCompany";
-import SettingsQuoteFollowup from "@/pages/SettingsQuoteFollowup";
-import SettingsInquiryAutoReply from "@/pages/SettingsInquiryAutoReply";
-import TimeTracking from "@/pages/TimeTracking";
-import FollowUpQueue from "@/pages/FollowUpQueue";
-import UnlinkedCalls from "@/pages/UnlinkedCalls";
-import Reconciliation from "@/pages/Reconciliation";
-import ProfitabilityCalculator from "@/pages/ProfitabilityCalculator";
+import { lazy, Suspense } from "react";
+
+// Route targets are lazy-loaded so the initial JS bundle stays small. This is
+// the biggest lever on first-paint time — previously all ~90 pages were bundled
+// into one monolithic chunk that mid-range Android devices spent seconds parsing
+// before anything rendered. Each page now becomes its own chunk, fetched on first
+// navigation. The router is wrapped in <Suspense> boundaries (sidebar <main> and
+// around <Router/>) so an as-yet-unloaded page shows a spinner, not a blank screen.
+const Login = lazy(() => import("@/pages/Login"));
+const Home = lazy(() => import("@/pages/Home"));
+const TreeRemoval = lazy(() => import("@/pages/TreeRemoval"));
+const TreePruning = lazy(() => import("@/pages/TreePruning"));
+const StumpGrinding = lazy(() => import("@/pages/StumpGrinding"));
+const HedgeTrimming = lazy(() => import("@/pages/HedgeTrimming"));
+const Mulch = lazy(() => import("@/pages/Mulch"));
+const MulchThanks = lazy(() => import("@/pages/MulchThanks"));
+const Blog = lazy(() => import("@/pages/Blog"));
+const BlogPost = lazy(() => import("@/pages/BlogPost"));
+const SummerOffer = lazy(() => import("@/pages/SummerOffer"));
+const Contact = lazy(() => import("@/pages/Contact"));
+const PrivacyPolicy = lazy(() => import("@/pages/PrivacyPolicy"));
+const JobDashboard = lazy(() => import("@/pages/JobDashboard"));
+const JobCardPreview = lazy(() => import("@/pages/JobCardPreview"));
+const MetricsDashboard = lazy(() => import("@/pages/MetricsDashboard"));
+const Tasks = lazy(() => import("@/pages/Tasks"));
+const Videos = lazy(() => import("@/pages/Videos"));
+const Help = lazy(() => import("@/pages/Help"));
+const HelpAdmin = lazy(() => import("@/pages/admin/HelpAdmin"));
+const Pipeline = lazy(() => import("@/pages/Pipeline"));
+const Opportunities = lazy(() => import("@/pages/Opportunities"));
+const ConversationDetail = lazy(() => import("@/pages/ConversationDetail"));
+const Reputation = lazy(() => import("@/pages/Reputation"));
+const Reviews = lazy(() => import("@/pages/Reviews"));
+const Inbox = lazy(() => import("@/pages/Inbox"));
+const Integrations = lazy(() => import("@/pages/Integrations"));
+const Invoices = lazy(() => import("@/pages/Invoices"));
+const MarketingPlanner = lazy(() => import("@/pages/MarketingPlanner"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+const CustomerPortal = lazy(() => import("@/pages/CustomerPortal").then((m) => ({ default: m.CustomerPortal })));
+const CommunicationsManagement = lazy(() => import("@/pages/CommunicationsManagement"));
+const Calls = lazy(() => import("@/pages/Calls"));
+const WatchVideo = lazy(() => import("@/pages/WatchVideo"));
+const Dispatch = lazy(() => import("@/pages/Dispatch"));
+const WorkflowAutomation = lazy(() => import("@/components/WorkflowAutomation").then((m) => ({ default: m.WorkflowAutomation })));
+const History = lazy(() => import("@/pages/History"));
+const Clients = lazy(() => import("@/pages/Clients"));
+const MaterialsServices = lazy(() => import("@/pages/MaterialsServices"));
+const Settings = lazy(() => import("@/pages/Settings"));
+const StaffManagement = lazy(() => import("@/pages/StaffManagement"));
+const PermissionsManagement = lazy(() => import("@/pages/PermissionsManagement"));
+const TemplateManagement = lazy(() => import("@/pages/TemplateManagement"));
+const Equipment = lazy(() => import("@/pages/Equipment"));
+const Developer = lazy(() => import("@/pages/Developer"));
+const Calendar = lazy(() => import("@/pages/Calendar"));
+const StaffSchedule = lazy(() => import("@/pages/StaffSchedule"));
+const SettingsPreferences = lazy(() => import("@/pages/SettingsPreferences"));
+const BookingReminderSettings = lazy(() => import("@/pages/BookingReminderSettings"));
+const CommunicationTemplates = lazy(() => import("@/pages/CommunicationTemplates"));
+const VehicleInspectionSettings = lazy(() => import("@/pages/VehicleInspectionSettings"));
+const NotificationPreferences = lazy(() => import("@/pages/NotificationPreferences"));
+const VehicleInspection = lazy(() => import("@/pages/VehicleInspection"));
+const VehicleInspectionHistory = lazy(() => import("@/pages/VehicleInspectionHistory"));
+const EquipmentInductionSettings = lazy(() => import("@/pages/EquipmentInductionSettings"));
+const EquipmentInductionRunner = lazy(() => import("@/pages/EquipmentInductionRunner"));
+const SignatureCapture = lazy(() => import("@/pages/SignatureCapture"));
+const JHATemplates = lazy(() => import("@/pages/JHATemplates"));
+const JHARiskControlTemplates = lazy(() => import("@/pages/JHARiskControlTemplates"));
+const SmsTemplates = lazy(() => import("@/pages/SmsTemplates"));
+const JHAAssessment = lazy(() => import("@/pages/JHAAssessment"));
+const JHAHistory = lazy(() => import("@/pages/JHAHistory"));
+const SettingsPlaceholder = lazy(() => import("@/components/SettingsPlaceholder").then((m) => ({ default: m.SettingsPlaceholder })));
+const JobTemplateManagement = lazy(() => import("@/components/JobTemplateManagement"));
+const ProposalViewer = lazy(() => import("@/pages/ProposalViewer"));
+const ProposalAccept = lazy(() => import("@/pages/ProposalAccept"));
+const QuoteViewer = lazy(() => import("@/pages/QuoteViewer"));
+const InvoiceViewer = lazy(() => import("@/pages/InvoiceViewer"));
+const InvoiceView = lazy(() => import("@/pages/InvoiceView"));
+const PaymentComplete = lazy(() => import("@/pages/PaymentComplete"));
+const PublicReview = lazy(() => import("@/pages/PublicReview"));
+const MulchDrops = lazy(() => import("@/pages/MulchDrops"));
+const NearMissReport = lazy(() => import("@/pages/NearMissReport"));
+const NearMissHistory = lazy(() => import("@/pages/NearMissHistory"));
+const SafetyHub = lazy(() => import("@/pages/SafetyHub"));
+const ToolboxTalks = lazy(() => import("@/pages/ToolboxTalks"));
+const PrestartChecklists = lazy(() => import("@/pages/PrestartChecklists"));
+const EquipmentInspectionRegister = lazy(() => import("@/pages/EquipmentInspectionRegister"));
+const CompetencyRegister = lazy(() => import("@/pages/CompetencyRegister"));
+const SWMSBuilder = lazy(() => import("@/pages/SWMSBuilder"));
+const NotifiableEvents = lazy(() => import("@/pages/NotifiableEvents"));
+const EquipmentRegister = lazy(() => import("@/pages/EquipmentRegister"));
+const AIDispatchScheduler = lazy(() => import("@/pages/AIDispatchScheduler"));
+const ChecklistTemplatePage = lazy(() => import("@/pages/ChecklistTemplatePage"));
+const RoleChecklistSettings = lazy(() => import("@/pages/RoleChecklistSettings"));
+const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings"));
+const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
+const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
+const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
+const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
+const TimeTracking = lazy(() => import("@/pages/TimeTracking"));
+const FollowUpQueue = lazy(() => import("@/pages/FollowUpQueue"));
+const UnlinkedCalls = lazy(() => import("@/pages/UnlinkedCalls"));
+const Reconciliation = lazy(() => import("@/pages/Reconciliation"));
+const ProfitabilityCalculator = lazy(() => import("@/pages/ProfitabilityCalculator"));
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Plus, ChevronDown, History as HistoryIcon, Users, Package, Settings2, Code, RefreshCw, LogOut, Calendar as CalendarIcon, ChevronLeft, ChevronRight, MessageSquare, Filter, Search, X, User, ArrowLeft } from "lucide-react";
@@ -122,6 +130,16 @@ function ScrollToTop() {
   }, [location]);
   
   return null;
+}
+
+// Shared fallback shown while a lazy-loaded route chunk is fetched. Fills the
+// available space and centers a spinner — used by both Suspense boundaries.
+function PageSpinner() {
+  return (
+    <div className="flex items-center justify-center w-full h-full min-h-[60vh]">
+      <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+    </div>
+  );
 }
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -728,7 +746,12 @@ function SidebarContent({ children }: { children: React.ReactNode | ((activeTab:
           </header>
           <main className="flex-1 overflow-y-auto w-full max-w-full min-w-0 min-h-0 relative flex flex-col md:pt-6" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="h-full flex flex-col md:pb-0">
-              {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
+              {/* Closest Suspense boundary to sidebar pages — keeps the sidebar
+                  + header mounted while the next page's chunk loads, showing the
+                  spinner only in the content area instead of full-screen. */}
+              <Suspense fallback={<PageSpinner />}>
+                {typeof children === 'function' ? children(activeTab, setActiveTab) : children}
+              </Suspense>
             </div>
           </main>
         </div>
@@ -1510,7 +1533,13 @@ function App() {
               <ScrollToTop />
               <Toaster />
               <InstallPrompt />
-              <Router />
+              {/* Outer Suspense — catches standalone (non-sidebar) routes like
+                  Login, Home, marketing and the customer-facing viewers, plus
+                  Router's own early <Home/> return. Sidebar pages resolve at the
+                  inner boundary above before reaching here. */}
+              <Suspense fallback={<PageSpinner />}>
+                <Router />
+              </Suspense>
             </TwilioCallProvider>
           </AuthProvider>
         </TooltipProvider>
