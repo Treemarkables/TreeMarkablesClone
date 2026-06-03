@@ -10688,6 +10688,7 @@ ${phoneTarget}
   //   folder=voicemail  baseName=greeting   → voicemail/greeting.{mp3,wav}
   //   folder=recording-disclosure baseName=disclosure → .../disclosure.{mp3,wav}
   const serveBucketAudio = async (
+    req: Request,
     res: Response,
     folder: string,
     baseName: string,
@@ -10710,12 +10711,43 @@ ${phoneTarget}
         const [exists] = await file.exists();
         if (!exists) continue;
         const [metadata] = await file.getMetadata();
+        const total = Number(metadata.size) || 0;
         res.set('Content-Type', (metadata.contentType as string) || candidate.type);
         res.set('Cache-Control', 'public, max-age=300');
-        return file.createReadStream().on('error', (err) => {
+        // WebKit (<audio> in Safari and the iOS webview) refuses to play media
+        // unless the server advertises and honours byte-range requests — it
+        // sends `Range: bytes=0-` and expects a 206 Partial Content reply. Plain
+        // 200 full-body responses show as "Error" in the player. Honour ranges
+        // so the in-app preview works. (Twilio's <Play> uses a plain GET and is
+        // unaffected either way.)
+        res.set('Accept-Ranges', 'bytes');
+
+        const onErr = (err: Error) => {
           console.error(`Error streaming ${folder}/${baseName}:`, err);
           if (!res.headersSent) res.status(500).send('Stream error');
-        }).pipe(res);
+        };
+
+        const rangeHeader = req.headers.range;
+        const match =
+          total > 0 && typeof rangeHeader === 'string'
+            ? /^bytes=(\d*)-(\d*)$/.exec(rangeHeader.trim())
+            : null;
+        if (match) {
+          const start = match[1] ? parseInt(match[1], 10) : 0;
+          let end = match[2] ? parseInt(match[2], 10) : total - 1;
+          if (Number.isNaN(start) || Number.isNaN(end) || start > end || start >= total) {
+            res.set('Content-Range', `bytes */${total}`);
+            return res.status(416).end();
+          }
+          if (end >= total) end = total - 1;
+          res.status(206);
+          res.set('Content-Range', `bytes ${start}-${end}/${total}`);
+          res.set('Content-Length', String(end - start + 1));
+          return file.createReadStream({ start, end }).on('error', onErr).pipe(res);
+        }
+
+        if (total > 0) res.set('Content-Length', String(total));
+        return file.createReadStream().on('error', onErr).pipe(res);
       }
       return res.status(404).send(notFoundMsg);
     } catch (err) {
@@ -10726,8 +10758,9 @@ ${phoneTarget}
 
   // Voicemail greeting — upload to voicemail/greeting.{mp3,wav}; point
   // TWILIO_VOICEMAIL_GREETING_URL at this.
-  app.get('/api/public/voicemail-greeting', async (_req: Request, res: Response) => {
+  app.get('/api/public/voicemail-greeting', async (req: Request, res: Response) => {
     await serveBucketAudio(
+      req,
       res,
       'voicemail',
       'greeting',
@@ -10737,8 +10770,9 @@ ${phoneTarget}
 
   // Recorded-call disclosure — upload to recording-disclosure/disclosure.{mp3,wav};
   // point TWILIO_RECORDING_DISCLOSURE_URL at this.
-  app.get('/api/public/recording-disclosure', async (_req: Request, res: Response) => {
+  app.get('/api/public/recording-disclosure', async (req: Request, res: Response) => {
     await serveBucketAudio(
+      req,
       res,
       'recording-disclosure',
       'disclosure',
