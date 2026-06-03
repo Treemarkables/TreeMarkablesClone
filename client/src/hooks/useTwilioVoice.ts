@@ -59,11 +59,36 @@ export function useTwilioVoice(options: TwilioVoiceOptions = {}) {
         method: "POST",
         credentials: "include",
       });
-      if (!res.ok) throw new Error(`Token fetch failed: ${res.status}`);
-      const { token } = await res.json();
-      await TwilioVoice.register({ token });
+      const bodyText = await res.text();
+      if (!res.ok) {
+        // Surface the server's actual message (e.g. 401 not-authenticated, or
+        // 503 "Twilio API Key not configured") — logging the bare Error object
+        // serialises to "{}" in the iOS webview console and hides the cause.
+        console.error(
+          `[TwilioVoice] token endpoint returned ${res.status}: ${bodyText}`,
+        );
+        return;
+      }
+      const data = JSON.parse(bodyText) as {
+        token?: string;
+        pushEnabled?: boolean;
+      };
+      if (!data.token) {
+        console.error("[TwilioVoice] token endpoint returned no token:", bodyText);
+        return;
+      }
+      if (data.pushEnabled === false) {
+        console.warn(
+          "[TwilioVoice] token issued but VoIP push is DISABLED (TWILIO_PUSH_CREDENTIAL_SID not set) — the app cannot receive inbound calls.",
+        );
+      }
+      await TwilioVoice.register({ token: data.token });
+      console.log("[TwilioVoice] register() ok — requested VoIP registration");
     } catch (err) {
-      console.error("[TwilioVoice] Registration failed:", err);
+      console.error(
+        "[TwilioVoice] Registration failed:",
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }, [isNative]);
 
