@@ -414,6 +414,7 @@ export function JobCardMobile({
                 customerId={customerId}
                 customerEmail={customer?.email as string | undefined}
                 customerPhone={customer?.phone as string | undefined}
+                embedded
                 onQuoteClick={onQuoteClick}
                 onInvoiceClick={onInvoiceClick}
                 onProposalClick={onProposalClick}

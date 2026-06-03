@@ -655,9 +655,38 @@ interface JobDiarySectionProps {
   customerEmail?: string;
   customerPhone?: string;
   className?: string;
+  /**
+   * Embedded mode: render the diary as plain flowing content instead of the
+   * default self-contained `h-full flex flex-col` + internal `ScrollArea`
+   * layout. Set this when the diary lives inside a parent that already owns
+   * the scroll (e.g. JobCardMobile's `overflow-y-auto` body). Without it the
+   * `h-full` collapses against a content-height parent and the Radix
+   * ScrollArea swallows the touch with nothing to scroll — which is why
+   * Android staff couldn't scroll the diary feed.
+   */
+  embedded?: boolean;
   onQuoteClick?: (quoteNumber: string) => void;
   onInvoiceClick?: (invoiceNumber: string) => void;
   onProposalClick?: (proposalNumber: string) => void;
+}
+
+/**
+ * Wraps the diary tab content. Default surfaces (desktop cards that give the
+ * diary a bounded height) keep the internal Radix ScrollArea so the feed
+ * scrolls within its pane. Embedded surfaces render a plain div so the feed
+ * flows into the parent's scroll container — no inner scroll trap on mobile.
+ */
+function TabScrollContainer({
+  embedded,
+  children,
+}: {
+  embedded?: boolean;
+  children: React.ReactNode;
+}) {
+  if (embedded) {
+    return <div>{children}</div>;
+  }
+  return <ScrollArea className="flex-1">{children}</ScrollArea>;
 }
 
 export function JobDiarySection({
@@ -666,6 +695,7 @@ export function JobDiarySection({
   customerEmail,
   customerPhone,
   className,
+  embedded,
   onQuoteClick,
   onInvoiceClick,
   onProposalClick,
@@ -1970,7 +2000,7 @@ export function JobDiarySection({
 
   return (
     <PullToRefresh onRefresh={handleRefresh} enabled={false}>
-      <div className={`h-full flex flex-col ${className}`}>
+      <div className={embedded ? (className ?? "") : `h-full flex flex-col ${className ?? ""}`}>
         {/* Header */}
         <div className="flex-shrink-0 p-2 border-b bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center justify-between mb-1">
@@ -2148,7 +2178,7 @@ export function JobDiarySection({
         {/* Photos tab: grid of every uploaded photo on this job, click any
             tile to open the existing fullscreen viewer (with swipe navigation). */}
         {diaryTab === "photos" && (
-          <ScrollArea className="flex-1">
+          <TabScrollContainer embedded={embedded}>
             {isLoading ? (
               <div className="flex items-center justify-center py-4">
                 <div className="text-xs text-muted-foreground">Loading...</div>
@@ -2200,12 +2230,12 @@ export function JobDiarySection({
                 })}
               </div>
             )}
-          </ScrollArea>
+          </TabScrollContainer>
         )}
 
         {/* Timeline */}
         {diaryTab === "timeline" && (
-        <ScrollArea className="flex-1">
+        <TabScrollContainer embedded={embedded}>
           <PendingMessagesCard jobId={jobId} />
           {isLoading ? (
             <div className="flex items-center justify-center py-4">
@@ -3664,7 +3694,7 @@ export function JobDiarySection({
               )}
             </div>
           )}
-        </ScrollArea>
+        </TabScrollContainer>
         )}
 
         {/* Quick Actions row removed — SMS, Email, Call already live up top
