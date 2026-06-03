@@ -163,6 +163,22 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         let uuid = UUID()
         self.callUUID = uuid
 
+        // Capture whether the app is in the foreground BEFORE presenting the
+        // CallKit UI (presenting it can flip the app to inactive). iOS only
+        // shows its own full-screen call UI for lock-screen/background answers;
+        // when the app is already open it tucks the call into the Dynamic Island
+        // and expects the app to draw its own controls. The web layer keys off
+        // this flag to show the in-app call screen ONLY for foreground calls.
+        let isForeground: Bool
+        if Thread.isMainThread {
+            isForeground = UIApplication.shared.applicationState == .active
+        } else {
+            isForeground = DispatchQueue.main.sync {
+                UIApplication.shared.applicationState == .active
+            }
+        }
+        NSLog("[TwilioVoice] incoming call — foreground=\(isForeground)")
+
         let update = CXCallUpdate()
         let callerNumber = callInvite.from ?? "Unknown"
         update.remoteHandle = CXHandle(type: .phoneNumber, value: callerNumber)
@@ -178,22 +194,6 @@ public class TwilioVoicePlugin: CAPPlugin, CAPBridgedPlugin {
         callKitProvider?.reportNewIncomingCall(with: uuid, update: update) { error in
             if let error = error {
                 NSLog("[TwilioVoice] CallKit incoming call error: \(error)")
-            }
-        }
-
-        // Whether the app was in the foreground when the call arrived. iOS only
-        // takes over the screen with its native in-call UI when a call is
-        // answered from OUTSIDE the app (lock screen / background); when the app
-        // is already open, iOS keeps you in-app and tucks the call into the
-        // Dynamic Island. The web layer uses this flag to show a native-styled
-        // in-app call screen ONLY for foreground calls, so it never competes
-        // with the real native UI in the lock-screen case.
-        let isForeground: Bool
-        if Thread.isMainThread {
-            isForeground = UIApplication.shared.applicationState == .active
-        } else {
-            isForeground = DispatchQueue.main.sync {
-                UIApplication.shared.applicationState == .active
             }
         }
 
@@ -359,5 +359,20 @@ extension TwilioVoicePlugin: CallDelegate {
         activeCall = nil
         callUUID = nil
         notifyListeners("callFailed", data: ["error": error.localizedDescription], retainUntilConsumed: true)
+    }
+}
+
+// MARK: - Bridge View Controller
+
+/// Capacitor 6+ only auto-registers plugins listed in capacitor.config.json's
+/// package list (i.e. npm-installed plugins). Local, app-target plugins like
+/// this one are NOT discovered automatically anymore — the legacy `.m`
+/// `CAP_PLUGIN` macro no longer registers them — so the web layer would get
+/// `{"code":"UNIMPLEMENTED"}` when calling TwilioVoice. Registering the
+/// instance here in `capacitorDidLoad()` is the supported way to wire up a
+/// local plugin. The storyboard's root view controller points at this class.
+class MainViewController: CAPBridgeViewController {
+    override func capacitorDidLoad() {
+        bridge?.registerPluginInstance(TwilioVoicePlugin())
     }
 }
