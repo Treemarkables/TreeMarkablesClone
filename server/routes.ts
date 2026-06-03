@@ -10701,8 +10701,112 @@ ${phoneTarget}
     );
   });
 
+  // ── Voicemail greeting management (admin) ──────────────────────────────────
+  // Lets the owner record/upload their own voicemail greeting from the app
+  // instead of hand-uploading to GCS or editing env vars. The file lands at
+  // voicemail/greeting.{mp3,wav}; the public /api/public/voicemail-greeting
+  // route above serves it to Twilio, and the no-answer handler below
+  // auto-detects it — so no TWILIO_VOICEMAIL_GREETING_URL env var is required.
+  const parsePrivateBucket = (): { bucketName: string; prefix: string } | null => {
+    const privateDir = (process.env.PRIVATE_OBJECT_DIR || '').trim();
+    if (!privateDir) return null;
+    const parts = privateDir.replace(/^\//, '').split('/');
+    return { bucketName: parts[0], prefix: parts.slice(1).join('/') };
+  };
+
+  // Returns the format of an uploaded greeting if one is present, else null.
+  const findUploadedGreeting = async (): Promise<'mp3' | 'wav' | null> => {
+    const bucket = parsePrivateBucket();
+    if (!bucket) return null;
+    for (const ext of ['mp3', 'wav'] as const) {
+      try {
+        const [exists] = await objectStorageClient
+          .bucket(bucket.bucketName)
+          .file(`${bucket.prefix}/voicemail/greeting.${ext}`)
+          .exists();
+        if (exists) return ext;
+      } catch {
+        /* try next candidate */
+      }
+    }
+    return null;
+  };
+
+  // Admin UI status: is a custom greeting in use right now?
+  app.get('/api/twilio/voicemail-greeting/status', requireAdmin, async (_req: Request, res: Response) => {
+    const format = await findUploadedGreeting();
+    res.json({ success: true, exists: !!format, format });
+  });
+
+  // Upload a recorded/selected greeting. Only mp3/wav — the formats Twilio
+  // <Play> accepts. Writes greeting.<ext> and removes the sibling format so
+  // serveBucketAudio (which checks mp3 before wav) resolves deterministically.
+  app.post('/api/twilio/voicemail-greeting', requireAdmin, imageUpload.single('audio'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ success: false, message: 'No audio file provided' });
+      }
+      const mime = (file.mimetype || '').toLowerCase();
+      const name = file.originalname.toLowerCase();
+      const isMp3 = mime === 'audio/mpeg' || mime === 'audio/mp3' || name.endsWith('.mp3');
+      const isWav = mime === 'audio/wav' || mime === 'audio/wave' || mime === 'audio/x-wav' || name.endsWith('.wav');
+      if (!isMp3 && !isWav) {
+        return res.status(400).json({ success: false, message: 'Greeting must be an MP3 or WAV file' });
+      }
+      const bucket = parsePrivateBucket();
+      if (!bucket) {
+        return res.status(503).json({ success: false, message: 'Object storage not configured' });
+      }
+      const ext = isMp3 ? 'mp3' : 'wav';
+      const siblingExt = isMp3 ? 'wav' : 'mp3';
+      const contentType = isMp3 ? 'audio/mpeg' : 'audio/wav';
+      await objectStorageClient
+        .bucket(bucket.bucketName)
+        .file(`${bucket.prefix}/voicemail/greeting.${ext}`)
+        .save(file.buffer, { contentType });
+      try {
+        await objectStorageClient
+          .bucket(bucket.bucketName)
+          .file(`${bucket.prefix}/voicemail/greeting.${siblingExt}`)
+          .delete({ ignoreNotFound: true });
+      } catch (delErr) {
+        console.error('Voicemail greeting: failed clearing sibling format:', delErr);
+      }
+      console.log(`📞 Voicemail greeting uploaded (${ext}, ${file.buffer.length} bytes)`);
+      res.json({ success: true, format: ext });
+    } catch (err) {
+      console.error('❌ Voicemail greeting upload failed:', err);
+      res.status(500).json({ success: false, message: 'Failed to save greeting' });
+    }
+  });
+
+  // Revert to the default spoken greeting by removing any uploaded file.
+  app.delete('/api/twilio/voicemail-greeting', requireAdmin, async (_req: Request, res: Response) => {
+    try {
+      const bucket = parsePrivateBucket();
+      if (!bucket) {
+        return res.status(503).json({ success: false, message: 'Object storage not configured' });
+      }
+      for (const ext of ['mp3', 'wav'] as const) {
+        try {
+          await objectStorageClient
+            .bucket(bucket.bucketName)
+            .file(`${bucket.prefix}/voicemail/greeting.${ext}`)
+            .delete({ ignoreNotFound: true });
+        } catch (delErr) {
+          console.error(`Voicemail greeting: failed deleting ${ext}:`, delErr);
+        }
+      }
+      res.json({ success: true });
+    } catch (err) {
+      console.error('❌ Voicemail greeting delete failed:', err);
+      res.status(500).json({ success: false, message: 'Failed to remove greeting' });
+    }
+  });
+
   // TwiML: owner didn't answer → take a voicemail (still records and processes)
-  app.post('/api/webhooks/twilio-no-answer', (req: Request, res: Response) => {
+  app.post('/api/webhooks/twilio-no-answer', async (req: Request, res: Response) => {
     const protocol = req.headers['x-forwarded-proto'] || req.protocol;
     const host = req.headers['x-forwarded-host'] || req.headers.host;
     const baseUrl = `${protocol}://${host}`;
@@ -10745,8 +10849,13 @@ ${phoneTarget}
     const greetingAudioUrl = (process.env.TWILIO_VOICEMAIL_GREETING_URL || '').trim();
     let greetingTwiml: string;
     if (greetingAudioUrl) {
-      // Audio URL must be publicly reachable by Twilio's servers.
+      // Explicit override via env var — audio URL must be publicly reachable.
       greetingTwiml = `<Play>${escapeXml(greetingAudioUrl)}</Play>`;
+    } else if (await findUploadedGreeting()) {
+      // Owner recorded/uploaded a greeting in the app — serve it via the public
+      // endpoint (no env var needed). Cache-bust so Twilio re-fetches after a
+      // re-record instead of replaying a stale cached file.
+      greetingTwiml = `<Play>${escapeXml(`${baseUrl}/api/public/voicemail-greeting?t=${Date.now()}`)}</Play>`;
     } else {
       const defaultGreeting =
         "Hi, you have reached Treemarkables. We are unable to take your call right now. " +
