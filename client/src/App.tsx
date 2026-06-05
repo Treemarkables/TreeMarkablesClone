@@ -17,6 +17,7 @@ import { lazy, Suspense } from "react";
 // navigation. The router is wrapped in <Suspense> boundaries (sidebar <main> and
 // around <Router/>) so an as-yet-unloaded page shows a spinner, not a blank screen.
 const Login = lazy(() => import("@/pages/Login"));
+const Signup = lazy(() => import("@/pages/Signup"));
 const Home = lazy(() => import("@/pages/Home"));
 const TreeRemoval = lazy(() => import("@/pages/TreeRemoval"));
 const TreePruning = lazy(() => import("@/pages/TreePruning"));
@@ -104,6 +105,7 @@ const RoleChecklistSettings = lazy(() => import("@/pages/RoleChecklistSettings")
 const QuotingProcessSettings = lazy(() => import("@/pages/QuotingProcessSettings"));
 const DocumentBuilderPage = lazy(() => import("@/pages/DocumentBuilderPage"));
 const SettingsCompany = lazy(() => import("@/pages/SettingsCompany"));
+const SettingsBilling = lazy(() => import("@/pages/SettingsBilling"));
 const SettingsQuoteFollowup = lazy(() => import("@/pages/SettingsQuoteFollowup"));
 const SettingsInquiryAutoReply = lazy(() => import("@/pages/SettingsInquiryAutoReply"));
 const TimeTracking = lazy(() => import("@/pages/TimeTracking"));
@@ -896,6 +898,7 @@ function Router() {
   return (
     <Switch>
       <Route path="/login" component={Login}/>
+      <Route path="/signup" component={Signup}/>
       <Route path="/home" component={Home}/>
       <Route path="/tree-removal" component={TreeRemoval}/>
       <Route path="/tree-pruning" component={TreePruning}/>
@@ -1319,6 +1322,11 @@ function Router() {
       <Route path="/settings/company">
         <SidebarLayout>
           <SettingsCompany />
+        </SidebarLayout>
+      </Route>
+      <Route path="/settings/billing">
+        <SidebarLayout>
+          <SettingsBilling />
         </SidebarLayout>
       </Route>
       <Route path="/settings/security">

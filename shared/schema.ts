@@ -4809,6 +4809,19 @@ export const insertNotifiableEventSchema = createInsertSchema(notifiableEvents).
 export type NotifiableEvent = typeof notifiableEvents.$inferSelect;
 export type InsertNotifiableEvent = z.infer<typeof insertNotifiableEventSchema>;
 
+// Tenant root (Inflow multi-tenancy). Created by the Phase 1 migration; declared here so
+// the ORM can read/write it (signup, billing FKs). RLS-isolated to the current tenant.
+export const businesses = pgTable("businesses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").unique(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const insertBusinessSchema = createInsertSchema(businesses).omit({ id: true, createdAt: true });
+export type Business = typeof businesses.$inferSelect;
+export type InsertBusiness = z.infer<typeof insertBusinessSchema>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // SaaS subscription billing (Inflow — Phase 4). `subscriptionPlans` + `addOns` are the
 // GLOBAL catalog (no tenant). `subscriptions` + `businessAddOns` are per-business

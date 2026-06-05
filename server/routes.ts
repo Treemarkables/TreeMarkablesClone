@@ -83,6 +83,7 @@ import {
   createBillingPortalSession,
 } from "./stripe";
 import * as billing from "./billing";
+import { createTenant } from "./onboarding";
 import { finalizeProposalAcceptance } from "./services/proposalAcceptanceService";
 import {
   ensureRoleTiersSeeded,
@@ -1639,6 +1640,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // AUTHENTICATION ENDPOINTS
   // ========================================
+
+  // POST /api/signup — public self-serve signup. Creates a tenant (business + admin),
+  // logs them straight in, and (for a paid plan) returns a Stripe Checkout URL to finish.
+  app.post('/api/signup', async (req: Request, res: Response) => {
+    try {
+      const { businessName, firstName, lastName, email, password, planKey } = req.body as {
+        businessName?: string; firstName?: string; lastName?: string; email?: string; password?: string; planKey?: string;
+      };
+      if (!businessName || !firstName || !lastName || !email || !password) {
+        return res.status(400).json({ success: false, message: 'All fields are required.' });
+      }
+      if (String(password).length < 8) {
+        return res.status(400).json({ success: false, message: 'Password must be at least 8 characters.' });
+      }
+
+      const { businessId, employeeId } = await createTenant({ businessName, firstName, lastName, email, password });
+
+      // If they chose a paid plan, prepare a Checkout URL to redirect to after signup.
+      let checkoutUrl: string | undefined;
+      if (planKey && planKey !== 'freemium' && isStripeConfigured()) {
+        try {
+          const plan = await billing.getPlanByKey(planKey);
+          if (plan?.stripePriceId) {
+            const customerId = await getOrCreateStripeCustomer(businessId, { email, name: `${firstName} ${lastName}`.trim() });
+            await billing.upsertSubscription(businessId, { stripeCustomerId: customerId, planId: plan.id, status: 'incomplete' });
+            const base = 'https://app.treemarkables.co.nz';
+            const session = await createSubscriptionCheckoutSession({
+              businessId, priceId: plan.stripePriceId, planKey, customerId,
+              successUrl: `${base}/settings/billing?status=success`,
+              cancelUrl: `${base}/settings/billing?status=cancelled`,
+            });
+            checkoutUrl = session.url;
+          }
+        } catch (e: any) {
+          console.error('signup checkout setup failed (non-fatal):', e?.message);
+        }
+      }
+
+      // Log them straight in (mirrors the login handler).
+      req.session.regenerate((regenErr) => {
+        if (regenErr) return res.status(500).json({ success: false, message: 'Account created — please log in.' });
+        req.session.employeeId = employeeId;
+        req.session.businessId = businessId;
+        req.session.save((saveErr) => {
+          if (saveErr) return res.status(500).json({ success: false, message: 'Account created — please log in.' });
+          res.json({ success: true, businessId, checkoutUrl });
+        });
+      });
+    } catch (e: any) {
+      res.status(400).json({ success: false, message: e?.message || 'Sign-up failed.' });
+    }
+  });
 
   // POST /api/auth/login - Create server-side session with employee ID or email+password
   app.post('/api/auth/login', async (req: Request, res: Response) => {
