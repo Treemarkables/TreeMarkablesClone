@@ -5247,13 +5247,14 @@ class DatabaseStorage implements IStorage {
       return existing;
     }
     
-    // Create default settings if none exist
+    // Create default settings if none exist. NOTE: do NOT hardcode id — each tenant needs
+    // its own row (the id column defaults to gen_random_uuid()). Hardcoding 'default' caused
+    // a primary-key clash for the 2nd tenant. Generic placeholders; the tenant edits these.
     const [created] = await db.insert(schema.businessSettings).values(withTenant({
-      id: 'default',
-      businessName: 'Treemarkables',
-      businessEmail: 'info@treemarkables.nz',
-      businessPhone: '06 868 9988',
-      businessAddress: 'Gisborne, New Zealand',
+      businessName: 'My Business',
+      businessEmail: '',
+      businessPhone: '',
+      businessAddress: '',
     })).returning();
     
     return created;

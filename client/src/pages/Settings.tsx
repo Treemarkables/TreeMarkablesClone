@@ -33,7 +33,8 @@ import {
   Banknote,
   PhoneOff,
   Receipt,
-  FileStack
+  FileStack,
+  CreditCard
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
@@ -104,6 +105,14 @@ const settingsOptions = [
     icon: Building2,
     color: "bg-purple-100 text-purple-600",
     path: "/settings/company"
+  },
+  {
+    id: "billing",
+    title: "Billing & Plan",
+    description: "Your subscription, plan and payment method",
+    icon: CreditCard,
+    color: "bg-green-100 text-green-600",
+    path: "/settings/billing"
   },
   {
     id: "security",
