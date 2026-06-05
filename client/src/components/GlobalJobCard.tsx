@@ -101,7 +101,6 @@ import { StaffTimeManager } from "./StaffTimeManager";
 import { StaffTimeTracker } from "./StaffTimeTracker";
 import { ExpenseManager } from "./ExpenseManager";
 import { GrossMarginCalculator } from "./GrossMarginCalculator";
-import { SupplierInvoiceManager } from "./SupplierInvoiceManager";
 import { EmailComposerModal } from "./EmailComposerModal";
 import { SMSComposerModal } from "./SMSComposerModal";
 import { InvoiceTemplate } from "./InvoiceTemplate";
@@ -9915,13 +9914,6 @@ The Treemarkables Team`;
                             </div>
                           );
                         })()}
-
-                      {/* Supplier Invoices — costs in, optionally rebilled out */}
-                      {editingJob?.id && (
-                        <div className="border-t pt-6">
-                          <SupplierInvoiceManager jobId={editingJob.id} />
-                        </div>
-                      )}
                     </div>
                   )}
 

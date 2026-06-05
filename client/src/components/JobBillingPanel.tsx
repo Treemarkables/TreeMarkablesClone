@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, AlertCircle, CheckCircle2, CreditCard, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { SupplierInvoiceManager } from "@/components/SupplierInvoiceManager";
 
 interface JobBillingPanelProps {
   jobId: string;
@@ -383,6 +384,11 @@ export function JobBillingPanel({ jobId }: JobBillingPanelProps) {
             ? "Take payment opens a secure Stripe page on this device — the customer can enter or camera-scan their card. Bank-transfer details stay on the invoice."
             : "Payment recording lives on the invoice itself — once an invoice is generated above, payments will surface here automatically."}
         </div>
+      </div>
+
+      {/* ── Supplier invoices card ── */}
+      <div className="bg-white border border-slate-200 rounded-2xl p-4">
+        <SupplierInvoiceManager jobId={jobId} />
       </div>
     </div>
   );
