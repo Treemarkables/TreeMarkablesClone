@@ -2377,7 +2377,9 @@ export function ProposalBuilderV2({
                 customerId: (customer as { id?: string } | null)?.id || customerId || "",
                 jobId: (job as { id?: string } | null)?.id || jobId || null,
                 title: proposalTitle,
-                subtotal: subtotalAfterDiscount.toString(),
+                // Pre-discount subtotal — matches what the server persists and
+                // lets the renderer derive the discount line from the totals.
+                subtotal: subtotalWithDraft.toString(),
                 gstAmount: gst.toString(),
                 totalAmount: grandTotal.toString(),
                 taxRate: taxRate.toString(),

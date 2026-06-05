@@ -100,6 +100,11 @@ export function buildProposalRenderContext(
   const subtotal = toNum(proposal.subtotal);
   const gstAmount = toNum(proposal.gstAmount);
   const totalAmount = toNum(proposal.totalAmount);
+  // Derive the dollar discount from the stored totals rather than the raw
+  // discountAmount/discountType fields (whose units are inconsistent across
+  // the codebase). subtotal is pre-discount ex-GST; (totalAmount - gstAmount)
+  // is post-discount ex-GST, so the difference is the discount in dollars.
+  const discountAmount = Math.round((subtotal - (totalAmount - gstAmount)) * 100) / 100;
 
   // Flatten line items from either proposal.lineItems or nested in sections
   const rawLineItems: ProposalLineItemLike[] = proposal.lineItems
@@ -174,6 +179,7 @@ export function buildProposalRenderContext(
     subtotal,
     gstAmount,
     totalAmount,
+    discountAmount: discountAmount > 0.005 ? discountAmount : undefined,
     jobNumber: job?.jobNumber,
     lineItemsWithChoices,
     photos: photos.length > 0 ? photos : undefined,

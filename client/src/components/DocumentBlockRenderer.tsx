@@ -52,6 +52,10 @@ export interface DocumentRenderContext {
   subtotal: number;
   gstAmount: number;
   totalAmount: number;
+  // Dollar discount applied to the (pre-GST) subtotal. When > 0 the totals
+  // block renders a "Discount" line between subtotal and GST. Optional —
+  // invoice callers and discount-free proposals omit it.
+  discountAmount?: number;
   jobNumber?: number;
 
   // Proposal-flavoured fields — all optional; invoice callers can omit.
@@ -370,6 +374,7 @@ export function renderDocumentBlock(
           <div className="flex justify-end">
             <div className="w-full max-w-sm space-y-1">
               {cfg.showSubtotal && <div className="flex justify-between text-xs"><span className="text-gray-600">{editText('labelSubtotal', cfg.labelSubtotal || 'Subtotal (excl GST)')}:</span><span className="text-black">{formatCurrency(ctx.subtotal)}</span></div>}
+              {ctx.discountAmount !== undefined && ctx.discountAmount > 0 && <div className="flex justify-between text-xs"><span className="text-gray-600">Discount:</span><span className="text-black">-{formatCurrency(ctx.discountAmount)}</span></div>}
               {cfg.showGST && <div className="flex justify-between text-xs border-b border-gray-200 pb-1"><span className="text-gray-600">{editText('labelGST', cfg.labelGST || 'GST (15%)')}:</span><span className="text-black">{formatCurrency(ctx.gstAmount)}</span></div>}
               <div className="flex justify-between pt-2"><span className="text-sm font-bold text-black">{editText('labelTotal', cfg.labelTotal || 'Total Amount')}:</span><span className="text-sm font-bold text-black">{formatCurrency(ctx.totalAmount)}</span></div>
             </div>

@@ -22817,7 +22817,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         );
         const taxRate = parseFloat(req.body.taxRate || '15') / 100;
         const discountAmt = parseFloat(req.body.discountAmount || '0') || 0;
-        const discountType = req.body.discountType || 'fixed';
         let recomputedSubtotal = 0;
         for (const item of storedItems) {
           const inOptionalSection = optionalSectionIds.has(item.sectionId || '');
@@ -22826,9 +22825,11 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             recomputedSubtotal += item.priceIncludesTax ? price / (1 + taxRate) : price;
           }
         }
-        const discountValue = discountType === 'percentage'
-          ? (recomputedSubtotal * discountAmt) / 100
-          : discountAmt;
+        // discountAmount arrives as the pre-computed dollar discount the
+        // builder already applied (it always sends discountValue in dollars,
+        // regardless of discountType). Subtract it directly — matching the
+        // accept path and the customer-facing renderers.
+        const discountValue = discountAmt;
         const subtotalAfterDiscount = Math.max(0, recomputedSubtotal - discountValue);
         const recomputedGst = subtotalAfterDiscount * taxRate;
         const recomputedTotal = subtotalAfterDiscount + recomputedGst;
@@ -22987,7 +22988,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
         );
         const taxRatePut = parseFloat(req.body.taxRate || '15') / 100;
         const discountAmtPut = parseFloat(req.body.discountAmount || '0') || 0;
-        const discountTypePut = req.body.discountType || 'fixed';
         let recomputedSubtotalPut = 0;
         for (const item of storedItemsPut) {
           const inOptionalSectionPut = optionalSectionIdsPut.has(item.sectionId || '');
@@ -22996,9 +22996,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
             recomputedSubtotalPut += item.priceIncludesTax ? price / (1 + taxRatePut) : price;
           }
         }
-        const discountValuePut = discountTypePut === 'percentage'
-          ? (recomputedSubtotalPut * discountAmtPut) / 100
-          : discountAmtPut;
+        // discountAmount is the pre-computed dollar discount (see CREATE above).
+        const discountValuePut = discountAmtPut;
         const subtotalAfterDiscountPut = Math.max(0, recomputedSubtotalPut - discountValuePut);
         const recomputedGstPut = subtotalAfterDiscountPut * taxRatePut;
         const recomputedTotalPut = subtotalAfterDiscountPut + recomputedGstPut;
@@ -23172,7 +23171,6 @@ Keep the tone professional but conversational. Use NZD for currency.`;
           const acceptLineItems = await storage.getProposalLineItemsByProposal(id);
           const acceptTaxRate = parseFloat(proposal.taxRate?.toString() || '15') / 100;
           const acceptDiscountAmt = parseFloat(proposal.discountAmount?.toString() || '0') || 0;
-          const acceptDiscountType = proposal.discountType || 'fixed';
           let computedSubtotal = 0;
           for (const item of acceptLineItems) {
             if (item.selected !== false) {
@@ -23180,9 +23178,8 @@ Keep the tone professional but conversational. Use NZD for currency.`;
               computedSubtotal += item.priceIncludesTax ? price / (1 + acceptTaxRate) : price;
             }
           }
-          const acceptDiscountValue = acceptDiscountType === 'percentage'
-            ? (computedSubtotal * acceptDiscountAmt) / 100
-            : acceptDiscountAmt;
+          // discountAmount is the pre-computed dollar discount (see CREATE/PUT).
+          const acceptDiscountValue = acceptDiscountAmt;
           const acceptSubtotalAfterDiscount = Math.max(0, computedSubtotal - acceptDiscountValue);
           const acceptGst = acceptSubtotalAfterDiscount * acceptTaxRate;
           updatedSubtotal = Math.round(computedSubtotal * 100) / 100;
