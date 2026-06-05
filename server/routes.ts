@@ -8415,19 +8415,6 @@ Draft the reply now.`;
       const isPdf = file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf');
       const base64 = file.buffer.toString('base64');
 
-      // Store the document so the extract → confirm round-trip only uploads once.
-      const photoStorage = new PhotoStorageService();
-      let documentUrl = '';
-      let thumbnailUrl: string | null = null;
-      if (isPdf) {
-        const { url } = await photoStorage.uploadDocument(file.buffer, file.originalname, file.mimetype || 'application/pdf');
-        documentUrl = url;
-      } else {
-        const { url, thumbnailUrl: thumb } = await photoStorage.uploadPhoto(file.buffer, file.originalname, file.mimetype);
-        documentUrl = url;
-        thumbnailUrl = thumb;
-      }
-
       const extractionInstruction = `You are extracting data from a supplier / purchase invoice for a New Zealand trades business (electrician, plumber, or builder). This is a bill the tradie received from a supplier or subcontractor.
 
 Return ONLY JSON with these keys:
@@ -8474,6 +8461,28 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
         extracted = {};
       }
 
+      // Best-effort: store the document so confirm doesn't re-upload. A storage
+      // outage (or missing GCS env in local dev) must NOT lose the AI read, so
+      // failures here are swallowed and surfaced as storageError — the user can
+      // still confirm and save the extracted data (without an attached file).
+      let documentUrl: string | null = null;
+      let thumbnailUrl: string | null = null;
+      let storageError: string | null = null;
+      try {
+        const photoStorage = new PhotoStorageService();
+        if (isPdf) {
+          const { url } = await photoStorage.uploadDocument(file.buffer, file.originalname, file.mimetype || 'application/pdf');
+          documentUrl = url;
+        } else {
+          const { url, thumbnailUrl: thumb } = await photoStorage.uploadPhoto(file.buffer, file.originalname, file.mimetype);
+          documentUrl = url;
+          thumbnailUrl = thumb;
+        }
+      } catch (storageErr) {
+        storageError = storageErr instanceof Error ? storageErr.message : 'Document storage failed';
+        console.error('Supplier invoice document storage failed (continuing with extraction):', storageError);
+      }
+
       res.json({
         success: true,
         data: {
@@ -8486,6 +8495,7 @@ Rules: use numbers (not strings) for amounts, null when a value is genuinely abs
             fileSize: file.size,
             isPdf,
           },
+          storageError,
         },
       });
     } catch (error) {
