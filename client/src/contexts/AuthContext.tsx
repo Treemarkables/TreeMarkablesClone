@@ -28,8 +28,15 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Dev mode auto-login - automatically log in as admin when running locally
-const DEV_AUTO_LOGIN = import.meta.env.DEV; // Only true in development mode
+// Dev mode auto-login - log in as the Treemarkables admin automatically when
+// running locally. OFF by default on the multi-tenant branch: auto-logging in
+// as one fixed tenant breaks testing real per-tenant signups/logins. Opt back
+// into the old convenience with localStorage 'enableDevAutoLogin' = '1'.
+// Dev-only either way; no effect in production (import.meta.env.DEV is false).
+const DEV_AUTO_LOGIN =
+  import.meta.env.DEV &&
+  typeof localStorage !== 'undefined' &&
+  localStorage.getItem('enableDevAutoLogin') === '1';
 const DEV_ADMIN_ID = 'admin-test-001';
 
 const STORAGE_KEY = 'treemarkables_user';

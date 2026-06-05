@@ -8,9 +8,12 @@ type Tier = {
   price: string;
   priceNote?: string;
   cta: string;
+  href: string;
   highlight?: boolean;
   features: string[];
 };
+
+const APP = "https://app.treemarkables.co.nz";
 
 const tiers: Tier[] = [
   {
@@ -20,6 +23,7 @@ const tiers: Tier[] = [
     price: "$0",
     priceNote: "Free forever · 1 user",
     cta: "Start for free",
+    href: `${APP}/signup?plan=freemium`,
     features: [
       "1 user",
       "Jobs, scheduling & dispatch",
@@ -36,7 +40,8 @@ const tiers: Tier[] = [
     jobsPerMonth: "Up to 75 jobs / month",
     price: "$89",
     priceNote: "+ GST · billed monthly",
-    cta: "Request access",
+    cta: "Start with Crew",
+    href: `${APP}/signup?plan=crew`,
     highlight: true,
     features: [
       "Everything in Freemium",
@@ -56,7 +61,8 @@ const tiers: Tier[] = [
     jobsPerMonth: "Unlimited jobs",
     price: "$189",
     priceNote: "+ GST · billed monthly",
-    cta: "Talk to us",
+    cta: "Start with Business",
+    href: `${APP}/signup?plan=business`,
     features: [
       "Everything in Crew",
       "Marketing & reputation suite",
@@ -94,7 +100,7 @@ const faqs = [
   },
   {
     q: "How does onboarding work?",
-    a: "We onboard each business by hand right now — a short call to understand your workflow, then we set up your account, import your customers, and walk your team through the first jobs.",
+    a: "Sign up free and you're in within a couple of minutes — create your account and start running jobs straight away. Moving from another tool? We'll happily help you import your customers and get your team going.",
   },
   {
     q: "Can I cancel anytime?",
@@ -173,7 +179,8 @@ export default function Pricing() {
 
               <div className="mt-8">
                 <LinkButton
-                  href="/contact"
+                  href={t.href}
+                  external
                   variant={t.highlight ? "secondary" : "primary"}
                   size="md"
                   className="w-full"
