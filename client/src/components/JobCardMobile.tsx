@@ -60,6 +60,7 @@ import {
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { JobDiarySection } from "@/components/JobDiarySection";
@@ -183,6 +184,8 @@ export function JobCardMobile({
   actions,
 }: JobCardMobileProps) {
   const [activeTab, setActiveTab] = useState<JobCardMobileTab>(initialTab);
+  // Role checklist (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
 
   // Fetch job — uses the same query key GlobalJobCard does so cache is shared.
   const { data: jobResp } = useQuery<{ success?: boolean; data?: Record<string, unknown> }>({
@@ -355,6 +358,10 @@ export function JobCardMobile({
           if (t.id === "backcosting" && (status === "lead" || status === "quote")) {
             return false;
           }
+          // Role checklist tab is Treemarkables-only.
+          if (t.id === "checklist" && !roleChecklistEnabled) {
+            return false;
+          }
           return true;
         }).map((t) => {
           const on = t.id === activeTab;
@@ -390,7 +397,7 @@ export function JobCardMobile({
               />
             </div>
           )}
-          {activeTab === "checklist" && (
+          {activeTab === "checklist" && roleChecklistEnabled && (
             <div className="bg-white">
               <JobChecklistPanel jobId={jobId} />
             </div>
