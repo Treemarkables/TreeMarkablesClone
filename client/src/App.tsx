@@ -132,14 +132,11 @@ function ScrollToTop() {
   return null;
 }
 
-// Shared fallback shown while a lazy-loaded route chunk is fetched. Fills the
-// available space and centers a spinner — used by both Suspense boundaries.
+// Fallback shown while a lazy-loaded route chunk is fetched. Renders nothing
+// (no spinner) — the sidebar shell stays visible and the content area simply
+// fills in once the chunk arrives. Used by both Suspense boundaries.
 function PageSpinner() {
-  return (
-    <div className="flex items-center justify-center w-full h-full min-h-[60vh]">
-      <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-    </div>
-  );
+  return null;
 }
 import { useIsMobile } from "@/hooks/use-mobile";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -155,13 +152,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isCrew, isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
   
-  // Wait for auth check to complete before redirecting
+  // Wait for auth check to complete before redirecting. Render a neutral
+  // background (no spinner) so there's no loading ring on startup.
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="min-h-screen bg-background" />;
   }
   
   // Redirect to login if not authenticated
@@ -183,13 +177,10 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function AuthenticatedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
   
-  // Wait for auth check to complete before redirecting
+  // Wait for auth check to complete before redirecting. Render a neutral
+  // background (no spinner) so there's no loading ring on startup.
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <div className="min-h-screen bg-background" />;
   }
   
   // Redirect to login if not authenticated
@@ -849,14 +840,11 @@ function Router() {
   // Authenticated users hitting '/' go straight to the dispatch board (handles PWA launches,
   // back-button presses, iframe restarts, and any other navigation that lands on the root URL)
   if (location === '/') {
-    // While we're still checking auth, show a neutral spinner rather than flashing the public
-    // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart
+    // While we're still checking auth, show a neutral background rather than flashing the public
+    // Home page — this prevents the visible "Home ↔ Dispatch" flicker on every server restart.
+    // No spinner: just the background, so there's no loading ring on startup.
     if (isLoading) {
-      return (
-        <div className="flex items-center justify-center min-h-screen bg-background">
-          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
-        </div>
-      );
+      return <div className="min-h-screen bg-background" />;
     }
     if (isAuthenticated) {
       return <Redirect to="/dispatch" />;
