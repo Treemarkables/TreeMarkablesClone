@@ -4587,23 +4587,23 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
             processedBody.address = existingCustomer.address;
             console.log('✅ Auto-filled job address from customer:', existingCustomer.address);
           }
-          // GDC always gets council lead source, regardless of what was submitted
-          if (existingCustomer.name && existingCustomer.name.toLowerCase().includes('gisborne district council')) {
-            processedBody.leadSource = 'council';
-            console.log('✅ Auto-set lead source to "council" for Gisborne District Council job');
-          } else if (!processedBody.leadSource) {
-            // Auto-set lead source to "repeat" for other existing customers
+          // Default lead source to "repeat" when not specified. This includes
+          // Gisborne District Council, which is repeat business by default but
+          // stays editable — staff can change it on the job card.
+          if (!processedBody.leadSource) {
             processedBody.leadSource = 'repeat';
             console.log('✅ Auto-set lead source to "repeat" for existing customer');
           }
         }
       }
 
-      // Also handle new-customer case: if the new customer name is GDC, force council
+      // New-customer case: Gisborne District Council defaults to "repeat" when not
+      // specified (repeat business by default, but staff can change it).
       if (processedBody.isNewCustomer && processedBody.newCustomerName &&
-          processedBody.newCustomerName.toLowerCase().includes('gisborne district council')) {
-        processedBody.leadSource = 'council';
-        console.log('✅ Auto-set lead source to "council" for new Gisborne District Council customer');
+          processedBody.newCustomerName.toLowerCase().includes('gisborne district council') &&
+          !processedBody.leadSource) {
+        processedBody.leadSource = 'repeat';
+        console.log('✅ Auto-set lead source to "repeat" for new Gisborne District Council customer');
       }
 
       const validation = insertJobSchema.safeParse(processedBody);
@@ -5684,22 +5684,8 @@ Important: The phone number is typically shown at the very TOP of the iPhone Mes
         processedBody.customerId = null;
       }
 
-      // GDC auto-classification: look up the resolved customerId and force council lead source
-      {
-        const resolvedCustomerId = processedBody.customerId ||
-          (await storage.getJob(req.params.id).catch(() => null))?.customerId;
-        if (resolvedCustomerId) {
-          const cust = await storage.getCustomer(resolvedCustomerId).catch(() => null);
-          if (cust?.name?.toLowerCase().includes('gisborne district council')) {
-            processedBody.leadSource = 'council';
-          }
-        }
-        // Also handle new-customer-by-name case in PUT
-        if (processedBody.isNewCustomer && processedBody.newCustomerName &&
-            processedBody.newCustomerName.toLowerCase().includes('gisborne district council')) {
-          processedBody.leadSource = 'council';
-        }
-      }
+      // Lead source is editable on update — no auto-classification override here.
+      // Gisborne District Council jobs default to "repeat" at creation time only.
 
       const validation = insertJobSchema.partial().safeParse(processedBody);
       if (!validation.success) {
