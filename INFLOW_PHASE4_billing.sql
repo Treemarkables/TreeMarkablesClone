@@ -45,7 +45,21 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   created_at timestamp DEFAULT now(),
   updated_at timestamp DEFAULT now()
 );
-CREATE INDEX IF NOT EXISTS subscriptions_business_idx ON subscriptions(business_id);
+-- UNIQUE on business_id: one subscription per business, and the conflict target
+-- for the atomic webhook upsert (INSERT ... ON CONFLICT). Also serves as the
+-- lookup index. Add idempotently (and only if no duplicates exist — dedupe
+-- first if this raises a uniqueness error).
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conrelid = 'subscriptions'::regclass
+      AND conname = 'subscriptions_business_id_unique'
+  ) THEN
+    ALTER TABLE subscriptions
+      ADD CONSTRAINT subscriptions_business_id_unique UNIQUE (business_id);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS add_ons (
   id varchar PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -97,36 +97,33 @@ interface SubUpsert {
 }
 
 async function upsertSubscription(data: SubUpsert): Promise<void> {
-  const [existing] = await db
-    .select()
-    .from(schema.subscriptions)
-    .where(eq(schema.subscriptions.businessId, data.businessId))
-    .limit(1);
+  // Only write the fields actually provided — never null out a column we didn't
+  // mean to touch. (planId: null IS meaningful — the cancel path sets freemium.)
+  const fields: Record<string, unknown> = {};
+  if (data.planId !== undefined) fields.planId = data.planId;
+  if (data.status !== undefined) fields.status = data.status;
+  if (data.stripeCustomerId !== undefined) fields.stripeCustomerId = data.stripeCustomerId;
+  if (data.stripeSubscriptionId !== undefined) fields.stripeSubscriptionId = data.stripeSubscriptionId;
+  if (data.currentPeriodEnd !== undefined) fields.currentPeriodEnd = data.currentPeriodEnd;
+  if (data.trialEnd !== undefined) fields.trialEnd = data.trialEnd;
+  if (data.cancelAtPeriodEnd !== undefined) fields.cancelAtPeriodEnd = data.cancelAtPeriodEnd;
 
-  const fields = {
-    planId: data.planId ?? undefined,
-    status: data.status,
-    stripeCustomerId: data.stripeCustomerId ?? undefined,
-    stripeSubscriptionId: data.stripeSubscriptionId ?? undefined,
-    currentPeriodEnd: data.currentPeriodEnd ?? undefined,
-    trialEnd: data.trialEnd ?? undefined,
-    cancelAtPeriodEnd: data.cancelAtPeriodEnd,
-  };
-  // strip undefined so we never null out a column we didn't mean to touch
-  const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined));
-
-  if (existing) {
-    await db
-      .update(schema.subscriptions)
-      .set({ ...clean, updatedAt: new Date() })
-      .where(eq(schema.subscriptions.id, existing.id));
-  } else {
-    await db.insert(schema.subscriptions).values({
+  // Atomic upsert keyed by business_id (one subscription per business). Replaces
+  // the old select-then-insert/update, which could create a duplicate row under
+  // the neon-http driver's read-after-write lag when Stripe delivers events in
+  // rapid/out-of-order succession. Requires the UNIQUE constraint on business_id
+  // (subscriptions_business_id_unique) as the conflict target — see the migration.
+  await db
+    .insert(schema.subscriptions)
+    .values({
       businessId: data.businessId,
       status: data.status ?? "incomplete",
-      ...clean,
-    } as schema.InsertSubscription);
-  }
+      ...fields,
+    } as schema.InsertSubscription)
+    .onConflictDoUpdate({
+      target: schema.subscriptions.businessId,
+      set: { ...fields, updatedAt: new Date() },
+    });
 }
 
 // ── Checkout (start/upgrade a subscription) ─────────────────────────────────

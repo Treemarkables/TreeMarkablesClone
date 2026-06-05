@@ -73,7 +73,10 @@ export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
 // into subscription_plans.id (not a plan key string).
 export const subscriptions = pgTable("subscriptions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  businessId: varchar("business_id").notNull(),
+  // UNIQUE: one subscription per business — the conflict target for the atomic
+  // webhook upsert (server/billing/stripeBilling.ts). Constraint name pinned so
+  // DB + Drizzle agree: subscriptions_business_id_unique.
+  businessId: varchar("business_id").notNull().unique("subscriptions_business_id_unique"),
   planId: varchar("plan_id"), // → subscription_plans.id
   stripeCustomerId: text("stripe_customer_id"),
   stripeSubscriptionId: text("stripe_subscription_id"),
