@@ -69,6 +69,7 @@ import path from "path";
 import bcrypt from "bcrypt";
 import OpenAI, { toFile } from "openai";
 import { registerXeroRoutes } from "./xeroRoutes";
+import { registerBillingRoutes } from "./billingRoutes";
 import {
   isStripeConfigured,
   getPublishableKey,
@@ -1612,7 +1613,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // XERO INTEGRATION ROUTES
   // ========================================
   registerXeroRoutes(app, storage);
-  
+
+  // ========================================
+  // INFLOW PLATFORM BILLING ROUTES (Phase 4)
+  // ========================================
+  registerBillingRoutes(app);
+
   // ========================================
   // CLIENT-SIDE ERROR LOGGING
   app.post('/api/client-errors', (req: Request, res: Response) => {
