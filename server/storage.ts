@@ -78,7 +78,7 @@ import {
   type SupplierInvoice, type InsertSupplierInvoice, type UpdateSupplierInvoice
 } from "@shared/schema";
 import { randomUUID } from "crypto";
-import { db } from "./db";
+import { db, ownerDb } from "./db";
 import { withTenant } from "./tenancy/tenantStore";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
@@ -2405,8 +2405,12 @@ class DatabaseStorage implements IStorage {
   
   async getNextJobNumber(): Promise<string> {
     try {
-      // Query to get the maximum job number using SQL CAST to handle numeric sorting
-      const result = await db.select({ 
+      // Job numbers are GLOBALLY unique (one sequence across all tenants), so the max
+      // MUST be read from the owner connection. Reading via the RLS-scoped `db` returns
+      // only the current tenant's max, so a new tenant would generate low numbers that
+      // collide with another tenant's existing job numbers → unique-constraint violation
+      // → "Error creating job". Use ownerDb (BYPASSRLS) for the global max.
+      const result = await ownerDb.select({
         maxJobNumber: sql<number>`CAST(MAX(CAST(${schema.jobs.jobNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.jobs)
@@ -2435,8 +2439,9 @@ class DatabaseStorage implements IStorage {
   
   async getNextQuoteNumber(): Promise<string> {
     try {
-      // Query to get the maximum quote number using SQL CAST to handle numeric sorting
-      const result = await db.select({ 
+      // Quote numbers are globally unique too — read the max from the owner connection,
+      // not the RLS-scoped `db`, so new tenants don't generate colliding quote numbers.
+      const result = await ownerDb.select({
         maxQuoteNumber: sql<number>`CAST(MAX(CAST(${schema.quotes.quoteNumber} AS INTEGER)) AS INTEGER)`
       })
       .from(schema.quotes)

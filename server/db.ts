@@ -49,7 +49,7 @@ pool.on("error", (err) => {
 // ── Owner client (neon-http, BYPASSRLS) ─────────────────────────────────────
 // Stateless one-request-per-query HTTP. Used for login, signup, crons, platform-admin,
 // and ALL queries when RLS is disabled. The pooler endpoint is fine here (no SET state).
-const ownerDb = drizzleHttp(neon(process.env.DATABASE_URL), { schema });
+export const ownerDb = drizzleHttp(neon(process.env.DATABASE_URL), { schema });
 
 // ── Tenant pool (node-postgres, DIRECT endpoint) ────────────────────────────
 // Only created when RLS is enabled. Hands out per-request connections that run as the
@@ -125,3 +125,36 @@ export const db: typeof ownerDb = new Proxy(ownerDb, {
     return typeof value === "function" ? value.bind(active) : value;
   },
 });
+
+/**
+ * Boot-time safety check. When RLS is enabled the tenant pool (DIRECT_DATABASE_URL)
+ * MUST point at the SAME database as the owner connection (DATABASE_URL). If a
+ * misconfigured DIRECT_DATABASE_URL points at a different Neon branch, owner-path
+ * operations (login, signup) keep working while tenant-scoped reads silently return a
+ * DIFFERENT database's rows — which once presented as "all my data vanished" in prod.
+ * We compare a cheap signature (businesses + jobs counts, read as owner on both pools)
+ * and refuse to boot on mismatch, so a wrong env var fails loudly at deploy time.
+ */
+export async function assertTenantDbMatchesOwner(): Promise<void> {
+  if (!RLS_ENABLED || !tenantPool) return;
+  const sigOf = async (p: pg.Pool): Promise<string> => {
+    const c = await p.connect();
+    try {
+      const b = (await c.query("SELECT count(*)::int AS n FROM businesses")).rows[0].n;
+      const j = (await c.query("SELECT count(*)::int AS n FROM jobs")).rows[0].n;
+      return `${b}:${j}`;
+    } finally {
+      c.release();
+    }
+  };
+  const ownerSig = await sigOf(pool); // DATABASE_URL
+  const tenantSig = await sigOf(tenantPool); // DIRECT_DATABASE_URL
+  if (ownerSig !== tenantSig) {
+    throw new Error(
+      `FATAL: DIRECT_DATABASE_URL points at a different database than DATABASE_URL ` +
+        `(owner businesses:jobs=${ownerSig}, tenant=${tenantSig}). ` +
+        `Delete DIRECT_DATABASE_URL to auto-derive from DATABASE_URL, or set it to the correct direct endpoint.`,
+    );
+  }
+  console.log(`[tenant-db] ✅ tenant pool matches owner DB (businesses:jobs=${ownerSig})`);
+}
