@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "wouter";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 
 // Settings sections data - simplified without complex features
 const settingsOptions = [
@@ -283,6 +284,11 @@ const settingsOptions = [
 ];
 
 export default function Settings() {
+  // Role checklist tasks (Kaitiaki / Kaiwhangai / Kaitirotiro) are Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
+  const visibleSettings = settingsOptions.filter(
+    (s) => s.id !== "role-checklist-tasks" || roleChecklistEnabled,
+  );
   return (
     <div className="flex flex-col min-h-full overflow-y-auto p-6 space-y-6">
       {/* Header */}
@@ -295,7 +301,7 @@ export default function Settings() {
 
       {/* Settings Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {settingsOptions.map((setting) => {
+        {visibleSettings.map((setting) => {
           const IconComponent = setting.icon;
           
           return (

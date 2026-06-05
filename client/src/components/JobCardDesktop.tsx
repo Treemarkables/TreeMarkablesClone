@@ -91,6 +91,7 @@ import { JobDiarySection } from "@/components/JobDiarySection";
 import { JobVideos } from "@/components/JobVideos";
 import { JobBillingPanel } from "@/components/JobBillingPanel";
 import { JobChecklistPanel } from "@/components/JobChecklistPanel";
+import { useRoleChecklistFeature } from "@/hooks/useRoleChecklistFeature";
 import { JobQuotingPanel } from "@/components/JobQuotingPanel";
 import { BackCostingPanel } from "@/components/BackCostingPanel";
 import { PhotoCaptureModal } from "@/components/PhotoCaptureModal";
@@ -258,6 +259,8 @@ export function JobCardDesktop({
   const [activeTab, setActiveTab] = useState<JobCardDesktopTab>(
     () => readStoredTab(initialTab),
   );
+  // Role checklist (Kaitiaki / Kaiwhangai / Kaitirotiro) is Treemarkables-only.
+  const roleChecklistEnabled = useRoleChecklistFeature();
   // Split ratio (left pane as a percentage). 60/40 default to match the
   // approved mockup. Clamped to 30–80 during drag so neither pane disappears.
   const [splitPct, setSplitPct] = useState<number>(() => readStoredSplitPct());
@@ -553,6 +556,10 @@ export function JobCardDesktop({
                 if (t.id === "backcosting" && (status === "lead" || status === "quote")) {
                   return false;
                 }
+                // Role checklist tab is Treemarkables-only.
+                if (t.id === "checklist" && !roleChecklistEnabled) {
+                  return false;
+                }
                 return true;
               }).map((t) => {
                 const on = t.id === activeTab;
@@ -590,7 +597,7 @@ export function JobCardDesktop({
                   onOpenTimeEntries={actions?.timeTracking}
                 />
               )}
-              {activeTab === "checklist" && <JobChecklistPanel jobId={jobId} />}
+              {activeTab === "checklist" && roleChecklistEnabled && <JobChecklistPanel jobId={jobId} />}
               {activeTab === "quoting" && <JobQuotingPanel jobId={jobId} />}
             </div>
           </div>
