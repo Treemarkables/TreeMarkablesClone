@@ -28,7 +28,8 @@ export type Entitlement =
   | "plan:business"
   | "addon:call_recording"
   | "addon:ai"
-  | "addon:sms";
+  | "addon:sms"
+  | "addon:payments"; // in-app card payments (Stripe Connect) — see INFLOW_SAAS_PLAN.md
 
 export interface Capability {
   key: string;
@@ -70,6 +71,9 @@ export const CAPABILITY_CATALOG: Capability[] = [
   { key: "invoices.edit", module: "Finance", label: "Edit invoices", kind: "action", requires: null },
   { key: "invoices.send", module: "Finance", label: "Send invoices", kind: "action", requires: null },
   { key: "payments.record", module: "Finance", label: "Record / manage payments", kind: "action", requires: null },
+  // In-app card payments (customers pay deposits/invoices online via the subscriber's
+  // own Stripe Connect account). Gated behind the Payments add-on — see INFLOW_SAAS_PLAN.md.
+  { key: "payments.online", module: "Finance", label: "Take online card payments", kind: "action", requires: "addon:payments" },
   { key: "reconciliation.view", module: "Finance", label: "View reconciliation", kind: "view", requires: "plan:crew" },
   { key: "reconciliation.manage", module: "Finance", label: "Reconcile transactions", kind: "action", requires: "plan:crew" },
   { key: "profitability.view", module: "Finance", label: "View profitability calculator", kind: "view", requires: "plan:crew" },

@@ -17,6 +17,124 @@ export const insertUserSchema = createInsertSchema(users).pick({
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 
+// ============================================================================
+// Inflow multi-tenant SaaS — tenant root + subscription billing (Phase 4)
+// See INFLOW_SAAS_PLAN.md. `businesses` already exists in the DB (created by
+// INFLOW_PHASE1_tenancy.sql); this is the Drizzle declaration mirroring it.
+// The subscription tables below are net-new and require a migration (gated on
+// explicit DB approval per CLAUDE.md — see INFLOW_PHASE4_billing.sql).
+// ============================================================================
+
+// Tenant root — one row per subscriber business. Treemarkables = tenant #1.
+export const businesses = pgTable("businesses", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").unique(), // future subdomain / URL key
+  status: text("status").notNull().default("active"), // active, suspended, cancelled, trialing
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertBusinessSchema = createInsertSchema(businesses).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertBusiness = z.infer<typeof insertBusinessSchema>;
+export type Business = typeof businesses.$inferSelect;
+
+// Base membership tiers (global catalog — not per-tenant). `key` is the stable
+// code reference used by the entitlements layer; it matches the `plan:<key>`
+// entitlement strings in server/tenancy/capabilities.ts.
+export const subscriptionPlans = pgTable("subscription_plans", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(), // 'freemium' | 'crew' | 'business'
+  name: text("name").notNull(),
+  // Stripe price IDs (set per environment; null on Freemium — no charge)
+  stripePriceIdMonthly: text("stripe_price_id_monthly"),
+  stripePriceIdYearly: text("stripe_price_id_yearly"),
+  // Display prices, NZD ex-GST (GST added at checkout). For UI + sanity only.
+  priceNzdMonthly: decimal("price_nzd_monthly", { precision: 10, scale: 2 }).default("0"),
+  priceNzdYearly: decimal("price_nzd_yearly", { precision: 10, scale: 2 }).default("0"),
+  jobsPerMonth: integer("jobs_per_month"), // null = unlimited
+  maxUsers: integer("max_users"), // null = unlimited
+  sortOrder: integer("sort_order").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertSubscriptionPlanSchema = createInsertSchema(subscriptionPlans).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertSubscriptionPlan = z.infer<typeof insertSubscriptionPlanSchema>;
+export type SubscriptionPlan = typeof subscriptionPlans.$inferSelect;
+
+// One active subscription per business (the base tier). Per-tenant.
+export const subscriptions = pgTable("subscriptions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),
+  planKey: text("plan_key").notNull(), // references subscriptionPlans.key
+  // trialing | active | past_due | canceled | incomplete (mirrors Stripe)
+  status: text("status").notNull().default("trialing"),
+  billingInterval: text("billing_interval").notNull().default("month"), // month | year
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  currentPeriodEnd: timestamp("current_period_end"),
+  trialEnd: timestamp("trial_end"),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
+export type Subscription = typeof subscriptions.$inferSelect;
+
+// Cost-incurring features sold on top of any paid tier (global catalog).
+// `key` matches the `addon:<key>` entitlement strings in capabilities.ts.
+export const addOns = pgTable("add_ons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull().unique(), // 'call_recording' | 'ai' | 'sms' | 'payments'
+  name: text("name").notNull(),
+  stripePriceId: text("stripe_price_id"),
+  priceNzd: decimal("price_nzd", { precision: 10, scale: 2 }).default("0"),
+  billingType: text("billing_type").notNull().default("flat"), // flat | metered
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertAddOnSchema = createInsertSchema(addOns).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertAddOn = z.infer<typeof insertAddOnSchema>;
+export type AddOn = typeof addOns.$inferSelect;
+
+// Which add-ons a business has switched on. Per-tenant.
+export const businessAddOns = pgTable("business_add_ons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  businessId: varchar("business_id").notNull(),
+  addOnKey: text("add_on_key").notNull(), // references addOns.key
+  status: text("status").notNull().default("active"), // active | canceled
+  stripeSubscriptionItemId: text("stripe_subscription_item_id"),
+  activatedAt: timestamp("activated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (t) => [
+  unique("business_add_ons_business_key_uq").on(t.businessId, t.addOnKey),
+]);
+
+export const insertBusinessAddOnSchema = createInsertSchema(businessAddOns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertBusinessAddOn = z.infer<typeof insertBusinessAddOnSchema>;
+export type BusinessAddOn = typeof businessAddOns.$inferSelect;
+
 // ServiceM8 GST & Tax Types
 export const TaxModeEnum = z.enum(['cost_markup', 'tax_inclusive', 'tax_exclusive']);
 export type TaxMode = z.infer<typeof TaxModeEnum>;
