@@ -12,9 +12,11 @@ import { fromZonedTime } from 'date-fns-tz';
 declare module 'express-session' {
   interface SessionData {
     employeeId?: string;
+    businessId?: string;
   }
 }
 import { storage, invoiceRevenueExGst } from "./storage";
+import { withTenant } from "./tenancy/tenantStore";
 import { sendContactEmail } from "./email";
 import * as schema from "@shared/schema";
 import { db } from "./db";
@@ -1707,6 +1709,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         req.session.employeeId = employee.id;
+        // Tenancy: stamp the session with the employee's business so requests can be
+        // tenant-scoped (single-tenant today → always the Treemarkables id).
+        req.session.businessId = employee.businessId ?? undefined;
 
         req.session.save((err) => {
           if (err) {
@@ -7132,7 +7137,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
 
         const now = new Date();
         try {
-          await db.insert(schema.photos).values({
+          await db.insert(schema.photos).values(withTenant({
             jobId,
             jobDiaryEntryId: diaryEntry.id,
             url: compositeUpload.url,
@@ -7146,7 +7151,7 @@ Reply ONLY as JSON: {"before": 0|1, "after": 0|1} where the value is the image i
             capturedBy: authorName,
             beforeAfterPairId,
             sequenceOrder: 0,
-          });
+          }));
         } catch (photoRowError) {
           console.error('⚠️ Failed to insert photos table row for before/after composite:', photoRowError);
         }
@@ -18902,7 +18907,7 @@ Return ONLY valid JSON, no markdown. If a field isn't mentioned, use null.`,
         .returning();
 
       const [createdDiary] = await db.insert(schema.jobDiaryEntries)
-        .values(diaryValidation.data)
+        .values(withTenant(diaryValidation.data))
         .returning();
 
       res.json({
@@ -27100,7 +27105,7 @@ Transcription: ${transcriptText}`;
           const hazard = selectedHazards[i];
 
           const [step] = await db.insert(schema.jhaSteps)
-            .values({
+            .values(withTenant({
               assessmentId: req.params.id,
               stepNumber: i + 1,
               stepName: null,
@@ -27112,20 +27117,20 @@ Transcription: ${transcriptText}`;
               riskControl: hazard.riskControl || null,
               responsiblePerson: hazard.responsiblePerson || null,
               responsiblePersonId: null
-            })
+            }))
             .returning();
 
           if (hazard.selectedControls && hazard.selectedControls.length > 0) {
             for (const controlId of hazard.selectedControls) {
               await db.insert(schema.jhaStepControls)
-                .values({
+                .values(withTenant({
                   stepId: step.id,
                   controlMeasureTemplateId: controlId.toString(),
                   description: '',
                   hierarchyLevel: 3,
                   isImplemented: true,
                   sortOrder: 0
-                });
+                }));
             }
           }
         }
@@ -27133,13 +27138,13 @@ Transcription: ${transcriptText}`;
 
       if (sharedSignature && sharedSignature.trim()) {
         await db.insert(schema.jhaSignatures)
-          .values({
+          .values(withTenant({
             assessmentId: req.params.id,
             workerName: 'Worker',
             workerId: null,
             signatureDataUrl: sharedSignature,
             signedAt: new Date()
-          });
+          }));
       }
 
       // Fetch the updated assessment to return
@@ -28399,7 +28404,7 @@ If you cannot find a value, use null. Do not guess.`
           .returning();
       } else {
         [result] = await db.insert(dailyBriefings)
-          .values({ date, content: content ?? '', createdBy: req.session.employeeId })
+          .values(withTenant({ date, content: content ?? '', createdBy: req.session.employeeId }))
           .returning();
       }
       return res.json({ success: true, data: result });
@@ -28419,7 +28424,7 @@ If you cannot find a value, use null. Do not guess.`
       const { dailyJobNotes } = await import('../shared/schema');
 
       const [result] = await db.insert(dailyJobNotes)
-        .values({ jobId, date, note, createdBy: req.session.employeeId })
+        .values(withTenant({ jobId, date, note, createdBy: req.session.employeeId }))
         .returning();
       return res.json({ success: true, data: result });
     } catch (error) {
@@ -28473,7 +28478,7 @@ If you cannot find a value, use null. Do not guess.`
       const [maxResult] = await db.select({ maxOrder: max(checklistTemplates.sortOrder) }).from(checklistTemplates);
       const nextOrder = sortOrder ?? ((maxResult?.maxOrder ?? -1) + 1);
       const [result] = await db.insert(checklistTemplates)
-        .values({ text: text.trim(), sortOrder: nextOrder })
+        .values(withTenant({ text: text.trim(), sortOrder: nextOrder }))
         .returning();
       return res.json({ success: true, data: result });
     } catch (error) {
@@ -28543,9 +28548,9 @@ If you cannot find a value, use null. Do not guess.`
     const { roleChecklistTasks } = await import('../shared/schema');
     const existing = await db.select().from(roleChecklistTasks).limit(1);
     if (existing.length === 0) {
-      await db.insert(roleChecklistTasks).values(
+      await db.insert(roleChecklistTasks).values(withTenant(
         BUILT_IN_ROLE_CHECKLIST_TASKS.map(t => ({ ...t, isBuiltIn: true })),
-      ).onConflictDoNothing();
+      )).onConflictDoNothing();
     }
   };
 
@@ -28592,7 +28597,7 @@ If you cannot find a value, use null. Do not guess.`
         .from(roleChecklistTasks)
         .where(eq(roleChecklistTasks.roleKey, roleKey));
       const nextOrder = sortOrder ?? ((maxResult?.maxOrder ?? -1) + 1);
-      const [result] = await db.insert(roleChecklistTasks).values({
+      const [result] = await db.insert(roleChecklistTasks).values(withTenant({
         roleKey,
         itemId: slug,
         label: label.trim(),
@@ -28600,7 +28605,7 @@ If you cannot find a value, use null. Do not guess.`
         sortOrder: nextOrder,
         isEnabled: true,
         isBuiltIn: false,
-      }).returning();
+      })).returning();
       return res.json({ success: true, data: result });
     } catch (error) {
       console.error('Error creating role checklist task:', error);
@@ -28677,9 +28682,9 @@ If you cannot find a value, use null. Do not guess.`
     const { quotingProcessSteps } = await import('../shared/schema');
     const existing = await db.select().from(quotingProcessSteps).limit(1);
     if (existing.length === 0) {
-      await db.insert(quotingProcessSteps).values(
+      await db.insert(quotingProcessSteps).values(withTenant(
         BUILT_IN_QUOTING_PROCESS_STEPS.map(s => ({ ...s, isBuiltIn: true })),
-      ).onConflictDoNothing();
+      )).onConflictDoNothing();
     }
   };
 
@@ -28718,14 +28723,14 @@ If you cannot find a value, use null. Do not guess.`
         .select({ maxOrder: max(quotingProcessSteps.sortOrder) })
         .from(quotingProcessSteps);
       const nextOrder = sortOrder ?? ((maxResult?.maxOrder ?? -1) + 1);
-      const [result] = await db.insert(quotingProcessSteps).values({
+      const [result] = await db.insert(quotingProcessSteps).values(withTenant({
         itemId: slug,
         label: label.trim(),
         iconName: typeof iconName === 'string' && iconName.trim() ? iconName.trim() : 'Check',
         sortOrder: nextOrder,
         isEnabled: true,
         isBuiltIn: false,
-      }).returning();
+      })).returning();
       return res.json({ success: true, data: result });
     } catch (error) {
       console.error('Error creating quoting process step:', error);
@@ -29538,7 +29543,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     try {
       const talkNumber = await generateSafetyNumber('TB', schema.toolboxTalks.talkNumber, schema.toolboxTalks);
       const parsed = toolboxTalkInsert.parse({ ...req.body, createdBy: req.session.employeeId || null });
-      const [talk] = await db.insert(schema.toolboxTalks).values({ ...parsed, talkNumber }).returning();
+      const [talk] = await db.insert(schema.toolboxTalks).values(withTenant({ ...parsed, talkNumber })).returning();
       res.json({ success: true, data: talk });
     } catch (e) { ssErr(res, e, 'Failed to create toolbox talk'); }
   });
@@ -29566,7 +29571,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       if (!talk) return res.status(404).json({ success: false, message: 'Toolbox talk not found' });
       const parsed = schema.insertToolboxTalkAttendeeSchema.extend({ signedAt: z.coerce.date().nullable().optional() })
         .parse({ ...req.body, talkId: req.params.id, signedAt: req.body.signatureDataUrl ? new Date() : null });
-      const [attendee] = await db.insert(schema.toolboxTalkAttendees).values(parsed).returning();
+      const [attendee] = await db.insert(schema.toolboxTalkAttendees).values(withTenant(parsed)).returning();
       res.json({ success: true, data: attendee });
     } catch (e) { ssErr(res, e, 'Failed to add attendee'); }
   });
@@ -29617,7 +29622,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     try {
       const checkNumber = await generateSafetyNumber('PS', schema.prestartChecklists.checkNumber, schema.prestartChecklists);
       const parsed = prestartInsert.parse({ ...req.body, createdBy: req.session.employeeId || null });
-      const [row] = await db.insert(schema.prestartChecklists).values({ ...parsed, checkNumber }).returning();
+      const [row] = await db.insert(schema.prestartChecklists).values(withTenant({ ...parsed, checkNumber })).returning();
       res.json({ success: true, data: row });
     } catch (e) { ssErr(res, e, 'Failed to create checklist'); }
   });
@@ -29674,7 +29679,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   app.post('/api/safety-assets', async (req: Request, res: Response) => {
     try {
       const parsed = safetyAssetInsert.parse(req.body);
-      const [asset] = await db.insert(schema.safetyAssets).values(parsed).returning();
+      const [asset] = await db.insert(schema.safetyAssets).values(withTenant(parsed)).returning();
       res.json({ success: true, data: asset });
     } catch (e) { ssErr(res, e, 'Failed to create asset'); }
   });
@@ -29704,7 +29709,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const nextDue = new Date(inspectedAt.getTime() + freq * 24 * 60 * 60 * 1000);
       const parsed = schema.insertAssetInspectionSchema.extend({ inspectedAt: z.coerce.date().optional(), nextInspectionDue: z.coerce.date().nullable().optional() })
         .parse({ ...req.body, assetId: req.params.id, inspectorId: req.body.inspectorId ?? req.session.employeeId ?? null, inspectedAt, nextInspectionDue: nextDue });
-      const [inspection] = await db.insert(schema.assetInspections).values(parsed).returning();
+      const [inspection] = await db.insert(schema.assetInspections).values(withTenant(parsed)).returning();
       const newStatus = parsed.result === 'fail' ? 'removed' : parsed.result === 'monitor' ? 'monitor' : 'in_service';
       await db.update(schema.safetyAssets)
         .set({ lastInspectedAt: inspectedAt, nextInspectionDue: nextDue, status: newStatus, updatedAt: new Date() })
@@ -29750,7 +29755,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
   app.post('/api/employee-competencies', async (req: Request, res: Response) => {
     try {
       const parsed = competencyInsert.parse(req.body);
-      const [row] = await db.insert(schema.employeeCompetencies).values(parsed).returning();
+      const [row] = await db.insert(schema.employeeCompetencies).values(withTenant(parsed)).returning();
       res.json({ success: true, data: { ...row, computedStatus: competencyStatus(row.expiryDate) } });
     } catch (e) { ssErr(res, e, 'Failed to create competency'); }
   });
@@ -29811,12 +29816,12 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const swmsNumber = await generateSafetyNumber('SW', schema.swmsDocuments.swmsNumber, schema.swmsDocuments);
       const { steps, ...docBody } = req.body;
       const parsed = swmsInsert.parse({ ...docBody, preparedById: req.session.employeeId || null, createdBy: req.session.employeeId || null });
-      const [doc] = await db.insert(schema.swmsDocuments).values({ ...parsed, swmsNumber }).returning();
+      const [doc] = await db.insert(schema.swmsDocuments).values(withTenant({ ...parsed, swmsNumber })).returning();
       if (Array.isArray(steps) && steps.length) {
-        await db.insert(schema.swmsSteps).values(steps.map((s: any, i: number) => ({
+        await db.insert(schema.swmsSteps).values(withTenant(steps.map((s: any, i: number) => ({
           swmsId: doc.id, stepNumber: s.stepNumber ?? i + 1, taskStep: s.taskStep ?? '',
           hazards: s.hazards ?? [], controls: s.controls ?? [], riskRating: s.riskRating ?? null, responsiblePerson: s.responsiblePerson ?? null,
-        })));
+        }))));
       }
       res.json({ success: true, data: doc });
     } catch (e) { ssErr(res, e, 'Failed to create SWMS'); }
@@ -29831,10 +29836,10 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       if (Array.isArray(steps)) {
         await db.delete(schema.swmsSteps).where(eq(schema.swmsSteps.swmsId, req.params.id));
         if (steps.length) {
-          await db.insert(schema.swmsSteps).values(steps.map((s: any, i: number) => ({
+          await db.insert(schema.swmsSteps).values(withTenant(steps.map((s: any, i: number) => ({
             swmsId: req.params.id, stepNumber: s.stepNumber ?? i + 1, taskStep: s.taskStep ?? '',
             hazards: s.hazards ?? [], controls: s.controls ?? [], riskRating: s.riskRating ?? null, responsiblePerson: s.responsiblePerson ?? null,
-          })));
+          }))));
         }
       }
       res.json({ success: true, data: updated });
@@ -29854,7 +29859,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       if (!doc) return res.status(404).json({ success: false, message: 'SWMS not found' });
       const parsed = schema.insertSwmsSignatureSchema.extend({ signedAt: z.coerce.date().optional() })
         .parse({ ...req.body, swmsId: req.params.id });
-      const [sig] = await db.insert(schema.swmsSignatures).values(parsed).returning();
+      const [sig] = await db.insert(schema.swmsSignatures).values(withTenant(parsed)).returning();
       res.json({ success: true, data: sig });
     } catch (e) { ssErr(res, e, 'Failed to add signature'); }
   });
@@ -29894,7 +29899,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const occurred = parsed.occurredAt;
       const notifyDueBy = parsed.notifyDueBy ?? new Date(occurred.getTime() + 48 * 60 * 60 * 1000);
       const retentionUntil = parsed.retentionUntil ?? new Date(new Date(occurred).setFullYear(occurred.getFullYear() + 5));
-      const [row] = await db.insert(schema.notifiableEvents).values({ ...parsed, eventNumber, notifyDueBy, retentionUntil }).returning();
+      const [row] = await db.insert(schema.notifiableEvents).values(withTenant({ ...parsed, eventNumber, notifyDueBy, retentionUntil })).returning();
       res.json({ success: true, data: row });
     } catch (e) { ssErr(res, e, 'Failed to create event'); }
   });
@@ -30013,7 +30018,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
     try {
       const reportNumber = await generateNearMissReportNumber();
       const parsed = nearMissReportInsert.parse(req.body);
-      const [report] = await db.insert(schema.nearMissReports).values({ ...parsed, reportNumber }).returning();
+      const [report] = await db.insert(schema.nearMissReports).values(withTenant({ ...parsed, reportNumber })).returning();
       res.json({ success: true, data: report });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });
@@ -30076,12 +30081,12 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
       const type = req.file.mimetype.startsWith('audio') ? 'voice_note' : 'photo';
       const filePath = req.file.path.replace(/\\/g, '/');
-      const [attachment] = await db.insert(schema.nearMissAttachments).values({
+      const [attachment] = await db.insert(schema.nearMissAttachments).values(withTenant({
         reportId: req.params.id,
         type,
         filePath,
         uploadedBy: req.session.employeeId || null,
-      }).returning();
+      })).returning();
       res.json({ success: true, data: attachment });
     } catch (error) {
       res.status(500).json({ success: false, message: error instanceof Error ? error.message : 'Failed to upload attachment' });
@@ -30107,7 +30112,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
       const parsed = schema.insertNearMissWitnessSchema.parse({ ...req.body, reportId: req.params.id });
-      const [witness] = await db.insert(schema.nearMissWitnesses).values(parsed).returning();
+      const [witness] = await db.insert(schema.nearMissWitnesses).values(withTenant(parsed)).returning();
       // State 2: named but signing later — notify the witness via inbox
       if (witness.witnessUserId && witness.status === 'pending') {
         await storage.createNotification({
@@ -30185,7 +30190,7 @@ Generate 3 ranked schedule alternatives as specified. Each alternative must have
       const [report] = await db.select().from(schema.nearMissReports).where(eq(schema.nearMissReports.id, req.params.id));
       if (!report) return res.status(404).json({ success: false, message: 'Report not found' });
       const parsed = schema.insertNearMissActionSchema.parse({ ...req.body, reportId: req.params.id });
-      const [action] = await db.insert(schema.nearMissActions).values(parsed).returning();
+      const [action] = await db.insert(schema.nearMissActions).values(withTenant(parsed)).returning();
       res.json({ success: true, data: action });
     } catch (error) {
       if (error instanceof z.ZodError) return res.status(400).json({ success: false, message: 'Validation error', errors: error.errors });

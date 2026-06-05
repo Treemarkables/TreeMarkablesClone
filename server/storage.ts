@@ -77,6 +77,7 @@ import {
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { db } from "./db";
+import { withTenant } from "./tenancy/tenantStore";
 import { eq, ilike, and, or, gte, lte, lt, gt, ne, desc, asc, sql, inArray, isNull } from "drizzle-orm";
 import * as schema from "@shared/schema";
 import * as mailchimpService from "./services/mailchimpService";
@@ -1139,7 +1140,7 @@ class DatabaseStorage implements IStorage {
       ...customer,
       normalizedPhone: this.normalizePhone(customer.phone)
     };
-    const [newCustomer] = await db.insert(schema.customers).values(customerData).returning();
+    const [newCustomer] = await db.insert(schema.customers).values(withTenant(customerData)).returning();
     
     // Auto-sync to Mailchimp if enabled
     this.syncCustomerToMailchimpBackground(newCustomer).catch(err => {
@@ -1354,7 +1355,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
 
   async createCustomerImportBatch(batch: InsertCustomerImportBatch): Promise<CustomerImportBatch> {
-    const [newBatch] = await db.insert(schema.customerImportBatches).values(batch).returning();
+    const [newBatch] = await db.insert(schema.customerImportBatches).values(withTenant(batch)).returning();
     return newBatch;
   }
 
@@ -1800,7 +1801,7 @@ class DatabaseStorage implements IStorage {
     if (job.status === 'work_order' && !(job as any).workOrderAt) {
       (job as any).workOrderAt = new Date();
     }
-    const [newJob] = await db.insert(schema.jobs).values(job).returning();
+    const [newJob] = await db.insert(schema.jobs).values(withTenant(job)).returning();
     return newJob;
   }
 
@@ -2245,14 +2246,14 @@ class DatabaseStorage implements IStorage {
     }
 
     if (!customer) {
-      const [newCustomer] = await db.insert(schema.customers).values({
+      const [newCustomer] = await db.insert(schema.customers).values(withTenant({
         name: params.customerName,
         phone: params.customerPhone || null,
         normalizedPhone: this.normalizePhone(params.customerPhone),
         email: params.customerEmail || null,
         address: params.customerAddress || null,
         source: 'phone',
-      }).returning();
+      })).returning();
       customer = newCustomer;
     }
 
@@ -2260,14 +2261,14 @@ class DatabaseStorage implements IStorage {
       .set({ customerId: customer.id })
       .where(eq(schema.calls.id, params.callId));
 
-    const [job] = await db.insert(schema.jobs).values({
+    const [job] = await db.insert(schema.jobs).values(withTenant({
       customerId: customer.id,
       title: params.jobTitle,
       description: params.jobDescription || `Job created from call on ${new Date().toLocaleString()}`,
       address: params.jobAddress || params.customerAddress || customer.address || 'Address not specified',
       leadSource: 'phone',
       status: 'quote',
-    }).returning();
+    })).returning();
 
     const [updatedCall2] = await db.update(schema.calls)
       .set({ jobId: job.id })
@@ -2278,14 +2279,14 @@ class DatabaseStorage implements IStorage {
       ? `Call recording and transcript from ${params.call.phoneNumber}\n\nTranscript:\n${params.call.transcript}`
       : `Call recording from ${params.call.phoneNumber}`;
 
-    await db.insert(schema.jobDiaryEntries).values({
+    await db.insert(schema.jobDiaryEntries).values(withTenant({
       jobId: job.id,
       entryType: 'note',
       title: `Phone Call - ${new Date(params.call.createdAt).toLocaleString()}`,
       description: diaryContent,
       authorName: 'Mobile App',
       authorRole: 'system',
-    });
+    }));
 
     return {
       job,
@@ -2454,7 +2455,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createJobTemplate(template: InsertJobTemplate): Promise<JobTemplate> {
-    const [newTemplate] = await db.insert(schema.jobTemplates).values(template).returning();
+    const [newTemplate] = await db.insert(schema.jobTemplates).values(withTenant(template)).returning();
     return newTemplate;
   }
 
@@ -2490,7 +2491,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createPipelineLead(lead: InsertLead): Promise<Lead> {
-    const [newLead] = await db.insert(schema.leads).values(lead).returning();
+    const [newLead] = await db.insert(schema.leads).values(withTenant(lead)).returning();
     return newLead;
   }
 
@@ -2537,7 +2538,7 @@ class DatabaseStorage implements IStorage {
 
   // Calls
   async createCall(call: InsertCall): Promise<Call> {
-    const [createdCall] = await db.insert(schema.calls).values(call).returning();
+    const [createdCall] = await db.insert(schema.calls).values(withTenant(call)).returning();
     return createdCall;
   }
   
@@ -2579,7 +2580,7 @@ class DatabaseStorage implements IStorage {
 
   // API Keys
   async createApiKey(apiKey: InsertApiKey): Promise<ApiKey> {
-    const [createdKey] = await db.insert(schema.apiKeys).values(apiKey).returning();
+    const [createdKey] = await db.insert(schema.apiKeys).values(withTenant(apiKey)).returning();
     return createdKey;
   }
   
@@ -2606,7 +2607,7 @@ class DatabaseStorage implements IStorage {
 
   // Quotes
   async createQuote(quote: InsertQuote): Promise<Quote> {
-    const [createdQuote] = await db.insert(schema.quotes).values(quote).returning();
+    const [createdQuote] = await db.insert(schema.quotes).values(withTenant(quote)).returning();
     return createdQuote;
   }
 
@@ -2642,7 +2643,7 @@ class DatabaseStorage implements IStorage {
 
   // Job diary entries
   async createJobDiaryEntry(entry: InsertJobDiaryEntry): Promise<JobDiaryEntry> {
-    const [diaryEntry] = await db.insert(schema.jobDiaryEntries).values(entry).returning();
+    const [diaryEntry] = await db.insert(schema.jobDiaryEntries).values(withTenant(entry)).returning();
     return diaryEntry;
   }
   async getJobDiaryEntry(id: string): Promise<JobDiaryEntry | undefined> { 
@@ -2809,7 +2810,7 @@ class DatabaseStorage implements IStorage {
   async getActivitiesByJob(jobId: string): Promise<Activity[]> { return []; }
   async getAllActivities(limit?: number): Promise<Activity[]> { return []; }
   async createReview(review: InsertReview): Promise<Review> {
-    const [row] = await db.insert(schema.reviews).values(review).returning();
+    const [row] = await db.insert(schema.reviews).values(withTenant(review)).returning();
     return row;
   }
   async getReview(id: string): Promise<Review | undefined> {
@@ -4167,7 +4168,7 @@ class DatabaseStorage implements IStorage {
 
   // All remaining methods return empty/default values
   async createNotification(notification: InsertNotification): Promise<Notification> {
-    const [newNotification] = await db.insert(schema.notifications).values(notification).returning();
+    const [newNotification] = await db.insert(schema.notifications).values(withTenant(notification)).returning();
     return newNotification;
   }
   async getNotification(id: string): Promise<Notification | undefined> {
@@ -4329,7 +4330,7 @@ class DatabaseStorage implements IStorage {
 
   // Notification Queue Management
   async createNotificationQueueItem(item: schema.InsertNotificationQueueItem): Promise<schema.NotificationQueueItem> {
-    const [created] = await db.insert(schema.notificationQueue).values(item).returning();
+    const [created] = await db.insert(schema.notificationQueue).values(withTenant(item)).returning();
     return created;
   }
 
@@ -4369,7 +4370,7 @@ class DatabaseStorage implements IStorage {
 
   // Pending Outbound Messages
   async createPendingOutboundMessage(msg: schema.InsertPendingOutboundMessage): Promise<schema.PendingOutboundMessage> {
-    const [created] = await db.insert(schema.pendingOutboundMessages).values(msg).returning();
+    const [created] = await db.insert(schema.pendingOutboundMessages).values(withTenant(msg)).returning();
     return created;
   }
 
@@ -4398,7 +4399,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createEmployee(employee: InsertEmployee): Promise<Employee> {
-    const [newEmployee] = await db.insert(schema.employees).values(employee).returning();
+    const [newEmployee] = await db.insert(schema.employees).values(withTenant(employee)).returning();
     return newEmployee;
   }
 
@@ -4453,7 +4454,7 @@ class DatabaseStorage implements IStorage {
 
   // Role Tier Management
   async createRoleTier(tier: schema.InsertRoleTier): Promise<schema.RoleTier> {
-    const [newTier] = await db.insert(schema.roleTiers).values(tier as any).returning();
+    const [newTier] = await db.insert(schema.roleTiers).values(withTenant(tier as any)).returning();
     return newTier;
   }
 
@@ -4489,7 +4490,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createScheduleEvent(event: InsertScheduleEvent): Promise<ScheduleEvent> {
-    const [newEvent] = await db.insert(schema.scheduleEvents).values(event).returning();
+    const [newEvent] = await db.insert(schema.scheduleEvents).values(withTenant(event)).returning();
     return newEvent;
   }
   
@@ -4549,7 +4550,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createJobStaffAssignment(assignment: InsertJobStaffAssignment): Promise<JobStaffAssignment> {
-    const [newAssignment] = await db.insert(schema.jobStaffAssignments).values(assignment).returning();
+    const [newAssignment] = await db.insert(schema.jobStaffAssignments).values(withTenant(assignment)).returning();
     return newAssignment;
   }
 
@@ -4634,7 +4635,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createProposal(proposal: InsertProposal): Promise<Proposal> {
-    const [created] = await db.insert(schema.proposals).values(proposal).returning();
+    const [created] = await db.insert(schema.proposals).values(withTenant(proposal)).returning();
     return created;
   }
   async getProposal(id: string): Promise<Proposal | undefined> {
@@ -4678,7 +4679,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createProposalSection(section: InsertProposalSection): Promise<ProposalSection> {
-    const [newSection] = await db.insert(schema.proposalSections).values(section).returning();
+    const [newSection] = await db.insert(schema.proposalSections).values(withTenant(section)).returning();
     return newSection;
   }
   
@@ -4726,7 +4727,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createProposalLineItem(item: InsertProposalLineItem): Promise<ProposalLineItem> {
-    const [newItem] = await db.insert(schema.proposalLineItems).values(item).returning();
+    const [newItem] = await db.insert(schema.proposalLineItems).values(withTenant(item)).returning();
     return newItem;
   }
   
@@ -4774,7 +4775,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createProposalLineItemChoice(choice: InsertProposalLineItemChoice): Promise<ProposalLineItemChoice> {
-    const [newChoice] = await db.insert(schema.proposalLineItemChoices).values(choice).returning();
+    const [newChoice] = await db.insert(schema.proposalLineItemChoices).values(withTenant(choice)).returning();
     return newChoice;
   }
   
@@ -4808,7 +4809,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createEquipment(equipment: InsertEquipment): Promise<Equipment> {
-    const [newEquipment] = await db.insert(schema.equipment).values(equipment).returning();
+    const [newEquipment] = await db.insert(schema.equipment).values(withTenant(equipment)).returning();
     return newEquipment;
   }
   
@@ -4876,7 +4877,7 @@ class DatabaseStorage implements IStorage {
   // Vehicle Pre-Start Inspection System Implementation
   // Inspection Templates
   async createInspectionTemplate(template: InsertInspectionTemplate): Promise<InspectionTemplate> {
-    const [result] = await db.insert(schema.inspectionTemplates).values(template).returning();
+    const [result] = await db.insert(schema.inspectionTemplates).values(withTenant(template)).returning();
     return result;
   }
 
@@ -4930,7 +4931,7 @@ class DatabaseStorage implements IStorage {
 
   // Inspection Checklist Items
   async createChecklistItem(item: InsertInspectionChecklistItem): Promise<InspectionChecklistItem> {
-    const [result] = await db.insert(schema.inspectionChecklistItems).values(item).returning();
+    const [result] = await db.insert(schema.inspectionChecklistItems).values(withTenant(item)).returning();
     return result;
   }
 
@@ -4972,7 +4973,7 @@ class DatabaseStorage implements IStorage {
 
   // Vehicle Inspections
   async createVehicleInspection(inspection: InsertVehicleInspection): Promise<VehicleInspection> {
-    const [result] = await db.insert(schema.vehicleInspections).values(inspection).returning();
+    const [result] = await db.insert(schema.vehicleInspections).values(withTenant(inspection)).returning();
     return result;
   }
 
@@ -5030,7 +5031,7 @@ class DatabaseStorage implements IStorage {
 
   // Inspection Responses
   async createInspectionResponse(response: InsertInspectionResponse): Promise<InspectionResponse> {
-    const [result] = await db.insert(schema.inspectionResponses).values(response).returning();
+    const [result] = await db.insert(schema.inspectionResponses).values(withTenant(response)).returning();
     return result;
   }
 
@@ -5042,7 +5043,7 @@ class DatabaseStorage implements IStorage {
 
   // Equipment Induction System Implementation
   async createInductionTemplate(template: InsertInductionTemplate): Promise<InductionTemplate> {
-    const [result] = await db.insert(schema.inductionTemplates).values(template).returning();
+    const [result] = await db.insert(schema.inductionTemplates).values(withTenant(template)).returning();
     return result;
   }
 
@@ -5080,7 +5081,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createInductionChecklistItem(item: InsertInductionChecklistItem): Promise<InductionChecklistItem> {
-    const [result] = await db.insert(schema.inductionChecklistItems).values(item).returning();
+    const [result] = await db.insert(schema.inductionChecklistItems).values(withTenant(item)).returning();
     return result;
   }
 
@@ -5120,7 +5121,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createEquipmentInduction(induction: InsertEquipmentInduction): Promise<EquipmentInduction> {
-    const [result] = await db.insert(schema.equipmentInductions).values(induction).returning();
+    const [result] = await db.insert(schema.equipmentInductions).values(withTenant(induction)).returning();
     return result;
   }
 
@@ -5182,7 +5183,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createInductionResponse(response: InsertInductionResponse): Promise<InductionResponse> {
-    const [result] = await db.insert(schema.inductionResponses).values(response).returning();
+    const [result] = await db.insert(schema.inductionResponses).values(withTenant(response)).returning();
     return result;
   }
 
@@ -5229,13 +5230,13 @@ class DatabaseStorage implements IStorage {
     }
     
     // Create default settings if none exist
-    const [created] = await db.insert(schema.businessSettings).values({
+    const [created] = await db.insert(schema.businessSettings).values(withTenant({
       id: 'default',
       businessName: 'Treemarkables',
       businessEmail: 'info@treemarkables.nz',
       businessPhone: '06 868 9988',
       businessAddress: 'Gisborne, New Zealand',
-    }).returning();
+    })).returning();
     
     return created;
   }
@@ -5292,7 +5293,7 @@ class DatabaseStorage implements IStorage {
     linkUrl?: string;
     rawPayload?: any;
   }): Promise<any> {
-    const [newEvent] = await db.insert(schema.emailEvents).values({
+    const [newEvent] = await db.insert(schema.emailEvents).values(withTenant({
       messageId: event.messageId,
       eventType: event.eventType,
       recipient: event.recipient,
@@ -5301,7 +5302,7 @@ class DatabaseStorage implements IStorage {
       ipAddress: event.ipAddress,
       linkUrl: event.linkUrl,
       rawPayload: event.rawPayload
-    }).returning();
+    })).returning();
     return newEvent;
   }
 
@@ -5328,7 +5329,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createConversation(conversation: InsertConversation): Promise<Conversation> {
-    const [newConversation] = await db.insert(schema.conversations).values(conversation).returning();
+    const [newConversation] = await db.insert(schema.conversations).values(withTenant(conversation)).returning();
     return newConversation;
   }
 
@@ -5498,7 +5499,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
   
   async createConversationMessage(message: InsertConversationMessage): Promise<ConversationMessage> {
-    const [newMessage] = await db.insert(schema.conversationMessages).values(message).returning();
+    const [newMessage] = await db.insert(schema.conversationMessages).values(withTenant(message)).returning();
     
     // Update conversation's last message info
     await db.update(schema.conversations)
@@ -5574,7 +5575,7 @@ class DatabaseStorage implements IStorage {
 
   // Job Videos (Loom replacement) — real implementations against the videos table.
   async createVideo(data: InsertVideo): Promise<Video> {
-    const [row] = await db.insert(videos).values(data).returning();
+    const [row] = await db.insert(videos).values(withTenant(data)).returning();
     return row;
   }
   async getVideo(id: string): Promise<Video | undefined> {
@@ -5660,7 +5661,7 @@ class DatabaseStorage implements IStorage {
   async getCustomerInvoices(customerId: string): Promise<Invoice[]> { return []; }
   async getCustomerPhotos(customerId: string, jobId?: string): Promise<Photo[]> { return []; }
   async createInvoice(invoice: InsertInvoice): Promise<Invoice> {
-    const [result] = await db.insert(schema.invoices).values(invoice).returning();
+    const [result] = await db.insert(schema.invoices).values(withTenant(invoice)).returning();
     return result;
   }
   async getInvoice(id: string): Promise<Invoice | undefined> { 
@@ -5696,7 +5697,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createInvoiceSection(section: InsertInvoiceSection): Promise<InvoiceSection> {
-    const [created] = await db.insert(schema.invoiceSections).values(section).returning();
+    const [created] = await db.insert(schema.invoiceSections).values(withTenant(section)).returning();
     return created;
   }
 
@@ -5740,7 +5741,7 @@ class DatabaseStorage implements IStorage {
   
   // Xero Integration Implementation
   async createXeroConnection(connection: InsertXeroConnection): Promise<XeroConnection> {
-    const [result] = await db.insert(schema.xeroConnections).values(connection).returning();
+    const [result] = await db.insert(schema.xeroConnections).values(withTenant(connection)).returning();
     return result;
   }
   
@@ -5794,7 +5795,7 @@ class DatabaseStorage implements IStorage {
     } else {
       // Create new settings if none exist
       const [result] = await db.insert(schema.xeroSettings)
-        .values({ ...updates })
+        .values(withTenant({ ...updates }))
         .returning();
       return result;
     }
@@ -5811,7 +5812,7 @@ class DatabaseStorage implements IStorage {
   async getSafetyIncidentsByStatus(status: string): Promise<SafetyIncident[]> { return []; }
 
   async createRiskAssessment(assessment: InsertRiskAssessment): Promise<RiskAssessment> {
-    const [result] = await db.insert(schema.riskAssessments).values(assessment).returning();
+    const [result] = await db.insert(schema.riskAssessments).values(withTenant(assessment)).returning();
     return result;
   }
   async getRiskAssessment(id: string): Promise<RiskAssessment | undefined> {
@@ -5845,7 +5846,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createEmailTemplate(templateData: InsertEmailTemplate): Promise<EmailTemplate> {
-    const [template] = await db.insert(schema.emailTemplates).values(templateData).returning();
+    const [template] = await db.insert(schema.emailTemplates).values(withTenant(templateData)).returning();
     return template;
   }
   
@@ -5871,7 +5872,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createSmsTemplate(templateData: InsertSmsTemplate): Promise<SmsTemplate> {
-    const [template] = await db.insert(schema.smsTemplates).values(templateData).returning();
+    const [template] = await db.insert(schema.smsTemplates).values(withTenant(templateData)).returning();
     return template;
   }
   
@@ -5962,7 +5963,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
 
   async createDocumentTemplate(template: InsertDocumentTemplate): Promise<DocumentTemplate> {
-    const [documentTemplate] = await db.insert(schema.documentTemplates).values(template).returning();
+    const [documentTemplate] = await db.insert(schema.documentTemplates).values(withTenant(template)).returning();
     return documentTemplate;
   }
 
@@ -6006,7 +6007,7 @@ class DatabaseStorage implements IStorage {
 
   // Template Sections Management
   async createTemplateSection(section: InsertTemplateSection): Promise<TemplateSection> {
-    const [templateSection] = await db.insert(schema.templateSections).values(section).returning();
+    const [templateSection] = await db.insert(schema.templateSections).values(withTenant(section)).returning();
     return templateSection;
   }
 
@@ -6036,7 +6037,7 @@ class DatabaseStorage implements IStorage {
 
   // Template Line Items Management
   async createTemplateLineItem(lineItem: InsertTemplateLineItem): Promise<TemplateLineItem> {
-    const [templateLineItem] = await db.insert(schema.templateLineItems).values(lineItem).returning();
+    const [templateLineItem] = await db.insert(schema.templateLineItems).values(withTenant(lineItem)).returning();
     return templateLineItem;
   }
 
@@ -6072,7 +6073,7 @@ class DatabaseStorage implements IStorage {
 
   // Template Photos Management
   async createTemplatePhoto(photo: InsertTemplatePhoto): Promise<TemplatePhoto> {
-    const [templatePhoto] = await db.insert(schema.templatePhotos).values(photo).returning();
+    const [templatePhoto] = await db.insert(schema.templatePhotos).values(withTenant(photo)).returning();
     return templatePhoto;
   }
 
@@ -6108,7 +6109,7 @@ class DatabaseStorage implements IStorage {
 
   // Generated Documents Management
   async createGeneratedDocument(document: InsertGeneratedDocument): Promise<GeneratedDocument> {
-    const [generatedDocument] = await db.insert(schema.generatedDocuments).values(document).returning();
+    const [generatedDocument] = await db.insert(schema.generatedDocuments).values(withTenant(document)).returning();
     return generatedDocument;
   }
 
@@ -6180,7 +6181,7 @@ class DatabaseStorage implements IStorage {
 
   // Generated Document Line Items Management
   async createGeneratedDocumentLineItem(lineItem: InsertGeneratedDocumentLineItem): Promise<GeneratedDocumentLineItem> {
-    const [generatedDocumentLineItem] = await db.insert(schema.generatedDocumentLineItems).values(lineItem).returning();
+    const [generatedDocumentLineItem] = await db.insert(schema.generatedDocumentLineItems).values(withTenant(lineItem)).returning();
     return generatedDocumentLineItem;
   }
 
@@ -6210,7 +6211,7 @@ class DatabaseStorage implements IStorage {
 
   // Generated Document Photos Management
   async createGeneratedDocumentPhoto(photo: InsertGeneratedDocumentPhoto): Promise<GeneratedDocumentPhoto> {
-    const [generatedDocumentPhoto] = await db.insert(schema.generatedDocumentPhotos).values(photo).returning();
+    const [generatedDocumentPhoto] = await db.insert(schema.generatedDocumentPhotos).values(withTenant(photo)).returning();
     return generatedDocumentPhoto;
   }
 
@@ -6306,7 +6307,7 @@ class DatabaseStorage implements IStorage {
   // Materials Catalog Management
   async createMaterial(material: InsertMaterial): Promise<Material> {
     const [newMaterial] = await db.insert(schema.materials)
-      .values(material)
+      .values(withTenant(material))
       .returning();
     return newMaterial;
   }
@@ -6352,7 +6353,7 @@ class DatabaseStorage implements IStorage {
   // Services Catalog Management
   async createService(service: InsertService): Promise<Service> {
     const [newService] = await db.insert(schema.services)
-      .values(service)
+      .values(withTenant(service))
       .returning();
     return newService;
   }
@@ -6424,7 +6425,7 @@ class DatabaseStorage implements IStorage {
 
   async createReviewRequest(data: any): Promise<any> {
     const [newRequest] = await db.insert(schema.reviewRequests)
-      .values(data)
+      .values(withTenant(data))
       .returning();
     return newRequest;
   }
@@ -6474,7 +6475,7 @@ class DatabaseStorage implements IStorage {
 
   async createReviewSubmission(data: any): Promise<any> {
     const [newSubmission] = await db.insert(schema.reviewSubmissions)
-      .values(data)
+      .values(withTenant(data))
       .returning();
     return newSubmission;
   }
@@ -6571,7 +6572,7 @@ class DatabaseStorage implements IStorage {
 
   async createJhaHazardTemplate(template: schema.InsertJhaHazardTemplate): Promise<schema.JhaHazardTemplate> {
     const [result] = await db.insert(schema.jhaHazardTemplates)
-      .values(template)
+      .values(withTenant(template))
       .returning();
     return result;
   }
@@ -6607,7 +6608,7 @@ class DatabaseStorage implements IStorage {
 
   async createJhaRiskControlTemplate(template: schema.InsertJhaRiskControlTemplate): Promise<schema.JhaRiskControlTemplate> {
     const [result] = await db.insert(schema.jhaRiskControlTemplates)
-      .values(template)
+      .values(withTenant(template))
       .returning();
     return result;
   }
@@ -6651,7 +6652,7 @@ class DatabaseStorage implements IStorage {
 
   async createJhaControlMeasure(measure: schema.InsertJhaControlMeasureTemplate): Promise<schema.JhaControlMeasureTemplate> {
     const [result] = await db.insert(schema.jhaControlMeasureTemplates)
-      .values(measure)
+      .values(withTenant(measure))
       .returning();
     return result;
   }
@@ -6771,7 +6772,7 @@ class DatabaseStorage implements IStorage {
     const assessmentNumber = `${nextNumber}`;
     
     const [result] = await db.insert(schema.jhaAssessments)
-      .values({ ...assessment, assessmentNumber })
+      .values(withTenant({ ...assessment, assessmentNumber }))
       .returning();
     return result;
   }
@@ -6805,7 +6806,7 @@ class DatabaseStorage implements IStorage {
 
   async createJhaStep(step: schema.InsertJhaStep): Promise<schema.JhaStep> {
     const [result] = await db.insert(schema.jhaSteps)
-      .values(step)
+      .values(withTenant(step))
       .returning();
     return result;
   }
@@ -6835,7 +6836,7 @@ class DatabaseStorage implements IStorage {
 
   async createJhaStepControl(control: schema.InsertJhaStepControl): Promise<schema.JhaStepControl> {
     const [result] = await db.insert(schema.jhaStepControls)
-      .values(control)
+      .values(withTenant(control))
       .returning();
     return result;
   }
@@ -6863,7 +6864,7 @@ class DatabaseStorage implements IStorage {
 
   async createJhaSignature(signature: schema.InsertJhaSignature): Promise<schema.JhaSignature> {
     const [result] = await db.insert(schema.jhaSignatures)
-      .values(signature)
+      .values(withTenant(signature))
       .returning();
     return result;
   }
@@ -6876,7 +6877,7 @@ class DatabaseStorage implements IStorage {
   // Marketing Campaigns
   async createMarketingCampaign(campaign: schema.InsertMarketingCampaign): Promise<schema.MarketingCampaign> {
     const [result] = await db.insert(schema.marketingCampaigns)
-      .values(campaign)
+      .values(withTenant(campaign))
       .returning();
     return result;
   }
@@ -6947,7 +6948,7 @@ class DatabaseStorage implements IStorage {
 
   async createFcmToken(token: schema.InsertFcmToken): Promise<schema.FcmToken> {
     const [result] = await db.insert(schema.fcmTokens)
-      .values(token)
+      .values(withTenant(token))
       .returning();
     return result;
   }
@@ -7015,7 +7016,7 @@ class DatabaseStorage implements IStorage {
 
   async createNotificationPreferences(prefs: schema.InsertNotificationPreferences): Promise<schema.NotificationPreferences> {
     const [result] = await db.insert(schema.notificationPreferences)
-      .values(prefs)
+      .values(withTenant(prefs))
       .returning();
     return result;
   }
@@ -7052,12 +7053,12 @@ class DatabaseStorage implements IStorage {
     employeeName: string | null,
   ): Promise<schema.JobChecklistCompletion> {
     const [result] = await db.insert(schema.jobChecklistCompletions)
-      .values({
+      .values(withTenant({
         jobId,
         itemId,
         completedByEmployeeId: employeeId,
         completedByName: employeeName,
-      })
+      }))
       .onConflictDoUpdate({
         target: [schema.jobChecklistCompletions.jobId, schema.jobChecklistCompletions.itemId],
         set: {
@@ -7086,7 +7087,7 @@ class DatabaseStorage implements IStorage {
 
   async createCallRecord(record: schema.InsertCallRecord): Promise<schema.CallRecord> {
     const [result] = await db.insert(schema.callRecords)
-      .values(record)
+      .values(withTenant(record))
       .returning();
     return result;
   }
@@ -7168,7 +7169,7 @@ class DatabaseStorage implements IStorage {
   // ========================================
 
   async createTreeMarker(marker: schema.InsertTreeMarker): Promise<schema.TreeMarker> {
-    const [result] = await db.insert(schema.treeMarkers).values(marker).returning();
+    const [result] = await db.insert(schema.treeMarkers).values(withTenant(marker)).returning();
     return result;
   }
 
@@ -7202,7 +7203,7 @@ class DatabaseStorage implements IStorage {
 
   // ─── Mulch Drops ──────────────────────────────────────────────────────────
   async createMulchDrop(drop: schema.InsertMulchDrop): Promise<schema.MulchDrop> {
-    const [created] = await db.insert(schema.mulchDrops).values(drop).returning();
+    const [created] = await db.insert(schema.mulchDrops).values(withTenant(drop)).returning();
     return created;
   }
 
@@ -7262,7 +7263,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createAssistantMessage(message: schema.InsertAssistantMessage): Promise<schema.AssistantMessage> {
-    const [created] = await db.insert(schema.assistantMessages).values(message).returning();
+    const [created] = await db.insert(schema.assistantMessages).values(withTenant(message)).returning();
     return created;
   }
 
@@ -7331,7 +7332,7 @@ class DatabaseStorage implements IStorage {
   }
 
   async createTask(input: schema.InsertTask): Promise<schema.Task> {
-    const [created] = await db.insert(schema.tasks).values(input).returning();
+    const [created] = await db.insert(schema.tasks).values(withTenant(input)).returning();
     return created;
   }
 
@@ -7393,7 +7394,7 @@ class DatabaseStorage implements IStorage {
         const baseDue = updated.dueDate ? new Date(updated.dueDate as any) : new Date();
         const nextDue = new Date(baseDue);
         nextDue.setDate(nextDue.getDate() + updated.recurringIntervalDays);
-        const [next] = await db.insert(schema.tasks).values({
+        const [next] = await db.insert(schema.tasks).values(withTenant({
           title: updated.title,
           description: updated.description,
           category: updated.category,
@@ -7407,7 +7408,7 @@ class DatabaseStorage implements IStorage {
           recurring: true,
           recurringIntervalDays: updated.recurringIntervalDays,
           parentTaskId: updated.id,
-        } as any).returning();
+        } as any)).returning();
         spawned = next;
       }
     }
@@ -7430,7 +7431,7 @@ class DatabaseStorage implements IStorage {
   // can extend to manual bank-transfer entries without migration.
 
   async createPayment(payment: schema.InsertPayment): Promise<schema.Payment> {
-    const [created] = await db.insert(schema.payments).values(payment).returning();
+    const [created] = await db.insert(schema.payments).values(withTenant(payment)).returning();
     return created;
   }
 
